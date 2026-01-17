@@ -1,0 +1,96 @@
+# =============================================================================
+# Python
+# =============================================================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.tox/
+dist/
+build/
+*.egg-info/
+.eggs/
+*.egg
+venv/
+env/
+ENV/
+.venv
+
+# =============================================================================
+# Node / React / Frontend
+# =============================================================================
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+build/
+dist/
+.cache/
+
+# =============================================================================
+# Environment & Secrets
+# =============================================================================
+.env
+.env.local
+.env.development
+.env.production
+*.pem
+*.key
+
+# =============================================================================
+# Local Data & Runtime Files
+# =============================================================================
+# Database files (keep schema, ignore data)
+backend/data/*.db
+backend/data/*.db-shm
+backend/data/*.db-wal
+backend/data/uploads/
+new_backend/data/*.db
+new_backend/data/*.db-shm
+new_backend/data/*.db-wal
+new_backend/data/uploads/
+
+# Logs
+*.log
+logs/
+
+# =============================================================================
+# IDE & Editor
+# =============================================================================
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.classpath
+.settings/
+*.sublime-project
+*.sublime-workspace
+
+# =============================================================================
+# OS
+# =============================================================================
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# =============================================================================
+# Temporary Files
+# =============================================================================
+*.tmp
+*.temp
+*.bak
+*.backup
+.nul
