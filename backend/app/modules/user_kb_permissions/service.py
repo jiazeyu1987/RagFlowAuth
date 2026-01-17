@@ -44,18 +44,23 @@ class UserKbPermissionsService:
         if user.role == "admin":
             return self._repo.list_all_kb_ids()
 
-        if not user.group_id:
+        group_ids = list(getattr(user, "group_ids", []) or [])
+        if not group_ids and user.group_id is not None:
+            group_ids = [user.group_id]
+
+        if not group_ids:
             return []
 
-        group = self._repo.get_permission_group(user.group_id)
-        if not group:
-            return []
+        kb_names: set[str] = set()
+        for group_id in group_ids:
+            group = self._repo.get_permission_group(group_id)
+            if not group:
+                continue
+            for kb in group.get("accessible_kbs", []) or []:
+                if isinstance(kb, str) and kb:
+                    kb_names.add(kb)
 
-        accessible_kbs = group.get("accessible_kbs", []) or []
-        if len(accessible_kbs) > 0:
-            return accessible_kbs
-
-        return self._repo.list_all_kb_ids()
+        return sorted(kb_names)
 
     def batch_grant_admin(self, *, user_ids: list[str], kb_ids: list[str], granted_by: str) -> int:
         valid_user_ids: list[str] = []
@@ -65,4 +70,3 @@ class UserKbPermissionsService:
             else:
                 raise HTTPException(status_code=404, detail=f"用户 {user_id} 不存在")
         return self._repo.grant_batch_permissions(user_ids=valid_user_ids, kb_ids=kb_ids, granted_by=granted_by)
-

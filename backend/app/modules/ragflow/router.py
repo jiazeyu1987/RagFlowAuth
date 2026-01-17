@@ -3,6 +3,13 @@ from fastapi.responses import Response
 from typing import Optional
 
 from app.core.auth import AuthRequired, get_deps
+from app.core.permission_resolver import (
+    ResourceScope,
+    assert_can_delete,
+    assert_can_download,
+    assert_kb_allowed,
+    resolve_permissions,
+)
 from dependencies import AppDependencies
 
 
@@ -43,36 +50,12 @@ async def list_datasets(
         logger.info(f"[GET /api/ragflow/datasets] Admin user {user.username} showing all {len(all_datasets)} datasets")
         return {"datasets": all_datasets}
 
-    if not user.group_id:
-        logger.warning(f"[GET /api/ragflow/datasets] User {user.username} has no group_id, returning empty datasets")
+    snapshot = resolve_permissions(deps, user)
+    if snapshot.kb_scope == ResourceScope.NONE:
         return {"datasets": []}
 
-    group = deps.permission_group_store.get_group(user.group_id)
-    if not group:
-        logger.warning(f"[GET /api/ragflow/datasets] User {user.username} has invalid group_id {user.group_id}, returning empty datasets")
-        return {"datasets": []}
-
-    logger.info(f"[GET /api/ragflow/datasets] User's permission group: {group['group_name']}")
-
-    accessible_kbs = group.get("accessible_kbs", [])
-    logger.info(f"[GET /api/ragflow/datasets] Accessible KBs from permission group: {accessible_kbs}")
-
-    if accessible_kbs and len(accessible_kbs) > 0:
-        logger.info(f"[GET /api/ragflow/datasets] Filtering datasets, accessible_kbs is not empty")
-        filtered_datasets = []
-        for ds in all_datasets:
-            ds_name = ds.get("name")
-            if ds_name in accessible_kbs:
-                filtered_datasets.append(ds)
-                logger.info(f"  ✅ Match: {ds_name}")
-            else:
-                logger.info(f"  ❌ No match: {ds_name}")
-
-        logger.info(f"[GET /api/ragflow/datasets] User {user.username} can access {len(filtered_datasets)} datasets")
-        return {"datasets": filtered_datasets}
-
-    logger.info(f"[GET /api/ragflow/datasets] Accessible KBs is empty, showing all {len(all_datasets)} datasets")
-    return {"datasets": all_datasets}
+    filtered = [ds for ds in all_datasets if ds.get("name") in snapshot.kb_names]
+    return {"datasets": filtered}
 
 
 @router.get("/documents")
@@ -81,6 +64,11 @@ async def list_ragflow_documents(
     deps: AppDependencies = Depends(get_deps),
     dataset_name: str = "展厅",
 ):
+    user = deps.user_store.get_by_user_id(payload.sub)
+    if not user:
+        raise HTTPException(status_code=404, detail="用户不存在")
+    snapshot = resolve_permissions(deps, user)
+    assert_kb_allowed(snapshot, dataset_name)
     documents = deps.ragflow_service.list_documents(dataset_name)
     return {"documents": documents, "dataset": dataset_name}
 
@@ -92,6 +80,11 @@ async def get_document_status(
     deps: AppDependencies = Depends(get_deps),
     dataset_name: str = "展厅",
 ):
+    user = deps.user_store.get_by_user_id(payload.sub)
+    if not user:
+        raise HTTPException(status_code=404, detail="用户不存在")
+    snapshot = resolve_permissions(deps, user)
+    assert_kb_allowed(snapshot, dataset_name)
     status = deps.ragflow_service.get_document_status(doc_id, dataset_name)
     if status is None:
         raise HTTPException(status_code=404, detail="文档不存在")
@@ -105,6 +98,11 @@ async def get_document_detail(
     deps: AppDependencies = Depends(get_deps),
     dataset_name: str = "展厅",
 ):
+    user = deps.user_store.get_by_user_id(payload.sub)
+    if not user:
+        raise HTTPException(status_code=404, detail="用户不存在")
+    snapshot = resolve_permissions(deps, user)
+    assert_kb_allowed(snapshot, dataset_name)
     detail = deps.ragflow_service.get_document_detail(doc_id, dataset_name)
     if detail is None:
         raise HTTPException(status_code=404, detail="文档不存在")
@@ -128,6 +126,13 @@ async def download_document(
     logger.info(f"[DOWNLOAD]   doc_id: {doc_id}")
     logger.info(f"[DOWNLOAD]   dataset: {dataset}")
     logger.info(f"[DOWNLOAD]   downloaded_by: {payload.sub}")
+
+    user = deps.user_store.get_by_user_id(payload.sub)
+    if not user:
+        raise HTTPException(status_code=404, detail="用户不存在")
+    snapshot = resolve_permissions(deps, user)
+    assert_can_download(snapshot)
+    assert_kb_allowed(snapshot, dataset)
 
     try:
         file_content, ragflow_filename = deps.ragflow_service.download_document(doc_id, dataset)
@@ -192,6 +197,13 @@ async def preview_document(
     logger.info(f"[PREVIEW]   doc_id: {doc_id}")
     logger.info(f"[PREVIEW]   dataset: {dataset}")
     logger.info(f"[PREVIEW]   user: {payload.sub}")
+
+    user = deps.user_store.get_by_user_id(payload.sub)
+    if not user:
+        raise HTTPException(status_code=404, detail="用户不存在")
+    snapshot = resolve_permissions(deps, user)
+    assert_can_download(snapshot)
+    assert_kb_allowed(snapshot, dataset)
 
     try:
         file_content, filename = deps.ragflow_service.download_document(doc_id, dataset)
@@ -264,15 +276,9 @@ async def delete_ragflow_document(
         logger.error("[DELETE RAGFLOW] User not found")
         raise HTTPException(status_code=404, detail="用户不存在")
 
-    if user.role != "admin":
-        if not user.group_id:
-            logger.warning(f"[DELETE RAGFLOW] User {user.username} has no group_id")
-            raise HTTPException(status_code=403, detail="您没有删除权限，请联系管理员")
-
-        group = deps.permission_group_store.get_group(user.group_id)
-        if not group or not group.get("can_delete", 0):
-            logger.warning(f"[DELETE RAGFLOW] User {user.username} has no delete permission")
-            raise HTTPException(status_code=403, detail="您没有删除权限，请联系管理员")
+    snapshot = resolve_permissions(deps, user)
+    assert_can_delete(snapshot)
+    assert_kb_allowed(snapshot, dataset_name)
 
     local_doc = deps.kb_store.get_document_by_ragflow_id(doc_id, dataset_name)
 
@@ -328,9 +334,19 @@ async def batch_download_documents(
     logger.info(f"[BATCH DOWNLOAD]   Number of documents: {len(documents_info)}")
     logger.info(f"[BATCH DOWNLOAD]   downloaded_by: {payload.sub}")
 
+    user = deps.user_store.get_by_user_id(payload.sub)
+    if not user:
+        raise HTTPException(status_code=404, detail="用户不存在")
+    snapshot = resolve_permissions(deps, user)
+    assert_can_download(snapshot)
+
     if not documents_info:
         logger.warning("[BATCH DOWNLOAD] No documents in request")
         raise HTTPException(status_code=400, detail="no_documents_selected")
+
+    for doc_info in documents_info:
+        dataset = doc_info.get("dataset", "展厅")
+        assert_kb_allowed(snapshot, dataset)
 
     zip_content, filename = deps.ragflow_service.batch_download_documents(documents_info)
     if zip_content is None:
@@ -388,4 +404,3 @@ async def list_downloads(
         ],
         "count": len(downloads),
     }
-

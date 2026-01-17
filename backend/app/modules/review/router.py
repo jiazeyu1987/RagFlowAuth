@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pathlib import Path
 
 from app.core.auth import AuthRequired, get_deps
+from app.core.permission_resolver import assert_can_review, assert_kb_allowed, resolve_permissions
 from dependencies import AppDependencies
 from models.document import DocumentResponse, DocumentReviewRequest
 
@@ -23,13 +24,8 @@ async def approve_document(
     if not user:
         raise HTTPException(status_code=404, detail="用户不存在")
 
-    if user.role != "admin":
-        if not user.group_id:
-            raise HTTPException(status_code=403, detail="您没有审核权限，请联系管理员")
-
-        group = deps.permission_group_store.get_group(user.group_id)
-        if not group or not group.get("can_review", 0):
-            raise HTTPException(status_code=403, detail="您没有审核权限，请联系管理员")
+    snapshot = resolve_permissions(deps, user)
+    assert_can_review(snapshot)
 
     logger.info(f"[APPROVE] User {user.username} approving doc {doc_id}")
 
@@ -37,6 +33,8 @@ async def approve_document(
     if not doc:
         logger.error(f"[APPROVE] Document not found: {doc_id}")
         raise HTTPException(status_code=404, detail="文档不存在")
+
+    assert_kb_allowed(snapshot, doc.kb_id)
 
     if doc.status != "pending":
         logger.error(f"[APPROVE] Document status is not pending: {doc.status}")
@@ -99,17 +97,14 @@ async def reject_document(
     if not user:
         raise HTTPException(status_code=404, detail="用户不存在")
 
-    if user.role != "admin":
-        if not user.group_id:
-            raise HTTPException(status_code=403, detail="您没有审核权限，请联系管理员")
-
-        group = deps.permission_group_store.get_group(user.group_id)
-        if not group or not group.get("can_review", 0):
-            raise HTTPException(status_code=403, detail="您没有审核权限，请联系管理员")
+    snapshot = resolve_permissions(deps, user)
+    assert_can_review(snapshot)
 
     doc = deps.kb_store.get_document(doc_id)
     if not doc:
         raise HTTPException(status_code=404, detail="文档不存在")
+
+    assert_kb_allowed(snapshot, doc.kb_id)
 
     if doc.status != "pending":
         raise HTTPException(status_code=400, detail="文档不是待审核状态")
@@ -135,4 +130,3 @@ async def reject_document(
         ragflow_doc_id=updated_doc.ragflow_doc_id,
         kb_id=updated_doc.kb_id,
     )
-

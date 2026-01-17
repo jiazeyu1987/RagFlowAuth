@@ -8,6 +8,13 @@ import io
 from pathlib import Path
 
 from app.core.auth import AuthRequired, get_deps
+from app.core.permission_resolver import (
+    ResourceScope,
+    assert_can_delete,
+    assert_can_upload,
+    assert_kb_allowed,
+    resolve_permissions,
+)
 from models.document import DocumentResponse
 from dependencies import AppDependencies
 from config import settings
@@ -38,15 +45,9 @@ async def upload_document(
     if not user:
         raise HTTPException(status_code=404, detail="用户不存在")
 
-    # 管理员可以直接上传
-    if user.role != "admin":
-        # 非管理员需要检查权限组的 can_upload 权限
-        if not user.group_id:
-            raise HTTPException(status_code=403, detail="您没有上传权限，请联系管理员")
-
-        group = deps.permission_group_store.get_group(user.group_id)
-        if not group or not group.get('can_upload', 0):
-            raise HTTPException(status_code=403, detail="您没有上传权限，请联系管理员")
+    snapshot = resolve_permissions(deps, user)
+    assert_can_upload(snapshot)
+    assert_kb_allowed(snapshot, kb_id)
 
     logger.info(f"[UPLOAD] User {user.username} uploading to kb_id={kb_id}")
 
@@ -127,10 +128,21 @@ async def list_documents(
     logger = logging.getLogger(__name__)
 
     user = deps.user_store.get_by_user_id(payload.sub)
+    if not user:
+        raise HTTPException(status_code=404, detail="用户不存在")
     logger.info(f"[LIST DOCS] User: {user.username}, role: {user.role}, kb_id: {kb_id}, status: {status}")
 
-    # 管理员可以看到所有文档
-    docs = deps.kb_store.list_documents(status=status, kb_id=kb_id, uploaded_by=uploaded_by, limit=limit)
+    snapshot = resolve_permissions(deps, user)
+    if snapshot.kb_scope == ResourceScope.NONE:
+        docs = []
+    else:
+        if kb_id:
+            assert_kb_allowed(snapshot, kb_id)
+            docs = deps.kb_store.list_documents(status=status, kb_id=kb_id, uploaded_by=uploaded_by, limit=limit)
+        else:
+            docs = deps.kb_store.list_documents(status=status, kb_id=None, uploaded_by=uploaded_by, limit=limit)
+            if snapshot.kb_scope != ResourceScope.ALL:
+                docs = [d for d in docs if d.kb_id in snapshot.kb_names]
 
     logger.info(f"[LIST DOCS] Found {len(docs)} documents")
 
@@ -250,15 +262,8 @@ async def delete_document(
     if not user:
         raise HTTPException(status_code=404, detail="用户不存在")
 
-    # 管理员可以直接删除
-    if user.role != "admin":
-        # 非管理员需要检查权限组的 can_delete 权限
-        if not user.group_id:
-            raise HTTPException(status_code=403, detail="您没有删除权限，请联系管理员")
-
-        group = deps.permission_group_store.get_group(user.group_id)
-        if not group or not group.get('can_delete', 0):
-            raise HTTPException(status_code=403, detail="您没有删除权限，请联系管理员")
+    snapshot = resolve_permissions(deps, user)
+    assert_can_delete(snapshot)
 
     logger.info(f"[DELETE] delete_document() called, doc_id: {doc_id}, deleted_by: {payload.sub}")
 
@@ -266,6 +271,8 @@ async def delete_document(
     if not doc:
         logger.error(f"[DELETE] Document not found: {doc_id}")
         raise HTTPException(status_code=404, detail="文档不存在")
+
+    assert_kb_allowed(snapshot, doc.kb_id)
 
     # 记录删除操作
     deps.deletion_log_store.log_deletion(

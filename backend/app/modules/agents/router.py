@@ -4,6 +4,7 @@ import logging
 from pydantic import BaseModel
 
 from app.core.auth import AuthRequired, get_deps
+from app.core.permission_resolver import ResourceScope, resolve_permissions
 from dependencies import AppDependencies
 
 
@@ -47,32 +48,13 @@ async def search_chunks(
         available_dataset_ids = [ds["id"] for ds in all_datasets]
         logger.info(f"[SEARCH] Admin user, available datasets: {available_dataset_ids}")
     else:
-        # 其他用户只能使用权限组中配置的知识库
-        if user.group_id:
-            group = deps.permission_group_store.get_group(user.group_id)
-            if group:
-                accessible_kbs = group.get('accessible_kbs', [])
-                if accessible_kbs and len(accessible_kbs) > 0:
-                    # 权限组指定了具体的知识库（按名称），需要转换为ID
-                    all_datasets = deps.ragflow_service.list_datasets()
-                    # 创建名称到ID的映射
-                    name_to_id = {ds["name"]: ds["id"] for ds in all_datasets}
-                    # 根据权限组的名称获取对应的ID
-                    available_dataset_ids = [name_to_id[kb_name] for kb_name in accessible_kbs if kb_name in name_to_id]
-                    logger.info(f"[SEARCH] User has {len(available_dataset_ids)} accessible datasets from permission group")
-                else:
-                    # 权限组未指定，使用所有知识库
-                    all_datasets = deps.ragflow_service.list_datasets()
-                    available_dataset_ids = [ds["id"] for ds in all_datasets]
-                    logger.info(f"[SEARCH] Permission group has empty accessible_kbs, using all datasets")
-            else:
-                # 权限组不存在
-                available_dataset_ids = []
-                logger.warning(f"[SEARCH] User has invalid group_id")
-        else:
-            # 用户没有分配权限组
+        snapshot = resolve_permissions(deps, user)
+        if snapshot.kb_scope == ResourceScope.NONE:
             available_dataset_ids = []
-            logger.warning(f"[SEARCH] User has no group_id")
+        else:
+            all_datasets = deps.ragflow_service.list_datasets()
+            name_to_id = {ds["name"]: ds["id"] for ds in all_datasets if ds.get("name") and ds.get("id")}
+            available_dataset_ids = [name_to_id[kb_name] for kb_name in snapshot.kb_names if kb_name in name_to_id]
 
     # 如果指定了dataset_ids，验证用户是否有权限
     if request_data.dataset_ids:
@@ -84,7 +66,7 @@ async def search_chunks(
         dataset_ids = available_dataset_ids
 
     if not dataset_ids:
-        raise HTTPException(status_code=400, detail="没有可用的知识库进行检索")
+        raise HTTPException(status_code=403, detail="no_accessible_knowledge_bases")
 
     logger.info(f"[SEARCH] Using datasets: {dataset_ids}")
 
@@ -141,48 +123,9 @@ async def list_available_datasets(
             "count": len(all_datasets)
         }
 
-    # 非管理员用户根据权限组过滤
-    if not user.group_id:
-        logger.warning(f"[GET /api/datasets] User {user.username} has no group_id")
-        return {
-            "datasets": [],
-            "count": 0
-        }
+    snapshot = resolve_permissions(deps, user)
+    if snapshot.kb_scope == ResourceScope.NONE:
+        return {"datasets": [], "count": 0}
 
-    group = deps.permission_group_store.get_group(user.group_id)
-    if not group:
-        logger.warning(f"[GET /api/datasets] User {user.username} has invalid group_id")
-        return {
-            "datasets": [],
-            "count": 0
-        }
-
-    logger.info(f"[GET /api/datasets] User's permission group: {group['group_name']}")
-
-    # 获取权限组配置的可访问知识库
-    accessible_kbs = group.get('accessible_kbs', [])
-    logger.info(f"[GET /api/datasets] Accessible KBs from permission group: {accessible_kbs}")
-
-    if accessible_kbs and len(accessible_kbs) > 0:
-        # 权限组指定了具体的知识库，需要过滤
-        filtered_datasets = []
-        for ds in all_datasets:
-            ds_name = ds.get('name')
-            if ds_name in accessible_kbs:
-                filtered_datasets.append(ds)
-                logger.info(f"  ✓ Match: {ds_name}")
-            else:
-                logger.info(f"  ✗ No match: {ds_name}")
-
-        logger.info(f"[GET /api/datasets] User can access {len(filtered_datasets)} datasets")
-        return {
-            "datasets": filtered_datasets,
-            "count": len(filtered_datasets)
-        }
-    else:
-        # 权限组的 accessible_kbs 为空数组，返回所有
-        logger.info(f"[GET /api/datasets] Accessible KBs is empty, showing all datasets")
-        return {
-            "datasets": all_datasets,
-            "count": len(all_datasets)
-        }
+    filtered = [ds for ds in all_datasets if ds.get("name") in snapshot.kb_names]
+    return {"datasets": filtered, "count": len(filtered)}

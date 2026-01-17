@@ -3,6 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 
 from app.core.auth import AuthRequired, get_deps
+from app.core.permission_resolver import ResourceScope, list_all_kb_names, resolve_permissions
 from core.security import auth
 from core.scopes import get_scopes_for_role
 from dependencies import AppDependencies
@@ -81,42 +82,31 @@ async def get_current_user(
     if not user:
         raise HTTPException(status_code=404, detail="用户不存在")
 
-    permissions = {"can_upload": False, "can_review": False, "can_download": False, "can_delete": False}
-    accessible_kbs_set: set[str] = set()
-    accessible_chats_set: set[str] = set()
+    snapshot = resolve_permissions(deps, user)
+    permissions = snapshot.permissions_dict()
+
+    if snapshot.kb_scope == ResourceScope.ALL:
+        accessible_kbs_set: set[str] = set(list_all_kb_names(deps))
+    else:
+        accessible_kbs_set = set(snapshot.kb_names)
+
+    if snapshot.chat_scope == ResourceScope.ALL:
+        accessible_chats_set: set[str] = set()
+    else:
+        accessible_chats_set = set(snapshot.chat_ids)
     permission_groups_list: list[dict] = []
 
-    # Admins can see all KBs and have all approval permissions.
-    if user.role == "admin":
-        permissions = {"can_upload": True, "can_review": True, "can_download": True, "can_delete": True}
-        try:
-            datasets = deps.ragflow_service.list_datasets() or []
-            for ds in datasets:
-                if isinstance(ds, dict) and ds.get("name"):
-                    accessible_kbs_set.add(ds["name"])
-        except Exception:
-            pass
+    group_ids = list(user.group_ids or [])
+    if not group_ids and user.group_id is not None:
+        group_ids = [user.group_id]
 
-    if user.group_ids and len(user.group_ids) > 0:
-        for group_id in user.group_ids:
+    if group_ids:
+        for group_id in group_ids:
             group = deps.permission_group_store.get_group(group_id)
             if not group:
                 continue
 
             permission_groups_list.append({"group_id": group_id, "group_name": group.get("group_name", "")})
-
-            permissions["can_upload"] = permissions["can_upload"] or bool(group.get("can_upload", False))
-            permissions["can_review"] = permissions["can_review"] or bool(group.get("can_review", False))
-            permissions["can_download"] = permissions["can_download"] or bool(group.get("can_download", False))
-            permissions["can_delete"] = permissions["can_delete"] or bool(group.get("can_delete", False))
-
-            group_kbs = group.get("accessible_kbs", [])
-            if group_kbs:
-                accessible_kbs_set.update(group_kbs)
-
-            group_chats = group.get("accessible_chats", [])
-            if group_chats:
-                accessible_chats_set.update(group_chats)
 
     return {
         "user_id": user.user_id,

@@ -8,8 +8,9 @@ from typing import Optional, List, AsyncIterator, Dict, Any
 class RagflowChatService:
     def __init__(self, config_path: str = None, logger: logging.Logger = None, session_store=None):
         if config_path is None:
-            script_dir = Path(__file__).parent.parent.parent
-            config_path = script_dir.parent / "ragflow_demo" / "ragflow_config.json"
+            # Default to repo root: <repo>/ragflow_config.json
+            repo_root = Path(__file__).resolve().parent.parent.parent
+            config_path = repo_root / "ragflow_config.json"
 
         self.config_path = Path(config_path)
         self.logger = logger or logging.getLogger(__name__)
