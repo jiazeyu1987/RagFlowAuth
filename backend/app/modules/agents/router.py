@@ -4,12 +4,13 @@ import logging
 from pydantic import BaseModel
 
 from backend.app.core.authz import AuthContextDep
+from backend.app.core.datasets import list_accessible_datasets
+from backend.app.core.permdbg import permdbg
 from backend.app.core.permission_resolver import ResourceScope, allowed_dataset_ids, filter_datasets_by_name
 
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
-perm_logger = logging.getLogger("uvicorn.error")
 
 
 class SearchRequest(BaseModel):
@@ -43,13 +44,13 @@ async def search_chunks(
     available_dataset_ids = allowed_dataset_ids(snapshot, all_datasets)
 
     try:
-        perm_logger.info(
-            "[PERMDBG] /api/search user=%s role=%s kb_scope=%s requested=%s allowed_ids=%s",
-            ctx.user.username,
-            ctx.user.role,
-            snapshot.kb_scope,
-            (request_data.dataset_ids or [])[:50],
-            available_dataset_ids[:50],
+        permdbg(
+            "search.request",
+            user=ctx.user.username,
+            role=ctx.user.role,
+            kb_scope=snapshot.kb_scope,
+            requested_dataset_ids=(request_data.dataset_ids or [])[:50],
+            allowed_dataset_ids=available_dataset_ids[:50],
         )
     except Exception:
         pass
@@ -100,22 +101,19 @@ async def list_available_datasets(
     """
     deps = ctx.deps
     snapshot = ctx.snapshot
-
-    # 获取所有知识库从RAGFlow
-    all_datasets = deps.ragflow_service.list_datasets()
-
+    datasets = list_accessible_datasets(deps, snapshot)
     if snapshot.is_admin:
-        return {"datasets": all_datasets, "count": len(all_datasets)}
+        return {"datasets": datasets, "count": len(datasets)}
 
-    filtered = filter_datasets_by_name(snapshot, all_datasets)
+    filtered = datasets
     try:
-        perm_logger.info(
-            "[PERMDBG] /api/datasets user=%s role=%s kb_scope=%s kb_refs=%s -> datasets=%s",
-            ctx.user.username,
-            ctx.user.role,
-            snapshot.kb_scope,
-            sorted(list(snapshot.kb_names))[:50],
-            [d.get("name") for d in filtered[:50] if isinstance(d, dict)],
+        permdbg(
+            "datasets.list",
+            user=ctx.user.username,
+            role=ctx.user.role,
+            kb_scope=snapshot.kb_scope,
+            kb_refs=sorted(list(snapshot.kb_names))[:50],
+            datasets=[d.get("name") for d in filtered[:50] if isinstance(d, dict)],
         )
     except Exception:
         pass

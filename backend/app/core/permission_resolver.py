@@ -121,7 +121,7 @@ def resolve_permissions(deps: AppDependencies, user: Any) -> PermissionSnapshot:
 
     # NOTE:
     # 业务授权以“权限组（resolver）”为准，不再合并按用户单独授权的 KB/Chat 可见性。
-    # user_kb_permissions / user_chat_permissions 保留为历史/管理用途，但不参与当前授权决策。
+    # Legacy per-user KB/chat grants are no longer supported and do not affect authorization.
 
     kb_scope = ResourceScope.SET if kb_names else ResourceScope.NONE
     chat_scope = ResourceScope.SET if chat_ids else ResourceScope.NONE

@@ -10,8 +10,6 @@ from backend.services.permission_group_store import PermissionGroupStore
 from backend.services.ragflow_connection import create_ragflow_connection
 from backend.services.ragflow_chat_service import RagflowChatService
 from backend.services.ragflow_service import RagflowService
-from backend.services.user_chat_permission_store import UserChatPermissionStore
-from backend.services.user_kb_permission_store import UserKbPermissionStore
 from backend.services.user_store import UserStore
 
 
@@ -20,10 +18,8 @@ class AppDependencies:
     user_store: UserStore
     kb_store: KbStore
     ragflow_service: RagflowService
-    user_kb_permission_store: UserKbPermissionStore
     deletion_log_store: DeletionLogStore
     download_log_store: DownloadLogStore
-    user_chat_permission_store: UserChatPermissionStore
     ragflow_chat_service: RagflowChatService
     chat_session_store: ChatSessionStore
     permission_group_store: PermissionGroupStore
@@ -41,10 +37,8 @@ def create_dependencies(db_path: str | None = None) -> AppDependencies:
         user_store=UserStore(db_path=str(db_path)),
         kb_store=KbStore(db_path=str(db_path)),
         ragflow_service=RagflowService(connection=ragflow_conn),
-        user_kb_permission_store=UserKbPermissionStore(db_path=str(db_path)),
         deletion_log_store=DeletionLogStore(db_path=str(db_path)),
         download_log_store=DownloadLogStore(db_path=str(db_path)),
-        user_chat_permission_store=UserChatPermissionStore(db_path=str(db_path)),
         ragflow_chat_service=RagflowChatService(session_store=chat_session_store, connection=ragflow_conn),
         chat_session_store=chat_session_store,
         permission_group_store=PermissionGroupStore(database_path=str(db_path)),

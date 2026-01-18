@@ -51,11 +51,10 @@ def create_app() -> FastAPI:
         chat,
         diagnostics,
         knowledge,
+        me,
         permission_groups,
         ragflow,
         review,
-        user_chat_permissions,
-        user_kb_permissions,
         users,
     )
 
@@ -64,10 +63,9 @@ def create_app() -> FastAPI:
     app.include_router(knowledge.router, prefix="/api/knowledge", tags=["Knowledge Base"])
     app.include_router(review.router, prefix="/api/knowledge", tags=["Document Review"])
     app.include_router(ragflow.router, prefix="/api/ragflow", tags=["RAGFlow Integration"])
-    app.include_router(user_kb_permissions.router, prefix="/api", tags=["User KB Permissions"])
-    app.include_router(user_chat_permissions.router, prefix="/api", tags=["User Chat Permissions"])
     app.include_router(chat.router, prefix="/api", tags=["Chat"])
     app.include_router(agents.router, prefix="/api", tags=["Agents"])
+    app.include_router(me.router, prefix="/api", tags=["Me"])
     app.include_router(permission_groups.create_router(), prefix="/api", tags=["Permission Groups"])
     app.include_router(diagnostics.router, prefix="/api", tags=["Diagnostics"])
 

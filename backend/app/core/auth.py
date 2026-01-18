@@ -13,16 +13,33 @@ def get_deps(request: Request) -> AppDependencies:
     return request.app.state.deps
 
 
-def get_current_payload(request: Request) -> TokenPayload:
-    auth_header = request.headers.get("Authorization")
-    if not auth_header or not auth_header.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Missing or invalid authorization header")
+async def get_current_payload(request: Request) -> TokenPayload:
+    """
+    Resolve the current access-token payload.
 
-    token = auth_header.split(" ")[1]
-    payload = auth._decode_token(token)
-    if not payload:
-        raise HTTPException(status_code=401, detail="Invalid token")
-    return payload
+    Accepts:
+    - Authorization: Bearer <access_token> (frontend default)
+    - access_token cookie (AuthX compatible)
+    - token query param (AuthX compatible)
+
+    Always returns 401 (not 422) when token is missing/invalid.
+    """
+    token: str | None = None
+    try:
+        token = await auth.get_access_token_from_request(request)
+    except Exception:
+        # Fall back to explicit header parsing.
+        auth_header = request.headers.get("Authorization") or ""
+        if auth_header.startswith("Bearer "):
+            token = auth_header.split(" ", 1)[1].strip() or None
+
+    if not token:
+        raise HTTPException(status_code=401, detail="Missing access token")
+
+    try:
+        return auth.verify_token(token, verify_type=True)
+    except Exception:
+        raise HTTPException(status_code=401, detail="Invalid access token")
 
 
 AuthRequired = Annotated[TokenPayload, Depends(get_current_payload)]

@@ -6,7 +6,6 @@ import ReactMarkdown from 'react-markdown';
 import mammoth from 'mammoth';
 import * as XLSX from 'xlsx';
 import * as pdfjsLib from 'pdfjs-dist';
-import JSZip from 'jszip';
 
 // Configure PDF.js worker to use local file
 pdfjsLib.GlobalWorkerOptions.workerSrc = process.env.PUBLIC_URL + '/js/pdf.worker.min.mjs';
@@ -76,14 +75,13 @@ const DocumentBrowser = () => {
   const [markdownContent, setMarkdownContent] = useState(null);
   const [docxContent, setDocxContent] = useState(null);
   const [docContent, setDocContent] = useState(null);
-  const [pptxSlides, setPptxSlides] = useState(null);
-  const [pptxCurrentSlide, setPptxCurrentSlide] = useState(0);
   const [excelData, setExcelData] = useState(null);
   const [pdfDocument, setPdfDocument] = useState(null);
   const [pdfNumPages, setPdfNumPages] = useState(0);
   const [pdfCurrentPage, setPdfCurrentPage] = useState(1);
   const [pdfScale, setPdfScale] = useState(1.5);
   const canvasRef = useRef(null);
+  const handleViewRef = useRef(null);
   const [imageScale, setImageScale] = useState(1);
   const [imageRotation, setImageRotation] = useState(0);
   const [canDeleteDocs, setCanDeleteDocs] = useState(false);
@@ -176,7 +174,7 @@ const DocumentBrowser = () => {
 
           const targetDoc = documents[datasetName].find(doc => doc.id === documentId);
           if (targetDoc) {
-            handleView(documentId, datasetName);
+            handleViewRef.current?.(documentId, datasetName);
           } else {
             setError(`无法在知识库 "${datasetName}" 中找到文档: ${documentName}`);
           }
@@ -295,8 +293,6 @@ const DocumentBrowser = () => {
       setMarkdownContent(null);
       setDocxContent(null);
       setDocContent(null);
-      setPptxSlides(null);
-      setPptxCurrentSlide(0);
       setExcelData(null);
       setPdfDocument(null);
       setPdfNumPages(0);
@@ -328,27 +324,6 @@ const DocumentBrowser = () => {
       } else if (isPptxFile(docName)) {
         const blob = await authClient.previewRagflowDocumentBlob(docId, datasetName, docName);
         const url = window.URL.createObjectURL(blob);
-        const arrayBuffer = await blob.arrayBuffer();
-
-        // Parse PPTX (it's a ZIP file)
-        const zip = await JSZip.loadAsync(arrayBuffer);
-        const slideFiles = [];
-
-        // Get all slide files
-        for (let i = 1; i <= 999; i++) {
-          const slidePath = `ppt/slides/slide${i}.xml`;
-          const slideFile = zip.file(slidePath);
-          if (!slideFile) break;
-
-          const content = await slideFile.async('string');
-          slideFiles.push({
-            index: i,
-            content: content
-          });
-        }
-
-        setPptxSlides(slideFiles);
-        setPptxCurrentSlide(0);
         setPreviewUrl(url);
       } else if (isExcelFile(docName)) {
         const blob = await authClient.previewRagflowDocumentBlob(docId, datasetName, docName);
@@ -388,7 +363,6 @@ const DocumentBrowser = () => {
       setMarkdownContent(null);
       setDocxContent(null);
       setDocContent(null);
-      setPptxSlides(null);
       setExcelData(null);
       setPdfDocument(null);
     } finally {
@@ -396,6 +370,8 @@ const DocumentBrowser = () => {
       setActionLoading(prev => ({ ...prev, [`${docId}-view`]: false }));
     }
   };
+
+  handleViewRef.current = handleView;
 
   const closePreview = () => {
     if (previewUrl) {
@@ -406,19 +382,10 @@ const DocumentBrowser = () => {
     setMarkdownContent(null);
     setDocxContent(null);
     setDocContent(null);
-    setPptxSlides(null);
-    setPptxCurrentSlide(0);
     setExcelData(null);
     setPdfDocument(null);
     setPdfNumPages(0);
     setPdfCurrentPage(1);
-  };
-
-  const isPreviewable = (filename) => {
-    if (!filename) return false;
-    const ext = filename.toLowerCase().split('.').pop();
-    const previewableExts = ['pdf', 'png', 'jpg', 'jpeg', 'gif', 'bmp', 'svg', 'webp', 'txt', 'md', 'mdocx', 'docx', 'doc', 'pptx', 'ppt', 'xlsx', 'xls'];
-    return previewableExts.includes(ext);
   };
 
   const isGenericPreviewable = (filename) => {

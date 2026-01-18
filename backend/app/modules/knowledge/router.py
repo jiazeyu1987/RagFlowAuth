@@ -9,7 +9,7 @@ from pathlib import Path
 
 from backend.app.core.authz import AuthContextDep
 from backend.app.core.kb_refs import resolve_kb_ref
-from backend.app.core.paths import resolve_backend_path
+from backend.app.core.paths import resolve_repo_path
 from backend.app.core.permission_resolver import (
     ResourceScope,
     assert_can_delete,
@@ -19,6 +19,7 @@ from backend.app.core.permission_resolver import (
 )
 from backend.models.document import DocumentResponse
 from backend.app.core.config import settings
+from backend.app.core.permdbg import permdbg
 
 
 router = APIRouter()
@@ -60,7 +61,7 @@ async def upload_document(
         raise HTTPException(status_code=400, detail="不支持的文件类型")
 
     # 存储到本地
-    uploads_dir = resolve_backend_path(settings.UPLOAD_DIR)
+    uploads_dir = resolve_repo_path(settings.UPLOAD_DIR)
     uploads_dir.mkdir(parents=True, exist_ok=True)
 
     # 生成唯一文件名
@@ -136,13 +137,13 @@ async def list_documents(
     snapshot = ctx.snapshot
     logger.info(f"[LIST DOCS] User: {user.username}, role: {user.role}, kb_id: {kb_id}, status: {status}")
     try:
-        perm_logger.info(
-            "[PERMDBG] /api/knowledge/documents user=%s role=%s kb_scope=%s kb_refs=%s request_kb_id=%s",
-            user.username,
-            user.role,
-            snapshot.kb_scope,
-            sorted(list(snapshot.kb_names))[:50],
-            kb_id,
+        permdbg(
+            "knowledge.documents.request",
+            user=user.username,
+            role=user.role,
+            kb_scope=snapshot.kb_scope,
+            kb_refs=sorted(list(snapshot.kb_names))[:50],
+            request_kb_id=kb_id,
         )
     except Exception:
         pass
@@ -171,10 +172,10 @@ async def list_documents(
                     or (d.kb_name is not None and d.kb_name in snapshot.kb_names)
                 ]
             try:
-                perm_logger.info(
-                    "[PERMDBG] /api/knowledge/documents filtered %s -> %s",
-                    before,
-                    len(docs),
+                permdbg(
+                    "knowledge.documents.filtered",
+                    before=before,
+                    after=len(docs),
                 )
             except Exception:
                 pass
@@ -241,8 +242,6 @@ async def download_document(
     """Download document file"""
     import logging
     logger = logging.getLogger(__name__)
-    perm_logger = logging.getLogger("uvicorn.error")
-
     deps = ctx.deps
     user = ctx.user
     snapshot = ctx.snapshot

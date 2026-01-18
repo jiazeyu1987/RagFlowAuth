@@ -3,7 +3,7 @@ import { httpClient } from '../../shared/http/httpClient';
 
 export const knowledgeApi = {
   listRagflowDatasets() {
-    return httpClient.requestJson(authBackendUrl('/api/ragflow/datasets'), { method: 'GET' });
+    return httpClient.requestJson(authBackendUrl('/api/datasets'), { method: 'GET' });
   },
 
   listLocalDocuments(params = {}) {

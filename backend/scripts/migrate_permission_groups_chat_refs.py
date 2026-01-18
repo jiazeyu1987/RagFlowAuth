@@ -7,8 +7,8 @@ from pathlib import Path
 
 from backend.database.paths import resolve_auth_db_path
 
-from backend.database.schema_migrations import ensure_schema
 from backend.database.sqlite import connect_sqlite
+from backend.runtime.runner import ensure_database
 from backend.services.ragflow_connection import create_ragflow_connection
 from backend.services.ragflow_chat_service import RagflowChatService
 
@@ -24,13 +24,13 @@ def main() -> None:
     parser.add_argument(
         "--db-path",
         default=None,
-        help="Path to auth.db (default: settings.DATABASE_PATH relative to backend/)",
+        help="Path to auth.db (relative paths are resolved from repo root)",
     )
     parser.add_argument("--dry-run", action="store_true", help="Only print changes, do not write DB")
     args = parser.parse_args()
 
     db_path = _resolve_db_path(args.db_path)
-    ensure_schema(str(db_path))
+    ensure_database(db_path=db_path)
     conn = connect_sqlite(db_path)
     try:
         rows = conn.execute(

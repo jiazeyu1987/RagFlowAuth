@@ -6,8 +6,8 @@ from pathlib import Path
 
 from backend.database.paths import resolve_auth_db_path
 
-from backend.database.schema_migrations import ensure_schema
 from backend.database.sqlite import connect_sqlite
+from backend.runtime.runner import ensure_database
 from backend.services.ragflow_connection import create_ragflow_connection
 from backend.services.ragflow_service import RagflowService
 
@@ -93,23 +93,17 @@ def main() -> None:
     parser.add_argument(
         "--db-path",
         default=None,
-        help="Path to auth.db (default: settings.DATABASE_PATH relative to backend/)",
+        help="Path to auth.db (relative paths are resolved from repo root)",
     )
     args = parser.parse_args()
 
     db_path = _resolve_db_path(args.db_path)
-    ensure_schema(str(db_path))
+    ensure_database(db_path=db_path)
     conn = connect_sqlite(db_path)
     try:
         ragflow_conn = create_ragflow_connection()
         ragflow = RagflowService(connection=ragflow_conn)
         index = ragflow.get_dataset_index()
-
-        if not _table_exists(conn, "user_kb_permissions"):
-            print("[SKIP] user_kb_permissions not found")
-        else:
-            updated = _backfill_table(conn, "user_kb_permissions", id_column="id", dataset_index=index)
-            print(f"[OK] user_kb_permissions updated: {updated}")
 
         if not _table_exists(conn, "kb_documents"):
             print("[SKIP] kb_documents not found")

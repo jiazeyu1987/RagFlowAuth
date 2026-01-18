@@ -19,7 +19,7 @@ const Agents = () => {
 
   // Search parameters
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(30);
+  const [pageSize] = useState(30);
   const [similarityThreshold, setSimilarityThreshold] = useState(0.2);
   const [topK, setTopK] = useState(30);
   const [keyword, setKeyword] = useState(false);
@@ -735,7 +735,6 @@ const Agents = () => {
             backgroundColor: 'white',
             borderRadius: '8px',
             maxWidth: '90vw',
-            maxHeight: '90vh',
             width: '80%',
             maxHeight: '80vh',
             display: 'flex',

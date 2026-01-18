@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response
 
 from backend.app.core.auth import get_deps
 from backend.app.core.authz import AuthContextDep
+from backend.app.core.permdbg import permdbg
 from backend.app.core.permission_resolver import ResourceScope
 from backend.core.security import auth
 from backend.app.dependencies import AppDependencies
@@ -14,7 +15,6 @@ from backend.services.user_store import hash_password
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
-perm_logger = logging.getLogger("uvicorn.error")
 
 
 @router.post("/login", response_model=TokenResponse)
@@ -53,7 +53,21 @@ async def login(
 @router.post("/refresh")
 async def refresh_token(request: Request):
     try:
-        refresh_token_value = await auth.get_refresh_token_from_request(request)
+        refresh_token_value: str | None = None
+        try:
+            refresh_token_value = await auth.get_refresh_token_from_request(request)
+        except Exception:
+            refresh_token_value = None
+
+        # Frontend sends refresh token via Authorization header.
+        if not refresh_token_value:
+            auth_header = request.headers.get("Authorization") or ""
+            if auth_header.startswith("Bearer "):
+                refresh_token_value = auth_header.split(" ", 1)[1].strip() or None
+
+        if not refresh_token_value:
+            raise HTTPException(status_code=401, detail="缺少刷新令牌")
+
         payload = auth.verify_token(refresh_token_value, verify_type=True)
 
         deps = request.app.state.deps
@@ -67,6 +81,8 @@ async def refresh_token(request: Request):
         scopes: list[str] = []
         access_token = auth.create_access_token(uid=payload.sub, scopes=scopes)
         return {"access_token": access_token, "token_type": "bearer"}
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=401, detail=f"刷新令牌无效: {str(e)}")
 
@@ -97,16 +113,14 @@ async def get_current_user(
             for ref in (group.get("accessible_kbs") or []):
                 if isinstance(ref, str) and ref:
                     group_kbs.append(ref)
-        user_kbs = deps.user_kb_permission_store.get_user_kbs(user.user_id) or []
-        perm_logger.info(
-            "[PERMDBG] /api/auth/me user=%s role=%s group_ids=%s kb_scope=%s kb_refs=%s group_kbs=%s user_kbs=%s",
-            user.username,
-            user.role,
-            group_ids,
-            snapshot.kb_scope,
-            sorted(list(snapshot.kb_names))[:50],
-            sorted(set([x for x in group_kbs if isinstance(x, str) and x]))[:50],
-            sorted(set([x for x in user_kbs if isinstance(x, str) and x]))[:50],
+        permdbg(
+            "auth.me.snapshot",
+            user=user.username,
+            role=user.role,
+            group_ids=group_ids,
+            kb_scope=snapshot.kb_scope,
+            kb_refs=sorted(list(snapshot.kb_names))[:50],
+            group_kbs=sorted(set([x for x in group_kbs if isinstance(x, str) and x]))[:50],
         )
     except Exception:
         # Best-effort debug only.
@@ -126,11 +140,11 @@ async def get_current_user(
         accessible_chats_set = set(snapshot.chat_ids)
 
     try:
-        perm_logger.info(
-            "[PERMDBG] /api/auth/me effective accessible_kbs=%s accessible_kb_ids=%s accessible_chats_count=%s",
-            sorted(accessible_kb_names_set)[:50],
-            sorted(accessible_kb_ids_set)[:50],
-            len(accessible_chats_set),
+        permdbg(
+            "auth.me.effective",
+            accessible_kbs=sorted(accessible_kb_names_set)[:50],
+            accessible_kb_ids=sorted(accessible_kb_ids_set)[:50],
+            accessible_chats_count=len(accessible_chats_set),
         )
     except Exception:
         pass

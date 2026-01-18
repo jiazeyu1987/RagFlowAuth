@@ -12,7 +12,7 @@ Note:
 from __future__ import annotations
 
 from backend.database.paths import resolve_auth_db_path
-from backend.database.schema_migrations import ensure_schema
+from backend.runtime.runner import ensure_database
 
 
 def migrate(db_path: str | None = None) -> bool:
@@ -22,7 +22,7 @@ def migrate(db_path: str | None = None) -> bool:
         return False
 
     print(f"[INFO] Ensuring schema: {resolved}")
-    ensure_schema(str(resolved))
+    ensure_database(db_path=resolved)
     print("[OK] Schema ensured (includes chat_sessions)")
     return True
 
@@ -34,7 +34,7 @@ def main() -> None:
     parser.add_argument(
         "--db-path",
         default=None,
-        help="Path to auth.db (default: settings.DATABASE_PATH relative to backend/)",
+        help="Path to auth.db (relative paths are resolved from repo root)",
     )
     args = parser.parse_args()
 

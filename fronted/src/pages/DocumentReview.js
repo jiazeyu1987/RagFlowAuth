@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { reviewApi } from '../features/review/api';
 import { knowledgeApi } from '../features/knowledge/api';
@@ -45,11 +45,7 @@ const DocumentReview = () => {
     fetchDatasets();
   }, []);
 
-  useEffect(() => {
-    fetchRagflowDocuments();
-  }, [selectedDataset]);
-
-  const fetchRagflowDocuments = async () => {
+  const fetchRagflowDocuments = useCallback(async () => {
     if (!selectedDataset) return;
 
     try {
@@ -68,7 +64,11 @@ const DocumentReview = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [selectedDataset]);
+
+  useEffect(() => {
+    fetchRagflowDocuments();
+  }, [fetchRagflowDocuments]);
 
   const handleApprove = async (docId) => {
     if (!window.confirm('确定要审核通过该文档吗？')) return;
@@ -209,7 +209,7 @@ const DocumentReview = () => {
 
         <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
           <select
-            value={selectedDataset}
+            value={selectedDataset || ''}
             onChange={(e) => setSelectedDataset(e.target.value)}
             disabled={loadingDatasets}
             style={{

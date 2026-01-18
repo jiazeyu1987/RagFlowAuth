@@ -18,8 +18,8 @@ import sqlite3
 from pathlib import Path
 
 from backend.database.paths import resolve_auth_db_path
-from backend.database.schema_migrations import ensure_schema
 from backend.database.sqlite import connect_sqlite
+from backend.runtime.runner import ensure_database
 
 
 def _resolve_db_path(raw: str | None) -> Path:
@@ -39,7 +39,7 @@ def migrate_database(db_path: Path, *, dry_run: bool = False) -> bool:
         print(f"[ERROR] 数据库文件不存在: {db_path}")
         return False
 
-    ensure_schema(str(db_path))
+    ensure_database(db_path=db_path)
 
     conn = connect_sqlite(db_path)
     try:
@@ -102,7 +102,7 @@ def main() -> None:
     parser.add_argument(
         "--db-path",
         default=None,
-        help="Path to auth.db (default: settings.DATABASE_PATH relative to backend/)",
+        help="Path to auth.db (relative paths are resolved from repo root)",
     )
     parser.add_argument("--dry-run", action="store_true", help="Only print changes, do not write DB")
     args = parser.parse_args()

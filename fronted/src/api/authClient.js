@@ -459,7 +459,7 @@ class AuthClient {
 
   async listDatasets() {
     const response = await this.fetchWithAuth(
-      authBackendUrl('/api/ragflow/datasets'),
+      authBackendUrl('/api/datasets'),
       { method: 'GET' }
     );
 

@@ -77,47 +77,6 @@ def _ensure_deletion_logs_table(conn: sqlite3.Connection) -> None:
     conn.execute("CREATE INDEX IF NOT EXISTS idx_deletion_logs_time ON deletion_logs(deleted_at_ms)")
 
 
-def _ensure_user_chat_permissions_table(conn: sqlite3.Connection) -> None:
-    if _table_exists(conn, "user_chat_permissions"):
-        return
-    conn.execute(
-        """
-        CREATE TABLE IF NOT EXISTS user_chat_permissions (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id TEXT NOT NULL,
-            chat_id TEXT NOT NULL,
-            granted_by TEXT NOT NULL,
-            granted_at_ms INTEGER NOT NULL,
-            UNIQUE(user_id, chat_id)
-        )
-        """
-    )
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_user_chat_user ON user_chat_permissions(user_id)")
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_user_chat_chat ON user_chat_permissions(chat_id)")
-
-
-def _ensure_user_kb_permissions_table(conn: sqlite3.Connection) -> None:
-    if _table_exists(conn, "user_kb_permissions"):
-        return
-    conn.execute(
-        """
-        CREATE TABLE IF NOT EXISTS user_kb_permissions (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id TEXT NOT NULL,
-            kb_id TEXT NOT NULL,
-            kb_dataset_id TEXT,
-            kb_name TEXT,
-            granted_by TEXT NOT NULL,
-            granted_at_ms INTEGER NOT NULL,
-            UNIQUE(user_id, kb_id)
-        )
-        """
-    )
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_user_kb_user ON user_kb_permissions(user_id)")
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_user_kb_kb ON user_kb_permissions(kb_id)")
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_user_kb_kb_dataset_id ON user_kb_permissions(kb_dataset_id)")
-
-
 def _ensure_permission_groups_table(conn: sqlite3.Connection) -> None:
     if _table_exists(conn, "permission_groups"):
         return
@@ -323,10 +282,8 @@ def ensure_kb_ref_columns(db_path: str | Path) -> None:
 
         _ensure_download_logs_table(conn)
         _ensure_deletion_logs_table(conn)
-        _ensure_user_chat_permissions_table(conn)
-        _ensure_user_kb_permissions_table(conn)
 
-        for table_name in ("kb_documents", "user_kb_permissions", "deletion_logs", "download_logs"):
+        for table_name in ("kb_documents", "deletion_logs", "download_logs"):
             if not _table_exists(conn, table_name):
                 continue
             _add_column_if_missing(conn, table_name, "kb_dataset_id TEXT")
@@ -341,10 +298,6 @@ def ensure_kb_ref_columns(db_path: str | Path) -> None:
 
         if _table_exists(conn, "kb_documents"):
             conn.execute("CREATE INDEX IF NOT EXISTS idx_docs_kb_dataset_id ON kb_documents(kb_dataset_id)")
-        if _table_exists(conn, "user_kb_permissions"):
-            conn.execute(
-                "CREATE INDEX IF NOT EXISTS idx_user_kb_kb_dataset_id ON user_kb_permissions(kb_dataset_id)"
-            )
         if _table_exists(conn, "deletion_logs"):
             conn.execute("CREATE INDEX IF NOT EXISTS idx_deletion_logs_kb_dataset_id ON deletion_logs(kb_dataset_id)")
         if _table_exists(conn, "download_logs"):

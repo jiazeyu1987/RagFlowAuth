@@ -1,27 +1,28 @@
 import logging
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request, Response as FastAPIResponse
 from fastapi.responses import Response
 from typing import Optional
 
 from backend.app.core.authz import AuthContextDep
+from backend.app.core.datasets import list_accessible_datasets
 from backend.app.core.kb_refs import resolve_kb_ref
+from backend.app.core.permdbg import permdbg
 from backend.app.core.permission_resolver import (
     assert_can_delete,
     assert_can_download,
     assert_kb_allowed,
-    filter_datasets_by_name,
 )
 
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
-perm_logger = logging.getLogger("uvicorn.error")
 
 
 @router.get("/datasets")
 async def list_datasets(
     ctx: AuthContextDep,
+    response: FastAPIResponse,
 ):
     """
     列出RAGFlow数据集（基于权限组过滤）
@@ -33,20 +34,20 @@ async def list_datasets(
     deps = ctx.deps
     snapshot = ctx.snapshot
 
-    all_datasets = deps.ragflow_service.list_datasets()
+    # Compatibility: legacy endpoint. Prefer `/api/datasets`.
+    response.headers["Deprecation"] = "true"
+    response.headers["X-Replaced-By"] = "/api/datasets"
 
-    if snapshot.is_admin:
-        return {"datasets": all_datasets}
-
-    filtered = filter_datasets_by_name(snapshot, all_datasets)
+    datasets = list_accessible_datasets(deps, snapshot)
+    filtered = datasets
     try:
-        perm_logger.info(
-            "[PERMDBG] /api/ragflow/datasets user=%s role=%s kb_scope=%s kb_refs=%s -> datasets=%s",
-            ctx.user.username,
-            ctx.user.role,
-            snapshot.kb_scope,
-            sorted(list(snapshot.kb_names))[:50],
-            [d.get("name") for d in filtered[:50] if isinstance(d, dict)],
+        permdbg(
+            "ragflow.datasets.deprecated",
+            user=ctx.user.username,
+            role=ctx.user.role,
+            kb_scope=snapshot.kb_scope,
+            kb_refs=sorted(list(snapshot.kb_names))[:50],
+            datasets=[d.get("name") for d in filtered[:50] if isinstance(d, dict)],
         )
     except Exception:
         pass

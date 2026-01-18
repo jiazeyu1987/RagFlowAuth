@@ -20,6 +20,9 @@ class Settings(BaseSettings):
     # Database
     DATABASE_PATH: str = "data/auth.db"
 
+    # Diagnostics / debug logging
+    PERMDBG_ENABLED: bool = False
+
     # File Upload
     UPLOAD_DIR: str = "data/uploads"
     MAX_FILE_SIZE: int = 16 * 1024 * 1024  # 16MB
