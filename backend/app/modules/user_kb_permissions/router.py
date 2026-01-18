@@ -1,17 +1,22 @@
 from __future__ import annotations
 
+import logging
+
 from fastapi import APIRouter, Depends
 
-from app.core.auth import AuthRequired, get_deps
-from core.permissions import AdminRequired
-from dependencies import AppDependencies
+from backend.app.core.auth import get_deps
+from backend.app.core.authz import AuthContextDep
+from backend.app.core.authz import AdminOnly
+from backend.app.dependencies import AppDependencies
 
-from app.modules.user_kb_permissions.repo import UserKbPermissionsRepo
-from app.modules.user_kb_permissions.schemas import BatchGrantRequest, KbListResponse
-from app.modules.user_kb_permissions.service import UserKbPermissionsService
+from backend.app.modules.user_kb_permissions.repo import UserKbPermissionsRepo
+from backend.app.modules.user_kb_permissions.schemas import BatchGrantRequest, KbListResponse
+from backend.app.modules.user_kb_permissions.service import UserKbPermissionsService
 
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
+perm_logger = logging.getLogger("uvicorn.error")
 
 
 def get_service(deps: AppDependencies = Depends(get_deps)) -> UserKbPermissionsService:
@@ -21,7 +26,7 @@ def get_service(deps: AppDependencies = Depends(get_deps)) -> UserKbPermissionsS
 @router.get("/users/{user_id}/kbs", response_model=KbListResponse)
 async def get_user_knowledge_bases(
     user_id: str,
-    _: AdminRequired,
+    _: AdminOnly,
     service: UserKbPermissionsService = Depends(get_service),
 ):
     kb_ids = service.get_user_knowledge_bases_admin(user_id)
@@ -32,7 +37,7 @@ async def get_user_knowledge_bases(
 async def grant_knowledge_base_access(
     user_id: str,
     kb_id: str,
-    payload: AdminRequired,
+    payload: AdminOnly,
     service: UserKbPermissionsService = Depends(get_service),
 ):
     username = service.grant_access_admin(user_id=user_id, kb_id=kb_id, granted_by=payload.sub)
@@ -43,7 +48,7 @@ async def grant_knowledge_base_access(
 async def revoke_knowledge_base_access(
     user_id: str,
     kb_id: str,
-    _: AdminRequired,
+    _: AdminOnly,
     service: UserKbPermissionsService = Depends(get_service),
 ):
     username = service.revoke_access_admin(user_id=user_id, kb_id=kb_id)
@@ -52,17 +57,37 @@ async def revoke_knowledge_base_access(
 
 @router.get("/me/kbs", response_model=KbListResponse)
 async def get_my_knowledge_bases(
-    payload: AuthRequired,
-    service: UserKbPermissionsService = Depends(get_service),
+    ctx: AuthContextDep,
 ):
-    kb_ids = service.get_my_knowledge_bases(payload.sub)
-    return KbListResponse(kb_ids=kb_ids)
+    if ctx.snapshot.is_admin:
+        return KbListResponse(kb_ids=ctx.deps.ragflow_service.list_all_kb_names())
+
+    try:
+        perm_logger.info(
+            "[PERMDBG] /api/me/kbs user=%s role=%s kb_scope=%s kb_refs=%s",
+            ctx.user.username,
+            ctx.user.role,
+            ctx.snapshot.kb_scope,
+            sorted(list(ctx.snapshot.kb_names))[:50],
+        )
+    except Exception:
+        pass
+
+    ragflow_service = ctx.deps.ragflow_service
+    resolve_names = getattr(ragflow_service, "resolve_dataset_names", None)
+    if callable(resolve_names):
+        try:
+            names = resolve_names(list(ctx.snapshot.kb_names))
+            return KbListResponse(kb_ids=sorted(set(names)))
+        except Exception:
+            pass
+    return KbListResponse(kb_ids=sorted(ctx.snapshot.kb_names))
 
 
 @router.post("/users/batch-grant")
 async def batch_grant_knowledge_bases(
     request_data: BatchGrantRequest,
-    payload: AdminRequired,
+    payload: AdminOnly,
     service: UserKbPermissionsService = Depends(get_service),
 ):
     count = service.batch_grant_admin(user_ids=request_data.user_ids, kb_ids=request_data.kb_ids, granted_by=payload.sub)
@@ -70,4 +95,3 @@ async def batch_grant_knowledge_bases(
         "message": f"已为 {len(request_data.user_ids)} 个用户授予 {len(request_data.kb_ids)} 个知识库的权限",
         "total_permissions": count,
     }
-

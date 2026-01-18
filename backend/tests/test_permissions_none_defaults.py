@@ -4,9 +4,9 @@ from authx import TokenPayload
 from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
 
-from app.core import auth as auth_module
-from app.modules.auth.router import router as auth_router
-from app.modules.chat.router import router as chat_router
+from backend.app.core import auth as auth_module
+from backend.app.modules.auth.router import router as auth_router
+from backend.app.modules.chat.router import router as chat_router
 
 
 class _User:
@@ -33,9 +33,25 @@ class _PermissionGroupStore:
         return None
 
 
+class _UserKbPermissionStore:
+    def get_user_kbs(self, user_id: str):  # noqa: ARG002
+        return []
+
+
+class _UserChatPermissionStore:
+    def get_user_chats(self, user_id: str):  # noqa: ARG002
+        return []
+
+
 class _RagflowService:
     def list_datasets(self):
         return [{"name": "kb_a"}, {"name": "kb_b"}]
+
+    def normalize_dataset_ids(self, refs):  # noqa: ARG002
+        return []
+
+    def resolve_dataset_names(self, refs):  # noqa: ARG002
+        return []
 
 
 class _RagflowChatService:
@@ -50,6 +66,8 @@ class _Deps:
     def __init__(self, user: _User):
         self.user_store = _UserStore(user)
         self.permission_group_store = _PermissionGroupStore()
+        self.user_kb_permission_store = _UserKbPermissionStore()
+        self.user_chat_permission_store = _UserChatPermissionStore()
         self.ragflow_service = _RagflowService()
         self.ragflow_chat_service = _RagflowChatService()
 
@@ -85,4 +103,3 @@ class TestNoneDefaults(unittest.TestCase):
 
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.json(), {"chats": [], "count": 0})
-

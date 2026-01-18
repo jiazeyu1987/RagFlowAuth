@@ -7,6 +7,7 @@ class UserCreate(BaseModel):
     username: str
     password: str
     email: Optional[str] = None
+    role: Optional[str] = None  # RBAC role (admin/reviewer/operator/viewer/guest); defaults to viewer
     group_id: Optional[int] = None  # 向后兼容
     group_ids: Optional[List[int]] = None  # 新字段：支持多个权限组
     status: str = "active"
@@ -15,6 +16,7 @@ class UserCreate(BaseModel):
 class UserUpdate(BaseModel):
     """User update model"""
     email: Optional[str] = None
+    role: Optional[str] = None  # RBAC role (admin/reviewer/operator/viewer/guest)
     group_id: Optional[int] = None  # 向后兼容
     group_ids: Optional[List[int]] = None  # 新字段：支持多个权限组
     status: Optional[str] = None

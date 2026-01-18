@@ -8,15 +8,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **NOTE:** This codebase contains two backend implementations:
 - `backend/` - Legacy Flask implementation (deprecated, uses Casbin)
-- `new_backend/` - Current FastAPI + AuthX implementation (active)
+- `backend/` - Current FastAPI + AuthX implementation (active)
 
-**Always work with `new_backend/` unless specifically maintaining the legacy Flask backend.**
+**Always work with `backend/` unless specifically maintaining legacy code.**
 
 ## Architecture Overview
 
 ```
 Auth/
-├── new_backend/     # FastAPI backend (port: 8001) - ACTIVE
+├── backend/     # FastAPI backend (port: 8001) - ACTIVE
 │   ├── api/         # API endpoints (auth, users, knowledge, review, ragflow, user_kb_permissions)
 │   ├── services/    # Business logic stores (user, kb, ragflow, user_kb_permission, deletion_log, download_log)
 │   ├── core/        # Security (AuthX JWT), scopes configuration
@@ -43,7 +43,7 @@ Auth/
 
 **Install Backend Dependencies:**
 ```bash
-cd new_backend
+cd backend
 pip install -r requirements.txt
 ```
 
@@ -55,7 +55,7 @@ npm install
 
 **Initialize Database:**
 ```bash
-cd new_backend
+cd backend
 python -m database.init_db
 ```
 
@@ -67,7 +67,7 @@ python -m database.init_db
 
 **Start Backend (port 8001):**
 ```bash
-cd new_backend
+cd backend
 python -m main
 # Or directly:
 uvicorn main:app --reload --port 8001
@@ -99,9 +99,9 @@ npm run build
 The backend follows FastAPI best practices with lifespan-managed dependencies:
 
 **Entry Points:**
-- `new_backend/__main__.py` - Enables `python -m new_backend` execution
-- `new_backend/main.py` - `create_app()` function that configures FastAPI app
-- `new_backend/dependencies.py` - `create_dependencies()` creates dependency injection container
+- `backend/__main__.py` - Enables `python -m backend` execution
+- `backend/app/main.py` - `create_app()` function that configures FastAPI app
+- `backend/app/dependencies.py` - `create_dependencies()` creates dependency injection container
 
 **Dependency Injection:**
 ```python
@@ -130,7 +130,7 @@ API endpoints are organized into domain-specific routers:
 | `api/ragflow.py` | RAGFlow integration | `/api/ragflow/datasets`, `/api/ragflow/documents`, `/api/ragflow/download` |
 | `api/user_kb_permissions.py` | KB permissions | `/api/user-kb-permissions` |
 
-All routers access dependencies via `Depends(get_deps)`.
+Routers access dependencies via the unified `AuthContextDep` dependency (see `backend/app/core/authz.py`).
 
 ### Authentication Layer
 
@@ -141,10 +141,9 @@ All routers access dependencies via `Depends(get_deps)`.
 - Refresh token expiration: 7 days
 - Token payload: `sub` (user_id), `scopes`, `exp`
 
-**Scopes-based Authorization** (`core/scopes.py`):
-- Scopes format: `resource:action` (e.g., `kb_documents:upload`)
-- Wildcard support: `kb_documents:*` for all actions on a resource
-- Scopes are assigned based on user role
+**Business Authorization**
+- JWT `scopes` are kept for compatibility only.
+- Business permissions are resolver/permission-group based (see `backend/app/core/permission_resolver.py`).
 
 **Token Endpoints:**
 - `POST /api/auth/login` - Returns access_token and refresh_token, sets cookies
@@ -154,31 +153,25 @@ All routers access dependencies via `Depends(get_deps)`.
 
 ### Authorization Layer
 
-**Role to Scopes Mapping** (`core/scopes.py`):
-
-| Role | Scopes |
-|------|-------------|
-| `admin` | `users:*`, `kb_documents:*`, `ragflow_documents:*` |
-| `reviewer` | `kb_documents:view`, `kb_documents:upload`, `kb_documents:review`, `kb_documents:approve`, `kb_documents:reject`, `kb_documents:delete`, `ragflow_documents:view`, `ragflow_documents:delete` |
-| `operator` | `kb_documents:upload`, `ragflow_documents:view` |
-| `viewer` | `ragflow_documents:view` |
-| `guest` | `ragflow_documents:view` |
-
-**Permission Checking:**
-- Scopes are embedded in JWT tokens during login
-- Backend validates scopes using AuthX's `@auth.required()` decorator
-- Frontend receives scopes in login response and caches them
+**Permission Checking**
+- Backend resolves a `PermissionSnapshot` per request and enforces it in routers.
+- KB permissions are canonicalized to RAGFlow `dataset_id` when possible (with `kb_name` for display).
+- Chat permissions are canonicalized to `chat_<id>` / `agent_<id>` refs.
 
 ### Data Layer
 
-**SQLite Database:** `new_backend/data/auth.db`
+**SQLite Database:** `backend/data/auth.db`
 
 **Tables:**
-- `users` - User accounts (user_id, username, password_hash, email, role, status, created_at_ms, last_login_at_ms, created_by)
-- `kb_documents` - Knowledge base documents (doc_id, filename, file_path, file_size, mime_type, uploaded_by, status, uploaded_at_ms, reviewed_by, reviewed_at_ms, review_notes, ragflow_doc_id, kb_id)
-- `user_kb_permissions` - Knowledge base access permissions (user_id, kb_id, granted_by, granted_at_ms)
-- `deletion_logs` - Document deletion audit (doc_id, filename, kb_id, deleted_by, deleted_at_ms, original_uploader, original_reviewer, ragflow_doc_id)
-- `download_logs` - Document download audit (doc_id, filename, downloaded_by, downloaded_at_ms)
+- `users` - User accounts (includes legacy `group_id` for compatibility)
+- `permission_groups` - Resolver permission groups (resources + can_* flags)
+- `user_permission_groups` - User ↔ permission group mapping (for `group_ids`)
+- `kb_documents` - Local uploads/review records (includes `kb_dataset_id` + `kb_name`)
+- `user_kb_permissions` - Per-user KB grants (canonicalized refs + `kb_dataset_id` + `kb_name`)
+- `user_chat_permissions` - Per-user chat grants (canonicalized `chat_/agent_` refs)
+- `chat_sessions` - Local session tracking
+- `deletion_logs` - Deletion audit (includes `kb_dataset_id` + `kb_name`)
+- `download_logs` - Download audit (includes `kb_dataset_id` + `kb_name`)
 
 **Data Stores** (Repository Pattern):
 - `services/user_store.py` - User CRUD, password hashing (SHA256), login tracking
@@ -273,11 +266,11 @@ The Auth system integrates with RAGFlow for knowledge base management:
 
 **Ragflow Service** (`services/ragflow_service.py`):
 - Uses `ragflow-sdk` for RAGFlow API calls
-- Configuration from parent's `ragflow_demo/ragflow_config.json`
+- Configuration from repo root `ragflow_config.json`
 - Document synchronization between local review workflow and RAGFlow
 
 **Document Workflow:**
-1. User uploads document → Stored in `new_backend/data/uploads/`
+1. User uploads document → Stored in `backend/data/uploads/` (default; controlled by `UPLOAD_DIR`)
 2. Document marked as "pending" in local database
 3. Reviewer approves/rejects document via review interface
 4. Approved documents synced to RAGFlow knowledge base
@@ -300,18 +293,18 @@ The Auth system integrates with RAGFlow for knowledge base management:
 REACT_APP_AUTH_URL=http://localhost:8001
 ```
 
-**Backend Configuration** (`new_backend/config.py`):
+**Backend Configuration** (`backend/app/core/config.py` and `backend/config.py`):
 - All settings use pydantic-settings BaseSettings
-- Database path: `data/auth.db` (relative to new_backend/)
-- Upload directory: `data/uploads/`
+- Database path: `data/auth.db` (relative to `backend/`)
+- Upload directory: `data/uploads/` (relative to `backend/`)
 - JWT secret, token expiration, CORS origins configurable via env vars
-- Create `.env` file in `new_backend/` for production settings
+- Create `.env` file in `backend/` for production settings
 
 ## Common Development Tasks
 
 ### Adding a New API Endpoint
 
-1. Create router file in `new_backend/api/your_feature.py`:
+1. Create router file in `backend/api/your_feature.py`:
    ```python
    from fastapi import APIRouter, Depends
    from core.security import auth
@@ -330,7 +323,7 @@ REACT_APP_AUTH_URL=http://localhost:8001
        return {"ok": True}
    ```
 
-2. Register in `new_backend/main.py:create_app()`:
+2. Register in `backend/app/main.py:create_app()`:
    ```python
    from api import your_feature
    app.include_router(your_feature.router, prefix="/api", tags=["Your Feature"])
@@ -338,15 +331,8 @@ REACT_APP_AUTH_URL=http://localhost:8001
 
 ### Adding a New Scope
 
-1. Update `core/scopes.py` ROLE_SCOPES dictionary:
-   ```python
-   ROLE_SCOPES: Dict[str, List[str]] = {
-       "admin": ["your_resource:*", ...],
-       "reviewer": ["your_resource:view", "your_resource:action"],
-   }
-   ```
-
-2. Use scope-based access control in endpoints with AuthX decorators.
+Scopes are not used for business authorization in this project.
+Business permissions are resolver/permission-group based (see `backend/app/core/permission_resolver.py`).
 
 ### Creating a New Frontend Page
 
@@ -363,12 +349,12 @@ REACT_APP_AUTH_URL=http://localhost:8001
 
 ### Database Migration
 
-**Migrations are in `new_backend/migrations/` directory:**
+**Migrations are in `backend/migrations/` directory:**
 - Example: `migrations/migrate_user_kb_permissions.py`
 
 **To run a migration:**
 ```bash
-cd new_backend
+cd backend
 python migrations/migrate_your_migration.py
 ```
 
@@ -380,7 +366,7 @@ python migrations/migrate_your_migration.py
 
 ## Database Initialization
 
-**Initialization Script:** `new_backend/database/init_db.py`
+**Initialization Script:** `backend/database/init_db.py`
 
 Creates:
 1. SQLite database with all tables
@@ -390,10 +376,10 @@ Creates:
 **Re-initialization:**
 ```bash
 # Backup existing data first
-cp new_backend/data/auth.db new_backend/data/auth.db.backup
+cp backend/data/auth.db backend/data/auth.db.backup
 
 # Re-run initialization
-cd new_backend
+cd backend
 python -m database.init_db
 ```
 
@@ -427,7 +413,7 @@ python -m database.init_db
 5. **Pydantic Models:** Request/response validation with automatic OpenAPI docs
 6. **Context API:** Centralized authentication state in React
 7. **Custom Hooks:** Encapsulate business logic (useAuth)
-8. **Scopes-based Authorization:** JWT tokens embed user scopes for stateless API authorization
+8. **Resolver-based Authorization:** Business permissions are computed per request from permission groups (JWT scopes are compat-only)
 
 ## Security Considerations
 
@@ -438,4 +424,4 @@ python -m database.init_db
 - **CORS:** Configurable origins (default `*` for development)
 - **File Validation:** Type whitelist and size limits
 - **Audit Logging:** Deletion and download logs for compliance
-- **Stateless Authorization:** Scopes embedded in JWT, no server-side session storage needed
+- **Stateless Authentication:** JWT-based auth (authorization is resolver-based, not scopes-based)

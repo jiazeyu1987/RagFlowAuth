@@ -4,7 +4,7 @@ import logging
 
 from fastapi import HTTPException
 
-from app.modules.user_chat_permissions.repo import UserChatPermissionsRepo
+from backend.app.modules.user_chat_permissions.repo import UserChatPermissionsRepo
 
 logger = logging.getLogger(__name__)
 
@@ -36,35 +36,6 @@ class UserChatPermissionsService:
             raise HTTPException(status_code=404, detail="权限不存在")
         return user.username
 
-    def get_my_chats(self, user_id: str) -> list[str]:
-        user = self._repo.get_user(user_id)
-        if not user:
-            raise HTTPException(status_code=404, detail="用户不存在")
-
-        if user.role == "admin":
-            try:
-                return self._repo.list_all_chat_ids()
-            except Exception as e:
-                logger.error("Failed to list all chats/agents: %s", e, exc_info=True)
-                return []
-
-        if not user.group_id:
-            return []
-
-        group = self._repo.get_permission_group(user.group_id)
-        if not group:
-            return []
-
-        accessible_chats = group.get("accessible_chats", []) or []
-        if len(accessible_chats) > 0:
-            return accessible_chats
-
-        try:
-            return self._repo.list_all_chat_ids()
-        except Exception as e:
-            logger.error("Failed to list all chats/agents: %s", e, exc_info=True)
-            return []
-
     def batch_grant_chats_admin(self, *, user_ids: list[str], chat_ids: list[str], granted_by: str) -> tuple[int, int]:
         valid_user_ids: list[str] = []
         for user_id in user_ids:
@@ -79,4 +50,3 @@ class UserChatPermissionsService:
 
         granted_count = self._repo.grant_batch_permissions(user_ids=valid_user_ids, chat_ids=chat_ids, granted_by=granted_by)
         return granted_count, revoked_count
-

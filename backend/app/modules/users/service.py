@@ -4,9 +4,10 @@ from typing import Optional
 
 from fastapi import HTTPException
 
-from models.user import UserCreate, UserUpdate, UserResponse
+from backend.models.user import UserCreate, UserUpdate, UserResponse
 
-from app.modules.users.repo import UsersRepo
+from backend.app.modules.users.repo import UsersRepo
+from backend.core.roles import VALID_ROLES
 
 
 class UsersService:
@@ -41,13 +42,18 @@ class UsersService:
         self,
         *,
         role: Optional[str],
+        group_id: Optional[int],
         status: Optional[str],
         limit: int,
     ) -> list[UserResponse]:
-        users = self._repo.list_users(role=role, status=status, limit=limit)
+        users = self._repo.list_users(role=role, status=status, group_id=group_id, limit=limit)
         return [self._to_response(u) for u in users]
 
     def create_user(self, *, user_data: UserCreate, created_by: str) -> UserResponse:
+        role = user_data.role or "viewer"
+        if role not in VALID_ROLES:
+            raise HTTPException(status_code=400, detail=f"Invalid role: {role}")
+
         group_ids = user_data.group_ids
         if not group_ids:
             group_id = user_data.group_id
@@ -63,15 +69,13 @@ class UsersService:
             if not self._repo.get_permission_group(gid):
                 raise HTTPException(status_code=400, detail=f"权限组 {gid} 不存在")
 
-        first_group = self._repo.get_permission_group(group_ids[0]) if group_ids else None
-        role_name = first_group["group_name"] if first_group else "viewer"
-
         user = self._repo.create_user(
             username=user_data.username,
             password=user_data.password,
             email=user_data.email,
-            role=role_name,
-            group_id=group_ids[0] if group_ids else None,
+            # Role is a user label; business permissions come from permission groups (resolver).
+            role=role,
+            group_id=None,
             status=user_data.status,
             created_by=created_by,
         )
@@ -89,32 +93,28 @@ class UsersService:
         return self._to_response(user)
 
     def update_user(self, *, user_id: str, user_data: UserUpdate) -> UserResponse:
+        role = user_data.role
+        if role is not None and role not in VALID_ROLES:
+            raise HTTPException(status_code=400, detail=f"Invalid role: {role}")
+
         group_ids = user_data.group_ids
-        role = None
-        group_id = None
 
         if group_ids is not None:
             for gid in group_ids:
                 if not self._repo.get_permission_group(gid):
                     raise HTTPException(status_code=400, detail=f"权限组 {gid} 不存在")
 
-            if len(group_ids) > 0:
-                first_group = self._repo.get_permission_group(group_ids[0])
-                role = first_group["group_name"] if first_group else None
-                group_id = group_ids[0]
         elif user_data.group_id is not None:
             group = self._repo.get_permission_group(user_data.group_id)
             if not group:
                 raise HTTPException(status_code=400, detail="权限组不存在")
-            role = group["group_name"]
-            group_id = user_data.group_id
-            group_ids = [group_id]
+            group_ids = [user_data.group_id]
 
         user = self._repo.update_user(
             user_id=user_id,
             email=user_data.email,
             role=role,
-            group_id=group_id,
+            group_id=None,
             status=user_data.status,
         )
         if not user:
@@ -135,4 +135,3 @@ class UsersService:
         if not user:
             raise HTTPException(status_code=404, detail="用户不存在")
         self._repo.update_password(user_id, new_password)
-

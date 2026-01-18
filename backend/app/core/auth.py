@@ -5,8 +5,8 @@ from typing import Annotated
 from authx import TokenPayload
 from fastapi import Depends, HTTPException, Request
 
-from core.security import auth
-from dependencies import AppDependencies
+from backend.core.security import auth
+from backend.app.dependencies import AppDependencies
 
 
 def get_deps(request: Request) -> AppDependencies:
@@ -26,4 +26,3 @@ def get_current_payload(request: Request) -> TokenPayload:
 
 
 AuthRequired = Annotated[TokenPayload, Depends(get_current_payload)]
-

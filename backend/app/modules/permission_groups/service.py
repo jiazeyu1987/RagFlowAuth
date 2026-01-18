@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from dependencies import AppDependencies
+from backend.app.dependencies import AppDependencies
 
-from app.modules.permission_groups.repo import PermissionGroupsRepo
+from backend.app.modules.permission_groups.repo import PermissionGroupsRepo
 
 
 class PermissionGroupsService:
@@ -31,4 +31,3 @@ class PermissionGroupsService:
 
     def list_chat_agents(self) -> list[dict[str, str]]:
         return self._repo.list_chat_agents()
-

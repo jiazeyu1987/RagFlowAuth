@@ -1,1 +1,1 @@
-from app.main import app, create_app
+from backend.app.main import app, create_app

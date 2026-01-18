@@ -5,9 +5,10 @@
 import sqlite3
 import logging
 import json
-from pathlib import Path
 from typing import List, Dict, Optional
 from datetime import datetime
+
+from backend.database.sqlite import connect_sqlite
 
 
 class PermissionGroupStore:
@@ -15,11 +16,21 @@ class PermissionGroupStore:
         self._database_path = database_path
         self._logger = logger or logging.getLogger(__name__)
 
+    def _count_users_in_group(self, cursor: sqlite3.Cursor, group_id: int) -> int:
+        try:
+            cursor.execute(
+                "SELECT COUNT(*) as count FROM user_permission_groups WHERE group_id = ?",
+                (group_id,),
+            )
+            row = cursor.fetchone()
+            return int((row["count"] if row else 0) or 0)
+        except sqlite3.OperationalError:
+            # Older DB missing user_permission_groups: treat as 0 (we no longer read users.group_id).
+            return 0
+
     def _get_connection(self) -> sqlite3.Connection:
         """获取数据库连接"""
-        conn = sqlite3.connect(self._database_path)
-        conn.row_factory = sqlite3.Row
-        return conn
+        return connect_sqlite(self._database_path)
 
     def create_group(
         self,
@@ -135,11 +146,7 @@ class PermissionGroupStore:
                 group['can_delete'] = bool(group['can_delete'])
 
                 # 获取用户数量
-                cursor.execute(
-                    "SELECT COUNT(*) as count FROM users WHERE group_id = ?",
-                    (group_id,)
-                )
-                group['user_count'] = cursor.fetchone()['count']
+                group["user_count"] = self._count_users_in_group(cursor, group_id)
 
                 return group
 
@@ -185,11 +192,7 @@ class PermissionGroupStore:
                 group['can_download'] = bool(group['can_download'])
                 group['can_delete'] = bool(group['can_delete'])
 
-                cursor.execute(
-                    "SELECT COUNT(*) as count FROM users WHERE group_id = ?",
-                    (group['group_id'],)
-                )
-                group['user_count'] = cursor.fetchone()['count']
+                group["user_count"] = self._count_users_in_group(cursor, int(group["group_id"]))
 
                 return group
 
@@ -229,12 +232,7 @@ class PermissionGroupStore:
                     group['can_download'] = bool(group['can_download'])
                     group['can_delete'] = bool(group['can_delete'])
 
-                    # 获取用户数量
-                    cursor.execute(
-                        "SELECT COUNT(*) as count FROM users WHERE group_id = ?",
-                        (group['group_id'],)
-                    )
-                    group['user_count'] = cursor.fetchone()['count']
+                    group["user_count"] = self._count_users_in_group(cursor, int(group["group_id"]))
 
                     groups.append(group)
 
@@ -374,9 +372,8 @@ class PermissionGroupStore:
                     self._logger.warning(f"不能删除系统权限组: {group_id}")
                     return False
 
-                # 检查是否有用户使用此权限组
-                cursor.execute("SELECT COUNT(*) as count FROM users WHERE group_id = ?", (group_id,))
-                user_count = cursor.fetchone()['count']
+                # 检查是否有用户使用此权限组（兼容单组 group_id 和多组 user_permission_groups）
+                user_count = self._count_users_in_group(cursor, group_id)
                 if user_count > 0:
                     self._logger.warning(f"权限组仍有 {user_count} 个用户使用，无法删除")
                     return False
@@ -406,36 +403,73 @@ class PermissionGroupStore:
             with self._get_connection() as conn:
                 cursor = conn.cursor()
 
-                # 获取用户的权限组
                 cursor.execute(
                     """
                     SELECT pg.accessible_kbs, pg.accessible_chats,
                            pg.can_upload, pg.can_review, pg.can_download, pg.can_delete
                     FROM permission_groups pg
-                    INNER JOIN users u ON u.group_id = pg.group_id
-                    WHERE u.user_id = ?
+                    WHERE pg.group_id IN (
+                        SELECT group_id FROM user_permission_groups WHERE user_id = ?
+                    )
                     """,
-                    (user_id,)
+                    (user_id,),
                 )
-                row = cursor.fetchone()
-
-                if not row:
+                rows = cursor.fetchall() or []
+                if not rows:
                     return {
-                        'accessible_kbs': [],
-                        'accessible_chats': [],
-                        'can_upload': False,
-                        'can_review': False,
-                        'can_download': False,
-                        'can_delete': False
+                        "accessible_kbs": [],
+                        "accessible_chats": [],
+                        "can_upload": False,
+                        "can_review": False,
+                        "can_download": False,
+                        "can_delete": False,
                     }
 
+                accessible_kbs: list[str] = []
+                accessible_chats: list[str] = []
+                can_upload = False
+                can_review = False
+                can_download = False
+                can_delete = False
+
+                for row in rows:
+                    try:
+                        accessible_kbs.extend(json.loads(row["accessible_kbs"] or "[]"))
+                    except Exception:
+                        pass
+                    try:
+                        accessible_chats.extend(json.loads(row["accessible_chats"] or "[]"))
+                    except Exception:
+                        pass
+                    can_upload = can_upload or bool(row["can_upload"])
+                    can_review = can_review or bool(row["can_review"])
+                    can_download = can_download or bool(row["can_download"])
+                    can_delete = can_delete or bool(row["can_delete"])
+
+                # de-dupe preserving order
+                seen_kb: set[str] = set()
+                deduped_kbs: list[str] = []
+                for kb in accessible_kbs:
+                    if not isinstance(kb, str) or not kb or kb in seen_kb:
+                        continue
+                    seen_kb.add(kb)
+                    deduped_kbs.append(kb)
+
+                seen_chat: set[str] = set()
+                deduped_chats: list[str] = []
+                for chat in accessible_chats:
+                    if not isinstance(chat, str) or not chat or chat in seen_chat:
+                        continue
+                    seen_chat.add(chat)
+                    deduped_chats.append(chat)
+
                 return {
-                    'accessible_kbs': json.loads(row['accessible_kbs'] or '[]'),
-                    'accessible_chats': json.loads(row['accessible_chats'] or '[]'),
-                    'can_upload': bool(row['can_upload']),
-                    'can_review': bool(row['can_review']),
-                    'can_download': bool(row['can_download']),
-                    'can_delete': bool(row['can_delete'])
+                    "accessible_kbs": deduped_kbs,
+                    "accessible_chats": deduped_chats,
+                    "can_upload": can_upload,
+                    "can_review": can_review,
+                    "can_download": can_download,
+                    "can_delete": can_delete,
                 }
 
         except Exception as e:

@@ -1,23 +1,19 @@
-from fastapi import APIRouter, Depends, HTTPException, Request, Body
+from fastapi import APIRouter, HTTPException, Request, Body
 from fastapi.responses import StreamingResponse
 from typing import Optional
 import json
 import logging
 from pydantic import BaseModel
 
-from app.core.auth import AuthRequired, get_deps
-from app.core.permission_resolver import ResourceScope, normalize_accessible_chat_ids, resolve_permissions
-from dependencies import AppDependencies
+from backend.app.core.authz import AuthContextDep
+from backend.app.core.permission_resolver import ResourceScope, normalize_accessible_chat_ids
 
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
-def _assert_chat_access(deps: AppDependencies, user, chat_id: Optional[str] = None) -> set[str]:
-    if not user:
-        raise HTTPException(status_code=404, detail="用户不存在")
-    snapshot = resolve_permissions(deps, user)
+def _assert_chat_access(snapshot, chat_id: Optional[str] = None) -> set[str]:
     if snapshot.chat_scope == ResourceScope.ALL:
         return set()
     if snapshot.chat_scope == ResourceScope.NONE:
@@ -43,8 +39,7 @@ class DeleteSessionsRequest(BaseModel):
 
 @router.get("/chats")
 async def list_chats(
-    payload: AuthRequired,
-    deps: AppDependencies = Depends(get_deps),
+    ctx: AuthContextDep,
     page: int = 1,
     page_size: int = 30,
     orderby: str = "create_time",
@@ -59,10 +54,8 @@ async def list_chats(
     - 管理员：可以看到所有聊天助手
     - 其他角色：根据权限组的accessible_chats配置
     """
-    user = deps.user_store.get_by_user_id(payload.sub)
-    if not user:
-        raise HTTPException(status_code=404, detail="用户不存在")
-
+    deps = ctx.deps
+    snapshot = ctx.snapshot
     # 获取所有聊天助手
     all_chats = deps.ragflow_chat_service.list_chats(
         page=page,
@@ -73,13 +66,16 @@ async def list_chats(
         chat_id=chat_id
     )
 
-    # 非管理员用户根据权限组过滤
-    if user.role != "admin":
-        snapshot = resolve_permissions(deps, user)
+    # 非管理员用户根据 resolver 过滤
+    if not isinstance(all_chats, list):
+        logger.error("ragflow_chat_service.list_chats returned non-list: %s", type(all_chats).__name__)
+        all_chats = []
+
+    if not snapshot.is_admin:
         if snapshot.chat_scope == ResourceScope.NONE:
             return {"chats": [], "count": 0}
         allowed_ids = normalize_accessible_chat_ids(snapshot.chat_ids)
-        all_chats = [chat for chat in all_chats if chat.get("id") in allowed_ids]
+        all_chats = [chat for chat in all_chats if isinstance(chat, dict) and chat.get("id") in allowed_ids]
 
     return {
         "chats": all_chats,
@@ -89,70 +85,52 @@ async def list_chats(
 
 @router.get("/chats/my")
 async def get_my_chats(
-    payload: AuthRequired,
-    deps: AppDependencies = Depends(get_deps),
+    ctx: AuthContextDep,
 ):
     """
     获取当前用户有权限访问的聊天助手列表（基于权限组）
-    """
-    user = deps.user_store.get_by_user_id(payload.sub)
-    if not user:
-        raise HTTPException(status_code=404, detail="用户不存在")
 
-    # 获取所有聊天助手和智能体
+    Note:
+    - 前端 AI 对话页目前只支持 chats，不支持 agents；否则会把 agent_id 当 chat_id 调用错误的接口。
+    """
+    deps = ctx.deps
+    snapshot = ctx.snapshot
+    # 获取所有聊天助手
     all_chats = deps.ragflow_chat_service.list_chats(page_size=1000)
-    all_agents = deps.ragflow_chat_service.list_agents(page_size=1000)
 
     if not isinstance(all_chats, list):
         logger.error("ragflow_chat_service.list_chats returned non-list: %s", type(all_chats).__name__)
         all_chats = []
-    if not isinstance(all_agents, list):
-        logger.error("ragflow_chat_service.list_agents returned non-list: %s", type(all_agents).__name__)
-        all_agents = []
 
-    # 获取用户的可访问聊天体列表（从权限组）
-    if user.role == "admin":
+    # 获取用户的可访问聊天体列表（从 resolver）
+    if snapshot.is_admin:
         allowed_ids = None
     else:
-        snapshot = resolve_permissions(deps, user)
         if snapshot.chat_scope == ResourceScope.NONE:
             return {"chats": [], "count": 0}
         allowed_ids = normalize_accessible_chat_ids(snapshot.chat_ids)
 
     if allowed_ids is None:
         filtered_chats = all_chats
-        filtered_agents = all_agents
     else:
         filtered_chats = [chat for chat in all_chats if chat.get("id") in allowed_ids]
-        filtered_agents = [agent for agent in all_agents if agent.get("id") in allowed_ids]
-
-    chats_with_type = []
-    for chat in filtered_chats:
-        chat["type"] = "chat"
-        chats_with_type.append(chat)
-    for agent in filtered_agents:
-        agent["type"] = "agent"
-        chats_with_type.append(agent)
 
     return {
-        "chats": chats_with_type,
-        "count": len(chats_with_type)
+        "chats": filtered_chats,
+        "count": len(filtered_chats)
     }
 
 
 @router.get("/chats/{chat_id}")
 async def get_chat(
     chat_id: str,
-    payload: AuthRequired,
-    deps: AppDependencies = Depends(get_deps),
+    ctx: AuthContextDep,
 ):
     """获取单个聊天助手详情（基于权限组）"""
-    user = deps.user_store.get_by_user_id(payload.sub)
-    if not user:
-        raise HTTPException(status_code=404, detail="用户不存在")
-
-    if user.role != "admin":
-        _assert_chat_access(deps, user, chat_id=chat_id)
+    deps = ctx.deps
+    snapshot = ctx.snapshot
+    if not snapshot.is_admin:
+        _assert_chat_access(snapshot, chat_id=chat_id)
 
     chat = deps.ragflow_chat_service.get_chat(chat_id)
     if not chat:
@@ -164,8 +142,7 @@ async def get_chat(
 @router.post("/chats/{chat_id}/sessions")
 async def create_session(
     chat_id: str,
-    payload: AuthRequired,
-    deps: AppDependencies = Depends(get_deps),
+    ctx: AuthContextDep,
     name: str = "新会话",
     user_id: Optional[str] = None,
 ):
@@ -175,12 +152,11 @@ async def create_session(
     权限规则：
     - 用户必须有该聊天助手的权限
     """
-    user = deps.user_store.get_by_user_id(payload.sub)
-    if not user:
-        raise HTTPException(status_code=404, detail="用户不存在")
-
-    if user.role != "admin":
-        _assert_chat_access(deps, user, chat_id=chat_id)
+    deps = ctx.deps
+    user = ctx.user
+    snapshot = ctx.snapshot
+    if not snapshot.is_admin:
+        _assert_chat_access(snapshot, chat_id=chat_id)
 
     # 创建会话（使用当前用户的user_id）
     session = deps.ragflow_chat_service.create_session(
@@ -198,8 +174,7 @@ async def create_session(
 @router.get("/chats/{chat_id}/sessions")
 async def list_sessions(
     chat_id: str,
-    payload: AuthRequired,
-    deps: AppDependencies = Depends(get_deps),
+    ctx: AuthContextDep,
 ):
     """
     列出聊天助手的所有会话
@@ -209,12 +184,11 @@ async def list_sessions(
     - 只能看到自己的会话
     - 直接从 RAGFlow API 获取,包含完整的 messages 数据
     """
-    user = deps.user_store.get_by_user_id(payload.sub)
-    if not user:
-        raise HTTPException(status_code=404, detail="用户不存在")
-
-    if user.role != "admin":
-        _assert_chat_access(deps, user, chat_id=chat_id)
+    deps = ctx.deps
+    user = ctx.user
+    snapshot = ctx.snapshot
+    if not snapshot.is_admin:
+        _assert_chat_access(snapshot, chat_id=chat_id)
 
     # 从 RAGFlow API 获取当前用户的会话列表（包含 messages）
     sessions = deps.ragflow_chat_service.list_sessions(
@@ -232,9 +206,8 @@ async def list_sessions(
 async def chat_completion(
     chat_id: str,
     request: Request,
-    payload: AuthRequired,
     body: ChatCompletionRequest,
-    deps: AppDependencies = Depends(get_deps),
+    ctx: AuthContextDep,
 ):
     """
     与聊天助手对话（流式）
@@ -244,13 +217,12 @@ async def chat_completion(
     """
     logger.info(f"[CHAT] chat_id={chat_id}, question={body.question[:50]}..., session_id={body.session_id}")
 
-    user = deps.user_store.get_by_user_id(payload.sub)
-    if not user:
-        raise HTTPException(status_code=404, detail="用户不存在")
-
-    if user.role != "admin":
+    deps = ctx.deps
+    user = ctx.user
+    snapshot = ctx.snapshot
+    if not snapshot.is_admin:
         try:
-            _assert_chat_access(deps, user, chat_id=chat_id)
+            _assert_chat_access(snapshot, chat_id=chat_id)
         except HTTPException:
             logger.warning(f"[CHAT] User {user.username} has no permission for chat {chat_id}")
             raise
@@ -290,8 +262,7 @@ async def chat_completion(
 @router.delete("/chats/{chat_id}/sessions")
 async def delete_sessions(
     chat_id: str,
-    payload: AuthRequired,
-    deps: AppDependencies = Depends(get_deps),
+    ctx: AuthContextDep,
     body: DeleteSessionsRequest = None,
 ):
     """
@@ -301,18 +272,17 @@ async def delete_sessions(
     - 用户必须有该聊天助手的权限
     - 只能删除自己的会话（管理员可以删除所有）
     """
-    user = deps.user_store.get_by_user_id(payload.sub)
-    if not user:
-        raise HTTPException(status_code=404, detail="用户不存在")
-
     # Extract session_ids from request body
     session_ids = body.ids if body else None
 
-    if user.role != "admin":
-        _assert_chat_access(deps, user, chat_id=chat_id)
+    deps = ctx.deps
+    user = ctx.user
+    snapshot = ctx.snapshot
+    if not snapshot.is_admin:
+        _assert_chat_access(snapshot, chat_id=chat_id)
 
     # 非管理员用户：检查会话所有权
-    if user.role != "admin" and session_ids:
+    if not snapshot.is_admin and session_ids:
         for session_id in session_ids:
             owns_session = deps.chat_session_store.check_ownership(
                 session_id=session_id,

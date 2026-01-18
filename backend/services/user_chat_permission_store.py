@@ -4,6 +4,10 @@ from dataclasses import dataclass
 from typing import Optional, List
 from pathlib import Path
 
+from backend.database.paths import resolve_auth_db_path
+from backend.database.sqlite import connect_sqlite
+
+
 
 @dataclass
 class UserChatPermission:
@@ -16,14 +20,11 @@ class UserChatPermission:
 
 class UserChatPermissionStore:
     def __init__(self, db_path: str = None):
-        if db_path is None:
-            script_dir = Path(__file__).parent.parent
-            db_path = script_dir / "data" / "auth.db"
-        self.db_path = Path(db_path)
+        self.db_path = resolve_auth_db_path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
 
     def _get_connection(self):
-        return sqlite3.connect(str(self.db_path))
+        return connect_sqlite(self.db_path)
 
     def grant_permission(self, user_id: str, chat_id: str, granted_by: str) -> UserChatPermission:
         """
@@ -57,7 +58,7 @@ class UserChatPermissionStore:
         finally:
             conn.close()
 
-    def revoke_permission(self, user_id: str, chat_id: str) -> bool:
+    def revoke_permission(self, user_id: str, chat_id: str, *, chat_refs: Optional[List[str]] = None) -> bool:
         """
         撤销用户的聊天助手权限
         返回是否成功撤销（如果权限不存在返回False）
@@ -65,10 +66,19 @@ class UserChatPermissionStore:
         conn = self._get_connection()
         cursor = conn.cursor()
         try:
-            cursor.execute("""
-                DELETE FROM user_chat_permissions
-                WHERE user_id = ? AND chat_id = ?
-            """, (user_id, chat_id))
+            refs = chat_refs or ([chat_id] if chat_id else [])
+            if refs:
+                placeholders = ",".join("?" for _ in refs)
+                cursor.execute(
+                    f"""
+                    DELETE FROM user_chat_permissions
+                    WHERE user_id = ?
+                      AND chat_id IN ({placeholders})
+                    """,
+                    [user_id, *refs],
+                )
+            else:
+                cursor.execute("DELETE FROM user_chat_permissions WHERE user_id = ?", (user_id,))
             conn.commit()
             return cursor.rowcount > 0
         finally:

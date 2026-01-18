@@ -6,22 +6,22 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.core.config import settings
-from app.core.errors import register_exception_handlers
-from app.core.request_id import RequestIdMiddleware
-from core.security import auth as authx_auth
+from backend.app.core.config import settings
+from backend.app.core.errors import register_exception_handlers
+from backend.app.core.request_id import RequestIdMiddleware
+from backend.core.security import auth as authx_auth
 
 logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    from app.dependencies import create_dependencies
+    from backend.app.dependencies import create_dependencies
 
     app.state.deps = create_dependencies()
-    print("[OK] Dependencies initialized")
+    logger.info("Dependencies initialized")
     yield
-    print("[OK] Shutting down...")
+    logger.info("Shutting down...")
 
 
 def create_app() -> FastAPI:
@@ -45,10 +45,11 @@ def create_app() -> FastAPI:
     register_exception_handlers(app)
     authx_auth.handle_errors(app)
 
-    from api import (
+    from backend.api import (
         agents,
         auth,
         chat,
+        diagnostics,
         knowledge,
         permission_groups,
         ragflow,
@@ -68,6 +69,7 @@ def create_app() -> FastAPI:
     app.include_router(chat.router, prefix="/api", tags=["Chat"])
     app.include_router(agents.router, prefix="/api", tags=["Agents"])
     app.include_router(permission_groups.create_router(), prefix="/api", tags=["Permission Groups"])
+    app.include_router(diagnostics.router, prefix="/api", tags=["Diagnostics"])
 
     @app.get("/health")
     async def health_check():
@@ -78,7 +80,7 @@ def create_app() -> FastAPI:
         return {
             "service": "Auth Backend (FastAPI)",
             "version": settings.APP_VERSION,
-            "auth": "AuthX JWT + Scopes",
+            "auth": "AuthX JWT",
         }
 
     return app

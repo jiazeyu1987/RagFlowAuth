@@ -172,35 +172,36 @@ export const AuthProvider = ({ children }) => {
   const isOperator = () => user?.role === 'admin' || permissions.can_upload || permissions.can_review;
 
   /**
-   * 简化的权限检查方法（同步）
-   * 使用后端返回的实际scopes，而不是硬编码的角色权限
-   *
-   * @param {string} resource - 资源名称 (如 'kb_documents')
-   * @param {string} action - 操作名称 (如 'upload')
-   * @returns {boolean} 是否有权限
+   * 前端 UI 权限检查（同步）
+   * 后端以权限组/resolver 为准；这里只用于 UI 显示控制。
    */
   const can = useCallback((resource, action) => {
     if (!user) return false;
+    if (user.role === 'admin') return true;
 
-    // 使用后端返回的实际scopes
-    const permissions = user.scopes || [];
+    const ops = permissions || {};
 
-    // 检查是否有通配符权限
-    if (permissions.includes('*')) {
-      return true;
+    if (resource === 'users') {
+      return false;
     }
 
-    // 检查具体权限
-    const requiredPermission = `${resource}:${action}`;
-    return permissions.some(p => {
-      if (p.endsWith(':*')) {
-        // 通配符匹配：'kb_documents:*' 匹配 'kb_documents:upload'
-        const prefix = p.split(':')[0];
-        return requiredPermission === `${prefix}:${action}` || requiredPermission.startsWith(`${prefix}:`);
-      }
-      return p === requiredPermission;
-    });
-  }, [user]);
+    if (resource === 'kb_documents') {
+      if (action === 'view') return accessibleKbs.length > 0;
+      if (action === 'upload') return !!ops.can_upload;
+      if (action === 'review' || action === 'approve' || action === 'reject') return !!ops.can_review;
+      if (action === 'delete') return !!ops.can_delete;
+      if (action === 'download') return !!ops.can_download;
+      return false;
+    }
+
+    if (resource === 'ragflow_documents') {
+      if (action === 'view' || action === 'download' || action === 'preview') return !!ops.can_download;
+      if (action === 'delete') return !!ops.can_delete;
+      return false;
+    }
+
+    return false;
+  }, [user, permissions, accessibleKbs]);
 
   /**
    * 检查用户是否有某个知识库的访问权限

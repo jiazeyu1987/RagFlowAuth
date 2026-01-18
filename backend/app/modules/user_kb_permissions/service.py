@@ -4,7 +4,7 @@ import logging
 
 from fastapi import HTTPException
 
-from app.modules.user_kb_permissions.repo import UserKbPermissionsRepo
+from backend.app.modules.user_kb_permissions.repo import UserKbPermissionsRepo
 
 logger = logging.getLogger(__name__)
 
@@ -33,34 +33,6 @@ class UserKbPermissionsService:
         if not self._repo.revoke_permission(user_id=user_id, kb_id=kb_id):
             raise HTTPException(status_code=404, detail="权限不存在")
         return user.username
-
-    def get_my_knowledge_bases(self, user_id: str) -> list[str]:
-        user = self._repo.get_user(user_id)
-        if not user:
-            raise HTTPException(status_code=404, detail="用户不存在")
-
-        logger.info("[GET /api/me/kbs] user=%s role=%s group_id=%s", user.username, user.role, user.group_id)
-
-        if user.role == "admin":
-            return self._repo.list_all_kb_ids()
-
-        group_ids = list(getattr(user, "group_ids", []) or [])
-        if not group_ids and user.group_id is not None:
-            group_ids = [user.group_id]
-
-        if not group_ids:
-            return []
-
-        kb_names: set[str] = set()
-        for group_id in group_ids:
-            group = self._repo.get_permission_group(group_id)
-            if not group:
-                continue
-            for kb in group.get("accessible_kbs", []) or []:
-                if isinstance(kb, str) and kb:
-                    kb_names.add(kb)
-
-        return sorted(kb_names)
 
     def batch_grant_admin(self, *, user_ids: list[str], kb_ids: list[str], granted_by: str) -> int:
         valid_user_ids: list[str] = []

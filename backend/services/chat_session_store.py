@@ -1,18 +1,18 @@
 import sqlite3
 import time
+import logging
 from typing import List, Optional, Dict
 from pathlib import Path
+
+from backend.database.paths import resolve_auth_db_path
+from backend.database.sqlite import connect_sqlite
 
 
 class ChatSessionStore:
     """Manages chat session data in SQLite database."""
 
     def __init__(self, db_path: str = None):
-        if db_path is None:
-            script_dir = Path(__file__).parent.parent
-            db_path = script_dir / "data" / "auth.db"
-
-        self.db_path = Path(db_path)
+        self.db_path = resolve_auth_db_path(db_path)
         self._ensure_db_exists()
 
     def _ensure_db_exists(self):
@@ -22,9 +22,7 @@ class ChatSessionStore:
 
     def _get_connection(self) -> sqlite3.Connection:
         """Get database connection."""
-        conn = sqlite3.connect(str(self.db_path))
-        conn.row_factory = sqlite3.Row
-        return conn
+        return connect_sqlite(self.db_path)
 
     def create_session(
         self,
@@ -64,7 +62,7 @@ class ChatSessionStore:
             # Session already exists, update it
             return self.update_session(session_id, chat_id, name)
         except Exception as e:
-            print(f"[ERROR] Failed to create session: {e}")
+            logging.getLogger(__name__).error("Failed to create session: %s", e)
             return False
 
     def update_session(
@@ -100,7 +98,7 @@ class ChatSessionStore:
             return True
 
         except Exception as e:
-            print(f"[ERROR] Failed to update session: {e}")
+            logging.getLogger(__name__).exception("Failed to update session: %s", e)
             return False
 
     def get_user_sessions(
@@ -146,7 +144,7 @@ class ChatSessionStore:
             return sessions
 
         except Exception as e:
-            print(f"[ERROR] Failed to get user sessions: {e}")
+            logging.getLogger(__name__).exception("Failed to get user sessions: %s", e)
             return []
 
     def get_session(
@@ -190,7 +188,7 @@ class ChatSessionStore:
             return None
 
         except Exception as e:
-            print(f"[ERROR] Failed to get session: {e}")
+            logging.getLogger(__name__).exception("Failed to get session: %s", e)
             return None
 
     def delete_sessions(
@@ -228,7 +226,7 @@ class ChatSessionStore:
             return True
 
         except Exception as e:
-            print(f"[ERROR] Failed to delete sessions: {e}")
+            logging.getLogger(__name__).exception("Failed to delete sessions: %s", e)
             return False
 
     def check_ownership(
@@ -264,5 +262,5 @@ class ChatSessionStore:
             return row["count"] > 0
 
         except Exception as e:
-            print(f"[ERROR] Failed to check session ownership: {e}")
+            logging.getLogger(__name__).exception("Failed to check session ownership: %s", e)
             return False

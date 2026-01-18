@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File, Form, Query
+from fastapi import APIRouter, HTTPException, Request, UploadFile, File, Form, Query
 from fastapi.responses import FileResponse, Response
 from typing import Optional
 import os
@@ -7,17 +7,18 @@ import zipfile
 import io
 from pathlib import Path
 
-from app.core.auth import AuthRequired, get_deps
-from app.core.permission_resolver import (
+from backend.app.core.authz import AuthContextDep
+from backend.app.core.kb_refs import resolve_kb_ref
+from backend.app.core.paths import resolve_backend_path
+from backend.app.core.permission_resolver import (
     ResourceScope,
     assert_can_delete,
+    assert_can_download,
     assert_can_upload,
     assert_kb_allowed,
-    resolve_permissions,
 )
-from models.document import DocumentResponse
-from dependencies import AppDependencies
-from config import settings
+from backend.models.document import DocumentResponse
+from backend.app.core.config import settings
 
 
 router = APIRouter()
@@ -26,9 +27,8 @@ router = APIRouter()
 @router.post("/upload", response_model=DocumentResponse, status_code=201)
 async def upload_document(
     request: Request,
-    payload: AuthRequired,
+    ctx: AuthContextDep,
     file: UploadFile = File(...),
-    deps: AppDependencies = Depends(get_deps),
 ):
     """
     上传文档到本地存储（pending状态）
@@ -37,19 +37,17 @@ async def upload_document(
     import logging
     logger = logging.getLogger(__name__)
 
-    # Get kb_id from query parameter, default to '展厅'
-    kb_id = request.query_params.get("kb_id", "展厅")
+    # Get kb_id from query parameter (dataset id or name)
+    kb_ref = request.query_params.get("kb_id", "展厅")
 
-    # 获取用户并检查上传权限
-    user = deps.user_store.get_by_user_id(payload.sub)
-    if not user:
-        raise HTTPException(status_code=404, detail="用户不存在")
-
-    snapshot = resolve_permissions(deps, user)
+    deps = ctx.deps
+    user = ctx.user
+    snapshot = ctx.snapshot
+    kb_info = resolve_kb_ref(deps, kb_ref)
     assert_can_upload(snapshot)
-    assert_kb_allowed(snapshot, kb_id)
+    assert_kb_allowed(snapshot, kb_ref)
 
-    logger.info(f"[UPLOAD] User {user.username} uploading to kb_id={kb_id}")
+    logger.info(f"[UPLOAD] User {user.username} uploading to kb_id={kb_ref}")
 
     # Validate file size
     content = await file.read()
@@ -62,7 +60,7 @@ async def upload_document(
         raise HTTPException(status_code=400, detail="不支持的文件类型")
 
     # 存储到本地
-    uploads_dir = Path(__file__).parent.parent / "data" / "uploads"
+    uploads_dir = resolve_backend_path(settings.UPLOAD_DIR)
     uploads_dir.mkdir(parents=True, exist_ok=True)
 
     # 生成唯一文件名
@@ -73,7 +71,7 @@ async def upload_document(
     with open(file_path, "wb") as f:
         f.write(content)
 
-    logger.info(f"BACKEND: File saved locally to: {file_path}")
+    logger.info("[UPLOAD] Saved file to: %s", file_path)
 
     # 5. 创建本地记录（pending状态）
     doc = deps.kb_store.create_document(
@@ -81,15 +79,22 @@ async def upload_document(
         file_path=str(file_path),
         file_size=len(content),
         mime_type=file.content_type or "application/octet-stream",
-        uploaded_by=payload.sub,
-        kb_id=kb_id,
+        uploaded_by=ctx.payload.sub,
+        kb_id=(kb_info.dataset_id or kb_ref),
+        kb_dataset_id=kb_info.dataset_id,
+        kb_name=(kb_info.name or kb_ref),
         status="pending"  # 关键修改：pending状态
     )
 
     # ========== BACKEND STEP 3: Upload Complete ==========
-    logger.info(f"BACKEND: Document record created successfully")
-    logger.info(f"BACKEND: doc_id={doc.doc_id}, filename={doc.filename}, kb_id={doc.kb_id}, status={doc.status}")
-    logger.info(f"BACKEND: Uploaded by={payload.sub}, waiting for review")
+    logger.info(
+        "[UPLOAD] Created local doc record: doc_id=%s filename=%s kb_id=%s status=%s uploaded_by=%s",
+        doc.doc_id,
+        doc.filename,
+        doc.kb_id,
+        doc.status,
+        ctx.payload.sub,
+    )
     logger.info("=" * 80)
 
     return DocumentResponse(
@@ -104,14 +109,13 @@ async def upload_document(
         reviewed_at_ms=doc.reviewed_at_ms,
         review_notes=doc.review_notes,
         ragflow_doc_id=doc.ragflow_doc_id,
-        kb_id=doc.kb_id,
+        kb_id=(doc.kb_name or doc.kb_id),
     )
 
 
 @router.get("/documents")
 async def list_documents(
-    payload: AuthRequired,
-    deps: AppDependencies = Depends(get_deps),
+    ctx: AuthContextDep,
     status: Optional[str] = None,
     kb_id: Optional[str] = None,
     uploaded_by: Optional[str] = None,
@@ -122,27 +126,58 @@ async def list_documents(
 
     权限规则：
     - 管理员：可以看到所有文档
-    - 其他角色：可以看到所有文档（基于权限组，无其他限制）
+    - 其他角色：只能看到 resolver 允许的知识库文档
     """
     import logging
     logger = logging.getLogger(__name__)
 
-    user = deps.user_store.get_by_user_id(payload.sub)
-    if not user:
-        raise HTTPException(status_code=404, detail="用户不存在")
+    deps = ctx.deps
+    user = ctx.user
+    snapshot = ctx.snapshot
     logger.info(f"[LIST DOCS] User: {user.username}, role: {user.role}, kb_id: {kb_id}, status: {status}")
+    try:
+        perm_logger.info(
+            "[PERMDBG] /api/knowledge/documents user=%s role=%s kb_scope=%s kb_refs=%s request_kb_id=%s",
+            user.username,
+            user.role,
+            snapshot.kb_scope,
+            sorted(list(snapshot.kb_names))[:50],
+            kb_id,
+        )
+    except Exception:
+        pass
 
-    snapshot = resolve_permissions(deps, user)
     if snapshot.kb_scope == ResourceScope.NONE:
         docs = []
     else:
         if kb_id:
             assert_kb_allowed(snapshot, kb_id)
-            docs = deps.kb_store.list_documents(status=status, kb_id=kb_id, uploaded_by=uploaded_by, limit=limit)
+            kb_info = resolve_kb_ref(deps, kb_id)
+            docs = deps.kb_store.list_documents(
+                status=status,
+                kb_refs=list(kb_info.variants),
+                uploaded_by=uploaded_by,
+                limit=limit,
+            )
         else:
             docs = deps.kb_store.list_documents(status=status, kb_id=None, uploaded_by=uploaded_by, limit=limit)
+            before = len(docs)
             if snapshot.kb_scope != ResourceScope.ALL:
-                docs = [d for d in docs if d.kb_id in snapshot.kb_names]
+                docs = [
+                    d
+                    for d in docs
+                    if (d.kb_id in snapshot.kb_names)
+                    or (d.kb_dataset_id is not None and d.kb_dataset_id in snapshot.kb_names)
+                    or (d.kb_name is not None and d.kb_name in snapshot.kb_names)
+                ]
+            try:
+                perm_logger.info(
+                    "[PERMDBG] /api/knowledge/documents filtered %s -> %s",
+                    before,
+                    len(docs),
+                )
+            except Exception:
+                pass
 
     logger.info(f"[LIST DOCS] Found {len(docs)} documents")
 
@@ -160,7 +195,7 @@ async def list_documents(
                 "reviewed_at_ms": d.reviewed_at_ms,
                 "review_notes": d.review_notes,
                 "ragflow_doc_id": d.ragflow_doc_id,
-                "kb_id": d.kb_id,
+                "kb_id": (d.kb_name or d.kb_id),
             }
             for d in docs
         ],
@@ -171,13 +206,16 @@ async def list_documents(
 @router.get("/documents/{doc_id}")
 async def get_document(
     doc_id: str,
-    payload: AuthRequired,
-    deps: AppDependencies = Depends(get_deps),
+    ctx: AuthContextDep,
 ):
     """Get document details"""
+    deps = ctx.deps
+    snapshot = ctx.snapshot
     doc = deps.kb_store.get_document(doc_id)
     if not doc:
         raise HTTPException(status_code=404, detail="文档不存在")
+
+    assert_kb_allowed(snapshot, doc.kb_id)
 
     return {
         "doc_id": doc.doc_id,
@@ -191,23 +229,30 @@ async def get_document(
         "reviewed_at_ms": doc.reviewed_at_ms,
         "review_notes": doc.review_notes,
         "ragflow_doc_id": doc.ragflow_doc_id,
-        "kb_id": doc.kb_id,
+        "kb_id": (doc.kb_name or doc.kb_id),
     }
 
 
 @router.get("/documents/{doc_id}/download")
 async def download_document(
     doc_id: str,
-    payload: AuthRequired,
-    deps: AppDependencies = Depends(get_deps),
+    ctx: AuthContextDep,
 ):
     """Download document file"""
     import logging
     logger = logging.getLogger(__name__)
+    perm_logger = logging.getLogger("uvicorn.error")
+
+    deps = ctx.deps
+    user = ctx.user
+    snapshot = ctx.snapshot
+    assert_can_download(snapshot)
 
     doc = deps.kb_store.get_document(doc_id)
     if not doc:
         raise HTTPException(status_code=404, detail="文档不存在")
+
+    assert_kb_allowed(snapshot, doc.kb_id)
 
     if not os.path.exists(doc.file_path):
         raise HTTPException(status_code=404, detail="文件不存在")
@@ -216,10 +261,12 @@ async def download_document(
     deps.download_log_store.log_download(
         doc_id=doc.doc_id,
         filename=doc.filename,
-        kb_id=doc.kb_id,
-        downloaded_by=payload.sub
+        kb_id=(doc.kb_name or doc.kb_id),
+        downloaded_by=ctx.payload.sub,
+        kb_dataset_id=doc.kb_dataset_id,
+        kb_name=doc.kb_name,
     )
-    logger.info(f"[DOWNLOAD] Document {doc_id} ({doc.filename}) downloaded by {payload.sub}")
+    logger.info(f"[DOWNLOAD] Document {doc_id} ({doc.filename}) downloaded by {ctx.payload.sub}")
 
     return FileResponse(
         path=doc.file_path,
@@ -230,14 +277,27 @@ async def download_document(
 
 @router.get("/stats")
 async def get_stats(
-    payload: AuthRequired,
-    deps: AppDependencies = Depends(get_deps),
+    ctx: AuthContextDep,
 ):
     """Get document statistics"""
-    total = deps.kb_store.count_documents()
-    pending = deps.kb_store.count_documents(status="pending")
-    approved = deps.kb_store.count_documents(status="approved")
-    rejected = deps.kb_store.count_documents(status="rejected")
+    deps = ctx.deps
+    snapshot = ctx.snapshot
+    if snapshot.is_admin:
+        total = deps.kb_store.count_documents()
+        pending = deps.kb_store.count_documents(status="pending")
+        approved = deps.kb_store.count_documents(status="approved")
+        rejected = deps.kb_store.count_documents(status="rejected")
+    elif snapshot.kb_scope == ResourceScope.NONE:
+        total = 0
+        pending = 0
+        approved = 0
+        rejected = 0
+    else:
+        kb_ids = list(snapshot.kb_names)
+        total = deps.kb_store.count_documents(kb_ids=kb_ids)
+        pending = deps.kb_store.count_documents(status="pending", kb_ids=kb_ids)
+        approved = deps.kb_store.count_documents(status="approved", kb_ids=kb_ids)
+        rejected = deps.kb_store.count_documents(status="rejected", kb_ids=kb_ids)
 
     return {
         "total_documents": total,
@@ -250,22 +310,17 @@ async def get_stats(
 @router.delete("/documents/{doc_id}")
 async def delete_document(
     doc_id: str,
-    payload: AuthRequired,
-    deps: AppDependencies = Depends(get_deps),
+    ctx: AuthContextDep,
 ):
     """Delete document (based on permission group)"""
     import logging
     logger = logging.getLogger(__name__)
 
-    # 获取用户并检查删除权限
-    user = deps.user_store.get_by_user_id(payload.sub)
-    if not user:
-        raise HTTPException(status_code=404, detail="用户不存在")
-
-    snapshot = resolve_permissions(deps, user)
+    deps = ctx.deps
+    snapshot = ctx.snapshot
     assert_can_delete(snapshot)
 
-    logger.info(f"[DELETE] delete_document() called, doc_id: {doc_id}, deleted_by: {payload.sub}")
+    logger.info(f"[DELETE] delete_document() called, doc_id: {doc_id}, deleted_by: {ctx.payload.sub}")
 
     doc = deps.kb_store.get_document(doc_id)
     if not doc:
@@ -278,8 +333,10 @@ async def delete_document(
     deps.deletion_log_store.log_deletion(
         doc_id=doc.doc_id,
         filename=doc.filename,
-        kb_id=doc.kb_id,
-        deleted_by=payload.sub,
+        kb_id=(doc.kb_name or doc.kb_id),
+        deleted_by=ctx.payload.sub,
+        kb_dataset_id=doc.kb_dataset_id,
+        kb_name=doc.kb_name,
         original_uploader=doc.uploaded_by,
         original_reviewer=doc.reviewed_by,
         ragflow_doc_id=doc.ragflow_doc_id,
@@ -307,8 +364,7 @@ async def delete_document(
 
 @router.get("/deletions")
 async def list_deletions(
-    payload: AuthRequired,
-    deps: AppDependencies = Depends(get_deps),
+    ctx: AuthContextDep,
     kb_id: Optional[str] = None,
     limit: int = 100,
 ):
@@ -317,9 +373,17 @@ async def list_deletions(
 
     权限规则：
     - 管理员：可以看到所有删除记录
-    - 其他角色：可以看到所有删除记录
+    - 其他角色：只能看到自己的删除记录（并受 KB 可见范围限制）
     """
-    deletions = deps.deletion_log_store.list_deletions(kb_id=kb_id, limit=limit)
+    deps = ctx.deps
+    snapshot = ctx.snapshot
+    kb_refs = None
+    if kb_id:
+        assert_kb_allowed(snapshot, kb_id)
+        kb_refs = list(resolve_kb_ref(deps, kb_id).variants)
+
+    deleted_by = None if snapshot.is_admin else ctx.payload.sub
+    deletions = deps.deletion_log_store.list_deletions(kb_refs=kb_refs, deleted_by=deleted_by, limit=limit)
 
     return {
         "deletions": [
@@ -327,7 +391,7 @@ async def list_deletions(
                 "id": d.id,
                 "doc_id": d.doc_id,
                 "filename": d.filename,
-                "kb_id": d.kb_id,
+                "kb_id": (d.kb_name or d.kb_id),
                 "deleted_by": d.deleted_by,
                 "deleted_at_ms": d.deleted_at_ms,
                 "original_uploader": d.original_uploader,
@@ -343,9 +407,8 @@ async def list_deletions(
 @router.post("/documents/batch/download")
 async def batch_download_documents(
     request: Request,
-    payload: AuthRequired,
     body: dict,
-    deps: AppDependencies = Depends(get_deps),
+    ctx: AuthContextDep,
 ):
     """
     批量下载文档（打包成ZIP）
@@ -353,16 +416,25 @@ async def batch_download_documents(
     import logging
     logger = logging.getLogger(__name__)
 
+    deps = ctx.deps
     doc_ids = body.get("doc_ids", [])
     logger.info(f"[BATCH DOWNLOAD] Request to download {len(doc_ids)} documents")
-    logger.info(f"[BATCH DOWNLOAD] User: {payload.sub}")
+    logger.info(f"[BATCH DOWNLOAD] User: {ctx.payload.sub}")
 
-    # 获取文档
+    snapshot = ctx.snapshot
+    assert_can_download(snapshot)
+
+    # 获取文档（并检查 KB 可见）
     valid_docs = []
     for doc_id in doc_ids:
         doc = deps.kb_store.get_document(doc_id)
         if not doc:
             logger.warning(f"[BATCH DOWNLOAD] Document not found: {doc_id}")
+            continue
+        try:
+            assert_kb_allowed(snapshot, doc.kb_id)
+        except HTTPException:
+            logger.warning(f"[BATCH DOWNLOAD] No access to doc {doc_id} kb_id={doc.kb_id}")
             continue
 
         # 检查文件是否存在
@@ -411,8 +483,10 @@ async def batch_download_documents(
             doc_id=doc.doc_id,
             filename=doc.filename,
             kb_id=doc.kb_id,
-            downloaded_by=payload.sub,
-            is_batch=True
+            downloaded_by=ctx.payload.sub,
+            is_batch=True,
+            kb_dataset_id=doc.kb_dataset_id,
+            kb_name=doc.kb_name,
         )
 
     logger.info(f"[BATCH DOWNLOAD] ZIP file created: {zip_filename} with {len(valid_docs)} files")

@@ -2,13 +2,14 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends
 
-from app.core.auth import AuthRequired, get_deps
-from core.permissions import AdminRequired
-from dependencies import AppDependencies
+from backend.app.core.auth import get_deps
+from backend.app.core.authz import AuthContextDep
+from backend.app.core.authz import AdminOnly
+from backend.app.dependencies import AppDependencies
 
-from app.modules.user_chat_permissions.repo import UserChatPermissionsRepo
-from app.modules.user_chat_permissions.schemas import BatchGrantChatsRequest, ChatListResponse
-from app.modules.user_chat_permissions.service import UserChatPermissionsService
+from backend.app.modules.user_chat_permissions.repo import UserChatPermissionsRepo
+from backend.app.modules.user_chat_permissions.schemas import BatchGrantChatsRequest, ChatListResponse
+from backend.app.modules.user_chat_permissions.service import UserChatPermissionsService
 
 
 router = APIRouter()
@@ -21,7 +22,7 @@ def get_service(deps: AppDependencies = Depends(get_deps)) -> UserChatPermission
 @router.get("/users/{user_id}/chats", response_model=ChatListResponse)
 async def get_user_chats(
     user_id: str,
-    _: AdminRequired,
+    _: AdminOnly,
     service: UserChatPermissionsService = Depends(get_service),
 ):
     return ChatListResponse(chat_ids=service.get_user_chats_admin(user_id))
@@ -31,7 +32,7 @@ async def get_user_chats(
 async def grant_chat_access(
     user_id: str,
     chat_id: str,
-    payload: AdminRequired,
+    payload: AdminOnly,
     service: UserChatPermissionsService = Depends(get_service),
 ):
     username = service.grant_chat_access_admin(user_id=user_id, chat_id=chat_id, granted_by=payload.sub)
@@ -42,7 +43,7 @@ async def grant_chat_access(
 async def revoke_chat_access(
     user_id: str,
     chat_id: str,
-    _: AdminRequired,
+    _: AdminOnly,
     service: UserChatPermissionsService = Depends(get_service),
 ):
     username = service.revoke_chat_access_admin(user_id=user_id, chat_id=chat_id)
@@ -51,16 +52,17 @@ async def revoke_chat_access(
 
 @router.get("/me/chats", response_model=ChatListResponse)
 async def get_my_chats(
-    payload: AuthRequired,
-    service: UserChatPermissionsService = Depends(get_service),
+    ctx: AuthContextDep,
 ):
-    return ChatListResponse(chat_ids=service.get_my_chats(payload.sub))
+    if ctx.snapshot.is_admin:
+        return ChatListResponse(chat_ids=ctx.deps.ragflow_chat_service.list_all_chat_ids())
+    return ChatListResponse(chat_ids=sorted(ctx.snapshot.chat_ids))
 
 
 @router.post("/users/batch-grant-chats")
 async def batch_grant_chats(
     request_data: BatchGrantChatsRequest,
-    payload: AdminRequired,
+    payload: AdminOnly,
     service: UserChatPermissionsService = Depends(get_service),
 ):
     granted, revoked = service.batch_grant_chats_admin(
@@ -73,4 +75,3 @@ async def batch_grant_chats(
         "total_permissions": granted,
         "revoked_permissions": revoked,
     }
-

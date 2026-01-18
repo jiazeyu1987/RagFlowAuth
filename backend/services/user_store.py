@@ -2,10 +2,13 @@ import sqlite3
 import hashlib
 import time
 import uuid
+import logging
 from dataclasses import dataclass
 from typing import Optional, List, Set
 from pathlib import Path
 
+from backend.database.paths import resolve_auth_db_path
+from backend.database.sqlite import connect_sqlite
 
 @dataclass
 class User:
@@ -32,14 +35,11 @@ def hash_password(password: str) -> str:
 
 class UserStore:
     def __init__(self, db_path: str = None):
-        if db_path is None:
-            script_dir = Path(__file__).parent.parent
-            db_path = script_dir / "data" / "auth.db"
-        self.db_path = Path(db_path)
+        self.db_path = resolve_auth_db_path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
 
     def _get_connection(self):
-        return sqlite3.connect(str(self.db_path))
+        return connect_sqlite(self.db_path)
 
     def get_by_username(self, username: str) -> Optional[User]:
         conn = self._get_connection()
@@ -67,6 +67,7 @@ class UserStore:
                 )
                 # 加载权限组列表
                 user.group_ids = self._get_user_group_ids(user.user_id, conn)
+                user.group_id = user.group_ids[0] if user.group_ids else None
                 return user
             return None
         finally:
@@ -98,6 +99,7 @@ class UserStore:
                 )
                 # 加载权限组列表
                 user.group_ids = self._get_user_group_ids(user.user_id, conn)
+                user.group_id = user.group_ids[0] if user.group_ids else None
                 return user
             return None
         finally:
@@ -112,9 +114,6 @@ class UserStore:
             """, (user_id,))
             return [row[0] for row in cursor.fetchall()]
         except sqlite3.OperationalError as e:
-            if "no such table: user_permission_groups" in str(e):
-                # Table doesn't exist yet (migration not run), return empty list
-                return []
             raise
 
     def create_user(
@@ -127,6 +126,9 @@ class UserStore:
         status: str = "active",
         created_by: Optional[str] = None
     ) -> User:
+        # Deprecated: users.group_id is no longer the source of truth (use user_permission_groups).
+        group_id = None
+
         user_id = str(uuid.uuid4())
         now_ms = int(time.time() * 1000)
         password_hash = hash_password(password)
@@ -174,9 +176,7 @@ class UserStore:
         if role is not None:
             updates.append("role = ?")
             params.append(role)
-        if group_id is not None:
-            updates.append("group_id = ?")
-            params.append(group_id)
+        # Deprecated: users.group_id is no longer updated (use user_permission_groups).
         if status is not None:
             updates.append("status = ?")
             params.append(status)
@@ -216,29 +216,52 @@ class UserStore:
         finally:
             conn.close()
 
-    def list_users(self, role: Optional[str] = None, status: Optional[str] = None, limit: int = 100) -> List[User]:
+    def list_users(
+        self,
+        role: Optional[str] = None,
+        status: Optional[str] = None,
+        group_id: Optional[int] = None,
+        limit: int = 100,
+    ) -> List[User]:
         conn = self._get_connection()
         cursor = conn.cursor()
         try:
-            query = """
+            base_query = """
                 SELECT user_id, username, password_hash, email, role, group_id, status,
                        created_at_ms, last_login_at_ms, created_by
                 FROM users
                 WHERE 1=1
             """
-            params = []
+            base_params: list[object] = []
 
             if role:
-                query += " AND role = ?"
-                params.append(role)
+                base_query += " AND role = ?"
+                base_params.append(role)
             if status:
-                query += " AND status = ?"
-                params.append(status)
+                base_query += " AND status = ?"
+                base_params.append(status)
+
+            query = base_query
+            params: list[object] = list(base_params)
+
+            if group_id is not None:
+                query += """
+                    AND (
+                        EXISTS (
+                            SELECT 1 FROM user_permission_groups upg
+                            WHERE upg.user_id = users.user_id AND upg.group_id = ?
+                        )
+                    )
+                """
+                params.append(group_id)
 
             query += " ORDER BY created_at_ms DESC LIMIT ?"
             params.append(limit)
 
-            cursor.execute(query, params)
+            try:
+                cursor.execute(query, params)
+            except sqlite3.OperationalError:
+                raise
             rows = cursor.fetchall()
             # 手动构造 User，避免字段顺序错位
             users = []
@@ -257,6 +280,7 @@ class UserStore:
                 )
                 # 加载权限组列表
                 user.group_ids = self._get_user_group_ids(user.user_id, conn)
+                user.group_id = user.group_ids[0] if user.group_ids else None
                 users.append(user)
             return users
         finally:
@@ -344,7 +368,7 @@ class UserStore:
             return True
         except Exception as e:
             conn.rollback()
-            print(f"Error setting user permission groups: {e}")
+            logging.getLogger(__name__).exception("Error setting user permission groups: %s", e)
             return False
         finally:
             conn.close()
@@ -385,7 +409,7 @@ class UserStore:
             return True
         except Exception as e:
             conn.rollback()
-            print(f"Error adding user to permission group: {e}")
+            logging.getLogger(__name__).exception("Error adding user to permission group: %s", e)
             return False
         finally:
             conn.close()
@@ -412,7 +436,7 @@ class UserStore:
             return True
         except Exception as e:
             conn.rollback()
-            print(f"Error removing user from permission group: {e}")
+            logging.getLogger(__name__).exception("Error removing user from permission group: %s", e)
             return False
         finally:
             conn.close()

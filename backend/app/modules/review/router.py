@@ -1,10 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, HTTPException
 from pathlib import Path
 
-from app.core.auth import AuthRequired, get_deps
-from app.core.permission_resolver import assert_can_review, assert_kb_allowed, resolve_permissions
-from dependencies import AppDependencies
-from models.document import DocumentResponse, DocumentReviewRequest
+from backend.app.core.authz import AuthContextDep
+from backend.app.core.permission_resolver import assert_can_review, assert_kb_allowed
+from backend.models.document import DocumentResponse, DocumentReviewRequest
 
 
 router = APIRouter()
@@ -13,18 +12,15 @@ router = APIRouter()
 @router.post("/documents/{doc_id}/approve", response_model=DocumentResponse)
 async def approve_document(
     doc_id: str,
-    payload: AuthRequired,
-    deps: AppDependencies = Depends(get_deps),
+    ctx: AuthContextDep,
     review_data: DocumentReviewRequest = None,
 ):
     import logging
     logger = logging.getLogger(__name__)
 
-    user = deps.user_store.get_by_user_id(payload.sub)
-    if not user:
-        raise HTTPException(status_code=404, detail="用户不存在")
-
-    snapshot = resolve_permissions(deps, user)
+    deps = ctx.deps
+    user = ctx.user
+    snapshot = ctx.snapshot
     assert_can_review(snapshot)
 
     logger.info(f"[APPROVE] User {user.username} approving doc {doc_id}")
@@ -60,7 +56,7 @@ async def approve_document(
         updated_doc = deps.kb_store.update_document_status(
             doc_id=doc_id,
             status="approved",
-            reviewed_by=payload.sub,
+            reviewed_by=ctx.payload.sub,
             review_notes=review_data.review_notes if review_data else None,
             ragflow_doc_id=ragflow_doc_id,
         )
@@ -89,15 +85,12 @@ async def approve_document(
 @router.post("/documents/{doc_id}/reject", response_model=DocumentResponse)
 async def reject_document(
     doc_id: str,
-    payload: AuthRequired,
-    deps: AppDependencies = Depends(get_deps),
+    ctx: AuthContextDep,
     review_data: DocumentReviewRequest = None,
 ):
-    user = deps.user_store.get_by_user_id(payload.sub)
-    if not user:
-        raise HTTPException(status_code=404, detail="用户不存在")
-
-    snapshot = resolve_permissions(deps, user)
+    deps = ctx.deps
+    user = ctx.user
+    snapshot = ctx.snapshot
     assert_can_review(snapshot)
 
     doc = deps.kb_store.get_document(doc_id)
@@ -112,7 +105,7 @@ async def reject_document(
     updated_doc = deps.kb_store.update_document_status(
         doc_id=doc_id,
         status="rejected",
-        reviewed_by=payload.sub,
+        reviewed_by=ctx.payload.sub,
         review_notes=review_data.review_notes if review_data else None,
     )
 

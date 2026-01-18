@@ -1,1 +1,1 @@
-from app.modules.auth.router import router
+from backend.app.modules.auth.router import router

@@ -79,7 +79,8 @@ class AuthClient {
 
   /**
    * 登录
-   * 新响应格式：{ access_token, refresh_token, token_type, scopes }
+   * 响应格式：{ access_token, refresh_token, token_type, scopes }
+   * 注意：后端已不再使用 scopes 做业务授权，scopes 仅为兼容字段（通常为空数组）。
    */
   async login(username, password) {
     const data = await httpClient.requestJson(authBackendUrl('/api/auth/login'), {
@@ -140,35 +141,8 @@ class AuthClient {
    * 这里仅用于前端 UI 显示控制
    */
   can(role, resource, action) {
-    if (!this.user || !this.user.role) {
-      return false;
-    }
-
-    // 简单的 role-based 检查（用于 UI 控制）
-    // 实际权限检查由后端自动完成
-    const rolePermissions = {
-      admin: ['*'],
-      reviewer: ['kb_documents:*', 'users:view'],
-      operator: ['kb_documents:upload'],
-      viewer: [],
-      guest: [],
-    };
-
-    const permissions = rolePermissions[this.user.role] || [];
-
-    // 检查是否有通配符权限
-    if (permissions.includes('*')) {
-      return true;
-    }
-
-    // 检查具体权限
-    const requiredPermission = `${resource}:${action}`;
-    return permissions.some(p => {
-      if (p.endsWith(':*')) {
-        return requiredPermission.startsWith(p.split(':')[0]);
-      }
-      return p === requiredPermission;
-    });
+    // Deprecated: UI permission checks live in useAuth.can().
+    return false;
   }
 
   /**

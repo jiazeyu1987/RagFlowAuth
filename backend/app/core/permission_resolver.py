@@ -6,7 +6,7 @@ from typing import Any, Iterable
 
 from fastapi import HTTPException
 
-from dependencies import AppDependencies
+from backend.app.dependencies import AppDependencies
 
 
 class ResourceScope(str, Enum):
@@ -40,9 +40,6 @@ def _effective_group_ids(user: Any) -> list[int]:
     group_ids: list[int] = []
     if getattr(user, "group_ids", None):
         group_ids.extend([int(gid) for gid in user.group_ids if gid is not None])
-    legacy_group_id = getattr(user, "group_id", None)
-    if not group_ids and legacy_group_id is not None:
-        group_ids.append(int(legacy_group_id))
     # Deduplicate while preserving order
     seen: set[int] = set()
     ordered: list[int] = []
@@ -60,6 +57,17 @@ def _safe_list(value: Any) -> list[Any]:
         return value
     return []
 
+def _add_kb_ref(kb_names: set[str], ref: str, dataset_index: dict[str, dict[str, str]] | None) -> None:
+    kb_names.add(ref)
+    if not dataset_index:
+        return
+    by_id = dataset_index.get("by_id", {})
+    by_name = dataset_index.get("by_name", {})
+    if ref in by_id:
+        kb_names.add(by_id[ref])
+    elif ref in by_name:
+        kb_names.add(by_name[ref])
+
 
 def resolve_permissions(deps: AppDependencies, user: Any) -> PermissionSnapshot:
     is_admin = getattr(user, "role", None) == "admin"
@@ -76,20 +84,6 @@ def resolve_permissions(deps: AppDependencies, user: Any) -> PermissionSnapshot:
             chat_ids=frozenset(),
         )
 
-    group_ids = _effective_group_ids(user)
-    if not group_ids:
-        return PermissionSnapshot(
-            is_admin=False,
-            can_upload=False,
-            can_review=False,
-            can_download=False,
-            can_delete=False,
-            kb_scope=ResourceScope.NONE,
-            kb_names=frozenset(),
-            chat_scope=ResourceScope.NONE,
-            chat_ids=frozenset(),
-        )
-
     can_upload = False
     can_review = False
     can_download = False
@@ -97,6 +91,17 @@ def resolve_permissions(deps: AppDependencies, user: Any) -> PermissionSnapshot:
     kb_names: set[str] = set()
     chat_ids: set[str] = set()
 
+    dataset_index: dict[str, dict[str, str]] | None = None
+    ragflow_service = getattr(deps, "ragflow_service", None)
+    if ragflow_service is not None:
+        try:
+            get_index = getattr(ragflow_service, "get_dataset_index", None)
+            if callable(get_index):
+                dataset_index = get_index()
+        except Exception:
+            dataset_index = None
+
+    group_ids = _effective_group_ids(user)
     for group_id in group_ids:
         group = deps.permission_group_store.get_group(group_id)
         if not group:
@@ -109,10 +114,14 @@ def resolve_permissions(deps: AppDependencies, user: Any) -> PermissionSnapshot:
 
         for name in _safe_list(group.get("accessible_kbs")):
             if isinstance(name, str) and name:
-                kb_names.add(name)
+                _add_kb_ref(kb_names, name, dataset_index)
         for cid in _safe_list(group.get("accessible_chats")):
             if isinstance(cid, str) and cid:
                 chat_ids.add(cid)
+
+    # NOTE:
+    # 业务授权以“权限组（resolver）”为准，不再合并按用户单独授权的 KB/Chat 可见性。
+    # user_kb_permissions / user_chat_permissions 保留为历史/管理用途，但不参与当前授权决策。
 
     kb_scope = ResourceScope.SET if kb_names else ResourceScope.NONE
     chat_scope = ResourceScope.SET if chat_ids else ResourceScope.NONE
@@ -130,22 +139,39 @@ def resolve_permissions(deps: AppDependencies, user: Any) -> PermissionSnapshot:
     )
 
 
-def list_all_kb_names(deps: AppDependencies) -> list[str]:
-    datasets = deps.ragflow_service.list_datasets() or []
-    names: list[str] = []
-    for ds in datasets:
-        if isinstance(ds, dict) and ds.get("name"):
-            names.append(ds["name"])
-    return names
-
-
 def filter_datasets_by_name(snapshot: PermissionSnapshot, datasets: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
     if snapshot.kb_scope == ResourceScope.ALL:
         return list(datasets)
     if snapshot.kb_scope == ResourceScope.NONE:
         return []
     allowed = snapshot.kb_names
-    return [ds for ds in datasets if isinstance(ds, dict) and ds.get("name") in allowed]
+    filtered: list[dict[str, Any]] = []
+    for ds in datasets:
+        if not isinstance(ds, dict):
+            continue
+        if (ds.get("name") in allowed) or (ds.get("id") in allowed):
+            filtered.append(ds)
+    return filtered
+
+
+def allowed_dataset_ids(snapshot: PermissionSnapshot, datasets: Iterable[dict[str, Any]]) -> list[str]:
+    """
+    Return the dataset ids the user can use for retrieval/search operations.
+
+    Note: For non-admin users we rely on resolver-derived `kb_names`, which may
+    include both dataset names and dataset ids (via dataset index expansion).
+    """
+    if snapshot.kb_scope == ResourceScope.NONE:
+        return []
+    permitted = datasets if snapshot.kb_scope == ResourceScope.ALL else filter_datasets_by_name(snapshot, datasets)
+    ids: list[str] = []
+    for ds in permitted:
+        if not isinstance(ds, dict):
+            continue
+        ds_id = ds.get("id")
+        if isinstance(ds_id, str) and ds_id:
+            ids.append(ds_id)
+    return ids
 
 
 def assert_can_upload(snapshot: PermissionSnapshot) -> None:
@@ -199,4 +225,3 @@ def normalize_accessible_chat_ids(chat_ids: Iterable[str]) -> set[str]:
         else:
             raw.add(cid)
     return raw
-

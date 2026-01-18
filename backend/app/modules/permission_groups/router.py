@@ -4,11 +4,12 @@ import logging
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from app.core.auth import AuthRequired, get_deps
-from dependencies import AppDependencies
+from backend.app.core.auth import get_deps
+from backend.app.core.authz import AdminOnly
+from backend.app.dependencies import AppDependencies
 
-from app.modules.permission_groups.schemas import PermissionGroupCreate, PermissionGroupUpdate
-from app.modules.permission_groups.service import PermissionGroupsService
+from backend.app.modules.permission_groups.schemas import PermissionGroupCreate, PermissionGroupUpdate
+from backend.app.modules.permission_groups.service import PermissionGroupsService
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +23,7 @@ def create_router() -> APIRouter:
 
     @router.get("/permission-groups")
     async def list_permission_groups(
-        _: AuthRequired,
+        _: AdminOnly,
         service: PermissionGroupsService = Depends(get_service),
     ):
         groups = service.list_groups()
@@ -31,7 +32,7 @@ def create_router() -> APIRouter:
     @router.get("/permission-groups/{group_id}")
     async def get_permission_group(
         group_id: int,
-        _: AuthRequired,
+        _: AdminOnly,
         service: PermissionGroupsService = Depends(get_service),
     ):
         group = service.get_group(group_id)
@@ -42,7 +43,7 @@ def create_router() -> APIRouter:
     @router.post("/permission-groups")
     async def create_permission_group(
         data: PermissionGroupCreate,
-        _: AuthRequired,
+        _: AdminOnly,
         service: PermissionGroupsService = Depends(get_service),
     ):
         payload = data.model_dump()
@@ -55,7 +56,7 @@ def create_router() -> APIRouter:
     async def update_permission_group(
         group_id: int,
         data: PermissionGroupUpdate,
-        _: AuthRequired,
+        _: AdminOnly,
         service: PermissionGroupsService = Depends(get_service),
     ):
         payload = {k: v for k, v in data.model_dump().items() if v is not None}
@@ -67,7 +68,7 @@ def create_router() -> APIRouter:
     @router.delete("/permission-groups/{group_id}")
     async def delete_permission_group(
         group_id: int,
-        _: AuthRequired,
+        _: AdminOnly,
         service: PermissionGroupsService = Depends(get_service),
     ):
         success = service.delete_group(group_id)
@@ -77,7 +78,7 @@ def create_router() -> APIRouter:
 
     @router.get("/permission-groups/resources/knowledge-bases")
     async def get_knowledge_bases(
-        _: AuthRequired,
+        _: AdminOnly,
         deps: AppDependencies = Depends(get_deps),
         service: PermissionGroupsService = Depends(get_service),
     ):
@@ -92,7 +93,7 @@ def create_router() -> APIRouter:
 
     @router.get("/permission-groups/resources/chats")
     async def get_chat_agents(
-        _: AuthRequired,
+        _: AdminOnly,
         service: PermissionGroupsService = Depends(get_service),
     ):
         try:

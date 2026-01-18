@@ -1,8 +1,12 @@
 import sqlite3
 import time
+import logging
 from typing import List, Optional
 from dataclasses import dataclass
 from pathlib import Path
+
+from backend.database.paths import resolve_auth_db_path
+from backend.database.sqlite import connect_sqlite
 
 
 @dataclass
@@ -16,18 +20,18 @@ class DeletionLog:
     original_uploader: Optional[str] = None
     original_reviewer: Optional[str] = None
     ragflow_doc_id: Optional[str] = None
+    kb_dataset_id: Optional[str] = None
+    kb_name: Optional[str] = None
 
 
 class DeletionLogStore:
     def __init__(self, db_path: str = None):
-        if db_path is None:
-            script_dir = Path(__file__).parent.parent
-            db_path = script_dir / "data" / "auth.db"
-        self.db_path = Path(db_path)
+        self.db_path = resolve_auth_db_path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        self._logger = logging.getLogger(__name__)
 
     def _get_connection(self):
-        return sqlite3.connect(str(self.db_path))
+        return connect_sqlite(self.db_path)
 
     def log_deletion(
         self,
@@ -35,6 +39,8 @@ class DeletionLogStore:
         filename: str,
         kb_id: str,
         deleted_by: str,
+        kb_dataset_id: Optional[str] = None,
+        kb_name: Optional[str] = None,
         original_uploader: Optional[str] = None,
         original_reviewer: Optional[str] = None,
         ragflow_doc_id: Optional[str] = None
@@ -48,17 +54,25 @@ class DeletionLogStore:
             cursor.execute("""
                 INSERT INTO deletion_logs (
                     doc_id, filename, kb_id, deleted_by, deleted_at_ms,
-                    original_uploader, original_reviewer, ragflow_doc_id
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    original_uploader, original_reviewer, ragflow_doc_id,
+                    kb_dataset_id, kb_name
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (doc_id, filename, kb_id, deleted_by, now_ms,
-                  original_uploader, original_reviewer, ragflow_doc_id))
+                  original_uploader, original_reviewer, ragflow_doc_id,
+                  kb_dataset_id, (kb_name or kb_id)))
             conn.commit()
 
             # 获取插入的记录
             cursor.execute("SELECT last_insert_rowid()")
             log_id = cursor.fetchone()[0]
 
-            log_to_file(f"[DELETE] 文件删除记录已保存: doc_id={doc_id}, filename={filename}, kb_id={kb_id}, deleted_by={deleted_by}")
+            self._logger.info(
+                "[DELETE] deletion logged doc_id=%s filename=%s kb_id=%s deleted_by=%s",
+                doc_id,
+                filename,
+                kb_id,
+                deleted_by,
+            )
 
             return DeletionLog(
                 id=log_id,
@@ -69,7 +83,9 @@ class DeletionLogStore:
                 deleted_at_ms=now_ms,
                 original_uploader=original_uploader,
                 original_reviewer=original_reviewer,
-                ragflow_doc_id=ragflow_doc_id
+                ragflow_doc_id=ragflow_doc_id,
+                kb_dataset_id=kb_dataset_id,
+                kb_name=(kb_name or kb_id),
             )
         finally:
             conn.close()
@@ -77,6 +93,8 @@ class DeletionLogStore:
     def list_deletions(
         self,
         kb_id: Optional[str] = None,
+        kb_refs: Optional[List[str]] = None,
+        deleted_by: Optional[str] = None,
         limit: int = 100
     ) -> List[DeletionLog]:
         """获取删除记录列表"""
@@ -85,15 +103,24 @@ class DeletionLogStore:
         try:
             query = """
                 SELECT id, doc_id, filename, kb_id, deleted_by, deleted_at_ms,
-                       original_uploader, original_reviewer, ragflow_doc_id
+                       original_uploader, original_reviewer, ragflow_doc_id,
+                       kb_dataset_id, kb_name
                 FROM deletion_logs
                 WHERE 1=1
             """
             params = []
 
-            if kb_id:
-                query += " AND kb_id = ?"
-                params.append(kb_id)
+            refs = kb_refs or ([kb_id] if kb_id else [])
+            if refs:
+                placeholders = ",".join("?" for _ in refs)
+                query += f" AND (kb_id IN ({placeholders}) OR kb_dataset_id IN ({placeholders}) OR kb_name IN ({placeholders}))"
+                params.extend(list(refs))
+                params.extend(list(refs))
+                params.extend(list(refs))
+
+            if deleted_by:
+                query += " AND deleted_by = ?"
+                params.append(deleted_by)
 
             query += " ORDER BY deleted_at_ms DESC LIMIT ?"
             params.append(limit)
@@ -105,10 +132,3 @@ class DeletionLogStore:
             conn.close()
 
 
-def log_to_file(message: str):
-    """写入日志到文件"""
-    from pathlib import Path
-    LOG_FILE = Path(__file__).parent.parent / "data" / "deletion_log.txt"
-    timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
-    with open(LOG_FILE, "a", encoding="utf-8") as f:
-        f.write(f"[{timestamp}] {message}\n")

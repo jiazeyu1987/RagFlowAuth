@@ -1,51 +1,26 @@
-import json
 import logging
-import requests
-from pathlib import Path
 from typing import Optional, List, AsyncIterator, Dict, Any
+
+from .ragflow_connection import RagflowConnection, create_ragflow_connection
 
 
 class RagflowChatService:
-    def __init__(self, config_path: str = None, logger: logging.Logger = None, session_store=None):
-        if config_path is None:
-            # Default to repo root: <repo>/ragflow_config.json
-            repo_root = Path(__file__).resolve().parent.parent.parent
-            config_path = repo_root / "ragflow_config.json"
-
-        self.config_path = Path(config_path)
+    def __init__(
+        self,
+        config_path: str = None,
+        logger: logging.Logger = None,
+        session_store=None,
+        *,
+        connection: RagflowConnection | None = None,
+    ):
         self.logger = logger or logging.getLogger(__name__)
-        self.config = self._load_config()
+        conn = connection or create_ragflow_connection(config_path=config_path, logger=self.logger)
+        self.config_path = conn.config_path
+        self.config = conn.config
         self.session_store = session_store
-
-    def _coerce_list(self, value: Any, *, context: str) -> List[dict]:
-        """
-        RAGFlow APIs are expected to return a list in the `data` field for list endpoints,
-        but some deployments return booleans or dicts. Normalize to a list to keep callers safe.
-        """
-        if value is None:
-            return []
-        if isinstance(value, list):
-            return value
-        self.logger.error(f"Unexpected {context} response type: {type(value).__name__}")
-        return []
-
-    def _load_config(self) -> dict:
-        if self.config_path.exists():
-            with open(self.config_path, "r", encoding="utf-8") as f:
-                return json.load(f)
-        return {}
-
-    def _get_headers(self) -> dict:
-        """获取请求头"""
-        api_key = self.config.get("api_key", "")
-        return {
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json"
-        }
-
-    def _get_base_url(self) -> str:
-        """获取RAGFlow基础URL"""
-        return self.config.get("base_url", "http://localhost:9380")
+        self._client = conn.http
+        self._chat_ref_cache: dict[str, str] | None = None
+        self._chat_ref_cache_at_s: float = 0.0
 
     def list_chats(
         self,
@@ -70,42 +45,17 @@ class RagflowChatService:
         Returns:
             聊天助手列表
         """
-        try:
-            base_url = self._get_base_url()
-            url = f"{base_url}/api/v1/chats"
-
-            params = {
-                "page": page,
-                "page_size": page_size,
-                "orderby": orderby,
-                "desc": "true" if desc else "false"
-            }
-
-            if name:
-                params["name"] = name
-            if chat_id:
-                params["id"] = chat_id
-
-            response = requests.get(
-                url,
-                headers=self._get_headers(),
-                params=params,
-                timeout=10
-            )
-
-            if response.status_code == 200:
-                data = response.json()
-                if data.get("code") == 0:
-                    return self._coerce_list(data.get("data", []), context="list_chats")
-                else:
-                    self.logger.error(f"Failed to list chats: {data.get('message')}")
-            else:
-                self.logger.error(f"Failed to list chats: HTTP {response.status_code}")
-
-            return []
-        except Exception as e:
-            self.logger.error(f"Failed to list chats: {e}")
-            return []
+        params: dict[str, Any] = {
+            "page": page,
+            "page_size": page_size,
+            "orderby": orderby,
+            "desc": "true" if desc else "false",
+        }
+        if name:
+            params["name"] = name
+        if chat_id:
+            params["id"] = chat_id
+        return self._client.get_list("/api/v1/chats", params=params, context="list_chats")
 
     def get_chat(self, chat_id: str) -> Optional[dict]:
         """
@@ -137,47 +87,33 @@ class RagflowChatService:
         Returns:
             创建的会话信息，失败返回None
         """
-        try:
-            base_url = self._get_base_url()
-            url = f"{base_url}/api/v1/chats/{chat_id}/sessions"
+        body: dict[str, Any] = {"name": name}
+        if user_id:
+            body["user_id"] = user_id
 
-            body = {"name": name}
-            if user_id:
-                body["user_id"] = user_id
-
-            response = requests.post(
-                url,
-                headers=self._get_headers(),
-                json=body,
-                timeout=10
-            )
-
-            if response.status_code == 200:
-                data = response.json()
-                if data.get("code") == 0:
-                    session_data = data.get("data")
-
-                    # 同步到本地数据库
-                    if self.session_store and user_id and session_data:
-                        session_id = session_data.get("id")
-                        if session_id:
-                            self.session_store.create_session(
-                                session_id=session_id,
-                                chat_id=chat_id,
-                                user_id=user_id,
-                                name=name
-                            )
-
-                    return session_data
-                else:
-                    self.logger.error(f"Failed to create session: {data.get('message')}")
-            else:
-                self.logger.error(f"Failed to create session: HTTP {response.status_code}")
-
+        payload = self._client.post_json(f"/api/v1/chats/{chat_id}/sessions", body=body)
+        if not payload:
             return None
-        except Exception as e:
-            self.logger.error(f"Failed to create session: {e}")
+        if payload.get("code") != 0:
+            self.logger.error("Failed to create session: %s", payload.get("message"))
             return None
+
+        session_data = payload.get("data")
+        if not isinstance(session_data, dict):
+            return None
+
+        # Sync to local DB
+        if self.session_store and user_id:
+            session_id_value = session_data.get("id")
+            if session_id_value:
+                self.session_store.create_session(
+                    session_id=session_id_value,
+                    chat_id=chat_id,
+                    user_id=user_id,
+                    name=name,
+                )
+
+        return session_data
 
     def list_sessions(
         self,
@@ -206,44 +142,23 @@ class RagflowChatService:
         Returns:
             会话列表
         """
-        try:
-            base_url = self._get_base_url()
-            url = f"{base_url}/api/v1/chats/{chat_id}/sessions"
-
-            params = {
-                "page": page,
-                "page_size": page_size,
-                "orderby": orderby,
-                "desc": "true" if desc else "false"
-            }
-
-            if name:
-                params["name"] = name
-            if session_id:
-                params["id"] = session_id
-            if user_id:
-                params["user_id"] = user_id
-
-            response = requests.get(
-                url,
-                headers=self._get_headers(),
-                params=params,
-                timeout=10
-            )
-
-            if response.status_code == 200:
-                data = response.json()
-                if data.get("code") == 0:
-                    return self._coerce_list(data.get("data", []), context="list_sessions")
-                else:
-                    self.logger.error(f"Failed to list sessions: {data.get('message')}")
-            else:
-                self.logger.error(f"Failed to list sessions: HTTP {response.status_code}")
-
-            return []
-        except Exception as e:
-            self.logger.error(f"Failed to list sessions: {e}")
-            return []
+        params: dict[str, Any] = {
+            "page": page,
+            "page_size": page_size,
+            "orderby": orderby,
+            "desc": "true" if desc else "false",
+        }
+        if name:
+            params["name"] = name
+        if session_id:
+            params["id"] = session_id
+        if user_id:
+            params["user_id"] = user_id
+        return self._client.get_list(
+            f"/api/v1/chats/{chat_id}/sessions",
+            params=params,
+            context="list_sessions",
+        )
 
     async def chat(
         self,
@@ -266,55 +181,22 @@ class RagflowChatService:
         Yields:
             聊天响应数据块
         """
-        try:
-            base_url = self._get_base_url()
-            url = f"{base_url}/api/v1/chats/{chat_id}/completions"
+        body: dict[str, Any] = {"question": question, "stream": stream}
+        if session_id:
+            body["session_id"] = session_id
+        if user_id:
+            body["user_id"] = user_id
 
-            body = {
-                "question": question,
-                "stream": stream
-            }
+        if stream:
+            for obj in self._client.post_sse(f"/api/v1/chats/{chat_id}/completions", body=body, timeout_s=30):
+                yield obj
+            return
 
-            if session_id:
-                body["session_id"] = session_id
-            if user_id:
-                body["user_id"] = user_id
-
-            response = requests.post(
-                url,
-                headers=self._get_headers(),
-                json=body,
-                stream=stream,
-                timeout=30
-            )
-
-            if response.status_code == 200:
-                if stream:
-                    # SSE流式响应
-                    for line in response.iter_lines():
-                        if line:
-                            line = line.decode('utf-8')
-                            if line.startswith('data:'):
-                                data_str = line[5:].strip()
-                                if data_str:
-                                    try:
-                                        data = json.loads(data_str)
-                                        yield data
-                                    except json.JSONDecodeError:
-                                        self.logger.warning(f"Failed to parse SSE data: {data_str}")
-                                        continue
-                else:
-                    # 非流式响应
-                    data = response.json()
-                    yield data
-            else:
-                error_msg = f"Chat request failed: HTTP {response.status_code}"
-                self.logger.error(error_msg)
-                yield {"code": response.status_code, "message": error_msg}
-
-        except Exception as e:
-            self.logger.error(f"Chat error: {e}")
-            yield {"code": -1, "message": str(e)}
+        payload = self._client.post_json(f"/api/v1/chats/{chat_id}/completions", body=body)
+        if payload is None:
+            yield {"code": -1, "message": "Chat request failed"}
+            return
+        yield payload
 
     def delete_sessions(
         self,
@@ -333,41 +215,19 @@ class RagflowChatService:
         Returns:
             是否成功
         """
-        try:
-            base_url = self._get_base_url()
-            url = f"{base_url}/api/v1/chats/{chat_id}/sessions"
-
-            body = {}
-            if session_ids:
-                body["ids"] = session_ids
-
-            response = requests.delete(
-                url,
-                headers=self._get_headers(),
-                json=body,
-                timeout=10
-            )
-
-            if response.status_code == 200:
-                data = response.json()
-                success = data.get("code") == 0
-
-                # 同步到本地数据库（软删除）
-                if success and self.session_store and session_ids and user_id:
-                    self.session_store.delete_sessions(
-                        session_ids=session_ids,
-                        chat_id=chat_id,
-                        deleted_by=user_id
-                    )
-
-                return success
-            else:
-                self.logger.error(f"Failed to delete sessions: HTTP {response.status_code}")
-                return False
-
-        except Exception as e:
-            self.logger.error(f"Failed to delete sessions: {e}")
+        body: dict[str, Any] = {}
+        if session_ids:
+            body["ids"] = session_ids
+        payload = self._client.delete_json(f"/api/v1/chats/{chat_id}/sessions", body=body)
+        if not payload:
             return False
+        success = payload.get("code") == 0
+
+        # Sync to local DB (soft delete)
+        if success and self.session_store and session_ids and user_id:
+            self.session_store.delete_sessions(session_ids=session_ids, chat_id=chat_id, deleted_by=user_id)
+
+        return bool(success)
 
     def list_agents(
         self,
@@ -392,42 +252,17 @@ class RagflowChatService:
         Returns:
             搜索体列表
         """
-        try:
-            base_url = self._get_base_url()
-            url = f"{base_url}/api/v1/agents"
-
-            params = {
-                "page": page,
-                "page_size": page_size,
-                "orderby": orderby,
-                "desc": "true" if desc else "false"
-            }
-
-            if name:
-                params["name"] = name
-            if id:
-                params["id"] = id
-
-            response = requests.get(
-                url,
-                headers=self._get_headers(),
-                params=params,
-                timeout=10
-            )
-
-            if response.status_code == 200:
-                data = response.json()
-                if data.get("code") == 0:
-                    return self._coerce_list(data.get("data", []), context="list_agents")
-                else:
-                    self.logger.error(f"Failed to list agents: {data.get('message')}")
-            else:
-                self.logger.error(f"Failed to list agents: HTTP {response.status_code}")
-
-            return []
-        except Exception as e:
-            self.logger.error(f"Failed to list agents: {e}")
-            return []
+        params: dict[str, Any] = {
+            "page": page,
+            "page_size": page_size,
+            "orderby": orderby,
+            "desc": "true" if desc else "false",
+        }
+        if name:
+            params["name"] = name
+        if id:
+            params["id"] = id
+        return self._client.get_list("/api/v1/agents", params=params, context="list_agents")
 
     def get_agent(self, agent_id: str) -> Optional[dict]:
         """
@@ -441,6 +276,60 @@ class RagflowChatService:
         """
         agents = self.list_agents(id=agent_id)
         return agents[0] if agents else None
+
+    def list_all_chat_ids(self, *, page_size: int = 1000) -> list[str]:
+        """
+        Return all chat/agent identifiers in permission-group storage format:
+        - chats:  'chat_<id>'
+        - agents: 'agent_<id>'
+        """
+        chats = self.list_chats(page_size=page_size)
+        agents = self.list_agents(page_size=page_size)
+
+        result: list[str] = []
+        for chat in chats:
+            if isinstance(chat, dict) and chat.get("id"):
+                result.append(f"chat_{chat['id']}")
+        for agent in agents:
+            if isinstance(agent, dict) and agent.get("id"):
+                result.append(f"agent_{agent['id']}")
+        return result
+
+    def get_chat_ref_index(self, *, ttl_s: float = 30.0, page_size: int = 1000) -> dict[str, str]:
+        """
+        Map raw ids -> canonical permission-group refs (chat_<id> / agent_<id>).
+        """
+        from time import time as _time
+
+        now_s = _time()
+        if self._chat_ref_cache and (now_s - self._chat_ref_cache_at_s) <= ttl_s:
+            return self._chat_ref_cache
+
+        index: dict[str, str] = {}
+        for ref in self.list_all_chat_ids(page_size=page_size):
+            if not isinstance(ref, str) or not ref:
+                continue
+            if ref.startswith("chat_"):
+                index[ref[5:]] = ref
+            elif ref.startswith("agent_"):
+                index[ref[6:]] = ref
+
+        self._chat_ref_cache = index
+        self._chat_ref_cache_at_s = now_s
+        return index
+
+    def normalize_chat_ref(self, ref: str) -> str:
+        """
+        Accept raw id or permission-group ref; return canonical permission-group ref when possible.
+        """
+        if not isinstance(ref, str) or not ref:
+            return ref
+        if ref.startswith("chat_") or ref.startswith("agent_"):
+            return ref
+        try:
+            return self.get_chat_ref_index().get(ref) or ref
+        except Exception:
+            return ref
 
     async def agent_chat(
         self,
@@ -465,57 +354,24 @@ class RagflowChatService:
         Yields:
             聊天响应数据块
         """
-        try:
-            base_url = self._get_base_url()
-            url = f"{base_url}/api/v1/agents/{agent_id}/completions"
+        body: dict[str, Any] = {"question": question, "stream": stream}
+        if session_id:
+            body["session_id"] = session_id
+        if inputs:
+            body["inputs"] = inputs
+        if user_id:
+            body["user"] = user_id
 
-            body = {
-                "question": question,
-                "stream": stream
-            }
+        if stream:
+            for obj in self._client.post_sse(f"/api/v1/agents/{agent_id}/completions", body=body, timeout_s=30):
+                yield obj
+            return
 
-            if session_id:
-                body["session_id"] = session_id
-            if inputs:
-                body["inputs"] = inputs
-            if user_id:
-                body["user"] = user_id
-
-            response = requests.post(
-                url,
-                headers=self._get_headers(),
-                json=body,
-                stream=stream,
-                timeout=30
-            )
-
-            if response.status_code == 200:
-                if stream:
-                    # SSE流式响应
-                    for line in response.iter_lines():
-                        if line:
-                            line = line.decode('utf-8')
-                            if line.startswith('data:'):
-                                data_str = line[5:].strip()
-                                if data_str:
-                                    try:
-                                        data = json.loads(data_str)
-                                        yield data
-                                    except json.JSONDecodeError:
-                                        self.logger.warning(f"Failed to parse SSE data: {data_str}")
-                                        continue
-                else:
-                    # 非流式响应
-                    data = response.json()
-                    yield data
-            else:
-                error_msg = f"Agent chat request failed: HTTP {response.status_code}"
-                self.logger.error(error_msg)
-                yield {"code": response.status_code, "message": error_msg}
-
-        except Exception as e:
-            self.logger.error(f"Agent chat error: {e}")
-            yield {"code": -1, "message": str(e)}
+        payload = self._client.post_json(f"/api/v1/agents/{agent_id}/completions", body=body)
+        if payload is None:
+            yield {"code": -1, "message": "Agent chat request failed"}
+            return
+        yield payload
 
     def retrieve_chunks(
         self,
@@ -548,57 +404,21 @@ class RagflowChatService:
             - page: 当前页码
             - page_size: 每页数量
         """
-        try:
-            base_url = self._get_base_url()
-            url = f"{base_url}/api/v1/retrieval"
-
-            body = {
-                "question": question,
-                "dataset_ids": dataset_ids,
-                "page": page,
-                "page_size": page_size,
-                "similarity_threshold": similarity_threshold,
-                "top_k": top_k,
-                "keyword": keyword,
-                "highlight": highlight
-            }
-
-            response = requests.post(
-                url,
-                headers=self._get_headers(),
-                json=body,
-                timeout=30
-            )
-
-            if response.status_code == 200:
-                data = response.json()
-                if data.get("code") == 0:
-                    result = data.get("data", {})
-
-                    # Debug: Log the structure of the first chunk
-                    chunks = result.get("chunks", [])
-                    if chunks:
-                        self.logger.info(f"[RETRIEVAL] highlight parameter: {highlight}")
-                        self.logger.info(f"[RETRIEVAL] First chunk keys: {list(chunks[0].keys())}")
-                        self.logger.info(f"[RETRIEVAL] All available fields: {', '.join(list(chunks[0].keys()))}")
-
-                        # Check if content_with_weight exists
-                        if 'content_with_weight' in chunks[0]:
-                            self.logger.info(f"[RETRIEVAL] content_with_weight exists: YES")
-                            self.logger.info(f"[RETRIEVAL] content_with_weight preview: {str(chunks[0].get('content_with_weight'))[:200]}...")
-                        else:
-                            self.logger.warning(f"[RETRIEVAL] content_with_weight field NOT FOUND in response!")
-                            self.logger.info(f"[RETRIEVAL] Content fields that exist: {[k for k in chunks[0].keys() if 'content' in k.lower()]}")
-
-                        self.logger.info(f"Successfully retrieved chunks: {result.get('total', 0)} total")
-                    return result
-                else:
-                    self.logger.error(f"Failed to retrieve chunks: {data.get('message')}")
-                    return {"chunks": [], "total": 0}
-            else:
-                self.logger.error(f"Failed to retrieve chunks: HTTP {response.status_code}")
-                return {"chunks": [], "total": 0}
-
-        except Exception as e:
-            self.logger.error(f"Failed to retrieve chunks: {e}", exc_info=True)
+        body: dict[str, Any] = {
+            "question": question,
+            "dataset_ids": dataset_ids,
+            "page": page,
+            "page_size": page_size,
+            "similarity_threshold": similarity_threshold,
+            "top_k": top_k,
+            "keyword": keyword,
+            "highlight": highlight,
+        }
+        payload = self._client.post_json("/api/v1/retrieval", body=body)
+        if not payload:
             return {"chunks": [], "total": 0}
+        if payload.get("code") != 0:
+            self.logger.error("Failed to retrieve chunks: %s", payload.get("message"))
+            return {"chunks": [], "total": 0}
+        data = payload.get("data")
+        return data if isinstance(data, dict) else {"chunks": [], "total": 0}

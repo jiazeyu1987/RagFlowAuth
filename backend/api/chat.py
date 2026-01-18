@@ -1,1 +1,1 @@
-from app.modules.chat.router import router
+from backend.app.modules.chat.router import router

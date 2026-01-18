@@ -2,7 +2,7 @@
 
 ## 概述
 
-新的 `new_backend/` (FastAPI + AuthX) 与现有前端**不直接兼容**。需要进行以下修改。
+新的 `backend/` (FastAPI + AuthX) 与现有前端**不直接兼容**。需要进行以下修改。
 
 ## 主要变更
 
@@ -30,7 +30,7 @@
   "access_token": "xxx",
   "refresh_token": "xxx",
   "token_type": "bearer",
-  "scopes": ["users:*", "kb_documents:*"]
+  "scopes": []
 }
 ```
 
@@ -46,8 +46,11 @@ await authClient.verifyPermission('kb_documents', 'upload');
 
 **新方式**:
 ```javascript
-// 后端自动检查，前端只需简单的 role-based UI 控制
-authClient.can('admin') || authClient.can('operator', 'kb_documents', 'upload');
+// 后端以权限组/resolver 为准；前端 UI 只做展示控制
+// - user.role === 'admin' 视为全权限
+// - user.permissions 提供 can_upload/can_review/can_download/can_delete
+// - /api/me/kbs 返回可访问知识库列表
+// - /api/me/chats 返回可访问聊天体列表
 ```
 
 ## 迁移步骤
@@ -193,7 +196,7 @@ class AuthClient {
 **A**: 新后端提供：
 - ✅ 更好的令牌管理（自动刷新）
 - ✅ 现代化的框架（FastAPI）
-- ✅ 简化的权限系统（Scopes）
+- ✅ 简化的权限系统（权限组 + resolver）
 - ✅ 自动 API 文档（Swagger UI）
 
 ### Q: 可以保留旧后端吗？
@@ -214,7 +217,7 @@ class AuthClient {
 
 **A**: 不会！使用迁移脚本：
 ```bash
-cd new_backend
+cd backend
 python migrate_db.py --old-db ../backend/data/auth.db
 ```
 

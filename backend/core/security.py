@@ -1,5 +1,5 @@
 from authx import AuthX, AuthXConfig
-from config import settings
+from backend.app.core.config import settings
 
 # AuthX Configuration
 auth_config = AuthXConfig(

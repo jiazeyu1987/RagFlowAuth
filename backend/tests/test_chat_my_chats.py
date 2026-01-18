@@ -5,8 +5,8 @@ from fastapi import FastAPI
 from fastapi import Request
 from fastapi.testclient import TestClient
 
-from app.core import auth as auth_module
-from app.modules.chat.router import router as chat_router
+from backend.app.core import auth as auth_module
+from backend.app.modules.chat.router import router as chat_router
 
 
 class _FakeUser:
