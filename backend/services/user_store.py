@@ -105,6 +105,25 @@ class UserStore:
         finally:
             conn.close()
 
+    def get_usernames_by_ids(self, user_ids: Set[str]) -> dict[str, str]:
+        """
+        Bulk lookup usernames by user_id.
+
+        Returns: {user_id: username}
+        """
+        ids = [i for i in (user_ids or set()) if isinstance(i, str) and i]
+        if not ids:
+            return {}
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        try:
+            placeholders = ",".join("?" for _ in ids)
+            cursor.execute(f"SELECT user_id, username FROM users WHERE user_id IN ({placeholders})", ids)
+            rows = cursor.fetchall()
+            return {str(r[0]): str(r[1]) for r in rows if r and len(r) >= 2}
+        finally:
+            conn.close()
+
     def _get_user_group_ids(self, user_id: str, conn) -> List[int]:
         """获取用户的所有权限组ID"""
         cursor = conn.cursor()

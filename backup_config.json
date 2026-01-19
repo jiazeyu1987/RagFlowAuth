@@ -1,0 +1,6 @@
+{
+  "enabled": true,
+  "method": "directory",
+  "target_dir": "\\\\192.168.1.100\\backup\\RagflowAuth",
+  "retain_days": 30
+}

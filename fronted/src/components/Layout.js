@@ -20,11 +20,11 @@ const Layout = ({ children }) => {
     { name: 'AI对话', path: '/chat' },
     { name: '搜索', path: '/agents' },
     { name: '文档浏览', path: '/browser' },
-    { name: '文档管理', path: '/documents', show: canReview },
+    { name: '文档审核', path: '/documents', show: canReview },
     { name: '上传文档', path: '/upload', show: canUpload },
-    { name: '审核记录', path: '/audit', show: canReview },
     { name: '用户管理', path: '/users', allowedRoles: ['admin'] },
     { name: '权限组管理', path: '/permission-groups', allowedRoles: ['admin'] },
+    { name: '数据安全', path: '/data-security', allowedRoles: ['admin'] },
   ];
 
   return (

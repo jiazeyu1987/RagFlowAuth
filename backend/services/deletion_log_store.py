@@ -22,6 +22,9 @@ class DeletionLog:
     ragflow_doc_id: Optional[str] = None
     kb_dataset_id: Optional[str] = None
     kb_name: Optional[str] = None
+    action: Optional[str] = None
+    ragflow_deleted: Optional[int] = None
+    ragflow_delete_error: Optional[str] = None
 
 
 class DeletionLogStore:
@@ -43,7 +46,11 @@ class DeletionLogStore:
         kb_name: Optional[str] = None,
         original_uploader: Optional[str] = None,
         original_reviewer: Optional[str] = None,
-        ragflow_doc_id: Optional[str] = None
+        ragflow_doc_id: Optional[str] = None,
+        *,
+        action: str | None = None,
+        ragflow_deleted: int | None = None,
+        ragflow_delete_error: str | None = None,
     ) -> DeletionLog:
         """记录文件删除操作"""
         now_ms = int(time.time() * 1000)
@@ -55,11 +62,11 @@ class DeletionLogStore:
                 INSERT INTO deletion_logs (
                     doc_id, filename, kb_id, deleted_by, deleted_at_ms,
                     original_uploader, original_reviewer, ragflow_doc_id,
-                    kb_dataset_id, kb_name
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    kb_dataset_id, kb_name, action, ragflow_deleted, ragflow_delete_error
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (doc_id, filename, kb_id, deleted_by, now_ms,
                   original_uploader, original_reviewer, ragflow_doc_id,
-                  kb_dataset_id, (kb_name or kb_id)))
+                  kb_dataset_id, (kb_name or kb_id), action, ragflow_deleted, ragflow_delete_error))
             conn.commit()
 
             # 获取插入的记录
@@ -86,6 +93,9 @@ class DeletionLogStore:
                 ragflow_doc_id=ragflow_doc_id,
                 kb_dataset_id=kb_dataset_id,
                 kb_name=(kb_name or kb_id),
+                action=action,
+                ragflow_deleted=ragflow_deleted,
+                ragflow_delete_error=ragflow_delete_error,
             )
         finally:
             conn.close()
@@ -104,7 +114,7 @@ class DeletionLogStore:
             query = """
                 SELECT id, doc_id, filename, kb_id, deleted_by, deleted_at_ms,
                        original_uploader, original_reviewer, ragflow_doc_id,
-                       kb_dataset_id, kb_name
+                       kb_dataset_id, kb_name, action, ragflow_deleted, ragflow_delete_error
                 FROM deletion_logs
                 WHERE 1=1
             """

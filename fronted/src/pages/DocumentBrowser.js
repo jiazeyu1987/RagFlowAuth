@@ -73,6 +73,7 @@ const DocumentBrowser = () => {
   const [previewDocName, setPreviewDocName] = useState(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [markdownContent, setMarkdownContent] = useState(null);
+  const [plainTextContent, setPlainTextContent] = useState(null);
   const [docxContent, setDocxContent] = useState(null);
   const [docContent, setDocContent] = useState(null);
   const [excelData, setExcelData] = useState(null);
@@ -291,6 +292,7 @@ const DocumentBrowser = () => {
       setActionLoading(prev => ({ ...prev, [`${docId}-view`]: true }));
       setPreviewDocName(docName);
       setMarkdownContent(null);
+      setPlainTextContent(null);
       setDocxContent(null);
       setDocContent(null);
       setExcelData(null);
@@ -309,6 +311,12 @@ const DocumentBrowser = () => {
         const url = window.URL.createObjectURL(blob);
         const text = await blob.text();
         setMarkdownContent(text);
+        setPreviewUrl(url);
+      } else if (isPlainTextFile(docName)) {
+        const blob = await authClient.previewRagflowDocumentBlob(docId, datasetName, docName);
+        const url = window.URL.createObjectURL(blob);
+        const text = await blob.text();
+        setPlainTextContent(text);
         setPreviewUrl(url);
       } else if (isDocFile(docName) || isDocxFile(docName)) {
         const blob = await authClient.previewRagflowDocumentBlob(docId, datasetName, docName);
@@ -361,6 +369,7 @@ const DocumentBrowser = () => {
       setError(err.message || '预览失败');
       setPreviewUrl(null);
       setMarkdownContent(null);
+      setPlainTextContent(null);
       setDocxContent(null);
       setDocContent(null);
       setExcelData(null);
@@ -380,6 +389,7 @@ const DocumentBrowser = () => {
     setPreviewUrl(null);
     setPreviewDocName(null);
     setMarkdownContent(null);
+    setPlainTextContent(null);
     setDocxContent(null);
     setDocContent(null);
     setExcelData(null);
@@ -389,16 +399,20 @@ const DocumentBrowser = () => {
   };
 
   const isGenericPreviewable = (filename) => {
-    // Only return true for txt files that use iframe preview
-    if (!filename) return false;
-    const ext = filename.toLowerCase().split('.').pop();
-    return ext === 'txt';
+    // Legacy iframe preview types (none currently).
+    return false;
   };
 
   const isMarkdownFile = (filename) => {
     if (!filename) return false;
     const ext = filename.toLowerCase().split('.').pop();
     return ext === 'md' || ext === 'markdown';
+  };
+
+  const isPlainTextFile = (filename) => {
+    if (!filename) return false;
+    const ext = filename.toLowerCase().split('.').pop();
+    return ext === 'txt' || ext === 'ini' || ext === 'log';
   };
 
   const isDocxFile = (filename) => {
@@ -1041,6 +1055,25 @@ const DocumentBrowser = () => {
                   }}>
                     <ReactMarkdown>{markdownContent}</ReactMarkdown>
                   </div>
+                </div>
+              ) : isPlainTextFile(previewDocName) ? (
+                <div style={{
+                  padding: '24px',
+                  backgroundColor: 'white',
+                  borderRadius: '8px',
+                  height: '70vh',
+                  overflow: 'auto',
+                  border: '1px solid #e5e7eb'
+                }}>
+                  <pre style={{
+                    margin: 0,
+                    fontSize: '0.875rem',
+                    lineHeight: '1.6',
+                    color: '#111827',
+                    whiteSpace: 'pre-wrap',
+                    wordBreak: 'break-word',
+                    fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace"
+                  }}>{plainTextContent}</pre>
                 </div>
               ) : isDocxFile(previewDocName) ? (
                 <div className="table-preview" style={{

@@ -118,6 +118,53 @@ def _ensure_user_permission_groups_table(conn: sqlite3.Connection) -> None:
     conn.execute("CREATE INDEX IF NOT EXISTS idx_upg_group_id ON user_permission_groups(group_id)")
 
 
+def _ensure_data_security_settings_table(conn: sqlite3.Connection) -> None:
+    if _table_exists(conn, "data_security_settings"):
+        return
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS data_security_settings (
+            id INTEGER PRIMARY KEY CHECK (id = 1),
+            enabled INTEGER NOT NULL DEFAULT 0,
+            interval_minutes INTEGER NOT NULL DEFAULT 1440,
+            target_mode TEXT NOT NULL DEFAULT 'share',
+            target_ip TEXT,
+            target_share_name TEXT,
+            target_subdir TEXT,
+            target_local_dir TEXT,
+            ragflow_compose_path TEXT,
+            ragflow_project_name TEXT,
+            ragflow_stop_services INTEGER NOT NULL DEFAULT 0,
+            auth_db_path TEXT NOT NULL DEFAULT 'data/auth.db',
+            updated_at_ms INTEGER NOT NULL DEFAULT 0,
+            last_run_at_ms INTEGER
+        )
+        """
+    )
+    conn.execute("INSERT OR IGNORE INTO data_security_settings (id) VALUES (1)")
+
+
+def _ensure_backup_jobs_table(conn: sqlite3.Connection) -> None:
+    if _table_exists(conn, "backup_jobs"):
+        return
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS backup_jobs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            status TEXT NOT NULL,
+            progress INTEGER NOT NULL DEFAULT 0,
+            message TEXT,
+            detail TEXT,
+            output_dir TEXT,
+            created_at_ms INTEGER NOT NULL,
+            started_at_ms INTEGER,
+            finished_at_ms INTEGER
+        )
+        """
+    )
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_backup_jobs_created ON backup_jobs(created_at_ms)")
+
+
 def _backfill_user_permission_groups_from_users_group_id(conn: sqlite3.Connection) -> None:
     """
     Final deprecation path: ensure multi-group table is the source of truth.
@@ -280,6 +327,9 @@ def ensure_kb_ref_columns(db_path: str | Path) -> None:
         _seed_default_permission_groups(conn)
         _backfill_user_permission_groups_from_users_group_id(conn)
 
+        _ensure_data_security_settings_table(conn)
+        _ensure_backup_jobs_table(conn)
+
         _ensure_download_logs_table(conn)
         _ensure_deletion_logs_table(conn)
 
@@ -295,6 +345,11 @@ def ensure_kb_ref_columns(db_path: str | Path) -> None:
                 conn.execute(
                     f"UPDATE {table_name} SET kb_name = kb_id WHERE (kb_name IS NULL OR kb_name = '')"
                 )
+
+        if _table_exists(conn, "deletion_logs"):
+            _add_column_if_missing(conn, "deletion_logs", "action TEXT")
+            _add_column_if_missing(conn, "deletion_logs", "ragflow_deleted INTEGER")
+            _add_column_if_missing(conn, "deletion_logs", "ragflow_delete_error TEXT")
 
         if _table_exists(conn, "kb_documents"):
             conn.execute("CREATE INDEX IF NOT EXISTS idx_docs_kb_dataset_id ON kb_documents(kb_dataset_id)")

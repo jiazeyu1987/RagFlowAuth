@@ -41,6 +41,11 @@ Show resolved paths (DB/uploads/RAGFlow config):
 
 `python -m backend paths`
 
+Backup auth DB (our data only):
+
+- Create config: `python -m backend init-backup`
+- Run backup: `python -m backend backup`
+
 ### Frontend
 
 `cd fronted`

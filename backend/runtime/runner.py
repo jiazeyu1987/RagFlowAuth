@@ -10,6 +10,7 @@ from shutil import copy2, move
 
 from backend.app.core.config import settings
 from backend.app.core.paths import backend_root, repo_root, resolve_repo_path
+from backend.runtime.backup import run_backup, write_default_backup_config
 from backend.database.paths import resolve_auth_db_path
 from backend.database.schema_migrations import ensure_schema
 from backend.database.sqlite import connect_sqlite
@@ -224,6 +225,25 @@ def main(argv: list[str] | None = None) -> None:
         help="数据库路径（相对路径按项目根目录解析；默认使用 settings.DATABASE_PATH）",
     )
 
+    p_backup_init = sub.add_parser("init-backup", help="生成备份配置文件（backup_config.json）")
+    p_backup_init.add_argument(
+        "--path",
+        default=None,
+        help="备份配置文件路径（默认：项目根目录 backup_config.json）",
+    )
+
+    p_backup = sub.add_parser("backup", help="执行一次数据库备份（复制到目标目录/共享目录）")
+    p_backup.add_argument(
+        "--config",
+        default=None,
+        help="备份配置文件路径（默认：项目根目录 backup_config.json）",
+    )
+    p_backup.add_argument(
+        "--target-dir",
+        default=None,
+        help="临时覆盖配置里的 target_dir（例如 \\\\IP\\share\\RagflowAuth）",
+    )
+
     args = parser.parse_args(argv)
 
     if args.cmd == "run":
@@ -247,6 +267,17 @@ def main(argv: list[str] | None = None) -> None:
 
     if args.cmd == "migrate-data-dir":
         migrate_data_dir(db_path=args.db_path)
+        return
+
+    if args.cmd == "init-backup":
+        path = write_default_backup_config(args.path)
+        print(f"[OK] 已生成备份配置: {path}")
+        print("请用记事本打开，修改 target_dir 为另一台电脑的共享目录（UNC 路径）。")
+        return
+
+    if args.cmd == "backup":
+        out = run_backup(config_path=args.config, target_dir=args.target_dir)
+        print(f"[OK] 备份完成: {out}")
         return
 
     raise SystemExit(2)

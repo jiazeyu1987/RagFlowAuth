@@ -6,12 +6,12 @@ import Layout from './components/Layout';
 import Dashboard from './pages/Dashboard';
 import UserManagement from './pages/UserManagement';
 import KnowledgeUpload from './pages/KnowledgeUpload';
-import DocumentReview from './pages/DocumentReview';
 import DocumentBrowser from './pages/DocumentBrowser';
-import DocumentAudit from './pages/DocumentAudit';
+import DocumentReviewAudit from './pages/DocumentReviewAudit';
 import Chat from './pages/Chat';
 import Agents from './pages/Agents';
 import PermissionGroupManagement from './pages/PermissionGroupManagement';
+import DataSecurity from './pages/DataSecurity';
 import Unauthorized from './pages/Unauthorized';
 import PermissionGuard from './components/PermissionGuard';
 
@@ -56,7 +56,7 @@ function App() {
             element={
               <PermissionGuard>
                 <Layout>
-                  <DocumentReview />
+                  <DocumentReviewAudit />
                 </Layout>
               </PermissionGuard>
             }
@@ -95,9 +95,7 @@ function App() {
             path="/audit"
             element={
               <PermissionGuard>
-                <Layout>
-                  <DocumentAudit />
-                </Layout>
+                <Navigate to="/documents?tab=records" replace />
               </PermissionGuard>
             }
           />
@@ -107,6 +105,16 @@ function App() {
               <PermissionGuard allowedRoles={['admin']}>
                 <Layout>
                   <PermissionGroupManagement />
+                </Layout>
+              </PermissionGuard>
+            }
+          />
+          <Route
+            path="/data-security"
+            element={
+              <PermissionGuard allowedRoles={['admin']}>
+                <Layout>
+                  <DataSecurity />
                 </Layout>
               </PermissionGuard>
             }

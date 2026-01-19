@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import threading
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
@@ -17,10 +18,17 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     from backend.app.dependencies import create_dependencies
+    from backend.app.modules.data_security.scheduler import start_data_security_scheduler
 
     app.state.deps = create_dependencies()
     logger.info("Dependencies initialized")
+
+    stop_event = threading.Event()
+    app.state.data_security_scheduler_stop = stop_event
+    app.state.data_security_scheduler_thread = start_data_security_scheduler(stop_event=stop_event)
+
     yield
+    stop_event.set()
     logger.info("Shutting down...")
 
 
@@ -49,6 +57,7 @@ def create_app() -> FastAPI:
         agents,
         auth,
         chat,
+        data_security,
         diagnostics,
         knowledge,
         me,
@@ -66,6 +75,7 @@ def create_app() -> FastAPI:
     app.include_router(chat.router, prefix="/api", tags=["Chat"])
     app.include_router(agents.router, prefix="/api", tags=["Agents"])
     app.include_router(me.router, prefix="/api", tags=["Me"])
+    app.include_router(data_security.router, prefix="/api", tags=["Data Security"])
     app.include_router(permission_groups.create_router(), prefix="/api", tags=["Permission Groups"])
     app.include_router(diagnostics.router, prefix="/api", tags=["Diagnostics"])
 

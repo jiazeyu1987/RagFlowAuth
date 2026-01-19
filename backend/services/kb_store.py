@@ -172,9 +172,13 @@ class KbStore:
             if status:
                 query += " AND status = ?"
                 params.append(status)
-            if kb_id:
-                query += " AND kb_id = ?"
-                params.append(kb_id)
+            refs = kb_refs or ([kb_id] if kb_id else [])
+            if refs:
+                placeholders = ",".join("?" for _ in refs)
+                query += f" AND (kb_id IN ({placeholders}) OR kb_dataset_id IN ({placeholders}) OR kb_name IN ({placeholders}))"
+                params.extend(list(refs))
+                params.extend(list(refs))
+                params.extend(list(refs))
             if uploaded_by:
                 query += " AND uploaded_by = ?"
                 params.append(uploaded_by)

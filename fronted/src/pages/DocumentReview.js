@@ -1,9 +1,12 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { reviewApi } from '../features/review/api';
 import { knowledgeApi } from '../features/knowledge/api';
+import { authBackendUrl } from '../config/backend';
+import ReactMarkdown from 'react-markdown';
+import { httpClient } from '../shared/http/httpClient';
 
-const DocumentReview = () => {
+const DocumentReview = ({ embedded = false }) => {
   const { user, isReviewer, isAdmin, canDownload } = useAuth();
   const [documents, setDocuments] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -14,8 +17,81 @@ const DocumentReview = () => {
   const [batchDownloadLoading, setBatchDownloadLoading] = useState(false);
 
   const [datasets, setDatasets] = useState([]);
-  const [selectedDataset, setSelectedDataset] = useState(null);  // 改为 null，等待数据加载
+  const [selectedDataset, setSelectedDataset] = useState(null); // null=未加载；''=全部；其它=知识库
   const [loadingDatasets, setLoadingDatasets] = useState(true);
+  const [overwritePrompt, setOverwritePrompt] = useState(null); // { newDocId, oldDoc, normalized }
+  const [previewing, setPreviewing] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewDocName, setPreviewDocName] = useState(null);
+  const [previewKind, setPreviewKind] = useState(null); // 'md' | 'text' | 'blob'
+  const [previewText, setPreviewText] = useState(null);
+  const [previewUrl, setPreviewUrl] = useState(null);
+
+  const activeDocMap = useMemo(() => {
+    const m = new Map();
+    for (const d of documents) m.set(d.doc_id, d);
+    return m;
+  }, [documents]);
+
+  const closePreview = () => {
+    if (previewUrl) window.URL.revokeObjectURL(previewUrl);
+    setPreviewOpen(false);
+    setPreviewDocName(null);
+    setPreviewKind(null);
+    setPreviewText(null);
+    setPreviewUrl(null);
+  };
+
+  const isMarkdownFile = (filename) => {
+    if (!filename) return false;
+    const ext = filename.toLowerCase().split('.').pop();
+    return ext === 'md' || ext === 'markdown';
+  };
+
+  const isPlainTextFile = (filename) => {
+    if (!filename) return false;
+    const ext = filename.toLowerCase().split('.').pop();
+    return ext === 'txt' || ext === 'ini' || ext === 'log';
+  };
+
+  const openLocalPreview = async (docId, filename) => {
+    setError(null);
+    setPreviewing(true);
+    setPreviewOpen(true);
+    setPreviewDocName(filename || `document_${docId}`);
+    setPreviewKind(null);
+    setPreviewText(null);
+    if (previewUrl) window.URL.revokeObjectURL(previewUrl);
+    setPreviewUrl(null);
+
+    try {
+      const response = await httpClient.request(authBackendUrl(`/api/knowledge/documents/${docId}/preview`), { method: 'GET' });
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data?.detail || `预览失败 (${response.status})`);
+      }
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      setPreviewUrl(url);
+
+      if (isMarkdownFile(filename)) {
+        const text = await blob.text();
+        setPreviewKind('md');
+        setPreviewText(text);
+      } else if (isPlainTextFile(filename)) {
+        const text = await blob.text();
+        setPreviewKind('text');
+        setPreviewText(text);
+      } else {
+        setPreviewKind('blob');
+      }
+    } catch (e) {
+      closePreview();
+      setError(e.message || '预览失败');
+    } finally {
+      setPreviewing(false);
+    }
+  };
 
   useEffect(() => {
     const fetchDatasets = async () => {
@@ -29,7 +105,8 @@ const DocumentReview = () => {
         setDatasets(datasets);
 
         if (datasets.length > 0) {
-          setSelectedDataset(datasets[0].name);
+          // 默认显示“全部”
+          setSelectedDataset('');
         } else {
           setError('您没有被分配任何知识库权限，请联系管理员');
         }
@@ -46,16 +123,20 @@ const DocumentReview = () => {
   }, []);
 
   const fetchRagflowDocuments = useCallback(async () => {
-    if (!selectedDataset) return;
+    if (selectedDataset === null) return;
 
     try {
       setLoading(true);
+      if (selectedDataset === '') {
+        console.log('Fetching local pending documents for ALL authorized KBs');
+        const data = await knowledgeApi.listLocalDocuments({ status: 'pending' });
+        console.log('Local pending documents response:', data);
+        setDocuments(data.documents || []);
+        return;
+      }
+
       console.log('Fetching local pending documents for KB:', selectedDataset);
-      // 获取本地待审核文档
-      const data = await knowledgeApi.listLocalDocuments({
-        status: 'pending',
-        kb_id: selectedDataset
-      });
+      const data = await knowledgeApi.listLocalDocuments({ status: 'pending', kb_id: selectedDataset });
       console.log('Local pending documents response:', data);
       setDocuments(data.documents || []);
     } catch (err) {
@@ -71,11 +152,56 @@ const DocumentReview = () => {
   }, [fetchRagflowDocuments]);
 
   const handleApprove = async (docId) => {
-    if (!window.confirm('确定要审核通过该文档吗？')) return;
-
+    setError(null);
     setActionLoading(docId);
     try {
+      const conflict = await reviewApi.getConflict(docId);
+      if (conflict?.conflict && conflict?.existing) {
+        setOverwritePrompt({ newDocId: docId, oldDoc: conflict.existing, normalized: conflict.normalized_name });
+        return;
+      }
+
+      if (!window.confirm('确定要审核通过该文档吗？')) return;
       await reviewApi.approve(docId);
+      fetchRagflowDocuments();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleOverwriteUseNew = async () => {
+    if (!overwritePrompt) return;
+    const { newDocId, oldDoc } = overwritePrompt;
+    const ok = window.confirm(
+      `检测到可能重复文件。\n\n旧文件：${oldDoc.filename}\n新文件：${activeDocMap.get(newDocId)?.filename || ''}\n\n是否用“新文件”覆盖旧文件？（会先删除旧文件，再上传新文件）`
+    );
+    if (!ok) return;
+
+    setActionLoading(newDocId);
+    setError(null);
+    try {
+      await reviewApi.approveOverwrite(newDocId, oldDoc.doc_id);
+      setOverwritePrompt(null);
+      fetchRagflowDocuments();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleOverwriteKeepOld = async () => {
+    if (!overwritePrompt) return;
+    const { newDocId, oldDoc } = overwritePrompt;
+    const ok = window.confirm(`将驳回新文件并保留旧文件：${oldDoc.filename}\n确定吗？`);
+    if (!ok) return;
+    setActionLoading(newDocId);
+    setError(null);
+    try {
+      await reviewApi.reject(newDocId, '检测到重复文件，选择保留旧文件');
+      setOverwritePrompt(null);
       fetchRagflowDocuments();
     } catch (err) {
       setError(err.message);
@@ -168,9 +294,229 @@ const DocumentReview = () => {
 
   return (
     <div>
+      {overwritePrompt && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0,0,0,0.35)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 50,
+            padding: '16px',
+          }}
+          onClick={() => setOverwritePrompt(null)}
+        >
+          <div
+            style={{
+              width: 'min(820px, 100%)',
+              background: 'white',
+              borderRadius: '12px',
+              border: '1px solid #e5e7eb',
+              padding: '16px',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: '10px', alignItems: 'center' }}>
+              <div style={{ fontWeight: 700, fontSize: '1.05rem' }}>检测到可能重复文件</div>
+              <button
+                type="button"
+                onClick={() => setOverwritePrompt(null)}
+                style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontSize: '1.2rem' }}
+              >
+                ×
+              </button>
+            </div>
+
+            <div style={{ marginTop: '12px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+              <div style={{ border: '1px solid #e5e7eb', borderRadius: '10px', padding: '12px' }}>
+                <div style={{ fontWeight: 700, marginBottom: '6px', color: '#b91c1c' }}>旧文件（已通过）</div>
+                <div style={{ color: '#111827' }}>{overwritePrompt.oldDoc.filename}</div>
+                <div style={{ color: '#6b7280', fontSize: '0.9rem', marginTop: '6px' }}>
+                  上传时间：{overwritePrompt.oldDoc.uploaded_at_ms ? new Date(overwritePrompt.oldDoc.uploaded_at_ms).toLocaleString('zh-CN') : ''}
+                </div>
+                <div style={{ marginTop: '10px' }}>
+                  <button
+                    type="button"
+                    onClick={() => openLocalPreview(overwritePrompt.oldDoc.doc_id, overwritePrompt.oldDoc.filename)}
+                    style={{
+                      padding: '8px 12px',
+                      borderRadius: '8px',
+                      border: 'none',
+                      background: '#10b981',
+                      color: 'white',
+                      cursor: 'pointer',
+                      marginRight: '8px',
+                    }}
+                  >
+                    在线查看旧文件
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => knowledgeApi.downloadLocalDocument(overwritePrompt.oldDoc.doc_id)}
+                    style={{
+                      padding: '8px 12px',
+                      borderRadius: '8px',
+                      border: '1px solid #d1d5db',
+                      background: 'white',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    下载旧文件
+                  </button>
+                </div>
+              </div>
+
+              <div style={{ border: '1px solid #e5e7eb', borderRadius: '10px', padding: '12px' }}>
+                <div style={{ fontWeight: 700, marginBottom: '6px', color: '#1d4ed8' }}>新文件（待审核）</div>
+                <div style={{ color: '#111827' }}>{activeDocMap.get(overwritePrompt.newDocId)?.filename || ''}</div>
+                <div style={{ color: '#6b7280', fontSize: '0.9rem', marginTop: '6px' }}>
+                  归一化名称：{overwritePrompt.normalized || ''}
+                </div>
+                <div style={{ marginTop: '10px' }}>
+                  <button
+                    type="button"
+                    onClick={() => openLocalPreview(overwritePrompt.newDocId, activeDocMap.get(overwritePrompt.newDocId)?.filename || '')}
+                    style={{
+                      padding: '8px 12px',
+                      borderRadius: '8px',
+                      border: 'none',
+                      background: '#10b981',
+                      color: 'white',
+                      cursor: 'pointer',
+                      marginRight: '8px',
+                    }}
+                  >
+                    在线查看新文件
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => knowledgeApi.downloadLocalDocument(overwritePrompt.newDocId)}
+                    style={{
+                      padding: '8px 12px',
+                      borderRadius: '8px',
+                      border: '1px solid #d1d5db',
+                      background: 'white',
+                      cursor: 'pointer',
+                      marginRight: '8px',
+                    }}
+                  >
+                    下载新文件
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div style={{ marginTop: '14px', display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+              <button
+                type="button"
+                onClick={handleOverwriteKeepOld}
+                style={{
+                  padding: '10px 12px',
+                  borderRadius: '8px',
+                  border: '1px solid #d1d5db',
+                  background: 'white',
+                  cursor: 'pointer',
+                }}
+              >
+                保留旧文件（驳回新文件）
+              </button>
+              <button
+                type="button"
+                onClick={handleOverwriteUseNew}
+                style={{
+                  padding: '10px 12px',
+                  borderRadius: '8px',
+                  border: 'none',
+                  background: '#3b82f6',
+                  color: 'white',
+                  cursor: 'pointer',
+                }}
+              >
+                使用新文件覆盖
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {previewOpen && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0,0,0,0.35)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 60,
+            padding: '16px',
+          }}
+          onClick={closePreview}
+        >
+          <div
+            style={{
+              width: 'min(980px, 100%)',
+              background: 'white',
+              borderRadius: '12px',
+              border: '1px solid #e5e7eb',
+              padding: '16px',
+              height: '80vh',
+              display: 'flex',
+              flexDirection: 'column',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: '10px', alignItems: 'center' }}>
+              <div style={{ fontWeight: 700, fontSize: '1.05rem' }}>{previewDocName || '在线查看'}</div>
+              <button
+                type="button"
+                onClick={closePreview}
+                style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontSize: '1.2rem' }}
+              >
+                ×
+              </button>
+            </div>
+
+            <div style={{ marginTop: '12px', flex: 1, overflow: 'auto' }}>
+              {previewing ? (
+                <div style={{ color: '#6b7280', padding: '24px' }}>加载中…</div>
+              ) : previewKind === 'md' ? (
+                <div style={{ padding: '24px' }}>
+                  <div style={{ fontSize: '0.875rem', lineHeight: '1.6', color: '#1f2937' }}>
+                    <ReactMarkdown>{previewText || ''}</ReactMarkdown>
+                  </div>
+                </div>
+              ) : previewKind === 'text' ? (
+                <pre
+                  style={{
+                    margin: 0,
+                    padding: '24px',
+                    fontSize: '0.875rem',
+                    lineHeight: '1.6',
+                    color: '#111827',
+                    whiteSpace: 'pre-wrap',
+                    wordBreak: 'break-word',
+                    fontFamily:
+                      "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace",
+                  }}
+                >
+                  {previewText || ''}
+                </pre>
+              ) : previewUrl ? (
+                <iframe title={previewDocName || 'preview'} src={previewUrl} style={{ width: '100%', height: '100%', border: 'none' }} />
+              ) : (
+                <div style={{ color: '#6b7280', padding: '24px' }}>无法预览</div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       <div style={{ marginBottom: '24px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-          <h2 style={{ margin: 0 }}>文档管理</h2>
+          {embedded ? <div /> : <h2 style={{ margin: 0 }}>文档管理</h2>}
           <div style={{ display: 'flex', gap: '8px' }}>
             <button
               onClick={handleSelectAll}
@@ -209,7 +555,7 @@ const DocumentReview = () => {
 
         <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
           <select
-            value={selectedDataset || ''}
+            value={selectedDataset === null ? '' : selectedDataset}
             onChange={(e) => setSelectedDataset(e.target.value)}
             disabled={loadingDatasets}
             style={{
@@ -223,11 +569,16 @@ const DocumentReview = () => {
           >
             {loadingDatasets ? (
               <option>加载中...</option>
-            ) : datasets.map((ds) => (
-              <option key={ds.id} value={ds.name}>
-                {ds.name}
-              </option>
-            ))}
+            ) : (
+              <>
+                <option value="">全部</option>
+                {datasets.map((ds) => (
+                  <option key={ds.id} value={ds.name}>
+                    {ds.name}
+                  </option>
+                ))}
+              </>
+            )}
           </select>
         </div>
       </div>
@@ -301,12 +652,29 @@ const DocumentReview = () => {
                     {doc.kb_id}
                   </td>
                   <td style={{ padding: '12px 16px', color: '#6b7280' }}>
-                    {doc.uploaded_by}
+                    {doc.uploaded_by_name || doc.uploaded_by}
                   </td>
                   <td style={{ padding: '12px 16px', color: '#6b7280', fontSize: '0.9rem' }}>
                     {new Date(doc.uploaded_at_ms).toLocaleString('zh-CN')}
                   </td>
                   <td style={{ padding: '12px 16px', textAlign: 'right' }}>
+                    {doc.status === 'pending' && (
+                      <button
+                        onClick={() => openLocalPreview(doc.doc_id, doc.filename)}
+                        style={{
+                          padding: '6px 12px',
+                          backgroundColor: '#10b981',
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: '4px',
+                          cursor: 'pointer',
+                          fontSize: '0.9rem',
+                          marginRight: '8px',
+                        }}
+                      >
+                        查看
+                      </button>
+                    )}
                     {canDownload() && (
                       <button
                         onClick={() => handleDownload(doc.doc_id)}

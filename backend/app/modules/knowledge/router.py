@@ -5,6 +5,7 @@ import os
 import uuid
 import zipfile
 import io
+import mimetypes
 from pathlib import Path
 
 from backend.app.core.authz import AuthContextDep
@@ -14,6 +15,7 @@ from backend.app.core.permission_resolver import (
     ResourceScope,
     assert_can_delete,
     assert_can_download,
+    assert_can_review,
     assert_can_upload,
     assert_kb_allowed,
 )
@@ -75,11 +77,19 @@ async def upload_document(
     logger.info("[UPLOAD] Saved file to: %s", file_path)
 
     # 5. 创建本地记录（pending状态）
+    # Prefer server-side mime detection to keep preview consistent across browsers.
+    guessed_mime, _ = mimetypes.guess_type(file.filename)
+    mime_type = (file.content_type or guessed_mime or "application/octet-stream").strip()
+    if file_ext in {".txt", ".ini", ".log"}:
+        mime_type = "text/plain; charset=utf-8"
+    elif file_ext in {".md", ".markdown"}:
+        mime_type = "text/markdown; charset=utf-8"
+
     doc = deps.kb_store.create_document(
         filename=file.filename,
         file_path=str(file_path),
         file_size=len(content),
-        mime_type=file.content_type or "application/octet-stream",
+        mime_type=mime_type,
         uploaded_by=ctx.payload.sub,
         kb_id=(kb_info.dataset_id or kb_ref),
         kb_dataset_id=kb_info.dataset_id,
@@ -182,6 +192,13 @@ async def list_documents(
 
     logger.info(f"[LIST DOCS] Found {len(docs)} documents")
 
+    user_ids = {d.uploaded_by for d in docs if d.uploaded_by}
+    user_ids.update({d.reviewed_by for d in docs if d.reviewed_by})
+    try:
+        usernames = deps.user_store.get_usernames_by_ids(user_ids)
+    except Exception:
+        usernames = {}
+
     return {
         "documents": [
             {
@@ -190,9 +207,11 @@ async def list_documents(
                 "file_size": d.file_size,
                 "mime_type": d.mime_type,
                 "uploaded_by": d.uploaded_by,
+                "uploaded_by_name": usernames.get(d.uploaded_by) if d.uploaded_by else None,
                 "status": d.status,
                 "uploaded_at_ms": d.uploaded_at_ms,
                 "reviewed_by": d.reviewed_by,
+                "reviewed_by_name": usernames.get(d.reviewed_by) if d.reviewed_by else None,
                 "reviewed_at_ms": d.reviewed_at_ms,
                 "review_notes": d.review_notes,
                 "ragflow_doc_id": d.ragflow_doc_id,
@@ -274,6 +293,50 @@ async def download_document(
     )
 
 
+@router.get("/documents/{doc_id}/preview")
+async def preview_document(
+    doc_id: str,
+    ctx: AuthContextDep,
+):
+    """Preview document file in browser (inline)"""
+    from urllib.parse import quote
+
+    deps = ctx.deps
+    snapshot = ctx.snapshot
+
+    # allow either review or download capability to preview
+    try:
+        assert_can_download(snapshot)
+    except Exception:
+        assert_can_review(snapshot)
+
+    doc = deps.kb_store.get_document(doc_id)
+    if not doc:
+        raise HTTPException(status_code=404, detail="文档不存在")
+
+    assert_kb_allowed(snapshot, doc.kb_id)
+
+    if not os.path.exists(doc.file_path):
+        raise HTTPException(status_code=404, detail="文件不存在")
+
+    # Force plain-text preview for common text formats, even if stored mime is generic.
+    ext = Path(doc.filename).suffix.lower()
+    media_type = doc.mime_type
+    if ext in {".txt", ".ini", ".log"}:
+        media_type = "text/plain; charset=utf-8"
+    elif ext in {".md", ".markdown"}:
+        media_type = "text/markdown; charset=utf-8"
+
+    quoted = quote(doc.filename)
+    return FileResponse(
+        path=doc.file_path,
+        media_type=media_type,
+        headers={
+            "Content-Disposition": f"inline; filename*=UTF-8''{quoted}",
+        },
+    )
+
+
 @router.get("/stats")
 async def get_stats(
     ctx: AuthContextDep,
@@ -328,7 +391,20 @@ async def delete_document(
 
     assert_kb_allowed(snapshot, doc.kb_id)
 
-    # 记录删除操作
+    # 先删除 RAGFlow（如果有 ragflow_doc_id），失败则报错并记录
+    ragflow_ok = None
+    ragflow_err = None
+    if doc.ragflow_doc_id:
+        dataset_ref = doc.kb_dataset_id or doc.kb_id or (doc.kb_name or "")
+        try:
+            ragflow_ok = 1 if deps.ragflow_service.delete_document(doc.ragflow_doc_id, dataset_name=dataset_ref) else 0
+        except Exception as e:
+            ragflow_ok = 0
+            ragflow_err = str(e)
+        if ragflow_ok == 0 and not ragflow_err:
+            ragflow_err = "RAGFlow 删除失败"
+
+    # 记录删除操作（包含 RAGFlow 删除结果）
     deps.deletion_log_store.log_deletion(
         doc_id=doc.doc_id,
         filename=doc.filename,
@@ -339,8 +415,14 @@ async def delete_document(
         original_uploader=doc.uploaded_by,
         original_reviewer=doc.reviewed_by,
         ragflow_doc_id=doc.ragflow_doc_id,
+        action="delete",
+        ragflow_deleted=ragflow_ok,
+        ragflow_delete_error=ragflow_err,
     )
     logger.info("[DELETE] Deletion log saved")
+
+    if ragflow_ok == 0:
+        raise HTTPException(status_code=500, detail=f"无法从 RAGFlow 删除该文件：{ragflow_err}")
 
     # Delete file
     if os.path.exists(doc.file_path):

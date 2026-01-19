@@ -34,6 +34,43 @@ python -m backend
 python -m backend migrate-data-dir
 ```
 
+## 备份（推荐）
+
+你需要同时备份两部分：
+1) RAGFlow（Docker Compose）：按官方迁移/备份文档执行。
+2) 本项目自己的数据库：`data/auth.db`（用户/权限组/审批/审计等）。
+
+本项目提供一键备份命令（支持备份到另一台电脑的共享目录）：
+
+1) 生成配置文件（只需要做一次）：
+```bash
+python -m backend init-backup
+```
+然后用记事本打开项目根目录的 `backup_config.json`，把 `target_dir` 改成另一台电脑的共享目录（例如 `\\\\192.168.1.100\\backup\\RagflowAuth`）。
+
+2) 立刻执行一次备份：
+```bash
+python -m backend backup
+```
+
+也可以直接双击项目根目录的 `backup_now.bat`。
+
+### 备份（带 UI，单文件）
+
+如果你希望“填 IP/方式 -> 点按钮生成迁移包（包含 auth.db + 可选 RAGFlow）”，可以使用项目根目录的单文件工具：
+
+```bash
+python backup_ui.py
+```
+
+第一次打开后可点击“保存配置”，会生成 `backup_ui_config.json`，以后直接打开就会自动加载。
+
+UI 里你可以选择：
+- 本地输出到某个文件夹
+- 或者填写“目标电脑 IP + 共享名 + 子目录”，输出到网络共享路径（UNC）
+
+如果自动找不到 RAGFlow 的 `docker-compose.yml`，请在 UI 里点击“选择...”手动指定。
+
 或使用 uvicorn：
 
 ```bash

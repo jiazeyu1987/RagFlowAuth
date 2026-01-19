@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import authClient from '../api/authClient';
 
-const DocumentAudit = () => {
+const DocumentAudit = ({ embedded = false }) => {
   const { isAdmin, accessibleKbs } = useAuth();
   const [documents, setDocuments] = useState([]);
   const [deletions, setDeletions] = useState([]);
@@ -197,7 +197,7 @@ const DocumentAudit = () => {
   return (
     <div>
       <div style={{ marginBottom: '24px' }}>
-        <h2 style={{ margin: '0 0 16px 0' }}>文档审核记录</h2>
+        {!embedded && <h2 style={{ margin: '0 0 16px 0' }}>文档审核记录</h2>}
 
         {/* 选项卡切换 */}
         <div style={{ marginBottom: '16px', borderBottom: '1px solid #e5e7eb' }}>
