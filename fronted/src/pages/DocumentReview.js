@@ -5,6 +5,7 @@ import { knowledgeApi } from '../features/knowledge/api';
 import { authBackendUrl } from '../config/backend';
 import ReactMarkdown from 'react-markdown';
 import { httpClient } from '../shared/http/httpClient';
+import ReactDiffViewer from 'react-diff-viewer-continued';
 
 const DocumentReview = ({ embedded = false }) => {
   const { user, isReviewer, isAdmin, canDownload } = useAuth();
@@ -26,6 +27,12 @@ const DocumentReview = ({ embedded = false }) => {
   const [previewKind, setPreviewKind] = useState(null); // 'md' | 'text' | 'blob'
   const [previewText, setPreviewText] = useState(null);
   const [previewUrl, setPreviewUrl] = useState(null);
+  const [diffOpen, setDiffOpen] = useState(false);
+  const [diffLoading, setDiffLoading] = useState(false);
+  const [diffOnly, setDiffOnly] = useState(true);
+  const [diffTitle, setDiffTitle] = useState(null);
+  const [diffOldText, setDiffOldText] = useState('');
+  const [diffNewText, setDiffNewText] = useState('');
 
   const activeDocMap = useMemo(() => {
     const m = new Map();
@@ -52,6 +59,50 @@ const DocumentReview = ({ embedded = false }) => {
     if (!filename) return false;
     const ext = filename.toLowerCase().split('.').pop();
     return ext === 'txt' || ext === 'ini' || ext === 'log';
+  };
+
+  const isTextComparable = (filename) => isMarkdownFile(filename) || isPlainTextFile(filename);
+
+  const countLines = (s) => {
+    const t = String(s || '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+    if (!t) return 0;
+    return t.split('\n').length;
+  };
+
+  const fetchLocalPreviewText = async (docId) => {
+    const response = await httpClient.request(authBackendUrl(`/api/knowledge/documents/${docId}/preview`), { method: 'GET' });
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      throw new Error(data?.detail || `预览失败 (${response.status})`);
+    }
+    const blob = await response.blob();
+    return await blob.text();
+  };
+
+  const openDiff = async (oldDocId, oldFilename, newDocId, newFilename) => {
+    setError(null);
+    setDiffTitle(`对比：${oldFilename}  vs  ${newFilename}`);
+    setDiffOpen(true);
+    setDiffLoading(true);
+    setDiffOldText('');
+    setDiffNewText('');
+    try {
+      if (!isTextComparable(oldFilename) || !isTextComparable(newFilename)) {
+        throw new Error('对比功能仅支持：md/txt/ini/log');
+      }
+      const [oldText, newText] = await Promise.all([fetchLocalPreviewText(oldDocId), fetchLocalPreviewText(newDocId)]);
+      const maxLines = 2500;
+      if (countLines(oldText) > maxLines || countLines(newText) > maxLines) {
+        throw new Error('文件太大，无法在页面里对比；请下载后用工具对比。');
+      }
+      setDiffOldText(oldText);
+      setDiffNewText(newText);
+    } catch (e) {
+      setDiffOpen(false);
+      setError(e.message || '对比失败');
+    } finally {
+      setDiffLoading(false);
+    }
   };
 
   const openLocalPreview = async (docId, filename) => {
@@ -408,7 +459,28 @@ const DocumentReview = ({ embedded = false }) => {
               </div>
             </div>
 
-            <div style={{ marginTop: '14px', display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+            <div style={{ marginTop: '14px', display: 'flex', justifyContent: 'space-between', gap: '10px', alignItems: 'center' }}>
+              <button
+                type="button"
+                onClick={() =>
+                  openDiff(
+                    overwritePrompt.oldDoc.doc_id,
+                    overwritePrompt.oldDoc.filename,
+                    overwritePrompt.newDocId,
+                    activeDocMap.get(overwritePrompt.newDocId)?.filename || ''
+                  )
+                }
+                style={{
+                  padding: '10px 12px',
+                  borderRadius: '8px',
+                  border: '1px solid #d1d5db',
+                  background: 'white',
+                  cursor: 'pointer',
+                }}
+              >
+                对比差异
+              </button>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
               <button
                 type="button"
                 onClick={handleOverwriteKeepOld}
@@ -436,6 +508,89 @@ const DocumentReview = ({ embedded = false }) => {
               >
                 使用新文件覆盖
               </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {diffOpen && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0,0,0,0.35)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 70,
+            padding: '16px',
+          }}
+          onClick={() => setDiffOpen(false)}
+        >
+          <div
+            style={{
+              width: 'min(1200px, 100%)',
+              background: 'white',
+              borderRadius: '12px',
+              border: '1px solid #e5e7eb',
+              padding: '16px',
+              height: '82vh',
+              display: 'flex',
+              flexDirection: 'column',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: '10px', alignItems: 'center' }}>
+              <div style={{ fontWeight: 700, fontSize: '1.05rem' }}>{diffTitle || '对比差异'}</div>
+              <button
+                type="button"
+                onClick={() => setDiffOpen(false)}
+                style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontSize: '1.2rem' }}
+              >
+                ×
+              </button>
+            </div>
+
+            <div style={{ marginTop: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <label style={{ display: 'flex', gap: '8px', alignItems: 'center', color: '#374151' }}>
+                <input type="checkbox" checked={diffOnly} onChange={(e) => setDiffOnly(e.target.checked)} />
+                只看差异
+              </label>
+              <div style={{ color: '#6b7280', fontSize: '0.9rem' }}>绿色=新增，红色=删除，灰色=未变化</div>
+            </div>
+
+            <div style={{ marginTop: '10px', flex: 1, overflow: 'auto', border: '1px solid #e5e7eb', borderRadius: '10px' }}>
+              {diffLoading ? (
+                <div style={{ padding: '24px', color: '#6b7280' }}>正在生成对比…</div>
+              ) : (
+                <div style={{ padding: '12px' }}>
+                  <ReactDiffViewer
+                    oldValue={diffOldText || ''}
+                    newValue={diffNewText || ''}
+                    splitView={true}
+                    showDiffOnly={diffOnly}
+                    disableWordDiff={false}
+                    compareMethod="diffLines"
+                    leftTitle="旧文件"
+                    rightTitle="新文件"
+                    styles={{
+                      variables: {
+                        light: {
+                          diffViewerBackground: '#ffffff',
+                          addedBackground: '#dcfce7',
+                          removedBackground: '#fee2e2',
+                          gutterBackground: '#f9fafb',
+                          gutterBackgroundDark: '#f3f4f6',
+                          highlightBackground: '#fff7ed',
+                        },
+                      },
+                      contentText: { fontSize: 12 },
+                      line: { fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace" },
+                    }}
+                  />
+                </div>
+              )}
             </div>
           </div>
         </div>

@@ -18,16 +18,16 @@ def _ensure_dir(path: Path) -> None:
     path.mkdir(parents=True, exist_ok=True)
 
 
-def _run(cmd: list[str]) -> tuple[int, str]:
-    proc = subprocess.run(cmd, capture_output=True, text=True, shell=False)
+def _run(cmd: list[str], *, cwd: Path | None = None) -> tuple[int, str]:
+    proc = subprocess.run(cmd, cwd=str(cwd) if cwd else None, capture_output=True, text=True, shell=False)
     out = (proc.stdout or "") + (proc.stderr or "")
     return proc.returncode, out.strip()
 
 
 def _docker_ok() -> tuple[bool, str]:
-    code, out = _run(["docker", "version"])
+    code, out = _run(["docker", "info"])
     if code != 0:
-        return False, out or "docker 命令不可用"
+        return False, out or "Docker 引擎不可用"
     code, out = _run(["docker", "compose", "version"])
     if code != 0:
         return False, out or "docker compose 命令不可用"
@@ -35,13 +35,13 @@ def _docker_ok() -> tuple[bool, str]:
 
 
 def _docker_compose_stop(compose_file: Path) -> None:
-    code, out = _run(["docker", "compose", "-f", str(compose_file), "stop"])
+    code, out = _run(["docker", "compose", "-f", str(compose_file), "stop"], cwd=compose_file.parent)
     if code != 0:
         raise RuntimeError(f"停止 RAGFlow 服务失败：{out}")
 
 
 def _docker_compose_start(compose_file: Path) -> None:
-    code, out = _run(["docker", "compose", "-f", str(compose_file), "start"])
+    code, out = _run(["docker", "compose", "-f", str(compose_file), "start"], cwd=compose_file.parent)
     if code != 0:
         raise RuntimeError(f"启动 RAGFlow 服务失败：{out}")
 
@@ -58,12 +58,11 @@ def _list_docker_volumes_by_prefix(prefix: str) -> list[str]:
     return sorted(vols)
 
 
-def _read_compose_project_name(compose_file: Path) -> str | None:
+def _read_compose_project_name(compose_file: Path) -> str:
     """
-    Tries to infer compose project name from:
-    - top-level `name:` in docker compose YAML
+    Infer compose project name (best-effort):
+    - top-level `name:` in docker compose YAML (if pyyaml installed)
     - `.env` next to compose file: `COMPOSE_PROJECT_NAME=...`
-    - docker volumes suffix matching (best effort)
     - fallback: compose file parent folder name
     """
     try:
@@ -74,34 +73,6 @@ def _read_compose_project_name(compose_file: Path) -> str | None:
             name = data.get("name")
             if isinstance(name, str) and name.strip():
                 return name.strip()
-
-            volume_keys: list[str] = []
-            vols = data.get("volumes")
-            if isinstance(vols, dict):
-                for k in vols.keys():
-                    if isinstance(k, str) and k.strip():
-                        volume_keys.append(k.strip())
-
-            if volume_keys:
-                try:
-                    code, out = _run(["docker", "volume", "ls", "--format", "{{.Name}}"])
-                    if code == 0:
-                        candidates: dict[str, int] = {}
-                        for vol_name in (out or "").splitlines():
-                            vol_name = vol_name.strip()
-                            if not vol_name:
-                                continue
-                            for key in volume_keys:
-                                suffix = f"_{key}"
-                                if vol_name.endswith(suffix) and len(vol_name) > len(suffix):
-                                    prefix = vol_name[: -len(suffix)]
-                                    candidates[prefix] = candidates.get(prefix, 0) + 1
-                        if candidates:
-                            best = sorted(candidates.items(), key=lambda x: (-x[1], x[0]))[0][0]
-                            if best.strip():
-                                return best.strip()
-                except Exception:
-                    pass
     except Exception:
         pass
 
@@ -141,14 +112,33 @@ def _docker_tar_volume(volume_name: str, dest_tar_gz: Path) -> None:
         raise RuntimeError(f"备份 volume 失败：{volume_name}\n{out}")
 
 
+def _list_compose_images(compose_file: Path) -> tuple[list[str], str | None]:
+    """
+    Best effort list of images used by a compose file.
+    Uses `docker compose config --images` so it can resolve `.env` in the same folder.
+    Returns (images, error_message).
+    """
+    code, out = _run(["docker", "compose", "-f", str(compose_file), "config", "--images"], cwd=compose_file.parent)
+    if code != 0:
+        return [], out or "docker compose config --images failed"
+    images = sorted({line.strip() for line in (out or "").splitlines() if line.strip()})
+    return images, None
+
+
+def _docker_save_images(images: list[str], dest_tar: Path) -> tuple[bool, str | None]:
+    if not images:
+        return False, None
+    _ensure_dir(dest_tar.parent)
+    code, out = _run(["docker", "save", "-o", str(dest_tar), *images])
+    if code != 0:
+        return False, out or "docker save failed"
+    return True, None
+
+
 def _sqlite_online_backup(src_db: Path, dest_db: Path) -> None:
     _ensure_dir(dest_db.parent)
     src = sqlite3.connect(str(src_db))
     try:
-        try:
-            src.execute("PRAGMA wal_checkpoint(FULL)")
-        except sqlite3.OperationalError:
-            pass
         dst = sqlite3.connect(str(dest_db))
         try:
             src.backup(dst)
@@ -205,7 +195,10 @@ class DataSecurityBackupService:
 
         ragflow_dir = pack_dir / "ragflow"
         vols_dir = ragflow_dir / "volumes"
+        images_dir = ragflow_dir / "images"
         _ensure_dir(vols_dir)
+        _ensure_dir(images_dir)
+
         try:
             (ragflow_dir / "docker-compose.yml").write_bytes(compose_file.read_bytes())
         except Exception:
@@ -216,19 +209,17 @@ class DataSecurityBackupService:
             self.store.update_job(job_id, message="停止 RAGFlow 服务", progress=40)
             _docker_compose_stop(compose_file)
 
+        archives: list[str] = []
         try:
             self.store.update_job(job_id, message="扫描 RAGFlow volumes", progress=45)
             vols = _list_docker_volumes_by_prefix(prefix)
             if not vols:
                 raise RuntimeError(
-                    f"找不到 RAGFlow volumes（前缀 {prefix}）。"
-                    "请确认该 docker-compose.yml 对应的 RAGFlow 已在本机启动过。"
-                    "如果你用过自定义 Compose 项目名，请在 compose 文件顶层增加 `name:`，或在同目录 `.env` 里设置 `COMPOSE_PROJECT_NAME=`。"
+                    f"找不到 RAGFlow volumes（前缀 {prefix}）。请确认该 compose 对应的 RAGFlow 已在本机启动过。"
                 )
 
             per = max(1, int(50 / max(1, len(vols))))
             prog = 50
-            archives: list[str] = []
             for v in vols:
                 self.store.update_job(job_id, message=f"打包 volume：{v}", progress=min(95, prog))
                 name = f"{v}_{_timestamp()}.tar.gz"
@@ -240,6 +231,23 @@ class DataSecurityBackupService:
                 self.store.update_job(job_id, message="启动 RAGFlow 服务", progress=96)
                 _docker_compose_start(compose_file)
 
+        # 3) ragflow images (optional)
+        images: list[str] = []
+        images_archives: list[str] = []
+        images_error: str | None = None
+        try:
+            self.store.update_job(job_id, message="导出 RAGFlow 镜像（可选）", progress=97)
+            images, images_error = _list_compose_images(compose_file)
+            if images:
+                tar_name = f"ragflow_images_{_timestamp()}.tar"
+                ok_img, img_err = _docker_save_images(images, images_dir / tar_name)
+                if ok_img:
+                    images_archives.append(tar_name)
+                else:
+                    images_error = img_err or images_error
+        except Exception as e:
+            images_error = str(e)
+
         manifest = {
             "created_at": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()),
             "contains": {"auth_db": True, "ragflow": True},
@@ -249,12 +257,15 @@ class DataSecurityBackupService:
                 "project_name": project,
                 "volumes_prefix": prefix,
                 "volumes_dir": "ragflow/volumes",
+                "volume_archives": archives,
+                "images_dir": "ragflow/images",
+                "images": images,
+                "images_archives": images_archives,
+                "images_error": images_error,
             },
         }
-        (pack_dir / "manifest.json").write_text(
-            json.dumps(manifest, ensure_ascii=False, indent=2) + "\n",
-            encoding="utf-8",
-        )
+        (pack_dir / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
         done_ms = int(time.time() * 1000)
         self.store.update_job(job_id, status="success", progress=100, message="备份完成", finished_at_ms=done_ms)
+
