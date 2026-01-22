@@ -16,6 +16,25 @@ const Chat = () => {
   const messagesEndRef = useRef(null);
   const assistantMessageRef = useRef('');
 
+  const normalizeForCompare = useCallback((value) => {
+    return String(value ?? '')
+      .replace(/\r\n/g, '\n')
+      .replace(/\r/g, '\n')
+      .split('\u0000')
+      .join('');
+  }, []);
+
+  const stripThinkTags = useCallback((value) => {
+    const text = String(value ?? '');
+    if (!text) return '';
+
+    // Remove <think>...</think> blocks (including multiline).
+    let out = text.replace(/<think>[\s\S]*?<\/think>/g, '');
+    // If streaming ended mid-think, hide the unfinished tail.
+    out = out.replace(/<think>[\s\S]*$/g, '');
+    return out;
+  }, []);
+
   const upsertAssistantMessage = useCallback((content) => {
     setMessages((prev) => {
       const next = [...prev];
@@ -160,8 +179,56 @@ const Chat = () => {
           try {
             const data = JSON.parse(dataStr);
             if (data.code === 0 && data.data && data.data.answer) {
-              assistantMessageRef.current += data.data.answer;
-              upsertAssistantMessage(assistantMessageRef.current);
+              const incoming = String(data.data.answer ?? '');
+              if (!incoming) continue;
+
+              // RAGFlow streaming payloads may be either:
+              // - delta chunks (append-only), or
+              // - full text so far (cumulative), or
+              // - overlapping chunks (some already-sent prefix repeated).
+              // Handle all to avoid duplicating content in the UI.
+              const current = assistantMessageRef.current || '';
+              const currentNorm = normalizeForCompare(current);
+              const incomingNorm = normalizeForCompare(incoming);
+              let next = '';
+              if (incomingNorm === currentNorm) {
+                next = current;
+              } else if (incomingNorm.startsWith(currentNorm)) {
+                next = incoming; // cumulative
+              } else if (currentNorm.startsWith(incomingNorm)) {
+                next = current; // incoming is older/shorter
+              } else if (currentNorm.includes(incomingNorm)) {
+                next = current; // duplicate chunk
+              } else {
+                // overlap: append only the non-overlapping suffix of incoming
+                let overlap = 0;
+                const max = Math.min(currentNorm.length, incomingNorm.length);
+                for (let k = max; k > 0; k--) {
+                  if (currentNorm.endsWith(incomingNorm.slice(0, k))) {
+                    overlap = k;
+                    break;
+                  }
+                }
+
+                if (overlap > 0) {
+                  // Use normalized overlap length to find a safe raw slicing point.
+                  // Prefer a direct "startsWith" overlap on raw as a fallback.
+                  let rawOverlap = 0;
+                  const rawMax = Math.min(current.length, incoming.length);
+                  for (let k = rawMax; k > 0; k--) {
+                    if (current.endsWith(incoming.slice(0, k))) {
+                      rawOverlap = k;
+                      break;
+                    }
+                  }
+                  next = current + incoming.slice(rawOverlap || overlap);
+                } else {
+                  next = current + incoming;
+                }
+              }
+
+              assistantMessageRef.current = next;
+              upsertAssistantMessage(stripThinkTags(next));
             }
           } catch {
             // ignore malformed SSE chunks
