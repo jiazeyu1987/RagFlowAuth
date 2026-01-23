@@ -98,9 +98,13 @@ def _docker_tar_volume(volume_name: str, dest_tar_gz: Path) -> None:
     backup_dir = dest_tar_gz.parent.resolve()
 
     # Convert container path to host path for Docker-in-Docker scenario
-    # /app/data/... -> /opt/ragflowauth/data/...
+    # Order matters: check more specific paths first
     backup_dir_str = str(backup_dir)
-    if backup_dir_str.startswith("/app/data/"):
+    if backup_dir_str.startswith("/app/data/backups/"):
+        # Backups directory has its own mount
+        backup_dir_str = backup_dir_str.replace("/app/data/backups", "/opt/ragflowauth/backups", 1)
+    elif backup_dir_str.startswith("/app/data/"):
+        # Main data directory
         backup_dir_str = backup_dir_str.replace("/app/data", "/opt/ragflowauth/data", 1)
     elif backup_dir_str.startswith("/app/uploads/"):
         backup_dir_str = backup_dir_str.replace("/app/uploads", "/opt/ragflowauth/uploads", 1)
@@ -314,4 +318,171 @@ class DataSecurityBackupService:
             self.store.update_job(job_id, status="success", progress=100, message="备份完成", finished_at_ms=done_ms)
         else:
             self.store.update_job(job_id, status="success", progress=100, message="备份完成并已上传", finished_at_ms=done_ms)
+
+    def run_full_backup_job(self, job_id: int) -> None:
+        """Run a full backup including Docker images, containers, and networks"""
+        from backend.services.data_security_full_backup import (
+            backup_docker_images,
+            backup_docker_containers,
+            backup_docker_networks,
+            backup_docker_volumes_list,
+            create_full_backup_manifest,
+        )
+
+        settings = self.store.get_settings()
+        target = settings.target_path()
+        if not target:
+            raise RuntimeError("未配置备份目标（请设置目标电脑IP/共享目录，或选择本地目录）")
+
+        ok, why = _docker_ok()
+        if not ok:
+            raise RuntimeError(f"Docker 不可用：{why}")
+
+        now_ms = int(time.time() * 1000)
+        self.store.update_job(job_id, status="running", progress=1, message="开始全量备份", started_at_ms=now_ms)
+
+        pack_dir = Path(target) / f"full_backup_pack_{_timestamp()}"
+        _ensure_dir(pack_dir)
+        self.store.update_job(job_id, output_dir=str(pack_dir), message="创建全量备份目录", progress=3)
+
+        # Step 1: Backup auth.db
+        self.store.update_job(job_id, message="备份 auth.db", progress=10)
+        src_db = Path(settings.auth_db_path)
+        if not src_db.is_absolute():
+            src_db = repo_root() / src_db
+        if not src_db.exists():
+            raise RuntimeError(f"找不到本项目数据库：{src_db}")
+        _sqlite_online_backup(src_db, pack_dir / "auth.db")
+        self.store.update_job(job_id, message="auth.db 已备份", progress=20)
+
+        # Step 2: Backup RAGFlow volumes (if configured)
+        ragflow_manifest = {}
+        compose_path = (settings.ragflow_compose_path or "").strip()
+        if compose_path:
+            self.store.update_job(job_id, message="备份 RAGFlow volumes", progress=25)
+
+            compose_file = Path(compose_path)
+            if not compose_file.is_absolute():
+                compose_file = repo_root() / compose_file
+            if not compose_file.exists():
+                raise RuntimeError(f"找不到 RAGFlow docker-compose.yml：{compose_file}")
+
+            project = _read_compose_project_name(compose_file)
+            prefix = f"{project}_"
+
+            ragflow_dir = pack_dir / "ragflow"
+            vols_dir = ragflow_dir / "volumes"
+            _ensure_dir(vols_dir)
+
+            try:
+                (ragflow_dir / "docker-compose.yml").write_bytes(compose_file.read_bytes())
+            except Exception:
+                pass
+
+            stop = bool(settings.ragflow_stop_services)
+            if stop:
+                self.store.update_job(job_id, message="停止 RAGFlow 服务", progress=30)
+                _docker_compose_stop(compose_file)
+
+            archives: list[str] = []
+            try:
+                self.store.update_job(job_id, message="扫描 RAGFlow volumes", progress=35)
+                vols = _list_docker_volumes_by_prefix(prefix)
+                if not vols:
+                    self.store.update_job(job_id, message="未找到 RAGFlow volumes", progress=40)
+                else:
+                    per = max(1, int(20 / max(1, len(vols))))
+                    prog = 40
+                    for v in vols:
+                        self.store.update_job(job_id, message=f"打包 volume：{v}", progress=min(75, prog))
+                        name = f"{v}_{_timestamp()}.tar.gz"
+                        _docker_tar_volume(v, vols_dir / name)
+                        archives.append(name)
+                        prog += per
+            finally:
+                if stop:
+                    self.store.update_job(job_id, message="启动 RAGFlow 服务", progress=78)
+                    _docker_compose_start(compose_file)
+
+            ragflow_manifest = {
+                "compose_file": str(compose_file),
+                "project_name": project,
+                "volumes_prefix": prefix,
+                "volumes_dir": "ragflow/volumes",
+                "volume_archives": archives,
+            }
+            self.store.update_job(job_id, message="RAGFlow volumes 已备份", progress=80)
+
+        # Step 3: Backup Docker images
+        self.store.update_job(job_id, message="备份 Docker 镜像", progress=82)
+        docker_images_dir = pack_dir / "docker" / "images"
+        include_images = getattr(settings, 'full_backup_include_images', True)
+        image_archives = backup_docker_images(docker_images_dir, include_images=include_images)
+        self.store.update_job(job_id, message=f"Docker 镜像已备份 ({len(image_archives)} 个)", progress=85)
+
+        # Step 4: Backup Docker container configurations
+        self.store.update_job(job_id, message="备份容器配置", progress=87)
+        docker_config_dir = pack_dir / "docker" / "config"
+        containers_config = backup_docker_containers(docker_config_dir)
+        self.store.update_job(job_id, message="容器配置已备份", progress=89)
+
+        # Step 5: Backup Docker network configurations
+        self.store.update_job(job_id, message="备份网络配置", progress=91)
+        networks_config = backup_docker_networks(docker_config_dir)
+        self.store.update_job(job_id, message="网络配置已备份", progress=93)
+
+        # Step 6: Backup Docker volumes list
+        self.store.update_job(job_id, message="备份卷列表", progress=94)
+        volumes_list = backup_docker_volumes_list(docker_config_dir)
+        self.store.update_job(job_id, message="卷列表已备份", progress=95)
+
+        # Step 7: Create full backup manifest
+        create_full_backup_manifest(
+            pack_dir=pack_dir,
+            include_images=include_images,
+            image_archives=image_archives,
+            containers_config=containers_config,
+            networks_config=networks_config,
+            volumes_list=volumes_list,
+            ragflow_manifest=ragflow_manifest,
+        )
+        self.store.update_job(job_id, message="全量备份清单已创建", progress=98)
+
+        # Step 8: Upload to remote server if configured
+        if getattr(settings, 'upload_after_backup', False):
+            upload_host = getattr(settings, 'upload_host', '').strip()
+            upload_username = getattr(settings, 'upload_username', '').strip()
+            upload_target_path = getattr(settings, 'upload_target_path', '').strip()
+
+            if upload_host and upload_username and upload_target_path:
+                try:
+                    self.store.update_job(job_id, message="上传全量备份到远程服务器", progress=99)
+
+                    remote_path = upload_target_path.replace('\\', '/')
+
+                    cmd = [
+                        "scp",
+                        "-r",
+                        "-o", "StrictHostKeyChecking=no",
+                        "-o", "UserKnownHostsFile=/dev/null",
+                        str(pack_dir),
+                        f"{upload_username}@{upload_host}:{remote_path}/"
+                    ]
+
+                    code, out = _run(cmd)
+                    if code != 0:
+                        raise RuntimeError(f"上传失败：{out}")
+
+                    self.store.update_job(job_id, message="上传完成", progress=100)
+                except Exception as e:
+                    import logging
+                    logging.error(f"Upload to remote failed: {e}")
+                    self.store.update_job(job_id, message=f"全量备份完成，但上传失败：{str(e)}", progress=100)
+
+        done_ms = int(time.time() * 1000)
+        if not getattr(settings, 'upload_after_backup', False) or not getattr(settings, 'upload_host', ''):
+            self.store.update_job(job_id, status="success", progress=100, message="全量备份完成", finished_at_ms=done_ms)
+        else:
+            self.store.update_job(job_id, status="success", progress=100, message="全量备份完成并已上传", finished_at_ms=done_ms)
+
 

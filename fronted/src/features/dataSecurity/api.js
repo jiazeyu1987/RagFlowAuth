@@ -12,6 +12,11 @@ export const dataSecurityApi = {
       method: 'POST',
       body: JSON.stringify({}),
     }),
+  runFullBackup: async () =>
+    httpClient.requestJson('/api/admin/data-security/backup/run-full', {
+      method: 'POST',
+      body: JSON.stringify({}),
+    }),
   listJobs: async (limit = 30) =>
     httpClient.requestJson(`/api/admin/data-security/backup/jobs?limit=${encodeURIComponent(limit)}`),
   getJob: async (jobId) => httpClient.requestJson(`/api/admin/data-security/backup/jobs/${jobId}`),

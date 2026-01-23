@@ -15,9 +15,13 @@ def get_running_job_id() -> int | None:
         return _running_job_id
 
 
-def start_job_if_idle(*, reason: str) -> int:
+def start_job_if_idle(*, reason: str, full_backup: bool = False) -> int:
     """
     Start a backup job if none is running. Returns the job_id (existing or new).
+
+    Args:
+        reason: Reason for starting the job
+        full_backup: If True, run a full backup including Docker images and configs
     """
     global _running_job_id
     store = DataSecurityStore()
@@ -34,7 +38,10 @@ def start_job_if_idle(*, reason: str) -> int:
         worker_store = DataSecurityStore()
         svc = DataSecurityBackupService(worker_store)
         try:
-            svc.run_job(job_id)
+            if full_backup:
+                svc.run_full_backup_job(job_id)
+            else:
+                svc.run_job(job_id)
         except Exception as exc:
             now_ms = int(time.time() * 1000)
             worker_store.update_job(

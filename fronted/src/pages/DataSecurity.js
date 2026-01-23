@@ -113,17 +113,17 @@ const DataSecurity = () => {
       if (!settings) return;
       if (settings.target_mode === 'local') {
         if (!String(settings.target_local_dir || '').trim()) {
-          setError('请先填写“本机目标目录”，再点击“立即备份”。');
+          setError('请先填写"本机目标目录"，再点击"立即备份"。');
           return;
         }
       } else {
         if (!String(settings.target_ip || '').trim() || !String(settings.target_share_name || '').trim()) {
-          setError('请先填写“目标电脑 IP”和“共享名”，再点击“立即备份”。');
+          setError('请先填写"目标电脑 IP"和"共享名"，再点击"立即备份"。');
           return;
         }
       }
 
-      // “立即备份”默认使用你当前看到的设置（无需先点“保存设置”）
+      // "立即备份"默认使用你当前看到的设置（无需先点"保存设置"）
       setSaving(true);
       const updated = await dataSecurityApi.updateSettings(settings);
       setSettings(updated);
@@ -138,6 +138,40 @@ const DataSecurity = () => {
       }
     } catch (e) {
       setError(e.message || '启动失败');
+      setSaving(false);
+    }
+  };
+
+  const runFullBackupNow = async () => {
+    setError(null);
+    try {
+      if (!settings) return;
+      if (settings.target_mode === 'local') {
+        if (!String(settings.target_local_dir || '').trim()) {
+          setError('请先填写"本机目标目录"，再点击"全量备份"。');
+          return;
+        }
+      } else {
+        if (!String(settings.target_ip || '').trim() || !String(settings.target_share_name || '').trim()) {
+          setError('请先填写"目标电脑 IP"和"共享名"，再点击"全量备份"。');
+          return;
+        }
+      }
+
+      setSaving(true);
+      const updated = await dataSecurityApi.updateSettings(settings);
+      setSettings(updated);
+      setSaving(false);
+
+      const res = await dataSecurityApi.runFullBackup();
+      if (res.job_id) {
+        setRunning(true);
+        await pollActiveJob(res.job_id);
+        if (pollTimer.current) clearInterval(pollTimer.current);
+        pollTimer.current = setInterval(() => pollActiveJob(res.job_id), 1000);
+      }
+    } catch (e) {
+      setError(e.message || '全量备份启动失败');
       setSaving(false);
     }
   };
@@ -162,6 +196,20 @@ const DataSecurity = () => {
             }}
           >
             {running ? '备份中…' : '立即备份'}
+          </button>
+          <button
+            onClick={runFullBackupNow}
+            disabled={running}
+            style={{
+              padding: '10px 14px',
+              borderRadius: '8px',
+              border: 'none',
+              cursor: running ? 'not-allowed' : 'pointer',
+              background: running ? '#9ca3af' : '#8b5cf6',
+              color: 'white',
+            }}
+          >
+            {running ? '备份中…' : '全量备份'}
           </button>
           <button
             onClick={saveSettings}
@@ -301,6 +349,15 @@ const DataSecurity = () => {
               onChange={(e) => setSettings((p) => ({ ...p, ragflow_stop_services: e.target.checked }))}
             />
             备份前停止 RAGFlow 服务（更一致，但会短暂停机）
+          </label>
+
+          <label style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+            <input
+              type="checkbox"
+              checked={!!settings?.full_backup_include_images}
+              onChange={(e) => setSettings((p) => ({ ...p, full_backup_include_images: e.target.checked }))}
+            />
+            全量备份包含 Docker 镜像（体积较大，但可离线恢复）
           </label>
 
           <label>

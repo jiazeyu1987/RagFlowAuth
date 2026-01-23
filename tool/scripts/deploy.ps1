@@ -6,7 +6,7 @@ param(
   [string]$Tag = (Get-Date -Format "yyyy-MM-dd"),
 
   [Parameter(Mandatory = $false)]
-  [string]$ServerHost = "172.30.30.57",
+  [string]$ServerHost = "172.30.30.57",  # Production server
 
   [Parameter(Mandatory = $false)]
   [string]$ServerUser = "root",
@@ -170,7 +170,7 @@ if (-not $SkipDeploy) {
   }
 
   # Use the existing remote-deploy.sh script
-  $localDeployScript = Join-Path $PSScriptRoot "scripts\remote-deploy.sh"
+  $localDeployScript = Join-Path $PSScriptRoot "remote-deploy.sh"
 
   if (Test-Path $localDeployScript) {
     Write-Info "Uploading deploy script..."

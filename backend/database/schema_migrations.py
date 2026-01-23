@@ -144,6 +144,14 @@ def _ensure_data_security_settings_table(conn: sqlite3.Connection) -> None:
     conn.execute("INSERT OR IGNORE INTO data_security_settings (id) VALUES (1)")
 
 
+def _add_full_backup_columns_to_data_security(conn: sqlite3.Connection) -> None:
+    """Add full backup columns to data_security_settings table"""
+    if not _table_exists(conn, "data_security_settings"):
+        return
+    _add_column_if_missing(conn, "data_security_settings", "full_backup_enabled INTEGER NOT NULL DEFAULT 0")
+    _add_column_if_missing(conn, "data_security_settings", "full_backup_include_images INTEGER NOT NULL DEFAULT 1")
+
+
 def _ensure_backup_jobs_table(conn: sqlite3.Connection) -> None:
     if _table_exists(conn, "backup_jobs"):
         return
@@ -329,6 +337,7 @@ def ensure_kb_ref_columns(db_path: str | Path) -> None:
 
         _ensure_data_security_settings_table(conn)
         _ensure_backup_jobs_table(conn)
+        _add_full_backup_columns_to_data_security(conn)
 
         _ensure_download_logs_table(conn)
         _ensure_deletion_logs_table(conn)

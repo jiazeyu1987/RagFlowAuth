@@ -30,6 +30,9 @@ class DataSecuritySettings:
     upload_host: str | None
     upload_username: str | None
     upload_target_path: str | None
+    # 全量备份
+    full_backup_enabled: bool
+    full_backup_include_images: bool
 
     def target_path(self) -> str | None:
         if self.target_mode == "local":
@@ -108,6 +111,8 @@ class DataSecurityStore:
                 upload_host=get_col("upload_host"),
                 upload_username=get_col("upload_username"),
                 upload_target_path=get_col("upload_target_path"),
+                full_backup_enabled=bool(get_col("full_backup_enabled", 0)),
+                full_backup_include_images=bool(get_col("full_backup_include_images", 1)),
             )
         finally:
             conn.close()
@@ -126,6 +131,8 @@ class DataSecurityStore:
             "ragflow_project_name",
             "ragflow_stop_services",
             "auth_db_path",
+            "full_backup_enabled",
+            "full_backup_include_images",
         }
         fields = {k: updates.get(k) for k in allowed if k in updates}
         fields["updated_at_ms"] = now_ms

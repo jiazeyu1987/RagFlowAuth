@@ -29,6 +29,8 @@ async def get_settings(_: AdminOnly) -> dict[str, Any]:
         "auth_db_path": s.auth_db_path,
         "updated_at_ms": s.updated_at_ms,
         "last_run_at_ms": s.last_run_at_ms,
+        "full_backup_enabled": getattr(s, 'full_backup_enabled', False),
+        "full_backup_include_images": getattr(s, 'full_backup_include_images', True),
     }
 
 
@@ -50,6 +52,8 @@ async def update_settings(_: AdminOnly, body: dict[str, Any]) -> dict[str, Any]:
         "auth_db_path": s.auth_db_path,
         "updated_at_ms": s.updated_at_ms,
         "last_run_at_ms": s.last_run_at_ms,
+        "full_backup_enabled": getattr(s, 'full_backup_enabled', False),
+        "full_backup_include_images": getattr(s, 'full_backup_include_images', True),
     }
 
 
@@ -74,4 +78,12 @@ async def get_job(_: AdminOnly, job_id: int) -> dict[str, Any]:
     except KeyError:
         raise HTTPException(status_code=404, detail="job_not_found")
     return job.as_dict()
+
+
+@router.post("/admin/data-security/backup/run-full")
+async def run_full_backup(_: AdminOnly) -> dict[str, Any]:
+    """Run a full backup including Docker images, containers, and networks"""
+    job_id = start_job_if_idle(reason="手动全量备份", full_backup=True)
+    return {"job_id": job_id}
+
 
