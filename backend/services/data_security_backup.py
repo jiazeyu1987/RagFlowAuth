@@ -94,6 +94,18 @@ def _read_compose_project_name(compose_file: Path) -> str:
 
 def _docker_tar_volume(volume_name: str, dest_tar_gz: Path) -> None:
     _ensure_dir(dest_tar_gz.parent)
+    # Ensure paths are absolute for Docker volume mounting
+    backup_dir = dest_tar_gz.parent.resolve()
+
+    # Convert container path to host path for Docker-in-Docker scenario
+    # /app/data/... -> /opt/ragflowauth/data/...
+    backup_dir_str = str(backup_dir)
+    if backup_dir_str.startswith("/app/data/"):
+        backup_dir_str = backup_dir_str.replace("/app/data", "/opt/ragflowauth/data", 1)
+    elif backup_dir_str.startswith("/app/uploads/"):
+        backup_dir_str = backup_dir_str.replace("/app/uploads", "/opt/ragflowauth/uploads", 1)
+
+    # Use ragflowauth-backend:local which already exists on server
     cmd = [
         "docker",
         "run",
@@ -101,8 +113,8 @@ def _docker_tar_volume(volume_name: str, dest_tar_gz: Path) -> None:
         "-v",
         f"{volume_name}:/data:ro",
         "-v",
-        f"{str(dest_tar_gz.parent)}:/backup",
-        "alpine",
+        f"{backup_dir_str}:/backup",
+        "ragflowauth-backend:local",
         "sh",
         "-lc",
         f"tar -czf /backup/{dest_tar_gz.name} -C /data .",
@@ -128,8 +140,17 @@ def _list_compose_images(compose_file: Path) -> tuple[list[str], str | None]:
 def _docker_save_images(images: list[str], dest_tar: Path) -> tuple[bool, str | None]:
     if not images:
         return False, None
-    _ensure_dir(dest_tar.parent)
-    code, out = _run(["docker", "save", "-o", str(dest_tar), *images])
+
+    # Convert container path to host path for Docker-in-Docker scenario
+    dest_tar_str = str(dest_tar)
+    if dest_tar_str.startswith("/app/data/"):
+        dest_tar_str = dest_tar_str.replace("/app/data", "/opt/ragflowauth/data", 1)
+    elif dest_tar_str.startswith("/app/uploads/"):
+        dest_tar_str = dest_tar_str.replace("/app/uploads", "/opt/ragflowauth/uploads", 1)
+
+    _ensure_dir(Path(dest_tar_str).parent)
+
+    code, out = _run(["docker", "save", "-o", dest_tar_str, *images])
     if code != 0:
         return False, out or "docker save failed"
     return True, None
@@ -231,22 +252,10 @@ class DataSecurityBackupService:
                 self.store.update_job(job_id, message="启动 RAGFlow 服务", progress=96)
                 _docker_compose_start(compose_file)
 
-        # 3) ragflow images (optional)
+        # 3) ragflow images (skipped - images can be pulled from registry)
         images: list[str] = []
         images_archives: list[str] = []
-        images_error: str | None = None
-        try:
-            self.store.update_job(job_id, message="导出 RAGFlow 镜像（可选）", progress=97)
-            images, images_error = _list_compose_images(compose_file)
-            if images:
-                tar_name = f"ragflow_images_{_timestamp()}.tar"
-                ok_img, img_err = _docker_save_images(images, images_dir / tar_name)
-                if ok_img:
-                    images_archives.append(tar_name)
-                else:
-                    images_error = img_err or images_error
-        except Exception as e:
-            images_error = str(e)
+        images_note: str = "镜像导出已禁用，可从 Docker Hub 重新拉取"
 
         manifest = {
             "created_at": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()),
@@ -258,14 +267,51 @@ class DataSecurityBackupService:
                 "volumes_prefix": prefix,
                 "volumes_dir": "ragflow/volumes",
                 "volume_archives": archives,
-                "images_dir": "ragflow/images",
-                "images": images,
-                "images_archives": images_archives,
-                "images_error": images_error,
+                "images_note": images_note,
             },
         }
         (pack_dir / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
+        self.store.update_job(job_id, message="备份完成", progress=100)
+
+        # 4) Upload to remote server if configured
+        if getattr(settings, 'upload_after_backup', False):
+            upload_host = getattr(settings, 'upload_host', '').strip()
+            upload_username = getattr(settings, 'upload_username', '').strip()
+            upload_target_path = getattr(settings, 'upload_target_path', '').strip()
+
+            if upload_host and upload_username and upload_target_path:
+                try:
+                    self.store.update_job(job_id, message="上传备份到远程服务器", progress=98)
+
+                    # Convert Windows path to SCP format (e.g., D:\datas -> /mnt/d/datas)
+                    # For Windows OpenSSH, we can use Windows path directly
+                    remote_path = upload_target_path.replace('\\', '/')
+
+                    # Use scp to upload the entire pack directory
+                    cmd = [
+                        "scp",
+                        "-r",
+                        "-o", "StrictHostKeyChecking=no",
+                        "-o", "UserKnownHostsFile=/dev/null",
+                        str(pack_dir),
+                        f"{upload_username}@{upload_host}:{remote_path}/"
+                    ]
+
+                    code, out = _run(cmd)
+                    if code != 0:
+                        raise RuntimeError(f"上传失败：{out}")
+
+                    self.store.update_job(job_id, message="上传完成", progress=99)
+                except Exception as e:
+                    # Log error but don't fail the backup
+                    import logging
+                    logging.error(f"Upload to remote failed: {e}")
+                    self.store.update_job(job_id, message=f"备份完成，但上传失败：{str(e)}", progress=100)
+
         done_ms = int(time.time() * 1000)
-        self.store.update_job(job_id, status="success", progress=100, message="备份完成", finished_at_ms=done_ms)
+        if not getattr(settings, 'upload_after_backup', False) or not getattr(settings, 'upload_host', ''):
+            self.store.update_job(job_id, status="success", progress=100, message="备份完成", finished_at_ms=done_ms)
+        else:
+            self.store.update_job(job_id, status="success", progress=100, message="备份完成并已上传", finished_at_ms=done_ms)
 

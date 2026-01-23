@@ -276,11 +276,11 @@ const DataSecurity = () => {
           <div style={{ borderTop: '1px solid #e5e7eb', paddingTop: '12px' }} />
 
           <label>
-            RAGFlow docker-compose.yml 路径（服务器上的路径）
+            RAGFlow docker-compose.yml 路径（容器内路径）
             <input
               value={settings?.ragflow_compose_path || ''}
               onChange={(e) => setSettings((p) => ({ ...p, ragflow_compose_path: e.target.value }))}
-              placeholder="例如：D:\\ragflow\\docker-compose.yml"
+              placeholder="/app/ragflow_compose/docker-compose.yml"
               style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '8px', marginTop: '6px' }}
             />
             <div style={{ color: '#6b7280', marginTop: '6px', fontSize: '0.9rem' }}>

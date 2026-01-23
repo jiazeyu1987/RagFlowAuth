@@ -9,6 +9,8 @@ services:
     volumes:
       - ../data:/app/data
       - ../ragflow_config.json:/app/ragflow_config.json:ro
+      - ../ragflow_compose:/app/ragflow_compose:ro
+      - ../backups:/app/data/backups
     environment:
       HOST: "0.0.0.0"
       PORT: "8001"

@@ -25,6 +25,11 @@ class DataSecuritySettings:
     auth_db_path: str
     updated_at_ms: int
     last_run_at_ms: int | None
+    # 新增：备份后上传到远程服务器
+    upload_after_backup: bool
+    upload_host: str | None
+    upload_username: str | None
+    upload_target_path: str | None
 
     def target_path(self) -> str | None:
         if self.target_mode == "local":
@@ -77,6 +82,14 @@ class DataSecurityStore:
             row = conn.execute("SELECT * FROM data_security_settings WHERE id = 1").fetchone()
             if not row:
                 raise RuntimeError("data_security_settings not initialized")
+
+            # Helper to safely get column value with default
+            def get_col(key, default=None):
+                try:
+                    return row[key]
+                except IndexError:
+                    return default
+
             return DataSecuritySettings(
                 enabled=bool(row["enabled"]),
                 interval_minutes=int(row["interval_minutes"] or 1440),
@@ -91,6 +104,10 @@ class DataSecurityStore:
                 auth_db_path=str(row["auth_db_path"] or "data/auth.db"),
                 updated_at_ms=int(row["updated_at_ms"] or 0),
                 last_run_at_ms=int(row["last_run_at_ms"]) if row["last_run_at_ms"] is not None else None,
+                upload_after_backup=bool(get_col("upload_after_backup", 0)),
+                upload_host=get_col("upload_host"),
+                upload_username=get_col("upload_username"),
+                upload_target_path=get_col("upload_target_path"),
             )
         finally:
             conn.close()

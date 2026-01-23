@@ -70,3 +70,5 @@ Backup auth DB (our data only):
 ## Diagnostics
 
 - Permission debug logs are gated by `PERMDBG_ENABLED=true`.
+
+ip地址 ：172.30.30.57  用户名：root   密码：KDLyx2021
