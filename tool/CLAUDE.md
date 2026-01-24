@@ -212,3 +212,38 @@ cd tool/scripts
 # Restore from backup
 .\Restore-RagflowBackup.ps1
 ```
+
+### Quick Deploy Script (NEW)
+
+**scripts/quick-deploy.ps1** - Simplified deployment for code updates
+- Purpose: Quick update of frontend/backend code without full re-deployment
+- Usage: Double-click `scripts/quick-deploy.bat` or run `.\scripts\quick-deploy.ps1`
+- Workflow:
+  1. Stop running containers on server
+  2. Build frontend and backend Docker images locally
+  3. Export images to tar files with SHA256 checksums
+  4. Transfer to server via SCP
+  5. Load images on server
+  6. Recreate containers with preserved configuration
+  7. Verify deployment status
+
+**Parameters:**
+- `-Tag "v1.0.0"` - Custom image tag (default: timestamp)
+- `-SkipBuild` - Use existing local images
+- `-SkipTransfer` - Build only, don't transfer
+- `-SkipLoad` - Transfer only, don't load
+
+**Comparison with deploy.ps1:**
+- `quick-deploy.ps1`: Fast code updates, assumes server already configured
+- `deploy.ps1`: Full deployment including network setup, volume creation, etc.
+
+**Example:**
+```powershell
+# Quick update with default tag
+.\tool\scripts\quick-deploy.ps1
+
+# Build and transfer specific version
+.\tool\scripts\quick-deploy.ps1 -Tag "v1.2.3"
+```
+
+See `scripts/QUICK-DEPLOY.md` for detailed documentation.

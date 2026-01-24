@@ -108,6 +108,29 @@ async def approve_document(
         if not ragflow_doc_id:
             raise HTTPException(status_code=500, detail="上传到RAGFlow失败")
 
+        # Trigger parsing (chunking) after successful upload (best-effort).
+        dataset_ref = doc.kb_dataset_id or doc.kb_id or (doc.kb_name or "")
+        if ragflow_doc_id and ragflow_doc_id != "uploaded":
+            try:
+                ok = deps.ragflow_service.parse_document(dataset_ref=dataset_ref, document_id=ragflow_doc_id)
+                if not ok:
+                    logger.warning(
+                        "[APPROVE] Parse trigger failed: doc_id=%s ragflow_doc_id=%s dataset_ref=%s",
+                        doc_id,
+                        ragflow_doc_id,
+                        dataset_ref,
+                    )
+            except Exception as e:
+                logger.warning(
+                    "[APPROVE] Parse trigger exception: doc_id=%s ragflow_doc_id=%s dataset_ref=%s err=%s",
+                    doc_id,
+                    ragflow_doc_id,
+                    dataset_ref,
+                    e,
+                )
+        else:
+            logger.warning("[APPROVE] Skip parse trigger: ragflow_doc_id is not available (%s)", ragflow_doc_id)
+
         updated_doc = deps.kb_store.update_document_status(
             doc_id=doc_id,
             status="approved",
@@ -238,6 +261,29 @@ async def approve_document_overwrite(doc_id: str, ctx: AuthContextDep, body: dic
     )
     if not ragflow_doc_id:
         raise HTTPException(status_code=500, detail="上传到RAGFlow失败")
+
+    # Trigger parsing (chunking) after successful upload (best-effort).
+    dataset_ref = new_doc.kb_dataset_id or new_doc.kb_id or (new_doc.kb_name or "")
+    if ragflow_doc_id and ragflow_doc_id != "uploaded":
+        try:
+            ok = deps.ragflow_service.parse_document(dataset_ref=dataset_ref, document_id=ragflow_doc_id)
+            if not ok:
+                logger.warning(
+                    "[APPROVE-OVERWRITE] Parse trigger failed: doc_id=%s ragflow_doc_id=%s dataset_ref=%s",
+                    new_doc.doc_id,
+                    ragflow_doc_id,
+                    dataset_ref,
+                )
+        except Exception as e:
+            logger.warning(
+                "[APPROVE-OVERWRITE] Parse trigger exception: doc_id=%s ragflow_doc_id=%s dataset_ref=%s err=%s",
+                new_doc.doc_id,
+                ragflow_doc_id,
+                dataset_ref,
+                e,
+            )
+    else:
+        logger.warning("[APPROVE-OVERWRITE] Skip parse trigger: ragflow_doc_id is not available (%s)", ragflow_doc_id)
 
     updated_doc = deps.kb_store.update_document_status(
         doc_id=new_doc.doc_id,

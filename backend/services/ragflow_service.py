@@ -364,6 +364,89 @@ class RagflowService:
             self.logger.error(traceback.format_exc())
             return None
 
+    def _looks_like_uuid(self, value: str) -> bool:
+        if not isinstance(value, str):
+            return False
+        v = value.strip()
+        if len(v) < 32 or len(v) > 64:
+            return False
+        import re
+
+        return bool(re.fullmatch(r"[0-9a-fA-F-]{32,64}", v))
+
+    def _normalize_dataset_id_for_http(self, dataset_ref: str) -> str | None:
+        dataset_ref = (dataset_ref or "").strip()
+        if not dataset_ref:
+            return None
+
+        try:
+            dataset_id = self.normalize_dataset_id(dataset_ref)
+        except Exception:
+            dataset_id = None
+
+        if dataset_id:
+            return dataset_id
+
+        # Fallback: if it already looks like an id, try using it directly.
+        if self._looks_like_uuid(dataset_ref):
+            return dataset_ref
+
+        return None
+
+    def parse_documents(self, *, dataset_ref: str, document_ids: list[str]) -> bool:
+        """
+        Trigger RAGFlow document parsing (chunking) for the given document IDs.
+
+        HTTP API:
+        - POST /api/v1/datasets/{dataset_id}/chunks
+          body: {"document_ids": ["..."]}
+
+        Notes:
+        - RAGFlow may parse asynchronously; this call only triggers the job.
+        """
+        dataset_id = self._normalize_dataset_id_for_http(dataset_ref)
+        if not dataset_id:
+            self.logger.warning("parse_documents: cannot resolve dataset_id for dataset_ref=%r", dataset_ref)
+            return False
+
+        doc_ids: list[str] = []
+        seen: set[str] = set()
+        for doc_id in document_ids or []:
+            if not isinstance(doc_id, str):
+                continue
+            doc_id = doc_id.strip()
+            if not doc_id or doc_id in seen:
+                continue
+            seen.add(doc_id)
+            doc_ids.append(doc_id)
+
+        if not doc_ids:
+            self.logger.warning("parse_documents: empty document_ids (dataset_ref=%r)", dataset_ref)
+            return False
+
+        payload = self._http.post_json(
+            f"/api/v1/datasets/{dataset_id}/chunks",
+            body={"document_ids": doc_ids},
+        )
+        if not payload:
+            self.logger.error("parse_documents: request failed (dataset_id=%s)", dataset_id)
+            return False
+
+        code = payload.get("code")
+        if code != 0:
+            self.logger.error(
+                "parse_documents: RAGFlow returned error code=%s message=%s dataset_id=%s",
+                code,
+                payload.get("message"),
+                dataset_id,
+            )
+            return False
+
+        return True
+
+    def parse_document(self, *, dataset_ref: str, document_id: str) -> bool:
+        return self.parse_documents(dataset_ref=dataset_ref, document_ids=[document_id])
+
     def delete_document(self, document_id: str, dataset_name: str = "展厅") -> bool:
         """
         从RAGFlow知识库中删除文档
