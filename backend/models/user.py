@@ -7,6 +7,8 @@ class UserCreate(BaseModel):
     username: str
     password: str
     email: Optional[str] = None
+    company_id: Optional[int] = None
+    department_id: Optional[int] = None
     role: Optional[str] = None  # RBAC role (admin/reviewer/operator/viewer/guest); defaults to viewer
     group_id: Optional[int] = None  # 向后兼容
     group_ids: Optional[List[int]] = None  # 新字段：支持多个权限组
@@ -16,6 +18,8 @@ class UserCreate(BaseModel):
 class UserUpdate(BaseModel):
     """User update model"""
     email: Optional[str] = None
+    company_id: Optional[int] = None
+    department_id: Optional[int] = None
     role: Optional[str] = None  # RBAC role (admin/reviewer/operator/viewer/guest)
     group_id: Optional[int] = None  # 向后兼容
     group_ids: Optional[List[int]] = None  # 新字段：支持多个权限组
@@ -27,6 +31,10 @@ class UserResponse(BaseModel):
     user_id: str
     username: str
     email: Optional[str] = None
+    company_id: Optional[int] = None
+    company_name: Optional[str] = None
+    department_id: Optional[int] = None
+    department_name: Optional[str] = None
     group_id: Optional[int] = None  # 权限组ID（已废弃，保留用于向后兼容）
     group_ids: List[int] = []  # 新字段：权限组ID列表
     group_name: Optional[str] = None  # 权限组名称（已废弃）

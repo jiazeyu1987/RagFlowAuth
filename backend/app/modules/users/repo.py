@@ -9,8 +9,30 @@ class UsersRepo:
     def __init__(self, deps: AppDependencies):
         self._deps = deps
 
-    def list_users(self, *, role: Optional[str], status: Optional[str], group_id: Optional[int], limit: int):
-        return self._deps.user_store.list_users(role=role, status=status, group_id=group_id, limit=limit)
+    def list_users(
+        self,
+        *,
+        q: Optional[str],
+        role: Optional[str],
+        status: Optional[str],
+        group_id: Optional[int],
+        company_id: Optional[int],
+        department_id: Optional[int],
+        created_from_ms: Optional[int],
+        created_to_ms: Optional[int],
+        limit: int,
+    ):
+        return self._deps.user_store.list_users(
+            q=q,
+            role=role,
+            status=status,
+            group_id=group_id,
+            company_id=company_id,
+            department_id=department_id,
+            created_from_ms=created_from_ms,
+            created_to_ms=created_to_ms,
+            limit=limit,
+        )
 
     def get_user(self, user_id: str):
         return self._deps.user_store.get_by_user_id(user_id)
@@ -35,3 +57,9 @@ class UsersRepo:
 
     def get_group_by_name(self, name: str) -> dict[str, Any] | None:
         return self._deps.permission_group_store.get_group_by_name(name)
+
+    def get_company(self, company_id: int):
+        return self._deps.org_directory_store.get_company(company_id)
+
+    def get_department(self, department_id: int):
+        return self._deps.org_directory_store.get_department(department_id)

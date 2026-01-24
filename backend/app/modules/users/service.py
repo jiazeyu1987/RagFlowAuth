@@ -24,10 +24,16 @@ class UsersService:
 
     def _to_response(self, user) -> UserResponse:
         group = self._repo.get_permission_group(user.group_id) if user.group_id else None
+        company = self._repo.get_company(user.company_id) if getattr(user, "company_id", None) else None
+        department = self._repo.get_department(user.department_id) if getattr(user, "department_id", None) else None
         return UserResponse(
             user_id=user.user_id,
             username=user.username,
             email=user.email,
+            company_id=getattr(user, "company_id", None),
+            company_name=company.name if company else None,
+            department_id=getattr(user, "department_id", None),
+            department_name=department.name if department else None,
             group_id=user.group_id,
             group_name=group["group_name"] if group else None,
             group_ids=user.group_ids,
@@ -41,18 +47,38 @@ class UsersService:
     def list_users(
         self,
         *,
+        q: Optional[str],
         role: Optional[str],
         group_id: Optional[int],
+        company_id: Optional[int],
+        department_id: Optional[int],
         status: Optional[str],
+        created_from_ms: Optional[int],
+        created_to_ms: Optional[int],
         limit: int,
     ) -> list[UserResponse]:
-        users = self._repo.list_users(role=role, status=status, group_id=group_id, limit=limit)
+        users = self._repo.list_users(
+            q=q,
+            role=role,
+            status=status,
+            group_id=group_id,
+            company_id=company_id,
+            department_id=department_id,
+            created_from_ms=created_from_ms,
+            created_to_ms=created_to_ms,
+            limit=limit,
+        )
         return [self._to_response(u) for u in users]
 
     def create_user(self, *, user_data: UserCreate, created_by: str) -> UserResponse:
         role = user_data.role or "viewer"
         if role not in VALID_ROLES:
             raise HTTPException(status_code=400, detail=f"Invalid role: {role}")
+
+        if user_data.company_id is not None and not self._repo.get_company(user_data.company_id):
+            raise HTTPException(status_code=400, detail="公司不存在")
+        if user_data.department_id is not None and not self._repo.get_department(user_data.department_id):
+            raise HTTPException(status_code=400, detail="部门不存在")
 
         group_ids = user_data.group_ids
         if not group_ids:
@@ -73,6 +99,8 @@ class UsersService:
             username=user_data.username,
             password=user_data.password,
             email=user_data.email,
+            company_id=user_data.company_id,
+            department_id=user_data.department_id,
             # Role is a user label; business permissions come from permission groups (resolver).
             role=role,
             group_id=None,
@@ -97,6 +125,11 @@ class UsersService:
         if role is not None and role not in VALID_ROLES:
             raise HTTPException(status_code=400, detail=f"Invalid role: {role}")
 
+        if user_data.company_id is not None and not self._repo.get_company(user_data.company_id):
+            raise HTTPException(status_code=400, detail="公司不存在")
+        if user_data.department_id is not None and not self._repo.get_department(user_data.department_id):
+            raise HTTPException(status_code=400, detail="部门不存在")
+
         group_ids = user_data.group_ids
 
         if group_ids is not None:
@@ -113,6 +146,8 @@ class UsersService:
         user = self._repo.update_user(
             user_id=user_id,
             email=user_data.email,
+            company_id=user_data.company_id,
+            department_id=user_data.department_id,
             role=role,
             group_id=None,
             status=user_data.status,

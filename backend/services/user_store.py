@@ -18,6 +18,8 @@ class User:
     email: Optional[str] = None
     role: str = "viewer"
     group_id: Optional[int] = None  # 权限组ID（已废弃，保留用于向后兼容）
+    company_id: Optional[int] = None
+    department_id: Optional[int] = None
     group_ids: List[int] = None  # 新字段：权限组ID列表
     status: str = "active"
     created_at_ms: int = 0
@@ -46,7 +48,7 @@ class UserStore:
         cursor = conn.cursor()
         try:
             cursor.execute("""
-                SELECT user_id, username, password_hash, email, role, group_id, status,
+                SELECT user_id, username, password_hash, email, role, group_id, company_id, department_id, status,
                        created_at_ms, last_login_at_ms, created_by
                 FROM users WHERE username = ?
             """, (username,))
@@ -60,10 +62,12 @@ class UserStore:
                     email=row[3],
                     role=row[4],
                     group_id=row[5],
-                    status=row[6],
-                    created_at_ms=row[7],
-                    last_login_at_ms=row[8],
-                    created_by=row[9],
+                    company_id=row[6],
+                    department_id=row[7],
+                    status=row[8],
+                    created_at_ms=row[9],
+                    last_login_at_ms=row[10],
+                    created_by=row[11],
                 )
                 # 加载权限组列表
                 user.group_ids = self._get_user_group_ids(user.user_id, conn)
@@ -78,7 +82,7 @@ class UserStore:
         cursor = conn.cursor()
         try:
             cursor.execute("""
-                SELECT user_id, username, password_hash, email, role, group_id, status,
+                SELECT user_id, username, password_hash, email, role, group_id, company_id, department_id, status,
                        created_at_ms, last_login_at_ms, created_by
                 FROM users WHERE user_id = ?
             """, (user_id,))
@@ -92,10 +96,12 @@ class UserStore:
                     email=row[3],
                     role=row[4],
                     group_id=row[5],
-                    status=row[6],
-                    created_at_ms=row[7],
-                    last_login_at_ms=row[8],
-                    created_by=row[9],
+                    company_id=row[6],
+                    department_id=row[7],
+                    status=row[8],
+                    created_at_ms=row[9],
+                    last_login_at_ms=row[10],
+                    created_by=row[11],
                 )
                 # 加载权限组列表
                 user.group_ids = self._get_user_group_ids(user.user_id, conn)
@@ -140,6 +146,8 @@ class UserStore:
         username: str,
         password: str,
         email: Optional[str] = None,
+        company_id: Optional[int] = None,
+        department_id: Optional[int] = None,
         role: str = "viewer",
         group_id: Optional[int] = None,
         status: str = "active",
@@ -157,10 +165,10 @@ class UserStore:
         try:
             cursor.execute("""
                 INSERT INTO users (
-                    user_id, username, password_hash, email, role, group_id, status,
+                    user_id, username, password_hash, email, role, group_id, company_id, department_id, status,
                     created_at_ms, created_by
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (user_id, username, password_hash, email, role, group_id, status, now_ms, created_by))
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (user_id, username, password_hash, email, role, group_id, company_id, department_id, status, now_ms, created_by))
             conn.commit()
             return User(
                 user_id=user_id,
@@ -169,6 +177,8 @@ class UserStore:
                 email=email,
                 role=role,
                 group_id=group_id,
+                company_id=company_id,
+                department_id=department_id,
                 status=status,
                 created_at_ms=now_ms,
                 created_by=created_by
@@ -182,6 +192,8 @@ class UserStore:
         self,
         user_id: str,
         email: Optional[str] = None,
+        company_id: Optional[int] = None,
+        department_id: Optional[int] = None,
         role: Optional[str] = None,
         group_id: Optional[int] = None,
         status: Optional[str] = None
@@ -192,6 +204,12 @@ class UserStore:
         if email is not None:
             updates.append("email = ?")
             params.append(email)
+        if company_id is not None:
+            updates.append("company_id = ?")
+            params.append(company_id)
+        if department_id is not None:
+            updates.append("department_id = ?")
+            params.append(department_id)
         if role is not None:
             updates.append("role = ?")
             params.append(role)
@@ -237,16 +255,21 @@ class UserStore:
 
     def list_users(
         self,
+        q: Optional[str] = None,
         role: Optional[str] = None,
         status: Optional[str] = None,
         group_id: Optional[int] = None,
+        company_id: Optional[int] = None,
+        department_id: Optional[int] = None,
+        created_from_ms: Optional[int] = None,
+        created_to_ms: Optional[int] = None,
         limit: int = 100,
     ) -> List[User]:
         conn = self._get_connection()
         cursor = conn.cursor()
         try:
             base_query = """
-                SELECT user_id, username, password_hash, email, role, group_id, status,
+                SELECT user_id, username, password_hash, email, role, group_id, company_id, department_id, status,
                        created_at_ms, last_login_at_ms, created_by
                 FROM users
                 WHERE 1=1
@@ -259,6 +282,21 @@ class UserStore:
             if status:
                 base_query += " AND status = ?"
                 base_params.append(status)
+            if company_id is not None:
+                base_query += " AND company_id = ?"
+                base_params.append(company_id)
+            if department_id is not None:
+                base_query += " AND department_id = ?"
+                base_params.append(department_id)
+            if q:
+                base_query += " AND username LIKE ?"
+                base_params.append(f"%{q}%")
+            if created_from_ms is not None:
+                base_query += " AND created_at_ms >= ?"
+                base_params.append(created_from_ms)
+            if created_to_ms is not None:
+                base_query += " AND created_at_ms <= ?"
+                base_params.append(created_to_ms)
 
             query = base_query
             params: list[object] = list(base_params)
@@ -292,10 +330,12 @@ class UserStore:
                     email=row[3],
                     role=row[4],
                     group_id=row[5],
-                    status=row[6],
-                    created_at_ms=row[7],
-                    last_login_at_ms=row[8],
-                    created_by=row[9],
+                    company_id=row[6],
+                    department_id=row[7],
+                    status=row[8],
+                    created_at_ms=row[9],
+                    last_login_at_ms=row[10],
+                    created_by=row[11],
                 )
                 # 加载权限组列表
                 user.group_ids = self._get_user_group_ids(user.user_id, conn)

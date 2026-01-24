@@ -10,6 +10,7 @@ from backend.services.permission_group_store import PermissionGroupStore
 from backend.services.ragflow_connection import create_ragflow_connection
 from backend.services.ragflow_chat_service import RagflowChatService
 from backend.services.ragflow_service import RagflowService
+from backend.services.org_directory_store import OrgDirectoryStore
 from backend.services.user_store import UserStore
 
 
@@ -23,6 +24,7 @@ class AppDependencies:
     ragflow_chat_service: RagflowChatService
     chat_session_store: ChatSessionStore
     permission_group_store: PermissionGroupStore
+    org_directory_store: OrgDirectoryStore
 
 
 def create_dependencies(db_path: str | None = None) -> AppDependencies:
@@ -42,4 +44,5 @@ def create_dependencies(db_path: str | None = None) -> AppDependencies:
         ragflow_chat_service=RagflowChatService(session_store=chat_session_store, connection=ragflow_conn),
         chat_session_store=chat_session_store,
         permission_group_store=PermissionGroupStore(database_path=str(db_path)),
+        org_directory_store=OrgDirectoryStore(db_path=str(db_path)),
     )

@@ -221,6 +221,8 @@ def _ensure_users_table(conn: sqlite3.Connection) -> None:
             email TEXT,
             role TEXT NOT NULL DEFAULT 'viewer',
             group_id INTEGER,
+            company_id INTEGER,
+            department_id INTEGER,
             status TEXT NOT NULL DEFAULT 'active',
             created_at_ms INTEGER NOT NULL,
             last_login_at_ms INTEGER,
@@ -231,6 +233,98 @@ def _ensure_users_table(conn: sqlite3.Connection) -> None:
     conn.execute("CREATE INDEX IF NOT EXISTS idx_users_username ON users(username)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_users_role ON users(role)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_users_group_id ON users(group_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_users_company_id ON users(company_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_users_department_id ON users(department_id)")
+
+
+def _ensure_companies_table(conn: sqlite3.Connection) -> None:
+    if _table_exists(conn, "companies"):
+        return
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS companies (
+            company_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL UNIQUE,
+            created_at_ms INTEGER NOT NULL,
+            updated_at_ms INTEGER NOT NULL
+        )
+        """
+    )
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_companies_name ON companies(name)")
+
+
+def _ensure_departments_table(conn: sqlite3.Connection) -> None:
+    if _table_exists(conn, "departments"):
+        return
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS departments (
+            department_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL UNIQUE,
+            created_at_ms INTEGER NOT NULL,
+            updated_at_ms INTEGER NOT NULL
+        )
+        """
+    )
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_departments_name ON departments(name)")
+
+
+def _ensure_org_directory_audit_logs_table(conn: sqlite3.Connection) -> None:
+    if _table_exists(conn, "org_directory_audit_logs"):
+        return
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS org_directory_audit_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            entity_type TEXT NOT NULL,
+            action TEXT NOT NULL,
+            entity_id INTEGER,
+            before_name TEXT,
+            after_name TEXT,
+            actor_user_id TEXT NOT NULL,
+            created_at_ms INTEGER NOT NULL
+        )
+        """
+    )
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_org_audit_type ON org_directory_audit_logs(entity_type)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_org_audit_action ON org_directory_audit_logs(action)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_org_audit_time ON org_directory_audit_logs(created_at_ms)")
+
+
+def _seed_default_companies(conn: sqlite3.Connection) -> None:
+    if not _table_exists(conn, "companies"):
+        return
+    cur = conn.execute("SELECT COUNT(*) FROM companies")
+    row = cur.fetchone()
+    if not row or row[0] != 0:
+        return
+
+    import time as _time
+
+    now_ms = int(_time.time() * 1000)
+    names = ["瑛泰医疗", "璞润医疗", "七木医疗", "璞慧医疗", "自动化所", "璞霖医疗", "其他"]
+    conn.executemany(
+        "INSERT OR IGNORE INTO companies (name, created_at_ms, updated_at_ms) VALUES (?, ?, ?)",
+        [(n, now_ms, now_ms) for n in names],
+    )
+
+
+def _seed_default_departments(conn: sqlite3.Connection) -> None:
+    if not _table_exists(conn, "departments"):
+        return
+    cur = conn.execute("SELECT COUNT(*) FROM departments")
+    row = cur.fetchone()
+    if not row or row[0] != 0:
+        return
+
+    import time as _time
+
+    now_ms = int(_time.time() * 1000)
+    names = ["技术部", "质量部", "生产部", "行政部", "总经办", "董办", "人事部", "法务部", "财务部"]
+    conn.executemany(
+        "INSERT OR IGNORE INTO departments (name, created_at_ms, updated_at_ms) VALUES (?, ?, ?)",
+        [(n, now_ms, now_ms) for n in names],
+    )
 
 
 def _ensure_kb_documents_table(conn: sqlite3.Connection) -> None:
@@ -338,6 +432,20 @@ def ensure_kb_ref_columns(db_path: str | Path) -> None:
         _ensure_data_security_settings_table(conn)
         _ensure_backup_jobs_table(conn)
         _add_full_backup_columns_to_data_security(conn)
+
+        # Org directory (companies/departments) and audit logs
+        _ensure_companies_table(conn)
+        _ensure_departments_table(conn)
+        _ensure_org_directory_audit_logs_table(conn)
+        _seed_default_companies(conn)
+        _seed_default_departments(conn)
+
+        # Add org columns to users table (for older DBs).
+        if _table_exists(conn, "users"):
+            _add_column_if_missing(conn, "users", "company_id INTEGER")
+            _add_column_if_missing(conn, "users", "department_id INTEGER")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_users_company_id ON users(company_id)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_users_department_id ON users(department_id)")
 
         _ensure_download_logs_table(conn)
         _ensure_deletion_logs_table(conn)

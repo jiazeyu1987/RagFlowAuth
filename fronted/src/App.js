@@ -12,6 +12,7 @@ import Chat from './pages/Chat';
 import Agents from './pages/Agents';
 import PermissionGroupManagement from './pages/PermissionGroupManagement';
 import DataSecurity from './pages/DataSecurity';
+import OrgDirectoryManagement from './pages/OrgDirectoryManagement';
 import Unauthorized from './pages/Unauthorized';
 import PermissionGuard from './components/PermissionGuard';
 
@@ -105,6 +106,16 @@ function App() {
               <PermissionGuard allowedRoles={['admin']}>
                 <Layout>
                   <PermissionGroupManagement />
+                </Layout>
+              </PermissionGuard>
+            }
+          />
+          <Route
+            path="/org-directory"
+            element={
+              <PermissionGuard allowedRoles={['admin']}>
+                <Layout>
+                  <OrgDirectoryManagement />
                 </Layout>
               </PermissionGuard>
             }

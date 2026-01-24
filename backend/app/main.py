@@ -61,6 +61,7 @@ def create_app() -> FastAPI:
         diagnostics,
         knowledge,
         me,
+        org_directory,
         permission_groups,
         ragflow,
         review,
@@ -77,6 +78,7 @@ def create_app() -> FastAPI:
     app.include_router(me.router, prefix="/api", tags=["Me"])
     app.include_router(data_security.router, prefix="/api", tags=["Data Security"])
     app.include_router(permission_groups.create_router(), prefix="/api", tags=["Permission Groups"])
+    app.include_router(org_directory.router, prefix="/api", tags=["Org Directory"])
     app.include_router(diagnostics.router, prefix="/api", tags=["Diagnostics"])
 
     @app.get("/health")

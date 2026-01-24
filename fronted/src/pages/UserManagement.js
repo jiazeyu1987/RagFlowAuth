@@ -1,11 +1,22 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { permissionGroupsApi } from '../features/permissionGroups/api';
 import { usersApi } from '../features/users/api';
+import { orgDirectoryApi } from '../features/orgDirectory/api';
+
+const DEFAULT_FILTERS = {
+  q: '',
+  company_id: '',
+  department_id: '',
+  status: '',
+  group_id: '',
+  created_from: '',
+  created_to: '',
+};
 
 const UserManagement = () => {
   const { can } = useAuth();
-  const [users, setUsers] = useState([]);
+  const [allUsers, setAllUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [canManageUsers, setCanManageUsers] = useState(false);
@@ -14,8 +25,13 @@ const UserManagement = () => {
     username: '',
     password: '',
     email: '',
+    company_id: '',
+    department_id: '',
     group_ids: [],
   });
+
+  // 用户筛选
+  const [filters, setFilters] = useState(DEFAULT_FILTERS);
 
   // 权限组相关 state
   const [availableGroups, setAvailableGroups] = useState([]);
@@ -23,28 +39,51 @@ const UserManagement = () => {
   const [showGroupModal, setShowGroupModal] = useState(false);
   const [selectedGroupIds, setSelectedGroupIds] = useState([]);
 
-  useEffect(() => {
-    fetchUsers();
-    fetchPermissionGroups();
-  }, []);
+  // 公司/部门下拉数据
+  const [companies, setCompanies] = useState([]);
+  const [departments, setDepartments] = useState([]);
 
   useEffect(() => {
     setCanManageUsers(can('users', 'manage'));
   }, [can]);
 
-  const fetchUsers = async () => {
+  const buildListParams = useCallback((f) => {
+    const params = {};
+
+    if (f.q && f.q.trim()) params.q = f.q.trim();
+    if (f.company_id) params.company_id = String(f.company_id);
+    if (f.department_id) params.department_id = String(f.department_id);
+    if (f.status) params.status = f.status;
+    if (f.group_id) params.group_id = String(f.group_id);
+
+    if (f.created_from) {
+      const fromMs = new Date(`${f.created_from}T00:00:00`).getTime();
+      if (!Number.isNaN(fromMs)) params.created_from_ms = String(fromMs);
+    }
+    if (f.created_to) {
+      const toMs = new Date(`${f.created_to}T23:59:59.999`).getTime();
+      if (!Number.isNaN(toMs)) params.created_to_ms = String(toMs);
+    }
+
+    // For admin UI, we want enough rows for client-side filtering.
+    params.limit = '2000';
+
+    return params;
+  }, []);
+
+  const fetchUsers = useCallback(async () => {
     try {
       setLoading(true);
-      const data = await usersApi.list();
-      setUsers(data);
+      const data = await usersApi.list(buildListParams(DEFAULT_FILTERS));
+      setAllUsers(data);
     } catch (err) {
       setError(err.message);
     } finally {
       setLoading(false);
     }
-  };
+  }, [buildListParams]);
 
-  const fetchPermissionGroups = async () => {
+  const fetchPermissionGroups = useCallback(async () => {
     try {
       const data = await permissionGroupsApi.list();
       if (data.ok) {
@@ -53,14 +92,71 @@ const UserManagement = () => {
     } catch (err) {
       console.error('Failed to load permission groups:', err);
     }
-  };
+  }, []);
+
+  const fetchOrgDirectory = useCallback(async () => {
+    try {
+      const [companyList, deptList] = await Promise.all([
+        orgDirectoryApi.listCompanies(),
+        orgDirectoryApi.listDepartments(),
+      ]);
+      setCompanies(Array.isArray(companyList) ? companyList : []);
+      setDepartments(Array.isArray(deptList) ? deptList : []);
+    } catch (err) {
+      console.error('Failed to load org directory:', err);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchUsers();
+    fetchPermissionGroups();
+    fetchOrgDirectory();
+  }, [fetchOrgDirectory, fetchPermissionGroups, fetchUsers]);
+
+  const filteredUsers = useMemo(() => {
+    const q = (filters.q || '').trim();
+    const companyId = filters.company_id ? Number(filters.company_id) : null;
+    const departmentId = filters.department_id ? Number(filters.department_id) : null;
+    const status = filters.status || '';
+    const groupId = filters.group_id ? Number(filters.group_id) : null;
+
+    let fromMs = null;
+    let toMs = null;
+    if (filters.created_from) {
+      const ms = new Date(`${filters.created_from}T00:00:00`).getTime();
+      fromMs = Number.isNaN(ms) ? null : ms;
+    }
+    if (filters.created_to) {
+      const ms = new Date(`${filters.created_to}T23:59:59.999`).getTime();
+      toMs = Number.isNaN(ms) ? null : ms;
+    }
+
+    return (allUsers || []).filter((u) => {
+      if (q && !(u.username || '').includes(q)) return false;
+      if (companyId != null && u.company_id !== companyId) return false;
+      if (departmentId != null && u.department_id !== departmentId) return false;
+      if (status && u.status !== status) return false;
+      if (groupId != null) {
+        const gids = u.group_ids || (u.permission_groups || []).map((pg) => pg.group_id);
+        if (!Array.isArray(gids) || !gids.includes(groupId)) return false;
+      }
+      if (fromMs != null && (u.created_at_ms || 0) < fromMs) return false;
+      if (toMs != null && (u.created_at_ms || 0) > toMs) return false;
+      return true;
+    });
+  }, [allUsers, filters]);
 
   const handleCreateUser = async (e) => {
     e.preventDefault();
     try {
-      await usersApi.create(newUser);
+      const payload = {
+        ...newUser,
+        company_id: newUser.company_id ? Number(newUser.company_id) : null,
+        department_id: newUser.department_id ? Number(newUser.department_id) : null,
+      };
+      await usersApi.create(payload);
       setShowCreateModal(false);
-      setNewUser({ username: '', password: '', email: '', group_ids: [] });
+      setNewUser({ username: '', password: '', email: '', company_id: '', department_id: '', group_ids: [] });
       fetchUsers();
     } catch (err) {
       setError(err.message);
@@ -136,6 +232,125 @@ const UserManagement = () => {
         )}
       </div>
 
+      {/* 筛选栏 */}
+      <div style={{
+        backgroundColor: 'white',
+        borderRadius: '8px',
+        boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
+        padding: '16px',
+        marginBottom: '16px',
+      }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', alignItems: 'flex-end' }}>
+          <div style={{ minWidth: '220px' }}>
+            <label style={{ display: 'block', marginBottom: '6px', fontWeight: 500 }}>搜索用户名</label>
+            <input
+              value={filters.q}
+              onChange={(e) => setFilters({ ...filters, q: e.target.value })}
+              placeholder="支持模糊搜索"
+              style={{
+                width: '100%',
+                padding: '8px',
+                border: '1px solid #d1d5db',
+                borderRadius: '6px',
+                boxSizing: 'border-box',
+              }}
+            />
+          </div>
+
+          <div style={{ minWidth: '180px' }}>
+            <label style={{ display: 'block', marginBottom: '6px', fontWeight: 500 }}>公司</label>
+            <select
+              value={filters.company_id}
+              onChange={(e) => setFilters({ ...filters, company_id: e.target.value })}
+              style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '6px' }}
+            >
+              <option value="">全部</option>
+              {companies.map((c) => (
+                <option key={c.id} value={String(c.id)}>{c.name}</option>
+              ))}
+            </select>
+          </div>
+
+          <div style={{ minWidth: '180px' }}>
+            <label style={{ display: 'block', marginBottom: '6px', fontWeight: 500 }}>部门</label>
+            <select
+              value={filters.department_id}
+              onChange={(e) => setFilters({ ...filters, department_id: e.target.value })}
+              style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '6px' }}
+            >
+              <option value="">全部</option>
+              {departments.map((d) => (
+                <option key={d.id} value={String(d.id)}>{d.name}</option>
+              ))}
+            </select>
+          </div>
+
+          <div style={{ minWidth: '140px' }}>
+            <label style={{ display: 'block', marginBottom: '6px', fontWeight: 500 }}>状态</label>
+            <select
+              value={filters.status}
+              onChange={(e) => setFilters({ ...filters, status: e.target.value })}
+              style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '6px' }}
+            >
+              <option value="">全部</option>
+              <option value="active">激活</option>
+              <option value="inactive">停用</option>
+            </select>
+          </div>
+
+          <div style={{ minWidth: '180px' }}>
+            <label style={{ display: 'block', marginBottom: '6px', fontWeight: 500 }}>权限组</label>
+            <select
+              value={filters.group_id}
+              onChange={(e) => setFilters({ ...filters, group_id: e.target.value })}
+              style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '6px' }}
+            >
+              <option value="">全部</option>
+              {availableGroups.map((g) => (
+                <option key={g.group_id} value={String(g.group_id)}>{g.group_name}</option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label style={{ display: 'block', marginBottom: '6px', fontWeight: 500 }}>创建时间(从)</label>
+            <input
+              type="date"
+              value={filters.created_from}
+              onChange={(e) => setFilters({ ...filters, created_from: e.target.value })}
+              style={{ padding: '8px', border: '1px solid #d1d5db', borderRadius: '6px' }}
+            />
+          </div>
+
+          <div>
+            <label style={{ display: 'block', marginBottom: '6px', fontWeight: 500 }}>创建时间(到)</label>
+            <input
+              type="date"
+              value={filters.created_to}
+              onChange={(e) => setFilters({ ...filters, created_to: e.target.value })}
+              style={{ padding: '8px', border: '1px solid #d1d5db', borderRadius: '6px' }}
+            />
+          </div>
+
+          <button
+            type="button"
+            onClick={() => {
+              setFilters(DEFAULT_FILTERS);
+            }}
+            style={{
+              padding: '10px 14px',
+              backgroundColor: '#6b7280',
+              color: 'white',
+              border: 'none',
+              borderRadius: '6px',
+              cursor: 'pointer',
+            }}
+          >
+            重置
+          </button>
+        </div>
+      </div>
+
       <div style={{
         backgroundColor: 'white',
         borderRadius: '8px',
@@ -147,6 +362,8 @@ const UserManagement = () => {
             <tr>
               <th style={{ padding: '12px 16px', textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>用户名</th>
               <th style={{ padding: '12px 16px', textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>邮箱</th>
+              <th style={{ padding: '12px 16px', textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>公司</th>
+              <th style={{ padding: '12px 16px', textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>部门</th>
               <th style={{ padding: '12px 16px', textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>状态</th>
               <th style={{ padding: '12px 16px', textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>权限组</th>
               <th style={{ padding: '12px 16px', textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>创建时间</th>
@@ -154,10 +371,12 @@ const UserManagement = () => {
             </tr>
           </thead>
           <tbody>
-            {users.map((user) => (
+            {filteredUsers.map((user) => (
               <tr key={user.user_id} style={{ borderBottom: '1px solid #e5e7eb' }}>
                 <td style={{ padding: '12px 16px' }}>{user.username}</td>
                 <td style={{ padding: '12px 16px', color: '#6b7280' }}>{user.email || '-'}</td>
+                <td style={{ padding: '12px 16px', color: '#6b7280' }}>{user.company_name || '-'}</td>
+                <td style={{ padding: '12px 16px', color: '#6b7280' }}>{user.department_name || '-'}</td>
                 <td style={{ padding: '12px 16px' }}>
                   <span style={{
                     color: user.status === 'active' ? '#10b981' : '#ef4444',
@@ -229,7 +448,7 @@ const UserManagement = () => {
           </tbody>
         </table>
 
-        {users.length === 0 && (
+        {filteredUsers.length === 0 && (
           <div style={{ padding: '48px', textAlign: 'center', color: '#6b7280' }}>
             暂无用户
           </div>
@@ -314,6 +533,54 @@ const UserManagement = () => {
                 />
               </div>
 
+              <div style={{ marginBottom: '16px' }}>
+                <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500' }}>
+                  公司
+                </label>
+                <select
+                  required
+                  value={newUser.company_id}
+                  onChange={(e) => setNewUser({ ...newUser, company_id: e.target.value })}
+                  style={{
+                    width: '100%',
+                    padding: '8px',
+                    border: '1px solid #d1d5db',
+                    borderRadius: '4px',
+                    boxSizing: 'border-box',
+                    backgroundColor: 'white',
+                  }}
+                >
+                  <option value="" disabled>请选择公司</option>
+                  {companies.map((c) => (
+                    <option key={c.id} value={String(c.id)}>{c.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div style={{ marginBottom: '16px' }}>
+                <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500' }}>
+                  部门
+                </label>
+                <select
+                  required
+                  value={newUser.department_id}
+                  onChange={(e) => setNewUser({ ...newUser, department_id: e.target.value })}
+                  style={{
+                    width: '100%',
+                    padding: '8px',
+                    border: '1px solid #d1d5db',
+                    borderRadius: '4px',
+                    boxSizing: 'border-box',
+                    backgroundColor: 'white',
+                  }}
+                >
+                  <option value="" disabled>请选择部门</option>
+                  {departments.map((d) => (
+                    <option key={d.id} value={String(d.id)}>{d.name}</option>
+                  ))}
+                </select>
+              </div>
+
               <div style={{ marginBottom: '24px' }}>
                 <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500' }}>
                   权限组 (可多选)
@@ -392,7 +659,7 @@ const UserManagement = () => {
                   type="button"
                   onClick={() => {
                     setShowCreateModal(false);
-                    setNewUser({ username: '', password: '', email: '', group_ids: [] });
+                    setNewUser({ username: '', password: '', email: '', company_id: '', department_id: '', group_ids: [] });
                   }}
                   style={{
                     flex: 1,

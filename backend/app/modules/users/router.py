@@ -23,12 +23,27 @@ def get_service(deps: AppDependencies = Depends(get_deps)) -> UsersService:
 async def list_users(
     _: AdminOnly,
     service: UsersService = Depends(get_service),
+    q: Optional[str] = None,
     role: Optional[str] = None,
     group_id: Optional[int] = None,
+    company_id: Optional[int] = None,
+    department_id: Optional[int] = None,
     status: Optional[str] = None,
+    created_from_ms: Optional[int] = None,
+    created_to_ms: Optional[int] = None,
     limit: int = 100,
 ):
-    return service.list_users(role=role, group_id=group_id, status=status, limit=limit)
+    return service.list_users(
+        q=q,
+        role=role,
+        group_id=group_id,
+        company_id=company_id,
+        department_id=department_id,
+        status=status,
+        created_from_ms=created_from_ms,
+        created_to_ms=created_to_ms,
+        limit=limit,
+    )
 
 
 @router.post("", response_model=UserResponse, status_code=201)
