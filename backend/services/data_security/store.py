@@ -3,6 +3,7 @@ from __future__ import annotations
 import time
 from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
 from backend.database.paths import resolve_auth_db_path
 from backend.database.sqlite import connect_sqlite
@@ -14,9 +15,79 @@ class DataSecurityStore:
     def __init__(self, db_path: str | Path | None = None) -> None:
         self.db_path = resolve_auth_db_path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        self._lock_owner = uuid4().hex
 
     def _conn(self):
         return connect_sqlite(self.db_path)
+
+    def _acquire_lock(self, *, name: str, job_id: int | None, ttl_ms: int) -> bool:
+        """
+        Acquire a cross-process lock stored in sqlite.
+
+        Uses `BEGIN IMMEDIATE` to ensure the check-and-set is atomic across processes.
+        If the lock exists but is older than ttl_ms, it will be taken over.
+        """
+        name = str(name or "").strip() or "backup"
+        now_ms = int(time.time() * 1000)
+        ttl_ms = int(max(1, ttl_ms))
+
+        conn = self._conn()
+        try:
+            conn.execute("BEGIN IMMEDIATE")
+            row = conn.execute("SELECT owner, acquired_at_ms FROM backup_locks WHERE name = ?", (name,)).fetchone()
+            if not row:
+                conn.execute(
+                    "INSERT INTO backup_locks (name, owner, job_id, acquired_at_ms) VALUES (?, ?, ?, ?)",
+                    (name, self._lock_owner, job_id, now_ms),
+                )
+                conn.commit()
+                return True
+
+            acquired_at_ms = int(row["acquired_at_ms"] or 0)
+            if now_ms - acquired_at_ms > ttl_ms:
+                conn.execute(
+                    "UPDATE backup_locks SET owner = ?, job_id = ?, acquired_at_ms = ? WHERE name = ?",
+                    (self._lock_owner, job_id, now_ms, name),
+                )
+                conn.commit()
+                return True
+
+            conn.rollback()
+            return False
+        finally:
+            conn.close()
+
+    def _release_lock(self, *, name: str) -> None:
+        """Release lock if owned by this store instance (best-effort)."""
+        name = str(name or "").strip() or "backup"
+        conn = self._conn()
+        try:
+            conn.execute("BEGIN IMMEDIATE")
+            conn.execute("DELETE FROM backup_locks WHERE name = ? AND owner = ?", (name, self._lock_owner))
+            conn.commit()
+        except Exception:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+        finally:
+            conn.close()
+
+    def try_acquire_backup_lock(self, *, job_id: int | None = None, ttl_ms: int = 24 * 60 * 60 * 1000) -> bool:
+        return self._acquire_lock(name="backup", job_id=job_id, ttl_ms=ttl_ms)
+
+    def release_backup_lock(self) -> None:
+        self._release_lock(name="backup")
+
+    def get_active_job_id(self) -> int | None:
+        """Return the newest queued/running job id, if any."""
+        try:
+            for job in self.list_jobs(limit=5):
+                if job.status in ("queued", "running"):
+                    return int(job.id)
+        except Exception:
+            return None
+        return None
 
     def get_settings(self) -> DataSecuritySettings:
         conn = self._conn()
@@ -51,6 +122,10 @@ class DataSecurityStore:
                 upload_target_path=get_col("upload_target_path"),
                 full_backup_enabled=bool(get_col("full_backup_enabled", 0)),
                 full_backup_include_images=bool(get_col("full_backup_include_images", 1)),
+                incremental_schedule=get_col("incremental_schedule"),
+                full_backup_schedule=get_col("full_backup_schedule"),
+                last_incremental_backup_time_ms=int(get_col("last_incremental_backup_time_ms")) if get_col("last_incremental_backup_time_ms") is not None else None,
+                last_full_backup_time_ms=int(get_col("last_full_backup_time_ms")) if get_col("last_full_backup_time_ms") is not None else None,
             )
         finally:
             conn.close()
@@ -71,6 +146,8 @@ class DataSecurityStore:
             "auth_db_path",
             "full_backup_enabled",
             "full_backup_include_images",
+            "incremental_schedule",
+            "full_backup_schedule",
         }
         fields = {k: updates.get(k) for k in allowed if k in updates}
         fields["updated_at_ms"] = now_ms
@@ -94,16 +171,63 @@ class DataSecurityStore:
         finally:
             conn.close()
 
+    def update_last_incremental_backup_time(self, when_ms: int | None = None) -> None:
+        """Update the last successful incremental backup time."""
+        now_ms = int(time.time() * 1000) if when_ms is None else int(when_ms)
+        conn = self._conn()
+        try:
+            conn.execute("UPDATE data_security_settings SET last_incremental_backup_time_ms = ? WHERE id = 1", (now_ms,))
+            conn.commit()
+        finally:
+            conn.close()
+
+    def update_last_full_backup_time(self, when_ms: int | None = None) -> None:
+        """Update the last successful full backup time."""
+        now_ms = int(time.time() * 1000) if when_ms is None else int(when_ms)
+        conn = self._conn()
+        try:
+            conn.execute("UPDATE data_security_settings SET last_full_backup_time_ms = ? WHERE id = 1", (now_ms,))
+            conn.commit()
+        finally:
+            conn.close()
+
     def create_job(self, *, status: str = "queued", message: str | None = None, detail: str | None = None) -> BackupJob:
         now_ms = int(time.time() * 1000)
         conn = self._conn()
         try:
             cur = conn.execute(
                 """
-                INSERT INTO backup_jobs (status, progress, message, detail, output_dir, created_at_ms)
-                VALUES (?, ?, ?, ?, ?, ?)
+                INSERT INTO backup_jobs (kind, status, progress, message, detail, output_dir, created_at_ms)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
                 """,
-                (status, 0, message, detail, None, now_ms),
+                ("incremental", status, 0, message, detail, None, now_ms),
+            )
+            job_id = int(cur.lastrowid)
+            conn.commit()
+        finally:
+            conn.close()
+        return self.get_job(job_id)
+
+    def create_job_v2(
+        self,
+        *,
+        kind: str,
+        status: str = "queued",
+        message: str | None = None,
+        detail: str | None = None,
+    ) -> BackupJob:
+        kind = str(kind or "incremental")
+        if kind not in ("incremental", "full"):
+            kind = "incremental"
+        now_ms = int(time.time() * 1000)
+        conn = self._conn()
+        try:
+            cur = conn.execute(
+                """
+                INSERT INTO backup_jobs (kind, status, progress, message, detail, output_dir, created_at_ms)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (kind, status, 0, message, detail, None, now_ms),
             )
             job_id = int(cur.lastrowid)
             conn.commit()
@@ -161,6 +285,7 @@ class DataSecurityStore:
                 raise KeyError(f"job not found: {job_id}")
             return BackupJob(
                 id=int(row["id"]),
+                kind=str(row["kind"] or "incremental"),
                 status=str(row["status"]),
                 progress=int(row["progress"] or 0),
                 message=row["message"],
@@ -184,6 +309,7 @@ class DataSecurityStore:
             return [
                 BackupJob(
                     id=int(r["id"]),
+                    kind=str(r["kind"] or "incremental"),
                     status=str(r["status"]),
                     progress=int(r["progress"] or 0),
                     message=r["message"],
@@ -197,4 +323,3 @@ class DataSecurityStore:
             ]
         finally:
             conn.close()
-

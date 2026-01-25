@@ -27,6 +27,12 @@ class DataSecuritySettings:
     # 全量备份
     full_backup_enabled: bool
     full_backup_include_images: bool
+    # Cron-based scheduling
+    incremental_schedule: str | None  # Cron expression for incremental backups
+    full_backup_schedule: str | None  # Cron expression for full backups
+    # Last successful backup times (for reliable scheduling)
+    last_incremental_backup_time_ms: int | None
+    last_full_backup_time_ms: int | None
 
     def target_path(self) -> str | None:
         if self.target_mode == "local":
@@ -42,6 +48,7 @@ class DataSecuritySettings:
 @dataclass(frozen=True)
 class BackupJob:
     id: int
+    kind: str
     status: str
     progress: int
     message: str | None
@@ -54,6 +61,7 @@ class BackupJob:
     def as_dict(self) -> dict[str, Any]:
         return {
             "id": self.id,
+            "kind": self.kind,
             "status": self.status,
             "progress": self.progress,
             "message": self.message,
@@ -63,4 +71,3 @@ class BackupJob:
             "started_at_ms": self.started_at_ms,
             "finished_at_ms": self.finished_at_ms,
         }
-

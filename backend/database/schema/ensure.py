@@ -13,8 +13,12 @@ from .audit_logs import (
 )
 from .chat_sessions import ensure_chat_sessions_table
 from .data_security import (
+    add_cron_schedule_columns_to_data_security,
+    add_backup_job_kind_column,
     add_full_backup_columns_to_data_security,
+    add_last_backup_time_columns_to_data_security,
     ensure_backup_jobs_table,
+    ensure_backup_locks_table,
     ensure_data_security_settings_table,
 )
 from .kb_documents import ensure_kb_documents_table
@@ -60,7 +64,11 @@ def ensure_schema(db_path: str | Path) -> None:
         # Data security / backup
         ensure_data_security_settings_table(conn)
         ensure_backup_jobs_table(conn)
+        ensure_backup_locks_table(conn)
+        add_backup_job_kind_column(conn)
         add_full_backup_columns_to_data_security(conn)
+        add_cron_schedule_columns_to_data_security(conn)
+        add_last_backup_time_columns_to_data_security(conn)
 
         # Org directory (companies/departments) + audit
         ensure_companies_table(conn)
@@ -82,4 +90,3 @@ def ensure_schema(db_path: str | Path) -> None:
         conn.commit()
     finally:
         conn.close()
-

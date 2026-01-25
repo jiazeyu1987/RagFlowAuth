@@ -207,6 +207,8 @@ $BackendCmd += " -p ${BackendPort}:${BackendPort}"
 $BackendCmd += " -v ${DataDir}/data:/app/data"
 $BackendCmd += " -v ${DataDir}/uploads:/app/uploads"
 $BackendCmd += " -v ${DataDir}/ragflow_config.json:/app/ragflow_config.json:ro"
+$BackendCmd += " -v ${DataDir}/ragflow_compose:/app/ragflow_compose:ro"
+$BackendCmd += " -v /var/run/docker.sock:/var/run/docker.sock:ro"
 $BackendCmd += " --restart unless-stopped"
 
 if ($BackendVolumes) {

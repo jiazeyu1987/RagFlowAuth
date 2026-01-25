@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import logging
-import threading
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
@@ -18,17 +17,27 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     from backend.app.dependencies import create_dependencies
-    from backend.app.modules.data_security.scheduler import start_data_security_scheduler
+    from backend.services.data_security_scheduler_v2 import init_scheduler_v2, stop_scheduler_v2
 
     app.state.deps = create_dependencies()
     logger.info("Dependencies initialized")
 
-    stop_event = threading.Event()
-    app.state.data_security_scheduler_stop = stop_event
-    app.state.data_security_scheduler_thread = start_data_security_scheduler(stop_event=stop_event)
+    try:
+        deps = app.state.deps
+        scheduler = init_scheduler_v2(store=deps.data_security_store)
+        scheduler.start()
+        logger.info("Backup scheduler V2 started")
+    except Exception as e:
+        logger.error(f"Failed to start improved backup scheduler V2: {e}", exc_info=True)
+        raise
 
     yield
-    stop_event.set()
+    try:
+        stop_scheduler_v2()
+        logger.info("Backup scheduler V2 stopped")
+    except Exception as e:
+        logger.error(f"Error stopping scheduler V2: {e}", exc_info=True)
+
     logger.info("Shutting down...")
 
 

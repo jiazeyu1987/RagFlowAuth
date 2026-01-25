@@ -30,7 +30,13 @@ class DataSecurityBackupService:
     def __init__(self, store: DataSecurityStore) -> None:
         self.store = store
 
-    def run_job(self, job_id: int) -> None:
+    def run_job(self, job_id: int, *, include_images: bool | None = None) -> None:
+        job_kind: str | None = None
+        try:
+            job_kind = self.store.get_job(job_id).kind
+        except Exception:
+            job_kind = None
+
         settings = self.store.get_settings()
         target = settings.target_path()
         if not target:
@@ -39,6 +45,9 @@ class DataSecurityBackupService:
         ok, why = docker_ok()
         if not ok:
             raise RuntimeError(f"Docker 不可用：{why}")
+
+        if include_images is None:
+            include_images = bool(getattr(settings, "full_backup_include_images", 1))
 
         now_ms = int(time.time() * 1000)
         self.store.update_job(job_id, status="running", progress=1, message="开始备份", started_at_ms=now_ms)
@@ -90,7 +99,7 @@ class DataSecurityBackupService:
                 prog += step
 
             # 3) images (optional)
-            if getattr(settings, "full_backup_include_images", 1):
+            if include_images:
                 images, err = list_compose_images(compose_file)
                 if err:
                     self.store.update_job(job_id, message=f"跳过镜像备份：{err}", progress=min(95, prog))
@@ -115,5 +124,28 @@ class DataSecurityBackupService:
                 except Exception:
                     pass
 
-        self.store.update_job(job_id, status="completed", progress=100, message="备份完成", finished_at_ms=int(time.time() * 1000))
+        finished_at_ms = int(time.time() * 1000)
+        self.store.update_job(job_id, status="completed", progress=100, message="备份完成", finished_at_ms=finished_at_ms)
+        try:
+            if job_kind == "full":
+                self.store.update_last_full_backup_time(finished_at_ms)
+            elif job_kind == "incremental":
+                self.store.update_last_incremental_backup_time(finished_at_ms)
+        except Exception:
+            # Best-effort: backup succeeded; scheduling metadata must not fail the job.
+            pass
 
+    def run_incremental_backup_job(self, job_id: int) -> None:
+        """
+        Incremental backup:
+        - Excludes Docker images to keep runtime/size manageable.
+        """
+        self.run_job(job_id, include_images=False)
+
+    def run_full_backup_job(self, job_id: int) -> None:
+        """
+        Full backup:
+        - Respects `full_backup_include_images` in settings.
+        """
+        settings = self.store.get_settings()
+        self.run_job(job_id, include_images=bool(getattr(settings, "full_backup_include_images", 1)))

@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from backend.database.paths import resolve_auth_db_path
 from backend.database.schema_migrations import ensure_schema
 from backend.services.chat_session_store import ChatSessionStore
+from backend.services.data_security import DataSecurityStore
 from backend.services.deletion_log_store import DeletionLogStore
 from backend.services.download_log_store import DownloadLogStore
 from backend.services.kb_store import KbStore
@@ -25,6 +26,7 @@ class AppDependencies:
     chat_session_store: ChatSessionStore
     permission_group_store: PermissionGroupStore
     org_directory_store: OrgDirectoryStore
+    data_security_store: DataSecurityStore
 
 
 def create_dependencies(db_path: str | None = None) -> AppDependencies:
@@ -34,6 +36,7 @@ def create_dependencies(db_path: str | None = None) -> AppDependencies:
 
     chat_session_store = ChatSessionStore(db_path=str(db_path))
     ragflow_conn = create_ragflow_connection()
+    data_security_store = DataSecurityStore(db_path=str(db_path))
 
     return AppDependencies(
         user_store=UserStore(db_path=str(db_path)),
@@ -45,4 +48,5 @@ def create_dependencies(db_path: str | None = None) -> AppDependencies:
         chat_session_store=chat_session_store,
         permission_group_store=PermissionGroupStore(database_path=str(db_path)),
         org_directory_store=OrgDirectoryStore(db_path=str(db_path)),
+        data_security_store=data_security_store,
     )

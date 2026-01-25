@@ -31,6 +31,8 @@ async def get_settings(_: AdminOnly) -> dict[str, Any]:
         "last_run_at_ms": s.last_run_at_ms,
         "full_backup_enabled": getattr(s, 'full_backup_enabled', False),
         "full_backup_include_images": getattr(s, 'full_backup_include_images', True),
+        "incremental_schedule": getattr(s, 'incremental_schedule', None),
+        "full_backup_schedule": getattr(s, 'full_backup_schedule', None),
     }
 
 
@@ -54,13 +56,18 @@ async def update_settings(_: AdminOnly, body: dict[str, Any]) -> dict[str, Any]:
         "last_run_at_ms": s.last_run_at_ms,
         "full_backup_enabled": getattr(s, 'full_backup_enabled', False),
         "full_backup_include_images": getattr(s, 'full_backup_include_images', True),
+        "incremental_schedule": getattr(s, 'incremental_schedule', None),
+        "full_backup_schedule": getattr(s, 'full_backup_schedule', None),
     }
 
 
 @router.post("/admin/data-security/backup/run")
 async def run_backup(_: AdminOnly) -> dict[str, Any]:
-    job_id = start_job_if_idle(reason="手动")
-    return {"job_id": job_id}
+    try:
+        job_id = start_job_if_idle(reason="手动")
+        return {"job_id": job_id}
+    except RuntimeError as e:
+        raise HTTPException(status_code=409, detail=str(e))
 
 
 @router.get("/admin/data-security/backup/jobs")
@@ -83,7 +90,9 @@ async def get_job(_: AdminOnly, job_id: int) -> dict[str, Any]:
 @router.post("/admin/data-security/backup/run-full")
 async def run_full_backup(_: AdminOnly) -> dict[str, Any]:
     """Run a full backup including Docker images, containers, and networks"""
-    job_id = start_job_if_idle(reason="手动全量备份", full_backup=True)
-    return {"job_id": job_id}
-
+    try:
+        job_id = start_job_if_idle(reason="手动全量备份", full_backup=True)
+        return {"job_id": job_id}
+    except RuntimeError as e:
+        raise HTTPException(status_code=409, detail=str(e))
 

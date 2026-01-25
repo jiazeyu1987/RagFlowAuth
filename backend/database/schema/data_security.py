@@ -38,6 +38,7 @@ def ensure_backup_jobs_table(conn: sqlite3.Connection) -> None:
         """
         CREATE TABLE IF NOT EXISTS backup_jobs (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
+            kind TEXT NOT NULL DEFAULT 'incremental',
             status TEXT NOT NULL,
             progress INTEGER NOT NULL DEFAULT 0,
             message TEXT,
@@ -52,9 +53,45 @@ def ensure_backup_jobs_table(conn: sqlite3.Connection) -> None:
     conn.execute("CREATE INDEX IF NOT EXISTS idx_backup_jobs_created ON backup_jobs(created_at_ms)")
 
 
+def ensure_backup_locks_table(conn: sqlite3.Connection) -> None:
+    if table_exists(conn, "backup_locks"):
+        return
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS backup_locks (
+            name TEXT PRIMARY KEY,
+            owner TEXT NOT NULL,
+            job_id INTEGER,
+            acquired_at_ms INTEGER NOT NULL
+        )
+        """
+    )
+
+
+def add_backup_job_kind_column(conn: sqlite3.Connection) -> None:
+    if not table_exists(conn, "backup_jobs"):
+        return
+    add_column_if_missing(conn, "backup_jobs", "kind TEXT NOT NULL DEFAULT 'incremental'")
+
+
 def add_full_backup_columns_to_data_security(conn: sqlite3.Connection) -> None:
     if not table_exists(conn, "data_security_settings"):
         return
     add_column_if_missing(conn, "data_security_settings", "full_backup_enabled INTEGER NOT NULL DEFAULT 0")
     add_column_if_missing(conn, "data_security_settings", "full_backup_include_images INTEGER NOT NULL DEFAULT 1")
 
+
+def add_cron_schedule_columns_to_data_security(conn: sqlite3.Connection) -> None:
+    """Add cron-based scheduling columns to data_security_settings table."""
+    if not table_exists(conn, "data_security_settings"):
+        return
+    add_column_if_missing(conn, "data_security_settings", "incremental_schedule TEXT")
+    add_column_if_missing(conn, "data_security_settings", "full_backup_schedule TEXT")
+
+
+def add_last_backup_time_columns_to_data_security(conn: sqlite3.Connection) -> None:
+    """Add last backup time tracking columns to prevent missed backups after restart."""
+    if not table_exists(conn, "data_security_settings"):
+        return
+    add_column_if_missing(conn, "data_security_settings", "last_incremental_backup_time_ms INTEGER")
+    add_column_if_missing(conn, "data_security_settings", "last_full_backup_time_ms INTEGER")

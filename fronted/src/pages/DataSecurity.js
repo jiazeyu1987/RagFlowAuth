@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { dataSecurityApi } from '../features/dataSecurity/api';
+import { cronToSchedule, scheduleToCron, formatSchedule } from '../features/dataSecurity/scheduleUtils';
 
 const formatTime = (ms) => {
   if (!ms) return '';
@@ -40,6 +41,14 @@ const DataSecurity = () => {
   const [activeJob, setActiveJob] = useState(null);
   const pollTimer = useRef(null);
 
+  // 定时备份状态
+  const [incrementalSchedule, setIncrementalSchedule] = useState(
+    cronToSchedule(null) || { type: 'daily', hour: '18', minute: '30' }
+  );
+  const [fullBackupSchedule, setFullBackupSchedule] = useState(
+    cronToSchedule(null) || { type: 'weekly', hour: '04', minute: '00', weekday: '1' }
+  );
+
   const targetPreview = useMemo(() => {
     if (!settings) return '';
     if (settings.target_mode === 'local') return settings.target_local_dir || '';
@@ -56,6 +65,9 @@ const DataSecurity = () => {
     try {
       const [s, j] = await Promise.all([dataSecurityApi.getSettings(), dataSecurityApi.listJobs(30)]);
       setSettings(s);
+      // 更新定时备份状态
+      setIncrementalSchedule(cronToSchedule(s.incremental_schedule) || { type: 'daily', hour: '18', minute: '30' });
+      setFullBackupSchedule(cronToSchedule(s.full_backup_schedule) || { type: 'weekly', hour: '04', minute: '00', weekday: '1' });
       setJobs(j.jobs || []);
       const latest = (j.jobs || [])[0];
       setActiveJob(latest || null);
@@ -98,7 +110,12 @@ const DataSecurity = () => {
     setSaving(true);
     setError(null);
     try {
-      const updated = await dataSecurityApi.updateSettings(settings);
+      const settingsWithCron = {
+        ...settings,
+        incremental_schedule: scheduleToCron(incrementalSchedule),
+        full_backup_schedule: scheduleToCron(fullBackupSchedule),
+      };
+      const updated = await dataSecurityApi.updateSettings(settingsWithCron);
       setSettings(updated);
     } catch (e) {
       setError(e.message || '保存失败');
@@ -248,20 +265,68 @@ const DataSecurity = () => {
             启用定时备份
           </label>
 
-          <label>
-            备份间隔（分钟）
-            <input
-              type="number"
-              min="1"
-              value={Number(settings?.interval_minutes || 1440)}
-              onChange={(e) => setSettings((p) => ({ ...p, interval_minutes: Number(e.target.value || 1) }))}
-              data-testid="ds-interval-minutes"
-              style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '8px', marginTop: '6px' }}
-            />
-            <div style={{ color: '#6b7280', marginTop: '6px', fontSize: '0.9rem' }}>
-              例如：1440 表示每天一次。启用后，系统会按间隔自动触发备份。
+          <div style={{ borderTop: '1px solid #e5e7eb', paddingTop: '16px', marginTop: '8px' }}>
+            <h4 style={{ margin: '0 0 12px 0', color: '#1f2937' }}>⏰ 定时备份设置</h4>
+
+            {/* 增量备份时间 */}
+            <label style={{ display: 'block', marginBottom: '16px' }}>
+              <div style={{ fontWeight: 600, marginBottom: '8px' }}>增量备份时间</div>
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                <span>每天</span>
+                <input
+                  type="time"
+                  value={`${incrementalSchedule.hour}:${incrementalSchedule.minute}`}
+                  onChange={(e) => {
+                    const [hour, minute] = e.target.value.split(':');
+                    setIncrementalSchedule({ type: 'daily', hour, minute });
+                  }}
+                  style={{ padding: '6px 8px', border: '1px solid #d1d5db', borderRadius: '6px' }}
+                />
+              </div>
+              <div style={{ color: '#6b7280', fontSize: '0.85rem', marginTop: '4px' }}>
+                预览：{formatSchedule(incrementalSchedule)} 执行增量备份
+              </div>
+            </label>
+
+            {/* 全量备份时间 */}
+            <label style={{ display: 'block', marginBottom: '12px' }}>
+              <div style={{ fontWeight: 600, marginBottom: '8px' }}>全量备份时间</div>
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                <span>每周</span>
+                <select
+                  value={fullBackupSchedule.weekday}
+                  onChange={(e) => {
+                    setFullBackupSchedule({ ...fullBackupSchedule, weekday: e.target.value });
+                  }}
+                  style={{ padding: '6px 8px', border: '1px solid #d1d5db', borderRadius: '6px' }}
+                >
+                  <option value="1">周一</option>
+                  <option value="2">周二</option>
+                  <option value="3">周三</option>
+                  <option value="4">周四</option>
+                  <option value="5">周五</option>
+                  <option value="6">周六</option>
+                  <option value="0">周日</option>
+                </select>
+                <input
+                  type="time"
+                  value={`${fullBackupSchedule.hour}:${fullBackupSchedule.minute}`}
+                  onChange={(e) => {
+                    const [hour, minute] = e.target.value.split(':');
+                    setFullBackupSchedule({ ...fullBackupSchedule, hour, minute });
+                  }}
+                  style={{ padding: '6px 8px', border: '1px solid #d1d5db', borderRadius: '6px' }}
+                />
+              </div>
+              <div style={{ color: '#6b7280', fontSize: '0.85rem', marginTop: '4px' }}>
+                预览：{formatSchedule(fullBackupSchedule)} 执行全量备份
+              </div>
+            </label>
+
+            <div style={{ padding: '10px', background: '#f0fdf4', border: '1px solid #86efac', borderRadius: '8px', color: '#166534', fontSize: '0.85rem' }}>
+              💡 系统会按照设定的时间自动执行备份
             </div>
-          </label>
+          </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
             <label>
