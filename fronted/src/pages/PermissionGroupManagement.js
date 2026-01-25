@@ -174,6 +174,7 @@ const PermissionGroupManagement = () => {
         </div>
         <button
           onClick={handleCreate}
+          data-testid="pg-create-open"
           style={{
             padding: '10px 20px',
             backgroundColor: '#3b82f6',
@@ -285,6 +286,7 @@ const PermissionGroupManagement = () => {
                 <td style={{ padding: '12px 16px', textAlign: 'center' }}>
                   <button
                     onClick={() => handleEdit(group)}
+                    data-testid={`pg-edit-${group.group_id}`}
                     style={{
                       padding: '6px 12px',
                       backgroundColor: '#3b82f6',
@@ -301,6 +303,7 @@ const PermissionGroupManagement = () => {
                   {group.is_system !== 1 && (
                     <button
                       onClick={() => handleDelete(group)}
+                      data-testid={`pg-delete-${group.group_id}`}
                       style={{
                         padding: '6px 12px',
                         backgroundColor: '#ef4444',
@@ -378,6 +381,7 @@ const PermissionGroupManagement = () => {
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
               <button
                 onClick={cancelDelete}
+                data-testid="pg-delete-cancel"
                 style={{
                   padding: '10px 20px',
                   backgroundColor: '#6b7280',
@@ -392,6 +396,7 @@ const PermissionGroupManagement = () => {
               </button>
               <button
                 onClick={confirmDelete}
+                data-testid="pg-delete-confirm"
                 style={{
                   padding: '10px 20px',
                   backgroundColor: '#ef4444',
@@ -438,7 +443,7 @@ const Modal = ({
       justifyContent: 'center',
       alignItems: 'center',
       zIndex: 1000
-    }}>
+    }} data-testid="pg-modal">
       <div style={{
         backgroundColor: 'white',
         borderRadius: '8px',
@@ -463,7 +468,7 @@ const Modal = ({
           </button>
         </div>
 
-        <form onSubmit={onSubmit}>
+        <form onSubmit={onSubmit} data-testid="pg-form">
           <div style={{ marginBottom: '16px' }}>
             <label style={{
               display: 'block',
@@ -479,6 +484,7 @@ const Modal = ({
               onChange={(e) => setFormData({ ...formData, group_name: e.target.value })}
               disabled={isSystem}
               required
+              data-testid="pg-form-group-name"
               style={{
                 width: '100%',
                 padding: '10px',
@@ -508,6 +514,7 @@ const Modal = ({
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
               rows={2}
+              data-testid="pg-form-description"
               style={{
                 width: '100%',
                 padding: '10px',
@@ -552,13 +559,14 @@ const Modal = ({
                       type="checkbox"
                       checked={formData.accessible_kbs.includes(kb.id)}
                       onChange={() => toggleKbAccess(kb.id)}
+                      data-testid={`pg-form-kb-${kb.id}`}
                       style={{ marginRight: '8px' }}
                     />
                     {kb.name}
                   </label>
                 ))
               ) : (
-                <div style={{ color: '#9ca3af', fontSize: '0.875rem', textAlign: 'center', padding: '20px' }}>
+                <div data-testid="pg-form-kb-empty" style={{ color: '#9ca3af', fontSize: '0.875rem', textAlign: 'center', padding: '20px' }}>
                   暂无知识库可用
                   <div style={{ fontSize: '0.75rem', marginTop: '4px' }}>
                     请确保RAGFlow服务正在运行
@@ -601,13 +609,14 @@ const Modal = ({
                       type="checkbox"
                       checked={formData.accessible_chats.includes(chat.id)}
                       onChange={() => toggleChatAccess(chat.id)}
+                      data-testid={`pg-form-chat-${chat.id}`}
                       style={{ marginRight: '8px' }}
                     />
                     {chat.name} ({chat.type === 'chat' ? '聊天' : '智能体'})
                   </label>
                 ))
               ) : (
-                <div style={{ color: '#9ca3af', fontSize: '0.875rem', textAlign: 'center', padding: '20px' }}>
+                <div data-testid="pg-form-chat-empty" style={{ color: '#9ca3af', fontSize: '0.875rem', textAlign: 'center', padding: '20px' }}>
                   暂无聊天体可用
                   <div style={{ fontSize: '0.75rem', marginTop: '4px' }}>
                     请确保RAGFlow服务正在运行
@@ -632,6 +641,7 @@ const Modal = ({
                   type="checkbox"
                   checked={formData.can_upload}
                   onChange={(e) => setFormData({ ...formData, can_upload: e.target.checked })}
+                  data-testid="pg-form-can-upload"
                   style={{ marginRight: '6px' }}
                 />
                 上传权限
@@ -641,6 +651,7 @@ const Modal = ({
                   type="checkbox"
                   checked={formData.can_review}
                   onChange={(e) => setFormData({ ...formData, can_review: e.target.checked })}
+                  data-testid="pg-form-can-review"
                   style={{ marginRight: '6px' }}
                 />
                 审核权限
@@ -650,6 +661,7 @@ const Modal = ({
                   type="checkbox"
                   checked={formData.can_download}
                   onChange={(e) => setFormData({ ...formData, can_download: e.target.checked })}
+                  data-testid="pg-form-can-download"
                   style={{ marginRight: '6px' }}
                 />
                 下载权限
@@ -659,6 +671,7 @@ const Modal = ({
                   type="checkbox"
                   checked={formData.can_delete}
                   onChange={(e) => setFormData({ ...formData, can_delete: e.target.checked })}
+                  data-testid="pg-form-can-delete"
                   style={{ marginRight: '6px' }}
                 />
                 删除权限
@@ -670,6 +683,7 @@ const Modal = ({
             <button
               type="button"
               onClick={onClose}
+              data-testid="pg-form-cancel"
               style={{
                 padding: '10px 20px',
                 backgroundColor: '#6b7280',
@@ -684,6 +698,7 @@ const Modal = ({
             </button>
             <button
               type="submit"
+              data-testid="pg-form-submit"
               style={{
                 padding: '10px 20px',
                 backgroundColor: '#3b82f6',

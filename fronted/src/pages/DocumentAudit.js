@@ -195,7 +195,7 @@ const DocumentAudit = ({ embedded = false }) => {
   }
 
   return (
-    <div>
+    <div data-testid="audit-page">
       <div style={{ marginBottom: '24px' }}>
         {!embedded && <h2 style={{ margin: '0 0 16px 0' }}>文档审核记录</h2>}
 
@@ -203,6 +203,7 @@ const DocumentAudit = ({ embedded = false }) => {
         <div style={{ marginBottom: '16px', borderBottom: '1px solid #e5e7eb' }}>
           <button
             onClick={() => setActiveTab('documents')}
+            data-testid="audit-tab-documents"
             style={{
               padding: '10px 20px',
               backgroundColor: activeTab === 'documents' ? '#3b82f6' : 'transparent',
@@ -219,6 +220,7 @@ const DocumentAudit = ({ embedded = false }) => {
           </button>
           <button
             onClick={() => setActiveTab('deletions')}
+            data-testid="audit-tab-deletions"
             style={{
               padding: '10px 20px',
               backgroundColor: activeTab === 'deletions' ? '#ef4444' : 'transparent',
@@ -235,6 +237,7 @@ const DocumentAudit = ({ embedded = false }) => {
           </button>
           <button
             onClick={() => setActiveTab('downloads')}
+            data-testid="audit-tab-downloads"
             style={{
               padding: '10px 20px',
               backgroundColor: activeTab === 'downloads' ? '#10b981' : 'transparent',
@@ -258,6 +261,7 @@ const DocumentAudit = ({ embedded = false }) => {
               <select
                 value={filterKb}
                 onChange={(e) => setFilterKb(e.target.value)}
+                data-testid="audit-filter-kb"
                 style={{
                   padding: '8px 12px',
                   border: '1px solid #d1d5db',
@@ -279,6 +283,7 @@ const DocumentAudit = ({ embedded = false }) => {
               <select
                 value={filterStatus}
                 onChange={(e) => setFilterStatus(e.target.value)}
+                data-testid="audit-filter-status"
                 style={{
                   padding: '8px 12px',
                   border: '1px solid #d1d5db',
@@ -301,6 +306,7 @@ const DocumentAudit = ({ embedded = false }) => {
                   setFilterKb('');
                   setFilterStatus('');
                 }}
+                data-testid="audit-filter-reset"
                 style={{
                   padding: '8px 16px',
                   backgroundColor: '#6b7280',
@@ -450,6 +456,7 @@ const DocumentAudit = ({ embedded = false }) => {
                     {filteredDocuments.map((doc, index) => (
                       <tr
                         key={doc.doc_id}
+                        data-testid={`audit-doc-row-${doc.doc_id}`}
                         style={{
                           borderBottom: '1px solid #e5e7eb',
                           backgroundColor: index % 2 === 0 ? 'white' : '#f9fafb',
@@ -512,6 +519,7 @@ const DocumentAudit = ({ embedded = false }) => {
                     {filteredDeletions.map((del, index) => (
                       <tr
                         key={del.id}
+                        data-testid={`audit-deletion-row-${del.id}`}
                         style={{
                           borderBottom: '1px solid #e5e7eb',
                           backgroundColor: index % 2 === 0 ? 'white' : '#fef2f2',
@@ -561,6 +569,7 @@ const DocumentAudit = ({ embedded = false }) => {
                     {filteredDownloads.map((down, index) => (
                       <tr
                         key={down.id}
+                        data-testid={`audit-download-row-${down.id}`}
                         style={{
                           borderBottom: '1px solid #e5e7eb',
                           backgroundColor: index % 2 === 0 ? 'white' : '#f0fdf4',

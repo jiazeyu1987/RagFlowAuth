@@ -26,12 +26,12 @@ const DocumentReviewAudit = () => {
   };
 
   return (
-    <div>
+    <div data-testid="documents-page">
       <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '14px' }}>
-        <button type="button" onClick={() => setTab('approve')} style={tabButtonStyle(activeTab === 'approve')}>
+        <button type="button" data-testid="documents-tab-approve" onClick={() => setTab('approve')} style={tabButtonStyle(activeTab === 'approve')}>
           审批
         </button>
-        <button type="button" onClick={() => setTab('records')} style={tabButtonStyle(activeTab === 'records')}>
+        <button type="button" data-testid="documents-tab-records" onClick={() => setTab('records')} style={tabButtonStyle(activeTab === 'records')}>
           记录
         </button>
       </div>
@@ -42,4 +42,3 @@ const DocumentReviewAudit = () => {
 };
 
 export default DocumentReviewAudit;
-

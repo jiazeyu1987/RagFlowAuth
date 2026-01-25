@@ -177,6 +177,7 @@ const LoginPage = () => {
             <div style={{ padding: 28, background: 'rgba(17,24,39,0.40)' }}>
               {error && (
                 <div
+                  data-testid="login-error"
                   style={{
                     backgroundColor: 'rgba(239,68,68,0.15)',
                     color: 'rgba(255,255,255,0.92)',
@@ -199,6 +200,7 @@ const LoginPage = () => {
                   <input
                     type="text"
                     name="username"
+                    data-testid="login-username"
                     autoComplete="username"
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
@@ -225,6 +227,7 @@ const LoginPage = () => {
                   <input
                     type="password"
                     name="password"
+                    data-testid="login-password"
                     autoComplete="current-password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
@@ -246,6 +249,7 @@ const LoginPage = () => {
 
                 <button
                   type="submit"
+                  data-testid="login-submit"
                   disabled={loading}
                   style={{
                     width: '100%',

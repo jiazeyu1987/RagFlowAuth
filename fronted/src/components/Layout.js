@@ -37,7 +37,7 @@ const Layout = ({ children }) => {
         transition: 'width 0.3s',
         display: 'flex',
         flexDirection: 'column',
-      }}>
+      }} data-testid="layout-sidebar">
         <div style={{
           padding: '20px',
           borderBottom: '1px solid #374151',
@@ -50,6 +50,7 @@ const Layout = ({ children }) => {
           </h2>
           <button
             onClick={() => setSidebarOpen(!sidebarOpen)}
+            data-testid="layout-sidebar-toggle"
             style={{
               background: 'none',
               border: 'none',
@@ -73,6 +74,7 @@ const Layout = ({ children }) => {
               <PermissionGuard key={item.path} allowedRoles={item.allowedRoles} fallback={null}>
                 <Link
                   to={item.path}
+                  data-testid={`nav-${item.path.replace('/', '') || 'home'}`}
                   style={{
                     display: 'block',
                     padding: '12px 20px',
@@ -107,12 +109,13 @@ const Layout = ({ children }) => {
         }}>
           {sidebarOpen && (
             <div style={{ marginBottom: '10px', fontSize: '0.9rem' }}>
-              <div style={{ fontWeight: 'bold' }}>{user?.username}</div>
-              <div style={{ color: '#9ca3af', fontSize: '0.8rem' }}>{user?.role}</div>
+              <div style={{ fontWeight: 'bold' }} data-testid="layout-user-name">{user?.username}</div>
+              <div style={{ color: '#9ca3af', fontSize: '0.8rem' }} data-testid="layout-user-role">{user?.role}</div>
             </div>
           )}
           <button
             onClick={handleLogout}
+            data-testid="layout-logout"
             style={{
               width: '100%',
               padding: '8px',
@@ -137,7 +140,7 @@ const Layout = ({ children }) => {
           borderBottom: '1px solid #e5e7eb',
           boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)',
         }}>
-          <h1 style={{ margin: 0, fontSize: '1.5rem', color: '#111827' }}>
+          <h1 style={{ margin: 0, fontSize: '1.5rem', color: '#111827' }} data-testid="layout-header-title">
             {navigation.find(item => item.path === location.pathname)?.name || 'Dashboard'}
           </h1>
         </header>

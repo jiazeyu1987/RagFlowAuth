@@ -607,7 +607,7 @@ const DocumentBrowser = () => {
   }
 
   return (
-    <div>
+    <div data-testid="browser-page">
       <div style={{ marginBottom: '24px' }}>
         <h2 style={{ margin: '0 0 8px 0' }}>文档浏览</h2>
         <p style={{ margin: 0, color: '#6b7280', fontSize: '0.9rem' }}>
@@ -618,6 +618,7 @@ const DocumentBrowser = () => {
       <div style={{ display: 'flex', gap: '12px', marginBottom: '24px' }}>
         <button
           onClick={expandAll}
+          data-testid="browser-expand-all"
           style={{
             padding: '8px 16px',
             backgroundColor: '#3b82f6',
@@ -632,6 +633,7 @@ const DocumentBrowser = () => {
         </button>
         <button
           onClick={collapseAll}
+          data-testid="browser-collapse-all"
           style={{
             padding: '8px 16px',
             backgroundColor: '#6b7280',
@@ -646,6 +648,7 @@ const DocumentBrowser = () => {
         </button>
         <button
           onClick={refreshAll}
+          data-testid="browser-refresh-all"
           style={{
             padding: '8px 16px',
             backgroundColor: '#10b981',
@@ -663,6 +666,7 @@ const DocumentBrowser = () => {
             <button
               onClick={handleBatchDownload}
               disabled={actionLoading['batch-download']}
+              data-testid="browser-batch-download"
               style={{
                 padding: '8px 16px',
                 backgroundColor: '#8b5cf6',
@@ -687,6 +691,7 @@ const DocumentBrowser = () => {
             </button>
             <button
               onClick={clearAllSelections}
+              data-testid="browser-clear-selection"
               style={{
                 padding: '8px 16px',
                 backgroundColor: '#ef4444',
@@ -728,7 +733,7 @@ const DocumentBrowser = () => {
           padding: '12px 16px',
           borderRadius: '4px',
           marginBottom: '20px',
-        }}>
+        }} data-testid="browser-error">
           {error}
         </div>
       )}
@@ -754,6 +759,7 @@ const DocumentBrowser = () => {
             return (
               <div
                 key={dataset.id}
+                data-testid={`browser-dataset-${dataset.id}`}
                 style={{
                   backgroundColor: 'white',
                   borderRadius: '8px',
@@ -763,6 +769,7 @@ const DocumentBrowser = () => {
               >
                 <div
                   onClick={() => toggleDataset(dataset.name)}
+                  data-testid={`browser-dataset-toggle-${dataset.id}`}
                   style={{
                     padding: '16px 20px',
                     display: 'flex',
@@ -826,6 +833,7 @@ const DocumentBrowser = () => {
                                 type="checkbox"
                                 checked={isAllSelectedInDataset(dataset.name)}
                                 onChange={() => handleSelectAllInDataset(dataset.name)}
+                                data-testid={`browser-dataset-selectall-${dataset.id}`}
                                 style={{ cursor: 'pointer' }}
                               />
                             </th>
@@ -847,6 +855,7 @@ const DocumentBrowser = () => {
                           {datasetDocs.map((doc) => (
                             <tr
                               key={doc.id}
+                              data-testid={`browser-doc-row-${dataset.id}-${doc.id}`}
                               style={{ borderBottom: '1px solid #f3f4f6' }}
                             >
                               <td style={{ padding: '12px 8px', width: '40px' }}>
@@ -854,6 +863,7 @@ const DocumentBrowser = () => {
                                   type="checkbox"
                                   checked={isDocSelected(doc.id, dataset.name)}
                                   onChange={() => handleSelectDoc(doc.id, dataset.name)}
+                                  data-testid={`browser-doc-select-${dataset.id}-${doc.id}`}
                                   style={{ cursor: 'pointer' }}
                                 />
                               </td>
@@ -880,6 +890,7 @@ const DocumentBrowser = () => {
                                   <button
                                     onClick={() => handleView(doc.id, dataset.name)}
                                     disabled={actionLoading[`${doc.id}-view`]}
+                                    data-testid={`browser-doc-view-${dataset.id}-${doc.id}`}
                                     title="查看"
                                     style={{
                                       padding: '6px 12px',
@@ -908,6 +919,7 @@ const DocumentBrowser = () => {
                                     <button
                                       onClick={() => handleDownload(doc.id, dataset.name)}
                                       disabled={actionLoading[`${doc.id}-download`]}
+                                      data-testid={`browser-doc-download-${dataset.id}-${doc.id}`}
                                       title="下载"
                                       style={{
                                         padding: '6px 12px',
@@ -937,6 +949,7 @@ const DocumentBrowser = () => {
                                     <button
                                       onClick={() => handleDelete(doc.id, dataset.name)}
                                       disabled={actionLoading[`${doc.id}-delete`]}
+                                      data-testid={`browser-doc-delete-${dataset.id}-${doc.id}`}
                                       title="删除"
                                       style={{
                                         padding: '6px 12px',
@@ -970,6 +983,7 @@ const DocumentBrowser = () => {
       {previewUrl && (
         <div
           onClick={closePreview}
+          data-testid="browser-preview-modal"
           style={{
             position: 'fixed',
             top: 0,
@@ -1006,6 +1020,7 @@ const DocumentBrowser = () => {
               </h3>
               <button
                 onClick={closePreview}
+                data-testid="browser-preview-close"
                 style={{
                   background: 'none',
                   border: 'none',

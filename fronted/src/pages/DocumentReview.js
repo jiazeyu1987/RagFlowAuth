@@ -346,7 +346,7 @@ const DocumentReview = ({ embedded = false }) => {
   return (
     <div>
       {overwritePrompt && (
-        <div
+        <div data-testid="docs-overwrite-modal"
           style={{
             position: 'fixed',
             inset: 0,
@@ -373,7 +373,7 @@ const DocumentReview = ({ embedded = false }) => {
               <div style={{ fontWeight: 700, fontSize: '1.05rem' }}>检测到可能重复文件</div>
               <button
                 type="button"
-                onClick={() => setOverwritePrompt(null)}
+                onClick={() => setOverwritePrompt(null)} data-testid="docs-overwrite-close"
                 style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontSize: '1.2rem' }}
               >
                 ×
@@ -390,7 +390,7 @@ const DocumentReview = ({ embedded = false }) => {
                 <div style={{ marginTop: '10px' }}>
                   <button
                     type="button"
-                    onClick={() => openLocalPreview(overwritePrompt.oldDoc.doc_id, overwritePrompt.oldDoc.filename)}
+                    onClick={() => openLocalPreview(overwritePrompt.oldDoc.doc_id, overwritePrompt.oldDoc.filename)} data-testid="docs-overwrite-old-preview"
                     style={{
                       padding: '8px 12px',
                       borderRadius: '8px',
@@ -405,7 +405,7 @@ const DocumentReview = ({ embedded = false }) => {
                   </button>
                   <button
                     type="button"
-                    onClick={() => knowledgeApi.downloadLocalDocument(overwritePrompt.oldDoc.doc_id)}
+                    onClick={() => knowledgeApi.downloadLocalDocument(overwritePrompt.oldDoc.doc_id)} data-testid="docs-overwrite-old-download"
                     style={{
                       padding: '8px 12px',
                       borderRadius: '8px',
@@ -428,7 +428,7 @@ const DocumentReview = ({ embedded = false }) => {
                 <div style={{ marginTop: '10px' }}>
                   <button
                     type="button"
-                    onClick={() => openLocalPreview(overwritePrompt.newDocId, activeDocMap.get(overwritePrompt.newDocId)?.filename || '')}
+                    onClick={() => openLocalPreview(overwritePrompt.newDocId, activeDocMap.get(overwritePrompt.newDocId)?.filename || '')} data-testid="docs-overwrite-new-preview"
                     style={{
                       padding: '8px 12px',
                       borderRadius: '8px',
@@ -443,7 +443,7 @@ const DocumentReview = ({ embedded = false }) => {
                   </button>
                   <button
                     type="button"
-                    onClick={() => knowledgeApi.downloadLocalDocument(overwritePrompt.newDocId)}
+                    onClick={() => knowledgeApi.downloadLocalDocument(overwritePrompt.newDocId)} data-testid="docs-overwrite-new-download"
                     style={{
                       padding: '8px 12px',
                       borderRadius: '8px',
@@ -483,7 +483,7 @@ const DocumentReview = ({ embedded = false }) => {
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
               <button
                 type="button"
-                onClick={handleOverwriteKeepOld}
+                onClick={handleOverwriteKeepOld} data-testid="docs-overwrite-keep-old"
                 style={{
                   padding: '10px 12px',
                   borderRadius: '8px',
@@ -496,7 +496,7 @@ const DocumentReview = ({ embedded = false }) => {
               </button>
               <button
                 type="button"
-                onClick={handleOverwriteUseNew}
+                onClick={handleOverwriteUseNew} data-testid="docs-overwrite-use-new"
                 style={{
                   padding: '10px 12px',
                   borderRadius: '8px',
@@ -712,6 +712,7 @@ const DocumentReview = ({ embedded = false }) => {
           <select
             value={selectedDataset === null ? '' : selectedDataset}
             onChange={(e) => setSelectedDataset(e.target.value)}
+            data-testid="docs-dataset-select"
             disabled={loadingDatasets}
             style={{
               padding: '8px 12px',
@@ -739,7 +740,7 @@ const DocumentReview = ({ embedded = false }) => {
       </div>
 
       {error && (
-        <div style={{
+        <div data-testid="docs-error" style={{
           backgroundColor: '#fee2e2',
           color: '#991b1b',
           padding: '12px 16px',
@@ -853,6 +854,7 @@ const DocumentReview = ({ embedded = false }) => {
                         <button
                           onClick={() => handleApprove(doc.doc_id)}
                           disabled={actionLoading === doc.doc_id}
+                          data-testid={`docs-approve-${doc.doc_id}`}
                           style={{
                             padding: '6px 12px',
                             backgroundColor: actionLoading === doc.doc_id ? '#9ca3af' : '#10b981',
@@ -869,6 +871,7 @@ const DocumentReview = ({ embedded = false }) => {
                         <button
                           onClick={() => handleReject(doc.doc_id)}
                           disabled={actionLoading === doc.doc_id}
+                          data-testid={`docs-reject-${doc.doc_id}`}
                           style={{
                             padding: '6px 12px',
                             backgroundColor: actionLoading === doc.doc_id ? '#9ca3af' : '#ef4444',
@@ -892,6 +895,7 @@ const DocumentReview = ({ embedded = false }) => {
                       <button
                         onClick={() => handleDelete(doc.doc_id)}
                         disabled={actionLoading === doc.doc_id}
+                        data-testid={`docs-delete-${doc.doc_id}`}
                         style={{
                           padding: '6px 12px',
                           backgroundColor: actionLoading === doc.doc_id ? '#9ca3af' : '#dc2626',
@@ -912,7 +916,7 @@ const DocumentReview = ({ embedded = false }) => {
           </table>
 
           {documents.length === 0 && (
-            <div style={{ padding: '48px', textAlign: 'center', color: '#6b7280' }}>
+            <div data-testid="docs-empty" style={{ padding: '48px', textAlign: 'center', color: '#6b7280' }}>
               {selectedDataset ? `该知识库暂无待审核文档` : '请选择知识库'}
             </div>
           )}

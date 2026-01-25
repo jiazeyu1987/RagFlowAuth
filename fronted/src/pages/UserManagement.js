@@ -218,6 +218,7 @@ const UserManagement = () => {
         {canManageUsers && (
           <button
             onClick={() => setShowCreateModal(true)}
+            data-testid="users-create-open"
             style={{
               padding: '10px 20px',
               backgroundColor: '#3b82f6',
@@ -246,6 +247,7 @@ const UserManagement = () => {
             <input
               value={filters.q}
               onChange={(e) => setFilters({ ...filters, q: e.target.value })}
+              data-testid="users-filter-q"
               placeholder="支持模糊搜索"
               style={{
                 width: '100%',
@@ -262,6 +264,7 @@ const UserManagement = () => {
             <select
               value={filters.company_id}
               onChange={(e) => setFilters({ ...filters, company_id: e.target.value })}
+              data-testid="users-filter-company"
               style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '6px' }}
             >
               <option value="">全部</option>
@@ -276,6 +279,7 @@ const UserManagement = () => {
             <select
               value={filters.department_id}
               onChange={(e) => setFilters({ ...filters, department_id: e.target.value })}
+              data-testid="users-filter-department"
               style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '6px' }}
             >
               <option value="">全部</option>
@@ -290,6 +294,7 @@ const UserManagement = () => {
             <select
               value={filters.status}
               onChange={(e) => setFilters({ ...filters, status: e.target.value })}
+              data-testid="users-filter-status"
               style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '6px' }}
             >
               <option value="">全部</option>
@@ -303,6 +308,7 @@ const UserManagement = () => {
             <select
               value={filters.group_id}
               onChange={(e) => setFilters({ ...filters, group_id: e.target.value })}
+              data-testid="users-filter-group"
               style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '6px' }}
             >
               <option value="">全部</option>
@@ -318,6 +324,7 @@ const UserManagement = () => {
               type="date"
               value={filters.created_from}
               onChange={(e) => setFilters({ ...filters, created_from: e.target.value })}
+              data-testid="users-filter-created-from"
               style={{ padding: '8px', border: '1px solid #d1d5db', borderRadius: '6px' }}
             />
           </div>
@@ -328,6 +335,7 @@ const UserManagement = () => {
               type="date"
               value={filters.created_to}
               onChange={(e) => setFilters({ ...filters, created_to: e.target.value })}
+              data-testid="users-filter-created-to"
               style={{ padding: '8px', border: '1px solid #d1d5db', borderRadius: '6px' }}
             />
           </div>
@@ -337,6 +345,7 @@ const UserManagement = () => {
             onClick={() => {
               setFilters(DEFAULT_FILTERS);
             }}
+            data-testid="users-filter-reset"
             style={{
               padding: '10px 14px',
               backgroundColor: '#6b7280',
@@ -372,7 +381,7 @@ const UserManagement = () => {
           </thead>
           <tbody>
             {filteredUsers.map((user) => (
-              <tr key={user.user_id} style={{ borderBottom: '1px solid #e5e7eb' }}>
+              <tr key={user.user_id} data-testid={`users-row-${user.user_id}`} style={{ borderBottom: '1px solid #e5e7eb' }}>
                 <td style={{ padding: '12px 16px' }}>{user.username}</td>
                 <td style={{ padding: '12px 16px', color: '#6b7280' }}>{user.email || '-'}</td>
                 <td style={{ padding: '12px 16px', color: '#6b7280' }}>{user.company_name || '-'}</td>
@@ -411,8 +420,10 @@ const UserManagement = () => {
                   {new Date(user.created_at_ms).toLocaleString('zh-CN')}
                 </td>
                 <td style={{ padding: '12px 16px', textAlign: 'right' }}>
-                  <button
+                  {canManageUsers && (
+                    <button
                     onClick={() => handleAssignGroup(user)}
+                    data-testid={`users-edit-groups-${user.user_id}`}
                     style={{
                       padding: '6px 12px',
                       backgroundColor: '#8b5cf6',
@@ -426,9 +437,11 @@ const UserManagement = () => {
                   >
                     权限组
                   </button>
+                  )}
                   {canManageUsers && user.username !== 'admin' && (
                     <button
                       onClick={() => handleDeleteUser(user.user_id)}
+                      data-testid={`users-delete-${user.user_id}`}
                       style={{
                         padding: '6px 12px',
                         backgroundColor: '#ef4444',
@@ -476,7 +489,7 @@ const UserManagement = () => {
             maxWidth: '400px',
           }}>
             <h3 style={{ margin: '0 0 24px 0' }}>新建用户</h3>
-            <form onSubmit={handleCreateUser}>
+            <form onSubmit={handleCreateUser} data-testid="users-create-form">
               <div style={{ marginBottom: '16px' }}>
                 <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500' }}>
                   用户名
@@ -486,6 +499,7 @@ const UserManagement = () => {
                   required
                   value={newUser.username}
                   onChange={(e) => setNewUser({ ...newUser, username: e.target.value })}
+                  data-testid="users-create-username"
                   style={{
                     width: '100%',
                     padding: '8px',
@@ -505,6 +519,7 @@ const UserManagement = () => {
                   required
                   value={newUser.password}
                   onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
+                  data-testid="users-create-password"
                   style={{
                     width: '100%',
                     padding: '8px',
@@ -523,6 +538,7 @@ const UserManagement = () => {
                   type="email"
                   value={newUser.email}
                   onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
+                  data-testid="users-create-email"
                   style={{
                     width: '100%',
                     padding: '8px',
@@ -541,6 +557,7 @@ const UserManagement = () => {
                   required
                   value={newUser.company_id}
                   onChange={(e) => setNewUser({ ...newUser, company_id: e.target.value })}
+                  data-testid="users-create-company"
                   style={{
                     width: '100%',
                     padding: '8px',
@@ -565,6 +582,7 @@ const UserManagement = () => {
                   required
                   value={newUser.department_id}
                   onChange={(e) => setNewUser({ ...newUser, department_id: e.target.value })}
+                  data-testid="users-create-department"
                   style={{
                     width: '100%',
                     padding: '8px',
@@ -619,6 +637,7 @@ const UserManagement = () => {
                               setNewUser({ ...newUser, group_ids: groupIds.filter(id => id !== group.group_id) });
                             }
                           }}
+                          data-testid={`users-create-group-${group.group_id}`}
                           style={{ marginRight: '8px' }}
                         />
                         <div>
@@ -643,6 +662,7 @@ const UserManagement = () => {
               <div style={{ display: 'flex', gap: '12px' }}>
                 <button
                   type="submit"
+                  data-testid="users-create-submit"
                   style={{
                     flex: 1,
                     padding: '10px',
@@ -661,6 +681,7 @@ const UserManagement = () => {
                     setShowCreateModal(false);
                     setNewUser({ username: '', password: '', email: '', company_id: '', department_id: '', group_ids: [] });
                   }}
+                  data-testid="users-create-cancel"
                   style={{
                     flex: 1,
                     padding: '10px',
@@ -681,7 +702,7 @@ const UserManagement = () => {
 
       {/* 权限组分配模态框 */}
       {showGroupModal && editingGroupUser && (
-        <div style={{
+        <div data-testid="users-group-modal" style={{
           position: 'fixed',
           top: 0,
           left: 0,
@@ -733,6 +754,7 @@ const UserManagement = () => {
                       <input
                         type="checkbox"
                         checked={selectedGroupIds?.includes(group.group_id) || false}
+                        data-testid={`users-group-checkbox-${group.group_id}`}
                         onChange={(e) => {
                           const groupIds = selectedGroupIds || [];
                           if (e.target.checked) {
@@ -765,6 +787,7 @@ const UserManagement = () => {
               <button
                 type="button"
                 onClick={handleCloseGroupModal}
+                data-testid="users-group-cancel"
                 style={{
                   flex: 1,
                   padding: '10px',
@@ -780,6 +803,7 @@ const UserManagement = () => {
               <button
                 type="button"
                 onClick={handleSaveGroup}
+                data-testid="users-group-save"
                 style={{
                   flex: 1,
                   padding: '10px',

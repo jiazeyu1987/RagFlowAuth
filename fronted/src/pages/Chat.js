@@ -250,9 +250,9 @@ const Chat = () => {
   };
 
   return (
-    <div style={{ height: 'calc(100vh - 120px)', display: 'flex', gap: '16px' }}>
+    <div data-testid="chat-page" style={{ height: 'calc(100vh - 120px)', display: 'flex', gap: '16px' }}>
       <div style={{ width: '320px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-        <div
+        <div data-testid="chat-list"
           style={{
             backgroundColor: 'white',
             borderRadius: '8px',
@@ -271,6 +271,7 @@ const Chat = () => {
             chats.map((chat) => (
               <div
                 key={chat.id}
+                data-testid={`chat-item-${chat.id}`}
                 onClick={() => setSelectedChatId(chat.id)}
                 style={{
                   padding: '8px 12px',
@@ -287,7 +288,7 @@ const Chat = () => {
           )}
         </div>
 
-        <div
+        <div data-testid="chat-sessions"
           style={{
             backgroundColor: 'white',
             borderRadius: '8px',
@@ -302,6 +303,7 @@ const Chat = () => {
             <button
               onClick={createSession}
               disabled={!selectedChatId}
+              data-testid="chat-session-create"
               style={{
                 padding: '6px 10px',
                 borderRadius: '4px',
@@ -323,6 +325,7 @@ const Chat = () => {
             sessions.map((s) => (
               <div
                 key={s.id}
+                data-testid={`chat-session-item-${s.id}`}
                 style={{
                   display: 'flex',
                   justifyContent: 'space-between',
@@ -345,6 +348,7 @@ const Chat = () => {
                     e.stopPropagation();
                     setDeleteConfirm({ show: true, sessionId: s.id, sessionName: s.name || s.id });
                   }}
+                  data-testid={`chat-session-delete-${s.id}`}
                   style={{
                     padding: '6px 10px',
                     borderRadius: '4px',
@@ -362,7 +366,7 @@ const Chat = () => {
         </div>
       </div>
 
-      <div
+      <div data-testid="chat-panel"
         style={{
           backgroundColor: 'white',
           borderRadius: '8px',
@@ -373,17 +377,18 @@ const Chat = () => {
           overflow: 'hidden',
         }}
       >
-        <div style={{ padding: '14px 16px', borderBottom: '1px solid #e5e7eb', fontWeight: 600 }}>
+        <div data-testid="chat-header" style={{ padding: '14px 16px', borderBottom: '1px solid #e5e7eb', fontWeight: 600 }}>
           {selectedChatId ? '对话' : '请选择聊天助手开始对话'}
         </div>
 
-        <div style={{ flex: 1, overflowY: 'auto', padding: '16px' }}>
+        <div data-testid="chat-messages" style={{ flex: 1, overflowY: 'auto', padding: '16px' }}>
           {messages.length === 0 ? (
             <div style={{ color: '#6b7280' }}>开始新的对话...</div>
           ) : (
             messages.map((m, idx) => (
               <div
                 key={idx}
+                data-testid={`chat-message-${idx}-${m.role}`}
                 style={{
                   marginBottom: '12px',
                   display: 'flex',
@@ -409,7 +414,7 @@ const Chat = () => {
         </div>
 
         {error && (
-          <div style={{ padding: '10px 16px', backgroundColor: '#fee2e2', color: '#991b1b' }}>{error}</div>
+          <div data-testid="chat-error" style={{ padding: '10px 16px', backgroundColor: '#fee2e2', color: '#991b1b' }}>{error}</div>
         )}
 
         <div style={{ padding: '12px', borderTop: '1px solid #e5e7eb', display: 'flex', gap: '10px' }}>
@@ -417,6 +422,7 @@ const Chat = () => {
             value={inputMessage}
             onChange={(e) => setInputMessage(e.target.value)}
             onKeyDown={handleKeyPress}
+            data-testid="chat-input"
             placeholder="输入消息...（Enter 发送，Shift+Enter 换行）"
             style={{
               flex: 1,
@@ -433,6 +439,7 @@ const Chat = () => {
           <button
             onClick={sendMessage}
             disabled={!selectedChatId || !inputMessage.trim()}
+            data-testid="chat-send"
             style={{
               padding: '0 16px',
               borderRadius: '6px',
@@ -450,6 +457,7 @@ const Chat = () => {
 
       {deleteConfirm.show && (
         <div
+          data-testid="chat-delete-modal"
           style={{
             position: 'fixed',
             top: 0,
@@ -471,6 +479,7 @@ const Chat = () => {
             <div style={{ display: 'flex', gap: '10px' }}>
               <button
                 onClick={() => setDeleteConfirm({ show: false, sessionId: null, sessionName: '' })}
+                data-testid="chat-delete-cancel"
                 style={{
                   flex: 1,
                   padding: '10px',
@@ -485,6 +494,7 @@ const Chat = () => {
               </button>
               <button
                 onClick={confirmDeleteSession}
+                data-testid="chat-delete-confirm"
                 style={{
                   flex: 1,
                   padding: '10px',

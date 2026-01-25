@@ -16,10 +16,18 @@
     "react-scripts": "5.0.1",
     "xlsx": "^0.18.5"
   },
+  "devDependencies": {
+    "@playwright/test": "^1.50.0"
+  },
   "scripts": {
     "start": "react-scripts start",
     "build": "react-scripts build",
     "test": "react-scripts test",
+    "e2e": "playwright test --grep-invert @integration",
+    "e2e:smoke": "playwright test --grep @smoke",
+    "e2e:integration": "playwright test --grep @integration --workers=1",
+    "e2e:report": "playwright show-report",
+    "e2e:ui": "playwright test --ui",
     "eject": "react-scripts eject"
   },
   "eslintConfig": {

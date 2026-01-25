@@ -7,6 +7,11 @@ from backend.app.core.auth import get_deps
 from backend.app.core.authz import AdminOnly
 from backend.app.dependencies import AppDependencies
 from backend.models.user import UserCreate, UserUpdate, UserResponse
+from pydantic import BaseModel
+
+
+class ResetPasswordRequest(BaseModel):
+    new_password: str
 
 from backend.app.modules.users.repo import UsersRepo
 from backend.app.modules.users.service import UsersService
@@ -87,9 +92,9 @@ async def delete_user(
 @router.put("/{user_id}/password")
 async def reset_password(
     user_id: str,
-    new_password: str,
+    payload: ResetPasswordRequest,
     _: AdminOnly,
     service: UsersService = Depends(get_service),
 ):
-    service.reset_password(user_id, new_password)
+    service.reset_password(user_id, payload.new_password)
     return {"message": "密码已重置"}

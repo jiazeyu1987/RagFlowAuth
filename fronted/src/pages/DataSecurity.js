@@ -186,6 +186,7 @@ const DataSecurity = () => {
           <button
             onClick={runNow}
             disabled={running}
+            data-testid="ds-run-now"
             style={{
               padding: '10px 14px',
               borderRadius: '8px',
@@ -200,6 +201,7 @@ const DataSecurity = () => {
           <button
             onClick={runFullBackupNow}
             disabled={running}
+            data-testid="ds-run-full"
             style={{
               padding: '10px 14px',
               borderRadius: '8px',
@@ -214,6 +216,7 @@ const DataSecurity = () => {
           <button
             onClick={saveSettings}
             disabled={saving || !settings}
+            data-testid="ds-save"
             style={{
               padding: '10px 14px',
               borderRadius: '8px',
@@ -228,7 +231,7 @@ const DataSecurity = () => {
       </div>
 
       {error && (
-        <div style={{ marginTop: '12px', padding: '10px 12px', background: '#fef2f2', color: '#991b1b', borderRadius: '10px' }}>
+        <div data-testid="ds-error" style={{ marginTop: '12px', padding: '10px 12px', background: '#fef2f2', color: '#991b1b', borderRadius: '10px' }}>
           {error}
         </div>
       )}
@@ -240,6 +243,7 @@ const DataSecurity = () => {
               type="checkbox"
               checked={!!settings?.enabled}
               onChange={(e) => setSettings((p) => ({ ...p, enabled: e.target.checked }))}
+              data-testid="ds-enabled"
             />
             启用定时备份
           </label>
@@ -251,6 +255,7 @@ const DataSecurity = () => {
               min="1"
               value={Number(settings?.interval_minutes || 1440)}
               onChange={(e) => setSettings((p) => ({ ...p, interval_minutes: Number(e.target.value || 1) }))}
+              data-testid="ds-interval-minutes"
               style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '8px', marginTop: '6px' }}
             />
             <div style={{ color: '#6b7280', marginTop: '6px', fontSize: '0.9rem' }}>
@@ -264,6 +269,7 @@ const DataSecurity = () => {
               <select
                 value={settings?.target_mode || 'share'}
                 onChange={(e) => setSettings((p) => ({ ...p, target_mode: e.target.value }))}
+                data-testid="ds-target-mode"
                 style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '8px', marginTop: '6px' }}
               >
                 <option value="share">另一台电脑共享目录（推荐）</option>
@@ -279,7 +285,7 @@ const DataSecurity = () => {
           {settings?.target_mode === 'local' ? (
             <label>
               本机目标目录（绝对路径）
-              <input
+              <input data-testid="ds-target-local-dir"
                 value={settings?.target_local_dir || ''}
                 onChange={(e) => setSettings((p) => ({ ...p, target_local_dir: e.target.value }))}
                 placeholder="例如：D:\\backup\\ragflowauth"
@@ -293,6 +299,7 @@ const DataSecurity = () => {
                 <input
                   value={settings?.target_ip || ''}
                   onChange={(e) => setSettings((p) => ({ ...p, target_ip: e.target.value }))}
+                  data-testid="ds-target-ip"
                   placeholder="例如：192.168.1.10"
                   style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '8px', marginTop: '6px' }}
                 />
@@ -302,6 +309,7 @@ const DataSecurity = () => {
                 <input
                   value={settings?.target_share_name || ''}
                   onChange={(e) => setSettings((p) => ({ ...p, target_share_name: e.target.value }))}
+                  data-testid="ds-target-share-name"
                   placeholder="例如：backup"
                   style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '8px', marginTop: '6px' }}
                 />
@@ -311,11 +319,12 @@ const DataSecurity = () => {
                 <input
                   value={settings?.target_subdir || ''}
                   onChange={(e) => setSettings((p) => ({ ...p, target_subdir: e.target.value }))}
+                  data-testid="ds-target-subdir"
                   placeholder="例如：ragflowauth"
                   style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '8px', marginTop: '6px' }}
                 />
               </label>
-              <div style={{ gridColumn: '1 / -1', color: '#6b7280', fontSize: '0.9rem' }}>
+              <div data-testid="ds-target-preview" style={{ gridColumn: '1 / -1', color: '#6b7280', fontSize: '0.9rem' }}>
                 预览：{targetPreview || '（未完整填写）'}
               </div>
             </div>
@@ -328,6 +337,7 @@ const DataSecurity = () => {
             <input
               value={settings?.ragflow_compose_path || ''}
               onChange={(e) => setSettings((p) => ({ ...p, ragflow_compose_path: e.target.value }))}
+              data-testid="ds-ragflow-compose-path"
               placeholder="/app/ragflow_compose/docker-compose.yml"
               style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '8px', marginTop: '6px' }}
             />
@@ -347,6 +357,7 @@ const DataSecurity = () => {
               type="checkbox"
               checked={!!settings?.ragflow_stop_services}
               onChange={(e) => setSettings((p) => ({ ...p, ragflow_stop_services: e.target.checked }))}
+              data-testid="ds-ragflow-stop-services"
             />
             备份前停止 RAGFlow 服务（更一致，但会短暂停机）
           </label>
@@ -356,6 +367,7 @@ const DataSecurity = () => {
               type="checkbox"
               checked={!!settings?.full_backup_include_images}
               onChange={(e) => setSettings((p) => ({ ...p, full_backup_include_images: e.target.checked }))}
+              data-testid="ds-full-backup-include-images"
             />
             全量备份包含 Docker 镜像（体积较大，但可离线恢复）
           </label>
@@ -365,6 +377,7 @@ const DataSecurity = () => {
             <input
               value={settings?.auth_db_path || 'data/auth.db'}
               onChange={(e) => setSettings((p) => ({ ...p, auth_db_path: e.target.value }))}
+              data-testid="ds-auth-db-path"
               placeholder="data/auth.db"
               style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '8px', marginTop: '6px' }}
             />
@@ -379,12 +392,12 @@ const DataSecurity = () => {
       <Card title="备份进度">
         {activeJob ? (
           <>
-            <div style={{ display: 'flex', justifyContent: 'space-between', gap: '10px', alignItems: 'center' }}>
+            <div data-testid="ds-active-job" style={{ display: 'flex', justifyContent: 'space-between', gap: '10px', alignItems: 'center' }}>
               <div>
-                <div style={{ fontWeight: 600 }}>
+                <div data-testid="ds-active-job-status" style={{ fontWeight: 600 }}>
                   #{activeJob.id} {activeJob.status}
                 </div>
-                <div style={{ color: '#6b7280', fontSize: '0.9rem' }}>
+                <div data-testid="ds-active-job-message" style={{ color: '#6b7280', fontSize: '0.9rem' }}>
                   {activeJob.message || ''} {activeJob.output_dir ? `（输出：${activeJob.output_dir}）` : ''}
                 </div>
               </div>
@@ -394,10 +407,10 @@ const DataSecurity = () => {
             </div>
             <div style={{ marginTop: '10px' }}>
               <ProgressBar value={activeJob.progress} />
-              <div style={{ marginTop: '6px', color: '#6b7280', fontSize: '0.9rem' }}>{activeJob.progress}%</div>
+              <div data-testid="ds-active-job-progress" style={{ marginTop: '6px', color: '#6b7280', fontSize: '0.9rem' }}>{activeJob.progress}%</div>
             </div>
             {activeJob.detail && (
-              <div style={{ marginTop: '10px', padding: '10px', background: '#fef2f2', color: '#991b1b', borderRadius: '8px' }}>
+              <div data-testid="ds-active-job-detail" style={{ marginTop: '10px', padding: '10px', background: '#fef2f2', color: '#991b1b', borderRadius: '8px' }}>
                 {activeJob.detail}
               </div>
             )}
@@ -415,6 +428,7 @@ const DataSecurity = () => {
             {jobs.map((j) => (
               <div
                 key={j.id}
+                data-testid={`ds-job-row-${j.id}`}
                 style={{
                   display: 'flex',
                   justifyContent: 'space-between',

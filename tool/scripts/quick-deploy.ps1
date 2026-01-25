@@ -175,9 +175,12 @@ $BackendVolumes = ssh "${ServerUser}@${ServerHost}" "docker inspect ragflowauth-
 $FrontendEnv = ssh "${ServerUser}@${ServerHost}" "docker inspect ragflowauth-frontend --format '{{range .Config.Env}}{{.}} {{end}}' 2>/dev/null || echo ''"
 $BackendEnv = ssh "${ServerUser}@${ServerHost}" "docker inspect ragflowauth-backend --format '{{range .Config.Env}}{{.}} {{end}}' 2>/dev/null || echo ''"
 
-# Remove old containers
-Write-Host "Removing old containers..." -ForegroundColor Cyan
-ssh "${ServerUser}@${ServerHost}" "docker rm ragflowauth-frontend ragflowauth-backend 2>/dev/null || true"
+# Force stop and remove existing containers
+Write-Host "Stopping existing containers..." -ForegroundColor Cyan
+ssh "${ServerUser}@${ServerHost}" "docker stop ragflowauth-frontend ragflowauth-backend 2>/dev/null || true"
+
+Write-Host "Removing existing containers..." -ForegroundColor Cyan
+ssh "${ServerUser}@${ServerHost}" "docker rm -f ragflowauth-frontend ragflowauth-backend 2>/dev/null || true"
 
 # Start frontend container
 Write-Host "Starting frontend container..." -ForegroundColor Cyan
@@ -194,7 +197,7 @@ if ($FrontendVolumes) {
 }
 
 ssh "${ServerUser}@${ServerHost}" "$FrontendCmd $FrontendImage"
-Write-Host "Frontend container started" -ForegroundColor Green
+Write-Host "Frontend container started: $FrontendImage" -ForegroundColor Green
 
 # Start backend container
 Write-Host "Starting backend container..." -ForegroundColor Cyan
@@ -216,7 +219,7 @@ if ($BackendVolumes) {
 }
 
 ssh "${ServerUser}@${ServerHost}" "$BackendCmd $BackendImage"
-Write-Host "Backend container started" -ForegroundColor Green
+Write-Host "Backend container started: $BackendImage" -ForegroundColor Green
 Write-Host ""
 
 # ========== Step 7: Verify deployment ==========

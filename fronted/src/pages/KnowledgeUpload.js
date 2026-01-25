@@ -81,6 +81,7 @@ const KnowledgeUpload = () => {
 
       {error && (
         <div
+          data-testid="upload-error"
           style={{
             backgroundColor: '#fee2e2',
             color: '#991b1b',
@@ -95,6 +96,7 @@ const KnowledgeUpload = () => {
 
       {success && (
         <div
+          data-testid="upload-success"
           style={{
             backgroundColor: '#d1fae5',
             color: '#065f46',
@@ -125,6 +127,7 @@ const KnowledgeUpload = () => {
               value={kbId}
               onChange={(e) => setKbId(e.target.value)}
               disabled={loadingDatasets}
+              data-testid="upload-kb-select"
               style={{
                 width: '100%',
                 padding: '10px',
@@ -154,6 +157,7 @@ const KnowledgeUpload = () => {
               选择文件
             </label>
             <div
+              data-testid="upload-file-dropzone"
               style={{
                 border: '2px dashed #d1d5db',
                 borderRadius: '4px',
@@ -172,6 +176,7 @@ const KnowledgeUpload = () => {
                 accept=".txt,.pdf,.doc,.docx,.md,.ppt,.pptx"
                 style={{ display: 'none' }}
                 id="fileInput"
+                data-testid="upload-file-input"
               />
               <div style={{ fontSize: '2rem', marginBottom: '12px' }}>文件</div>
               <div style={{ color: '#6b7280', marginBottom: '8px' }}>
@@ -189,6 +194,7 @@ const KnowledgeUpload = () => {
           <button
             type="submit"
             disabled={!selectedFile || uploading}
+            data-testid="upload-submit"
             style={{
               width: '100%',
               padding: '12px',
@@ -228,4 +234,3 @@ const KnowledgeUpload = () => {
 };
 
 export default KnowledgeUpload;
-
