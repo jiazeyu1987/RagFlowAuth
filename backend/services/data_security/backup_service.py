@@ -100,15 +100,43 @@ class DataSecurityBackupService:
 
             # 3) images (optional)
             if include_images:
+                self.store.update_job(job_id, message=f"开始备份Docker镜像...", progress=min(92, prog))
                 images, err = list_compose_images(compose_file)
                 if err:
                     self.store.update_job(job_id, message=f"跳过镜像备份：{err}", progress=min(95, prog))
                 else:
-                    ok_save, err2 = docker_save_images(images, pack_dir / "images.tar")
-                    if not ok_save and err2:
-                        self.store.update_job(job_id, message=f"镜像备份失败（已跳过）：{err2}", progress=min(95, prog))
-                    else:
-                        self.store.update_job(job_id, message=f"镜像已备份（{len(images)}）", progress=min(95, prog))
+                    import logging
+                    logger = logging.getLogger(__name__)
+                    images_dest = pack_dir / "images.tar"
+                    logger.info(f"Saving {len(images)} images to {images_dest}")
+                    self.store.update_job(job_id, message=f"正在备份{len(images)}个Docker镜像...", progress=min(93, prog))
+                    try:
+                        ok_save, err2 = docker_save_images(images, images_dest)
+                        logger.info(f"docker_save_images result: ok={ok_save}, err={err2}")
+                        if not ok_save and err2:
+                            self.store.update_job(job_id, message=f"镜像备份失败（已跳过）：{err2}", progress=min(95, prog))
+                        else:
+                            # Verify file was created (check host path)
+                            import os
+                            # Convert container path to host path for verification
+                            images_dest_str = str(images_dest)
+                            if images_dest_str.startswith("/app/data/"):
+                                images_dest_str = images_dest_str.replace("/app/data", "/opt/ragflowauth/data", 1)
+                            elif images_dest_str.startswith("/app/uploads/"):
+                                images_dest_str = images_dest_str.replace("/app/uploads", "/opt/ragflowauth/uploads", 1)
+
+                            if os.path.exists(images_dest_str):
+                                size = os.path.getsize(images_dest_str)
+                                logger.info(f"Images file created: {size/1024/1024:.2f} MB")
+                                self.store.update_job(job_id, message=f"镜像已备份（{len(images)}）", progress=min(95, prog))
+                            else:
+                                logger.error(f"Images file NOT created at {images_dest_str}")
+                                self.store.update_job(job_id, message=f"镜像备份失败：文件未创建", progress=min(95, prog))
+                    except Exception as e:
+                        logger.error(f"Exception during image backup: {e}", exc_info=True)
+                        self.store.update_job(job_id, message=f"镜像备份异常：{str(e)}", progress=min(95, prog))
+            else:
+                self.store.update_job(job_id, message="跳过Docker镜像备份", progress=min(95, prog))
 
             # 4) config snapshot
             try:
@@ -124,16 +152,54 @@ class DataSecurityBackupService:
                 except Exception:
                     pass
 
-        finished_at_ms = int(time.time() * 1000)
-        self.store.update_job(job_id, status="completed", progress=100, message="备份完成", finished_at_ms=finished_at_ms)
+        backup_done_ms = int(time.time() * 1000)
+        # Keep job running while we perform post-backup steps (replication).
+        self.store.update_job(job_id, status="running", progress=90, message="备份完成，准备同步")
         try:
             if job_kind == "full":
-                self.store.update_last_full_backup_time(finished_at_ms)
+                self.store.update_last_full_backup_time(backup_done_ms)
             elif job_kind == "incremental":
-                self.store.update_last_incremental_backup_time(finished_at_ms)
+                self.store.update_last_incremental_backup_time(backup_done_ms)
         except Exception:
             # Best-effort: backup succeeded; scheduling metadata must not fail the job.
             pass
+
+        # Automatic replication to mounted SMB share
+        replicated = False
+        try:
+            from .replica_service import BackupReplicaService
+            replica_svc = BackupReplicaService(self.store)
+            replicated = bool(replica_svc.replicate_backup(pack_dir, job_id))
+        except Exception as e:
+            # Replication failure should not mark the backup as failed
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Replication failed: {e}", exc_info=True)
+            # Update message to indicate replication failure, but keep status as "completed"
+            try:
+                self.store.update_job(
+                    job_id,
+                    message=f"备份完成（同步失败：{str(e)}）",
+                    detail=str(e),
+                    progress=100
+                )
+            except Exception:
+                pass
+        finally:
+            finished_at_ms = int(time.time() * 1000)
+            # If replication is disabled, or replication didn't update the progress to 100, finish the job here.
+            try:
+                if not replicated:
+                    # Keep any error message written by replica service; only set a default if still at the pre-sync message.
+                    try:
+                        current = self.store.get_job(job_id)
+                        if (current.message or "") == "备份完成，准备同步":
+                            self.store.update_job(job_id, message="备份完成")
+                    except Exception:
+                        pass
+                self.store.update_job(job_id, status="completed", progress=100, finished_at_ms=finished_at_ms)
+            except Exception:
+                pass
 
     def run_incremental_backup_job(self, job_id: int) -> None:
         """

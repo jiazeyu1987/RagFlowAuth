@@ -33,6 +33,9 @@ async def get_settings(_: AdminOnly) -> dict[str, Any]:
         "full_backup_include_images": getattr(s, 'full_backup_include_images', True),
         "incremental_schedule": getattr(s, 'incremental_schedule', None),
         "full_backup_schedule": getattr(s, 'full_backup_schedule', None),
+        "replica_enabled": getattr(s, 'replica_enabled', False),
+        "replica_target_path": getattr(s, 'replica_target_path') or "",
+        "replica_subdir_format": getattr(s, 'replica_subdir_format') or "flat",
     }
 
 
@@ -58,6 +61,9 @@ async def update_settings(_: AdminOnly, body: dict[str, Any]) -> dict[str, Any]:
         "full_backup_include_images": getattr(s, 'full_backup_include_images', True),
         "incremental_schedule": getattr(s, 'incremental_schedule', None),
         "full_backup_schedule": getattr(s, 'full_backup_schedule', None),
+        "replica_enabled": getattr(s, 'replica_enabled', False),
+        "replica_target_path": getattr(s, 'replica_target_path') or "",
+        "replica_subdir_format": getattr(s, 'replica_subdir_format') or "flat",
     }
 
 

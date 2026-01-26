@@ -95,3 +95,12 @@ def add_last_backup_time_columns_to_data_security(conn: sqlite3.Connection) -> N
         return
     add_column_if_missing(conn, "data_security_settings", "last_incremental_backup_time_ms INTEGER")
     add_column_if_missing(conn, "data_security_settings", "last_full_backup_time_ms INTEGER")
+
+
+def add_replica_columns_to_data_security(conn: sqlite3.Connection) -> None:
+    """Add automatic replication settings for copying backups to mounted SMB shares."""
+    if not table_exists(conn, "data_security_settings"):
+        return
+    add_column_if_missing(conn, "data_security_settings", "replica_enabled INTEGER NOT NULL DEFAULT 0")
+    add_column_if_missing(conn, "data_security_settings", "replica_target_path TEXT")
+    add_column_if_missing(conn, "data_security_settings", "replica_subdir_format TEXT DEFAULT 'flat'")

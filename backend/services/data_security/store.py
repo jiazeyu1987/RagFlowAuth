@@ -58,12 +58,12 @@ class DataSecurityStore:
             conn.close()
 
     def _release_lock(self, *, name: str) -> None:
-        """Release lock if owned by this store instance (best-effort)."""
+        """Release lock by name (owner check removed to fix worker thread issue)."""
         name = str(name or "").strip() or "backup"
         conn = self._conn()
         try:
             conn.execute("BEGIN IMMEDIATE")
-            conn.execute("DELETE FROM backup_locks WHERE name = ? AND owner = ?", (name, self._lock_owner))
+            conn.execute("DELETE FROM backup_locks WHERE name = ?", (name,))
             conn.commit()
         except Exception:
             try:
@@ -126,6 +126,9 @@ class DataSecurityStore:
                 full_backup_schedule=get_col("full_backup_schedule"),
                 last_incremental_backup_time_ms=int(get_col("last_incremental_backup_time_ms")) if get_col("last_incremental_backup_time_ms") is not None else None,
                 last_full_backup_time_ms=int(get_col("last_full_backup_time_ms")) if get_col("last_full_backup_time_ms") is not None else None,
+                replica_enabled=bool(get_col("replica_enabled", 0)),
+                replica_target_path=get_col("replica_target_path"),
+                replica_subdir_format=get_col("replica_subdir_format") or "flat",
             )
         finally:
             conn.close()
@@ -148,6 +151,9 @@ class DataSecurityStore:
             "full_backup_include_images",
             "incremental_schedule",
             "full_backup_schedule",
+            "replica_enabled",
+            "replica_target_path",
+            "replica_subdir_format",
         }
         fields = {k: updates.get(k) for k in allowed if k in updates}
         fields["updated_at_ms"] = now_ms

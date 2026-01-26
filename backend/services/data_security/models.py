@@ -33,6 +33,10 @@ class DataSecuritySettings:
     # Last successful backup times (for reliable scheduling)
     last_incremental_backup_time_ms: int | None
     last_full_backup_time_ms: int | None
+    # Automatic replication to mounted SMB share
+    replica_enabled: bool
+    replica_target_path: str | None
+    replica_subdir_format: str  # 'flat' or 'date'
 
     def target_path(self) -> str | None:
         if self.target_mode == "local":

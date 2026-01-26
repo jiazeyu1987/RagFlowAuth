@@ -79,5 +79,7 @@ def start_job_if_idle(*, reason: str, full_backup: bool = False) -> int:
             except Exception:
                 pass
 
-    threading.Thread(target=worker, args=(job.id,), daemon=True).start()
+    # Use non-daemon thread to ensure backup completes in container
+    thread = threading.Thread(target=worker, args=(job.id,), daemon=False)
+    thread.start()
     return job.id

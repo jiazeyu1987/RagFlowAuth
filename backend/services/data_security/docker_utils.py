@@ -78,9 +78,8 @@ def docker_tar_volume(volume_name: str, dest_tar_gz: Path) -> None:
     backup_dir = dest_tar_gz.parent.resolve()
 
     backup_dir_str = str(backup_dir)
-    if backup_dir_str.startswith("/app/data/backups/"):
-        backup_dir_str = backup_dir_str.replace("/app/data/backups", "/opt/ragflowauth/backups", 1)
-    elif backup_dir_str.startswith("/app/data/"):
+    # Keep the /data part in the path since /opt/ragflowauth/data is mounted to /app/data
+    if backup_dir_str.startswith("/app/data/"):
         backup_dir_str = backup_dir_str.replace("/app/data", "/opt/ragflowauth/data", 1)
     elif backup_dir_str.startswith("/app/uploads/"):
         backup_dir_str = backup_dir_str.replace("/app/uploads", "/opt/ragflowauth/uploads", 1)
@@ -93,7 +92,7 @@ def docker_tar_volume(volume_name: str, dest_tar_gz: Path) -> None:
         f"{volume_name}:/data:ro",
         "-v",
         f"{backup_dir_str}:/backup",
-        "ragflowauth-backend:local",
+        "ragflowauth-backend:2025-01-25-scheduler-fix-v2",
         "sh",
         "-lc",
         f"tar -czf /backup/{dest_tar_gz.name} -C /data .",
@@ -123,8 +122,29 @@ def docker_save_images(images: list[str], dest_tar: Path) -> tuple[bool, str | N
 
     ensure_dir(Path(dest_tar_str).parent)
 
+    # Debug output
+    print(f"[DEBUG] Saving {len(images)} images to {dest_tar_str}", flush=True)
+
+    # Check directory exists
+    import os
+    dest_dir = os.path.dirname(dest_tar_str)
+    print(f"[DEBUG] Destination directory: {dest_dir}, exists: {os.path.exists(dest_dir)}", flush=True)
+
     code, out = run_cmd(["docker", "save", "-o", dest_tar_str, *images])
+    print(f"[DEBUG] Docker save return code: {code}", flush=True)
     if code != 0:
+        print(f"[DEBUG] Docker save error: {out}", flush=True)
         return False, out or "docker save failed"
+
+    # Verify file was created
+    print(f"[DEBUG] Checking if file exists: {dest_tar_str}", flush=True)
+    if os.path.exists(dest_tar_str):
+        size = os.path.getsize(dest_tar_str)
+        print(f"[DEBUG] File created successfully: {size/1024/1024:.2f} MB", flush=True)
+    else:
+        print(f"[DEBUG] ERROR: File not created at {dest_tar_str}", flush=True)
+        print(f"[DEBUG] Listing directory: {os.listdir(dest_dir) if os.path.exists(dest_dir) else 'DIR NOT FOUND'}", flush=True)
+        return False, f"File not created: {dest_tar_str}"
+
     return True, None
 

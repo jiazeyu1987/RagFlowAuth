@@ -223,6 +223,25 @@ if (-not $SkipCleanup) {
   } else {
     Write-Info "Keeping temporary files in: $OutPath"
   }
+
+  # Clean up old images on server
+  Write-Step "Cleaning up old Docker images on server"
+
+  $cleanupScript = Join-Path $PSScriptRoot "cleanup-images.sh"
+  if (Test-Path $cleanupScript) {
+    Write-Info "Uploading cleanup script..."
+    scp $cleanupScript "${ServerUser}@${ServerHost}:/tmp/cleanup-images.sh"
+
+    Write-Info "Converting line endings..."
+    ssh "${ServerUser}@${ServerHost}" "sed -i 's/\r$//' /tmp/cleanup-images.sh"
+
+    Write-Info "Running cleanup script (keeping only current version)..."
+    ssh "${ServerUser}@${ServerHost}" "chmod +x /tmp/cleanup-images.sh && /tmp/cleanup-images.sh --keep 1"
+
+    Write-Success "Old images cleaned up on server (only current version kept)"
+  } else {
+    Write-Warn "Cleanup script not found, skipping image cleanup"
+  }
 }
 
 # ==================== Complete ====================

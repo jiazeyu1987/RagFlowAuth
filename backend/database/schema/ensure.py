@@ -17,6 +17,7 @@ from .data_security import (
     add_backup_job_kind_column,
     add_full_backup_columns_to_data_security,
     add_last_backup_time_columns_to_data_security,
+    add_replica_columns_to_data_security,
     ensure_backup_jobs_table,
     ensure_backup_locks_table,
     ensure_data_security_settings_table,
@@ -69,6 +70,7 @@ def ensure_schema(db_path: str | Path) -> None:
         add_full_backup_columns_to_data_security(conn)
         add_cron_schedule_columns_to_data_security(conn)
         add_last_backup_time_columns_to_data_security(conn)
+        add_replica_columns_to_data_security(conn)
 
         # Org directory (companies/departments) + audit
         ensure_companies_table(conn)
