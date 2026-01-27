@@ -14,9 +14,54 @@ import subprocess
 import webbrowser
 import threading
 import os
+import sys
+import logging
 from pathlib import Path
+from datetime import datetime
 
-# 配置文件路径
+# ==================== 日志配置 ====================
+# 日志文件路径（与 tool.py 同目录）
+LOG_FILE = Path(__file__).parent / "tool_log.log"
+
+# 创建 logger
+logger = logging.getLogger("RagflowAuthTool")
+logger.setLevel(logging.DEBUG)
+
+# 文件处理器（UTF-8 编码，自动换行）
+file_handler = logging.FileHandler(LOG_FILE, encoding='utf-8', mode='a')
+file_handler.setLevel(logging.DEBUG)
+
+# 控制台处理器
+console_handler = logging.StreamHandler(sys.stdout)
+console_handler.setLevel(logging.INFO)
+
+# 日志格式
+formatter = logging.Formatter(
+    '%(asctime)s [%(levelname)s] %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
+file_handler.setFormatter(formatter)
+console_handler.setFormatter(formatter)
+
+# 添加处理器
+logger.addHandler(file_handler)
+logger.addHandler(console_handler)
+
+# 防止重复添加
+logger.propagate = False
+
+def log_to_file(message, level="INFO"):
+    """写入日志到文件的辅助函数"""
+    if level == "ERROR":
+        logger.error(message)
+    elif level == "WARNING":
+        logger.warning(message)
+    elif level == "DEBUG":
+        logger.debug(message)
+    else:
+        logger.info(message)
+
+# ==================== 配置文件路径 ====================
 CONFIG_FILE = Path.home() / ".ragflowauth_tool_config.txt"
 
 
@@ -41,7 +86,9 @@ class ServerConfig:
                             elif key == "SERVER_USER":
                                 self.user = value
             except Exception as e:
-                print(f"加载配置失败: {e}")
+                msg = f"加载配置失败: {e}"
+                print(msg)
+                log_to_file(msg, "ERROR")
 
     def save_config(self):
         """保存配置到文件"""
@@ -50,7 +97,9 @@ class ServerConfig:
                 f.write(f"SERVER_IP={self.ip}\n")
                 f.write(f"SERVER_USER={self.user}\n")
         except Exception as e:
-            print(f"保存配置失败: {e}")
+            msg = f"保存配置失败: {e}"
+            print(msg)
+            log_to_file(msg, "ERROR")
 
 
 class SSHExecutor:
@@ -60,18 +109,59 @@ class SSHExecutor:
         self.ip = ip
         self.user = user
 
-    def execute(self, command, callback=None):
-        """执行 SSH 命令"""
-        full_command = f"{self.user}@{self.ip} {command}"
+    def execute(self, command, callback=None, timeout_seconds=310):
+        """执行 SSH 命令
+
+        Args:
+            command: 要执行的命令
+            callback: 可选的回调函数
+            timeout_seconds: 超时时间（秒），默认 310 秒（5分钟）
+        """
+        # 使用双引号包裹命令，转义内部的双引号和特殊字符
+        escaped_command = command.replace('\\', '\\\\').replace('"', '\\"').replace('$', '\\$')
+        # 添加 BatchMode=yes 避免等待密码输入
+        full_command = f'ssh -o BatchMode=yes -o ConnectTimeout=10 {self.user}@{self.ip} "{escaped_command}"'
+
+        # 调试日志（仅当命令较长时显示）
+        if len(command) > 100:
+            debug_cmd = command[:97] + "..."
+        else:
+            debug_cmd = command
+
+        # 记录 SSH 命令到日志文件
+        log_to_file(f"[SSH] 执行命令: {debug_cmd}", "DEBUG")
+
         try:
+            # 执行命令
             process = subprocess.Popen(
-                ["ssh", full_command],
+                full_command,
                 shell=True,
                 stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=True
+                stderr=subprocess.PIPE,
+                text=True,
+                encoding='utf-8',
+                errors='replace'
             )
-            output, _ = process.communicate()
+            # 添加超时
+            try:
+                stdout, stderr = process.communicate(timeout=timeout_seconds)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                timeout_minutes = timeout_seconds / 60
+                error_msg = f"SSH 命令超时（超过{timeout_minutes:.1f}分钟）: {command[:100]}..."
+                log_to_file(f"[SSH] {error_msg}", "ERROR")
+                raise Exception(error_msg)
+
+            # 合并 stdout 和 stderr
+            output = stdout + stderr
+
+            # 记录命令执行结果
+            if process.returncode == 0:
+                log_to_file(f"[SSH] 命令执行成功", "DEBUG")
+            else:
+                log_to_file(f"[SSH] 命令执行失败 (返回码: {process.returncode})", "ERROR")
+                if output.strip():
+                    log_to_file(f"[SSH] 错误输出: {output}", "ERROR")
 
             if callback:
                 callback(output)
@@ -79,6 +169,7 @@ class SSHExecutor:
             return process.returncode == 0, output
         except Exception as e:
             error_msg = f"执行失败: {str(e)}"
+            log_to_file(f"[SSH] {error_msg}", "ERROR")
             if callback:
                 callback(error_msg)
             return False, error_msg
@@ -126,6 +217,8 @@ class ToolButton(ttk.Frame):
         self.output.insert(tk.END, text)
         self.output.see(tk.END)
         self.output.config(state=tk.DISABLED)
+        # 同时记录到日志文件
+        log_to_file(f"[TOOL] {text.strip()}", "INFO")
 
 
 class RagflowAuthTool:
@@ -138,6 +231,9 @@ class RagflowAuthTool:
 
         self.config = ServerConfig()
         self.ssh_executor = None
+
+        # 记录初始化
+        log_to_file(f"UI 初始化完成，默认服务器: {self.config.user}@{self.config.ip}")
 
         self.setup_ui()
 
@@ -427,7 +523,7 @@ class RagflowAuthTool:
         info_label = ttk.Label(
             restore_frame,
             text="从本地备份文件夹恢复数据到服务器\n"
-                 "支持恢复数据库、上传文件和 Docker 镜像",
+                 "支持恢复：RagflowAuth 数据、上传文件、Docker 镜像、RAGFlow 数据 (volumes)",
             foreground="gray",
             justify=tk.CENTER
         )
@@ -493,6 +589,7 @@ class RagflowAuthTool:
 
         # 初始化还原状态
         self.restore_images_exists = False
+        self.restore_volumes_exists = False
         self.selected_restore_folder = None
 
     def create_logs_tab(self):
@@ -556,6 +653,9 @@ class RagflowAuthTool:
         self.config.user = self.user_var.get()
         self.config.save_config()
         self.status_bar.config(text="配置已保存")
+        msg = "[INFO] 配置已保存"
+        print(msg)
+        log_to_file(msg)
         messagebox.showinfo("成功", "配置已保存")
 
     def test_connection(self):
@@ -564,9 +664,15 @@ class RagflowAuthTool:
         success, output = self.ssh_executor.execute("echo 'Connection successful'")
         if success and "Connection successful" in output:
             self.status_bar.config(text="连接测试成功")
+            msg = f"[INFO] 成功连接到 {self.config.user}@{self.config.ip}"
+            print(msg)
+            log_to_file(msg)
             messagebox.showinfo("成功", f"成功连接到 {self.config.user}@{self.config.ip}")
         else:
             self.status_bar.config(text="连接测试失败")
+            msg = f"[ERROR] 无法连接到 {self.config.user}@{self.config.ip}\n错误: {output}"
+            print(msg)
+            log_to_file(msg, "ERROR")
             messagebox.showerror("失败", f"无法连接到 {self.config.user}@{self.config.ip}\n\n错误: {output}")
 
     def update_ssh_executor(self):
@@ -586,14 +692,21 @@ class RagflowAuthTool:
             def callback(output):
                 # 在实际应用中，你可能想要显示输出
                 print(output)
+                log_to_file(f"[SSH-CMD] {output.strip()}")
 
             success, output = self.ssh_executor.execute(command, callback)
 
             if success:
                 self.status_bar.config(text="命令执行完成")
+                msg = f"[INFO] 命令执行成功！\n输出:\n{output}"
+                print(msg)
+                log_to_file(msg)
                 messagebox.showinfo("成功", f"命令执行成功！\n\n输出:\n{output}")
             else:
                 self.status_bar.config(text="命令执行失败")
+                msg = f"[ERROR] 命令执行失败！\n错误: {output}"
+                print(msg)
+                log_to_file(msg, "ERROR")
                 messagebox.showerror("失败", f"命令执行失败！\n\n错误: {output}")
 
         thread = threading.Thread(target=execute, daemon=True)
@@ -625,8 +738,12 @@ class RagflowAuthTool:
         url = self.url_var.get()
         if url and url != "http://":
             self.status_bar.config(text=f"打开: {url}")
+            log_to_file(f"[URL] 打开自定义 URL: {url}")
             webbrowser.open(url)
         else:
+            msg = "[WARNING] 请输入有效的 URL"
+            print(msg)
+            log_to_file(msg, "WARNING")
             messagebox.showwarning("警告", "请输入有效的 URL")
 
     def open_log_window(self, command):
@@ -691,6 +808,9 @@ class RagflowAuthTool:
         self.selected_restore_folder = Path(folder_path)
         self.restore_folder_var.set(str(self.selected_restore_folder))
 
+        # 记录到日志
+        log_to_file(f"[RESTORE] 选择备份文件夹: {self.selected_restore_folder}")
+
         # 验证文件夹
         self.validate_restore_folder()
 
@@ -705,6 +825,7 @@ class RagflowAuthTool:
         auth_db = self.selected_restore_folder / "auth.db"
         uploads_dir = self.selected_restore_folder / "uploads"
         images_tar = self.selected_restore_folder / "images.tar"
+        volumes_dir = self.selected_restore_folder / "volumes"
 
         info_text = []
         is_valid = True
@@ -730,8 +851,20 @@ class RagflowAuthTool:
             info_text.append("ℹ️  未找到 Docker 镜像（仅恢复数据）")
             self.restore_images_exists = False
 
+        # 检查 volumes 目录（RAGFlow 数据）
+        if volumes_dir.exists() and volumes_dir.is_dir():
+            volume_items = list(volumes_dir.rglob("*"))
+            info_text.append(f"✅ 找到 RAGFlow 数据 (volumes): {len(volume_items)} 个文件")
+            self.restore_volumes_exists = True
+        else:
+            info_text.append("ℹ️  未找到 RAGFlow 数据 (volumes)")
+            self.restore_volumes_exists = False
+
         # 显示信息
         self.restore_info_label.config(text="\n".join(info_text), foreground="blue" if is_valid else "red")
+
+        # 记录验证结果到日志
+        log_to_file(f"[RESTORE] 备份验证结果:\n" + "\n".join(info_text))
 
         # 启用/禁用还原按钮
         if is_valid and auth_db.exists():
@@ -740,21 +873,70 @@ class RagflowAuthTool:
             self.restore_btn.config(state=tk.DISABLED)
 
     def append_restore_log(self, text):
-        """追加还原日志"""
-        self.restore_output.config(state=tk.NORMAL)
-        self.restore_output.insert(tk.END, text + "\n")
-        self.restore_output.see(tk.END)
-        self.restore_output.config(state=tk.DISABLED)
-        self.restore_output.update()
+        """追加还原日志（线程安全）"""
+        # 记录到日志文件
+        log_to_file(f"[RESTORE] {text}", "INFO")
+
+        # 使用 after 方法将 GUI 更新调度到主线程
+        def _update():
+            self.restore_output.config(state=tk.NORMAL)
+            self.restore_output.insert(tk.END, text + "\n")
+            self.restore_output.see(tk.END)
+            self.restore_output.config(state=tk.DISABLED)
+            self.restore_output.update_idletasks()
+
+        # 如果已经在主线程中，直接执行；否则使用 after 调度
+        if threading.current_thread() is threading.main_thread():
+            _update()
+        else:
+            # 从后台线程更新 GUI，需要使用 after
+            self.root.after(0, _update)
+
+    def update_restore_status(self, text):
+        """更新还原状态标签（线程安全）"""
+        # 记录到日志文件
+        log_to_file(f"[RESTORE-STATUS] {text}", "INFO")
+
+        def _update():
+            self.restore_status_label.config(text=text)
+
+        if threading.current_thread() is threading.main_thread():
+            _update()
+        else:
+            self.root.after(0, _update)
+
+    def stop_restore_progress(self):
+        """停止还原进度条并恢复按钮（线程安全）"""
+        def _update():
+            self.restore_progress.stop()
+            self.restore_btn.config(state=tk.NORMAL)
+
+        if threading.current_thread() is threading.main_thread():
+            _update()
+        else:
+            self.root.after(0, _update)
 
     def restore_data(self):
         """执行数据还原"""
         if not self.selected_restore_folder:
+            msg = "[ERROR] 请先选择备份文件夹"
+            print(msg)
+            log_to_file(msg, "ERROR")
             messagebox.showerror("错误", "请先选择备份文件夹")
             return
 
+        # 确保 SSH 执行器已初始化
+        self.update_ssh_executor()
+
         # 确认对话框
-        restore_type = "数据和 Docker 镜像" if self.restore_images_exists else "数据"
+        restore_items = []
+        restore_items.append("RagflowAuth 数据")
+        if self.restore_images_exists:
+            restore_items.append("Docker 镜像")
+        if self.restore_volumes_exists:
+            restore_items.append("RAGFlow 数据 (volumes)")
+
+        restore_type = " 和 ".join(restore_items)
         result = messagebox.askyesno(
             "确认还原",
             f"即将还原 {restore_type} 到服务器\n\n"
@@ -765,7 +947,14 @@ class RagflowAuthTool:
         )
 
         if not result:
+            log_to_file(f"[RESTORE] 用户取消还原操作")
             return
+
+        # 记录还原开始
+        log_to_file(f"[RESTORE] 用户确认还原操作")
+        log_to_file(f"[RESTORE] 源文件夹: {self.selected_restore_folder}")
+        log_to_file(f"[RESTORE] 目标服务器: {self.config.user}@{self.config.ip}")
+        log_to_file(f"[RESTORE] 还原内容: {restore_type}")
 
         # 禁用按钮
         self.restore_btn.config(state=tk.DISABLED)
@@ -775,7 +964,7 @@ class RagflowAuthTool:
 
         # 启动进度条
         self.restore_progress.start(10)
-        self.restore_status_label.config(text="正在准备还原...")
+        self.update_restore_status("正在准备还原...")
 
         # 在后台线程执行还原
         thread = threading.Thread(target=self._execute_restore, daemon=True)
@@ -789,17 +978,29 @@ class RagflowAuthTool:
             self.append_restore_log("=" * 60)
 
             # 1. 停止容器
-            self.append_restore_log("\n[1/6] 停止 Docker 容器...")
-            self.restore_status_label.config(text="正在停止容器...")
+            self.append_restore_log("\n[1/7] 停止 Docker 容器...")
+            self.update_restore_status("正在停止容器...")
 
+            # 停止 RagflowAuth 容器
+            self.append_restore_log("  停止 RagflowAuth 容器...")
             success, output = self.ssh_executor.execute(
                 "docker stop ragflowauth-backend ragflowauth-frontend 2>/dev/null || true"
             )
-            self.append_restore_log(output)
+            self.append_restore_log(f"  {output}")
+
+            # 停止 RAGFlow 容器（如果存在 volumes）
+            if self.restore_volumes_exists:
+                self.append_restore_log("  停止 RAGFlow 容器...")
+                success, output = self.ssh_executor.execute(
+                    "cd /opt/ragflowauth/ragflow_compose && docker compose down 2>/dev/null || true"
+                )
+                self.append_restore_log(f"  {output}")
+            else:
+                self.append_restore_log("  跳过 RAGFlow 容器（未找到 volumes 数据）")
 
             # 2. 备份服务器现有数据
-            self.append_restore_log("\n[2/6] 备份服务器现有数据...")
-            self.restore_status_label.config(text="正在备份现有数据...")
+            self.append_restore_log("\n[2/7] 备份服务器现有数据...")
+            self.update_restore_status("正在备份现有数据...")
 
             timestamp = subprocess.check_output("powershell -Command 'Get-Date -Format \"yyyyMMdd_HHmmss\"'", shell=True).decode().strip()
             backup_dir = f"/tmp/restore_backup_{timestamp}"
@@ -818,18 +1019,18 @@ class RagflowAuthTool:
                 if not success:
                     self.append_restore_log(f"  ⚠️  警告: {output}")
 
-            self.append_restore_log(f"✅ 现有数据已备份到: {backup_dir}")
+            self.append_restore_log(f"✅ RagflowAuth 数据已备份到: {backup_dir}")
 
             # 3. 上传数据文件
-            self.append_restore_log("\n[3/6] 上传数据文件到服务器...")
-            self.restore_status_label.config(text="正在上传数据...")
+            self.append_restore_log("\n[3/7] 上传 RagflowAuth 数据文件...")
+            self.update_restore_status("正在上传 RagflowAuth 数据...")
 
             # 上传 auth.db
             auth_db_local = self.selected_restore_folder / "auth.db"
             if auth_db_local.exists():
                 self.append_restore_log(f"  上传 auth.db ({auth_db_local.stat().st_size / 1024 / 1024:.2f} MB)...")
                 result = subprocess.run(
-                    ["scp", str(auth_db_local), f"{self.config.user}@{self.config.ip}:/opt/ragflowauth/data/auth.db"],
+                    ["scp", "-o", "BatchMode=yes", str(auth_db_local), f"{self.config.user}@{self.config.ip}:/opt/ragflowauth/data/auth.db"],
                     capture_output=True,
                     text=True
                 )
@@ -843,7 +1044,7 @@ class RagflowAuthTool:
             if uploads_local.exists() and uploads_local.is_dir():
                 self.append_restore_log("  上传 uploads 目录...")
                 result = subprocess.run(
-                    ["scp", "-r", str(uploads_local) + "/", f"{self.config.user}@{self.config.ip}:/opt/ragflowauth/uploads/"],
+                    ["scp", "-o", "BatchMode=yes", "-r", str(uploads_local) + "/", f"{self.config.user}@{self.config.ip}:/opt/ragflowauth/uploads/"],
                     capture_output=True,
                     text=True
                 )
@@ -854,93 +1055,429 @@ class RagflowAuthTool:
 
             # 4. 上传并加载 Docker 镜像（如果存在）
             if self.restore_images_exists:
-                self.append_restore_log("\n[4/6] 上传并加载 Docker 镜像...")
-                self.restore_status_label.config(text="正在上传 Docker 镜像...")
+                self.append_restore_log("\n[4/7] 上传并加载 Docker 镜像...")
+                self.update_restore_status("正在上传 Docker 镜像...")
+
+                # 确保 Docker 磁盘挂载点存在
+                self.ssh_executor.execute("mkdir -p /var/lib/docker/tmp")
 
                 images_tar_local = self.selected_restore_folder / "images.tar"
                 size_mb = images_tar_local.stat().st_size / 1024 / 1024
-                self.append_restore_log(f"  上传 images.tar ({size_mb:.2f} MB)...")
+                self.append_restore_log(f"  上传 images.tar ({size_mb:.2f} MB) 到 /var/lib/docker/tmp...")
 
-                # 上传到服务器
+                # 上传到 Docker 磁盘挂载点
+                import time
+                start_time = time.time()
+
                 result = subprocess.run(
-                    ["scp", str(images_tar_local), f"{self.config.user}@{self.config.ip}:/tmp/images.tar"],
+                    ["scp", "-o", "BatchMode=yes", str(images_tar_local), f"{self.config.user}@{self.config.ip}:/var/lib/docker/tmp/images.tar"],
                     capture_output=True,
                     text=True
                 )
                 if result.returncode != 0:
+                    log_to_file(f"[RESTORE] 上传 images.tar 失败: {result.stderr}", "ERROR")
                     raise Exception(f"上传 images.tar 失败: {result.stderr}")
 
+                elapsed = time.time() - start_time
                 self.append_restore_log("  ✅ images.tar 上传成功")
+                log_to_file(f"[RESTORE] images.tar 上传完成: {size_mb:.2f} MB 用时 {elapsed:.1f} 秒 ({size_mb/elapsed:.2f} MB/s)")
                 self.append_restore_log("  正在加载 Docker 镜像...")
 
                 # 加载镜像
-                success, output = self.ssh_executor.execute("docker load -i /tmp/images.tar")
+                success, output = self.ssh_executor.execute("docker load -i /var/lib/docker/tmp/images.tar")
                 if success:
                     self.append_restore_log("  ✅ Docker 镜像加载成功")
                 else:
                     raise Exception(f"加载 Docker 镜像失败: {output}")
 
                 # 清理临时文件
-                self.ssh_executor.execute("rm -f /tmp/images.tar")
+                self.ssh_executor.execute("rm -f /var/lib/docker/tmp/images.tar")
             else:
-                self.append_restore_log("\n[4/6] 跳过 Docker 镜像（未找到 images.tar）")
+                self.append_restore_log("\n[4/7] 跳过 Docker 镜像（未找到 images.tar）")
 
-            # 5. 启动容器
-            self.append_restore_log("\n[5/6] 启动 Docker 容器...")
-            self.restore_status_label.config(text="正在启动容器...")
+            # 4.5. 上传 RAGFlow volumes（如果存在）
+            if self.restore_volumes_exists:
+                self.append_restore_log("\n[5/7] 上传 RAGFlow 数据 (volumes)...")
+                self.update_restore_status("正在上传 RAGFlow 数据...")
 
+                volumes_local = self.selected_restore_folder / "volumes"
+                self.append_restore_log(f"  本地 volumes 目录: {volumes_local}")
+
+                # 先确保服务器上的目录存在
+                self.append_restore_log("  [步骤 1/6] 准备服务器目录...")
+                self.append_restore_log("    执行: mkdir -p /opt/ragflowauth/ragflow_compose")
+                success, output = self.ssh_executor.execute("mkdir -p /opt/ragflowauth/ragflow_compose")
+                if success:
+                    self.append_restore_log("    ✅ 目录创建成功")
+                else:
+                    self.append_restore_log(f"    ⚠️  目录创建输出: {output}")
+
+                # 先备份服务器上的 RAGFlow volumes（如果存在）
+                self.append_restore_log("  [步骤 2/6] 备份服务器上的 RAGFlow volumes...")
+                backup_cmd = (
+                    "cd /opt/ragflowauth/ragflow_compose && "
+                    "tar -czf /var/lib/docker/tmp/ragflow_volumes_backup_$(date +%Y%m%d_%H%M%S).tar.gz volumes 2>/dev/null || true"
+                )
+                self.append_restore_log(f"    执行: {backup_cmd}")
+                success, output = self.ssh_executor.execute(backup_cmd)
+                if success:
+                    self.append_restore_log("    ✅ 备份成功")
+                else:
+                    self.append_restore_log(f"    ⚠️  备份输出: {output}")
+
+                # 删除服务器上的旧 volumes 目录（如果存在）
+                self.append_restore_log("  [步骤 3/6] 清理服务器上的旧 volumes目录...")
+                self.append_restore_log("    执行: rm -rf /opt/ragflowauth/ragflow_compose/volumes")
+                success, output = self.ssh_executor.execute("rm -rf /opt/ragflowauth/ragflow_compose/volumes")
+                if success:
+                    self.append_restore_log("    ✅ 清理成功")
+                else:
+                    self.append_restore_log(f"    ⚠️  清理输出: {output}")
+
+                # 在本地打包 volumes 目录
+                self.append_restore_log("  [步骤 4/6] 打包本地 volumes 目录...")
+                import tarfile
+                import tempfile
+
+                self.append_restore_log(f"    创建临时文件...")
+                temp_tar = tempfile.NamedTemporaryFile(suffix='.tar.gz', delete=False)
+                temp_tar_path = temp_tar.name
+                temp_tar.close()
+                self.append_restore_log(f"    临时文件: {temp_tar_path}")
+
+                try:
+                    self.append_restore_log(f"    开始压缩: {volumes_local} -> {temp_tar_path}")
+                    with tarfile.open(temp_tar_path, "w:gz") as tar:
+                        tar.add(volumes_local, arcname="volumes")
+
+                    size_mb = os.path.getsize(temp_tar_path) / 1024 / 1024
+                    self.append_restore_log(f"    ✅ 压缩完成，大小: {size_mb:.2f} MB")
+
+                    # 上传压缩包到服务器
+                    self.append_restore_log("  [步骤 5/6] 上传压缩包到服务器...")
+                    self.append_restore_log(f"    目标: {self.config.user}@{self.config.ip}:/var/lib/docker/tmp/volumes.tar.gz")
+                    self.append_restore_log(f"    预计需要时间: {size_mb:.2f} MB / 网络速度 ≈ 10秒 ~ 1分钟")
+
+                    import time
+                    import sys
+                    start_time = time.time()
+
+                    # 方案: 使用 pscp (PuTTY) 或 scp with SSH key
+                    # 先检查是否在 Windows 上
+                    is_windows = sys.platform == 'win32'
+                    self.append_restore_log(f"    平台检测: {'Windows' if is_windows else 'Linux/Mac'}")
+
+                    try:
+                        if is_windows:
+                            # Windows: 使用 PowerShell + WinSCP-Portable 或直接 scp
+                            self.append_restore_log("    检测到 Windows，使用 SCP...")
+
+                            # 检查 scp 是否可用
+                            self.append_restore_log("    检查 scp 命令...")
+                            scp_check = subprocess.run(["where", "scp"], capture_output=True, text=True, shell=True)
+                            self.append_restore_log(f"    where scp 返回码: {scp_check.returncode}")
+
+                            if scp_check.returncode != 0:
+                                error_msg = (
+                                    "Windows 上找不到 scp 命令。\n\n"
+                                    "解决方案：\n"
+                                    "1. 安装 Git for Windows（包括 Git Bash）\n"
+                                    "2. 或安装 WSL (Windows Subsystem for Linux)\n"
+                                    "3. 或使用 WinSCP 图形界面手动上传文件"
+                                )
+                                self.append_restore_log(f"    ❌ {error_msg}")
+                                raise Exception(error_msg)
+
+                            scp_path = scp_check.stdout.strip()
+                            self.append_restore_log(f"    ✅ 找到 scp: {scp_path}")
+
+                            # 方案1: 尝试使用 scp（如果有 Git Bash 或 WSL）
+                            self.append_restore_log(f"    准备执行 SCP 命令...")
+                            self.append_restore_log(f"    源文件: {temp_tar_path}")
+                            self.append_restore_log(f"    目标: {self.config.user}@{self.config.ip}:/var/lib/docker/tmp/volumes.tar.gz")
+
+                            cmd = ["scp", "-o", "ConnectTimeout=10", "-o", "BatchMode=yes",
+                                   temp_tar_path, f"{self.config.user}@{self.config.ip}:/var/lib/docker/tmp/volumes.tar.gz"]
+                            self.append_restore_log(f"    命令: {' '.join(cmd)}")
+
+                            result = subprocess.run(
+                                cmd,
+                                capture_output=True,
+                                text=True
+                            )
+
+                            elapsed = time.time() - start_time
+                            self.append_restore_log(f"    SCP 执行完成，耗时: {elapsed:.1f}秒")
+                            self.append_restore_log(f"    SCP 退出码: {result.returncode}")
+
+                            if result.returncode == 0:
+                                self.append_restore_log(f"    ✅ 上传成功 (耗时: {elapsed:.1f}秒)")
+                                log_to_file(f"[RESTORE] volumes.tar.gz 上传完成: {size_mb:.2f} MB 用时 {elapsed:.1f} 秒 ({size_mb/elapsed:.2f} MB/s)")
+                            else:
+                                # SCP 失败，显示详细错误
+                                stdout = result.stdout.strip() if result.stdout else "(空)"
+                                stderr = result.stderr.strip() if result.stderr else "(空)"
+                                self.append_restore_log(f"    ❌ SCP 失败")
+                                self.append_restore_log(f"    stdout: {stdout}")
+                                self.append_restore_log(f"    stderr: {stderr}")
+
+                                if "Permission denied" in stderr or "password" in stderr.lower():
+                                    error_msg = (
+                                        f"SCP 需要 SSH 密钥认证。\n"
+                                        f"错误: {stderr}\n\n"
+                                        f"解决方案：\n"
+                                        f"1. 生成 SSH 密钥: ssh-keygen -t rsa -b 4096\n"
+                                        f"2. 复制公钥到服务器: ssh-copy-id {self.config.user}@{self.config.ip}\n"
+                                        f"3. 或手动复制: type C:\\Users\\<用户>\\.ssh\\id_rsa.pub | ssh {self.config.user}@{self.config.ip} 'cat >> ~/.ssh/authorized_keys'"
+                                    )
+                                    self.append_restore_log(f"    ❌ {error_msg}")
+                                    raise Exception(error_msg)
+                                else:
+                                    error_msg = f"上传失败 (退出码: {result.returncode}):\nstdout: {stdout}\nstderr: {stderr}"
+                                    self.append_restore_log(f"    ❌ {error_msg}")
+                                    raise Exception(error_msg)
+
+                        else:
+                            # Linux/Mac: 直接使用 scp
+                            self.append_restore_log("    使用 SCP 上传 (Linux/Mac)...")
+                            result = subprocess.run(
+                                ["scp", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10",
+                                 temp_tar_path, f"{self.config.user}@{self.config.ip}:/var/lib/docker/tmp/volumes.tar.gz"],
+                                capture_output=True,
+                                text=True
+                            )
+
+                            if result.returncode != 0:
+                                error_msg = result.stderr or result.stdout
+                                self.append_restore_log(f"    ❌ 上传失败: {error_msg}")
+                                raise Exception(f"上传失败: {error_msg}")
+
+                            elapsed = time.time() - start_time
+                            self.append_restore_log(f"    ✅ 上传完成 (耗时: {elapsed:.1f}秒)")
+
+                    except Exception as e:
+                        elapsed = time.time() - start_time
+                        raise Exception(f"上传失败 (耗时: {elapsed:.1f}秒): {str(e)}")
+
+                    # 在服务器上解压
+                    self.append_restore_log("  [步骤 6/6] 解压并还原 volumes...")
+                    self.append_restore_log("    在服务器上解压 volumes.tar.gz...")
+                    extract_cmd = (
+                        "cd /opt/ragflowauth/ragflow_compose && "
+                        "tar -xzf /var/lib/docker/tmp/volumes.tar.gz && "
+                        "rm -f /var/lib/docker/tmp/volumes.tar.gz"
+                    )
+                    self.append_restore_log(f"    执行: {extract_cmd}")
+                    success, output = self.ssh_executor.execute(extract_cmd)
+                    if not success:
+                        self.append_restore_log(f"    ❌ 解压失败: {output}")
+                        raise Exception(f"解压 volumes.tar.gz 失败: {output}")
+                    else:
+                        self.append_restore_log(f"    ✅ 解压成功")
+                        if output:
+                            self.append_restore_log(f"    输出: {output}")
+
+                    # 停止 RAGFlow 容器（防止还原时的写入冲突）
+                    self.append_restore_log("    停止 RAGFlow 容器（防止还原冲突）...")
+                    stop_cmd = "cd /opt/ragflowauth/ragflow_compose && docker compose down"
+                    self.append_restore_log(f"    执行: {stop_cmd}")
+                    success, output = self.ssh_executor.execute(stop_cmd)
+                    if success:
+                        self.append_restore_log("    ✅ RAGFlow 容器已停止")
+                    else:
+                        self.append_restore_log("    ⚠️  停止 RAGFlow 容器时出现警告（可能已停止）")
+                        if output:
+                            self.append_restore_log(f"    输出: {output}")
+
+                    # 还原 Docker volumes（将 tar.gz 提取到实际的 Docker volume 中）
+                    self.append_restore_log("    还原 Docker volumes（提取到实际 volume）...")
+
+                    # 先检查是否有 alpine 镜像
+                    self.append_restore_log("    检查 alpine 镜像...")
+                    check_alpine_cmd = "docker images | grep alpine || echo 'NOT_FOUND'"
+                    success, alpine_output = self.ssh_executor.execute(check_alpine_cmd)
+                    if "NOT_FOUND" in alpine_output:
+                        self.append_restore_log("    ⚠️  未找到 alpine 镜像，正在拉取（这可能需要几分钟）...")
+                        self.append_restore_log("    提示：首次运行会自动拉取 alpine 镜像，请耐心等待")
+                        pull_cmd = "docker pull alpine:latest"
+                        success, pull_output = self.ssh_executor.execute(pull_cmd)
+                        if not success:
+                            self.append_restore_log(f"    ❌ 拉取 alpine 镜像失败: {pull_output}")
+                            raise Exception(f"拉取 alpine 镜像失败: {pull_output}")
+                        self.append_restore_log("    ✅ alpine 镜像拉取完成")
+                    else:
+                        self.append_restore_log("    ✅ alpine 镜像已存在")
+
+                    # 先列出要还原的 volumes
+                    self.append_restore_log("    扫描要还原的 volume 文件...")
+                    list_cmd = "ls -1 /opt/ragflowauth/ragflow_compose/volumes/*.tar.gz 2>/dev/null | xargs -n1 basename || echo 'NO_FILES'"
+                    success, list_output = self.ssh_executor.execute(list_cmd)
+                    if "NO_FILES" in list_output or not list_output.strip():
+                        self.append_restore_log("    ⚠️  未找到 volume 备份文件，跳过 volume 还原")
+                    else:
+                        # 过滤：只保留以 .tar.gz 结尾的行（排除 SSH 错误输出）
+                        volume_files = [line.strip() for line in list_output.strip().split('\n')
+                                      if line.strip() and line.strip().endswith('.tar.gz')]
+                        self.append_restore_log(f"    找到 {len(volume_files)} 个 volume 文件:")
+                        for vf in volume_files:
+                            self.append_restore_log(f"      - {vf}")
+
+                        # 逐个还原 volume（每个 volume 独立超时）
+                        restored_count = 0
+                        failed_volumes = []
+                        for i, tar_filename in enumerate(volume_files, 1):
+                            volume_name = tar_filename.replace('.tar.gz', '')
+                            self.append_restore_log(f"\n    [{i}/{len(volume_files)}] 还原 volume: {volume_name}")
+                            self.append_restore_log(f"      文件: {tar_filename}")
+
+                            # 检查文件大小（使用 stat 避免 awk 转义问题）
+                            size_cmd = f"stat -c %s /opt/ragflowauth/ragflow_compose/volumes/{tar_filename} 2>/dev/null || echo '0'"
+                            success, size_output = self.ssh_executor.execute(size_cmd)
+                            if success and size_output.strip().isdigit():
+                                size_bytes = int(size_output.strip())
+                                size_mb = size_bytes / 1024 / 1024
+                                self.append_restore_log(f"      大小: {size_mb:.2f} MB")
+                            else:
+                                self.append_restore_log(f"      大小: (无法获取)")
+
+                            self.append_restore_log(f"      开始解压（预计 1-3 分钟）...")
+
+                            # 还原单个 volume（使用更长的超时：15分钟）
+                            # 完全避免引号问题：直接使用 tar 命令，不用 sh -c
+                            restore_single_cmd = (
+                                f"docker run --rm "
+                                f"-v {volume_name}:/data "
+                                f"-v /opt/ragflowauth/ragflow_compose/volumes:/backup:ro "
+                                f"alpine tar -xzf /backup/{tar_filename} -C /data 2>&1"
+                            )
+                            self.append_restore_log(f"      执行还原命令（超时 15 分钟）...")
+                            # Volume 还原可能需要很长时间，设置 15 分钟超时
+                            success, output = self.ssh_executor.execute(restore_single_cmd, timeout_seconds=900)
+                            if success:
+                                self.append_restore_log(f"      ✅ {volume_name} 还原成功")
+                                restored_count += 1
+                            else:
+                                self.append_restore_log(f"      ⚠️  {volume_name} 还原失败:")
+                                self.append_restore_log(f"      错误输出:\n{output}")
+                                failed_volumes.append(volume_name)
+
+                        # 汇总结果
+                        self.append_restore_log(f"\n    Volume 还原完成:")
+                        self.append_restore_log(f"      成功: {restored_count}/{len(volume_files)}")
+                        if failed_volumes:
+                            self.append_restore_log(f"      失败: {', '.join(failed_volumes)}")
+                            if restored_count > 0:
+                                self.append_restore_log(f"      ⚠️  部分 volume 还原失败，但 RAGFlow 可能仍能正常工作")
+                            else:
+                                raise Exception(f"所有 volume 还原失败: {', '.join(failed_volumes)}")
+
+                    self.append_restore_log("  ✅ RAGFlow volumes 还原完成")
+
+                finally:
+                    # 删除本地临时文件
+                    if os.path.exists(temp_tar_path):
+                        os.remove(temp_tar_path)
+            else:
+                self.append_restore_log("\n[5/7] 跳过 RAGFlow 数据（未找到 volumes）")
+
+            # 6. 启动容器
+            self.append_restore_log("\n[6/7] 启动 Docker 容器...")
+            self.update_restore_status("正在启动容器...")
+
+            # 启动 RagflowAuth 容器
+            self.append_restore_log("  启动 RagflowAuth 容器...")
             success, output = self.ssh_executor.execute(
-                "docker start ragflowauth-backend ragflowauth-frontend"
+                "docker start ragflowauth-backend ragflowauth-frontend 2>/dev/null || docker restart ragflowauth-backend ragflowauth-frontend"
             )
-            self.append_restore_log(output)
+            self.append_restore_log(f"  {output}")
 
             if success:
-                self.append_restore_log("  ✅ 容器启动成功")
+                self.append_restore_log("  ✅ RagflowAuth 容器启动成功")
             else:
-                self.append_restore_log("  ⚠️  容器启动可能有问题，请检查日志")
+                self.append_restore_log("  ⚠️  RagflowAuth 容器启动可能有问题，请检查日志")
 
-            # 6. 验证
-            self.append_restore_log("\n[6/6] 验证服务状态...")
-            self.restore_status_label.config(text="正在验证服务...")
+            # 启动 RAGFlow 容器（如果还原了 volumes）
+            if self.restore_volumes_exists:
+                self.append_restore_log("  启动 RAGFlow 容器...")
+                success, output = self.ssh_executor.execute(
+                    "cd /opt/ragflowauth/ragflow_compose && docker compose up -d"
+                )
+                self.append_restore_log(f"  {output}")
+
+                if success:
+                    self.append_restore_log("  ✅ RAGFlow 容器启动成功")
+                else:
+                    self.append_restore_log("  ⚠️  RAGFlow 容器启动可能有问题，请检查日志")
+
+                # 等待 RAGFlow 容器启动
+                import time
+                self.append_restore_log("  等待 RAGFlow 服务完全启动...")
+                time.sleep(10)  # RAGFlow 需要更长时间启动
+            else:
+                self.append_restore_log("  跳过 RAGFlow 容器（未还原数据）")
+
+            # 7. 验证
+            self.append_restore_log("\n[7/7] 验证服务状态...")
+            self.update_restore_status("正在验证服务...")
 
             import time
             time.sleep(3)  # 等待容器完全启动
 
-            success, output = self.ssh_executor.execute("docker ps | grep ragflowauth")
+            success, output = self.ssh_executor.execute("docker ps | grep ragflow")
             self.append_restore_log(output)
 
             # 完成
             self.append_restore_log("\n" + "=" * 60)
             self.append_restore_log("✅ 数据还原完成！")
             self.append_restore_log("=" * 60)
-            self.restore_status_label.config(text="✅ 还原完成")
+            self.update_restore_status("✅ 还原完成")
 
             # 显示成功消息
-            messagebox.showinfo(
-                "还原完成",
-                f"数据还原成功！\n\n"
-                f"可以访问以下地址验证：\n"
-                f"• 前端: http://{self.config.ip}:3001\n"
-                f"• 后端: http://{self.config.ip}:8001"
-            )
+            success_msg = f"数据还原成功！\n\n可以访问以下地址验证：\n"
+            success_msg += f"• RagflowAuth 前端: http://{self.config.ip}:3001\n"
+            success_msg += f"• RagflowAuth 后端: http://{self.config.ip}:8001\n"
+            if self.restore_volumes_exists:
+                success_msg += f"• RAGFlow: http://{self.config.ip}\n"
+            success_msg += f"\n提示：RAGFlow 服务可能需要 1-2 分钟完全启动"
+
+            msg = f"[INFO] 数据还原成功！\n{success_msg}"
+            print(msg)
+            log_to_file(msg)
+            messagebox.showinfo("还原完成", success_msg)
 
         except Exception as e:
             error_msg = f"还原失败: {str(e)}"
             self.append_restore_log(f"\n❌ {error_msg}")
-            self.restore_status_label.config(text="❌ 还原失败")
+            self.update_restore_status("❌ 还原失败")
+            msg = f"[ERROR] {error_msg}"
+            print(msg)
+            log_to_file(msg, "ERROR")
             messagebox.showerror("还原失败", error_msg)
 
         finally:
-            # 恢复按钮状态
-            self.restore_progress.stop()
-            self.restore_btn.config(state=tk.NORMAL)
+            # 恢复按钮状态和停止进度条
+            self.stop_restore_progress()
 
 
 def main():
     """主函数"""
-    root = tk.Tk()
-    app = RagflowAuthTool(root)
-    root.mainloop()
+    # 记录应用启动
+    log_to_file("=" * 80)
+    log_to_file(f"RagflowAuth 工具启动")
+    log_to_file(f"日志文件: {LOG_FILE}")
+    log_to_file("=" * 80)
+
+    try:
+        root = tk.Tk()
+        app = RagflowAuthTool(root)
+        root.mainloop()
+    except Exception as e:
+        error_msg = f"未捕获的异常: {str(e)}"
+        print(error_msg)
+        log_to_file(error_msg, "ERROR")
+        import traceback
+        log_to_file(traceback.format_exc(), "ERROR")
+        raise
 
 
 if __name__ == "__main__":
