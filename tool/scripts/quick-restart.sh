@@ -108,6 +108,7 @@ docker run -d \
   --name ragflowauth-backend \
   --network ragflowauth-network \
   -p "${BACKEND_PORT}:8001" \
+  -e TZ=Asia/Shanghai \
   -v "$DATA_DIR/data:/app/data" \
   -v "$DATA_DIR/uploads:/app/uploads" \
   -v "$DATA_DIR/ragflow_config.json:/app/ragflow_config.json:ro" \

@@ -3,7 +3,7 @@
 
 param(
   [Parameter(Mandatory = $false)]
-  [string]$Tag = (Get-Date -Format "yyyy-MM-dd"),
+  [string]$Tag = "",  # Empty by default, will use version from .version file
 
   [Parameter(Mandatory = $false)]
   [string]$ServerHost = "172.30.30.57",  # Production server
@@ -27,12 +27,80 @@ param(
   [switch]$SkipCleanup = $false,
 
   [Parameter(Mandatory = $false)]
-  [string]$OutDir = "dist"
+  [string]$OutDir = "dist",
+
+  # Version increment options
+  [Parameter(Mandatory = $false)]
+  [switch]$IncrementPatch = $false,  # 1.0.0 -> 1.0.1
+
+  [Parameter(Mandatory = $false)]
+  [switch]$IncrementMinor = $false,  # 1.0.0 -> 1.1.0
+
+  [Parameter(Mandatory = $false)]
+  [switch]$IncrementMajor = $false,  # 1.0.0 -> 2.0.0
+
+  [Parameter(Mandatory = $false)]
+  [switch]$NoAutoIncrement = $false  # Don't auto-increment version
 )
 
 $ErrorActionPreference = "Stop"
 
-# Output functions
+# ==================== Version Management Functions ====================
+
+function Get-CurrentVersion {
+  param([string]$RepoRoot)
+
+  $versionFile = Join-Path $RepoRoot ".version"
+
+  if (Test-Path $versionFile) {
+    $version = Get-Content $versionFile -Raw
+    return $version.Trim()
+  } else {
+    return "1.0.0"
+  }
+}
+
+function Set-CurrentVersion {
+  param(
+    [string]$RepoRoot,
+    [string]$Version
+  )
+
+  $versionFile = Join-Path $RepoRoot ".version"
+  $Version | Set-Content -Encoding ASCII -NoNewline -Path $versionFile
+}
+
+function Increment-Version {
+  param(
+    [string]$Version,
+    [switch]$Major,
+    [switch]$Minor,
+    [switch]$Patch
+  )
+
+  $parts = $Version -split '\.'
+  $major = [int]$parts[0]
+  $minor = [int]$parts[1]
+  $patch = [int]$parts[2]
+
+  if ($Major) {
+    $major++
+    $minor = 0
+    $patch = 0
+  } elseif ($Minor) {
+    $minor++
+    $patch = 0
+  } elseif ($Patch) {
+    $patch++
+  } else {
+    # Default: increment patch
+    $patch++
+  }
+
+  return "$major.$minor.$patch"
+}
+
+# ==================== Output Functions ====================
 function Write-Step([string]$Message) {
   Write-Host "`n==> $Message" -ForegroundColor Cyan
 }
@@ -72,9 +140,36 @@ if ($missingTools.Count -gt 0) {
 Write-Success "All required tools are installed"
 
 # Setup paths
-$RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
+$RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot "../..")).Path
 $ComposeFilePath = Join-Path $RepoRoot $ComposeFile
 $OutPath = Join-Path $RepoRoot $OutDir
+
+# ==================== Version Management ====================
+if ([string]::IsNullOrWhiteSpace($Tag)) {
+  # No Tag specified, use version from .version file
+  $currentVersion = Get-CurrentVersion -RepoRoot $RepoRoot
+
+  if ($IncrementMajor -or $IncrementMinor -or $IncrementPatch) {
+    # Increment version
+    $newVersion = Increment-Version -Version $currentVersion -Major:$IncrementMajor -Minor:$IncrementMinor -Patch:$IncrementPatch
+    Write-Step "Version bump: $currentVersion -> $newVersion"
+    Set-CurrentVersion -RepoRoot $RepoRoot -Version $newVersion
+    $Tag = $newVersion
+  } elseif (-not $NoAutoIncrement) {
+    # Auto-increment patch version by default
+    $newVersion = Increment-Version -Version $currentVersion -Patch
+    Write-Step "Version bump: $currentVersion -> $newVersion"
+    Set-CurrentVersion -RepoRoot $RepoRoot -Version $newVersion
+    $Tag = $newVersion
+  } else {
+    # Use current version without incrementing
+    $Tag = $currentVersion
+    Write-Step "Using version: $Tag (no increment)"
+  }
+} else {
+  # Tag explicitly provided, use it
+  Write-Step "Using explicit tag: $Tag"
+}
 
 # Check compose file
 if (-not (Test-Path $ComposeFilePath)) {
@@ -100,7 +195,25 @@ if (-not $SkipBuild) {
 
   Write-Success "Images built successfully"
 } else {
-  Write-Step "Skipping image build"
+  # ⚠️ CRITICAL WARNING
+  Write-Warn "============================================"
+  Write-Warn "⚠️  WARNING: 跳过镜像构建 (-SkipBuild)"
+  Write-Warn "============================================"
+  Write-Warn "如果您修改了代码，服务器将运行旧版本！"
+  Write-Warn ""
+  Write-Warn "仅在以下情况使用 -SkipBuild："
+  Write-Warn "  1. 只修改了配置文件（没有代码修改）"
+  Write-Warn "  2. 只修改了前端 HTML/CSS"
+  Write-Warn "  3. 完全确认镜像已是最新的"
+  Write-Warn ""
+  Write-Warn "如果修改了 Python/JS 代码，请按 Ctrl+C 取消，然后："
+  Write-Warn "  1. 不使用 -SkipBuild 参数"
+  Write-Warn "  2. 完整运行部署流程"
+  Write-Warn ""
+
+  # Auto-confirm in scripts, but show warning
+  Write-Info "Continuing with -SkipBuild..."
+  Start-Sleep -Seconds 3
 }
 
 # ==================== Step 2: Export Images ====================
@@ -215,14 +328,9 @@ if (-not $SkipDeploy) {
 if (-not $SkipCleanup) {
   Write-Step "Cleaning up temporary files"
 
-  $shouldClean = Read-Host "Delete local tar file? (Y/N)"
-  if ($shouldClean -eq "Y" -or $shouldClean -eq "y") {
-    Remove-Item $TarPath -Force
-    Remove-Item $HashPath -Force -ErrorAction SilentlyContinue
-    Write-Success "Temporary files deleted"
-  } else {
-    Write-Info "Keeping temporary files in: $OutPath"
-  }
+  Remove-Item $TarPath -Force -ErrorAction SilentlyContinue
+  Remove-Item $HashPath -Force -ErrorAction SilentlyContinue
+  Write-Success "Temporary files deleted"
 
   # Clean up old images on server
   Write-Step "Cleaning up old Docker images on server"
@@ -230,15 +338,15 @@ if (-not $SkipCleanup) {
   $cleanupScript = Join-Path $PSScriptRoot "cleanup-images.sh"
   if (Test-Path $cleanupScript) {
     Write-Info "Uploading cleanup script..."
-    scp $cleanupScript "${ServerUser}@${ServerHost}:/tmp/cleanup-images.sh"
+    scp $cleanupScript "${ServerUser}@${ServerHost}:/tmp/cleanup-images.sh" 2>$null
 
     Write-Info "Converting line endings..."
-    ssh "${ServerUser}@${ServerHost}" "sed -i 's/\r$//' /tmp/cleanup-images.sh"
+    ssh "${ServerUser}@${ServerHost}" "sed -i 's/\r$//' /tmp/cleanup-images.sh" 2>$null
 
-    Write-Info "Running cleanup script (keeping only current version)..."
-    ssh "${ServerUser}@${ServerHost}" "chmod +x /tmp/cleanup-images.sh && /tmp/cleanup-images.sh --keep 1"
+    Write-Info "Running cleanup script (keeping only running images)..."
+    ssh "${ServerUser}@${ServerHost}" "chmod +x /tmp/cleanup-images.sh && yes | /tmp/cleanup-images.sh" 2>$null
 
-    Write-Success "Old images cleaned up on server (only current version kept)"
+    Write-Success "Old images cleaned up on server (only running images kept)"
   } else {
     Write-Warn "Cleanup script not found, skipping image cleanup"
   }

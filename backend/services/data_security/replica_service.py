@@ -57,7 +57,16 @@ class BackupReplicaService:
             # Step 1.5: Check and copy images.tar from host path (special handling)
             import os
             images_container = pack_dir / "images.tar"
-            images_host_str = str(images_container).replace("/app/data", "/opt/ragflowauth/data", 1)
+            # Convert container path to host path (handle special case for /app/data/backups)
+            images_container_str = str(images_container)
+            if images_container_str.startswith("/app/data/backups"):
+                images_host_str = images_container_str.replace("/app/data/backups", "/opt/ragflowauth/backups", 1)
+            elif images_container_str.startswith("/app/data/"):
+                images_host_str = images_container_str.replace("/app/data", "/opt/ragflowauth/data", 1)
+            elif images_container_str.startswith("/app/uploads/"):
+                images_host_str = images_container_str.replace("/app/uploads", "/opt/ragflowauth/uploads", 1)
+            else:
+                images_host_str = images_container_str
             if os.path.exists(images_host_str) and not images_container.exists():
                 # images.tar exists on host but not in container view
                 images_host = Path(images_host_str)
@@ -117,10 +126,13 @@ class BackupReplicaService:
 
         When running in Docker container, /app/data maps to /opt/ragflowauth/data.
         Files are accessible from container at /app/data/backups,
-        which corresponds to /opt/ragflowauth/data/backups on host.
+        which corresponds to /opt/ragflowauth/backups on host (NOT /opt/ragflowauth/data/backups).
         """
         path_str = str(path)
-        if path_str.startswith("/app/data/"):
+        # Special case: /app/data/backups maps to /opt/ragflowauth/backups
+        if path_str.startswith("/app/data/backups"):
+            path_str = path_str.replace("/app/data/backups", "/opt/ragflowauth/backups", 1)
+        elif path_str.startswith("/app/data/"):
             path_str = path_str.replace("/app/data", "/opt/ragflowauth/data", 1)
         elif path_str.startswith("/app/uploads/"):
             path_str = path_str.replace("/app/uploads", "/opt/ragflowauth/uploads", 1)
@@ -130,11 +142,36 @@ class BackupReplicaService:
         """Copy directory recursively with progress updates."""
         ensure_dir(dst)
 
-        total_files = sum(len(files) for _, _, files in os.walk(src))
+        # Special handling: check for volumes directory on host path
+        volumes_container = src / "volumes"
+        # Convert container path to host path (handle special case for /app/data/backups)
+        volumes_container_str = str(volumes_container)
+        if volumes_container_str.startswith("/app/data/backups"):
+            volumes_host_str = volumes_container_str.replace("/app/data/backups", "/opt/ragflowauth/backups", 1)
+        elif volumes_container_str.startswith("/app/data/"):
+            volumes_host_str = volumes_container_str.replace("/app/data", "/opt/ragflowauth/data", 1)
+        elif volumes_container_str.startswith("/app/uploads/"):
+            volumes_host_str = volumes_container_str.replace("/app/uploads", "/opt/ragflowauth/uploads", 1)
+        else:
+            volumes_host_str = volumes_container_str
+        volumes_host = Path(volumes_host_str)
+
+        # Count files including those on host path
+        total_files = 0
+        for root, dirs, files in os.walk(src):
+            total_files += len(files)
+
+        # Add volumes files from host path if they exist there but not in container
+        if volumes_host.exists() and not volumes_container.exists():
+            volumes_files = list(volumes_host.rglob("*"))
+            volumes_files = [f for f in volumes_files if f.is_file()]
+            total_files += len(volumes_files)
+
         if total_files == 0:
             return
 
         copied_files = 0
+        # First, copy all files visible in container
         for root, dirs, files in os.walk(src):
             for file in files:
                 src_file = Path(root) / file
@@ -144,12 +181,16 @@ class BackupReplicaService:
                 # Create parent directory if needed
                 dst_file.parent.mkdir(parents=True, exist_ok=True)
 
-                # Special handling for images.tar: it's saved to host path, not container path
+                # Special handling for files saved to host path (not container path)
+                # This includes: images.tar and volumes/*.tar.gz
                 src_file_to_copy = src_file
-                if file == "images.tar" and not src_file.exists():
-                    # Convert container path to host path for images.tar
+                if not src_file.exists():
+                    # Convert container path to host path
                     src_file_str = str(src_file)
-                    if src_file_str.startswith("/app/data/"):
+                    # Special case: /app/data/backups maps to /opt/ragflowauth/backups (not /opt/ragflowauth/data/backups)
+                    if src_file_str.startswith("/app/data/backups"):
+                        src_file_str = src_file_str.replace("/app/data/backups", "/opt/ragflowauth/backups", 1)
+                    elif src_file_str.startswith("/app/data/"):
                         src_file_str = src_file_str.replace("/app/data", "/opt/ragflowauth/data", 1)
                     elif src_file_str.startswith("/app/uploads/"):
                         src_file_str = src_file_str.replace("/app/uploads", "/opt/ragflowauth/uploads", 1)
@@ -159,6 +200,29 @@ class BackupReplicaService:
                 if src_file_to_copy.exists():
                     shutil.copy2(src_file_to_copy, dst_file)
                     copied_files += 1
+
+        # Second, copy volumes files from host path if they exist there but are empty in container
+        if volumes_host.exists():
+            # Check if volumes directory in container is actually empty (or has no files)
+            container_has_volumes_files = False
+            if volumes_container.exists():
+                container_volumes_files = list(volumes_container.rglob("*"))
+                container_volumes_files = [f for f in container_volumes_files if f.is_file()]
+                container_has_volumes_files = len(container_volumes_files) > 0
+
+            # Copy from host if container doesn't have the files
+            if not container_has_volumes_files:
+                for src_file in volumes_host.rglob("*"):
+                    if src_file.is_file():
+                        rel_path = src_file.relative_to(volumes_host)
+                        dst_file = dst / "volumes" / rel_path
+
+                        # Create parent directory if needed
+                        dst_file.parent.mkdir(parents=True, exist_ok=True)
+
+                        # Copy file
+                        shutil.copy2(src_file, dst_file)
+                        copied_files += 1
 
                 if total_files > 0:
                     progress = 92 + int(5 * copied_files / total_files)

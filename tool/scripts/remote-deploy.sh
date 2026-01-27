@@ -284,11 +284,14 @@ docker run -d \
   --name ragflowauth-backend \
   --network ragflowauth-network \
   -p "${BACKEND_PORT}:8001" \
+  -e TZ=Asia/Shanghai \
   -v "$DATA_DIR/data:/app/data" \
   -v "$DATA_DIR/uploads:/app/uploads" \
   -v "$DATA_DIR/ragflow_config.json:/app/ragflow_config.json:ro" \
   -v "$DATA_DIR/ragflow_compose:/app/ragflow_compose:ro" \
   -v "$DATA_DIR/backups:/app/data/backups" \
+  -v "$DATA_DIR/data:/opt/ragflowauth/data:ro" \
+  -v /mnt/replica:/mnt/replica \
   -v /var/run/docker.sock:/var/run/docker.sock \
   "ragflowauth-backend:$TAG"
 

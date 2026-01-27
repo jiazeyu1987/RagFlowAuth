@@ -33,16 +33,11 @@ print_error() {
 }
 
 # 配置
-KEEP_RECENT="${KEEP_RECENT:-1}"  # 保留最近几个版本的镜像（默认：仅保留当前版本）
 PRODUCTION_TAG="${PRODUCTION_TAG:-production}"  # 生产环境 tag
 
 # 解析命令行参数
 while [[ $# -gt 0 ]]; do
     case $1 in
-        --keep)
-            KEEP_RECENT="$2"
-            shift 2
-            ;;
         --production-tag)
             PRODUCTION_TAG="$2"
             shift 2
@@ -55,13 +50,15 @@ while [[ $# -gt 0 ]]; do
             echo "用法: $0 [选项]"
             echo ""
             echo "选项:"
-            echo "  --keep N              保留最近几个版本的镜像 (默认: 2)"
             echo "  --production-tag TAG  生产环境镜像 tag (默认: production)"
             echo "  --dry-run             仅显示将要删除的镜像，不实际删除"
             echo "  --help                显示此帮助信息"
             echo ""
+            echo "说明:"
+            echo "  脚本只会保留当前正在运行的容器使用的镜像，"
+            echo "  所有其他版本的镜像都会被删除。"
+            echo ""
             echo "示例:"
-            echo "  $0 --keep 3                    # 保留最近 3 个版本"
             echo "  $0 --production-tag latest     # 使用 latest 作为生产 tag"
             echo "  $0 --dry-run                   # 预览将要删除的镜像"
             exit 0
@@ -76,7 +73,7 @@ done
 
 print_step "RagflowAuth Docker 镜像清理"
 echo ""
-print_info "保留最近版本数: $KEEP_RECENT"
+print_info "策略: 只保留当前运行的镜像"
 print_info "生产环境 tag: $PRODUCTION_TAG"
 [ "$DRY_RUN" = true ] && print_info "模式: 预览（不实际删除）"
 echo ""
@@ -100,31 +97,20 @@ echo ""
 docker images | grep ragflowauth || print_warn "未找到任何 ragflowauth 镜像"
 echo ""
 
-# 收集要保留的镜像
+# 收集要保留的镜像（仅保留当前运行的）
+print_step "分析镜像版本"
 KEEP_IMAGES=()
 if [ -n "$RUNNING_BACKEND" ]; then
     KEEP_IMAGES+=("$RUNNING_BACKEND")
+    print_info "保留后端: $RUNNING_BACKEND"
 fi
 if [ -n "$RUNNING_FRONTEND" ]; then
     KEEP_IMAGES+=("$RUNNING_FRONTEND")
+    print_info "保留前端: $RUNNING_FRONTEND"
 fi
-
-# 添加最近几个版本的镜像（按时间排序）
-print_step "分析镜像版本"
-BACKEND_IMAGES=$(docker images --format "{{.Repository}}:{{.Tag}}\t{{.CreatedAt}}" | grep "^ragflowauth-backend:" | sort -k2 -r | head -n "$KEEP_RECENT" | cut -f1)
-FRONTEND_IMAGES=$(docker images --format "{{.Repository}}:{{.Tag}}\t{{.CreatedAt}}" | grep "^ragflowauth-frontend:" | sort -k2 -r | head -n "$KEEP_RECENT" | cut -f1)
-
-for img in $BACKEND_IMAGES $FRONTEND_IMAGES; do
-    KEEP_IMAGES+=("$img")
-done
 
 # 去重
 UNIQUE_KEEP=($(printf "%s\n" "${KEEP_IMAGES[@]}" | sort -u))
-
-print_info "将保留以下镜像:"
-for img in "${UNIQUE_KEEP[@]}"; do
-    echo "  - $img"
-done
 echo ""
 
 # 收集要删除的镜像

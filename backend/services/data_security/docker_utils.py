@@ -78,11 +78,23 @@ def docker_tar_volume(volume_name: str, dest_tar_gz: Path) -> None:
     backup_dir = dest_tar_gz.parent.resolve()
 
     backup_dir_str = str(backup_dir)
-    # Keep the /data part in the path since /opt/ragflowauth/data is mounted to /app/data
-    if backup_dir_str.startswith("/app/data/"):
+    # Handle special case: /app/data/backups maps to /opt/ragflowauth/backups (not /opt/ragflowauth/data/backups)
+    if backup_dir_str.startswith("/app/data/backups"):
+        backup_dir_str = backup_dir_str.replace("/app/data/backups", "/opt/ragflowauth/backups", 1)
+    elif backup_dir_str.startswith("/app/data/"):
+        # Keep the /data part in the path since /opt/ragflowauth/data is mounted to /app/data
         backup_dir_str = backup_dir_str.replace("/app/data", "/opt/ragflowauth/data", 1)
     elif backup_dir_str.startswith("/app/uploads/"):
         backup_dir_str = backup_dir_str.replace("/app/uploads", "/opt/ragflowauth/uploads", 1)
+
+    # Get current running backend container's image (instead of hardcoded version)
+    image = "ragflowauth-backend:latest"  # Fallback default
+    try:
+        code, out = run_cmd(["docker", "ps", "--filter", "name=ragflowauth-backend", "--format", "{{.Image}}"])
+        if code == 0 and out and out.strip():
+            image = out.strip()
+    except Exception:
+        pass  # Use fallback default
 
     cmd = [
         "docker",
@@ -92,7 +104,7 @@ def docker_tar_volume(volume_name: str, dest_tar_gz: Path) -> None:
         f"{volume_name}:/data:ro",
         "-v",
         f"{backup_dir_str}:/backup",
-        "ragflowauth-backend:2025-01-25-scheduler-fix-v2",
+        image,
         "sh",
         "-lc",
         f"tar -czf /backup/{dest_tar_gz.name} -C /data .",
@@ -115,7 +127,10 @@ def docker_save_images(images: list[str], dest_tar: Path) -> tuple[bool, str | N
         return False, None
 
     dest_tar_str = str(dest_tar)
-    if dest_tar_str.startswith("/app/data/"):
+    # Handle special case: /app/data/backups maps to /opt/ragflowauth/backups (not /opt/ragflowauth/data/backups)
+    if dest_tar_str.startswith("/app/data/backups"):
+        dest_tar_str = dest_tar_str.replace("/app/data/backups", "/opt/ragflowauth/backups", 1)
+    elif dest_tar_str.startswith("/app/data/"):
         dest_tar_str = dest_tar_str.replace("/app/data", "/opt/ragflowauth/data", 1)
     elif dest_tar_str.startswith("/app/uploads/"):
         dest_tar_str = dest_tar_str.replace("/app/uploads", "/opt/ragflowauth/uploads", 1)

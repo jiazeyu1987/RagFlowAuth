@@ -50,8 +50,8 @@ class BackupSchedulerV2:
         Weekday follows standard cron conventions: Sunday=0 (or 7), Monday=1 ... Saturday=6.
 
         Returns:
-          - epoch milliseconds of the latest scheduled time within the current day
-          - None if the schedule is invalid or no candidate exists for today
+          - epoch milliseconds of the latest scheduled time (may be in the past)
+          - None if the schedule is invalid or no candidate exists
         """
         try:
             parts = str(schedule or "").strip().split()
@@ -79,24 +79,35 @@ class BackupSchedulerV2:
             hours = range(24) if target_hour is None else [target_hour]
             minutes = range(60) if target_minute is None else [target_minute]
 
+            # Search backwards up to 7 days for a matching schedule
+            from datetime import timedelta
             best_ts: float | None = None
-            for h in hours:
-                for m in minutes:
-                    dt = now.replace(hour=h, minute=m, second=0, microsecond=0)
-                    if dt > now:
-                        continue
-                    if target_day is not None and dt.day != target_day:
-                        continue
-                    if target_month is not None and dt.month != target_month:
-                        continue
-                    if target_weekday is not None:
-                        # Python: Mon=0..Sun=6 -> Cron: Sun=0..Sat=6
-                        dt_cron_weekday = (dt.weekday() + 1) % 7
-                        if dt_cron_weekday != target_weekday:
+
+            for day_offset in range(7):  # Check today and past 6 days
+                check_time = now - timedelta(days=day_offset)
+
+                for h in hours:
+                    for m in minutes:
+                        try:
+                            dt = check_time.replace(hour=h, minute=m, second=0, microsecond=0)
+                        except ValueError:
+                            # Handle day overflow (e.g., Feb 30)
                             continue
-                    ts = dt.timestamp()
-                    if best_ts is None or ts > best_ts:
-                        best_ts = ts
+
+                        if dt > now:
+                            continue
+                        if target_day is not None and dt.day != target_day:
+                            continue
+                        if target_month is not None and dt.month != target_month:
+                            continue
+                        if target_weekday is not None:
+                            # Python: Mon=0..Sun=6 -> Cron: Sun=0..Sat=6
+                            dt_cron_weekday = (dt.weekday() + 1) % 7
+                            if dt_cron_weekday != target_weekday:
+                                continue
+                        ts = dt.timestamp()
+                        if best_ts is None or ts > best_ts:
+                            best_ts = ts
 
             if best_ts is None:
                 return None

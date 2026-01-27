@@ -174,8 +174,11 @@ def run_server(*, host: str | None = None, port: int | None = None, reload: bool
     except Exception as exc:  # pragma: no cover
         raise SystemExit(f"缺少 uvicorn，无法启动服务: {exc}")
 
+    # Import app directly to ensure lifespan events fire correctly
+    from backend.app.main import app
+
     uvicorn.run(
-        "backend.app.main:app",
+        app,
         host=host or settings.HOST,
         port=port or settings.PORT,
         reload=reload,
