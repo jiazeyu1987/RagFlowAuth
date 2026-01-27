@@ -271,6 +271,7 @@ class RagflowAuthTool:
         self.create_tools_tab()
         self.create_web_links_tab()
         self.create_backup_tab()
+        self.create_restore_tab()
         self.create_logs_tab()
 
         # 底部状态栏
@@ -306,9 +307,9 @@ class RagflowAuthTool:
                 "cmd": "/tmp/cleanup-images.sh --keep 1"
             },
             {
-                "title": "清理 Docker 镜像（保留3个版本）",
-                "desc": "清理服务器上未使用的 Docker 镜像，保留最近 3 个版本用于回滚",
-                "cmd": "/tmp/cleanup-images.sh --keep 3"
+                "title": "快速部署",
+                "desc": "快速部署到服务器（使用 Windows 本地构建的镜像）",
+                "cmd": "quick-deploy"
             },
             {
                 "title": "快速重启容器",
@@ -515,13 +516,22 @@ class RagflowAuthTool:
             )
             btn.pack(anchor=tk.W)
 
-        # 数据还原区域
-        restore_frame = ttk.LabelFrame(tab, text="数据还原", padding=10)
-        restore_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=10)
+    def create_restore_tab(self):
+        """创建数据还原选项卡"""
+        tab = ttk.Frame(self.notebook)
+        self.notebook.add(tab, text="  数据还原  ")
+
+        # 标题
+        title_label = ttk.Label(
+            tab,
+            text="数据还原",
+            font=("Arial", 14, "bold")
+        )
+        title_label.pack(pady=20)
 
         # 说明
         info_label = ttk.Label(
-            restore_frame,
+            tab,
             text="从本地备份文件夹恢复数据到服务器\n"
                  "支持恢复：RagflowAuth 数据、上传文件、Docker 镜像、RAGFlow 数据 (volumes)",
             foreground="gray",
@@ -530,39 +540,80 @@ class RagflowAuthTool:
         info_label.pack(pady=10)
 
         # 文件夹选择区域
-        folder_frame = ttk.Frame(restore_frame)
-        folder_frame.pack(fill=tk.X, pady=10)
+        folder_frame = ttk.LabelFrame(tab, text="选择备份文件夹", padding=10)
+        folder_frame.pack(fill=tk.X, padx=20, pady=10)
 
-        ttk.Label(folder_frame, text="备份文件夹:").grid(row=0, column=0, padx=5, sticky=tk.W)
+        input_frame = ttk.Frame(folder_frame)
+        input_frame.pack(fill=tk.X, pady=5)
+
+        ttk.Label(input_frame, text="备份文件夹:").pack(side=tk.LEFT, padx=5)
         self.restore_folder_var = tk.StringVar()
-        folder_entry = ttk.Entry(folder_frame, textvariable=self.restore_folder_var, width=50)
-        folder_entry.grid(row=0, column=1, padx=5, pady=5)
+        folder_entry = ttk.Entry(input_frame, textvariable=self.restore_folder_var, width=50)
+        folder_entry.pack(side=tk.LEFT, padx=5, fill=tk.X, expand=True)
 
         select_btn = ttk.Button(
-            folder_frame,
-            text="选择文件夹",
+            input_frame,
+            text="浏览",
             command=self.select_restore_folder,
-            width=12
+            width=10
         )
-        select_btn.grid(row=0, column=2, padx=5)
+        select_btn.pack(side=tk.LEFT, padx=5)
 
         # 文件夹信息显示
-        self.restore_info_label = ttk.Label(restore_frame, text="", foreground="blue", justify=tk.LEFT)
+        self.restore_info_label = ttk.Label(folder_frame, text="", foreground="blue", justify=tk.LEFT)
         self.restore_info_label.pack(anchor=tk.W, padx=10, pady=5)
 
+        # 还原选项
+        options_frame = ttk.LabelFrame(tab, text="还原选项", padding=10)
+        options_frame.pack(fill=tk.X, padx=20, pady=10)
+
+        self.restore_options = {
+            "auth_db": tk.BooleanVar(value=True),
+            "uploads": tk.BooleanVar(value=True),
+            "images": tk.BooleanVar(value=False),
+            "volumes": tk.BooleanVar(value=True),
+        }
+
+        ttk.Checkbutton(
+            options_frame,
+            text="RagflowAuth 数据库",
+            variable=self.restore_options["auth_db"]
+        ).pack(anchor=tk.W, padx=10, pady=2)
+
+        ttk.Checkbutton(
+            options_frame,
+            text="上传文件 (uploads)",
+            variable=self.restore_options["uploads"]
+        ).pack(anchor=tk.W, padx=10, pady=2)
+
+        ttk.Checkbutton(
+            options_frame,
+            text="Docker 镜像",
+            variable=self.restore_options["images"]
+        ).pack(anchor=tk.W, padx=10, pady=2)
+
+        ttk.Checkbutton(
+            options_frame,
+            text="RAGFlow 数据 (volumes)",
+            variable=self.restore_options["volumes"]
+        ).pack(anchor=tk.W, padx=10, pady=2)
+
         # 进度显示
+        progress_frame = ttk.LabelFrame(tab, text="还原进度", padding=10)
+        progress_frame.pack(fill=tk.X, padx=20, pady=10)
+
         self.restore_progress = ttk.Progressbar(
-            restore_frame,
+            progress_frame,
             mode='indeterminate',
             length=400
         )
         self.restore_progress.pack(pady=5)
 
-        self.restore_status_label = ttk.Label(restore_frame, text="", foreground="gray")
+        self.restore_status_label = ttk.Label(progress_frame, text="", foreground="gray")
         self.restore_status_label.pack(pady=5)
 
         # 还原按钮
-        restore_btn_frame = ttk.Frame(restore_frame)
+        restore_btn_frame = ttk.Frame(tab)
         restore_btn_frame.pack(pady=10)
 
         self.restore_btn = ttk.Button(
@@ -575,13 +626,13 @@ class RagflowAuthTool:
         self.restore_btn.pack()
 
         # 输出区域
-        output_frame = ttk.LabelFrame(restore_frame, text="还原日志", padding=5)
-        output_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        output_frame = ttk.LabelFrame(tab, text="还原日志", padding=5)
+        output_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=(0, 10))
 
         self.restore_output = scrolledtext.ScrolledText(
             output_frame,
-            height=10,
-            width=70,
+            height=15,
+            width=80,
             state=tk.DISABLED,
             font=("Consolas", 9)
         )
@@ -683,6 +734,11 @@ class RagflowAuthTool:
 
     def execute_ssh_command(self, command):
         """执行 SSH 命令"""
+        # 特殊处理：快速部署
+        if command == "quick-deploy":
+            self.run_quick_deploy()
+            return
+
         if not self.ssh_executor:
             self.update_ssh_executor()
 
@@ -708,6 +764,48 @@ class RagflowAuthTool:
                 print(msg)
                 log_to_file(msg, "ERROR")
                 messagebox.showerror("失败", f"命令执行失败！\n\n错误: {output}")
+
+        thread = threading.Thread(target=execute, daemon=True)
+        thread.start()
+
+    def run_quick_deploy(self):
+        """执行快速部署"""
+        self.status_bar.config(text="正在执行快速部署...")
+
+        def execute():
+            try:
+                # 调用 quick-deploy.ps1
+                script_path = Path(__file__).parent / "tool" / "scripts" / "quick-deploy.ps1"
+                if not script_path.exists():
+                    raise FileNotFoundError(f"部署脚本不存在: {script_path}")
+
+                # 执行 PowerShell 脚本
+                result = subprocess.run(
+                    ["powershell.exe", "-ExecutionPolicy", "Bypass", "-File", str(script_path)],
+                    capture_output=True,
+                    text=True,
+                    encoding='utf-8',
+                    errors='replace'
+                )
+
+                if result.returncode == 0:
+                    self.status_bar.config(text="快速部署完成")
+                    msg = f"[INFO] 快速部署成功！\n输出:\n{result.stdout}"
+                    print(msg)
+                    log_to_file(msg)
+                    messagebox.showinfo("部署成功", f"快速部署成功！\n\n{result.stdout}")
+                else:
+                    self.status_bar.config(text="快速部署失败")
+                    msg = f"[ERROR] 快速部署失败！\n错误:\n{result.stderr}"
+                    print(msg)
+                    log_to_file(msg, "ERROR")
+                    messagebox.showerror("部署失败", f"快速部署失败！\n\n{result.stderr}")
+            except Exception as e:
+                self.status_bar.config(text="快速部署失败")
+                msg = f"[ERROR] 快速部署异常: {str(e)}"
+                print(msg)
+                log_to_file(msg, "ERROR")
+                messagebox.showerror("部署失败", f"快速部署异常！\n\n{str(e)}")
 
         thread = threading.Thread(target=execute, daemon=True)
         thread.start()
