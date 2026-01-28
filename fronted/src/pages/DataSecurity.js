@@ -474,11 +474,11 @@ const DataSecurity = () => {
                 value={settings?.replica_target_path || ''}
                 onChange={(e) => setSettings((p) => ({ ...p, replica_target_path: e.target.value }))}
                 data-testid="ds-replica-target-path"
-                placeholder="/replica/RagflowAuth"
+                placeholder="/mnt/replica/RagflowAuth"
                 style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '8px', marginTop: '6px' }}
               />
               <div style={{ color: '#6b7280', fontSize: '0.85rem', marginTop: '4px' }}>
-                容器内的绝对路径，该路径已通过Docker bind mount挂载到Windows共享
+                容器内的绝对路径，该路径已通过Docker bind mount挂载到Windows共享（必须使用 /mnt/replica 路径）
               </div>
             </label>
 

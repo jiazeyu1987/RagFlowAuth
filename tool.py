@@ -318,8 +318,8 @@ class RagflowAuthTool:
             },
             {
                 "title": "查看运行中的容器",
-                "desc": "列出所有运行中的 Docker 容器及其状态",
-                "cmd": "docker ps"
+                "desc": "列出所有运行中的 Docker 容器及其状态（包括挂载信息）",
+                "cmd": "__show_containers_with_mounts__"
             },
             {
                 "title": "查看所有容器",
@@ -739,6 +739,11 @@ class RagflowAuthTool:
             self.run_quick_deploy()
             return
 
+        # 特殊处理：显示容器列表和挂载状态
+        if command == "__show_containers_with_mounts__":
+            self.show_containers_with_mounts()
+            return
+
         if not self.ssh_executor:
             self.update_ssh_executor()
 
@@ -809,6 +814,251 @@ class RagflowAuthTool:
 
         thread = threading.Thread(target=execute, daemon=True)
         thread.start()
+
+    def show_containers_with_mounts(self):
+        """显示容器列表和挂载状态"""
+        self.status_bar.config(text="正在获取容器信息...")
+        log_to_file("[CONTAINER-CHECK] 开始检查容器挂载状态")
+
+        def execute():
+            try:
+                print("[DEBUG] 步骤 1: 初始化SSH连接...")
+                log_to_file("[CONTAINER-CHECK] 步骤 1: 初始化SSH连接")
+                if not self.ssh_executor:
+                    self.update_ssh_executor()
+
+                # 获取运行中的容器列表
+                print("[DEBUG] 步骤 2: 获取容器列表...")
+                log_to_file("[CONTAINER-CHECK] 步骤 2: 获取容器列表")
+                success, output = self.ssh_executor.execute("docker ps --format '{{.Names}}\t{{.Image}}\t{{.Status}}'")
+                print(f"[DEBUG] 获取容器列表: success={success}, output_length={len(output) if output else 0}")
+                log_to_file(f"[CONTAINER-CHECK] 获取容器列表结果: success={success}")
+
+                if not success:
+                    error_msg = f"获取容器列表失败：\n{output}"
+                    print(f"[ERROR] {error_msg}")
+                    log_to_file(f"[CONTAINER-CHECK] ERROR: {error_msg}", "ERROR")
+                    messagebox.showerror("错误", error_msg)
+                    self.status_bar.config(text="获取容器列表失败")
+                    return
+
+                containers = []
+                for line in output.strip().split('\n'):
+                    if line:
+                        parts = line.split('\t')
+                        if len(parts) >= 3:
+                            container_name = parts[0]
+                            containers.append(container_name)
+
+                print(f"[DEBUG] 找到 {len(containers)} 个运行中的容器")
+                log_to_file(f"[CONTAINER-CHECK] 找到 {len(containers)} 个运行中的容器")
+
+                # 检查每个容器的挂载状态
+                result_text = "=== 运行中的容器及挂载状态 ===\n\n"
+                result_text += f"{'容器名称':<30} {'挂载检查':<50} {'状态':<15}\n"
+                result_text += "=" * 95 + "\n"
+
+                # 首先获取数据库配置
+                print("[DEBUG] 步骤 3: 获取数据库配置...")
+                log_to_file("[CONTAINER-CHECK] 步骤 3: 获取数据库配置")
+                config_cmd = "docker exec ragflowauth-backend python -c \"import sqlite3; conn = sqlite3.connect('/app/data/auth.db'); cursor = conn.cursor(); cursor.execute('SELECT replica_target_path FROM data_security_settings LIMIT 1'); row = cursor.fetchone(); print(row[0] if row else 'NOT_SET'); conn.close()\""
+                success, config_output = self.ssh_executor.execute(config_cmd)
+                print(f"[DEBUG] 获取配置: success={success}, output={config_output}")
+                log_to_file(f"[CONTAINER-CHECK] 配置查询结果: {config_output}")
+
+                if config_output:
+                    config_output = '\n'.join(line for line in config_output.split('\n')
+                                              if 'close - IO is still pending' not in line
+                                              and 'read:' not in line
+                                              and 'write:' not in line
+                                              and 'io:' not in line).strip()
+
+                # 定义颜色代码
+                GREEN = "\033[92m"
+                RED = "\033[91m"
+                RESET = "\033[0m"
+
+                # 检查配置是否符合预期
+                config_ok = config_output == "/mnt/replica/RagflowAuth"
+                config_status = f"{GREEN}✓ 符合预期{RESET}" if config_ok else f"{RED}✗ 配置错误{RESET}"
+                result_text += f"配置的复制路径: {config_output} [{config_status}]\n"
+                result_text += "-" * 95 + "\n"
+
+                # 检查每个容器
+                print(f"[DEBUG] 步骤 4: 检查 {len(containers)} 个容器的挂载点...")
+                log_to_file(f"[CONTAINER-CHECK] 步骤 4: 检查容器挂载点")
+
+                for idx, container in enumerate(containers):
+                    print(f"[DEBUG] 检查容器 {idx+1}/{len(containers)}: {container}")
+                    log_to_file(f"[CONTAINER-CHECK] 检查容器: {container}")
+
+                    try:
+                        # 获取容器状态
+                        status_cmd = "docker inspect {} --format '{{{{.State.Status}}}}' 2>/dev/null".format(container)
+                        success, status = self.ssh_executor.execute(status_cmd)
+                        if status:
+                            status = '\n'.join(line for line in status.split('\n')
+                                             if 'close - IO is still pending' not in line
+                                             and 'read:' not in line
+                                             and 'write:' not in line
+                                             and 'io:' not in line).strip()
+
+                        if not success or not status:
+                            status = "未知"
+                            status_colored = f"{RED}{status}{RESET}"
+                        else:
+                            # 状态用颜色标记
+                            if status == "running":
+                                status_colored = f"{GREEN}{status}{RESET}"
+                            else:
+                                status_colored = f"{RED}{status}{RESET}"
+
+                        # 只检查 ragflowauth-backend 的挂载
+                        if container == "ragflowauth-backend":
+                            # 获取容器的所有挂载点（JSON格式）
+                            inspect_cmd = "docker inspect {} --format '{{{{json .Mounts}}}}' 2>/dev/null".format(container)
+                            success, mounts_json = self.ssh_executor.execute(inspect_cmd)
+
+                            if not success:
+                                mount_info = f"{RED}⚠️  无法获取挂载信息{RESET}"
+                            else:
+                                # 清理输出中的SSH警告信息
+                                if mounts_json:
+                                    mounts_json = '\n'.join(line for line in mounts_json.split('\n')
+                                                               if 'close - IO is still pending' not in line
+                                                               and 'read:' not in line
+                                                               and 'write:' not in line
+                                                               and 'io:' not in line).strip()
+
+                                # 检查是否有 /mnt/replica 挂载
+                                has_replica_mount = False
+                                mount_info = ""
+
+                                if mounts_json and "YES" not in mounts_json:
+                                    import json
+                                    try:
+                                        mounts = json.loads(mounts_json)
+                                        replica_mounts = [m for m in mounts if '/mnt/replica' in m.get('Destination', '')]
+                                        if replica_mounts:
+                                            has_replica_mount = True
+                                            for m in replica_mounts:
+                                                source = m.get('Source', '')
+                                                dest = m.get('Destination', '')
+                                                if dest == '/mnt/replica':
+                                                    mount_info = f"{GREEN}✓ {source} -> {dest}{RESET}"
+                                                else:
+                                                    mount_info = f"{RED}⚠️  {source} -> {dest}{RESET}"
+                                    except json.JSONDecodeError as e:
+                                        print(f"[DEBUG]   JSON解析失败: {e}")
+                                        mount_info = f"{RED}⚠️  挂载信息解析失败{RESET}"
+
+                                if not has_replica_mount and not mount_info:
+                                    mount_info = f"{RED}✗ 未挂载 /mnt/replica{RESET}"
+
+                                print(f"[DEBUG]   挂载状态: {mount_info}")
+
+                            result_text += f"{container:<30} {mount_info:<50} {status_colored:<15}\n"
+                        else:
+                            # 其他容器不显示挂载信息
+                            result_text += f"{container:<30} {'(无需挂载)':<50} {status_colored:<15}\n"
+
+                    except Exception as e:
+                        error_msg = f"检查容器 {container} 时出错: {str(e)}"
+                        print(f"[ERROR] {error_msg}")
+                        log_to_file(f"[CONTAINER-CHECK] ERROR: {error_msg}", "ERROR")
+                        result_text += f"{container:<30} {RED}⚠️  检查失败{RESET:<50} {status_colored:<15}\n"
+
+                print("[DEBUG] 步骤 5: 生成结果...")
+                log_to_file("[CONTAINER-CHECK] 步骤 5: 生成结果")
+
+                result_text += "\n" + "=" * 95 + "\n"
+                result_text += f"说明: {GREEN}✓ = 符合预期{RESET}, {RED}✗ = 需要修复{RESET}\n"
+
+                # 显示结果
+                print("[DEBUG] 显示结果窗口...")
+                log_to_file(f"[CONTAINER-CHECK] 显示结果窗口")
+                print(result_text)
+                self.show_result_window("容器列表及挂载状态", result_text)
+                self.status_bar.config(text="容器信息获取完成")
+                log_to_file("[CONTAINER-CHECK] 完成")
+
+            except Exception as e:
+                error_msg = f"获取容器信息失败：{str(e)}"
+                print(f"[ERROR] {error_msg}")
+                log_to_file(f"[CONTAINER-CHECK] ERROR: {error_msg}", "ERROR")
+                import traceback
+                traceback.print_exc()
+                messagebox.showerror("错误", error_msg)
+                self.status_bar.config(text="获取容器信息失败")
+
+        thread = threading.Thread(target=execute, daemon=True)
+        thread.start()
+
+    def show_result_window(self, title, content):
+        """显示结果窗口（支持ANSI颜色代码）"""
+        result_window = tk.Toplevel(self.root)
+        result_window.title(title)
+        result_window.geometry("800x600")
+
+        # 添加文本框
+        text_frame = ttk.Frame(result_window)
+        text_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+
+        text_widget = tk.Text(text_frame, wrap=tk.WORD, font=("Consolas", 10))
+        text_widget.pack(fill=tk.BOTH, expand=True)
+
+        scrollbar = ttk.Scrollbar(text_widget, orient=tk.VERTICAL, command=text_widget.yview)
+        text_widget.configure(yscrollcommand=scrollbar.set)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+        # 定义颜色tag
+        text_widget.tag_config("green", foreground="green")
+        text_widget.tag_config("red", foreground="red")
+
+        # 解析ANSI颜色代码并插入文本
+        import re
+        ansi_escape = re.compile(r'\033\[(\d+(;\d+)*)?m')
+
+        lines = content.split('\n')
+        for line in lines:
+            last_pos = 0
+            current_tag = None
+
+            for match in ansi_escape.finditer(line):
+                # 插入普通文本
+                if match.start() > last_pos:
+                    normal_text = line[last_pos:match.start()]
+                    if current_tag:
+                        text_widget.insert(tk.END, normal_text, current_tag)
+                    else:
+                        text_widget.insert(tk.END, normal_text)
+
+                # 解析颜色代码
+                code = match.group()
+                if '\033[92m' in code:  # 绿色
+                    current_tag = "green"
+                elif '\033[91m' in code:  # 红色
+                    current_tag = "red"
+                elif '\033[0m' in code:  # 重置
+                    current_tag = None
+
+                last_pos = match.end()
+
+            # 插入剩余文本
+            if last_pos < len(line):
+                remaining_text = line[last_pos:]
+                if current_tag:
+                    text_widget.insert(tk.END, remaining_text, current_tag)
+                else:
+                    text_widget.insert(tk.END, remaining_text)
+
+            text_widget.insert(tk.END, '\n')
+
+        text_widget.config(state=tk.DISABLED)
+
+        # 添加关闭按钮
+        close_button = ttk.Button(result_window, text="关闭", command=result_window.destroy)
+        close_button.pack(pady=10)
 
     def open_frontend(self):
         """打开 RagflowAuth 前端"""
@@ -1482,17 +1732,29 @@ class RagflowAuthTool:
             self.append_restore_log("\n[6/7] 启动 Docker 容器...")
             self.update_restore_status("正在启动容器...")
 
-            # 启动 RagflowAuth 容器
-            self.append_restore_log("  启动 RagflowAuth 容器...")
+            # 停止并删除旧容器（确保使用最新配置重新创建）
+            self.append_restore_log("  停止并删除旧容器...")
+            success, _ = self.ssh_executor.execute("docker stop ragflowauth-backend ragflowauth-frontend 2>/dev/null || true")
+            success, _ = self.ssh_executor.execute("docker rm ragflowauth-backend ragflowauth-frontend 2>/dev/null || true")
+
+            # 获取当前镜像tag
+            self.append_restore_log("  获取当前镜像tag...")
             success, output = self.ssh_executor.execute(
-                "docker start ragflowauth-backend ragflowauth-frontend 2>/dev/null || docker restart ragflowauth-backend ragflowauth-frontend"
+                "docker images --format '{{.Tag}}' | grep '^ragflowauth-backend' | head -1 | cut -d: -f2"
             )
-            self.append_restore_log(f"  {output}")
+            current_tag = output.strip() if success and output.strip() else "latest"
+            self.append_restore_log(f"  当前镜像tag: {current_tag}")
+
+            # 使用 remote-deploy.sh 启动容器（包含正确的挂载配置）
+            self.append_restore_log("  使用 remote-deploy.sh 重新创建容器...")
+            success, output = self.ssh_executor.execute(
+                f"cd /tmp && bash remote-deploy.sh --skip-load --tag {current_tag}"
+            )
 
             if success:
                 self.append_restore_log("  ✅ RagflowAuth 容器启动成功")
             else:
-                self.append_restore_log("  ⚠️  RagflowAuth 容器启动可能有问题，请检查日志")
+                self.append_restore_log(f"  ⚠️  容器启动可能有问题: {output}")
 
             # 启动 RAGFlow 容器（如果还原了 volumes）
             if self.restore_volumes_exists:
