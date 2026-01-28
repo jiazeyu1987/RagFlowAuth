@@ -6,6 +6,108 @@ import { authBackendUrl } from '../config/backend';
 import ReactMarkdown from 'react-markdown';
 import { httpClient } from '../shared/http/httpClient';
 import ReactDiffViewer from 'react-diff-viewer-continued';
+import * as XLSX from 'xlsx';
+
+const escapeHtml = (s) =>
+  String(s ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+
+const detectDelimiter = (line) => {
+  const candidates = [',', ';', '\t'];
+  let best = ',';
+  let bestCount = -1;
+  for (const d of candidates) {
+    const c = (line.match(new RegExp(`\\${d}`, 'g')) || []).length;
+    if (c > bestCount) {
+      bestCount = c;
+      best = d;
+    }
+  }
+  return best;
+};
+
+const parseDelimited = (text, delimiter) => {
+  const rows = [];
+  let row = [];
+  let cell = '';
+  let inQuotes = false;
+
+  const s = String(text ?? '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i];
+    if (inQuotes) {
+      if (ch === '"') {
+        const next = s[i + 1];
+        if (next === '"') {
+          cell += '"';
+          i++;
+        } else {
+          inQuotes = false;
+        }
+      } else {
+        cell += ch;
+      }
+      continue;
+    }
+
+    if (ch === '"') {
+      inQuotes = true;
+      continue;
+    }
+    if (ch === delimiter) {
+      row.push(cell);
+      cell = '';
+      continue;
+    }
+    if (ch === '\n') {
+      row.push(cell);
+      cell = '';
+      // skip last empty line
+      if (!(row.length === 1 && row[0] === '' && rows.length === 0)) rows.push(row);
+      row = [];
+      continue;
+    }
+    cell += ch;
+  }
+  row.push(cell);
+  if (row.length > 1 || row[0] !== '') rows.push(row);
+  return rows;
+};
+
+const rowsToHtmlTable = (rows, { maxRows = 2000, maxCols = 100 } = {}) => {
+  const limitedRows = rows.slice(0, maxRows);
+  const colCount = Math.min(
+    maxCols,
+    Math.max(0, ...limitedRows.map((r) => (Array.isArray(r) ? r.length : 0)))
+  );
+
+  const head = limitedRows[0] || [];
+  const body = limitedRows.slice(1);
+
+  const thead =
+    colCount > 0
+      ? `<thead><tr>${Array.from({ length: colCount })
+          .map((_, i) => `<th>${escapeHtml(head[i] ?? '')}</th>`)
+          .join('')}</tr></thead>`
+      : '';
+
+  const tbody = `<tbody>${body
+    .map((r) => {
+      const cells = Array.from({ length: colCount })
+        .map((_, i) => `<td>${escapeHtml(r?.[i] ?? '')}</td>`)
+        .join('');
+      return `<tr>${cells}</tr>`;
+    })
+    .join('')}</tbody>`;
+
+  const table = `<table>${thead}${tbody}</table>`;
+  const truncated = rows.length > maxRows || rows.some((r) => (r?.length || 0) > maxCols);
+  return { html: table, truncated, rowCount: rows.length, colLimit: maxCols, rowLimit: maxRows };
+};
 
 const DocumentReview = ({ embedded = false }) => {
   const { user, isReviewer, isAdmin, canDownload } = useAuth();
@@ -24,15 +126,50 @@ const DocumentReview = ({ embedded = false }) => {
   const [previewing, setPreviewing] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewDocName, setPreviewDocName] = useState(null);
-  const [previewKind, setPreviewKind] = useState(null); // 'md' | 'text' | 'blob'
+  const [previewKind, setPreviewKind] = useState(null); // 'md' | 'text' | 'excel' | 'blob'
   const [previewText, setPreviewText] = useState(null);
   const [previewUrl, setPreviewUrl] = useState(null);
+  const [previewExcelData, setPreviewExcelData] = useState(null); // { [sheetName]: html }
+  const [previewExcelNote, setPreviewExcelNote] = useState(null);
   const [diffOpen, setDiffOpen] = useState(false);
   const [diffLoading, setDiffLoading] = useState(false);
   const [diffOnly, setDiffOnly] = useState(true);
   const [diffTitle, setDiffTitle] = useState(null);
   const [diffOldText, setDiffOldText] = useState('');
   const [diffNewText, setDiffNewText] = useState('');
+
+  // Inject table styles for Excel/CSV preview
+  useEffect(() => {
+    if (typeof document !== 'undefined' && !document.getElementById('table-preview-styles')) {
+      const style = document.createElement('style');
+      style.id = 'table-preview-styles';
+      style.textContent = `
+        .table-preview table {
+          border-collapse: collapse;
+          width: 100%;
+          font-size: 0.875rem;
+        }
+        .table-preview th,
+        .table-preview td {
+          border: 1px solid #d1d5db;
+          padding: 8px 12px;
+          text-align: left;
+        }
+        .table-preview th {
+          background-color: #f3f4f6;
+          font-weight: 600;
+          color: #1f2937;
+        }
+        .table-preview tr:nth-child(even) {
+          background-color: #f9fafb;
+        }
+        .table-preview tr:hover {
+          background-color: #f3f4f6;
+        }
+      `;
+      document.head.appendChild(style);
+    }
+  }, []);
 
   const activeDocMap = useMemo(() => {
     const m = new Map();
@@ -47,6 +184,8 @@ const DocumentReview = ({ embedded = false }) => {
     setPreviewKind(null);
     setPreviewText(null);
     setPreviewUrl(null);
+    setPreviewExcelData(null);
+    setPreviewExcelNote(null);
   };
 
   const isMarkdownFile = (filename) => {
@@ -59,6 +198,18 @@ const DocumentReview = ({ embedded = false }) => {
     if (!filename) return false;
     const ext = filename.toLowerCase().split('.').pop();
     return ext === 'txt' || ext === 'ini' || ext === 'log';
+  };
+
+  const isExcelFile = (filename) => {
+    if (!filename) return false;
+    const ext = filename.toLowerCase().split('.').pop();
+    return ext === 'xlsx' || ext === 'xls';
+  };
+
+  const isCsvFile = (filename) => {
+    if (!filename) return false;
+    const ext = filename.toLowerCase().split('.').pop();
+    return ext === 'csv';
   };
 
   const isTextComparable = (filename) => isMarkdownFile(filename) || isPlainTextFile(filename);
@@ -112,6 +263,8 @@ const DocumentReview = ({ embedded = false }) => {
     setPreviewDocName(filename || `document_${docId}`);
     setPreviewKind(null);
     setPreviewText(null);
+    setPreviewExcelData(null);
+    setPreviewExcelNote(null);
     if (previewUrl) window.URL.revokeObjectURL(previewUrl);
     setPreviewUrl(null);
 
@@ -133,6 +286,27 @@ const DocumentReview = ({ embedded = false }) => {
         const text = await blob.text();
         setPreviewKind('text');
         setPreviewText(text);
+      } else if (isExcelFile(filename)) {
+        const arrayBuffer = await blob.arrayBuffer();
+        const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+        const sheetNames = workbook.SheetNames || [];
+        const sheetsData = {};
+        sheetNames.forEach((sheetName) => {
+          const worksheet = workbook.Sheets[sheetName];
+          const html = XLSX.utils.sheet_to_html(worksheet);
+          sheetsData[sheetName] = html;
+        });
+        setPreviewKind('excel');
+        setPreviewExcelData(sheetsData);
+      } else if (isCsvFile(filename)) {
+        const text = await blob.text();
+        const firstLine = String(text || '').split(/\r?\n/)[0] || '';
+        const delimiter = detectDelimiter(firstLine);
+        const rows = parseDelimited(text, delimiter);
+        const { html, truncated } = rowsToHtmlTable(rows);
+        setPreviewKind('excel');
+        setPreviewExcelData({ CSV: html });
+        if (truncated) setPreviewExcelNote('提示：内容较大，已在页面中截断显示（请下载查看完整内容）。');
       } else {
         setPreviewKind('blob');
       }
@@ -659,6 +833,25 @@ const DocumentReview = ({ embedded = false }) => {
                 >
                   {previewText || ''}
                 </pre>
+              ) : previewKind === 'excel' && previewExcelData ? (
+                <div className="table-preview" style={{ padding: '12px 12px 24px 12px' }}>
+                  {previewExcelNote && (
+                    <div style={{ marginBottom: 12, color: '#6b7280', fontSize: '0.9rem' }}>
+                      {previewExcelNote}
+                    </div>
+                  )}
+                  {Object.keys(previewExcelData).map((sheetName, index) => (
+                    <div key={sheetName} style={{ marginBottom: index < Object.keys(previewExcelData).length - 1 ? '32px' : 0 }}>
+                      {Object.keys(previewExcelData).length > 1 && (
+                        <div style={{ marginBottom: 8, fontWeight: 600, color: '#111827' }}>{sheetName}</div>
+                      )}
+                      <div
+                        style={{ overflowX: 'auto' }}
+                        dangerouslySetInnerHTML={{ __html: previewExcelData[sheetName] }}
+                      />
+                    </div>
+                  ))}
+                </div>
               ) : previewUrl ? (
                 <iframe title={previewDocName || 'preview'} src={previewUrl} style={{ width: '100%', height: '100%', border: 'none' }} />
               ) : (

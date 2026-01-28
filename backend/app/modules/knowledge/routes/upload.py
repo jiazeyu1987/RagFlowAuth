@@ -67,6 +67,12 @@ async def upload_document(
         mime_type = "text/plain; charset=utf-8"
     elif file_ext in {".md", ".markdown"}:
         mime_type = "text/markdown; charset=utf-8"
+    elif file_ext in {".csv"}:
+        mime_type = "text/csv; charset=utf-8"
+    elif file_ext in {".xlsx"}:
+        mime_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    elif file_ext in {".xls"}:
+        mime_type = "application/vnd.ms-excel"
 
     doc = deps.kb_store.create_document(
         filename=file.filename,
@@ -103,4 +109,3 @@ async def upload_document(
         ragflow_doc_id=doc.ragflow_doc_id,
         kb_id=(doc.kb_name or doc.kb_id),
     )
-

@@ -349,6 +349,17 @@ const DocumentBrowser = () => {
 
         setExcelData(sheetsData);
         setPreviewUrl(url);
+      } else if (isCsvFile(docName)) {
+        const blob = await authClient.previewRagflowDocumentBlob(docId, datasetName, docName);
+        const url = window.URL.createObjectURL(blob);
+        const text = await blob.text();
+        const firstLine = String(text || '').split(/\r?\n/)[0] || '';
+        const delimiter = detectDelimiter(firstLine);
+        const rows = parseDelimited(text, delimiter);
+        const { html, truncated } = rowsToHtmlTable(rows);
+        setExcelData({ CSV: html });
+        setPreviewUrl(url);
+        if (truncated) console.warn('[preview] CSV truncated for display (too large).');
       } else if (isPdfFile(docName)) {
         const blob = await authClient.previewRagflowDocumentBlob(docId, datasetName, docName);
         const url = window.URL.createObjectURL(blob);
@@ -443,6 +454,112 @@ const DocumentBrowser = () => {
     if (!filename) return false;
     const ext = filename.toLowerCase().split('.').pop();
     return ext === 'xlsx' || ext === 'xls';
+  };
+
+  const isCsvFile = (filename) => {
+    if (!filename) return false;
+    const ext = filename.toLowerCase().split('.').pop();
+    return ext === 'csv';
+  };
+
+  const escapeHtml = (s) =>
+    String(s ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+
+  const detectDelimiter = (line) => {
+    const candidates = [',', ';', '\t'];
+    let best = ',';
+    let bestCount = -1;
+    for (const d of candidates) {
+      const c = (line.match(new RegExp(`\\${d}`, 'g')) || []).length;
+      if (c > bestCount) {
+        bestCount = c;
+        best = d;
+      }
+    }
+    return best;
+  };
+
+  const parseDelimited = (text, delimiter) => {
+    const rows = [];
+    let row = [];
+    let cell = '';
+    let inQuotes = false;
+
+    const s = String(text ?? '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+    for (let i = 0; i < s.length; i++) {
+      const ch = s[i];
+      if (inQuotes) {
+        if (ch === '"') {
+          const next = s[i + 1];
+          if (next === '"') {
+            cell += '"';
+            i++;
+          } else {
+            inQuotes = false;
+          }
+        } else {
+          cell += ch;
+        }
+        continue;
+      }
+
+      if (ch === '"') {
+        inQuotes = true;
+        continue;
+      }
+      if (ch === delimiter) {
+        row.push(cell);
+        cell = '';
+        continue;
+      }
+      if (ch === '\n') {
+        row.push(cell);
+        cell = '';
+        if (!(row.length === 1 && row[0] === '' && rows.length === 0)) rows.push(row);
+        row = [];
+        continue;
+      }
+      cell += ch;
+    }
+    row.push(cell);
+    if (row.length > 1 || row[0] !== '') rows.push(row);
+    return rows;
+  };
+
+  const rowsToHtmlTable = (rows, { maxRows = 2000, maxCols = 100 } = {}) => {
+    const limitedRows = rows.slice(0, maxRows);
+    const colCount = Math.min(
+      maxCols,
+      Math.max(0, ...limitedRows.map((r) => (Array.isArray(r) ? r.length : 0)))
+    );
+
+    const head = limitedRows[0] || [];
+    const body = limitedRows.slice(1);
+
+    const thead =
+      colCount > 0
+        ? `<thead><tr>${Array.from({ length: colCount })
+            .map((_, i) => `<th>${escapeHtml(head[i] ?? '')}</th>`)
+            .join('')}</tr></thead>`
+        : '';
+
+    const tbody = `<tbody>${body
+      .map((r) => {
+        const cells = Array.from({ length: colCount })
+          .map((_, i) => `<td>${escapeHtml(r?.[i] ?? '')}</td>`)
+          .join('');
+        return `<tr>${cells}</tr>`;
+      })
+      .join('')}</tbody>`;
+
+    const table = `<table>${thead}${tbody}</table>`;
+    const truncated = rows.length > maxRows || rows.some((r) => (r?.length || 0) > maxCols);
+    return { html: table, truncated };
   };
 
   const isPdfFile = (filename) => {
@@ -1232,7 +1349,7 @@ const DocumentBrowser = () => {
                     以获得更好的兼容性和在线预览体验。
                   </div>
                 </div>
-              ) : isExcelFile(previewDocName) ? (
+              ) : (isExcelFile(previewDocName) || isCsvFile(previewDocName)) ? (
                 <div className="table-preview" style={{
                   padding: '24px',
                   backgroundColor: 'white',

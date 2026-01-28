@@ -2,15 +2,35 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { knowledgeApi } from '../features/knowledge/api';
 
+const MAX_FILE_SIZE_BYTES = 16 * 1024 * 1024;
+const ACCEPTED_EXTENSIONS = ['.txt', '.pdf', '.doc', '.docx', '.md', '.ppt', '.pptx', '.xlsx', '.xls', '.csv'];
+
+const getFileExtensionLower = (name = '') => {
+  const idx = name.lastIndexOf('.');
+  if (idx < 0) return '';
+  return name.slice(idx).toLowerCase();
+};
+
+const formatBytes = (bytes) => {
+  if (!Number.isFinite(bytes)) return '-';
+  if (bytes < 1024) return `${bytes} B`;
+  const kb = bytes / 1024;
+  if (kb < 1024) return `${kb.toFixed(2)} KB`;
+  const mb = kb / 1024;
+  return `${mb.toFixed(2)} MB`;
+};
+
 const KnowledgeUpload = () => {
   const navigate = useNavigate();
-  const [selectedFile, setSelectedFile] = useState(null);
+  const [selectedFiles, setSelectedFiles] = useState([]);
   const [kbId, setKbId] = useState('展厅');
   const [datasets, setDatasets] = useState([]);
   const [loadingDatasets, setLoadingDatasets] = useState(true);
   const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(null); // {current, total, filename}
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
+  const [dragActive, setDragActive] = useState(false);
 
   useEffect(() => {
     const fetchDatasets = async () => {
@@ -37,41 +57,117 @@ const KnowledgeUpload = () => {
     fetchDatasets();
   }, []);
 
-  const handleFileSelect = (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const addFiles = (filesLike) => {
+    const incoming = Array.from(filesLike || []);
+    if (incoming.length === 0) return;
 
-    const maxSize = 16 * 1024 * 1024;
-    if (file.size > maxSize) {
-      setError('文件大小不能超过 16MB');
-      setSelectedFile(null);
-      return;
+    const valid = [];
+    const rejected = [];
+
+    for (const f of incoming) {
+      const ext = getFileExtensionLower(f.name);
+      if (!ACCEPTED_EXTENSIONS.includes(ext)) {
+        rejected.push({ file: f, reason: 'unsupported' });
+        continue;
+      }
+      if (f.size > MAX_FILE_SIZE_BYTES) {
+        rejected.push({ file: f, reason: 'too_large' });
+        continue;
+      }
+      valid.push(f);
     }
 
-    setSelectedFile(file);
-    setError(null);
+    setSelectedFiles((prev) => {
+      const existing = prev || [];
+      const map = new Map();
+      for (const f of existing) map.set(`${f.name}__${f.size}__${f.lastModified}`, f);
+      for (const f of valid) map.set(`${f.name}__${f.size}__${f.lastModified}`, f);
+      return Array.from(map.values());
+    });
+
+    if (rejected.length > 0) {
+      const tooLarge = rejected.filter((r) => r.reason === 'too_large').length;
+      const unsupported = rejected.filter((r) => r.reason === 'unsupported').length;
+      const parts = [];
+      if (tooLarge) parts.push(`${tooLarge} 个文件超过 16MB`);
+      if (unsupported) parts.push(`${unsupported} 个文件类型不支持`);
+      setError(`部分文件未添加：${parts.join('，')}`);
+    } else {
+      setError(null);
+    }
+  };
+
+  const handleFileSelect = (e) => {
+    addFiles(e.target.files);
+    // allow selecting same file again later
+    e.target.value = '';
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(false);
+    if (uploading) return;
+    addFiles(e.dataTransfer?.files);
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!uploading) setDragActive(true);
+  };
+
+  const handleDragLeave = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(false);
+  };
+
+  const removeFile = (key) => {
+    setSelectedFiles((prev) => (prev || []).filter((f) => `${f.name}__${f.size}__${f.lastModified}` !== key));
   };
 
   const handleUpload = async (e) => {
     e.preventDefault();
-    if (!selectedFile) {
+    if (!selectedFiles || selectedFiles.length === 0) {
       setError('请选择文件');
       return;
     }
 
     setUploading(true);
+    setUploadProgress(null);
     setError(null);
     setSuccess(null);
 
     try {
-      const result = await knowledgeApi.uploadDocument(selectedFile, kbId);
-      setSuccess(`文件“${result.filename}”上传成功，等待审核`);
-      setSelectedFile(null);
-      setTimeout(() => navigate('/documents'), 1200);
+      const results = [];
+      for (let i = 0; i < selectedFiles.length; i++) {
+        const file = selectedFiles[i];
+        setUploadProgress({ current: i + 1, total: selectedFiles.length, filename: file.name });
+        try {
+          const result = await knowledgeApi.uploadDocument(file, kbId);
+          results.push({ ok: true, filename: result?.filename || file.name });
+        } catch (err) {
+          results.push({ ok: false, filename: file.name, error: err?.message || '上传失败' });
+        }
+      }
+
+      const okCount = results.filter((r) => r.ok).length;
+      const failCount = results.length - okCount;
+
+      if (failCount === 0) {
+        setSuccess(`已上传 ${okCount} 个文件，等待审核`);
+        setSelectedFiles([]);
+        setTimeout(() => navigate('/documents'), 1200);
+      } else {
+        const firstFail = results.find((r) => !r.ok);
+        setError(`上传完成：成功 ${okCount} 个，失败 ${failCount} 个。${firstFail?.filename ? `（例如：${firstFail.filename}：${firstFail.error}）` : ''}`);
+      }
     } catch (err) {
       setError(err.message || '上传失败');
     } finally {
       setUploading(false);
+      setUploadProgress(null);
     }
   };
 
@@ -159,55 +255,137 @@ const KnowledgeUpload = () => {
             <div
               data-testid="upload-file-dropzone"
               style={{
-                border: '2px dashed #d1d5db',
+                border: `2px dashed ${dragActive ? '#3b82f6' : '#d1d5db'}`,
                 borderRadius: '4px',
                 padding: '40px',
                 textAlign: 'center',
                 cursor: 'pointer',
                 transition: 'border-color 0.2s',
+                backgroundColor: dragActive ? '#eff6ff' : 'transparent',
               }}
-              onMouseEnter={(e) => (e.currentTarget.style.borderColor = '#3b82f6')}
-              onMouseLeave={(e) => (e.currentTarget.style.borderColor = '#d1d5db')}
-              onClick={() => document.getElementById('fileInput')?.click()}
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+              onClick={() => !uploading && document.getElementById('fileInput')?.click()}
             >
               <input
                 type="file"
                 onChange={handleFileSelect}
-                accept=".txt,.pdf,.doc,.docx,.md,.ppt,.pptx"
+                accept=".txt,.pdf,.doc,.docx,.md,.ppt,.pptx,.xlsx,.xls,.csv"
+                multiple
                 style={{ display: 'none' }}
                 id="fileInput"
                 data-testid="upload-file-input"
               />
               <div style={{ fontSize: '2rem', marginBottom: '12px' }}>文件</div>
               <div style={{ color: '#6b7280', marginBottom: '8px' }}>
-                {selectedFile ? selectedFile.name : '点击选择文件'}
+                {selectedFiles && selectedFiles.length > 0
+                  ? `已选择 ${selectedFiles.length} 个文件`
+                  : '拖动文件到此处，或点击选择文件（支持多选）'}
               </div>
-              {selectedFile && (
-                <div style={{ fontSize: '0.9rem', color: '#6b7280' }}>{(selectedFile.size / 1024).toFixed(2)} KB</div>
+              {uploadProgress && (
+                <div style={{ fontSize: '0.9rem', color: '#6b7280' }} data-testid="upload-progress">
+                  正在上传 {uploadProgress.current}/{uploadProgress.total}：{uploadProgress.filename}
+                </div>
               )}
             </div>
+
+            {selectedFiles && selectedFiles.length > 0 && (
+              <div style={{ marginTop: 12 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                  <div style={{ fontSize: '0.9rem', color: '#374151', fontWeight: 500 }}>已选择文件</div>
+                  <button
+                    type="button"
+                    disabled={uploading}
+                    onClick={() => setSelectedFiles([])}
+                    data-testid="upload-files-clear"
+                    style={{
+                      padding: '6px 10px',
+                      backgroundColor: '#6b7280',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: 6,
+                      cursor: uploading ? 'not-allowed' : 'pointer',
+                      fontSize: '0.85rem',
+                    }}
+                  >
+                    清空
+                  </button>
+                </div>
+                <div style={{
+                  border: '1px solid #e5e7eb',
+                  borderRadius: 8,
+                  overflow: 'hidden',
+                }}>
+                  {selectedFiles.map((f) => {
+                    const key = `${f.name}__${f.size}__${f.lastModified}`;
+                    return (
+                      <div
+                        key={key}
+                        data-testid={`upload-file-item-${key}`}
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          padding: '10px 12px',
+                          borderBottom: '1px solid #f3f4f6',
+                          backgroundColor: 'white',
+                          gap: 12,
+                        }}
+                      >
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ fontSize: '0.95rem', color: '#111827', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {f.name}
+                          </div>
+                          <div style={{ fontSize: '0.85rem', color: '#6b7280' }}>{formatBytes(f.size)}</div>
+                        </div>
+                        <button
+                          type="button"
+                          disabled={uploading}
+                          onClick={() => removeFile(key)}
+                          data-testid={`upload-file-remove-${key}`}
+                          style={{
+                            padding: '6px 10px',
+                            backgroundColor: '#ef4444',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: 6,
+                            cursor: uploading ? 'not-allowed' : 'pointer',
+                            fontSize: '0.85rem',
+                            flexShrink: 0,
+                          }}
+                        >
+                          移除
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
             <div style={{ marginTop: '8px', fontSize: '0.85rem', color: '#6b7280' }}>
-              支持的文件类型：.txt, .pdf, .doc, .docx, .md, .ppt, .pptx（最大 16MB）
+              支持的文件类型：.txt, .pdf, .doc, .docx, .md, .ppt, .pptx, .xlsx, .xls, .csv（最大 16MB）
             </div>
           </div>
 
           <button
             type="submit"
-            disabled={!selectedFile || uploading}
+            disabled={!selectedFiles || selectedFiles.length === 0 || uploading}
             data-testid="upload-submit"
             style={{
               width: '100%',
               padding: '12px',
-              backgroundColor: !selectedFile || uploading ? '#9ca3af' : '#3b82f6',
+              backgroundColor: !selectedFiles || selectedFiles.length === 0 || uploading ? '#9ca3af' : '#3b82f6',
               color: 'white',
               border: 'none',
               borderRadius: '4px',
               fontSize: '1rem',
               fontWeight: '500',
-              cursor: !selectedFile || uploading ? 'not-allowed' : 'pointer',
+              cursor: !selectedFiles || selectedFiles.length === 0 || uploading ? 'not-allowed' : 'pointer',
             }}
           >
-            {uploading ? '上传中...' : '上传文档'}
+            {uploading ? '上传中...' : `上传文档${selectedFiles && selectedFiles.length > 0 ? `（${selectedFiles.length}）` : ''}`}
           </button>
         </form>
 
