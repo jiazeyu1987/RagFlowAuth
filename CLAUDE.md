@@ -55,8 +55,21 @@ Show resolved paths (DB/uploads/RAGFlow config):
 Run backend tests (Python unittest):
 
 ```bash
+# Run all tests
 cd backend
 python -m unittest discover tests
+
+# Run single test file
+python -m unittest tests.test_password_validation
+
+# Run single test class
+python -m unittest tests.test_password_validation.TestPasswordValidation
+
+# Run single test method
+python -m unittest tests.test_password_validation.TestPasswordValidation.test_accepts_valid_password
+
+# Run with verbose output
+python -m unittest discover tests -v
 ```
 
 **Backend Testing Pattern:**
@@ -149,7 +162,7 @@ See `tool/CLAUDE.md` for detailed deployment and backup documentation.
 - Lifecycle handled by async context manager for proper startup/shutdown
 
 **Core Modules:**
-- `auth` - Login/logout, JWT token management (AuthX)
+- `auth` - Login/logout, JWT token management, password change (AuthX)
 - `users` - User CRUD operations
 - `knowledge` - KB document management (upload, review, download, delete)
 - `review` - Document review workflow
@@ -158,6 +171,14 @@ See `tool/CLAUDE.md` for detailed deployment and backup documentation.
 - `permission_groups` - Permission group CRUD
 - `data_security` - Backup job management and execution
 - `org_directory` - Organizational directory (sync users from RAGFlow)
+
+**Authentication Patterns:**
+- **Public endpoints**: No authentication required (e.g., `/api/auth/login`)
+- **Authenticated endpoints**: Use `AuthContextDep` dependency (e.g., `/api/auth/me`, `/api/auth/password`)
+- **Admin-only endpoints**: Use role-based checks (e.g., `AdminOnly` dependency in users module)
+- **JWT tokens**: Stored in HTTP-only cookies, managed by `backend.core.security.auth`
+- **Password hashing**: SHA256 via `hash_password()` in `backend/services/users/password.py`
+- **Password validation**: `validate_password_requirements()` enforces 6+ chars, letters + numbers, not common
 
 **Key Services:**
 - `UserStore` - User data persistence
@@ -271,12 +292,58 @@ Historical "individual user permissions" tables (`user_kb_permissions`, `user_ch
 - Tests fail: Ensure backend and frontend are running, check `E2E_FRONTEND_BASE_URL`
 
 **Recent Feature Additions:**
+- **User Password Change**: Authenticated users can change their own password via `PUT /api/auth/password`
 - **Scheduled Backups**: Data Security page allows configuring scheduled backup jobs
 - **Backup Replica**: Automatic replication to Windows network shares after backup completes
 - **Organizational Directory**: User sync from RAGFlow with group assignment support
 - **E2E Test Suite**: Comprehensive Playwright tests with smoke/integration/regression tags
 
 ## Development Notes
+
+**Test-Driven Development (TDD) Workflow:**
+This project follows TDD methodology for new features:
+1. **RED**: Write tests first (tests will fail)
+2. **GREEN**: Implement minimal code to make tests pass
+3. **REFACTOR**: Improve code quality while keeping tests green
+4. Use `/tdd` command to invoke TDD workflow agent
+5. Minimum test coverage: 80% (100% for critical authentication code)
+
+### Password Change Feature
+
+**Endpoint**: `PUT /api/auth/password`
+
+**Authentication**: Required (uses `AuthContextDep`)
+
+**Request Body**:
+```json
+{
+  "old_password": "string",
+  "new_password": "string"
+}
+```
+
+**Password Requirements** (enforced by `validate_password_requirements()`):
+- Minimum 6 characters
+- Must contain both letters AND numbers
+- Cannot be a common password (password, 123456, abc123, qwerty, admin)
+- Cannot match the old password
+
+**Success Response**: `{"message": "密码修改成功"}`
+
+**Error Responses**:
+- `400` - Old password incorrect: `{"detail": "旧密码错误"}`
+- `400` - New password too short: `{"detail": "密码不符合要求：密码长度至少6个字符"}`
+- `400` - New password matches old: `{"detail": "新密码不能与旧密码相同"}`
+- `400` - General validation failure: `{"detail": "密码不符合要求：必须包含字母和数字，且不能使用常见密码"}`
+
+**Implementation Location**:
+- Endpoint: `backend/app/modules/auth/router.py:186`
+- Validation: `backend/services/users/password.py:8`
+- Model: `backend/models/auth.py:18`
+
+**Tests**:
+- Unit tests: `backend/tests/test_password_validation.py`
+- Integration tests: `backend/tests/test_password_change_api.py`
 
 **Adding New Endpoints:**
 1. Create router in `backend/app/modules/`
@@ -523,6 +590,7 @@ Bad version numbers (DO NOT USE):
 | 1.0.4 | 2025-01-27 | Fixed Docker images backup path conversion (read-only filesystem error) |
 | 1.0.5 | 2025-01-27 | Fixed volume backup path conversion (volumes written to wrong location) |
 | 1.1.0 | 2025-01-27 | Added scheduled backup support with cron expressions |
+| 1.1.1 | 2026-01-28 | Added user-initiated password change feature (PUT /api/auth/password) |
 
 ### Migration from Old Naming Scheme
 

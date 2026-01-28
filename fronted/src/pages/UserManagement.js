@@ -39,6 +39,14 @@ const UserManagement = () => {
   const [showGroupModal, setShowGroupModal] = useState(false);
   const [selectedGroupIds, setSelectedGroupIds] = useState([]);
 
+  // 重置用户密码（管理员）
+  const [showResetPasswordModal, setShowResetPasswordModal] = useState(false);
+  const [resetPasswordUser, setResetPasswordUser] = useState(null);
+  const [resetPasswordValue, setResetPasswordValue] = useState('');
+  const [resetPasswordConfirm, setResetPasswordConfirm] = useState('');
+  const [resetPasswordSubmitting, setResetPasswordSubmitting] = useState(false);
+  const [resetPasswordError, setResetPasswordError] = useState(null);
+
   // 公司/部门下拉数据
   const [companies, setCompanies] = useState([]);
   const [departments, setDepartments] = useState([]);
@@ -171,6 +179,46 @@ const UserManagement = () => {
       fetchUsers();
     } catch (err) {
       setError(err.message);
+    }
+  };
+
+  const handleOpenResetPassword = (user) => {
+    setResetPasswordUser(user);
+    setResetPasswordValue('');
+    setResetPasswordConfirm('');
+    setResetPasswordError(null);
+    setShowResetPasswordModal(true);
+  };
+
+  const handleCloseResetPassword = () => {
+    setShowResetPasswordModal(false);
+    setResetPasswordUser(null);
+    setResetPasswordValue('');
+    setResetPasswordConfirm('');
+    setResetPasswordError(null);
+  };
+
+  const handleSubmitResetPassword = async () => {
+    if (!resetPasswordUser) return;
+    setResetPasswordError(null);
+
+    if (!resetPasswordValue) {
+      setResetPasswordError('请输入新密码');
+      return;
+    }
+    if (resetPasswordValue !== resetPasswordConfirm) {
+      setResetPasswordError('两次输入的新密码不一致');
+      return;
+    }
+
+    try {
+      setResetPasswordSubmitting(true);
+      await usersApi.resetPassword(resetPasswordUser.user_id, resetPasswordValue);
+      handleCloseResetPassword();
+    } catch (err) {
+      setResetPasswordError(err.message || '修改密码失败');
+    } finally {
+      setResetPasswordSubmitting(false);
     }
   };
 
@@ -438,6 +486,24 @@ const UserManagement = () => {
                     权限组
                   </button>
                   )}
+                  {canManageUsers && (
+                    <button
+                      onClick={() => handleOpenResetPassword(user)}
+                      data-testid={`users-reset-password-${user.user_id}`}
+                      style={{
+                        padding: '6px 12px',
+                        backgroundColor: '#3b82f6',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '4px',
+                        cursor: 'pointer',
+                        fontSize: '0.9rem',
+                        marginRight: '8px',
+                      }}
+                    >
+                      修改密码
+                    </button>
+                  )}
                   {canManageUsers && user.username !== 'admin' && (
                     <button
                       onClick={() => handleDeleteUser(user.user_id)}
@@ -467,6 +533,111 @@ const UserManagement = () => {
           </div>
         )}
       </div>
+
+      {/* 修改密码模态框（管理员重置） */}
+      {showResetPasswordModal && resetPasswordUser && (
+        <div data-testid="users-reset-password-modal" style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.5)',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          zIndex: 1000,
+        }}>
+          <div style={{
+            backgroundColor: 'white',
+            padding: '32px',
+            borderRadius: '8px',
+            width: '100%',
+            maxWidth: '500px',
+          }}>
+            <h3 style={{ margin: '0 0 24px 0' }}>
+              修改密码 - {resetPasswordUser.username}
+            </h3>
+
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: 'block', marginBottom: 8, fontWeight: '500' }}>新密码</label>
+              <input
+                type="password"
+                value={resetPasswordValue}
+                autoComplete="new-password"
+                onChange={(e) => setResetPasswordValue(e.target.value)}
+                data-testid="users-reset-password-new"
+                style={{
+                  width: '100%',
+                  padding: '10px 12px',
+                  border: '1px solid #d1d5db',
+                  borderRadius: '4px',
+                }}
+              />
+            </div>
+
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: 'block', marginBottom: 8, fontWeight: '500' }}>确认新密码</label>
+              <input
+                type="password"
+                value={resetPasswordConfirm}
+                autoComplete="new-password"
+                onChange={(e) => setResetPasswordConfirm(e.target.value)}
+                data-testid="users-reset-password-confirm"
+                style={{
+                  width: '100%',
+                  padding: '10px 12px',
+                  border: '1px solid #d1d5db',
+                  borderRadius: '4px',
+                }}
+              />
+            </div>
+
+            {resetPasswordError && (
+              <div style={{ marginBottom: 16, color: '#ef4444' }} data-testid="users-reset-password-error">
+                {resetPasswordError}
+              </div>
+            )}
+
+            <div style={{ display: 'flex', gap: '12px' }}>
+              <button
+                type="button"
+                onClick={handleCloseResetPassword}
+                disabled={resetPasswordSubmitting}
+                data-testid="users-reset-password-cancel"
+                style={{
+                  flex: 1,
+                  padding: '10px',
+                  backgroundColor: '#6b7280',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: resetPasswordSubmitting ? 'not-allowed' : 'pointer',
+                }}
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                onClick={handleSubmitResetPassword}
+                disabled={resetPasswordSubmitting}
+                data-testid="users-reset-password-save"
+                style={{
+                  flex: 1,
+                  padding: '10px',
+                  backgroundColor: resetPasswordSubmitting ? '#93c5fd' : '#3b82f6',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: resetPasswordSubmitting ? 'not-allowed' : 'pointer',
+                }}
+              >
+                {resetPasswordSubmitting ? '提交中...' : '保存'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {canManageUsers && showCreateModal && (
         <div style={{

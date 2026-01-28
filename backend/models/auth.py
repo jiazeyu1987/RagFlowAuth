@@ -13,3 +13,9 @@ class TokenResponse(BaseModel):
     refresh_token: str
     token_type: str = "bearer"
     scopes: list[str] = []
+
+
+class ChangePasswordRequest(BaseModel):
+    """Change password request model"""
+    old_password: str
+    new_password: str

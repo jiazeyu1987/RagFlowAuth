@@ -10,8 +10,9 @@ from backend.app.core.permdbg import permdbg
 from backend.app.core.permission_resolver import ResourceScope
 from backend.core.security import auth
 from backend.app.dependencies import AppDependencies
-from backend.models.auth import LoginRequest, TokenResponse
+from backend.models.auth import LoginRequest, TokenResponse, ChangePasswordRequest
 from backend.services.user_store import hash_password
+from backend.services.users import validate_password_requirements
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -180,3 +181,42 @@ async def get_current_user(
         "accessible_kb_ids": sorted(accessible_kb_ids_set),
         "accessible_chats": sorted(accessible_chats_set),
     }
+
+
+@router.put("/password")
+async def change_password(
+    request_data: ChangePasswordRequest,
+    ctx: AuthContextDep,
+):
+    """
+    Change password for authenticated user.
+
+    Requires:
+    - Correct old password
+    - New password meets validation requirements
+    """
+    deps = ctx.deps
+    user = ctx.user
+
+    # Verify old password
+    if hash_password(request_data.old_password) != user.password_hash:
+        raise HTTPException(status_code=400, detail="旧密码错误")
+
+    # Validate new password requirements
+    if not validate_password_requirements(
+        password=request_data.new_password,
+        old_password=request_data.old_password,
+    ):
+        # Check specific validation error for better error messages
+        if len(request_data.new_password) < 6:
+            raise HTTPException(status_code=400, detail="密码不符合要求：密码长度至少6个字符")
+        if request_data.new_password == request_data.old_password:
+            raise HTTPException(status_code=400, detail="新密码不能与旧密码相同")
+        raise HTTPException(status_code=400, detail="密码不符合要求：必须包含字母和数字，且不能使用常见密码")
+
+    # Update password
+    deps.user_store.update_password(user.user_id, request_data.new_password)
+
+    logger.info(f"Password changed for user {user.username}")
+
+    return {"message": "密码修改成功"}

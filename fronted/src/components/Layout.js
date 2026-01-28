@@ -22,6 +22,7 @@ const Layout = ({ children }) => {
     { name: '文档浏览', path: '/browser' },
     { name: '文档审核', path: '/documents', show: canReview },
     { name: '上传文档', path: '/upload', show: canUpload },
+    { name: '修改密码', path: '/change-password' },
     { name: '用户管理', path: '/users', allowedRoles: ['admin'] },
     { name: '公司/部门', path: '/org-directory', allowedRoles: ['admin'] },
     { name: '权限组管理', path: '/permission-groups', allowedRoles: ['admin'] },
