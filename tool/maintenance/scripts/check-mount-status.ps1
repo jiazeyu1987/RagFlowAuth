@@ -1,7 +1,20 @@
 # Windows Share Status Check Script
 # Function: Check /mnt/replica mount status
 
-$LogFile = "C:\Users\BJB110\AppData\Local\Temp\check_mount_status.log"
+param(
+    [Parameter(Mandatory = $true)]
+    [string]$ServerHost,
+
+    [Parameter(Mandatory = $true)]
+    [string]$ServerUser,
+
+    [Parameter(Mandatory = $false)]
+    [string]$WindowsHost = ""
+)
+
+$LogFile = Join-Path $env:TEMP "check_mount_status.log"
+$MountPoint = "/mnt/replica"
+$ExpectedSubdir = "RagflowAuth"
 
 function Write-Log {
     param([string]$Message)
@@ -13,7 +26,7 @@ function Write-Log {
 function Invoke-SSH {
     param([string]$Command)
     $EscapedCommand = $Command.Replace('"', '\"')
-    $FullCommand = "ssh -o BatchMode=yes -o ConnectTimeout=10 -o ControlMaster=no root@172.30.30.57 ""$EscapedCommand"""
+    $FullCommand = "ssh -o BatchMode=yes -o ConnectTimeout=10 -o ControlMaster=no $ServerUser@$ServerHost ""$EscapedCommand"""
     Write-Log "Execute: $Command"
     $Output = Invoke-Expression $FullCommand 2>&1
     $ExitCode = $LASTEXITCODE
@@ -39,43 +52,46 @@ try {
     Write-Log ""
     Write-Log "[Check 1] File list detection"
 
-    $Result = Invoke-SSH "timeout 3 ls /mnt/replica/RagflowAuth/ 2>&1 | head -1"
+    $TargetDir = "$MountPoint/$ExpectedSubdir"
+    $Result = Invoke-SSH "timeout 3 ls $TargetDir 2>&1 | head -1"
 
-    # Check 2: Mount command (auxiliary)
+    # Check 2: Mount command (PRIMARY - CIFS type check)
     Write-Log ""
-    Write-Log "[Check 2] Mount command detection"
+    Write-Log "[Check 2] CIFS mount detection"
 
-    $Result2 = Invoke-SSH "mount | grep replica; exit 0"
+    $Result2 = Invoke-SSH "mount | grep -E 'type.*cifs|$MountPoint.*type' 2>&1"
 
     # Determine mount status
     $IsMounted = $false
     $FileListDetected = $false
-    $MountDetected = $false
+    $CifsMountDetected = $false
 
-    # Check file list first (priority)
+    # Check file list (auxiliary - can be misleading!)
     if ($Result.Output -match "migration_pack" -and $Result.Output -notmatch "cannot access" -and $Result.Output -notmatch "No such file") {
         $FileListDetected = $true
-        Write-Log "File List: Detected migration_pack files -> Mounted"
+        Write-Log "File List: Detected migration_pack files (but NOT checking mount type)"
     } elseif ($Result.Output -match "cannot access" -or $Result.Output -match "No such file" -or $Result.Output -match "Transport endpoint") {
         Write-Log "File List: Cannot access directory (not mounted or mount failed)"
     } else {
         Write-Log "File List: No migration_pack files detected"
     }
 
-    # Check mount command (auxiliary)
-    if ($Result2.Output -match "replica" -or $Result2.Output -match "192.168.112.72") {
-        $MountDetected = $true
-        Write-Log "Mount Command: Detected //192.168.112.72/backup on /mnt/replica"
+    # Check CIFS mount (PRIMARY CHECK - must be CIFS type)
+    if ($Result2.Output -match "type cifs") {
+        $CifsMountDetected = $true
+        Write-Log "Mount Command: ✓ Detected CIFS mount (type cifs)"
     } else {
-        Write-Log "Mount Command: No mount entry found"
+        Write-Log "Mount Command: ✗ No CIFS mount found (only local files exist)"
     }
 
-    # Final decision: file list has priority
-    if ($FileListDetected) {
+    # Final decision: CIFS mount check has priority
+    if ($CifsMountDetected) {
         $IsMounted = $true
-    } elseif ($MountDetected) {
-        $IsMounted = $true
-        Write-Log "Decision: Mount detected by mount command"
+        Write-Log "Decision: Mounted (CIFS filesystem detected)"
+    } elseif ($FileListDetected) {
+        $IsMounted = $false
+        Write-Log "Decision: NOT Mounted (local files exist but no CIFS mount)"
+        Write-Log "WARNING: Old backup files in local directory can be misleading!"
     } else {
         Write-Log "Result: Not mounted"
     }
@@ -84,20 +100,23 @@ try {
     Write-Log ""
     Write-Log "[Check 3] Disk usage"
 
-    $Result = Invoke-SSH "df -h | grep replica; exit 0"
+    $Result = Invoke-SSH "df -h | grep $MountPoint; exit 0"
 
     # Check 4: Network connectivity
     Write-Log ""
     Write-Log "[Check 4] Network connectivity"
 
-    $Result = Invoke-SSH "ping -c 1 -W 2 192.168.112.72 2>/dev/null; echo 'unreachable'"
-    $IsReachable = $Result.Output -notmatch "unreachable"
+    $IsReachable = $false
+    if ($WindowsHost) {
+        $Result = Invoke-SSH "ping -c 1 -W 2 $WindowsHost 2>/dev/null; echo 'unreachable'"
+        $IsReachable = $Result.Output -notmatch "unreachable"
+    }
 
     # Check 5: Recent files
     Write-Log ""
     Write-Log "[Check 5] Recent synced files"
 
-    $Result = Invoke-SSH "ls -lt /mnt/replica/RagflowAuth/ 2>/dev/null | head -10; echo 'DONE'"
+    $Result = Invoke-SSH "ls -lt $TargetDir 2>/dev/null | head -10; echo 'DONE'"
 
     # Build status report
     Write-Log ""
@@ -121,17 +140,19 @@ try {
     Write-Log ""
     Write-Log "=== Network Connection ==="
 
-    if ($IsReachable) {
-        Write-Log "Windows Host (192.168.112.72): Reachable (OK)"
+    if (-not $WindowsHost) {
+        Write-Log "Windows Host: (not provided) - skipped ping"
+    } elseif ($IsReachable) {
+        Write-Log "Windows Host ($WindowsHost): Reachable (OK)"
     } else {
-        Write-Log "Windows Host (192.168.112.72): Unreachable"
+        Write-Log "Windows Host ($WindowsHost): Unreachable"
         Write-Log "Hint: Check network and Windows host power"
     }
 
     Write-Log ""
     Write-Log "=== Disk Usage ==="
 
-    $Result = Invoke-SSH "df -h | grep replica; exit 0"
+    $Result = Invoke-SSH "df -h | grep $MountPoint; exit 0"
     if ($Result.Output) {
         Write-Log $($Result.Output)
     } else {
@@ -141,7 +162,7 @@ try {
     Write-Log ""
     Write-Log "=== Recent Synced Files ==="
 
-    $Result = Invoke-SSH "ls -lt /mnt/replica/RagflowAuth/ 2>/dev/null | head -10; echo 'DONE'"
+    $Result = Invoke-SSH "ls -lt $TargetDir 2>/dev/null | head -10; echo 'DONE'"
     if ($Result.Output -match "DONE" -and $Result.Output.Length -gt 10) {
         $Lines = $Result.Output -split "`n"
         foreach ($Line in $Lines) {
@@ -150,7 +171,7 @@ try {
             }
         }
     } else {
-        Write-Log "Cannot access /mnt/replica/RagflowAuth/"
+        Write-Log "Cannot access $TargetDir"
         if (-not $IsMounted) {
             Write-Log "Reason: Share not mounted"
         }

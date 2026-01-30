@@ -17,6 +17,7 @@ import os
 import sys
 import time
 import logging
+import tempfile
 from pathlib import Path
 from datetime import datetime
 
@@ -79,6 +80,13 @@ ENVIRONMENTS = {
     }
 }
 
+# ==================== 固定 Windows 共享（不弹框） ====================
+# 说明：用户环境固定时，可在此处提供默认值；密码不写死，优先从 ~/.ragflowauth_tool_config.txt 读取。
+DEFAULT_WINDOWS_SHARE_HOST = "192.168.112.72"
+DEFAULT_WINDOWS_SHARE_NAME = "backup"
+DEFAULT_WINDOWS_SHARE_USERNAME = "BJB110"
+DEFAULT_WINDOWS_SHARE_PASSWORD = "showgood87"
+
 
 class ServerConfig:
     """服务器配置"""
@@ -87,7 +95,17 @@ class ServerConfig:
         self.ip = "172.30.30.57"
         self.user = "root"
         self.environment = "正式服务器"
+        # Windows 共享挂载配置（用于把备份复制到 Windows）
+        self.windows_share_host = DEFAULT_WINDOWS_SHARE_HOST
+        self.windows_share_name = DEFAULT_WINDOWS_SHARE_NAME
+        self.windows_share_username = DEFAULT_WINDOWS_SHARE_USERNAME
+        self.windows_share_password = DEFAULT_WINDOWS_SHARE_PASSWORD
         self.load_config()
+        # 用户环境固定：不从配置文件覆盖写死值
+        self.windows_share_host = DEFAULT_WINDOWS_SHARE_HOST
+        self.windows_share_name = DEFAULT_WINDOWS_SHARE_NAME
+        self.windows_share_username = DEFAULT_WINDOWS_SHARE_USERNAME
+        self.windows_share_password = DEFAULT_WINDOWS_SHARE_PASSWORD
 
     def load_config(self):
         """从文件加载配置"""
@@ -103,6 +121,14 @@ class ServerConfig:
                                 self.user = value
                             elif key == "ENVIRONMENT":
                                 self.environment = value
+                            elif key == "WIN_SHARE_HOST":
+                                self.windows_share_host = value
+                            elif key == "WIN_SHARE_NAME":
+                                self.windows_share_name = value
+                            elif key == "WIN_SHARE_USER":
+                                self.windows_share_username = value
+                            elif key == "WIN_SHARE_PASS":
+                                self.windows_share_password = value
             except Exception as e:
                 msg = f"加载配置失败: {e}"
                 print(msg)
@@ -115,6 +141,10 @@ class ServerConfig:
                 f.write(f"ENVIRONMENT={self.environment}\n")
                 f.write(f"SERVER_IP={self.ip}\n")
                 f.write(f"SERVER_USER={self.user}\n")
+                f.write(f"WIN_SHARE_HOST={self.windows_share_host}\n")
+                f.write(f"WIN_SHARE_NAME={self.windows_share_name}\n")
+                f.write(f"WIN_SHARE_USER={self.windows_share_username}\n")
+                f.write(f"WIN_SHARE_PASS={self.windows_share_password}\n")
         except Exception as e:
             msg = f"保存配置失败: {e}"
             print(msg)
@@ -498,7 +528,7 @@ class RagflowAuthTool:
             },
             {
                 "title": "挂载 Windows 共享",
-                "desc": "挂载 Windows 网络共享到服务器（//192.168.112.72/backup → /mnt/replica）",
+                "desc": "挂载 Windows 网络共享到服务器（固定挂载到 /mnt/replica）",
                 "cmd": "__mount_windows_share__"
             },
             {
@@ -1228,10 +1258,33 @@ class RagflowAuthTool:
             self.show_text_window("错误", "[RED]请先配置服务器信息[/RED]")
             return
 
+        host = DEFAULT_WINDOWS_SHARE_HOST
+        share = DEFAULT_WINDOWS_SHARE_NAME
+        user = DEFAULT_WINDOWS_SHARE_USERNAME
+        pwd = DEFAULT_WINDOWS_SHARE_PASSWORD
+
+        if host == self.config.ip:
+            messagebox.showerror(
+                "错误",
+                f"Windows 共享 IP 不能等于服务器 IP（{self.config.ip}）。\n当前为固定配置模式，请修改 ~/.ragflowauth_tool_config.txt 中 WIN_SHARE_HOST。",
+            )
+            return
+
+        # 在控制台打印使用的参数（不打印密码）
+        print(f"\n{'='*60}", flush=True)
+        print("[MOUNT] 挂载 Windows 共享", flush=True)
+        print(f"[MOUNT] 服务器: {self.config.user}@{self.config.ip}", flush=True)
+        print(f"[MOUNT] Windows 共享: //{host}/{share}", flush=True)
+        print(f"[MOUNT] 共享用户: {user}", flush=True)
+        print(f"[MOUNT] 挂载点: /mnt/replica", flush=True)
+        print(f"[MOUNT] 目标目录: /mnt/replica/RagflowAuth", flush=True)
+        print(f"{'='*60}\n", flush=True)
+
         def do_mount():
             try:
                 import subprocess
                 import os
+                log_content = ""
 
                 script_path = os.path.join(os.path.dirname(__file__), "scripts", "mount-windows-share.ps1")
 
@@ -1241,7 +1294,15 @@ class RagflowAuthTool:
 
                 # 执行 PowerShell 脚本
                 result = subprocess.run(
-                    ["powershell", "-ExecutionPolicy", "Bypass", "-File", script_path],
+                    [
+                        "powershell", "-ExecutionPolicy", "Bypass", "-File", script_path,
+                        "-ServerHost", self.config.ip,
+                        "-ServerUser", self.config.user,
+                        "-WindowsHost", host,
+                        "-ShareName", share,
+                        "-ShareUsername", user,
+                        "-SharePassword", pwd,
+                    ],
                     capture_output=True,
                     text=True,
                     encoding='utf-8',
@@ -1250,7 +1311,7 @@ class RagflowAuthTool:
                 )
 
                 # 读取日志文件
-                log_file = r"C:\Users\BJB110\AppData\Local\Temp\mount_windows_share.log"
+                log_file = str(Path(tempfile.gettempdir()) / "mount_windows_share.log")
                 if os.path.exists(log_file):
                     with open(log_file, 'r', encoding='utf-8') as f:
                         log_content = f.read()
@@ -1278,6 +1339,7 @@ class RagflowAuthTool:
         """挂载前诊断，检查网络、挂载点、进程占用等"""
         try:
             diag_lines = []
+            win_host = (self.config.windows_share_host or "").strip()
 
             # 1. 检查挂载点目录
             print("[DIAG] 1. 检查挂载点目录...", flush=True)
@@ -1303,26 +1365,32 @@ class RagflowAuthTool:
 
             # 4. 测试 ICMP 连通性
             print("[DIAG] 4. 测试 ICMP 连通性...", flush=True)
-            success, output = self.ssh_executor.execute("ping -c 2 -W 2 192.168.112.72 2>&1")
-            if "100% packet loss" in output or "unreachable" in output.lower():
-                diag_lines.append("4. [RED]✗ ICMP 不可达（ping 失败）[/RED]")
-            elif "0% packet loss" in output or "100% packet loss" not in output:
-                diag_lines.append("4. [GREEN]✓ ICMP 可达（ping 成功）[/GREEN]")
+            if not win_host:
+                diag_lines.append("4. [YELLOW]⚠ 未配置 Windows 主机 IP，跳过 ping[/YELLOW]")
             else:
-                diag_lines.append(f"4. [YELLOW]⚠ ICMP 部分可达:[/YELLOW]\n{output.strip()[:100]}")
+                success, output = self.ssh_executor.execute(f"ping -c 2 -W 2 {win_host} 2>&1")
+                if "100% packet loss" in output or "unreachable" in output.lower():
+                    diag_lines.append(f"4. [RED]✗ ICMP 不可达（ping {win_host} 失败）[/RED]")
+                elif "0% packet loss" in output or "100% packet loss" not in output:
+                    diag_lines.append(f"4. [GREEN]✓ ICMP 可达（ping {win_host} 成功）[/GREEN]")
+                else:
+                    diag_lines.append(f"4. [YELLOW]⚠ ICMP 部分可达:[/YELLOW]\n{output.strip()[:100]}")
 
             # 5. 测试 TCP 445 端口（SMB）
             print("[DIAG] 5. 测试 TCP 445 端口...", flush=True)
-            port_test_cmd = (
-                "timeout 3 bash -c 'echo > /dev/tcp/192.168.112.72/445' 2>&1 "
-                "&& echo '端口可达' || echo '端口不可达'"
-            )
-            success, output = self.ssh_executor.execute(port_test_cmd)
-            if "端口可达" in output:
-                diag_lines.append("5. [GREEN]✓ TCP 445 端口可达（SMB 服务可用）[/GREEN]")
+            if not win_host:
+                diag_lines.append("5. [YELLOW]⚠ 未配置 Windows 主机 IP，跳过 445 端口测试[/YELLOW]")
             else:
-                diag_lines.append("5. [RED]✗ TCP 445 端口不可达（SMB 服务不可用）[/RED]")
-                diag_lines.append("   可能原因: 防火墙阻止、SMB 服务未启用、Windows 主机离线")
+                port_test_cmd = (
+                    f"timeout 3 bash -c 'echo > /dev/tcp/{win_host}/445' 2>&1 "
+                    "&& echo '端口可达' || echo '端口不可达'"
+                )
+                success, output = self.ssh_executor.execute(port_test_cmd)
+                if "端口可达" in output:
+                    diag_lines.append(f"5. [GREEN]✓ TCP 445 端口可达（{win_host} SMB 服务可用）[/GREEN]")
+                else:
+                    diag_lines.append(f"5. [RED]✗ TCP 445 端口不可达（{win_host} SMB 服务不可用）[/RED]")
+                    diag_lines.append("   可能原因: 防火墙阻止、SMB 服务未启用、Windows 主机离线")
 
             # 6. 检查凭据文件
             print("[DIAG] 6. 检查凭据文件...", flush=True)
@@ -1354,6 +1422,7 @@ class RagflowAuthTool:
         """收集挂载诊断信息"""
         try:
             diag_lines = []
+            win_host = (self.config.windows_share_host or "").strip()
 
             # 检查挂载点状态
             success, output = self.ssh_executor.execute("mount | grep /mnt/replica")
@@ -1371,11 +1440,14 @@ class RagflowAuthTool:
             diag_lines.append(f"凭据文件:\n{output}\n")
 
             # 测试 Windows 主机连接
-            success, output = self.ssh_executor.execute("ping -c 1 -W 2 192.168.112.72 2>&1 || echo 'unreachable'")
-            if "unreachable" in output.lower() or "100% packet loss" in output:
-                diag_lines.append("[RED]✗ Windows 主机 (192.168.112.72) 不可达[/RED]\n")
+            if not win_host:
+                diag_lines.append("[YELLOW]⚠ 未配置 Windows 主机 IP，跳过 ping[/YELLOW]\n")
             else:
-                diag_lines.append("[GREEN]✓ Windows 主机 (192.168.112.72) 可达[/GREEN]\n")
+                success, output = self.ssh_executor.execute(f"ping -c 1 -W 2 {win_host} 2>&1 || echo 'unreachable'")
+                if "unreachable" in output.lower() or "100% packet loss" in output:
+                    diag_lines.append(f"[RED]✗ Windows 主机 ({win_host}) 不可达[/RED]\n")
+                else:
+                    diag_lines.append(f"[GREEN]✓ Windows 主机 ({win_host}) 可达[/GREEN]\n")
 
             # 检查是否已有挂载项在 /etc/fstab
             success, output = self.ssh_executor.execute("grep /mnt/replica /etc/fstab 2>&1 || echo '未找到 fstab 条目'")
@@ -1391,13 +1463,17 @@ class RagflowAuthTool:
             self.show_text_window("错误", "[RED]请先配置服务器信息[/RED]")
             return
 
-        # 去掉确认弹框，直接执行卸载
-        print("[UNMOUNT] 开始卸载流程", flush=True)
+        print(f"\n{'='*60}", flush=True)
+        print("[UNMOUNT] 卸载 Windows 共享", flush=True)
+        print(f"[UNMOUNT] 服务器: {self.config.user}@{self.config.ip}", flush=True)
+        print("[UNMOUNT] 挂载点: /mnt/replica", flush=True)
+        print(f"{'='*60}\n", flush=True)
 
         def do_unmount():
             try:
                 import subprocess
                 import os
+                log_content = ""
 
                 script_path = os.path.join(os.path.dirname(__file__), "scripts", "unmount-windows-share.ps1")
 
@@ -1407,7 +1483,11 @@ class RagflowAuthTool:
 
                 # 执行 PowerShell 脚本
                 result = subprocess.run(
-                    ["powershell", "-ExecutionPolicy", "Bypass", "-File", script_path],
+                    [
+                        "powershell", "-ExecutionPolicy", "Bypass", "-File", script_path,
+                        "-ServerHost", self.config.ip,
+                        "-ServerUser", self.config.user,
+                    ],
                     capture_output=True,
                     text=True,
                     encoding='utf-8',
@@ -1416,7 +1496,7 @@ class RagflowAuthTool:
                 )
 
                 # 读取日志文件
-                log_file = r"C:\Users\BJB110\AppData\Local\Temp\unmount_windows_share.log"
+                log_file = str(Path(tempfile.gettempdir()) / "unmount_windows_share.log")
                 if os.path.exists(log_file):
                     with open(log_file, 'r', encoding='utf-8') as f:
                         log_content = f.read()
@@ -1445,20 +1525,33 @@ class RagflowAuthTool:
             self.show_text_window("错误", "[RED]请先配置服务器信息[/RED]")
             return
 
+        # 在控制台打印使用的参数
+        print(f"\n{'='*60}", flush=True)
+        print(f"[CHECK] 检查 Windows 共享挂载状态", flush=True)
+        print(f"[CHECK] 服务器 IP: {self.config.ip}", flush=True)
+        print(f"[CHECK] 服务器用户: {self.config.user}", flush=True)
+        print(f"{'='*60}\n", flush=True)
+
         def do_check():
             try:
                 import subprocess
                 import os
+                log_content = ""
 
                 script_path = os.path.join(os.path.dirname(__file__), "scripts", "check-mount-status.ps1")
 
-                print("[CHECK] 调用 PowerShell 脚本: {script_path}", flush=True)
+                print(f"[CHECK] 调用 PowerShell 脚本: {script_path}", flush=True)
                 self.status_bar.config(text="正在检查挂载状态...")
                 self.root.update()
 
                 # 执行 PowerShell 脚本
                 result = subprocess.run(
-                    ["powershell", "-ExecutionPolicy", "Bypass", "-File", script_path],
+                    [
+                        "powershell", "-ExecutionPolicy", "Bypass", "-File", script_path,
+                        "-ServerHost", self.config.ip,
+                        "-ServerUser", self.config.user,
+                        "-WindowsHost", DEFAULT_WINDOWS_SHARE_HOST,
+                    ],
                     capture_output=True,
                     text=True,
                     encoding='utf-8',
@@ -1467,7 +1560,7 @@ class RagflowAuthTool:
                 )
 
                 # 读取日志文件
-                log_file = r"C:\Users\BJB110\AppData\Local\Temp\check_mount_status.log"
+                log_file = str(Path(tempfile.gettempdir()) / "check_mount_status.log")
                 if os.path.exists(log_file):
                     with open(log_file, 'r', encoding='utf-8') as f:
                         log_content = f.read()
@@ -1663,7 +1756,7 @@ class RagflowAuthTool:
             try:
                 # 读取配置（端口、网络、路径等）
                 import json
-                config_path = Path(__file__).parent / "tool" / "scripts" / "deploy-config.json"
+                config_path = Path(__file__).parent / "scripts" / "deploy-config.json"
                 if not config_path.exists():
                     raise FileNotFoundError(f"配置文件不存在: {config_path}")
 
@@ -1689,8 +1782,8 @@ class RagflowAuthTool:
                 frontend_image = f"ragflowauth-frontend:{tag}"
                 backend_image = f"ragflowauth-backend:{tag}"
 
-                repo_root = Path(__file__).parent
-                temp_dir = repo_root / "tool" / "scripts" / "temp"
+                repo_root = Path(__file__).parent.parent.parent
+                temp_dir = Path(__file__).parent / "scripts" / "temp"
 
                 # ========== Step 1: 停止服务器容器 ==========
                 log_to_file("[Step 1/7] 停止服务器容器...")

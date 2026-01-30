@@ -211,9 +211,12 @@ class BackupSchedulerV2:
     def _run_incremental_backup(self, scheduled_ms: int | None):
         """Run incremental backup (fire-and-forget)."""
         try:
-            job_id = start_job_if_idle(reason="定时增量备份", full_backup=False)
+            now_ms = int(time.time() * 1000)
+            when_ms = int(scheduled_ms or now_ms)
+            when_str = datetime.fromtimestamp(when_ms / 1000).strftime("%Y-%m-%d %H:%M")
+            job_id = start_job_if_idle(reason=f"定时增量备份@{when_str}", full_backup=False)
             logger.info(f"Started incremental backup job #{job_id}")
-            self.store.touch_last_run(int(time.time() * 1000))
+            self.store.touch_last_run(when_ms)
             if scheduled_ms is not None:
                 self._last_incremental_attempt_ms = int(scheduled_ms)
 
@@ -223,9 +226,12 @@ class BackupSchedulerV2:
     def _run_full_backup(self, scheduled_ms: int | None):
         """Run full backup (fire-and-forget)."""
         try:
-            job_id = start_job_if_idle(reason="定时全量备份", full_backup=True)
+            now_ms = int(time.time() * 1000)
+            when_ms = int(scheduled_ms or now_ms)
+            when_str = datetime.fromtimestamp(when_ms / 1000).strftime("%Y-%m-%d %H:%M")
+            job_id = start_job_if_idle(reason=f"定时全量备份@{when_str}", full_backup=True)
             logger.info(f"Started full backup job #{job_id}")
-            self.store.touch_last_run(int(time.time() * 1000))
+            self.store.touch_last_run(when_ms)
             if scheduled_ms is not None:
                 self._last_full_attempt_ms = int(scheduled_ms)
 

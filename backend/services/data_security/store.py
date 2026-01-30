@@ -156,6 +156,10 @@ class DataSecurityStore:
             "replica_subdir_format",
         }
         fields = {k: updates.get(k) for k in allowed if k in updates}
+        # Replica target path is fixed to avoid drift/misconfig between systems.
+        # It must match the mount point used by the server tools and the backend replication check.
+        if "replica_target_path" in fields or "replica_enabled" in fields:
+            fields["replica_target_path"] = "/mnt/replica/RagflowAuth"
         fields["updated_at_ms"] = now_ms
 
         conn = self._conn()

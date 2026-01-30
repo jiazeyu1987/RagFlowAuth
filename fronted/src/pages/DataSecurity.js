@@ -454,65 +454,6 @@ const DataSecurity = () => {
         </div>
       </Card>
 
-      <Card title="自动复制设置">
-        <label style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-          <input
-            type="checkbox"
-            checked={!!settings?.replica_enabled}
-            onChange={(e) => setSettings((p) => ({ ...p, replica_enabled: e.target.checked }))}
-            data-testid="ds-replica-enabled"
-          />
-          启用自动复制（备份完成后自动复制到挂载目录）
-        </label>
-
-        {settings?.replica_enabled && (
-          <div style={{ display: 'grid', gap: '12px', marginTop: '16px' }}>
-            <label>
-              容器内目标路径
-              <input
-                type="text"
-                value={settings?.replica_target_path || ''}
-                onChange={(e) => setSettings((p) => ({ ...p, replica_target_path: e.target.value }))}
-                data-testid="ds-replica-target-path"
-                placeholder="/mnt/replica/RagflowAuth"
-                style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '8px', marginTop: '6px' }}
-              />
-              <div style={{ color: '#6b7280', fontSize: '0.85rem', marginTop: '4px' }}>
-                容器内的绝对路径，该路径已通过Docker bind mount挂载到Windows共享（必须使用 /mnt/replica 路径）
-              </div>
-            </label>
-
-            <label>
-              子目录格式
-              <select
-                value={settings?.replica_subdir_format || 'flat'}
-                onChange={(e) => setSettings((p) => ({ ...p, replica_subdir_format: e.target.value }))}
-                data-testid="ds-replica-subdir-format"
-                style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '8px', marginTop: '6px' }}
-              >
-                <option value="flat">平铺（所有备份在同一目录）</option>
-                <option value="date">按日期分桶（YYYY/MM/DD）</option>
-              </select>
-              <div style={{ color: '#6b7280', fontSize: '0.85rem', marginTop: '4px' }}>
-                {settings?.replica_subdir_format === 'date'
-                  ? '目标路径格式：/replica/RagflowAuth/2025/01/25/migration_pack_xxx'
-                  : '目标路径格式：/replica/RagflowAuth/migration_pack_xxx'}
-              </div>
-            </label>
-
-            <div style={{ padding: '10px', background: '#eff6ff', border: '1px solid #93c5fd', borderRadius: '8px', fontSize: '0.85rem' }}>
-              <div style={{ fontWeight: 600, marginBottom: '8px' }}>📋 配置说明：</div>
-              <div style={{ color: '#1e40af', lineHeight: '1.5' }}>
-                1. 此功能需要宿主机已挂载Windows共享到容器内路径<br/>
-                2. 复制过程采用原子性操作（临时目录 + 重命名），避免半成品<br/>
-                3. 复制失败不影响本地备份，会在消息中标注"同步失败"<br/>
-                4. 确保容器内有该路径的写权限
-              </div>
-            </div>
-          </div>
-        )}
-      </Card>
-
       <Card title="备份进度">
         {activeJob ? (
           <>

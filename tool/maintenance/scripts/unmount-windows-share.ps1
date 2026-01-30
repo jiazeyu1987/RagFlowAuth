@@ -1,7 +1,16 @@
 # Windows Share Unmount Script
-# Function: Unmount /mnt/replica Windows share
+# Function: Unmount Windows share from <MountPoint> on the selected Linux server via SSH.
 
-$LogFile = "C:\Users\BJB110\AppData\Local\Temp\unmount_windows_share.log"
+param(
+    [Parameter(Mandatory = $true)]
+    [string]$ServerHost,
+
+    [Parameter(Mandatory = $true)]
+    [string]$ServerUser
+)
+
+$LogFile = Join-Path $env:TEMP "unmount_windows_share.log"
+$MountPoint = "/mnt/replica"
 
 function Write-Log {
     param([string]$Message)
@@ -13,7 +22,7 @@ function Write-Log {
 function Invoke-SSH {
     param([string]$Command)
     $EscapedCommand = $Command.Replace('"', '\"')
-    $FullCommand = "ssh -o BatchMode=yes -o ConnectTimeout=10 -o ControlMaster=no root@172.30.30.57 ""$EscapedCommand"""
+    $FullCommand = "ssh -o BatchMode=yes -o ConnectTimeout=10 -o ControlMaster=no $ServerUser@$ServerHost ""$EscapedCommand"""
     Write-Log "Execute: $Command"
     $Output = Invoke-Expression $FullCommand 2>&1
     $ExitCode = $LASTEXITCODE
@@ -48,7 +57,7 @@ try {
     Write-Log ""
     Write-Log "[Step 2] Unmount network share"
 
-    $Result = Invoke-SSH "umount /mnt/replica 2>&1"
+    $Result = Invoke-SSH "umount $MountPoint 2>&1"
 
     if ($Result.ExitCode -eq 0) {
         Write-Log "Success: Unmounted successfully"
@@ -71,7 +80,7 @@ try {
 
     $Result = Invoke-SSH "mount | grep replica; exit 0"
 
-    if ($Result.Output -match "replica" -or $Result.Output -match "192.168.112.72") {
+    if ($Result.Output -match [regex]::Escape($MountPoint)) {
         Write-Log "[ERROR] Still shows mounted status - $($Result.Output)"
         Write-Log "========================================"
         Write-Log "[FAILED] Unmount verification failed"
