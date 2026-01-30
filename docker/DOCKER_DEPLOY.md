@@ -13,6 +13,7 @@
 - `ragflow_config.json`
 - `data/auth.db`
 - `data/uploads/`（可选）
+- `backups/`（推荐：数据安全/迁移包输出目录，避免备份文件落到“容器不可见的宿主机路径”）
 
 ## 2) 配置 RAGFlow 地址
 
@@ -43,4 +44,3 @@ docker compose -f docker/docker-compose.yml up -d --build
 ## 5) 生产环境要改的
 
 - `JWT_SECRET_KEY`：部署时请在 `docker/.env` 里改成一串随机值（不要用默认值）
-

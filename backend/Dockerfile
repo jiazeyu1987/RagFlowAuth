@@ -11,6 +11,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     curl \
     tzdata \
+    libreoffice-writer \
+    libreoffice-calc \
+    libreoffice-core \
+    fonts-dejavu \
     && ln -snf /usr/share/zoneinfo/$TZ /etc/localtime \
     && echo $TZ > /etc/timezone \
     && rm -rf /var/lib/apt/lists/* \
@@ -41,4 +45,3 @@ ENV HOST=0.0.0.0 \
     PERMDBG_ENABLED=false
 
 CMD ["python", "-m", "backend", "run", "--host", "0.0.0.0", "--port", "8001"]
-

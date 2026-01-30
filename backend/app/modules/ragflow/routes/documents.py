@@ -164,6 +164,28 @@ async def preview_document(
             base64_pdf = base64.b64encode(file_content).decode("utf-8")
             return {"type": "pdf", "filename": filename, "content": base64_pdf}
 
+        if file_ext == ".doc":
+            try:
+                from backend.services.office_to_html import convert_office_bytes_to_html_bytes
+
+                html_bytes = convert_office_bytes_to_html_bytes(file_content, filename=filename or "input.doc")
+                base64_html = base64.b64encode(html_bytes).decode("utf-8")
+                out_name = f"{Path(filename).stem}.html" if filename else f"document_{doc_id}.html"
+                return {"type": "html", "filename": out_name, "content": base64_html}
+            except Exception as e:
+                return {"type": "unsupported", "filename": filename, "message": f"DOC 在线预览不可用：{str(e)}"}
+
+        if file_ext in {".xlsx", ".xls"}:
+            try:
+                from backend.services.office_to_html import convert_office_bytes_to_html_bytes
+
+                html_bytes = convert_office_bytes_to_html_bytes(file_content, filename=filename or "input.xlsx")
+                base64_html = base64.b64encode(html_bytes).decode("utf-8")
+                out_name = f"{Path(filename).stem}.html" if filename else f"document_{doc_id}.html"
+                return {"type": "html", "filename": out_name, "content": base64_html}
+            except Exception as e:
+                return {"type": "unsupported", "filename": filename, "message": f"Excel 在线预览不可用：{str(e)}"}
+
         return {"type": "unsupported", "filename": filename, "message": f"不支持的文件类型: {file_ext}，请下载后查看"}
 
     except HTTPException:
@@ -276,4 +298,3 @@ async def batch_download_documents(
         media_type="application/zip",
         headers={"Content-Disposition": f'attachment; filename=\"{filename}\"'},
     )
-

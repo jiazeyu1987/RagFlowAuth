@@ -75,14 +75,17 @@ const DocumentBrowser = () => {
   const [markdownContent, setMarkdownContent] = useState(null);
   const [plainTextContent, setPlainTextContent] = useState(null);
   const [docxContent, setDocxContent] = useState(null);
-  const [docContent, setDocContent] = useState(null);
+
   const [excelData, setExcelData] = useState(null);
+  const [excelRenderHint, setExcelRenderHint] = useState(null);
   const [pdfDocument, setPdfDocument] = useState(null);
   const [pdfNumPages, setPdfNumPages] = useState(0);
   const [pdfCurrentPage, setPdfCurrentPage] = useState(1);
   const [pdfScale, setPdfScale] = useState(1.5);
   const canvasRef = useRef(null);
   const handleViewRef = useRef(null);
+  const previewDocIdRef = useRef(null);
+  const previewDatasetRef = useRef(null);
   const [imageScale, setImageScale] = useState(1);
   const [imageRotation, setImageRotation] = useState(0);
   const [canDeleteDocs, setCanDeleteDocs] = useState(false);
@@ -290,12 +293,14 @@ const DocumentBrowser = () => {
     try {
       setPreviewLoading(true);
       setActionLoading(prev => ({ ...prev, [`${docId}-view`]: true }));
+      previewDocIdRef.current = docId;
+      previewDatasetRef.current = datasetName;
       setPreviewDocName(docName);
       setMarkdownContent(null);
       setPlainTextContent(null);
       setDocxContent(null);
-      setDocContent(null);
       setExcelData(null);
+      setExcelRenderHint(null);
       setPdfDocument(null);
       setPdfNumPages(0);
       setPdfCurrentPage(1);
@@ -318,17 +323,30 @@ const DocumentBrowser = () => {
         const text = await blob.text();
         setPlainTextContent(text);
         setPreviewUrl(url);
-      } else if (isDocFile(docName) || isDocxFile(docName)) {
+      } else if (isDocxFile(docName)) {
         const blob = await authClient.previewRagflowDocumentBlob(docId, datasetName, docName);
         const url = window.URL.createObjectURL(blob);
         const arrayBuffer = await blob.arrayBuffer();
         const result = await mammoth.convertToHtml({ arrayBuffer });
-        if (isDocFile(docName)) {
-          setDocContent(result.value);
-        } else {
-          setDocxContent(result.value);
-        }
+        setDocxContent(result.value);
         setPreviewUrl(url);
+      } else if (isDocFile(docName)) {
+        // Use backend preview endpoint: it can convert legacy .doc to HTML for online viewing.
+        const data = await authClient.previewDocument(docId, datasetName);
+        if (data?.type !== 'html' || !data?.content) {
+          throw new Error(data?.message || '此文件类型不支持在线预览，请下载后查看');
+        }
+
+        const binary = atob(data.content);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+        const blob = new Blob([bytes], { type: 'text/html; charset=utf-8' });
+        const url = window.URL.createObjectURL(blob);
+        setPdfDocument(null);
+        setPdfNumPages(0);
+        setPdfCurrentPage(1);
+        setPreviewUrl(url);
+        if (data?.filename) setPreviewDocName(data.filename);
       } else if (isPptxFile(docName)) {
         const blob = await authClient.previewRagflowDocumentBlob(docId, datasetName, docName);
         const url = window.URL.createObjectURL(blob);
@@ -348,6 +366,7 @@ const DocumentBrowser = () => {
         });
 
         setExcelData(sheetsData);
+        setExcelRenderHint('如果 Excel 里包含流程图/形状，表格模式可能看不到；可点“原样预览(HTML)”查看。');
         setPreviewUrl(url);
       } else if (isCsvFile(docName)) {
         const blob = await authClient.previewRagflowDocumentBlob(docId, datasetName, docName);
@@ -358,6 +377,7 @@ const DocumentBrowser = () => {
         const rows = parseDelimited(text, delimiter);
         const { html, truncated } = rowsToHtmlTable(rows);
         setExcelData({ CSV: html });
+        setExcelRenderHint(null);
         setPreviewUrl(url);
         if (truncated) console.warn('[preview] CSV truncated for display (too large).');
       } else if (isPdfFile(docName)) {
@@ -382,8 +402,8 @@ const DocumentBrowser = () => {
       setMarkdownContent(null);
       setPlainTextContent(null);
       setDocxContent(null);
-      setDocContent(null);
       setExcelData(null);
+      setExcelRenderHint(null);
       setPdfDocument(null);
     } finally {
       setPreviewLoading(false);
@@ -399,19 +419,23 @@ const DocumentBrowser = () => {
     }
     setPreviewUrl(null);
     setPreviewDocName(null);
+    previewDocIdRef.current = null;
+    previewDatasetRef.current = null;
     setMarkdownContent(null);
     setPlainTextContent(null);
     setDocxContent(null);
-    setDocContent(null);
     setExcelData(null);
+    setExcelRenderHint(null);
     setPdfDocument(null);
     setPdfNumPages(0);
     setPdfCurrentPage(1);
   };
 
   const isGenericPreviewable = (filename) => {
-    // Legacy iframe preview types (none currently).
-    return false;
+    if (!filename) return false;
+    const ext = filename.toLowerCase().split('.').pop();
+    // HTML previews produced by backend (e.g. Office -> HTML).
+    return ext === 'html' || ext === 'htm';
   };
 
   const isMarkdownFile = (filename) => {
@@ -1225,34 +1249,6 @@ const DocumentBrowser = () => {
                     dangerouslySetInnerHTML={{ __html: docxContent }}
                   />
                 </div>
-              ) : isDocFile(previewDocName) ? (
-                <div className="table-preview" style={{
-                  padding: '24px',
-                  backgroundColor: 'white',
-                  borderRadius: '8px',
-                  height: '70vh',
-                  overflow: 'auto',
-                  border: '1px solid #e5e7eb'
-                }}>
-                  <div style={{
-                    marginBottom: '16px',
-                    padding: '8px 12px',
-                    backgroundColor: '#fef3c7',
-                    borderLeft: '4px solid #f59e0b',
-                    fontSize: '0.875rem',
-                    color: '#92400e'
-                  }}>
-                    ℹ️ 此为老版本Word文档（.doc），格式可能不完全准确
-                  </div>
-                  <div
-                    style={{
-                      fontSize: '0.875rem',
-                      lineHeight: '1.6',
-                      color: '#1f2937'
-                    }}
-                    dangerouslySetInnerHTML={{ __html: docContent }}
-                  />
-                </div>
               ) : isPptxFile(previewDocName) ? (
                 <div style={{
                   display: 'flex',
@@ -1349,7 +1345,7 @@ const DocumentBrowser = () => {
                     以获得更好的兼容性和在线预览体验。
                   </div>
                 </div>
-              ) : (isExcelFile(previewDocName) || isCsvFile(previewDocName)) ? (
+              ) : ((isExcelFile(previewDocName) || isCsvFile(previewDocName)) && excelData) ? (
                 <div className="table-preview" style={{
                   padding: '24px',
                   backgroundColor: 'white',
@@ -1358,6 +1354,67 @@ const DocumentBrowser = () => {
                   overflow: 'auto',
                   border: '1px solid #e5e7eb'
                 }}>
+                  {excelRenderHint && isExcelFile(previewDocName) && (
+                    <div style={{
+                      display: 'flex',
+                      gap: '10px',
+                      alignItems: 'center',
+                      marginBottom: '16px',
+                      padding: '10px 12px',
+                      backgroundColor: '#eff6ff',
+                      border: '1px solid #bfdbfe',
+                      borderRadius: '8px',
+                      color: '#1e3a8a',
+                      fontSize: '0.9rem',
+                    }}>
+                      <div style={{ flex: 1 }}>{excelRenderHint}</div>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          try {
+                            setError(null);
+                            setPreviewLoading(true);
+                            const docId = previewDocIdRef.current;
+                            const dataset = previewDatasetRef.current;
+                            if (!docId || !dataset) throw new Error('缺少文档信息，无法预览');
+
+                            const data = await authClient.previewDocument(docId, dataset);
+                            if (data?.type !== 'html' || !data?.content) {
+                              throw new Error(data?.message || '此文件类型不支持在线预览，请下载后查看');
+                            }
+                            const binary = atob(data.content);
+                            const bytes = new Uint8Array(binary.length);
+                            for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+                            const htmlBlob = new Blob([bytes], { type: 'text/html; charset=utf-8' });
+                            const url = window.URL.createObjectURL(htmlBlob);
+                            setPdfDocument(null);
+                            setPdfNumPages(0);
+                            setPdfCurrentPage(1);
+                            setPreviewUrl(url);
+                            if (data?.filename) setPreviewDocName(data.filename);
+                            setExcelData(null);
+                            setExcelRenderHint(null);
+                          } catch (e) {
+                            setError(e.message || '预览失败');
+                          } finally {
+                            setPreviewLoading(false);
+                          }
+                        }}
+                        style={{
+                          padding: '8px 12px',
+                          backgroundColor: '#3b82f6',
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: '6px',
+                          cursor: 'pointer',
+                          fontSize: '0.85rem',
+                          flexShrink: 0,
+                        }}
+                      >
+                        原样预览(HTML)
+                      </button>
+                    </div>
+                  )}
                   {Object.keys(excelData).map((sheetName, index) => (
                     <div key={sheetName} style={{ marginBottom: index < Object.keys(excelData).length - 1 ? '32px' : 0 }}>
                       <h3 style={{
@@ -1380,7 +1437,7 @@ const DocumentBrowser = () => {
                     </div>
                   ))}
                 </div>
-              ) : isPdfFile(previewDocName) ? (
+              ) : pdfDocument ? (
                 <div style={{
                   display: 'flex',
                   flexDirection: 'column',

@@ -1,8 +1,81 @@
 from __future__ import annotations
 
+import json
+import os
 from pathlib import Path
 
 from .common import ensure_dir, run_cmd
+
+
+def _docker_self_mounts() -> list[dict]:
+    """
+    Best-effort: inspect the currently running container to learn bind-mount sources.
+
+    This avoids hardcoding host paths like `/opt/ragflowauth/...` and fixes cases where
+    `/app/data/backups` is mounted differently across environments.
+    """
+    cid = (os.environ.get("HOSTNAME") or "").strip()
+    if not cid:
+        return []
+
+    code, out = run_cmd(["docker", "inspect", cid])
+    if code != 0 or not out:
+        return []
+
+    try:
+        data = json.loads(out)
+        if isinstance(data, list) and data and isinstance(data[0], dict):
+            mounts = data[0].get("Mounts") or []
+            if isinstance(mounts, list):
+                return [m for m in mounts if isinstance(m, dict)]
+    except Exception:
+        return []
+
+    return []
+
+
+def container_path_to_host_str(path: str | Path) -> str:
+    """
+    Translate a container path (e.g. `/app/data/backups/...`) to the host path as seen by the Docker daemon.
+
+    When we run `docker run`/`docker save` from inside the backend container (via docker socket),
+    paths passed to docker CLI must be host paths, not container paths.
+    """
+    # Use raw string + POSIX normalization. This function deals with Linux container/daemon paths,
+    # but the codebase can be developed on Windows (where `Path("/app")` becomes `\\app`).
+    s = str(path).replace("\\", "/")
+    if not s.startswith("/"):
+        return s
+
+    # Prefer dynamic mount inspection (no assumptions about host directory layout).
+    mounts = _docker_self_mounts()
+    best = None  # (dest, src)
+    for m in mounts:
+        dst = m.get("Destination")
+        src = m.get("Source")
+        if not isinstance(dst, str) or not isinstance(src, str) or not dst or not src:
+            continue
+        if s == dst or s.startswith(dst.rstrip("/") + "/"):
+            if best is None or len(dst) > len(best[0]):
+                best = (dst, src)
+
+    if best is not None:
+        dst, src = best
+        suffix = s[len(dst) :]
+        return f"{src}{suffix}"
+
+    # Backward-compatible fallback for older deployments that used fixed host paths.
+    host_backups = (os.environ.get("RAGFLOWAUTH_HOST_BACKUPS_DIR") or "/opt/ragflowauth/backups").rstrip("/")
+    host_data = (os.environ.get("RAGFLOWAUTH_HOST_DATA_DIR") or "/opt/ragflowauth/data").rstrip("/")
+    host_uploads = (os.environ.get("RAGFLOWAUTH_HOST_UPLOADS_DIR") or "/opt/ragflowauth/uploads").rstrip("/")
+
+    if s.startswith("/app/data/backups"):
+        return s.replace("/app/data/backups", host_backups, 1)
+    if s.startswith("/app/data/") or s == "/app/data":
+        return s.replace("/app/data", host_data, 1)
+    if s.startswith("/app/uploads/") or s == "/app/uploads":
+        return s.replace("/app/uploads", host_uploads, 1)
+    return s
 
 
 def docker_ok() -> tuple[bool, str]:
@@ -77,15 +150,7 @@ def docker_tar_volume(volume_name: str, dest_tar_gz: Path) -> None:
     ensure_dir(dest_tar_gz.parent)
     backup_dir = dest_tar_gz.parent.resolve()
 
-    backup_dir_str = str(backup_dir)
-    # Handle special case: /app/data/backups maps to /opt/ragflowauth/backups (not /opt/ragflowauth/data/backups)
-    if backup_dir_str.startswith("/app/data/backups"):
-        backup_dir_str = backup_dir_str.replace("/app/data/backups", "/opt/ragflowauth/backups", 1)
-    elif backup_dir_str.startswith("/app/data/"):
-        # Keep the /data part in the path since /opt/ragflowauth/data is mounted to /app/data
-        backup_dir_str = backup_dir_str.replace("/app/data", "/opt/ragflowauth/data", 1)
-    elif backup_dir_str.startswith("/app/uploads/"):
-        backup_dir_str = backup_dir_str.replace("/app/uploads", "/opt/ragflowauth/uploads", 1)
+    backup_dir_str = container_path_to_host_str(backup_dir)
 
     # Get current running backend container's image (instead of hardcoded version)
     image = "ragflowauth-backend:latest"  # Fallback default
@@ -126,16 +191,9 @@ def docker_save_images(images: list[str], dest_tar: Path) -> tuple[bool, str | N
     if not images:
         return False, None
 
-    dest_tar_str = str(dest_tar)
-    # Handle special case: /app/data/backups maps to /opt/ragflowauth/backups (not /opt/ragflowauth/data/backups)
-    if dest_tar_str.startswith("/app/data/backups"):
-        dest_tar_str = dest_tar_str.replace("/app/data/backups", "/opt/ragflowauth/backups", 1)
-    elif dest_tar_str.startswith("/app/data/"):
-        dest_tar_str = dest_tar_str.replace("/app/data", "/opt/ragflowauth/data", 1)
-    elif dest_tar_str.startswith("/app/uploads/"):
-        dest_tar_str = dest_tar_str.replace("/app/uploads", "/opt/ragflowauth/uploads", 1)
-
-    ensure_dir(Path(dest_tar_str).parent)
+    # Ensure the container-visible directory exists (and therefore host dir exists if mounted).
+    ensure_dir(dest_tar.parent)
+    dest_tar_str = container_path_to_host_str(dest_tar)
 
     # Debug output
     print(f"[DEBUG] Saving {len(images)} images to {dest_tar_str}", flush=True)
@@ -162,4 +220,3 @@ def docker_save_images(images: list[str], dest_tar: Path) -> tuple[bool, str | N
         return False, f"File not created: {dest_tar_str}"
 
     return True, None
-

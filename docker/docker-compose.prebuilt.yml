@@ -5,6 +5,7 @@ services:
       - "8001:8001"
     volumes:
       - ../data:/app/data
+      - ../backups:/app/data/backups
       - ../ragflow_config.json:/app/ragflow_config.json:ro
     environment:
       HOST: "0.0.0.0"

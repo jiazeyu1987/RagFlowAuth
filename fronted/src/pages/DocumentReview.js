@@ -7,6 +7,7 @@ import ReactMarkdown from 'react-markdown';
 import { httpClient } from '../shared/http/httpClient';
 import ReactDiffViewer from 'react-diff-viewer-continued';
 import * as XLSX from 'xlsx';
+import mammoth from 'mammoth';
 
 const escapeHtml = (s) =>
   String(s ?? '')
@@ -125,12 +126,14 @@ const DocumentReview = ({ embedded = false }) => {
   const [overwritePrompt, setOverwritePrompt] = useState(null); // { newDocId, oldDoc, normalized }
   const [previewing, setPreviewing] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewDocId, setPreviewDocId] = useState(null);
   const [previewDocName, setPreviewDocName] = useState(null);
-  const [previewKind, setPreviewKind] = useState(null); // 'md' | 'text' | 'excel' | 'blob'
+  const [previewKind, setPreviewKind] = useState(null); // 'md' | 'text' | 'excel' | 'html' | 'blob'
   const [previewText, setPreviewText] = useState(null);
   const [previewUrl, setPreviewUrl] = useState(null);
   const [previewExcelData, setPreviewExcelData] = useState(null); // { [sheetName]: html }
   const [previewExcelNote, setPreviewExcelNote] = useState(null);
+  const [previewHtml, setPreviewHtml] = useState(null);
   const [diffOpen, setDiffOpen] = useState(false);
   const [diffLoading, setDiffLoading] = useState(false);
   const [diffOnly, setDiffOnly] = useState(true);
@@ -180,12 +183,14 @@ const DocumentReview = ({ embedded = false }) => {
   const closePreview = () => {
     if (previewUrl) window.URL.revokeObjectURL(previewUrl);
     setPreviewOpen(false);
+    setPreviewDocId(null);
     setPreviewDocName(null);
     setPreviewKind(null);
     setPreviewText(null);
     setPreviewUrl(null);
     setPreviewExcelData(null);
     setPreviewExcelNote(null);
+    setPreviewHtml(null);
   };
 
   const isMarkdownFile = (filename) => {
@@ -200,6 +205,18 @@ const DocumentReview = ({ embedded = false }) => {
     return ext === 'txt' || ext === 'ini' || ext === 'log';
   };
 
+  const isDocxFile = (filename) => {
+    if (!filename) return false;
+    const ext = filename.toLowerCase().split('.').pop();
+    return ext === 'docx';
+  };
+
+  const isDocFile = (filename) => {
+    if (!filename) return false;
+    const ext = filename.toLowerCase().split('.').pop();
+    return ext === 'doc';
+  };
+
   const isExcelFile = (filename) => {
     if (!filename) return false;
     const ext = filename.toLowerCase().split('.').pop();
@@ -210,6 +227,21 @@ const DocumentReview = ({ embedded = false }) => {
     if (!filename) return false;
     const ext = filename.toLowerCase().split('.').pop();
     return ext === 'csv';
+  };
+
+  const fetchLocalPreviewBlob = async (docId, { render } = {}) => {
+    const params = new URLSearchParams();
+    if (render) params.set('render', render);
+    const qs = params.toString();
+    const response = await httpClient.request(
+      authBackendUrl(`/api/knowledge/documents/${docId}/preview${qs ? `?${qs}` : ''}`),
+      { method: 'GET' }
+    );
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      throw new Error(data?.detail || `预览失败 (${response.status})`);
+    }
+    return response.blob();
   };
 
   const isTextComparable = (filename) => isMarkdownFile(filename) || isPlainTextFile(filename);
@@ -260,21 +292,18 @@ const DocumentReview = ({ embedded = false }) => {
     setError(null);
     setPreviewing(true);
     setPreviewOpen(true);
+    setPreviewDocId(docId);
     setPreviewDocName(filename || `document_${docId}`);
     setPreviewKind(null);
     setPreviewText(null);
     setPreviewExcelData(null);
     setPreviewExcelNote(null);
+    setPreviewHtml(null);
     if (previewUrl) window.URL.revokeObjectURL(previewUrl);
     setPreviewUrl(null);
 
     try {
-      const response = await httpClient.request(authBackendUrl(`/api/knowledge/documents/${docId}/preview`), { method: 'GET' });
-      if (!response.ok) {
-        const data = await response.json().catch(() => ({}));
-        throw new Error(data?.detail || `预览失败 (${response.status})`);
-      }
-      const blob = await response.blob();
+      const blob = await fetchLocalPreviewBlob(docId);
       const url = window.URL.createObjectURL(blob);
       setPreviewUrl(url);
 
@@ -286,6 +315,17 @@ const DocumentReview = ({ embedded = false }) => {
         const text = await blob.text();
         setPreviewKind('text');
         setPreviewText(text);
+      } else if (isDocFile(filename)) {
+        const htmlBlob = await fetchLocalPreviewBlob(docId, { render: 'html' });
+        const url2 = window.URL.createObjectURL(htmlBlob);
+        if (previewUrl) window.URL.revokeObjectURL(previewUrl);
+        setPreviewUrl(url2);
+        setPreviewKind('blob');
+      } else if (isDocxFile(filename)) {
+        const arrayBuffer = await blob.arrayBuffer();
+        const result = await mammoth.convertToHtml({ arrayBuffer });
+        setPreviewKind('html');
+        setPreviewHtml(result.value || '');
       } else if (isExcelFile(filename)) {
         const arrayBuffer = await blob.arrayBuffer();
         const workbook = XLSX.read(arrayBuffer, { type: 'array' });
@@ -799,13 +839,50 @@ const DocumentReview = ({ embedded = false }) => {
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: '10px', alignItems: 'center' }}>
               <div style={{ fontWeight: 700, fontSize: '1.05rem' }}>{previewDocName || '在线查看'}</div>
-              <button
-                type="button"
-                onClick={closePreview}
-                style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontSize: '1.2rem' }}
-              >
-                ×
-              </button>
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                {previewDocId && isExcelFile(previewDocName) && (
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        setError(null);
+                        setPreviewing(true);
+                        const htmlBlob = await fetchLocalPreviewBlob(previewDocId, { render: 'html' });
+                        const url = window.URL.createObjectURL(htmlBlob);
+                        if (previewUrl) window.URL.revokeObjectURL(previewUrl);
+                        setPreviewUrl(url);
+                        setPreviewKind('blob');
+                        setPreviewExcelData(null);
+                        setPreviewExcelNote(null);
+                        setPreviewHtml(null);
+                      } catch (e) {
+                        setError(e.message || '预览失败');
+                      } finally {
+                        setPreviewing(false);
+                      }
+                    }}
+                    style={{
+                      padding: '6px 10px',
+                      backgroundColor: '#3b82f6',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      fontSize: '0.85rem',
+                    }}
+                    data-testid="docs-preview-render-pdf"
+                  >
+                    原样预览(HTML)
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={closePreview}
+                  style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontSize: '1.2rem' }}
+                >
+                  ×
+                </button>
+              </div>
             </div>
 
             <div style={{ marginTop: '12px', flex: 1, overflow: 'auto' }}>
@@ -833,6 +910,17 @@ const DocumentReview = ({ embedded = false }) => {
                 >
                   {previewText || ''}
                 </pre>
+              ) : previewKind === 'html' ? (
+                <div className="table-preview" style={{ padding: '24px' }}>
+                  <div
+                    style={{
+                      fontSize: '0.875rem',
+                      lineHeight: '1.6',
+                      color: '#1f2937',
+                    }}
+                    dangerouslySetInnerHTML={{ __html: previewHtml || '' }}
+                  />
+                </div>
               ) : previewKind === 'excel' && previewExcelData ? (
                 <div className="table-preview" style={{ padding: '12px 12px 24px 12px' }}>
                   {previewExcelNote && (

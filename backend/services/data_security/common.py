@@ -6,7 +6,10 @@ from pathlib import Path
 
 
 def timestamp() -> str:
-    return time.strftime("%Y%m%d_%H%M%S", time.localtime())
+    # Include milliseconds to avoid directory name collisions
+    now = time.localtime()
+    ms = int(time.time() * 1000) % 1000
+    return time.strftime("%Y%m%d_%H%M%S", now) + f"_{ms:03d}"
 
 
 def ensure_dir(path: Path) -> None:

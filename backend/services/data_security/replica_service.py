@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import shutil
+import subprocess
 import time
 import json
 from pathlib import Path
@@ -9,6 +10,7 @@ from datetime import datetime
 
 from .common import ensure_dir
 from .store import DataSecurityStore
+from .docker_utils import container_path_to_host_str
 
 
 class BackupReplicaService:
@@ -57,16 +59,7 @@ class BackupReplicaService:
             # Step 1.5: Check and copy images.tar from host path (special handling)
             import os
             images_container = pack_dir / "images.tar"
-            # Convert container path to host path (handle special case for /app/data/backups)
-            images_container_str = str(images_container)
-            if images_container_str.startswith("/app/data/backups"):
-                images_host_str = images_container_str.replace("/app/data/backups", "/opt/ragflowauth/backups", 1)
-            elif images_container_str.startswith("/app/data/"):
-                images_host_str = images_container_str.replace("/app/data", "/opt/ragflowauth/data", 1)
-            elif images_container_str.startswith("/app/uploads/"):
-                images_host_str = images_container_str.replace("/app/uploads", "/opt/ragflowauth/uploads", 1)
-            else:
-                images_host_str = images_container_str
+            images_host_str = container_path_to_host_str(images_container)
             if os.path.exists(images_host_str) and not images_container.exists():
                 # images.tar exists on host but not in container view
                 images_host = Path(images_host_str)
@@ -124,19 +117,9 @@ class BackupReplicaService:
     def _convert_to_host_path(self, path: Path) -> Path:
         """Convert container path to host path.
 
-        When running in Docker container, /app/data maps to /opt/ragflowauth/data.
-        Files are accessible from container at /app/data/backups,
-        which corresponds to /opt/ragflowauth/backups on host (NOT /opt/ragflowauth/data/backups).
+        Prefer dynamic mount inspection (via `docker inspect`) to avoid hardcoded host paths.
         """
-        path_str = str(path)
-        # Special case: /app/data/backups maps to /opt/ragflowauth/backups
-        if path_str.startswith("/app/data/backups"):
-            path_str = path_str.replace("/app/data/backups", "/opt/ragflowauth/backups", 1)
-        elif path_str.startswith("/app/data/"):
-            path_str = path_str.replace("/app/data", "/opt/ragflowauth/data", 1)
-        elif path_str.startswith("/app/uploads/"):
-            path_str = path_str.replace("/app/uploads", "/opt/ragflowauth/uploads", 1)
-        return Path(path_str)
+        return Path(container_path_to_host_str(path))
 
     def _copy_directory(self, src: Path, dst: Path, job_id: int):
         """Copy directory recursively with progress updates."""
@@ -144,17 +127,7 @@ class BackupReplicaService:
 
         # Special handling: check for volumes directory on host path
         volumes_container = src / "volumes"
-        # Convert container path to host path (handle special case for /app/data/backups)
-        volumes_container_str = str(volumes_container)
-        if volumes_container_str.startswith("/app/data/backups"):
-            volumes_host_str = volumes_container_str.replace("/app/data/backups", "/opt/ragflowauth/backups", 1)
-        elif volumes_container_str.startswith("/app/data/"):
-            volumes_host_str = volumes_container_str.replace("/app/data", "/opt/ragflowauth/data", 1)
-        elif volumes_container_str.startswith("/app/uploads/"):
-            volumes_host_str = volumes_container_str.replace("/app/uploads", "/opt/ragflowauth/uploads", 1)
-        else:
-            volumes_host_str = volumes_container_str
-        volumes_host = Path(volumes_host_str)
+        volumes_host = Path(container_path_to_host_str(volumes_container))
 
         # Count files including those on host path
         total_files = 0
@@ -185,16 +158,7 @@ class BackupReplicaService:
                 # This includes: images.tar and volumes/*.tar.gz
                 src_file_to_copy = src_file
                 if not src_file.exists():
-                    # Convert container path to host path
-                    src_file_str = str(src_file)
-                    # Special case: /app/data/backups maps to /opt/ragflowauth/backups (not /opt/ragflowauth/data/backups)
-                    if src_file_str.startswith("/app/data/backups"):
-                        src_file_str = src_file_str.replace("/app/data/backups", "/opt/ragflowauth/backups", 1)
-                    elif src_file_str.startswith("/app/data/"):
-                        src_file_str = src_file_str.replace("/app/data", "/opt/ragflowauth/data", 1)
-                    elif src_file_str.startswith("/app/uploads/"):
-                        src_file_str = src_file_str.replace("/app/uploads", "/opt/ragflowauth/uploads", 1)
-                    src_file_to_copy = Path(src_file_str)
+                    src_file_to_copy = Path(container_path_to_host_str(src_file))
 
                 # Copy file
                 if src_file_to_copy.exists():
@@ -226,7 +190,61 @@ class BackupReplicaService:
 
                 if total_files > 0:
                     progress = 92 + int(5 * copied_files / total_files)
-                    self.store.update_job(job_id, progress=progress)
+        # Last resort: use docker run to copy volumes from the host via the docker socket
+        volumes_on_host_str = container_path_to_host_str(volumes_container)
+
+        # Get the current running container's image to use for docker run
+        from .common import run_cmd
+        helper_image = "ragflowauth-backend:latest"
+        try:
+            code, out = run_cmd(["docker", "ps", "--filter", "name=ragflowauth-backend", "--format", "{{.Image}}"])
+            if code == 0 and out and out.strip():
+                helper_image = out.strip()
+        except Exception:
+            pass  # Use fallback default
+
+        try:
+            # Ensure destination volumes directory exists
+            dst_volumes = dst / "volumes"
+            dst_volumes.mkdir(parents=True, exist_ok=True)
+
+            # Copy individual files using docker run (more reliable than recursive copy)
+            # First, list the files on host using docker run
+            list_cmd = [
+                "docker", "run", "--rm",
+                "-v", f"{volumes_on_host_str}:/src:ro",
+                helper_image,
+                "sh", "-c", "ls -1 /src/*.tar.gz 2>/dev/null || echo ''"
+            ]
+            result = subprocess.run(list_cmd, capture_output=True, text=True, timeout=60)
+            if result.returncode == 0 and result.stdout.strip():
+                files_to_copy = [f.strip() for f in result.stdout.strip().split('\n') if f.strip()]
+                for filename in files_to_copy:
+                    # Copy each file individually
+                    copy_cmd = [
+                        "docker", "run", "--rm",
+                        "-v", f"{volumes_on_host_str}:/src:ro",
+                        "-v", f"{dst}:/dst",
+                        helper_image,
+                        "sh", "-c", f"cp /src/{Path(filename).name} /dst/volumes/ 2>/dev/null || true"
+                    ]
+                    result2 = subprocess.run(copy_cmd, capture_output=True, timeout=60)
+                    if result2.returncode == 0:
+                        copied_files += 1
+
+                if files_to_copy:
+                    import logging
+                    logger = logging.getLogger(__name__)
+                    logger.info(f"Copied {len(files_to_copy)} volume files from host: {volumes_on_host_str}")
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(f"Failed to copy volumes from host path {volumes_on_host_str}: {e}")
+        # No additional "alt path" probing needed when container->host mapping is correct.
+
+            if total_files > 0:
+                progress = 92 + int(5 * copied_files / total_files)
+                self.store.update_job(job_id, progress=progress)
 
     def _write_replication_manifest(self, target_dir: Path, pack_name: str, job_id: int):
         """Write replication manifest file."""

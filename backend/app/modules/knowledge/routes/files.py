@@ -48,6 +48,7 @@ async def download_document(
 
 @router.get("/documents/{doc_id}/preview")
 async def preview_document(
+    request: Request,
     doc_id: str,
     ctx: AuthContextDep,
 ):
@@ -72,11 +73,49 @@ async def preview_document(
     from urllib.parse import quote
 
     ext = Path(doc.filename).suffix.lower()
+    render = (request.query_params.get("render") or "").strip().lower()
     media_type = doc.mime_type
     if ext in {".txt", ".ini", ".log"}:
         media_type = "text/plain; charset=utf-8"
     elif ext in {".md", ".markdown"}:
         media_type = "text/markdown; charset=utf-8"
+    elif ext in {".doc", ".docx", ".xlsx", ".xls"} and render == "html":
+        try:
+            from backend.app.core.paths import resolve_repo_path
+            from backend.services.office_to_html import convert_office_path_to_html_bytes
+
+            previews_dir = resolve_repo_path("data/previews")
+            previews_dir.mkdir(parents=True, exist_ok=True)
+            cached_html = previews_dir / f"{doc_id}.html"
+
+            try:
+                src_mtime = os.path.getmtime(doc.file_path)
+            except Exception:
+                src_mtime = None
+
+            if cached_html.exists() and src_mtime is not None:
+                try:
+                    if os.path.getmtime(cached_html) >= src_mtime:
+                        quoted = quote(f"{Path(doc.filename).stem}.html")
+                        return FileResponse(
+                            path=str(cached_html),
+                            media_type="text/html; charset=utf-8",
+                            headers={"Content-Disposition": f"inline; filename*=UTF-8''{quoted}"},
+                        )
+                except Exception:
+                    pass
+
+            html_bytes = convert_office_path_to_html_bytes(doc.file_path)
+            cached_html.write_bytes(html_bytes)
+
+            quoted = quote(f"{Path(doc.filename).stem}.html")
+            return FileResponse(
+                path=str(cached_html),
+                media_type="text/html; charset=utf-8",
+                headers={"Content-Disposition": f"inline; filename*=UTF-8''{quoted}"},
+            )
+        except Exception as e:
+            raise HTTPException(status_code=415, detail=f"Office 在线预览不可用：{str(e)}")
 
     quoted = quote(doc.filename)
     return FileResponse(
