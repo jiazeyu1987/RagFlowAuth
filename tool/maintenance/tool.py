@@ -50,12 +50,16 @@ from tool.maintenance.features.docker_containers_with_mounts import (
 from tool.maintenance.features.windows_share_mount import mount_windows_share as feature_mount_windows_share
 from tool.maintenance.features.windows_share_unmount import unmount_windows_share as feature_unmount_windows_share
 from tool.maintenance.features.windows_share_status import check_mount_status as feature_check_mount_status
+from tool.maintenance.features.local_backup_catalog import list_local_backups as feature_list_local_backups
 from tool.maintenance.features.release_publish import (
     get_server_version_info as feature_get_server_version_info,
     publish_from_test_to_prod as feature_publish_from_test_to_prod,
 )
 from tool.maintenance.features.release_publish_local_to_test import (
     publish_from_local_to_test as feature_publish_from_local_to_test,
+)
+from tool.maintenance.features.release_publish_data_test_to_prod import (
+    publish_data_from_test_to_prod as feature_publish_data_from_test_to_prod,
 )
 
 # （日志配置已迁移到 tool.maintenance.core.logging_setup）
@@ -767,71 +771,46 @@ class RagflowAuthTool:
         # 说明
         info_label = ttk.Label(
             tab,
-            text="从本地备份文件夹恢复数据到服务器\n"
-                 "支持恢复：RagflowAuth 数据、上传文件、Docker 镜像、RAGFlow 数据 (volumes)",
+            text="从本机固定目录恢复数据到【测试服务器】\n"
+                 "固定目录：D:\\datas\\RagflowAuth\n"
+                 "还原内容：auth.db + volumes；若存在 images.tar 也会还原镜像",
             foreground="gray",
             justify=tk.CENTER
         )
         info_label.pack(pady=10)
 
-        # 文件夹选择区域
-        folder_frame = ttk.LabelFrame(tab, text="选择备份文件夹", padding=10)
-        folder_frame.pack(fill=tk.X, padx=20, pady=10)
+        # 本地备份列表（固定目录）
+        folder_frame = ttk.LabelFrame(tab, text="选择本地备份（固定目录：D:\\datas\\RagflowAuth）", padding=10)
+        folder_frame.pack(fill=tk.BOTH, expand=False, padx=20, pady=10)
 
-        input_frame = ttk.Frame(folder_frame)
-        input_frame.pack(fill=tk.X, pady=5)
-
-        ttk.Label(input_frame, text="备份文件夹:").pack(side=tk.LEFT, padx=5)
-        self.restore_folder_var = tk.StringVar()
-        folder_entry = ttk.Entry(input_frame, textvariable=self.restore_folder_var, width=50)
-        folder_entry.pack(side=tk.LEFT, padx=5, fill=tk.X, expand=True)
-
-        select_btn = ttk.Button(
-            input_frame,
-            text="浏览",
-            command=self.select_restore_folder,
-            width=10
+        toolbar = ttk.Frame(folder_frame)
+        toolbar.pack(fill=tk.X, pady=(0, 8))
+        ttk.Button(toolbar, text="刷新列表", command=self.refresh_local_restore_list).pack(side=tk.LEFT, padx=5)
+        self.restore_start_btn = ttk.Button(
+            toolbar,
+            text="开始还原",
+            command=self.restore_data,
+            state=tk.DISABLED,
+            width=12,
         )
-        select_btn.pack(side=tk.LEFT, padx=5)
+        self.restore_start_btn.pack(side=tk.LEFT, padx=5)
+
+        columns = ("label", "has_images", "folder")
+        self.restore_tree = ttk.Treeview(folder_frame, columns=columns, show="headings", height=6, selectmode="browse")
+        self.restore_tree.heading("label", text="备份时间")
+        self.restore_tree.heading("has_images", text="有镜像")
+        self.restore_tree.heading("folder", text="文件夹")
+        self.restore_tree.column("label", width=160, anchor=tk.W)
+        self.restore_tree.column("has_images", width=80, anchor=tk.CENTER)
+        self.restore_tree.column("folder", width=440, anchor=tk.W)
+        self.restore_tree.pack(fill=tk.X, expand=False)
+        self.restore_tree.bind("<<TreeviewSelect>>", self.on_restore_backup_selected)
+
+        self.restore_backup_map = {}
 
         # 文件夹信息显示
         self.restore_info_label = ttk.Label(folder_frame, text="", foreground="blue", justify=tk.LEFT)
         self.restore_info_label.pack(anchor=tk.W, padx=10, pady=5)
-
-        # 还原选项
-        options_frame = ttk.LabelFrame(tab, text="还原选项", padding=10)
-        options_frame.pack(fill=tk.X, padx=20, pady=10)
-
-        self.restore_options = {
-            "auth_db": tk.BooleanVar(value=True),
-            "uploads": tk.BooleanVar(value=True),
-            "images": tk.BooleanVar(value=False),
-            "volumes": tk.BooleanVar(value=True),
-        }
-
-        ttk.Checkbutton(
-            options_frame,
-            text="RagflowAuth 数据库",
-            variable=self.restore_options["auth_db"]
-        ).pack(anchor=tk.W, padx=10, pady=2)
-
-        ttk.Checkbutton(
-            options_frame,
-            text="上传文件 (uploads)",
-            variable=self.restore_options["uploads"]
-        ).pack(anchor=tk.W, padx=10, pady=2)
-
-        ttk.Checkbutton(
-            options_frame,
-            text="Docker 镜像",
-            variable=self.restore_options["images"]
-        ).pack(anchor=tk.W, padx=10, pady=2)
-
-        ttk.Checkbutton(
-            options_frame,
-            text="RAGFlow 数据 (volumes)",
-            variable=self.restore_options["volumes"]
-        ).pack(anchor=tk.W, padx=10, pady=2)
 
         # 进度显示
         progress_frame = ttk.LabelFrame(tab, text="还原进度", padding=10)
@@ -877,6 +856,43 @@ class RagflowAuthTool:
         self.restore_images_exists = False
         self.restore_volumes_exists = False
         self.selected_restore_folder = None
+        self.restore_target_ip = TEST_SERVER_IP
+        self.restore_target_user = "root"
+        self.root.after(0, self.refresh_local_restore_list)
+
+    def refresh_local_restore_list(self):
+        root_dir = Path(r"D:\datas\RagflowAuth")
+        entries = feature_list_local_backups(root_dir)
+
+        self.restore_backup_map = {}
+        if hasattr(self, "restore_tree"):
+            for item in self.restore_tree.get_children():
+                self.restore_tree.delete(item)
+
+            for entry in entries:
+                has_images = "有" if (entry.path / "images.tar").exists() else "无"
+                iid = self.restore_tree.insert("", tk.END, values=(entry.label, has_images, entry.path.name))
+                self.restore_backup_map[iid] = entry.path
+
+        if not entries:
+            self.restore_info_label.config(
+                text=f"未找到可用备份（需要包含 auth.db）：{root_dir}",
+                foreground="red",
+            )
+            self.restore_btn.config(state=tk.DISABLED)
+            if hasattr(self, "restore_start_btn"):
+                self.restore_start_btn.config(state=tk.DISABLED)
+
+    def on_restore_backup_selected(self, _event=None):
+        sel = self.restore_tree.selection()
+        if not sel:
+            return
+        p = self.restore_backup_map.get(sel[0])
+        if not p:
+            return
+        self.selected_restore_folder = Path(p)
+        log_to_file(f"[RESTORE] 选择备份文件夹(固定目录): {self.selected_restore_folder}")
+        self.validate_restore_folder()
 
     def create_release_tab(self):
         """发布：包含两个子页签（本机->测试、测试->正式）"""
@@ -912,6 +928,7 @@ class RagflowAuthTool:
 
         self._create_release_local_to_test_tab()
         self._create_release_test_to_prod_tab()
+        self._create_release_test_data_to_prod_tab()
 
         # Defer initial refresh until after the UI is fully initialized (status_bar created).
         self.root.after(0, self.refresh_release_versions)
@@ -974,6 +991,34 @@ class RagflowAuthTool:
         log_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=(0, 10))
         self.release_log_text = scrolledtext.ScrolledText(log_frame, height=18)
         self.release_log_text.pack(fill=tk.BOTH, expand=True)
+
+    def _create_release_test_data_to_prod_tab(self):
+        tab = ttk.Frame(self.release_notebook)
+        self.release_notebook.add(tab, text="测试数据 -> 正式")
+
+        desc = ttk.Label(
+            tab,
+            text=(
+                "将【测试服务器】数据同步到【正式服务器】（高风险/覆盖生产数据）：\n"
+                f"- 测试: {TEST_SERVER_IP} -> 正式: {PROD_SERVER_IP}\n"
+                "- 内容: auth.db + RAGFlow volumes（ragflow_compose_*）\n"
+                "- 发布过程中会自动把正式服务器 ragflow_config.json 的 base_url 修正为正式服务器\n"
+            ),
+            foreground="gray",
+            justify=tk.LEFT,
+        )
+        desc.pack(fill=tk.X, padx=20, pady=(10, 6), anchor=tk.W)
+
+        button_frame = ttk.Frame(tab)
+        button_frame.pack(fill=tk.X, padx=20, pady=(6, 10))
+        ttk.Button(button_frame, text="从测试发布数据到正式", command=self.publish_test_data_to_prod).pack(
+            side=tk.LEFT, padx=5
+        )
+
+        log_frame = ttk.LabelFrame(tab, text="发布日志（测试数据 -> 正式）", padding=10)
+        log_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=(0, 10))
+        self.release_data_log_text = scrolledtext.ScrolledText(log_frame, height=18)
+        self.release_data_log_text.pack(fill=tk.BOTH, expand=True)
 
     def _format_version_info(self, info) -> str:
         if not info:
@@ -1115,6 +1160,64 @@ class RagflowAuthTool:
                 self.release_log_text.insert(tk.END, f"[ERROR] {e}\n")
                 log_to_file(f"[Release] Publish exception: {e}", "ERROR")
                 self.status_bar.config(text="发布：失败")
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def publish_test_data_to_prod(self):
+        if not messagebox.askyesno(
+            "确认数据发布（第 1 次确认）",
+            f"即将把【测试服务器】数据发布到【正式服务器】。\n\n"
+            f"测试: {TEST_SERVER_IP}\n"
+            f"正式: {PROD_SERVER_IP}\n\n"
+            f"⚠️  警告：这会覆盖正式服务器上的 auth.db 和 RAGFlow volumes 数据！\n\n"
+            f"是否继续？",
+        ):
+            return
+
+        if not messagebox.askyesno(
+            "确认数据发布（第 2 次确认）",
+            "再次确认：你已理解此操作会覆盖生产数据，且无法自动回滚。\n\n是否继续？",
+        ):
+            return
+
+        def worker():
+            try:
+                if hasattr(self, "release_data_log_text"):
+                    self.root.after(0, lambda: self.release_data_log_text.delete("1.0", tk.END))
+                if hasattr(self, "status_bar"):
+                    self.status_bar.config(text="正在发布测试数据到正式...")
+                log_to_file("[ReleaseData] Start publish test-data->prod", "INFO")
+
+                def ui_log(line: str) -> None:
+                    if not hasattr(self, "release_data_log_text"):
+                        return
+
+                    def _append() -> None:
+                        self.release_data_log_text.insert(tk.END, line + "\n")
+                        self.release_data_log_text.see(tk.END)
+
+                    self.root.after(0, _append)
+
+                result = feature_publish_data_from_test_to_prod(version=self._release_version_arg(), log_cb=ui_log)
+
+                if result.ok:
+                    for line in (result.log or "").splitlines():
+                        log_to_file(f"[ReleaseDataFlow] {line}", "INFO")
+                    log_to_file("[ReleaseData] Publish succeeded", "INFO")
+                    if hasattr(self, "status_bar"):
+                        self.status_bar.config(text="数据发布：成功")
+                else:
+                    for line in (result.log or "").splitlines():
+                        log_to_file(f"[ReleaseDataFlow] {line}", "ERROR")
+                    log_to_file("[ReleaseData] Publish failed", "ERROR")
+                    if hasattr(self, "status_bar"):
+                        self.status_bar.config(text="数据发布：失败")
+            except Exception as e:
+                if hasattr(self, "release_data_log_text"):
+                    self.root.after(0, lambda: self.release_data_log_text.insert(tk.END, f"[ERROR] {e}\n"))
+                log_to_file(f"[ReleaseData] Publish exception: {e}", "ERROR")
+                if hasattr(self, "status_bar"):
+                    self.status_bar.config(text="数据发布：失败")
 
         threading.Thread(target=worker, daemon=True).start()
 
@@ -3157,33 +3260,20 @@ conn.close()
 
     def select_restore_folder(self):
         """选择备份文件夹"""
-        folder_path = filedialog.askdirectory(
-            title="选择备份文件夹",
-            initialdir=r"D:\datas\RagflowAuth"
-        )
-
-        if not folder_path:
-            return
-
-        self.selected_restore_folder = Path(folder_path)
-        self.restore_folder_var.set(str(self.selected_restore_folder))
-
-        # 记录到日志
-        log_to_file(f"[RESTORE] 选择备份文件夹: {self.selected_restore_folder}")
-
-        # 验证文件夹
-        self.validate_restore_folder()
+        messagebox.showinfo("提示", "还原页签已改为固定目录列表选择：D:\\datas\\RagflowAuth")
+        self.refresh_local_restore_list()
 
     def validate_restore_folder(self):
         """验证备份文件夹"""
         if not self.selected_restore_folder or not self.selected_restore_folder.exists():
             self.restore_info_label.config(text="❌ 文件夹不存在", foreground="red")
             self.restore_btn.config(state=tk.DISABLED)
+            if hasattr(self, "restore_start_btn"):
+                self.restore_start_btn.config(state=tk.DISABLED)
             return
 
         # 检查必要的文件
         auth_db = self.selected_restore_folder / "auth.db"
-        uploads_dir = self.selected_restore_folder / "uploads"
         images_tar = self.selected_restore_folder / "images.tar"
         volumes_dir = self.selected_restore_folder / "volumes"
 
@@ -3196,19 +3286,13 @@ conn.close()
         else:
             info_text.append(f"✅ 找到数据库: {auth_db.stat().st_size / 1024 / 1024:.2f} MB")
 
-        if uploads_dir.exists() and uploads_dir.is_dir():
-            upload_files = list(uploads_dir.rglob("*"))
-            info_text.append(f"✅ 找到 uploads 目录: {len(upload_files)} 个文件")
-        else:
-            info_text.append("⚠️  未找到 uploads 目录")
-
         # 检查 images.tar
         if images_tar.exists():
             size_mb = images_tar.stat().st_size / 1024 / 1024
             info_text.append(f"✅ 找到 Docker 镜像: {size_mb:.2f} MB")
             self.restore_images_exists = True
         else:
-            info_text.append("ℹ️  未找到 Docker 镜像（仅恢复数据）")
+            info_text.append("⚠️  未找到 Docker 镜像（images.tar）—仅还原 auth.db + volumes")
             self.restore_images_exists = False
 
         # 检查 volumes 目录（RAGFlow 数据）
@@ -3229,8 +3313,12 @@ conn.close()
         # 启用/禁用还原按钮
         if is_valid and auth_db.exists():
             self.restore_btn.config(state=tk.NORMAL)
+            if hasattr(self, "restore_start_btn"):
+                self.restore_start_btn.config(state=tk.NORMAL)
         else:
             self.restore_btn.config(state=tk.DISABLED)
+            if hasattr(self, "restore_start_btn"):
+                self.restore_start_btn.config(state=tk.DISABLED)
 
     def append_restore_log(self, text):
         """追加还原日志（线程安全）"""
@@ -3270,6 +3358,8 @@ conn.close()
         def _update():
             self.restore_progress.stop()
             self.restore_btn.config(state=tk.NORMAL)
+            if hasattr(self, "restore_start_btn"):
+                self.restore_start_btn.config(state=tk.NORMAL)
 
         if threading.current_thread() is threading.main_thread():
             _update()
@@ -3285,8 +3375,61 @@ conn.close()
             messagebox.showerror("错误", "请先选择备份文件夹")
             return
 
-        # 确保 SSH 执行器已初始化
-        self.update_ssh_executor()
+        # 还原仅允许在测试服务器执行（固定）
+        self.ssh_executor = SSHExecutor(self.restore_target_ip, self.restore_target_user)
+
+        # 防呆：还原前自动修正测试服务器 ragflow_config.json 的 base_url，避免误读生产知识库
+        try:
+            cfg_path = "/opt/ragflowauth/ragflow_config.json"
+            cmd = (
+                f"test -f {cfg_path} || (echo MISSING && exit 0); "
+                f"sed -n 's/.*\"base_url\"[[:space:]]*:[[:space:]]*\"\\([^\\\"]*\\)\".*/\\1/p' {cfg_path} | head -n 1"
+            )
+            ok, out = self.ssh_executor.execute(cmd)
+            base_url = (out or "").strip().splitlines()[-1].strip() if (out or "").strip() else ""
+            if (not ok) or (not base_url) or (base_url == "MISSING"):
+                messagebox.showerror(
+                    "还原前检查失败",
+                    f"无法读取测试服务器 ragflow_config.json 的 base_url。\n"
+                    f"服务器: {self.restore_target_ip}\n"
+                    f"文件: {cfg_path}\n"
+                    f"输出: {out}",
+                )
+                log_to_file(f"[RESTORE] [PRECHECK] failed to read base_url: {out}", "ERROR")
+                return
+
+            desired = f"http://{TEST_SERVER_IP}:9380"
+            if desired not in base_url:
+                self.append_restore_log(f"[PRECHECK] 检测到 base_url={base_url}，将自动修正为 {desired}")
+                log_to_file(f"[RESTORE] [PRECHECK] rewriting base_url: {base_url} -> {desired}")
+
+                # Backup then atomic rewrite (keep JSON formatting roughly intact)
+                fix_cmd = (
+                    f"set -e; "
+                    f"cp -f {cfg_path} {cfg_path}.bak.$(date +%Y%m%d_%H%M%S) 2>/dev/null || true; "
+                    f"tmp=$(mktemp); "
+                    f"sed -E 's#(\"base_url\"[[:space:]]*:[[:space:]]*\")([^\\\"]+)(\")#\\1{desired}\\3#' {cfg_path} > $tmp; "
+                    f"mv -f $tmp {cfg_path}; "
+                    f"sed -n 's/.*\"base_url\"[[:space:]]*:[[:space:]]*\"\\([^\\\"]*\\)\".*/\\1/p' {cfg_path} | head -n 1"
+                )
+                ok2, out2 = self.ssh_executor.execute(fix_cmd)
+                new_base = (out2 or "").strip().splitlines()[-1].strip() if (out2 or "").strip() else ""
+                if (not ok2) or (desired not in new_base):
+                    messagebox.showerror(
+                        "还原前自动修正失败",
+                        f"已尝试将测试服务器 base_url 修正为 {desired}，但未成功。\n"
+                        f"当前读取: {new_base or '(empty)'}\n\n"
+                        f"输出: {out2}",
+                    )
+                    log_to_file(f"[RESTORE] [PRECHECK] rewrite failed: {out2}", "ERROR")
+                    return
+                self.append_restore_log(f"[PRECHECK] base_url 已修正: {new_base}")
+
+            log_to_file(f"[RESTORE] [PRECHECK] ragflow base_url OK: {base_url}")
+        except Exception as exc:
+            log_to_file(f"[RESTORE] [PRECHECK] exception: {exc}", "ERROR")
+            messagebox.showerror("还原前检查异常", str(exc))
+            return
 
         # 确认对话框
         restore_items = []
@@ -3301,7 +3444,7 @@ conn.close()
             "确认还原",
             f"即将还原 {restore_type} 到服务器\n\n"
             f"源文件夹: {self.selected_restore_folder}\n"
-            f"目标服务器: {self.config.ip}\n\n"
+            f"目标服务器(固定): {self.restore_target_ip}\n\n"
             f"⚠️  警告：这将覆盖服务器上的现有数据！\n\n"
             f"是否继续？"
         )
@@ -3313,11 +3456,13 @@ conn.close()
         # 记录还原开始
         log_to_file(f"[RESTORE] 用户确认还原操作")
         log_to_file(f"[RESTORE] 源文件夹: {self.selected_restore_folder}")
-        log_to_file(f"[RESTORE] 目标服务器: {self.config.user}@{self.config.ip}")
+        log_to_file(f"[RESTORE] 目标服务器: {self.restore_target_user}@{self.restore_target_ip}")
         log_to_file(f"[RESTORE] 还原内容: {restore_type}")
 
         # 禁用按钮
         self.restore_btn.config(state=tk.DISABLED)
+        if hasattr(self, "restore_start_btn"):
+            self.restore_start_btn.config(state=tk.DISABLED)
         self.restore_output.config(state=tk.NORMAL)
         self.restore_output.delete(1.0, tk.END)
         self.restore_output.config(state=tk.DISABLED)
@@ -3362,15 +3507,14 @@ conn.close()
             self.append_restore_log("\n[2/7] 备份服务器现有数据...")
             self.update_restore_status("正在备份现有数据...")
 
-            timestamp = subprocess.check_output("powershell -Command 'Get-Date -Format \"yyyyMMdd_HHmmss\"'", shell=True).decode().strip()
+            import time
+            timestamp = time.strftime("%Y%m%d_%H%M%S", time.localtime())
             backup_dir = f"/tmp/restore_backup_{timestamp}"
 
             commands = [
                 f"mkdir -p {backup_dir}",
                 "cp /opt/ragflowauth/data/auth.db /opt/ragflowauth/data/auth.db.backup 2>/dev/null || true",
                 f"cp /opt/ragflowauth/data/auth.db {backup_dir}/ 2>/dev/null || true",
-                "rm -rf /opt/ragflowauth/uploads.bak 2>/dev/null || true",
-                "cp -r /opt/ragflowauth/uploads /opt/ragflowauth/uploads.bak 2>/dev/null || true",
             ]
 
             for cmd in commands:
@@ -3390,7 +3534,13 @@ conn.close()
             if auth_db_local.exists():
                 self.append_restore_log(f"  上传 auth.db ({auth_db_local.stat().st_size / 1024 / 1024:.2f} MB)...")
                 result = subprocess.run(
-                    ["scp", "-o", "BatchMode=yes", str(auth_db_local), f"{self.config.user}@{self.config.ip}:/opt/ragflowauth/data/auth.db"],
+                    [
+                        "scp",
+                        "-o",
+                        "BatchMode=yes",
+                        str(auth_db_local),
+                        f"{self.restore_target_user}@{self.restore_target_ip}:/opt/ragflowauth/data/auth.db",
+                    ],
                     capture_output=True,
                     text=True
                 )
@@ -3399,19 +3549,7 @@ conn.close()
                 else:
                     raise Exception(f"上传 auth.db 失败: {result.stderr}")
 
-            # 上传 uploads 目录（如果存在）
-            uploads_local = self.selected_restore_folder / "uploads"
-            if uploads_local.exists() and uploads_local.is_dir():
-                self.append_restore_log("  上传 uploads 目录...")
-                result = subprocess.run(
-                    ["scp", "-o", "BatchMode=yes", "-r", str(uploads_local) + "/", f"{self.config.user}@{self.config.ip}:/opt/ragflowauth/uploads/"],
-                    capture_output=True,
-                    text=True
-                )
-                if result.returncode == 0:
-                    self.append_restore_log("  ✅ uploads 目录上传成功")
-                else:
-                    self.append_restore_log(f"  ⚠️  uploads 上传失败: {result.stderr}")
+            # 注意：按需求仅还原 auth.db + volumes（若存在 images.tar 也还原镜像），不还原 uploads
 
             # 4. 上传并加载 Docker 镜像（如果存在）
             if self.restore_images_exists:
@@ -3430,7 +3568,13 @@ conn.close()
                 start_time = time.time()
 
                 result = subprocess.run(
-                    ["scp", "-o", "BatchMode=yes", str(images_tar_local), f"{self.config.user}@{self.config.ip}:/var/lib/docker/tmp/images.tar"],
+                    [
+                        "scp",
+                        "-o",
+                        "BatchMode=yes",
+                        str(images_tar_local),
+                        f"{self.restore_target_user}@{self.restore_target_ip}:/var/lib/docker/tmp/images.tar",
+                    ],
                     capture_output=True,
                     text=True
                 )
@@ -3515,7 +3659,7 @@ conn.close()
 
                     # 上传压缩包到服务器
                     self.append_restore_log("  [步骤 5/6] 上传压缩包到服务器...")
-                    self.append_restore_log(f"    目标: {self.config.user}@{self.config.ip}:/var/lib/docker/tmp/volumes.tar.gz")
+                    self.append_restore_log(f"    目标: {self.restore_target_user}@{self.restore_target_ip}:/var/lib/docker/tmp/volumes.tar.gz")
                     self.append_restore_log(f"    预计需要时间: {size_mb:.2f} MB / 网络速度 ≈ 10秒 ~ 1分钟")
 
                     import time
@@ -3554,10 +3698,10 @@ conn.close()
                             # 方案1: 尝试使用 scp（如果有 Git Bash 或 WSL）
                             self.append_restore_log(f"    准备执行 SCP 命令...")
                             self.append_restore_log(f"    源文件: {temp_tar_path}")
-                            self.append_restore_log(f"    目标: {self.config.user}@{self.config.ip}:/var/lib/docker/tmp/volumes.tar.gz")
+                            self.append_restore_log(f"    目标: {self.restore_target_user}@{self.restore_target_ip}:/var/lib/docker/tmp/volumes.tar.gz")
 
                             cmd = ["scp", "-o", "ConnectTimeout=10", "-o", "BatchMode=yes",
-                                   temp_tar_path, f"{self.config.user}@{self.config.ip}:/var/lib/docker/tmp/volumes.tar.gz"]
+                                   temp_tar_path, f"{self.restore_target_user}@{self.restore_target_ip}:/var/lib/docker/tmp/volumes.tar.gz"]
                             self.append_restore_log(f"    命令: {' '.join(cmd)}")
 
                             result = subprocess.run(
@@ -3587,8 +3731,8 @@ conn.close()
                                         f"错误: {stderr}\n\n"
                                         f"解决方案：\n"
                                         f"1. 生成 SSH 密钥: ssh-keygen -t rsa -b 4096\n"
-                                        f"2. 复制公钥到服务器: ssh-copy-id {self.config.user}@{self.config.ip}\n"
-                                        f"3. 或手动复制: type C:\\Users\\<用户>\\.ssh\\id_rsa.pub | ssh {self.config.user}@{self.config.ip} 'cat >> ~/.ssh/authorized_keys'"
+                                        f"2. 复制公钥到服务器: ssh-copy-id {self.restore_target_user}@{self.restore_target_ip}\n"
+                                        f"3. 或手动复制: type C:\\Users\\<用户>\\.ssh\\id_rsa.pub | ssh {self.restore_target_user}@{self.restore_target_ip} 'cat >> ~/.ssh/authorized_keys'"
                                     )
                                     self.append_restore_log(f"    ❌ {error_msg}")
                                     raise Exception(error_msg)
@@ -3602,7 +3746,7 @@ conn.close()
                             self.append_restore_log("    使用 SCP 上传 (Linux/Mac)...")
                             result = subprocess.run(
                                 ["scp", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10",
-                                 temp_tar_path, f"{self.config.user}@{self.config.ip}:/var/lib/docker/tmp/volumes.tar.gz"],
+                                 temp_tar_path, f"{self.restore_target_user}@{self.restore_target_ip}:/var/lib/docker/tmp/volumes.tar.gz"],
                                 capture_output=True,
                                 text=True
                             )
@@ -3744,29 +3888,81 @@ conn.close()
             self.append_restore_log("\n[6/7] 启动 Docker 容器...")
             self.update_restore_status("正在启动容器...")
 
-            # 停止并删除旧容器（确保使用最新配置重新创建）
-            self.append_restore_log("  停止并删除旧容器...")
-            success, _ = self.ssh_executor.execute("docker stop ragflowauth-backend ragflowauth-frontend 2>/dev/null || true")
-            success, _ = self.ssh_executor.execute("docker rm ragflowauth-backend ragflowauth-frontend 2>/dev/null || true")
+            ragflowauth_ok = False
+            ragflowauth_reason = ""
 
-            # 获取当前镜像tag
-            self.append_restore_log("  获取当前镜像tag...")
-            success, output = self.ssh_executor.execute(
-                "docker images --format '{{.Tag}}' | grep '^ragflowauth-backend' | head -1 | cut -d: -f2"
-            )
-            current_tag = output.strip() if success and output.strip() else "latest"
-            self.append_restore_log(f"  当前镜像tag: {current_tag}")
+            # 尽量启动已存在的容器；还原阶段不强制删除容器，避免“没镜像/没网络”导致无法启动。
+            self.append_restore_log("  检查 RagflowAuth 容器是否存在...")
+            success, out_backend_exists = self.ssh_executor.execute("docker inspect ragflowauth-backend >/dev/null 2>&1 && echo YES || echo NO")
+            success, out_frontend_exists = self.ssh_executor.execute("docker inspect ragflowauth-frontend >/dev/null 2>&1 && echo YES || echo NO")
+            backend_exists = (out_backend_exists or "").strip().endswith("YES")
+            frontend_exists = (out_frontend_exists or "").strip().endswith("YES")
 
-            # 使用 remote-deploy.sh 启动容器（包含正确的挂载配置）
-            self.append_restore_log("  使用 remote-deploy.sh 重新创建容器...")
-            success, output = self.ssh_executor.execute(
-                f"cd /tmp && bash remote-deploy.sh --skip-load --tag {current_tag}"
-            )
+            # docker run 需要网络
+            self.ssh_executor.execute("docker network inspect ragflowauth-network >/dev/null 2>&1 || docker network create ragflowauth-network")
 
-            if success:
-                self.append_restore_log("  ✅ RagflowAuth 容器启动成功")
+            if backend_exists and frontend_exists:
+                self.append_restore_log("  启动已存在的 RagflowAuth 容器...")
+                success, output = self.ssh_executor.execute("docker start ragflowauth-backend ragflowauth-frontend 2>/dev/null || true")
+                if output:
+                    self.append_restore_log(f"  {output}")
             else:
-                self.append_restore_log(f"  ⚠️  容器启动可能有问题: {output}")
+                self.append_restore_log("  RagflowAuth 容器不存在，尝试从本地镜像创建容器（不会联网拉取）...")
+                success, backend_image = self.ssh_executor.execute(
+                    "docker images ragflowauth-backend --format '{{.Repository}}:{{.Tag}}' | grep -v '<none>' | head -n 1"
+                )
+                success, frontend_image = self.ssh_executor.execute(
+                    "docker images ragflowauth-frontend --format '{{.Repository}}:{{.Tag}}' | grep -v '<none>' | head -n 1"
+                )
+                backend_image = (backend_image or "").strip()
+                frontend_image = (frontend_image or "").strip()
+
+                if not backend_image or not frontend_image:
+                    ragflowauth_reason = (
+                        "未找到 ragflowauth-backend/frontend 本地镜像。"
+                        "如果本次还原未包含 images.tar，请先使用【发布】把镜像发布到测试服务器，再启动容器。"
+                    )
+                    self.append_restore_log(f"  ⚠️  {ragflowauth_reason}")
+                else:
+                    self.append_restore_log(f"  使用镜像: backend={backend_image} frontend={frontend_image}")
+
+                    # 可选挂载：backup_config.json
+                    success, has_backup_cfg = self.ssh_executor.execute("test -f /opt/ragflowauth/backup_config.json && echo YES || echo NO")
+                    has_backup_cfg = (has_backup_cfg or "").strip().endswith("YES")
+                    backup_cfg_mount = " -v /opt/ragflowauth/backup_config.json:/app/backup_config.json:ro" if has_backup_cfg else ""
+
+                    run_front = f"docker run -d --name ragflowauth-frontend --network ragflowauth-network -p 3001:80 --restart unless-stopped {frontend_image}"
+                    run_back = (
+                        "docker run -d --name ragflowauth-backend --network ragflowauth-network -p 8001:8001 "
+                        "-e TZ=Asia/Shanghai -e HOST=0.0.0.0 -e PORT=8001 -e DATABASE_PATH=data/auth.db -e UPLOAD_DIR=data/uploads "
+                        "-v /opt/ragflowauth/data:/app/data "
+                        "-v /opt/ragflowauth/uploads:/app/uploads "
+                        "-v /opt/ragflowauth/ragflow_config.json:/app/ragflow_config.json:ro "
+                        "-v /opt/ragflowauth/ragflow_compose:/app/ragflow_compose:ro "
+                        f"{backup_cfg_mount} "
+                        "-v /opt/ragflowauth/backups:/app/data/backups "
+                        "-v /mnt/replica:/mnt/replica "
+                        "-v /var/run/docker.sock:/var/run/docker.sock:ro "
+                        f"--restart unless-stopped {backend_image}"
+                    ).replace("  ", " ").strip()
+
+                    self.append_restore_log(f"  run frontend: {run_front}")
+                    success, output = self.ssh_executor.execute(run_front)
+                    if not success:
+                        ragflowauth_reason = f"前端容器创建失败: {output}"
+                        self.append_restore_log(f"  ⚠️  {ragflowauth_reason}")
+                    else:
+                        if output:
+                            self.append_restore_log(f"  frontend started: {output.strip()}")
+
+                    self.append_restore_log(f"  run backend: {run_back}")
+                    success, output = self.ssh_executor.execute(run_back)
+                    if not success:
+                        ragflowauth_reason = f"后端容器创建失败: {output}"
+                        self.append_restore_log(f"  ⚠️  {ragflowauth_reason}")
+                    else:
+                        if output:
+                            self.append_restore_log(f"  backend started: {output.strip()}")
 
             # 启动 RAGFlow 容器（如果还原了 volumes）
             if self.restore_volumes_exists:
@@ -3795,24 +3991,48 @@ conn.close()
             import time
             time.sleep(3)  # 等待容器完全启动
 
-            success, output = self.ssh_executor.execute("docker ps | grep ragflow")
-            self.append_restore_log(output)
+            # 容器状态
+            success, output = self.ssh_executor.execute(
+                "docker ps -a --format '{{.Names}}\t{{.Image}}\t{{.Status}}' | grep -E 'ragflowauth-|ragflow_compose-' || true"
+            )
+            if output:
+                self.append_restore_log(output)
+
+            # RagflowAuth 健康检查
+            success, health = self.ssh_executor.execute("curl -fsS http://127.0.0.1:8001/health >/dev/null && echo OK || echo FAIL")
+            health = (health or "").strip()
+            if health == "OK":
+                ragflowauth_ok = True
+                self.append_restore_log("✅ RagflowAuth 后端健康检查: OK")
+            else:
+                if not ragflowauth_reason:
+                    ragflowauth_reason = "RagflowAuth 后端健康检查失败（/health 未通过）"
+                self.append_restore_log(f"⚠️  RagflowAuth 后端健康检查: {health or 'FAIL'}")
+                success, backend_logs = self.ssh_executor.execute("docker logs --tail 80 ragflowauth-backend 2>/dev/null || true")
+                if backend_logs:
+                    self.append_restore_log("---- ragflowauth-backend logs (tail 80) ----")
+                    self.append_restore_log(backend_logs)
 
             # 完成
             self.append_restore_log("\n" + "=" * 60)
-            self.append_restore_log("✅ 数据还原完成！")
+            if ragflowauth_ok:
+                self.append_restore_log("✅ 数据还原完成！")
+            else:
+                self.append_restore_log("⚠️  数据已还原完成，但 RagflowAuth 未正常启动（请检查日志/先发布镜像后再启动）。")
             self.append_restore_log("=" * 60)
-            self.update_restore_status("✅ 还原完成")
+            self.update_restore_status("✅ 还原完成" if ragflowauth_ok else "⚠️ 还原完成（RagflowAuth 未启动）")
 
-            # 显示成功消息
-            success_msg = f"数据还原成功！\n\n可以访问以下地址验证：\n"
-            success_msg += f"• RagflowAuth 前端: http://{self.config.ip}:3001\n"
-            success_msg += f"• RagflowAuth 后端: http://{self.config.ip}:8001\n"
+            # 显示消息（目标固定：测试服务器）
+            success_msg = f"数据还原已完成。\n\n可以访问以下地址验证：\n"
+            success_msg += f"• RagflowAuth 前端: http://{self.restore_target_ip}:3001\n"
+            success_msg += f"• RagflowAuth 后端: http://{self.restore_target_ip}:8001\n"
             if self.restore_volumes_exists:
-                success_msg += f"• RAGFlow: http://{self.config.ip}\n"
+                success_msg += f"• RAGFlow: http://{self.restore_target_ip}\n"
             success_msg += f"\n提示：RAGFlow 服务可能需要 1-2 分钟完全启动"
+            if not ragflowauth_ok:
+                success_msg += f"\n\n⚠️ RagflowAuth 未正常启动：{ragflowauth_reason or '请查看日志'}"
 
-            msg = f"[INFO] 数据还原成功！\n{success_msg}"
+            msg = f"[INFO] 数据还原完成\\n{success_msg}"
             print(msg)
             log_to_file(msg)
             messagebox.showinfo("还原完成", success_msg)
@@ -3841,6 +4061,14 @@ def main():
 
     try:
         root = tk.Tk()
+        # 程序启动默认全屏/最大化（Windows 优先）
+        try:
+            root.state("zoomed")
+        except Exception:
+            try:
+                root.attributes("-fullscreen", True)
+            except Exception:
+                pass
         app = RagflowAuthTool(root)
         root.mainloop()
     except Exception as e:

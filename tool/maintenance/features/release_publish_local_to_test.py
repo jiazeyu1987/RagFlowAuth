@@ -11,8 +11,10 @@ from tool.maintenance.features.release_publish import (
     DEFAULT_REMOTE_APP_DIR,
     PublishResult,
     ServerVersionInfo,
+    bootstrap_server_containers,
     docker_load_tar_on_server,
     get_server_version_info,
+    preflight_check_ragflow_base_url,
     recreate_server_containers_from_inspect,
 )
 
@@ -65,6 +67,16 @@ def publish_from_local_to_test(
     before = get_server_version_info(server_ip=test_ip, app_dir=app_dir)
     log(f"LOCAL -> TEST={test_ip} VERSION={tag}")
 
+    if not preflight_check_ragflow_base_url(
+        server_ip=test_ip,
+        expected_server_ip=test_ip,
+        app_dir=app_dir,
+        log=log,
+        role_name="TEST",
+    ):
+        log("[ERROR] Preflight check failed; refusing to publish (to avoid TEST reading PROD datasets).")
+        return finish(False, before, None)
+
     log("[1/6] Build images locally")
     ok, out = _run_local(f'docker build -f backend/Dockerfile -t {backend_image} .', cwd=repo_root, timeout_s=7200)
     if not ok:
@@ -106,8 +118,22 @@ def publish_from_local_to_test(
         log=log,
     )
     if not ok:
-        log(f"[ERROR] recreate failed: {msg}")
-        return finish(False, before, None)
+        if "containers not found" in (msg or ""):
+            log("[WARN] TEST containers not found; this looks like first-time deploy. Falling back to bootstrap mode.")
+            ok2, msg2 = bootstrap_server_containers(
+                server_ip=test_ip,
+                backend_image=backend_image,
+                frontend_image=frontend_image,
+                healthcheck_url=healthcheck_url,
+                log=log,
+                app_dir=app_dir,
+            )
+            if not ok2:
+                log(f"[ERROR] bootstrap failed: {msg2}")
+                return finish(False, before, None)
+        else:
+            log(f"[ERROR] recreate failed: {msg}")
+            return finish(False, before, None)
 
     log("[6/6] Done")
     after = get_server_version_info(server_ip=test_ip, app_dir=app_dir)

@@ -54,6 +54,55 @@ def _ssh_cmd(ip: str, command: str) -> tuple[bool, str]:
     ssh = SSHExecutor(ip, DEFAULT_SERVER_USER)
     return ssh.execute(command, timeout_seconds=900)
 
+
+def _read_ragflow_base_url(*, server_ip: str, app_dir: str) -> tuple[bool, str]:
+    """
+    Read base_url from ragflow_config.json on the target server.
+    Uses POSIX tools (sed/head) so it works even when host python isn't installed.
+    """
+    cfg_path = f"{app_dir}/ragflow_config.json"
+    cmd = (
+        f"test -f {cfg_path} || (echo MISSING && exit 0); "
+        f"sed -n 's/.*\"base_url\"[[:space:]]*:[[:space:]]*\"\\([^\\\"]*\\)\".*/\\1/p' {cfg_path} | head -n 1"
+    )
+    ok, out = _ssh_cmd(server_ip, cmd)
+    text = (out or "").strip().splitlines()[-1].strip() if (out or "").strip() else ""
+    if text == "MISSING":
+        return False, f"missing {cfg_path}"
+    if not ok:
+        return False, (out or "").strip()
+    if not text:
+        return False, f"unable to parse base_url from {cfg_path}"
+    return True, text
+
+
+def preflight_check_ragflow_base_url(
+    *,
+    server_ip: str,
+    expected_server_ip: str,
+    app_dir: str,
+    log,
+    role_name: str,
+) -> bool:
+    """
+    Guardrail: ensure a server's ragflow_config.json points to its own RAGFlow (or localhost),
+    so TEST doesn't read PROD and vice versa.
+    """
+    ok, base_url_or_err = _read_ragflow_base_url(server_ip=server_ip, app_dir=app_dir)
+    if not ok:
+        log(f"[PRECHECK] [ERROR] {role_name} ragflow_config base_url check failed: {base_url_or_err}")
+        log(f"[PRECHECK] Hint: ensure {app_dir}/ragflow_config.json exists on {server_ip}.")
+        return False
+
+    base_url = base_url_or_err.strip()
+    log(f"[PRECHECK] {role_name} ragflow base_url: {base_url}")
+
+    allowed = (expected_server_ip in base_url) or ("localhost" in base_url) or ("127.0.0.1" in base_url)
+    if not allowed:
+        log(f"[PRECHECK] [ERROR] {role_name} ragflow_config.json base_url looks wrong.")
+        log(f"[PRECHECK] Expected to contain '{expected_server_ip}' (or localhost), got: {base_url}")
+        return False
+    return True
 def docker_load_tar_on_server(*, server_ip: str, tar_path: str) -> tuple[bool, str]:
     """Load a docker image tarball on a remote server."""
     return _ssh_cmd(server_ip, f"docker load -i {tar_path}")
@@ -350,6 +399,26 @@ def publish_from_test_to_prod(
 
     log(f"TEST={test_ip} PROD={prod_ip} VERSION={tag}")
     log(f"Detected TEST images: backend={test_version.backend_image} frontend={test_version.frontend_image}")
+
+    # Safety checks: ensure each environment points to its own RAGFlow.
+    if not preflight_check_ragflow_base_url(
+        server_ip=test_ip,
+        expected_server_ip=test_ip,
+        app_dir=app_dir,
+        log=log,
+        role_name="TEST",
+    ):
+        log("[ERROR] Preflight check failed; refusing to publish (TEST base_url mismatch).")
+        return PublishResult(False, "\n".join(log_lines), version_before, None)
+    if not preflight_check_ragflow_base_url(
+        server_ip=prod_ip,
+        expected_server_ip=prod_ip,
+        app_dir=app_dir,
+        log=log,
+        role_name="PROD",
+    ):
+        log("[ERROR] Preflight check failed; refusing to publish (PROD base_url mismatch).")
+        return PublishResult(False, "\n".join(log_lines), version_before, None)
     if test_version.compose_path:
         log(f"Detected TEST compose: {test_version.compose_path}")
         log(f"Detected TEST env: {test_version.env_path or '(missing)'}")
@@ -382,7 +451,20 @@ def publish_from_test_to_prod(
     log("[3/6] Transfer images TEST -> PROD (scp -3)")
     log(f"scp tar: {DEFAULT_SERVER_USER}@{test_ip}:{tar_on_test} -> {DEFAULT_SERVER_USER}@{prod_ip}:{tar_on_prod}")
     ok, out = _run_local(
-        ["scp", "-3", f"{DEFAULT_SERVER_USER}@{test_ip}:{tar_on_test}", f"{DEFAULT_SERVER_USER}@{prod_ip}:{tar_on_prod}"],
+        [
+            "scp",
+            "-3",
+            "-o",
+            "BatchMode=yes",
+            "-o",
+            "ConnectTimeout=10",
+            "-o",
+            "StrictHostKeyChecking=no",
+            "-o",
+            "UserKnownHostsFile=/dev/null",
+            f"{DEFAULT_SERVER_USER}@{test_ip}:{tar_on_test}",
+            f"{DEFAULT_SERVER_USER}@{prod_ip}:{tar_on_prod}",
+        ],
         timeout_s=7200,
     )
     if not ok:
@@ -399,8 +481,22 @@ def publish_from_test_to_prod(
     prod_backend = _docker_inspect(prod_ip, "ragflowauth-backend")
     prod_frontend = _docker_inspect(prod_ip, "ragflowauth-frontend")
     if not prod_backend or not prod_frontend:
-        log("[ERROR] PROD containers not found (ragflowauth-backend/frontend). Cannot recreate safely.")
-        return PublishResult(False, "\n".join(log_lines), version_before, None)
+        log("[WARN] PROD containers not found (ragflowauth-backend/frontend); falling back to bootstrap mode.")
+        ok2, msg2 = bootstrap_server_containers(
+            server_ip=prod_ip,
+            backend_image=test_version.backend_image,
+            frontend_image=test_version.frontend_image,
+            healthcheck_url=healthcheck_url,
+            log=log,
+            app_dir=app_dir,
+        )
+        if not ok2:
+            log(f"[ERROR] bootstrap failed: {msg2}")
+            return PublishResult(False, "\n".join(log_lines), version_before, None)
+
+        version_after = get_server_version_info(server_ip=prod_ip, app_dir=app_dir)
+        log("Publish completed (bootstrap mode)")
+        return PublishResult(True, "\n".join(log_lines), version_before, version_after)
 
     network_mode = str((prod_backend.get("HostConfig") or {}).get("NetworkMode") or "").strip()
     ok, out = _ensure_network(prod_ip, network_mode)
@@ -489,6 +585,131 @@ def recreate_server_containers_from_inspect(
         return False, f"run backend failed: {out}"
     if out:
         log(f"backend started: {(out or '').strip()}")
+
+    ok, out = _wait_prod_ready(prod_ip=server_ip, healthcheck_url=healthcheck_url)
+    if not ok:
+        return False, f"healthcheck failed:\n{out}"
+    return True, "OK"
+
+
+def bootstrap_server_containers(
+    *,
+    server_ip: str,
+    backend_image: str,
+    frontend_image: str,
+    healthcheck_url: str,
+    log,
+    app_dir: str = DEFAULT_REMOTE_APP_DIR,
+    network_name: str = "ragflowauth-network",
+    frontend_port: int = 3001,
+    backend_port: int = 8001,
+) -> tuple[bool, str]:
+    """
+    First-time deployment fallback when target server has no existing containers to inspect.
+
+    This uses a fixed, known-good docker run layout that matches the project deployment conventions:
+    - host app dir: /opt/ragflowauth (or `app_dir`)
+    - bind mounts for data/uploads/configs/backups
+    - optional /mnt/replica mount
+    """
+    log(f"[BOOTSTRAP] No existing containers detected; creating new containers on {server_ip} (docker run mode).")
+
+    # Ensure required directories exist
+    ok, out = _ssh_cmd(
+        server_ip,
+        f"mkdir -p {app_dir}/data {app_dir}/uploads {app_dir}/backups {app_dir}/releases /mnt/replica && echo OK",
+    )
+    if not ok:
+        return False, f"mkdir failed: {out}"
+
+    # Validate required config artifacts (minimum required to start backend)
+    required_files = [
+        f"{app_dir}/ragflow_config.json",
+    ]
+    required_dirs = [
+        f"{app_dir}/ragflow_compose",
+    ]
+
+    missing: list[str] = []
+    for p in required_files:
+        ok, out = _ssh_cmd(server_ip, f"test -f {p} && echo OK || echo MISSING")
+        if (out or "").strip().endswith("MISSING"):
+            missing.append(p)
+    for p in required_dirs:
+        ok, out = _ssh_cmd(server_ip, f"test -d {p} && echo OK || echo MISSING")
+        if (out or "").strip().endswith("MISSING"):
+            missing.append(p)
+
+    if missing:
+        log("[BOOTSTRAP] Missing required files/dirs on target server:")
+        for p in missing:
+            log(f"[BOOTSTRAP]  - {p}")
+        return False, "missing required deployment artifacts under app_dir"
+
+    # Optional backup config (can be absent; backend will use defaults).
+    ok, out = _ssh_cmd(server_ip, f"test -f {app_dir}/backup_config.json && echo OK || echo ''")
+    has_backup_cfg = bool((out or "").strip())
+    if not has_backup_cfg:
+        log("[BOOTSTRAP] Note: backup_config.json not found; backup will use default target_dir inside container.")
+
+    ok, out = _ensure_network(server_ip, network_name)
+    if not ok:
+        return False, f"ensure network failed: {out}"
+
+    ok, out = _ssh_cmd(
+        server_ip,
+        "docker stop ragflowauth-backend ragflowauth-frontend 2>/dev/null || true; "
+        "docker rm -f ragflowauth-backend ragflowauth-frontend 2>/dev/null || true",
+    )
+    if not ok:
+        return False, f"stop/rm failed: {out}"
+
+    run_front = (
+        "docker run -d "
+        "--name ragflowauth-frontend "
+        f"--network {network_name} "
+        f"-p {frontend_port}:80 "
+        "--restart unless-stopped "
+        f"{frontend_image}"
+    )
+    log(f"[BOOTSTRAP] run frontend: {run_front}")
+    ok, out = _ssh_cmd(server_ip, run_front)
+    if not ok:
+        return False, f"run frontend failed: {out}"
+    if out:
+        log(f"[BOOTSTRAP] frontend started: {(out or '').strip()}")
+
+    run_back = (
+        "docker run -d "
+        "--name ragflowauth-backend "
+        f"--network {network_name} "
+        f"-p {backend_port}:{backend_port} "
+        "-e TZ=Asia/Shanghai "
+        "-e HOST=0.0.0.0 "
+        f"-e PORT={backend_port} "
+        "-e DATABASE_PATH=data/auth.db "
+        "-e UPLOAD_DIR=data/uploads "
+        f"-v {app_dir}/data:/app/data "
+        f"-v {app_dir}/uploads:/app/uploads "
+        f"-v {app_dir}/ragflow_config.json:/app/ragflow_config.json:ro "
+        f"-v {app_dir}/ragflow_compose:/app/ragflow_compose:ro "
+        f"-v {app_dir}/backups:/app/data/backups "
+        "-v /mnt/replica:/mnt/replica "
+        "-v /var/run/docker.sock:/var/run/docker.sock:ro "
+        "--restart unless-stopped "
+        f"{backend_image}"
+    )
+    if has_backup_cfg:
+        run_back = run_back.replace(
+            f"-v {app_dir}/backups:/app/data/backups ",
+            f"-v {app_dir}/backup_config.json:/app/backup_config.json:ro -v {app_dir}/backups:/app/data/backups ",
+        )
+    log(f"[BOOTSTRAP] run backend: {run_back}")
+    ok, out = _ssh_cmd(server_ip, run_back)
+    if not ok:
+        return False, f"run backend failed: {out}"
+    if out:
+        log(f"[BOOTSTRAP] backend started: {(out or '').strip()}")
 
     ok, out = _wait_prod_ready(prod_ip=server_ip, healthcheck_url=healthcheck_url)
     if not ok:

@@ -23,6 +23,8 @@ class TestReleasePublishUnit(unittest.TestCase):
         ), patch.object(release_publish, "_ensure_network", return_value=(True, "")), patch.object(
             release_publish, "_wait_prod_ready", return_value=(True, "OK")
         ), patch.object(
+            release_publish, "preflight_check_ragflow_base_url", return_value=True
+        ), patch.object(
             release_publish, "get_server_version_info"
         ) as mock_ver:
             mock_ver.side_effect = [
@@ -61,8 +63,8 @@ class TestReleasePublishUnit(unittest.TestCase):
         self.assertTrue(calls, "expected scp calls")
         # First call: tar transfer should use scp -3 and fixed ips.
         self.assertEqual(calls[0][0:2], ["scp", "-3"])
-        self.assertIn(f"{DEFAULT_SERVER_USER}@{TEST_SERVER_IP}:", calls[0][2])
-        self.assertIn(f"{DEFAULT_SERVER_USER}@{PROD_SERVER_IP}:", calls[0][3])
+        self.assertIn(f"{DEFAULT_SERVER_USER}@{TEST_SERVER_IP}:", calls[0][-2])
+        self.assertIn(f"{DEFAULT_SERVER_USER}@{PROD_SERVER_IP}:", calls[0][-1])
 
     def test_run_mode_when_no_compose(self) -> None:
         calls: list[list[str]] = []
@@ -82,6 +84,8 @@ class TestReleasePublishUnit(unittest.TestCase):
             release_publish, "_ensure_network", return_value=(True, "")
         ), patch.object(
             release_publish, "_wait_prod_ready", return_value=(True, "OK")
+        ), patch.object(
+            release_publish, "preflight_check_ragflow_base_url", return_value=True
         ), patch.object(
             release_publish, "get_server_version_info"
         ) as mock_ver:
@@ -121,3 +125,32 @@ class TestReleasePublishUnit(unittest.TestCase):
         # Only tar transfer via scp -3 should happen (single scp call).
         scp_calls = [c for c in calls if c and c[0] == "scp"]
         self.assertEqual(len(scp_calls), 1, scp_calls)
+        self.assertEqual(scp_calls[0][0:2], ["scp", "-3"])
+
+    def test_preflight_blocks_publish(self) -> None:
+        with patch.object(release_publish, "preflight_check_ragflow_base_url", return_value=False), patch.object(
+            release_publish, "get_server_version_info"
+        ) as mock_ver:
+            mock_ver.side_effect = [
+                release_publish.ServerVersionInfo(
+                    server_ip=PROD_SERVER_IP,
+                    backend_image="ragflowauth-backend:prev",
+                    frontend_image="ragflowauth-frontend:prev",
+                    compose_path="",
+                    env_path="",
+                    compose_sha256="",
+                    env_sha256="",
+                ),
+                release_publish.ServerVersionInfo(
+                    server_ip=TEST_SERVER_IP,
+                    backend_image="ragflowauth-backend:testtag",
+                    frontend_image="ragflowauth-frontend:testtag",
+                    compose_path="",
+                    env_path="",
+                    compose_sha256="",
+                    env_sha256="",
+                ),
+            ]
+            res = release_publish.publish_from_test_to_prod(version="v3")
+            self.assertFalse(res.ok)
+            self.assertIn("Preflight check failed", res.log)

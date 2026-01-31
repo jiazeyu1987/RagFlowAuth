@@ -1,85 +1,115 @@
-# 发布（测试 -> 正式）故障复盘与经验教训
+﻿# 发布/同步/还原：问题复盘与经验教训（必读）
 
-更新日期：2026-01-31
+更新日期：2026-02-01
 
-本文记录一次“工具发布按钮”失败的根因与改进点，避免后续改代码/改环境后导致发布流程不可用或难以排障。
+本文记录近期在“发布镜像 / 同步数据 / 还原数据”链路里遇到的真实问题、根因与修复方式，目的是：
+- 避免未来改代码/改环境导致链路失效
+- 一旦失败，能通过日志快速定位到具体一步、具体原因
 
-## 1) 现象（Symptoms）
+适用环境：
+- TEST：`172.30.30.58`
+- PROD：`172.30.30.57`
+- RagflowAuth：`ragflowauth-backend` / `ragflowauth-frontend`
+- RAGFlow compose：`/opt/ragflowauth/ragflow_compose`
 
-在工具的“发布”页签点击“从测试发布到正式”后失败，日志提示：
+工具本地日志：`tool/maintenance/tool_log.log`
 
-- 找不到测试服务器上的 `docker-compose.yml`（例如：`/opt/ragflowauth/docker-compose.yml: No such file or directory`）
-- Docker 容器上缺失 Docker Compose label（`com.docker.compose.project.config_files` / `working_dir` 为空）
-- Windows OpenSSH 偶发噪声：`close - IO is still pending on closed socket...`（会污染输出，影响定位）
+---
 
-## 2) 根因（Root Cause）
+## 1) 问题：发布（测试 -> 正式，镜像）失败：找不到 docker-compose / compose label 为空
 
-### 2.1 测试服务器并不是用 docker compose 启动
+### 现象
+- 工具日志提示找不到 `/opt/ragflowauth/docker-compose.yml` 或 `.yaml`
+- 或者 `ragflowauth-backend` 容器没有 `com.docker.compose.*` labels（`config_files`/`working_dir` 为空）
 
-测试服务器上的 `ragflowauth-backend` / `ragflowauth-frontend` 容器是通过 **`docker run`**（工具的“快速部署/快速重启”）启动的，而不是通过 `docker compose up -d` 启动：
+### 根因
+- 服务器上的 RagflowAuth 可能不是用 `docker compose` 启动，而是 `docker run`（或 Portainer 非 stack/compose 方式）
+- 因此无法依赖 compose 文件路径/label 来做发布
 
-- 因此容器没有 `com.docker.compose.*` 的 label
-- 也就无法“自动推导”compose 文件路径
-- 同时服务器上也可能根本不存在 `/opt/ragflowauth/docker-compose.yml`
+### 解决策略（工具侧）
+工具必须支持 **docker run 发布模式**：
+1) 在 TEST 读取当前运行镜像 tag（通过 `docker inspect`）
+2) `docker save` 导出镜像 tar
+3) `scp -3` 直接 TEST -> PROD 传输 tar（不落地本机）
+4) PROD `docker load`
+5) 在 PROD 用 `docker run` 方式重建容器（从现有容器 `docker inspect` 复刻参数）
 
-结论：**发布流程如果强依赖 compose 文件，在 docker run 启动模式下必然失败。**
+### 关键经验
+- “compose 模式”是锦上添花；生产环境常见会出现“没有 compose 文件/label”的情况，发布链路必须能在 run-mode 下工作
 
-### 2.2 初版发布逻辑对环境做了错误假设
+---
 
-初版“发布”功能默认认为：
+## 2) 问题：PROD 上 ragflow_compose-ragflow-cpu-1 启动后很快退出/无法访问 ES（No route to host）
 
-- 测试服务器上存在固定位置的 `docker-compose.yml`、`.env`
-- 并以此作为“发布到正式的配置来源”
+### 现象
+- `ragflow_compose-ragflow-cpu-1` 容器启动后退出（或 inspect 看到网络 Endpoint/IP 异常）
+- 容器内访问 `http://es01:9200` 报 `No route to host` / 超时
+- 但宿主机上 `curl http://<容器IP>:9200` 可能是 OK（不走 docker FORWARD 链）
 
-但实际环境是 docker run 模式，配置并不在 compose 文件中，而是隐含在容器的 `docker inspect` 结果里（端口、挂载、环境变量、网络、restart 策略等）。
+### 根因（已验证）
+PROD 机器存在残留的防火墙 nft 规则（`nft table inet firewalld`），即使 `firewalld` 服务不在运行，规则仍可能挂在 forward hook 上生效：
+- 容器间通信依赖 Linux `FORWARD`，被这套规则拦截后，会导致 docker bridge 内部转发失败
+- 表现就是容器间互相“路由不通”，RAGFlow 访问 ES/Redis/MySQL 失败
 
-## 3) 改进（Fix & Improvements）
+为什么 TEST 没问题但 PROD 有问题？
+- 两台机器防火墙历史状态不一致：PROD 曾启用过 firewalld（或被系统/运维工具配置过），残留 nft 规则未清理；TEST 没有这类残留
 
-### 3.1 发布流程支持“docker run 发布模式”
+### 修复（推荐方案 A：一次性根除干扰）
+在 PROD 执行（谨慎操作，建议先备份规则）：
+1) 备份：`nft list ruleset > /root/nft.ruleset.bak.<时间戳>`
+2) 禁用/屏蔽服务：`systemctl disable --now firewalld; systemctl mask firewalld`
+3) 删除残留表（如存在）：`nft delete table inet firewalld`（以及可能的 `ip6 firewalld`）
 
-当无法定位 compose 时，发布流程应切换为 “docker run 模式”：
+### 验证方法（必须做）
+进入 ragflow-cpu 容器执行：
+- `curl -sS -m 2 http://es01:9200/ >/dev/null && echo ES_OK || echo ES_FAIL`
+并在宿主机确认 ragflow http 可用（本项目默认容器暴露到 80）：
+- `curl -fsS http://127.0.0.1:80 >/dev/null && echo RAGFLOW_OK`
 
-1) 在测试服务器 `docker save` 当前运行的前/后端镜像（确保版本一致）
-2) 通过 `scp -3` 把镜像 tar 直接转发到正式服务器（不落盘到本机）
-3) 正式服务器 `docker load`
-4) 用正式服务器当前容器的 `docker inspect` 生成等价的 `docker run` 参数
-5) 删除旧容器后，用测试镜像 tag 重建容器
-6) 做 healthcheck（例如 `http://127.0.0.1:8001/health`）通过才算成功
+---
 
-这样发布不再依赖 compose 文件是否存在。
+## 3) 问题：测试环境“文档浏览/知识库”读到了生产数据（或生产读测试）
 
-### 3.2 日志必须能“单步定位失败点”
+### 现象
+- 测试服务器上的前端/工具，读取知识库时看到的是生产服务器的数据
 
-发布日志至少应包含：
+### 根因
+- `/opt/ragflowauth/ragflow_config.json` 的 `base_url` 指向了错误的 RAGFlow（例如测试指向生产 `http://172.30.30.57:9380`）
 
-- 目标信息：TEST/PROD IP、版本号（tag）、检测到的镜像名
-- 关键路径：检测到的 `compose_path` / `env_path`（若存在）
-- 每一步执行到哪（step N/M）
-- 每个关键动作的参数（如 scp 源/目标路径、最终 docker run 命令）
-- 失败时的原始输出（stdout/stderr），并过滤已知噪声行
+### 解决策略（强制防呆）
+发布/还原链路必须强制校验与修正：
+- 发布到 TEST / 还原到 TEST：确保 `base_url` 包含 `172.30.30.58`（或 localhost）
+- 发布到 PROD / 同步数据到 PROD：确保 `base_url` 包含 `172.30.30.57`（或 localhost）
 
-建议统一以 `[ReleaseFlow] ...` 的形式落盘到 `tool/maintenance/tool_log.log`，方便第二天追查。
+关键经验：
+- 这个问题不是“发布镜像/复制数据”本身的问题，而是“配置跨环境污染”，必须在工具链路中自动纠正
 
-### 3.3 未来建议：统一运行方式（推荐）
+---
 
-为了让“发布/回滚/可追溯”更简单、更可靠，建议长期将测试/正式统一到 docker compose（或 Portainer Stack）：
+## 4) 问题：删除 PROD 的 ragflowauth-backend/frontend 后，镜像发布无法继续
 
-- 让容器带有 `com.docker.compose.project.config_files` 等 label
-- 并把 compose 文件固定存放在 `/opt/ragflowauth/docker-compose.yml`（或其它固定路径，但必须一致且可读）
+### 现象
+- 工具提示：`PROD containers not found (ragflowauth-backend/frontend). Cannot recreate safely.`
 
-这样发布可以直接“复制 compose + 镜像”进行重启，变更点更清晰。
+### 根因
+- run-mode 的“复刻发布”需要从 PROD 当前容器 `docker inspect` 读取端口/挂载/网络等参数
+- 删除容器后，无法复刻
 
-## 4) 排障 Checklist（失败时先看这里）
+### 解决策略（工具侧：bootstrap 首次部署）
+当 PROD 不存在 `ragflowauth-backend/frontend` 时，走 bootstrap：
+- 依赖固定目录规范（`/opt/ragflowauth/...`）创建容器
+- 仍然使用“从 TEST docker save -> scp -3 -> docker load”的镜像来源，保证版本一致
 
-1) 测试服务器容器启动方式是什么？
-   - 如果 label 为空，基本就是 docker run（或非 compose 启动）
-2) 测试服务器是否存在 compose 文件？
-   - `ls -l /opt/ragflowauth/docker-compose.yml`（如不存在不要再走 compose 发布模式）
-3) 正式服务器当前容器是否存在？
-   - `docker ps | grep ragflowauth-`（如果容器名不一致，发布脚本需要同步修改）
-4) 正式服务器 network 是否存在？
-   - `docker network ls | grep ragflowauth`（如果 run 模式依赖特定 network）
-5) 健康检查失败时看什么？
-   - `docker logs ragflowauth-backend --tail 200`
-   - `docker ps -a | grep ragflowauth`
+---
 
+## 5) 关键原则：数据同步/还原必须“停干净再做快照”
+
+原因：
+- volumes/db 快照如果在服务仍写入时进行，会导致数据不一致（最坏情况：ES/MySQL/MinIO/Redis 之间版本不一致）
+
+强制要求：
+- 数据发布（测试数据 -> 正式）在 TEST 做快照前：必须确认目标服务容器都已停止
+- 数据发布在 PROD apply 前：同样必须确认已停止
+
+说明：
+- `node-exporter`、`portainer` 不属于业务数据链路，不需要停止
