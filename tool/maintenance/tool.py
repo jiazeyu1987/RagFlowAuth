@@ -21,74 +21,48 @@ import tempfile
 from pathlib import Path
 from datetime import datetime
 
-# ==================== 日志配置 ====================
-# 日志文件路径（与 tool.py 同目录）
-LOG_FILE = Path(__file__).parent / "tool_log.log"
+# Allow importing `tool.*` modules when this file is executed directly.
+if __package__ is None or __package__ == "":
+    repo_root = Path(__file__).resolve().parents[2]
+    if str(repo_root) not in sys.path:
+        sys.path.insert(0, str(repo_root))
 
-# 创建 logger
-logger = logging.getLogger("RagflowAuthTool")
-logger.setLevel(logging.DEBUG)
-
-# 文件处理器（UTF-8 编码，自动换行）
-file_handler = logging.FileHandler(LOG_FILE, encoding='utf-8', mode='a')
-file_handler.setLevel(logging.DEBUG)
-
-# 控制台处理器
-console_handler = logging.StreamHandler(sys.stdout)
-console_handler.setLevel(logging.INFO)
-
-# 日志格式
-formatter = logging.Formatter(
-    '%(asctime)s [%(levelname)s] %(message)s',
-    datefmt='%Y-%m-%d %H:%M:%S'
+from tool.maintenance.core.constants import (
+    CONFIG_FILE,
+    DEFAULT_WINDOWS_SHARE_HOST,
+    DEFAULT_WINDOWS_SHARE_NAME,
+    DEFAULT_WINDOWS_SHARE_PASSWORD,
+    DEFAULT_WINDOWS_SHARE_USERNAME,
+    LOG_FILE,
+    MOUNT_POINT,
+    PROD_SERVER_IP,
+    REPLICA_TARGET_DIR,
+    TEST_SERVER_IP,
 )
-file_handler.setFormatter(formatter)
-console_handler.setFormatter(formatter)
+from tool.maintenance.core.environments import ENVIRONMENTS
+from tool.maintenance.core.logging_setup import logger, log_to_file
+from tool.maintenance.core.server_config import ServerConfig
+from tool.maintenance.core.ssh_executor import SSHExecutor
+from tool.maintenance.features.docker_cleanup_images import cleanup_docker_images as feature_cleanup_docker_images
+from tool.maintenance.features.docker_containers_with_mounts import (
+    show_containers_with_mounts as feature_show_containers_with_mounts,
+)
+from tool.maintenance.features.windows_share_mount import mount_windows_share as feature_mount_windows_share
+from tool.maintenance.features.windows_share_unmount import unmount_windows_share as feature_unmount_windows_share
+from tool.maintenance.features.windows_share_status import check_mount_status as feature_check_mount_status
+from tool.maintenance.features.release_publish import (
+    get_server_version_info as feature_get_server_version_info,
+    publish_from_test_to_prod as feature_publish_from_test_to_prod,
+)
+from tool.maintenance.features.release_publish_local_to_test import (
+    publish_from_local_to_test as feature_publish_from_local_to_test,
+)
 
-# 添加处理器
-logger.addHandler(file_handler)
-logger.addHandler(console_handler)
-
-# 防止重复添加
-logger.propagate = False
-
-def log_to_file(message, level="INFO"):
-    """写入日志到文件的辅助函数"""
-    if level == "ERROR":
-        logger.error(message)
-    elif level == "WARNING":
-        logger.warning(message)
-    elif level == "DEBUG":
-        logger.debug(message)
-    else:
-        logger.info(message)
-
-# ==================== 配置文件路径 ====================
-CONFIG_FILE = Path.home() / ".ragflowauth_tool_config.txt"
-
-# ==================== 环境配置 ====================
-ENVIRONMENTS = {
-    "正式服务器": {
-        "ip": "172.30.30.57",
-        "user": "root",
-        "description": "生产环境"
-    },
-    "测试服务器": {
-        "ip": "172.30.30.58",
-        "user": "root",
-        "description": "测试环境（密码：KDLyx2021）"
-    }
-}
-
-# ==================== 固定 Windows 共享（不弹框） ====================
-# 说明：用户环境固定时，可在此处提供默认值；密码不写死，优先从 ~/.ragflowauth_tool_config.txt 读取。
-DEFAULT_WINDOWS_SHARE_HOST = "192.168.112.72"
-DEFAULT_WINDOWS_SHARE_NAME = "backup"
-DEFAULT_WINDOWS_SHARE_USERNAME = "BJB110"
-DEFAULT_WINDOWS_SHARE_PASSWORD = "showgood87"
+# （日志配置已迁移到 tool.maintenance.core.logging_setup）
+# （配置/环境/固定共享常量已迁移到 tool.maintenance.core.*）
 
 
-class ServerConfig:
+class _LegacyServerConfig:
     """服务器配置"""
 
     def __init__(self):
@@ -161,7 +135,7 @@ class ServerConfig:
         return False
 
 
-class SSHExecutor:
+class _LegacySSHExecutor:
     """SSH 命令执行器"""
 
     def __init__(self, ip, user):
@@ -491,6 +465,7 @@ class RagflowAuthTool:
         self.create_web_links_tab()
         self.create_backup_tab()
         self.create_restore_tab()
+        self.create_release_tab()
         self.create_backup_files_tab()  # 新增：备份文件管理
         self.create_logs_tab()
 
@@ -699,15 +674,15 @@ class RagflowAuthTool:
         )
         web_btn.grid(row=2, column=0, pady=10, padx=10)
 
-        # Web 管理说明
-        web_desc = ttk.Label(
+        # Web 管理说明（动态显示当前服务器IP）
+        self.web_desc_label = ttk.Label(
             tab,
-            text="Web 管理界面 - RagflowAuth 后台管理\n"
-                 "访问 https://172.30.30.57:9090/ 进行后台管理",
+            text=f"Web 管理界面 - RagflowAuth 后台管理\n"
+                 f"访问 https://{self.config.ip}:9090/ 进行后台管理",
             justify=tk.CENTER,
             foreground="gray"
         )
-        web_desc.pack(pady=(0, 20))
+        self.web_desc_label.pack(pady=(0, 20))
 
         # 手动输入 URL
         url_frame = ttk.LabelFrame(tab, text="自定义 URL", padding=10)
@@ -902,6 +877,246 @@ class RagflowAuthTool:
         self.restore_images_exists = False
         self.restore_volumes_exists = False
         self.selected_restore_folder = None
+
+    def create_release_tab(self):
+        """发布：包含两个子页签（本机->测试、测试->正式）"""
+        tab = ttk.Frame(self.notebook)
+        self.notebook.add(tab, text="  发布  ")
+
+        title = ttk.Label(tab, text="发布到生产（测试 -> 正式）", font=("Arial", 14, "bold"))
+        title.pack(pady=10)
+
+        # Unified version input for both publish flows
+        version_frame = ttk.Frame(tab)
+        version_frame.pack(fill=tk.X, padx=20, pady=(0, 8))
+        ttk.Label(version_frame, text="版本号（留空自动生成）:").pack(side=tk.LEFT)
+        self.release_version_var = tk.StringVar(value="")
+        ttk.Entry(version_frame, textvariable=self.release_version_var, width=28).pack(side=tk.LEFT, padx=6)
+        ttk.Button(version_frame, text="生成版本号", command=self._release_generate_version).pack(side=tk.LEFT, padx=6)
+
+        desc = ttk.Label(
+            tab,
+            text=(
+                "本页包含两个发布流：\n"
+                f"- 本机 -> 测试：把本机构建的镜像发布到测试服务器 {TEST_SERVER_IP}\n"
+                f"- 测试 -> 正式：把测试服务器当前运行的镜像发布到正式服务器 {PROD_SERVER_IP}\n"
+            ),
+            foreground="gray",
+            justify=tk.LEFT,
+        )
+        desc.pack(pady=(0, 10), padx=20, anchor=tk.W)
+
+        # Sub-tabs
+        self.release_notebook = ttk.Notebook(tab)
+        self.release_notebook.pack(fill=tk.BOTH, expand=True, padx=10, pady=(0, 10))
+
+        self._create_release_local_to_test_tab()
+        self._create_release_test_to_prod_tab()
+
+        # Defer initial refresh until after the UI is fully initialized (status_bar created).
+        self.root.after(0, self.refresh_release_versions)
+
+    def _release_generate_version(self):
+        self.release_version_var.set(time.strftime("%Y%m%d_%H%M%S", time.localtime()))
+
+    def _release_version_arg(self) -> str | None:
+        v = (self.release_version_var.get() or "").strip()
+        return v or None
+
+    def _create_release_local_to_test_tab(self):
+        tab = ttk.Frame(self.release_notebook)
+        self.release_notebook.add(tab, text="本机 -> 测试")
+
+        button_frame = ttk.Frame(tab)
+        button_frame.pack(fill=tk.X, padx=20, pady=(10, 10))
+        ttk.Button(button_frame, text="刷新测试版本", command=self.refresh_release_test_versions).pack(side=tk.LEFT, padx=5)
+        ttk.Button(button_frame, text="发布本机到测试", command=self.publish_local_to_test).pack(side=tk.LEFT, padx=5)
+
+        info_frame = ttk.Frame(tab)
+        info_frame.pack(fill=tk.BOTH, expand=False, padx=20, pady=(0, 10))
+        before = ttk.LabelFrame(info_frame, text=f"测试发布前版本 ({TEST_SERVER_IP})", padding=10)
+        after = ttk.LabelFrame(info_frame, text=f"测试发布后版本 ({TEST_SERVER_IP})", padding=10)
+        before.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 10))
+        after.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        self.release_test_before_text = scrolledtext.ScrolledText(before, height=10, width=60)
+        self.release_test_before_text.pack(fill=tk.BOTH, expand=True)
+        self.release_test_after_text = scrolledtext.ScrolledText(after, height=10, width=60)
+        self.release_test_after_text.pack(fill=tk.BOTH, expand=True)
+
+        log_frame = ttk.LabelFrame(tab, text="发布日志（本机 -> 测试）", padding=10)
+        log_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=(0, 10))
+        self.release_local_log_text = scrolledtext.ScrolledText(log_frame, height=18)
+        self.release_local_log_text.pack(fill=tk.BOTH, expand=True)
+
+    def _create_release_test_to_prod_tab(self):
+        tab = ttk.Frame(self.release_notebook)
+        self.release_notebook.add(tab, text="测试 -> 正式")
+
+        button_frame = ttk.Frame(tab)
+        button_frame.pack(fill=tk.X, padx=20, pady=(10, 10))
+        ttk.Button(button_frame, text="刷新版本信息", command=self.refresh_release_versions).pack(side=tk.LEFT, padx=5)
+        ttk.Button(button_frame, text="从测试发布到正式", command=self.publish_test_to_prod).pack(side=tk.LEFT, padx=5)
+
+        info_frame = ttk.Frame(tab)
+        info_frame.pack(fill=tk.BOTH, expand=False, padx=20, pady=(0, 10))
+
+        left = ttk.LabelFrame(info_frame, text=f"测试版本信息 ({TEST_SERVER_IP})", padding=10)
+        right = ttk.LabelFrame(info_frame, text=f"正式版本信息 ({PROD_SERVER_IP})", padding=10)
+        left.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 10))
+        right.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        self.release_test_text = scrolledtext.ScrolledText(left, height=10, width=60)
+        self.release_test_text.pack(fill=tk.BOTH, expand=True)
+        self.release_prod_text = scrolledtext.ScrolledText(right, height=10, width=60)
+        self.release_prod_text.pack(fill=tk.BOTH, expand=True)
+
+        log_frame = ttk.LabelFrame(tab, text="发布日志（测试 -> 正式）", padding=10)
+        log_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=(0, 10))
+        self.release_log_text = scrolledtext.ScrolledText(log_frame, height=18)
+        self.release_log_text.pack(fill=tk.BOTH, expand=True)
+
+    def _format_version_info(self, info) -> str:
+        if not info:
+            return ""
+        return (
+            f"server: {info.server_ip}\n"
+            f"backend_image: {info.backend_image}\n"
+            f"frontend_image: {info.frontend_image}\n"
+            f"compose_path: {info.compose_path}\n"
+            f"env_path: {info.env_path}\n"
+            f"docker-compose.yml sha256: {info.compose_sha256}\n"
+            f".env sha256: {info.env_sha256}\n"
+        )
+
+    def refresh_release_versions(self):
+        def worker():
+            try:
+                if hasattr(self, "status_bar"):
+                    self.status_bar.config(text="刷新版本信息...")
+                test_info = feature_get_server_version_info(server_ip=TEST_SERVER_IP)
+                prod_info = feature_get_server_version_info(server_ip=PROD_SERVER_IP)
+
+                if hasattr(self, "release_test_text"):
+                    self.release_test_text.delete("1.0", tk.END)
+                    self.release_test_text.insert(tk.END, self._format_version_info(test_info))
+
+                if hasattr(self, "release_prod_text"):
+                    self.release_prod_text.delete("1.0", tk.END)
+                    self.release_prod_text.insert(tk.END, self._format_version_info(prod_info))
+
+                if hasattr(self, "status_bar"):
+                    self.status_bar.config(text="刷新版本信息：成功")
+            except Exception as e:
+                if hasattr(self, "status_bar"):
+                    self.status_bar.config(text="刷新版本信息：失败")
+                log_to_file(f"[Release] Refresh version failed: {e}", "ERROR")
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def refresh_release_test_versions(self):
+        def worker():
+            try:
+                if hasattr(self, "status_bar"):
+                    self.status_bar.config(text="刷新测试版本...")
+                test_info = feature_get_server_version_info(server_ip=TEST_SERVER_IP)
+                if hasattr(self, "release_test_before_text"):
+                    self.release_test_before_text.delete("1.0", tk.END)
+                    self.release_test_before_text.insert(tk.END, self._format_version_info(test_info))
+                if hasattr(self, "release_test_after_text"):
+                    self.release_test_after_text.delete("1.0", tk.END)
+                if hasattr(self, "status_bar"):
+                    self.status_bar.config(text="刷新测试版本：成功")
+            except Exception as e:
+                if hasattr(self, "status_bar"):
+                    self.status_bar.config(text="刷新测试版本：失败")
+                log_to_file(f"[Release] Refresh test version failed: {e}", "ERROR")
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def publish_local_to_test(self):
+        if not messagebox.askyesno(
+            "确认发布",
+            f"确认要从本机发布到测试服务器 {TEST_SERVER_IP} 吗？\n"
+            "注意：这会重启测试环境容器。",
+        ):
+            return
+
+        def worker():
+            try:
+                if hasattr(self, "release_local_log_text"):
+                    self.release_local_log_text.delete("1.0", tk.END)
+                if hasattr(self, "status_bar"):
+                    self.status_bar.config(text="发布本机->测试中...")
+                log_to_file("[Release] Start publish local->test", "INFO")
+
+                result = feature_publish_from_local_to_test(version=self._release_version_arg())
+                if hasattr(self, "release_local_log_text"):
+                    self.release_local_log_text.insert(tk.END, (result.log or "") + "\n")
+
+                # Show before/after on test
+                if result.version_before and hasattr(self, "release_test_before_text"):
+                    self.release_test_before_text.delete("1.0", tk.END)
+                    self.release_test_before_text.insert(tk.END, self._format_version_info(result.version_before))
+                if result.version_after and hasattr(self, "release_test_after_text"):
+                    self.release_test_after_text.delete("1.0", tk.END)
+                    self.release_test_after_text.insert(tk.END, self._format_version_info(result.version_after))
+
+                if result.ok:
+                    for line in (result.log or "").splitlines():
+                        log_to_file(f"[ReleaseFlow] {line}", "INFO")
+                    log_to_file("[Release] Publish local->test succeeded", "INFO")
+                    if hasattr(self, "status_bar"):
+                        self.status_bar.config(text="发布本机->测试：成功")
+                else:
+                    for line in (result.log or "").splitlines():
+                        log_to_file(f"[ReleaseFlow] {line}", "ERROR")
+                    log_to_file("[Release] Publish local->test failed", "ERROR")
+                    if hasattr(self, "status_bar"):
+                        self.status_bar.config(text="发布本机->测试：失败")
+            except Exception as e:
+                if hasattr(self, "release_local_log_text"):
+                    self.release_local_log_text.insert(tk.END, f"[ERROR] {e}\n")
+                log_to_file(f"[Release] Publish local->test exception: {e}", "ERROR")
+                if hasattr(self, "status_bar"):
+                    self.status_bar.config(text="发布本机->测试：失败")
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def publish_test_to_prod(self):
+        if not messagebox.askyesno(
+            "确认发布",
+            f"确认要从测试服务器 {TEST_SERVER_IP} 发布到正式服务器 {PROD_SERVER_IP} 吗？\n"
+            "注意：这会重启正式环境容器，请在低峰期执行。",
+        ):
+            return
+
+        def worker():
+            try:
+                self.release_log_text.delete("1.0", tk.END)
+                self.status_bar.config(text="发布中...")
+                log_to_file("[Release] Start publish test->prod", "INFO")
+
+                result = feature_publish_from_test_to_prod(version=self._release_version_arg())
+                self.release_log_text.insert(tk.END, (result.log or "") + "\n")
+
+                if result.ok:
+                    for line in (result.log or "").splitlines():
+                        log_to_file(f"[ReleaseFlow] {line}", "INFO")
+                    log_to_file("[Release] Publish succeeded", "INFO")
+                    self.status_bar.config(text="发布：成功")
+                else:
+                    for line in (result.log or "").splitlines():
+                        log_to_file(f"[ReleaseFlow] {line}", "ERROR")
+                    log_to_file("[Release] Publish failed", "ERROR")
+                    self.status_bar.config(text="发布：失败")
+
+                self.refresh_release_versions()
+            except Exception as e:
+                self.release_log_text.insert(tk.END, f"[ERROR] {e}\n")
+                log_to_file(f"[Release] Publish exception: {e}", "ERROR")
+                self.status_bar.config(text="发布：失败")
+
+        threading.Thread(target=worker, daemon=True).start()
 
     def create_logs_tab(self):
         """创建日志选项卡"""
@@ -1276,47 +1491,19 @@ class RagflowAuthTool:
         print(f"[MOUNT] 服务器: {self.config.user}@{self.config.ip}", flush=True)
         print(f"[MOUNT] Windows 共享: //{host}/{share}", flush=True)
         print(f"[MOUNT] 共享用户: {user}", flush=True)
-        print(f"[MOUNT] 挂载点: /mnt/replica", flush=True)
-        print(f"[MOUNT] 目标目录: /mnt/replica/RagflowAuth", flush=True)
+        print(f"[MOUNT] 挂载点: {MOUNT_POINT}", flush=True)
+        print(f"[MOUNT] 目标目录: {REPLICA_TARGET_DIR}", flush=True)
         print(f"{'='*60}\n", flush=True)
 
         def do_mount():
             try:
-                import subprocess
-                import os
-                log_content = ""
-
-                script_path = os.path.join(os.path.dirname(__file__), "scripts", "mount-windows-share.ps1")
-
-                print(f"[MOUNT] 调用 PowerShell 脚本: {script_path}", flush=True)
                 self.status_bar.config(text="正在挂载 Windows 共享...")
                 self.root.update()
 
-                # 执行 PowerShell 脚本
-                result = subprocess.run(
-                    [
-                        "powershell", "-ExecutionPolicy", "Bypass", "-File", script_path,
-                        "-ServerHost", self.config.ip,
-                        "-ServerUser", self.config.user,
-                        "-WindowsHost", host,
-                        "-ShareName", share,
-                        "-ShareUsername", user,
-                        "-SharePassword", pwd,
-                    ],
-                    capture_output=True,
-                    text=True,
-                    encoding='utf-8',
-                    errors='replace',
-                    timeout=180  # 3分钟超时
-                )
+                result = feature_mount_windows_share(server_host=self.config.ip, server_user=self.config.user)
+                log_content = result.log_content or result.stderr or ""
 
-                # 读取日志文件
-                log_file = str(Path(tempfile.gettempdir()) / "mount_windows_share.log")
-                if os.path.exists(log_file):
-                    with open(log_file, 'r', encoding='utf-8') as f:
-                        log_content = f.read()
-
-                if result.returncode == 0:
+                if result.ok:
                     print("[MOUNT] ✓ 挂载成功", flush=True)
                     self.root.after(0, lambda: self.status_bar.config(text="挂载成功"))
                     self.root.after(0, lambda: self.show_text_window("成功", f"[GREEN]Windows 共享挂载成功！[/GREEN]\n\n{log_content}"))
@@ -1466,42 +1653,18 @@ class RagflowAuthTool:
         print(f"\n{'='*60}", flush=True)
         print("[UNMOUNT] 卸载 Windows 共享", flush=True)
         print(f"[UNMOUNT] 服务器: {self.config.user}@{self.config.ip}", flush=True)
-        print("[UNMOUNT] 挂载点: /mnt/replica", flush=True)
+        print(f"[UNMOUNT] 挂载点: {MOUNT_POINT}", flush=True)
         print(f"{'='*60}\n", flush=True)
 
         def do_unmount():
             try:
-                import subprocess
-                import os
-                log_content = ""
-
-                script_path = os.path.join(os.path.dirname(__file__), "scripts", "unmount-windows-share.ps1")
-
-                print(f"[UNMOUNT] 调用 PowerShell 脚本: {script_path}", flush=True)
                 self.status_bar.config(text="正在卸载 Windows 共享...")
                 self.root.update()
 
-                # 执行 PowerShell 脚本
-                result = subprocess.run(
-                    [
-                        "powershell", "-ExecutionPolicy", "Bypass", "-File", script_path,
-                        "-ServerHost", self.config.ip,
-                        "-ServerUser", self.config.user,
-                    ],
-                    capture_output=True,
-                    text=True,
-                    encoding='utf-8',
-                    errors='replace',
-                    timeout=120  # 2分钟超时
-                )
+                result = feature_unmount_windows_share(server_host=self.config.ip, server_user=self.config.user)
+                log_content = result.log_content or result.stderr or ""
 
-                # 读取日志文件
-                log_file = str(Path(tempfile.gettempdir()) / "unmount_windows_share.log")
-                if os.path.exists(log_file):
-                    with open(log_file, 'r', encoding='utf-8') as f:
-                        log_content = f.read()
-
-                if result.returncode == 0:
+                if result.ok:
                     print("[UNMOUNT] ✓ 卸载成功", flush=True)
                     self.root.after(0, lambda: self.status_bar.config(text="卸载成功"))
                     self.root.after(0, lambda: self.show_text_window("卸载成功", f"[GREEN]Windows 网络共享已成功卸载！[/GREEN]\n\n{log_content}"))
@@ -1534,64 +1697,39 @@ class RagflowAuthTool:
 
         def do_check():
             try:
-                import subprocess
-                import os
-                log_content = ""
-
-                script_path = os.path.join(os.path.dirname(__file__), "scripts", "check-mount-status.ps1")
-
-                print(f"[CHECK] 调用 PowerShell 脚本: {script_path}", flush=True)
                 self.status_bar.config(text="正在检查挂载状态...")
                 self.root.update()
 
-                # 执行 PowerShell 脚本
-                result = subprocess.run(
-                    [
-                        "powershell", "-ExecutionPolicy", "Bypass", "-File", script_path,
-                        "-ServerHost", self.config.ip,
-                        "-ServerUser", self.config.user,
-                        "-WindowsHost", DEFAULT_WINDOWS_SHARE_HOST,
-                    ],
-                    capture_output=True,
-                    text=True,
-                    encoding='utf-8',
-                    errors='replace',
-                    timeout=120  # 2分钟超时
-                )
+                result = feature_check_mount_status(server_host=self.config.ip, server_user=self.config.user)
+                log_content = result.log_content or result.stderr or ""
 
-                # 读取日志文件
-                log_file = str(Path(tempfile.gettempdir()) / "check_mount_status.log")
-                if os.path.exists(log_file):
-                    with open(log_file, 'r', encoding='utf-8') as f:
-                        log_content = f.read()
+                # 解析挂载状态并在第一行高亮显示（只读取最新的摘要）
+                status_line = ""
+                # 查找最后一条 [Summary] 行
+                lines = log_content.split('\n')
+                for i in range(len(lines) - 1, -1, -1):
+                    line = lines[i].strip()
+                    if "[Summary] Mount Status: Mounted" in line:
+                        status_line = "[GREEN]挂载状态: 已连接 (Mounted)[/GREEN]\n\n"
+                        break
+                    elif "[Summary] Mount Status: Not Mounted" in line:
+                        status_line = "[RED]挂载状态: 未连接 (Not Mounted)[/RED]\n\n"
+                        break
 
-                    # 解析挂载状态并在第一行高亮显示（只读取最新的摘要）
-                    status_line = ""
-                    # 查找最后一条 [Summary] 行
-                    lines = log_content.split('\n')
+                # 如果没找到Summary，尝试查找 Status: 行
+                if not status_line:
                     for i in range(len(lines) - 1, -1, -1):
                         line = lines[i].strip()
-                        if "[Summary] Mount Status: Mounted" in line:
+                        if "Status: Mounted (OK)" in line:
                             status_line = "[GREEN]挂载状态: 已连接 (Mounted)[/GREEN]\n\n"
                             break
-                        elif "[Summary] Mount Status: Not Mounted" in line:
+                        elif "Status: Not Mounted" in line:
                             status_line = "[RED]挂载状态: 未连接 (Not Mounted)[/RED]\n\n"
                             break
 
-                    # 如果没找到Summary，尝试查找 Status: 行
-                    if not status_line:
-                        for i in range(len(lines) - 1, -1, -1):
-                            line = lines[i].strip()
-                            if "Status: Mounted (OK)" in line:
-                                status_line = "[GREEN]挂载状态: 已连接 (Mounted)[/GREEN]\n\n"
-                                break
-                            elif "Status: Not Mounted" in line:
-                                status_line = "[RED]挂载状态: 未连接 (Not Mounted)[/RED]\n\n"
-                                break
-
-                    if status_line:
-                        # 将状态行放在最前面
-                        log_content = status_line + log_content
+                if status_line:
+                    # 将状态行放在最前面
+                    log_content = status_line + log_content
 
                 if result.returncode == 0:
                     print("[CHECK] ✓ 检查完成", flush=True)
@@ -1625,6 +1763,13 @@ class RagflowAuthTool:
             msg = f"[INFO] 环境已切换到: {env_name} ({self.config.user}@{self.config.ip})"
             print(msg)
             log_to_file(msg)
+
+            # 更新Web管理界面说明
+            if hasattr(self, 'web_desc_label'):
+                self.web_desc_label.config(
+                    text=f"Web 管理界面 - RagflowAuth 后台管理\n"
+                         f"访问 https://{self.config.ip}:9090/ 进行后台管理"
+                )
         else:
             messagebox.showerror("错误", f"未知的环境: {env_name}")
 
@@ -2215,6 +2360,23 @@ class RagflowAuthTool:
 
     def cleanup_docker_images(self):
         """清理服务器上未使用的 Docker 镜像（仅保留当前运行的镜像）"""
+        # Refactored: moved core logic into tool.maintenance.features.docker_cleanup_images
+        self.status_bar.config(text="正在清理 Docker 镜像...")
+
+        def execute_refactored():
+            try:
+                if not self.ssh_executor:
+                    self.update_ssh_executor()
+                result = feature_cleanup_docker_images(ssh=self.ssh_executor, log=log_to_file)
+                self.status_bar.config(text="镜像清理完成")
+                self.show_text_window("镜像清理结果", result.summary())
+            except Exception as e:
+                self.status_bar.config(text="镜像清理失败")
+                log_to_file(f"[CLEANUP-IMAGES] ERROR: {e}", "ERROR")
+                self.show_text_window("错误", f"[RED]镜像清理失败：{str(e)}[/RED]")
+
+        threading.Thread(target=execute_refactored, daemon=True).start()
+        return
         self.status_bar.config(text="正在清理 Docker 镜像...")
 
         def execute():
@@ -2377,6 +2539,24 @@ class RagflowAuthTool:
 
     def show_containers_with_mounts(self):
         """显示容器列表和挂载状态"""
+        # Refactored: moved core logic into tool.maintenance.features.docker_containers_with_mounts
+        self.status_bar.config(text="正在获取容器信息...")
+        log_to_file("[CONTAINER-CHECK] 开始检查容器挂载状态")
+
+        def execute_refactored():
+            try:
+                if not self.ssh_executor:
+                    self.update_ssh_executor()
+                result = feature_show_containers_with_mounts(ssh=self.ssh_executor, log=log_to_file)
+                self.status_bar.config(text="容器信息获取完成")
+                self.show_text_window("容器挂载检查", result.text)
+            except Exception as e:
+                self.status_bar.config(text="获取容器信息失败")
+                log_to_file(f"[CONTAINER-CHECK] ERROR: {e}", "ERROR")
+                self.show_text_window("错误", f"[RED]获取容器信息失败：{str(e)}[/RED]")
+
+        threading.Thread(target=execute_refactored, daemon=True).start()
+        return
         self.status_bar.config(text="正在获取容器信息...")
         log_to_file("[CONTAINER-CHECK] 开始检查容器挂载状态")
 
@@ -2761,9 +2941,9 @@ conn.close()
                         result_text += "    2. 导出镜像:\n"
                         result_text += "       docker save ragflowauth-backend:local -o ragflowauth-backend.tar\n\n"
                         result_text += "    3. 传输到服务器:\n"
-                        result_text += "       scp ragflowauth-backend.tar root@172.30.30.57:/tmp/\n\n"
+                        result_text += f"       scp ragflowauth-backend.tar root@{self.config.ip}:/tmp/\n\n"
                         result_text += "    4. 在服务器上加载并重启:\n"
-                        result_text += "       ssh root@172.30.30.57\n"
+                        result_text += f"       ssh root@{self.config.ip}\n"
                         result_text += "       docker load -i /tmp/ragflowauth-backend.tar\n"
                         result_text += "       docker stop ragflowauth-backend\n"
                         result_text += "       docker rm ragflowauth-backend\n"

@@ -100,3 +100,5 @@ desktop.ini
 *.bak
 *.backup
 .nul
+/nul
+/backend/nul
