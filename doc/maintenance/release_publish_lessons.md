@@ -113,3 +113,59 @@ PROD 机器存在残留的防火墙 nft 规则（`nft table inet firewalld`）�
 
 说明：
 - `node-exporter`、`portainer` 不属于业务数据链路，不需要停止
+
+---
+
+## 6) 问题：全量备份勾选“包含 Docker 镜像”，但备份包没有 `images.tar`
+
+### 现象
+- 在“数据安全”页面执行全量备份，并勾选“全量备份包含 Docker 镜像（体积较大，但可离线恢复）”
+- 备份目录 `migration_pack_*/` 内只有：`auth.db`、`volumes/`，没有 `images.tar`
+
+### 根因（架构点，必须记住）
+`docker save -o <path>` **会在“执行 docker CLI 的机器/容器”上写文件**。
+
+当前架构里：
+- `ragflowauth-backend` 容器内运行备份代码
+- 通过挂载的 `/var/run/docker.sock` 调用 Docker（docker CLI 在容器里执行）
+
+因此 `-o` 的输出路径必须是 **容器内可见且可写** 的路径（例如 `/app/data/backups/...`）。
+
+如果错误地把输出路径“转换成宿主机路径”（例如 `/opt/ragflowauth/backups/...`），容器内往往不存在这个目录：
+- 结果：`docker save` 失败，典型报错：`invalid output path: ... no such file or directory`
+- 最终备份包不会生成 `images.tar`
+
+### 修复策略（代码侧）
+- 镜像备份统一使用容器路径（`/app/data/backups/.../images.tar`）
+- “生成成功检查”也必须在容器路径上检查（不要再按 `/opt/...` 去找）
+- 若容器内没有 `docker compose`（常见）：需要 fallback 从 `docker ps -a` 推导镜像列表；注意 RAGFlow compose 的容器名通常是 `ragflow_compose-xxx`（中划线 `-`），不要错误按 `ragflow_compose_`（下划线 `_`）过滤，否则会误判“未找到可备份镜像”并跳过 `images.tar`。
+ - 镜像备份会占用大量磁盘空间：如果备份目录落在服务器根分区（测试机 50GB，常常只剩几 GB），`docker save` 会因为空间不足无法生成 `images.tar`。推荐把目标目录直接改到大盘（例如 `/mnt/replica/RagflowAuth`）。
+
+### 快速定位方法（只要 30 秒）
+在目标服务器执行：
+- `docker logs ragflowauth-backend --tail 200 | grep -E \"Saving .* images|docker save|images.tar\"`
+
+关键日志应该能看到：
+- `Saving <N> images to /app/data/backups/migration_pack_.../images.tar`
+- 如果失败：会打印 docker save 的错误输出
+
+---
+
+## 7) 问题：备份作业轮询 `/api/admin/data-security/backup/jobs/{id}` 偶发 500
+
+### 现象
+- 前端轮询作业状态时报：`GET .../backup/jobs/<id> 500 (Internal Server Error)`
+- 后端日志里可见 `sqlite3.OperationalError: unable to open database file`
+
+### 推断根因（常见于挂载/IO 波动）
+- SQLite 文件在 bind mount 上（`/app/data/auth.db`）
+- 备份/还原/容器重建等动作可能造成短时 IO 抖动或路径短暂不可用
+- 直接抛异常会导致接口返回 500，前端以为“系统崩了”
+
+### 修复策略（代码侧）
+- SQLite 连接增加短暂重试窗口（避免瞬时抖动造成 500）
+- 授权依赖（authz）捕获 sqlite OperationalError，返回 **503**（可重试）而不是 500
+
+### 运维建议
+- 遇到 503/备份卡住时：先看 `ragflowauth-backend` 日志是否有 DB 打开失败/权限问题
+- 同步/还原时尽量减少“频繁 stop/start + 同时轮询”的时间窗口（先做完关键数据步骤再开放 UI 操作）

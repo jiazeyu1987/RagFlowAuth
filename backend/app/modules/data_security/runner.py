@@ -40,8 +40,15 @@ def start_job_if_idle(*, reason: str, full_backup: bool = False) -> int:
         active_job_id = store.get_active_job_id()
         if active_job_id is not None:
             return active_job_id
-        # Lock exists but no active job is visible (e.g. stale); let caller try again later.
-        raise RuntimeError("备份任务已被其他进程占用")
+        # Lock exists but no active job is visible. This commonly happens when a backup is aborted by
+        # restarting the container or killing the process. Try once to clear the stale lock.
+        try:
+            store.release_backup_lock()
+        except Exception:
+            pass
+
+        if not store.try_acquire_backup_lock():
+            raise RuntimeError("备份任务已被其他进程占用")
 
     with _lock:
         if _running_job_id is not None:

@@ -213,6 +213,42 @@ def _docker_inspect(ip: str, container_name: str) -> dict | None:
     return None
 
 
+def _detect_ragflow_images_on_server(*, server_ip: str) -> list[str]:
+    """
+    Best-effort detection of RAGFlow container images on a server.
+
+    We only need image tags (strings) so we can optionally include them in docker save/load.
+    This helps when PROD can't pull from internet (offline) and the local image cache gets deleted/corrupted.
+    """
+    # Prefer containers created by /opt/ragflowauth/ragflow_compose (commonly named ragflow_compose-*).
+    ok, out = _ssh_cmd(
+        server_ip,
+        "docker ps --format '{{.Names}}\t{{.Image}}' | grep -E '^ragflow_compose-.*ragflow' || true",
+    )
+    images: list[str] = []
+    if ok and out:
+        for line in (out or "").splitlines():
+            parts = line.strip().split("\t", 1)
+            if len(parts) == 2:
+                img = parts[1].strip()
+                if img and img not in images:
+                    images.append(img)
+
+    # Fallback: detect common upstream image name if container naming differs.
+    if not images:
+        ok, out = _ssh_cmd(
+            server_ip,
+            "docker ps --format '{{.Image}}' | grep -E '^infiniflow/ragflow:' | head -n 5 || true",
+        )
+        if ok and out:
+            for img in (out or "").splitlines():
+                img = img.strip()
+                if img and img not in images:
+                    images.append(img)
+
+    return images
+
+
 def _ensure_network(ip: str, network_name: str) -> tuple[bool, str]:
     if not network_name or network_name in ("default", "host", "bridge", "none"):
         return True, ""
@@ -366,6 +402,7 @@ def publish_from_test_to_prod(
     prod_ip: str = PROD_SERVER_IP,
     app_dir: str = DEFAULT_REMOTE_APP_DIR,
     healthcheck_url: str = "http://127.0.0.1:8001/health",
+    include_ragflow_images: bool = False,
 ) -> PublishResult:
     """
     Publish the currently-running TEST containers to PROD by:
@@ -399,6 +436,13 @@ def publish_from_test_to_prod(
 
     log(f"TEST={test_ip} PROD={prod_ip} VERSION={tag}")
     log(f"Detected TEST images: backend={test_version.backend_image} frontend={test_version.frontend_image}")
+    ragflow_images: list[str] = []
+    if include_ragflow_images:
+        ragflow_images = _detect_ragflow_images_on_server(server_ip=test_ip)
+        if ragflow_images:
+            log(f"Detected TEST RAGFlow images: {', '.join(ragflow_images)}")
+        else:
+            log("[WARN] include_ragflow_images enabled but no RAGFlow images detected on TEST.")
 
     # Safety checks: ensure each environment points to its own RAGFlow.
     if not preflight_check_ragflow_base_url(
@@ -440,9 +484,16 @@ def publish_from_test_to_prod(
         return PublishResult(False, "\n".join(log_lines), version_before, None)
 
     log("[2/6] Export images on TEST (docker save)")
+    images_to_save = [test_version.backend_image, test_version.frontend_image] + ragflow_images
+    # Deduplicate while keeping order
+    uniq: list[str] = []
+    for img in images_to_save:
+        if img and img not in uniq:
+            uniq.append(img)
+    images_str = " ".join(uniq)
     ok, out = _ssh_cmd(
         test_ip,
-        f"rm -f {tar_on_test} && docker save {test_version.backend_image} {test_version.frontend_image} -o {tar_on_test}",
+        f"rm -f {tar_on_test} && docker save {images_str} -o {tar_on_test}",
     )
     if not ok:
         log(f"[ERROR] docker save failed: {out}")

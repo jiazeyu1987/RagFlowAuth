@@ -154,3 +154,61 @@ class TestReleasePublishUnit(unittest.TestCase):
             res = release_publish.publish_from_test_to_prod(version="v3")
             self.assertFalse(res.ok)
             self.assertIn("Preflight check failed", res.log)
+
+    def test_include_ragflow_images_adds_to_docker_save(self) -> None:
+        docker_save_cmds: list[str] = []
+
+        def fake_ssh_cmd(ip: str, command: str):
+            if ip == TEST_SERVER_IP and "docker save" in command:
+                docker_save_cmds.append(command)
+            return True, "OK"
+
+        with patch.object(release_publish, "_ssh_cmd", side_effect=fake_ssh_cmd), patch.object(
+            release_publish, "_docker_inspect", return_value={"HostConfig": {"NetworkMode": "ragflowauth-network"}}
+        ), patch.object(release_publish, "_build_recreate_from_inspect", return_value="echo docker-run"), patch.object(
+            release_publish, "_ensure_network", return_value=(True, "")
+        ), patch.object(release_publish, "_wait_prod_ready", return_value=(True, "OK")), patch.object(
+            release_publish, "preflight_check_ragflow_base_url", return_value=True
+        ), patch.object(release_publish, "_run_local", return_value=(True, "ok")), patch.object(
+            release_publish, "_detect_ragflow_images_on_server", return_value=["infiniflow/ragflow:v0.21.1-slim"]
+        ), patch.object(
+            release_publish, "get_server_version_info"
+        ) as mock_ver:
+            mock_ver.side_effect = [
+                release_publish.ServerVersionInfo(
+                    server_ip=PROD_SERVER_IP,
+                    backend_image="ragflowauth-backend:prev",
+                    frontend_image="ragflowauth-frontend:prev",
+                    compose_path="",
+                    env_path="",
+                    compose_sha256="",
+                    env_sha256="",
+                ),
+                release_publish.ServerVersionInfo(
+                    server_ip=TEST_SERVER_IP,
+                    backend_image="ragflowauth-backend:testtag",
+                    frontend_image="ragflowauth-frontend:testtag",
+                    compose_path="",
+                    env_path="",
+                    compose_sha256="",
+                    env_sha256="",
+                ),
+                release_publish.ServerVersionInfo(
+                    server_ip=PROD_SERVER_IP,
+                    backend_image="ragflowauth-backend:testtag",
+                    frontend_image="ragflowauth-frontend:testtag",
+                    compose_path="",
+                    env_path="",
+                    compose_sha256="",
+                    env_sha256="",
+                ),
+            ]
+
+            res = release_publish.publish_from_test_to_prod(version="v4", include_ragflow_images=True)
+            self.assertTrue(res.ok, res.log)
+
+        self.assertTrue(docker_save_cmds, "expected docker save to be executed on TEST")
+        cmd = docker_save_cmds[0]
+        self.assertIn("ragflowauth-backend:testtag", cmd)
+        self.assertIn("ragflowauth-frontend:testtag", cmd)
+        self.assertIn("infiniflow/ragflow:v0.21.1-slim", cmd)

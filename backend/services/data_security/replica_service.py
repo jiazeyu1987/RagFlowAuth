@@ -43,6 +43,16 @@ class BackupReplicaService:
         logger.info("[Step 0] Checking if replication is enabled...")
         if not getattr(settings, 'replica_enabled', False):
             logger.info("[Step 0] ✓ Replication disabled - SKIPPED")
+            # Make it explicit in job status so users won't assume the backup was copied to Windows.
+            try:
+                self.store.update_job(
+                    job_id,
+                    message="备份完成（未同步：自动复制未启用）",
+                    detail="replica_enabled=false",
+                    progress=100,
+                )
+            except Exception:
+                pass
             return True  # Not enabled, skip
 
         logger.info(f"[Step 0] ✓ Replication enabled")
@@ -62,6 +72,28 @@ class BackupReplicaService:
             self.store.update_job(job_id, message="备份完成（同步失败：复制目标路径必须是绝对路径）", detail=f"replica_target_path={target_path!r}")
             return False
         logger.info(f"[Step 1] ✓ Target path is absolute")
+
+        # If the backup pack is already created under the replica target (e.g. target_mode=local and
+        # target_local_dir=/mnt/replica/RagflowAuth), then "replication" would be a no-op at best and
+        # a wasteful self-copy at worst. Skip with a clear message.
+        try:
+            pack_real = pack_dir.resolve()
+            target_real = target_base.resolve()
+            if str(pack_real).replace("\\", "/").startswith(str(target_real).replace("\\", "/").rstrip("/") + "/"):
+                logger.info("[Step 1.1] Pack dir is already under replica target; skip replication.")
+                try:
+                    current = self.store.get_job(job_id)
+                    base_msg = (current.message or "备份完成").strip()
+                    if "已在共享目录" in base_msg:
+                        new_msg = base_msg
+                    else:
+                        new_msg = f"{base_msg}（已在共享目录）"
+                    self.store.update_job(job_id, message=new_msg, progress=100)
+                except Exception:
+                    pass
+                return True
+        except Exception:
+            pass
 
         # Step 2: Check if target is mounted to Windows share
         logger.info("[Step 2] Checking if target is mounted to Windows share...")
@@ -100,7 +132,13 @@ class BackupReplicaService:
             logger.info("[Step 5] Checking for images.tar on host path...")
             images_container = pack_dir / "images.tar"
             images_host_str = container_path_to_host_str(images_container)
-            if os.path.exists(images_host_str) and not images_container.exists():
+            if images_container.exists():
+                try:
+                    size = images_container.stat().st_size
+                    logger.info(f"[Step 5] images.tar present in pack ({size/1024/1024:.2f} MB); copied in Step 4")
+                except Exception:
+                    logger.info(f"[Step 5] images.tar present in pack; copied in Step 4")
+            elif os.path.exists(images_host_str):
                 # images.tar exists on host but not in container view
                 logger.info(f"[Step 5] Found images.tar on host: {images_host_str}")
                 images_host = Path(images_host_str)
@@ -108,7 +146,7 @@ class BackupReplicaService:
                 shutil.copy2(images_host, target_images)
                 logger.info(f"[Step 5] ✓ Copied images.tar to {target_images}")
             else:
-                logger.info(f"[Step 5] No images.tar to copy (not a full backup)")
+                logger.info(f"[Step 5] No images.tar to copy")
 
             # Step 6: Write manifest and DONE marker
             logger.info("[Step 6] Writing replication manifest...")
@@ -139,12 +177,18 @@ class BackupReplicaService:
 
             # Step 9: Update job message
             logger.info("[Step 9] Updating job status...")
-            self.store.update_job(
-                job_id,
-                message="备份完成（已同步）",
-                progress=100
-            )
-            logger.info(f"[Step 9] ✓ Job updated: 备份完成（已同步）")
+            try:
+                current = self.store.get_job(job_id)
+                base_msg = (current.message or "备份完成").strip()
+                if "已同步" in base_msg:
+                    new_msg = base_msg
+                else:
+                    new_msg = f"{base_msg}（已同步）"
+            except Exception:
+                new_msg = "备份完成（已同步）"
+
+            self.store.update_job(job_id, message=new_msg, progress=100)
+            logger.info(f"[Step 9] ✓ Job updated: {new_msg}")
 
             logger.info("=" * 60)
             logger.info(f"[REPLICATION SUCCESS] Job ID: {job_id}")

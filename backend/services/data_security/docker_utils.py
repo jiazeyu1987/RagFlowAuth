@@ -4,7 +4,7 @@ import json
 import os
 from pathlib import Path
 
-from .common import ensure_dir, run_cmd
+from .common import ensure_dir, run_cmd, run_cmd_live
 
 
 def _docker_self_mounts() -> list[dict]:
@@ -146,7 +146,7 @@ def read_compose_project_name(compose_file: Path) -> str:
     return compose_file.parent.name
 
 
-def docker_tar_volume(volume_name: str, dest_tar_gz: Path) -> None:
+def docker_tar_volume(volume_name: str, dest_tar_gz: Path, *, heartbeat: callable | None = None) -> None:
     ensure_dir(dest_tar_gz.parent)
     backup_dir = dest_tar_gz.parent.resolve()
 
@@ -174,7 +174,7 @@ def docker_tar_volume(volume_name: str, dest_tar_gz: Path) -> None:
         "-lc",
         f"tar -czf /backup/{dest_tar_gz.name} -C /data .",
     ]
-    code, out = run_cmd(cmd)
+    code, out = run_cmd_live(cmd, heartbeat=heartbeat, heartbeat_interval_s=15.0)
     if code != 0:
         raise RuntimeError(f"备份 volume 失败：{volume_name}\n{out}")
 
@@ -187,36 +187,69 @@ def list_compose_images(compose_file: Path) -> tuple[list[str], str | None]:
     return images, None
 
 
-def docker_save_images(images: list[str], dest_tar: Path) -> tuple[bool, str | None]:
+def docker_save_images(images: list[str], dest_tar: Path, *, heartbeat: callable | None = None) -> tuple[bool, str | None]:
     if not images:
         return False, None
 
     # Ensure the container-visible directory exists (and therefore host dir exists if mounted).
     ensure_dir(dest_tar.parent)
-    dest_tar_str = container_path_to_host_str(dest_tar)
 
-    # Debug output
-    print(f"[DEBUG] Saving {len(images)} images to {dest_tar_str}", flush=True)
+    # IMPORTANT:
+    # `docker save -o <path>` writes the output file on the machine that runs the docker CLI.
+    # In our architecture the docker CLI runs *inside the backend container* (using docker.sock),
+    # so the output path MUST be a container-visible path (typically under a bind mount like `/app/data/backups`).
+    # Do NOT translate to a host-only path like `/opt/...`, otherwise the file can't be created.
+    dest_tar_str = str(dest_tar).replace("\\", "/")
 
-    # Check directory exists
-    import os
-    dest_dir = os.path.dirname(dest_tar_str)
-    print(f"[DEBUG] Destination directory: {dest_dir}, exists: {os.path.exists(dest_dir)}", flush=True)
-
-    code, out = run_cmd(["docker", "save", "-o", dest_tar_str, *images])
-    print(f"[DEBUG] Docker save return code: {code}", flush=True)
+    code, out = run_cmd_live(["docker", "save", "-o", dest_tar_str, *images], heartbeat=heartbeat, heartbeat_interval_s=15.0)
     if code != 0:
-        print(f"[DEBUG] Docker save error: {out}", flush=True)
         return False, out or "docker save failed"
 
-    # Verify file was created
-    print(f"[DEBUG] Checking if file exists: {dest_tar_str}", flush=True)
+    # Verify file was created (inside container filesystem)
+    import os
     if os.path.exists(dest_tar_str):
         size = os.path.getsize(dest_tar_str)
-        print(f"[DEBUG] File created successfully: {size/1024/1024:.2f} MB", flush=True)
     else:
-        print(f"[DEBUG] ERROR: File not created at {dest_tar_str}", flush=True)
-        print(f"[DEBUG] Listing directory: {os.listdir(dest_dir) if os.path.exists(dest_dir) else 'DIR NOT FOUND'}", flush=True)
         return False, f"File not created: {dest_tar_str}"
 
     return True, None
+
+
+def list_running_container_images(*, name_prefix: str) -> list[str]:
+    """
+    Best-effort: list unique images of containers whose names start with `name_prefix`.
+
+    Used as a fallback when `docker compose config --images` fails (e.g. missing env vars).
+    """
+    name_prefix_raw = str(name_prefix or "").strip()
+    if not name_prefix_raw:
+        return []
+    base_prefix = name_prefix_raw.rstrip("_-")
+    if not base_prefix:
+        return []
+
+    code, out = run_cmd(["docker", "ps", "-a", "--format", "{{.Names}}\t{{.Image}}"])
+    if code != 0:
+        return []
+
+    images: list[str] = []
+    for line in (out or "").splitlines():
+        line = line.strip()
+        if not line or "\t" not in line:
+            continue
+        name, image = line.split("\t", 1)
+        name = name.strip()
+        image = image.strip()
+        if not (
+            name == base_prefix
+            or name.startswith(base_prefix + "_")
+            or name.startswith(base_prefix + "-")
+            or name.startswith(name_prefix_raw)
+        ):
+            continue
+        if not image or "<none>" in image:
+            continue
+        if image not in images:
+            images.append(image)
+
+    return images

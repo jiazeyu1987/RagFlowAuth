@@ -973,6 +973,11 @@ class RagflowAuthTool:
         button_frame.pack(fill=tk.X, padx=20, pady=(10, 10))
         ttk.Button(button_frame, text="刷新版本信息", command=self.refresh_release_versions).pack(side=tk.LEFT, padx=5)
         ttk.Button(button_frame, text="从测试发布到正式", command=self.publish_test_to_prod).pack(side=tk.LEFT, padx=5)
+        # Optional: also publish RAGFlow images, so PROD can run even when offline (no docker pull).
+        self.release_include_ragflow_var = tk.BooleanVar(value=False)
+        ttk.Checkbutton(button_frame, text="同步 RAGFlow 镜像", variable=self.release_include_ragflow_var).pack(
+            side=tk.LEFT, padx=(10, 0)
+        )
 
         info_frame = ttk.Frame(tab)
         info_frame.pack(fill=tk.BOTH, expand=False, padx=20, pady=(0, 10))
@@ -1141,7 +1146,11 @@ class RagflowAuthTool:
                 self.status_bar.config(text="发布中...")
                 log_to_file("[Release] Start publish test->prod", "INFO")
 
-                result = feature_publish_from_test_to_prod(version=self._release_version_arg())
+                include_ragflow = bool(getattr(self, "release_include_ragflow_var", tk.BooleanVar(value=False)).get())
+                result = feature_publish_from_test_to_prod(
+                    version=self._release_version_arg(),
+                    include_ragflow_images=include_ragflow,
+                )
                 self.release_log_text.insert(tk.END, (result.log or "") + "\n")
 
                 if result.ok:

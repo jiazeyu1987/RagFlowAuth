@@ -1,5 +1,6 @@
 import os
 import unittest
+from unittest import mock
 
 
 class TestDataSecurityPathMapping(unittest.TestCase):
@@ -30,3 +31,29 @@ class TestDataSecurityPathMapping(unittest.TestCase):
             "/host/uploads/file.bin",
         )
 
+    def test_docker_save_images_uses_container_path_not_host_path(self):
+        from pathlib import Path
+
+        from backend.services.data_security import docker_utils
+
+        calls = []
+
+        def fake_run_cmd(argv, cwd=None, **_kwargs):
+            calls.append(list(argv))
+            return 0, ""
+
+        # Make file existence check pass without touching filesystem.
+        with mock.patch.object(docker_utils, "run_cmd_live", side_effect=fake_run_cmd), mock.patch.object(
+            docker_utils, "ensure_dir", return_value=None
+        ), mock.patch.object(docker_utils.os.path, "exists", return_value=True), mock.patch.object(
+            docker_utils.os.path, "getsize", return_value=123
+        ):
+            ok, err = docker_utils.docker_save_images(["a:b"], Path("/app/data/backups/migration_pack_x/images.tar"))
+
+        self.assertTrue(ok)
+        self.assertIsNone(err)
+        self.assertTrue(calls)
+        # -o must use container path (NOT translated to /opt/...)
+        self.assertIn("-o", calls[0])
+        out_path = calls[0][calls[0].index("-o") + 1]
+        self.assertEqual(out_path, "/app/data/backups/migration_pack_x/images.tar")

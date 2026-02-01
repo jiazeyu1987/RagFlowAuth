@@ -28,6 +28,9 @@
 
 说明：
 - 该页以“查看/管理”为主，真正触发备份通常在后端“数据安全”流程中完成
+- “全量备份包含镜像”会生成 `images.tar`（体积可能非常大，常见 5~10GB+），同步到 Windows 共享也会很慢，请预留磁盘与时间
+- `images.tar` 的生成路径必须是容器内可见路径（例如 `/app/data/backups/migration_pack_*/images.tar`），否则会出现“勾选了但不生成”的问题（详见 `doc/maintenance/release_publish_lessons.md`）
+ - 目前建议（并在工具/后端配置中固定）：备份目录直接使用 `/mnt/replica/RagflowAuth`（避免写入服务器根分区 50GB 导致空间不足）。
 
 ---
 
@@ -84,3 +87,13 @@ UI 结构：
 - 备份不包含 `images.tar` 且测试机没有 ragflowauth 镜像、同时服务器不能访问外网拉取镜像：
   - 会出现 `Unable to find image ...` + `Get https://registry-1.docker.io ... timeout`
   - 解决：先在“发布”页签执行【本机 -> 测试】发布镜像，再做还原
+
+- “全量备份包含镜像”已勾选，但备份包里仍然没有 `images.tar`：
+  - 典型表现：后端日志里出现 `docker save error: invalid output path`（输出路径不是容器可写路径）
+  - 快速定位：到测试机执行 `docker logs ragflowauth-backend --tail 200 | grep -E \"images.tar|docker save|Saving\"`
+  - 正常日志应包含：`Saving <N> images to /app/data/backups/migration_pack_.../images.tar`
+
+- 备份作业轮询接口偶发 500：
+  - 典型表现：前端轮询 `/api/admin/data-security/backup/jobs/<id>` 报 500
+  - 后端日志通常会看到：`sqlite3.OperationalError: unable to open database file`
+  - 处理建议：先看后端日志定位是“真实 DB 路径/权限问题”还是“瞬时 IO 抖动”（工具会持续重试）

@@ -55,6 +55,7 @@
 ## B. 测试 -> 正式（发布镜像到 PROD）
 
 按钮：从测试发布到正式
+选项：同步 RAGFlow 镜像（checkbox）
 
 目标：
 - 把 TEST 当前运行的前后端镜像发布到 PROD（保证“测试通过的同一版本”进生产）
@@ -62,6 +63,8 @@
 流程（工具内部）：
 1) 在 TEST 读取当前运行镜像 tag（`docker inspect` 获取容器镜像）
 2) TEST `docker save` 导出镜像到 `/tmp/ragflowauth_release_<tag>.tar`
+   - 默认：仅 RagflowAuth 前后端镜像
+   - 若勾选“同步 RAGFlow 镜像”：会额外把 TEST 上检测到的 `ragflow_compose-*ragflow*` 相关镜像一起打包导出
 3) 本机 `scp -3` 直连转发 TEST -> PROD（不落地本机）
 4) PROD `docker load` 加载镜像
 5) PROD 重建容器：

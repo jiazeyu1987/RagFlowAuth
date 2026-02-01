@@ -156,6 +156,18 @@ class DataSecurityStore:
             "replica_subdir_format",
         }
         fields = {k: updates.get(k) for k in allowed if k in updates}
+
+        # Target local dir is fixed to the mounted Windows share to avoid filling the server root disk.
+        # This keeps full backups (especially `images.tar`) on the large `/mnt/replica` filesystem.
+        #
+        # Notes:
+        # - `/mnt/replica` is the fixed mount point used by the server tools.
+        # - Backups are stored under `/mnt/replica/RagflowAuth` for consistency.
+        if "target_mode" in fields or "target_local_dir" in fields:
+            if (str(fields.get("target_mode") or "") or "").strip() == "local" or "target_local_dir" in fields:
+                fields["target_mode"] = "local"
+                fields["target_local_dir"] = "/mnt/replica/RagflowAuth"
+
         # Replica target path is fixed to avoid drift/misconfig between systems.
         # It must match the mount point used by the server tools and the backend replication check.
         if "replica_target_path" in fields or "replica_enabled" in fields:
