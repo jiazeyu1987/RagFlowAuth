@@ -771,11 +771,14 @@ class RagflowAuthTool:
         # 说明
         info_label = ttk.Label(
             tab,
-            text="从本机固定目录恢复数据到【测试服务器】\n"
-                 "固定目录：D:\\datas\\RagflowAuth\n"
-                 "还原内容：auth.db + volumes；若存在 images.tar 也会还原镜像",
+            text=(
+                "⚠️ 注意：本页签【只会还原到测试服务器】（不会影响正式服务器）\n"
+                f"目标服务器：{TEST_SERVER_IP}\n"
+                "本机固定目录：D:\\datas\\RagflowAuth\n"
+                "还原内容：auth.db + volumes；若存在 images.tar 也会还原镜像"
+            ),
             foreground="gray",
-            justify=tk.CENTER
+            justify=tk.CENTER,
         )
         info_label.pack(pady=10)
 
@@ -922,8 +925,14 @@ class RagflowAuthTool:
         )
         desc.pack(pady=(0, 10), padx=20, anchor=tk.W)
 
-        # Sub-tabs
-        self.release_notebook = ttk.Notebook(tab)
+        # Sub-tabs (make them visually distinct and easier to click)
+        try:
+            style = ttk.Style()
+            style.configure("Release.TNotebook.Tab", font=("Arial", 14, "bold"), padding=(22, 12))
+        except Exception:
+            pass
+
+        self.release_notebook = ttk.Notebook(tab, style="Release.TNotebook")
         self.release_notebook.pack(fill=tk.BOTH, expand=True, padx=10, pady=(0, 10))
 
         self._create_release_local_to_test_tab()
@@ -942,7 +951,7 @@ class RagflowAuthTool:
 
     def _create_release_local_to_test_tab(self):
         tab = ttk.Frame(self.release_notebook)
-        self.release_notebook.add(tab, text="本机 -> 测试")
+        self.release_notebook.add(tab, text="① 本机 → 测试")
 
         button_frame = ttk.Frame(tab)
         button_frame.pack(fill=tk.X, padx=20, pady=(10, 10))
@@ -967,7 +976,7 @@ class RagflowAuthTool:
 
     def _create_release_test_to_prod_tab(self):
         tab = ttk.Frame(self.release_notebook)
-        self.release_notebook.add(tab, text="测试 -> 正式")
+        self.release_notebook.add(tab, text="② 测试 → 正式（镜像）")
 
         button_frame = ttk.Frame(tab)
         button_frame.pack(fill=tk.X, padx=20, pady=(10, 10))
@@ -999,7 +1008,7 @@ class RagflowAuthTool:
 
     def _create_release_test_data_to_prod_tab(self):
         tab = ttk.Frame(self.release_notebook)
-        self.release_notebook.add(tab, text="测试数据 -> 正式")
+        self.release_notebook.add(tab, text="③ 测试 → 正式（数据）")
 
         desc = ttk.Label(
             tab,
