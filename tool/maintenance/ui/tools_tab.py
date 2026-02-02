@@ -28,6 +28,16 @@ def build_tools_tab(app) -> None:
             "cmd": "__cleanup_docker_images__",
         },
         {
+            "title": "重启服务（RAGFlow + RagflowAuth）",
+            "desc": "在当前选择的服务器上重启 ragflow_compose-* 相关容器，以及 ragflowauth-backend/frontend（不影响 node-exporter/portainer）",
+            "cmd": "__restart_ragflow_and_ragflowauth__",
+        },
+        {
+            "title": "关闭所有容器（业务）",
+            "desc": "在当前选择的服务器上停止 ragflow_compose-* 相关容器，以及 ragflowauth-backend/frontend（不影响 node-exporter/portainer）",
+            "cmd": "__stop_ragflow_and_ragflowauth__",
+        },
+        {
             "title": "挂载 Windows 共享",
             "desc": "挂载 Windows 网络共享到服务器（固定挂载到 /mnt/replica）",
             "cmd": "__mount_windows_share__",
@@ -46,56 +56,6 @@ def build_tools_tab(app) -> None:
             "title": "快速部署",
             "desc": "快速部署到服务器（使用 Windows 本地构建的镜像）",
             "cmd": "quick-deploy",
-        },
-        {
-            "title": "快速重启容器",
-            "desc": "使用现有镜像快速重启容器（自动检测镜像标签并修复挂载）",
-            "cmd": "__smart_quick_restart__",
-        },
-        {
-            "title": "查看运行中的容器",
-            "desc": "列出所有运行中的 Docker 容器及其状态（包括挂载信息）",
-            "cmd": "__show_containers_with_mounts__",
-        },
-        {
-            "title": "查看所有容器",
-            "desc": "列出所有 Docker 容器（包括已停止的）",
-            "cmd": "docker ps -a",
-        },
-        {
-            "title": "查看 Docker 镜像",
-            "desc": "列出所有 Docker 镜像及其大小",
-            "cmd": "docker images",
-        },
-        {
-            "title": "查看磁盘使用情况",
-            "desc": "显示 Docker 占用的磁盘空间",
-            "cmd": "docker system df",
-        },
-        {
-            "title": "查看后端日志",
-            "desc": "显示后端容器最近的日志输出",
-            "cmd": "docker logs --tail 50 ragflowauth-backend",
-        },
-        {
-            "title": "查看前端日志",
-            "desc": "显示前端容器最近的日志输出",
-            "cmd": "docker logs --tail 50 ragflowauth-frontend",
-        },
-        {
-            "title": "重启所有容器",
-            "desc": "重启 RagflowAuth 的所有容器",
-            "cmd": "docker restart ragflowauth-backend ragflowauth-frontend",
-        },
-        {
-            "title": "停止所有容器",
-            "desc": "停止 RagflowAuth 的所有容器",
-            "cmd": "docker stop ragflowauth-backend ragflowauth-frontend",
-        },
-        {
-            "title": "启动所有容器",
-            "desc": "启动 RagflowAuth 的所有容器",
-            "cmd": "docker start ragflowauth-backend ragflow-frontend",
         },
     ]
 
@@ -130,4 +90,3 @@ def build_tools_tab(app) -> None:
             anchor="w",
         )
         desc_label.pack(fill=tk.BOTH, expand=True, pady=(0, 8), padx=8)
-

@@ -46,9 +46,6 @@ from tool.maintenance.core.server_config import ServerConfig
 from tool.maintenance.core.ssh_executor import SSHExecutor
 from tool.maintenance.core.task_runner import TaskRunner
 from tool.maintenance.features.docker_cleanup_images import cleanup_docker_images as feature_cleanup_docker_images
-from tool.maintenance.features.docker_containers_with_mounts import (
-    show_containers_with_mounts as feature_show_containers_with_mounts,
-)
 from tool.maintenance.features.windows_share_mount import mount_windows_share as feature_mount_windows_share
 from tool.maintenance.features.windows_share_unmount import unmount_windows_share as feature_unmount_windows_share
 from tool.maintenance.features.windows_share_status import check_mount_status as feature_check_mount_status
@@ -69,7 +66,10 @@ from tool.maintenance.features.release_rollback import (
     feature_rollback_ragflowauth_to_version as feature_rollback_ragflowauth_to_version,
 )
 from tool.maintenance.features.release_history import load_release_history as feature_load_release_history
-from tool.maintenance.features.cancel_backup_job import cancel_active_backup_job as feature_cancel_active_backup_job
+from tool.maintenance.features.restart_services import (
+    restart_ragflow_and_ragflowauth as feature_restart_ragflow_and_ragflowauth,
+)
+from tool.maintenance.features.stop_services import stop_ragflow_and_ragflowauth as feature_stop_ragflow_and_ragflowauth
 
 # （日志配置已迁移到 tool.maintenance.core.logging_setup）
 # （配置/环境/固定共享常量已迁移到 tool.maintenance.core.*）
@@ -478,7 +478,6 @@ class RagflowAuthTool:
         # 创建选项卡
         self.create_tools_tab()
         self.create_web_links_tab()
-        self.create_backup_tab()
         self.create_restore_tab()
         self.create_release_tab()
         self.create_smoke_tab()
@@ -500,12 +499,6 @@ class RagflowAuthTool:
         from tool.maintenance.ui.web_links_tab import build_web_links_tab
 
         build_web_links_tab(self)
-
-    def create_backup_tab(self):
-        """备份管理页签 UI（拆分到独立模块，回调仍在 tool.py 里）。"""
-        from tool.maintenance.ui.backup_tab import build_backup_tab
-
-        build_backup_tab(self)
 
     def create_restore_tab(self):
         """数据还原页签 UI（拆分到独立模块；还原只允许测试服务器）。"""
@@ -713,15 +706,13 @@ class RagflowAuthTool:
             log_to_file(f"[ReleaseHistory] copy failed: {e}", "ERROR")
             messagebox.showerror("错误", f"复制失败：{e}")
 
-    def cancel_active_backup_job(self):
-        """
-        Cancel the current queued/running backup job on the selected server.
-
-        Implemented via SSH + docker exec (no HTTP auth dependency).
-        """
+    def restart_ragflow_and_ragflowauth(self):
         confirm = messagebox.askyesno(
             "二次确认",
-            f"即将取消当前服务器({self.config.user}@{self.config.ip})正在运行/排队的备份任务。\n\n确定继续吗？",
+            f"即将在服务器 {self.config.environment}（{self.config.user}@{self.config.ip}）重启：\n\n"
+            f"- ragflow_compose-*（RAGFlow 相关容器）\n"
+            f"- ragflowauth-backend / ragflowauth-frontend\n\n"
+            "确定继续吗？",
         )
         if not confirm:
             return
@@ -730,45 +721,58 @@ class RagflowAuthTool:
         server_user = self.config.user
 
         if hasattr(self, "status_bar"):
-            self.status_bar.config(text="取消备份任务中...")
+            self.status_bar.config(text="正在重启服务...")
 
         def do_work():
-            return feature_cancel_active_backup_job(server_ip=server_ip, server_user=server_user)
+            return feature_restart_ragflow_and_ragflowauth(server_ip=server_ip, server_user=server_user)
 
         def on_done(res):
             if not res.ok or not res.value:
                 if hasattr(self, "status_bar"):
-                    self.status_bar.config(text="取消备份任务：失败")
+                    self.status_bar.config(text="重启服务：失败")
                 return
 
             result = res.value
-            log_to_file(f"[BackupCancel] {result.raw}", "INFO" if result.ok else "ERROR")
-            if result.ok:
-                if hasattr(self, "status_bar"):
-                    if getattr(result, "final", False):
-                        self.status_bar.config(text=f"已取消：job#{result.job_id}")
-                    else:
-                        self.status_bar.config(text=f"已请求取消：job#{result.job_id}（仍在停止）")
+            log_to_file(result.log, "INFO" if result.ok else "ERROR")
+            if hasattr(self, "status_bar"):
+                self.status_bar.config(text="重启服务：完成" if result.ok else "重启服务：完成（有警告）")
+            self.show_text_window("重启服务结果", result.log)
 
-                waited = getattr(result, "waited_seconds", 0)
-                final = getattr(result, "final", False)
-                if final:
-                    messagebox.showinfo(
-                        "完成",
-                        f"已取消备份任务：job#{result.job_id}\nstatus={result.status}\nwaited={waited}s",
-                    )
-                else:
-                    messagebox.showinfo(
-                        "已请求取消，仍在停止",
-                        f"已请求取消备份任务：job#{result.job_id}\nstatus={result.status}\nwaited={waited}s\n\n"
-                        "如果仍然提示 409/Conflict，请等待几秒后重试；也可在备份/日志页查看服务端进度。",
-                    )
-            else:
-                if hasattr(self, "status_bar"):
-                    self.status_bar.config(text="取消备份任务：无活动任务/失败")
-                messagebox.showwarning("提示", f"未找到可取消的任务（或取消失败）\n\nraw:\n{result.raw}")
+        self.task_runner.run(name="restart_ragflow_and_ragflowauth", fn=do_work, on_done=on_done)
 
-        self.task_runner.run(name="cancel_active_backup_job", fn=do_work, on_done=on_done)
+    def stop_ragflow_and_ragflowauth(self):
+        confirm = messagebox.askyesno(
+            "二次确认",
+            f"即将在服务器 {self.config.environment}（{self.config.user}@{self.config.ip}）停止：\n\n"
+            f"- ragflow_compose-*（RAGFlow 相关容器）\n"
+            f"- ragflowauth-backend / ragflowauth-frontend\n\n"
+            "这会导致业务不可用，确定继续吗？",
+        )
+        if not confirm:
+            return
+
+        server_ip = self.config.ip
+        server_user = self.config.user
+
+        if hasattr(self, "status_bar"):
+            self.status_bar.config(text="正在停止服务...")
+
+        def do_work():
+            return feature_stop_ragflow_and_ragflowauth(server_ip=server_ip, server_user=server_user)
+
+        def on_done(res):
+            if not res.ok or not res.value:
+                if hasattr(self, "status_bar"):
+                    self.status_bar.config(text="停止服务：失败")
+                return
+
+            result = res.value
+            log_to_file(result.log, "INFO" if result.ok else "ERROR")
+            if hasattr(self, "status_bar"):
+                self.status_bar.config(text="停止服务：完成" if result.ok else "停止服务：完成（有警告）")
+            self.show_text_window("停止服务结果", result.log)
+
+        self.task_runner.run(name="stop_ragflow_and_ragflowauth", fn=do_work, on_done=on_done)
 
     def refresh_prod_rollback_versions(self):
         if hasattr(self, "status_bar"):
@@ -1605,14 +1609,14 @@ class RagflowAuthTool:
             self.run_quick_deploy()
             return
 
-        # 特殊处理：显示容器列表和挂载状态
-        if command == "__show_containers_with_mounts__":
-            self.show_containers_with_mounts()
+        # 特殊处理：重启 RAGFlow + RagflowAuth（当前选择的服务器）
+        if command == "__restart_ragflow_and_ragflowauth__":
+            self.restart_ragflow_and_ragflowauth()
             return
 
-        # 特殊处理：智能快速重启（自动检测镜像标签）
-        if command == "__smart_quick_restart__":
-            self.smart_quick_restart()
+        # 特殊处理：停止 RAGFlow + RagflowAuth（当前选择的服务器）
+        if command == "__stop_ragflow_and_ragflowauth__":
+            self.stop_ragflow_and_ragflowauth()
             return
 
         # 特殊处理：清理 Docker 镜像（仅保留当前运行的镜像）
@@ -1633,11 +1637,6 @@ class RagflowAuthTool:
         # 特殊处理：检查挂载状态
         if command == "__check_mount_status__":
             self.check_mount_status()
-            return
-
-        # 特殊处理：取消当前备份任务（后端 DataSecurity 任务）
-        if command == "__cancel_active_backup_job__":
-            self.cancel_active_backup_job()
             return
 
         if not self.ssh_executor:
@@ -1934,208 +1933,6 @@ class RagflowAuthTool:
         thread = threading.Thread(target=execute, daemon=True)
         thread.start()
 
-    def smart_quick_restart(self):
-        """智能快速重启容器（自动检测镜像标签并修复挂载）"""
-        self.status_bar.config(text="正在智能快速重启容器...")
-
-        def execute():
-            try:
-                if not self.ssh_executor:
-                    self.update_ssh_executor()
-
-                # 步骤 1: 检测当前运行的镜像标签
-                print("[DEBUG] 步骤 1: 检测当前镜像标签...")
-                log_to_file("[QUICK-RESTART] 步骤 1: 检测当前镜像标签")
-
-                # 方法 1: 从 docker images 获取最新的 backend 镜像
-                tag_cmd = "docker images --format '{{.Repository}}:{{.Tag}}' | grep 'ragflowauth-backend' | grep -v '<none>' | head -1"
-                success, output = self.ssh_executor.execute(tag_cmd)
-
-                # 清理输出中的 SSH 警告信息
-                if output:
-                    output = '\n'.join(line for line in output.split('\n')
-                                       if 'close - IO is still pending' not in line
-                                       and 'read:' not in line
-                                       and 'write:' not in line
-                                       and 'io:' not in line
-                                       and line.strip()).strip()
-
-                # 如果方法 1 失败，尝试方法 2: 从运行中的容器获取
-                if not success or not output:
-                    print("[DEBUG] 方法 1 失败，尝试从运行中的容器获取镜像...")
-                    tag_cmd2 = "docker inspect ragflowauth-backend --format '{{.Config.Image}}' 2>/dev/null || echo 'NOT_FOUND'"
-                    success, output = self.ssh_executor.execute(tag_cmd2)
-
-                    if output:
-                        output = '\n'.join(line for line in output.split('\n')
-                                           if 'close - IO is still pending' not in line
-                                           and 'read:' not in line
-                                           and 'write:' not in line
-                                           and 'io:' not in line
-                                           and line.strip()).strip()
-
-                    if output and output != 'NOT_FOUND' and 'ragflowauth-backend:' in output:
-                        # 输出格式是 "ragflowauth-backend:tag"，提取 tag 部分
-                        if ':' in output:
-                            current_tag = output.split(':', 1)[1]
-                        else:
-                            current_tag = output
-                    else:
-                        # 方法 2 也失败，提供详细诊断信息
-                        print("[DEBUG] 获取镜像失败，收集诊断信息...")
-
-                        # 获取所有 ragflowauth 镜像
-                        list_cmd = "docker images | grep ragflowauth || echo 'NO_IMAGES'"
-                        success, list_output = self.ssh_executor.execute(list_cmd)
-                        if list_output:
-                            list_output = '\n'.join(line for line in list_output.split('\n')
-                                                 if 'close - IO is still pending' not in line
-                                                 and 'read:' not in line
-                                                 and 'write:' not in line
-                                                 and 'io:' not in line
-                                                 and line.strip()).strip()
-
-                        # 获取所有运行中的容器
-                        ps_cmd = "docker ps || echo 'NO_CONTAINERS'"
-                        success, ps_output = self.ssh_executor.execute(ps_cmd)
-                        if ps_output:
-                            ps_output = '\n'.join(line for line in ps_output.split('\n')
-                                               if 'close - IO is still pending' not in line
-                                               and 'read:' not in line
-                                               and 'write:' not in line
-                                               and 'io:' not in line
-                                               and line.strip()).strip()
-
-                        error_detail = f"无法检测到 ragflowauth-backend 镜像标签\n\n"
-                        error_detail += f"可用镜像:\n{list_output}\n\n"
-                        error_detail += f"运行中的容器:\n{ps_output}"
-
-                        raise Exception(error_detail)
-                else:
-                    # 方法 1 成功，输出格式是 "ragflowauth-backend:tag"，提取 tag 部分
-                    if ':' in output:
-                        current_tag = output.split(':', 1)[1]
-                    else:
-                        current_tag = output
-
-                if not current_tag:
-                    raise Exception("无法检测到 ragflowauth-backend 镜像标签")
-
-                print(f"[DEBUG] 检测到镜像标签: {current_tag}")
-                log_to_file(f"[QUICK-RESTART] 检测到镜像标签: {current_tag}")
-
-                # 步骤 2: 停止后端容器
-                print(f"[DEBUG] 步骤 2: 停止后端容器 (tag={current_tag})...")
-                log_to_file(f"[QUICK-RESTART] 步骤 2: 停止后端容器")
-
-                stop_cmd = "docker stop ragflowauth-backend 2>/dev/null || echo 'NOT_RUNNING'"
-                success, stop_output = self.ssh_executor.execute(stop_cmd)
-                print(f"[DEBUG] 停止命令执行完成")
-
-                # 步骤 3: 删除后端容器
-                print(f"[DEBUG] 步骤 3: 删除后端容器...")
-                log_to_file(f"[QUICK-RESTART] 步骤 3: 删除后端容器")
-
-                rm_cmd = "docker rm ragflowauth-backend 2>/dev/null || echo 'NOT_EXISTS'"
-                success, rm_output = self.ssh_executor.execute(rm_cmd)
-                print(f"[DEBUG] 删除命令执行完成")
-
-                # 步骤 4: 重新创建后端容器（包含正确的挂载）
-                print(f"[DEBUG] 步骤 4: 重新创建后端容器（包含 /mnt/replica 挂载）...")
-                log_to_file(f"[QUICK-RESTART] 步骤 4: 重新创建后端容器")
-
-                recreate_cmd = f"""docker run -d \
-  --name ragflowauth-backend \
-  --network ragflowauth-network \
-  -p 8001:8001 \
-  -e TZ=Asia/Shanghai \
-  -v /opt/ragflowauth/data:/app/data \
-  -v /opt/ragflowauth/uploads:/app/uploads \
-  -v /opt/ragflowauth/ragflow_config.json:/app/ragflow_config.json:ro \
-  -v /opt/ragflowauth/ragflow_compose:/app/ragflow_compose:ro \
-  -v /opt/ragflowauth/backup_config.json:/app/backup_config.json:ro \
-  -v /mnt/replica:/mnt/replica \
-  -v /var/run/docker.sock:/var/run/docker.sock:ro \
-  --restart unless-stopped \
-  ragflowauth-backend:{current_tag}"""
-
-                success, output = self.ssh_executor.execute(recreate_cmd)
-
-                # 清理输出中的 SSH 警告信息
-                if output:
-                    output = '\n'.join(line for line in output.split('\n')
-                                       if 'close - IO is still pending' not in line
-                                       and 'read:' not in line
-                                       and 'write:' not in line
-                                       and 'io:' not in line
-                                       and line.strip()).strip()
-
-                if not success:
-                    raise Exception(f"重新创建容器失败:\n{output}")
-
-                # 步骤 5: 等待容器启动并验证状态
-                print("[DEBUG] 步骤 5: 等待容器启动并验证状态...")
-                log_to_file("[QUICK-RESTART] 步骤 5: 等待容器启动")
-
-                time.sleep(3)  # 等待容器启动
-
-                verify_cmd = "docker ps | grep ragflowauth-backend"
-                success, output = self.ssh_executor.execute(verify_cmd)
-
-                # 清理输出中的 SSH 警告信息
-                if output:
-                    output = '\n'.join(line for line in output.split('\n')
-                                       if 'close - IO is still pending' not in line
-                                       and 'read:' not in line
-                                       and 'write:' not in line
-                                       and 'io:' not in line
-                                       and line.strip()).strip()
-
-                if not success or not output:
-                    raise Exception("容器启动失败：容器未在运行")
-
-                # 步骤 6: 验证 /mnt/replica 挂载
-                print("[DEBUG] 步骤 6: 验证 /mnt/replica 挂载...")
-                log_to_file("[QUICK-RESTART] 步骤 6: 验证挂载")
-
-                mount_cmd = "docker inspect ragflowauth-backend --format '{{json .Mounts}}' 2>/dev/null | grep -o '/mnt/replica' || echo 'NOT_MOUNTED'"
-                success, mount_output = self.ssh_executor.execute(mount_cmd)
-
-                # 清理输出中的 SSH 警告信息
-                if mount_output:
-                    mount_output = '\n'.join(line for line in mount_output.split('\n')
-                                          if 'close - IO is still pending' not in line
-                                          and 'read:' not in line
-                                          and 'write:' not in line
-                                          and 'io:' not in line
-                                          and line.strip()).strip()
-
-                mount_ok = success and '/mnt/replica' in mount_output
-
-                # 完成消息
-                result_msg = f"✅ 快速重启成功！\n\n"
-                result_msg += f"镜像标签: {current_tag}\n"
-                result_msg += f"容器状态: 运行中\n"
-                result_msg += f"/mnt/replica 挂载: {'✓ 已挂载' if mount_ok else '✗ 未挂载 (需要手动检查)'}\n\n"
-                result_msg += f"输出:\n{output}"
-
-                self.status_bar.config(text="快速重启完成")
-                print(result_msg)
-                log_to_file(f"[QUICK-RESTART] 完成: {current_tag}, 挂载: {'OK' if mount_ok else 'FAIL'}")
-                # 不显示弹窗，只更新状态栏和记录日志
-                # messagebox.showinfo("快速重启成功", result_msg)
-
-            except Exception as e:
-                error_msg = f"快速重启失败：{str(e)}"
-                self.status_bar.config(text="快速重启失败")
-                print(f"[ERROR] {error_msg}")
-                log_to_file(f"[QUICK-RESTART] ERROR: {error_msg}", "ERROR")
-                # 不显示弹窗，只更新状态栏和记录日志
-                # messagebox.showerror("快速重启失败", error_msg)
-
-        thread = threading.Thread(target=execute, daemon=True)
-        thread.start()
-
     def cleanup_docker_images(self):
         """清理服务器上未使用的 Docker 镜像（仅保留当前运行的镜像）"""
         # Refactored: moved core logic into tool.maintenance.features.docker_cleanup_images
@@ -2316,24 +2113,15 @@ class RagflowAuthTool:
         thread.start()
 
     def show_containers_with_mounts(self):
-        """显示容器列表和挂载状态"""
-        # Refactored: moved core logic into tool.maintenance.features.docker_containers_with_mounts
-        self.status_bar.config(text="正在获取容器信息...")
-        log_to_file("[CONTAINER-CHECK] 开始检查容器挂载状态")
-
-        def execute_refactored():
-            try:
-                if not self.ssh_executor:
-                    self.update_ssh_executor()
-                result = feature_show_containers_with_mounts(ssh=self.ssh_executor, log=log_to_file)
-                self.status_bar.config(text="容器信息获取完成")
-                self.show_text_window("容器挂载检查", result.text)
-            except Exception as e:
-                self.status_bar.config(text="获取容器信息失败")
-                log_to_file(f"[CONTAINER-CHECK] ERROR: {e}", "ERROR")
-                self.show_text_window("错误", f"[RED]获取容器信息失败：{str(e)}[/RED]")
-
-        threading.Thread(target=execute_refactored, daemon=True).start()
+        """(已移除) 原“查看运行中的容器”按钮对应功能。"""
+        # 为避免误用/误导：工具页签已移除此按钮（以及相关一键查看日志/启停容器按钮）。
+        # 仍需排查时请使用发布/备份页签的结构化日志，或在服务器上手动执行 docker 命令排查。
+        try:
+            if hasattr(self, "status_bar"):
+                self.status_bar.config(text="该功能已移除（请看日志或手动 docker 排查）")
+        except Exception:
+            pass
+        log_to_file("[CONTAINER-CHECK] (removed) show_containers_with_mounts was called; no-op.", "WARN")
         return
         self.status_bar.config(text="正在获取容器信息...")
         log_to_file("[CONTAINER-CHECK] 开始检查容器挂载状态")
@@ -2734,14 +2522,14 @@ conn.close()
 
                         result_text += f"  {CYAN}方案3: 使用快速重启（仅修复挂载）{RESET}\n"
                         result_text += "  步骤:\n"
-                        result_text += "    1. 点击tool.py左侧的「快速重启容器」按钮\n"
+                        result_text += "    1. 在服务器上重启 ragflowauth 容器（docker restart ragflowauth-backend ragflowauth-frontend）\n"
                         result_text += "    2. 等待容器重启完成\n\n"
 
                         result_text += "验证步骤:\n"
                         result_text += "  1. 在「数据安全」页面点击「立即执行增量备份」\n"
                         result_text += "  2. 等待备份完成\n"
-                        result_text += "  3. 点击tool.py的「查看运行中的容器」按钮\n"
-                        result_text += "  4. 检查「Windows共享文件检查」部分，volumes目录应该存在且有文件\n\n"
+                        result_text += "  3. 在服务器上执行（或让运维执行）：docker inspect ragflowauth-backend --format '{{json .Mounts}}'\n"
+                        result_text += "  4. 确认 /mnt/replica 已挂载且 /mnt/replica/RagflowAuth 下有备份目录（migration_pack_...）\n\n"
 
                     # 检查/mnt/replica挂载缺失
                     if "/mnt/replica 挂载缺失" in result_text:
@@ -2752,8 +2540,8 @@ conn.close()
                         else:
                             result_text += "\n附加问题: 后端容器缺少 /mnt/replica 挂载\n\n"
 
-                        result_text += f"  {CYAN}解决方案: 快速重启容器{RESET}\n"
-                        result_text += "  操作: 点击tool.py左侧的「快速重启容器」按钮\n"
+                        result_text += f"  {CYAN}解决方案: 手动重启 ragflowauth 容器{RESET}\n"
+                        result_text += "  操作: 在服务器上执行 docker restart ragflowauth-backend ragflowauth-frontend\n"
                         result_text += "  说明: 该按钮会自动检测当前镜像标签，并使用正确的挂载配置重新创建容器\n\n"
 
                 print("[DEBUG] 步骤 8: 生成结果...")
