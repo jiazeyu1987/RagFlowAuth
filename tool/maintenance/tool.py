@@ -50,6 +50,10 @@ from tool.maintenance.features.windows_share_mount import mount_windows_share as
 from tool.maintenance.features.windows_share_unmount import unmount_windows_share as feature_unmount_windows_share
 from tool.maintenance.features.windows_share_status import check_mount_status as feature_check_mount_status
 from tool.maintenance.features.local_backup_catalog import list_local_backups as feature_list_local_backups
+from tool.maintenance.features.replica_backups import (
+    delete_replica_backup_dir as feature_delete_replica_backup_dir,
+    list_replica_backup_dirs as feature_list_replica_backup_dirs,
+)
 from tool.maintenance.features.release_publish import (
     get_server_version_info as feature_get_server_version_info,
     publish_from_test_to_prod as feature_publish_from_test_to_prod,
@@ -70,6 +74,9 @@ from tool.maintenance.features.restart_services import (
     restart_ragflow_and_ragflowauth as feature_restart_ragflow_and_ragflowauth,
 )
 from tool.maintenance.features.stop_services import stop_ragflow_and_ragflowauth as feature_stop_ragflow_and_ragflowauth
+from tool.maintenance.features.kill_backup_job import (
+    kill_running_backup_job as feature_kill_running_backup_job,
+)
 
 # （日志配置已迁移到 tool.maintenance.core.logging_setup）
 # （配置/环境/固定共享常量已迁移到 tool.maintenance.core.*）
@@ -482,6 +489,7 @@ class RagflowAuthTool:
         self.create_release_tab()
         self.create_smoke_tab()
         self.create_backup_files_tab()  # 新增：备份文件管理
+        self.create_replica_backups_tab()
         self.create_logs_tab()
 
         # 底部状态栏
@@ -774,6 +782,46 @@ class RagflowAuthTool:
 
         self.task_runner.run(name="stop_ragflow_and_ragflowauth", fn=do_work, on_done=on_done)
 
+    def kill_running_backup_job(self):
+        """
+        Force-stop the currently running DataSecurity backup job on the selected server.
+
+        This will:
+        - mark the active job as canceling/failed + release sqlite lock (best-effort)
+        - restart ragflowauth-backend container to terminate the running backup thread
+        """
+        confirm = messagebox.askyesno(
+            "二次确认",
+            f"即将强制终止【备份任务】（并重启 ragflowauth-backend）于服务器 {self.config.environment}（{self.config.user}@{self.config.ip}）。\n\n"
+            "这会中断正在进行的备份，可能导致本次备份不完整。\n\n"
+            "确定继续吗？",
+        )
+        if not confirm:
+            return
+
+        server_ip = self.config.ip
+        server_user = self.config.user
+
+        if hasattr(self, "status_bar"):
+            self.status_bar.config(text="正在终止备份任务...")
+
+        def do_work():
+            return feature_kill_running_backup_job(server_ip=server_ip, server_user=server_user)
+
+        def on_done(res):
+            if not res.ok or not res.value:
+                if hasattr(self, "status_bar"):
+                    self.status_bar.config(text="终止备份任务：失败")
+                return
+
+            result = res.value
+            log_to_file(result.log, "INFO" if result.ok else "ERROR")
+            if hasattr(self, "status_bar"):
+                self.status_bar.config(text="终止备份任务：完成" if result.ok else "终止备份任务：完成（有警告）")
+            self.show_text_window("终止备份任务结果", result.log)
+
+        self.task_runner.run(name="kill_running_backup_job", fn=do_work, on_done=on_done)
+
     def refresh_prod_rollback_versions(self):
         if hasattr(self, "status_bar"):
             self.status_bar.config(text="刷新可回滚版本...")
@@ -1029,6 +1077,12 @@ class RagflowAuthTool:
 
         build_backup_files_tab(self)
 
+    def create_replica_backups_tab(self):
+        """共享备份页签：查看/删除两台服务器本地 /opt/ragflowauth/data/backups 下的备份目录（测试+正式）。"""
+        from tool.maintenance.ui.replica_backups_tab import build_replica_backups_tab
+
+        build_replica_backups_tab(self)
+
     def refresh_backup_files(self):
         """刷新备份文件列表"""
         self.backup_files_status.config(text="正在加载文件列表...")
@@ -1048,6 +1102,106 @@ class RagflowAuthTool:
         # 在后台线程中执行
         thread = threading.Thread(target=load_files, daemon=True)
         thread.start()
+
+    def refresh_replica_backups(self):
+        """刷新共享备份列表（测试+正式：/opt/ragflowauth/data/backups）。"""
+        if hasattr(self, "replica_status"):
+            self.replica_status.config(text="正在加载服务器本地备份列表...")
+        self.root.update()
+
+        def worker():
+            test_res = feature_list_replica_backup_dirs(server_ip=TEST_SERVER_IP, server_user="root")
+            prod_res = feature_list_replica_backup_dirs(server_ip=PROD_SERVER_IP, server_user="root")
+
+            def apply():
+                # Clear trees
+                for tree in (getattr(self, "test_replica_tree", None), getattr(self, "prod_replica_tree", None)):
+                    if tree is None:
+                        continue
+                    for iid in tree.get_children():
+                        tree.delete(iid)
+
+                if getattr(self, "test_replica_tree", None) is not None:
+                    for name in test_res.names:
+                        self.test_replica_tree.insert("", tk.END, values=(name,))
+                    if hasattr(self, "test_replica_count"):
+                        self.test_replica_count.config(text=f"{len(test_res.names)} 个")
+
+                if getattr(self, "prod_replica_tree", None) is not None:
+                    for name in prod_res.names:
+                        self.prod_replica_tree.insert("", tk.END, values=(name,))
+                    if hasattr(self, "prod_replica_count"):
+                        self.prod_replica_count.config(text=f"{len(prod_res.names)} 个")
+
+                if hasattr(self, "replica_status"):
+                    self.replica_status.config(
+                        text=(
+                            f"测试: {len(test_res.names)} 个；正式: {len(prod_res.names)} 个"
+                            + ("（部分失败）" if (not test_res.ok or not prod_res.ok) else "")
+                        )
+                    )
+
+            self.root.after(0, apply)
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def delete_selected_replica_backup(self, which: str):
+        which = (which or "").strip().lower()
+        if which not in ("test", "prod"):
+            return
+
+        server_ip = TEST_SERVER_IP if which == "test" else PROD_SERVER_IP
+        tree = getattr(self, "test_replica_tree", None) if which == "test" else getattr(self, "prod_replica_tree", None)
+        if tree is None:
+            return
+
+        sel = list(tree.selection())
+        if not sel:
+            messagebox.showwarning("提示", "请先选择要删除的备份目录")
+            return
+
+        names: list[str] = []
+        for iid in sel:
+            vals = tree.item(iid, "values") or []
+            if vals:
+                names.append(str(vals[0]))
+
+        if not names:
+            messagebox.showwarning("提示", "未解析到选中的目录名")
+            return
+
+        confirm = messagebox.askyesno(
+            "二次确认",
+            f"即将从 {which.upper()} 服务器（{server_ip}）删除 {len(names)} 个本机备份目录（/opt/ragflowauth/data/backups）：\n\n"
+            + "\n".join(names[:12])
+            + ("\n..." if len(names) > 12 else "")
+            + "\n\n删除后不可恢复，确定继续吗？",
+        )
+        if not confirm:
+            return
+
+        if hasattr(self, "replica_status"):
+            self.replica_status.config(text=f"正在删除 {which.upper()} 选中备份目录...")
+
+        def worker():
+            results = []
+            for name in names:
+                results.append(feature_delete_replica_backup_dir(server_ip=server_ip, server_user="root", name=name))
+
+            def apply():
+                ok_cnt = sum(1 for r in results if r.ok)
+                fail_cnt = len(results) - ok_cnt
+                log_lines = [f"[TARGET] {which.upper()} {server_ip}", ""]
+                for r in results:
+                    log_lines.append(f"- {r.name}: {'OK' if r.ok else 'FAIL'} ({r.message})")
+                self.show_text_window("删除共享备份结果", "\n".join(log_lines))
+                if hasattr(self, "replica_status"):
+                    self.replica_status.config(text=f"删除完成：成功 {ok_cnt} 个，失败 {fail_cnt} 个")
+                self.refresh_replica_backups()
+
+            self.root.after(0, apply)
+
+        threading.Thread(target=worker, daemon=True).start()
 
     def _get_backup_files(self, directory):
         """获取指定目录的备份文件列表"""
@@ -1617,6 +1771,11 @@ class RagflowAuthTool:
         # 特殊处理：停止 RAGFlow + RagflowAuth（当前选择的服务器）
         if command == "__stop_ragflow_and_ragflowauth__":
             self.stop_ragflow_and_ragflowauth()
+            return
+
+        # 特殊处理：强制终止正在运行的备份任务（当前选择的服务器）
+        if command == "__kill_backup_job__":
+            self.kill_running_backup_job()
             return
 
         # 特殊处理：清理 Docker 镜像（仅保留当前运行的镜像）
