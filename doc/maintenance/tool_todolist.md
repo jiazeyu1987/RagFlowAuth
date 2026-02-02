@@ -1,61 +1,62 @@
-# tool.py 缺口功能 TODO（对齐 workflow.md）
+# tool.py 功能对齐 TODO（对齐 `doc/maintenance/workflow.md`）
 
-说明：
-- 本文件对应 `doc/maintance/workflow.md` 的 SOP 要求，用于列出 `tool/maintenance/tool.py` 目前未覆盖/需要补齐的能力。
-- 仓库中已存在 `doc/maintance/`（注意拼写），但本文件按需求写入 `doc/maintaince/`（本目录为新建）。
+更新日期：2026-02-02
 
----
+本文用于追踪维护工具 `tool/maintenance/tool.py` 需要补齐/已落地的能力，避免后续改动导致发布/备份/还原链路失效。
 
-## P0（建议优先做）
-
-已由前后端实现（无需在 tool.py 里重复实现）：
-- 手动触发增量/全量备份 + 进度/日志展示（前端 DataSecurity 页面 → 后端 job 机制）
-- 定时增量/全量备份（后端 scheduler v2，cron 表达式）
-- 全量备份可包含 `images.tar`（等价于“每周镜像备份”，配合“全量备份时间=每周”）
-
-### 1) “版本/回滚”工作流（保留上一版本并一键切回）
-- 现状：工具支持快速部署/重启、清理镜像，但没有“选择历史版本/镜像 -> 回滚”的标准流程；清理镜像功能可能误删回滚所需镜像。
-- 目标能力：
-  - 记录每次部署：tag、时间、变更说明（可手填）、目标环境（测试/生产）。
-  - 一键回滚：选择上一 tag 或指定 tag，重建容器并验证。
-  - 镜像清理改为：保留最近 N 个发布版本 + 当前运行版本（避免破坏回滚点）。
-- SOP 对应：`doc/maintance/workflow.md:56`、`doc/maintance/workflow.md:66`
-- 相关代码参考：部署 `tool/maintenance/tool.py:1658`；清理镜像 `tool/maintenance/tool.py:2123`
+固定环境（工具内写死，不弹窗）：
+- TEST：`172.30.30.58`
+- PROD：`172.30.30.57`
+- Windows 共享：`//192.168.112.72/backup`
+- 服务器挂载点：`/mnt/replica`，项目子目录固定：`/mnt/replica/RagflowAuth`
 
 ---
 
-## P1（建议补齐）
+## 已完成（✅）
 
-### 2) 测试/生产“冒烟测试”一键执行（Checklist 自动化）
-- 现状：SOP 有 checklist，但工具未提供自动跑检查的按钮（目前更多是日志/容器状态查看）。
-- 目标能力：
-  - 一键 smoke：静态资源（含 `.mjs`）、登录、上传（含 413 检测）、预览、权限校验、备份跑通。
-  - 输出可复制的报告（成功/失败/建议动作）。
-- SOP 对应：`doc/maintance/workflow.md:41`
+### ✅ 1) “版本回滚”工作流（PROD）
+- 已落地：发布页签②增加“版本回滚（正式）”
+  - 刷新可回滚版本：列出 PROD 上 backend/frontend 同 tag 镜像
+  - 一键回滚：按 `docker inspect` 复刻参数重建容器 + `/health` 检查
+- 同时增强：清理镜像不会再删除回滚点
+  - 默认保留最近 N(=5) 个 `ragflowauth-backend`/`ragflowauth-frontend` 镜像 + 当前运行镜像
 
-### 3) “compose 部署”与“docker run 快速部署”的统一
-- 现状：SOP 偏向 docker compose；工具当前快速部署走 `docker run`，与 compose 管理方式不一致。
-- 目标能力：
-  - 提供两种部署策略可选，并把“生产/测试一致性”固化到流程里：
-    - compose：拉取版本/更新镜像/`docker compose up -d`
-    - run：保留现有快速部署，但明确适用场景与风险
-- SOP 对应：`doc/maintance/workflow.md:37`
+### ✅ 2) 测试/生产“冒烟测试”一键执行（只读）
+- 已落地：新增页签 `冒烟测试`
+- 覆盖检查：docker 可用、容器状态、后端 `/health`、前端/ RAGFlow HTTP、`/mnt/replica` 挂载与空间
 
-### 4) 备份留存策略可配置化
-- 现状：工具提供“一键清理 30 天前旧备份”，但 SOP 建议 Daily/Weekly 不同保留策略。
-- 目标能力：
-  - Daily 保留 14~30 天、Weekly 保留 4~8 周（可配置）。
-  - 分类型清理（数据备份 vs 镜像备份）。
-- SOP 对应：`doc/maintance/workflow.md:84`
-- 相关代码参考：清理旧备份 `tool/maintenance/tool.py:1197`
+### ✅ 3) 备份留存策略“可配置化”
+- 已落地：`备份文件`页签支持输入“保留天数”（默认 30）并清理超过 N 天的备份目录
+
+### ✅ 3.1) 取消当前备份任务（解除 409/卡住）
+- 已落地：`备份管理`页签增加“取消当前备份任务”按钮
+- 用途：当备份长期卡住（例如卡在 volume 或镜像保存）或再次触发返回 409（Conflict）时，可释放占用并允许下一次备份启动
+- 机制：协作取消（best-effort），长命令会在 heartbeat 检查点中断；状态会从 `running/queued` -> `canceling` -> `canceled`
+
+### ✅ 4) compose 部署与 docker run 快速部署共存（工具侧）
+- 已落地：发布链路优先走 compose 检测；当 compose 不可用/label 为空时，自动 fallback 为 run-mode（从 `docker inspect` 复刻参数重建容器）
+- 已落地：TEST/PROD `ragflow_config.json.base_url` 防呆校验与自动修正（防止跨环境读错知识库）
+
+### ✅ 5) 工具 UI 模块化（降低改动风险）
+- 已落地：UI 拆分到 `tool/maintenance/ui/*`
+  - `release_tab.py`、`backup_tab.py`、`restore_tab.py`、`smoke_tab.py`、`tools_tab.py`、`web_links_tab.py`、`backup_files_tab.py`、`logs_tab.py`
+- 已落地：对应 import 单测，防止未来重构破坏入口
+
+### ✅ 6) “发布记录”可视化（只读）
+- 已落地：工具会把成功的发布/数据同步/回滚记录追加到 `doc/maintenance/release_history.md`
+- 已落地：发布页签新增“发布记录”子页签：支持刷新查看 + 复制到剪贴板（便于粘贴到运维群/工单）
 
 ---
 
-## P2（增强体验/可选）
+## 待办（⏳）
 
-### 5) 发布记录与审批流（轻量化）
-- 目标能力：发布前确认“测试环境已通过”的 tag/commit；发布后自动写一条发布记录（时间、版本、回滚点）。
-- SOP 对应：`doc/maintance/workflow.md:60`、`doc/maintance/workflow.md:64`
+### ⏳ B) 自动化通知（可选）
+- 目标：备份/发布/还原成功或失败时，支持通知（企业微信/钉钉/邮件等）
+- 说明：需要明确通知渠道与凭据管理方式（否则不建议硬编码）
 
-### 6) 通知（可选）
-- 目标能力：备份/部署/还原完成或失败时，通过邮件/企业微信/钉钉/Telegram 等通知。
+---
+
+## 参考文档（必读）
+- 发布/数据同步问题复盘：`doc/maintenance/release_publish_lessons.md`
+- 镜像备份问题复盘：`doc/maintenance/backup_images_lessons.md`
+- 工具页签说明：`doc/maintenance/tool_release.md`、`doc/maintenance/tool_backup_restore.md`

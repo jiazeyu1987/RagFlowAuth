@@ -104,3 +104,18 @@ def add_replica_columns_to_data_security(conn: sqlite3.Connection) -> None:
     add_column_if_missing(conn, "data_security_settings", "replica_enabled INTEGER NOT NULL DEFAULT 0")
     add_column_if_missing(conn, "data_security_settings", "replica_target_path TEXT")
     add_column_if_missing(conn, "data_security_settings", "replica_subdir_format TEXT DEFAULT 'flat'")
+
+
+def add_cancel_columns_to_backup_jobs(conn: sqlite3.Connection) -> None:
+    """
+    Add cancellation tracking columns for long-running backup jobs.
+
+    This enables:
+    - User-triggered cancel (UI / operator)
+    - Worker cooperative cancellation (checkpoints + heartbeat)
+    """
+    if not table_exists(conn, "backup_jobs"):
+        return
+    add_column_if_missing(conn, "backup_jobs", "cancel_requested_at_ms INTEGER")
+    add_column_if_missing(conn, "backup_jobs", "cancel_reason TEXT")
+    add_column_if_missing(conn, "backup_jobs", "canceled_at_ms INTEGER")

@@ -61,6 +61,9 @@ class BackupJob:
     created_at_ms: int
     started_at_ms: int | None
     finished_at_ms: int | None
+    cancel_requested_at_ms: int | None = None
+    cancel_reason: str | None = None
+    canceled_at_ms: int | None = None
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -74,4 +77,7 @@ class BackupJob:
             "created_at_ms": self.created_at_ms,
             "started_at_ms": self.started_at_ms,
             "finished_at_ms": self.finished_at_ms,
+            "cancel_requested_at_ms": self.cancel_requested_at_ms,
+            "cancel_reason": self.cancel_reason,
+            "canceled_at_ms": self.canceled_at_ms,
         }

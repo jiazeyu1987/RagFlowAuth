@@ -30,7 +30,8 @@ def get_auth_context(
         # Avoid leaking transient sqlite errors as 500s (e.g. during backup/restore IO).
         raise HTTPException(status_code=503, detail=f"db_unavailable: {e}") from e
     if not user:
-        raise HTTPException(status_code=404, detail="用户不存在")
+        # Treat missing user for an authenticated token as unauthorized.
+        raise HTTPException(status_code=401, detail="用户不存在")
     snapshot = resolve_permissions(deps, user)
     return AuthContext(deps=deps, payload=payload, user=user, snapshot=snapshot)
 

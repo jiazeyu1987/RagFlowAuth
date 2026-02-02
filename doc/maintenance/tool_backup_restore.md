@@ -25,11 +25,15 @@
 - 查看最近的备份：列出服务器上最近生成的备份目录
 - 查看备份磁盘使用：统计备份占用空间
 - 查看 Windows 共享备份：查看同步到 Windows 共享目录中的备份
+- 取消当前备份任务：当备份长期卡住（例如卡在某个 volume 或镜像保存）或再次点击出现 409（Conflict）时，用于释放占用并允许下一次备份启动
+  - 说明：这是“协作取消”（best-effort），长时间运行的 `docker save` / `tar` 会在 heartbeat 检查点被中断
+  - 结果：任务状态会从 `running/queued` -> `canceling` -> `canceled`
 
 说明：
 - 该页以“查看/管理”为主，真正触发备份通常在后端“数据安全”流程中完成
 - “全量备份包含镜像”会生成 `images.tar`（体积可能非常大，常见 5~10GB+），同步到 Windows 共享也会很慢，请预留磁盘与时间
 - `images.tar` 的生成路径必须是容器内可见路径（例如 `/app/data/backups/migration_pack_*/images.tar`），否则会出现“勾选了但不生成”的问题（详见 `doc/maintenance/release_publish_lessons.md`）
+  - 镜像备份相关常见问题/经验汇总：`doc/maintenance/backup_images_lessons.md`
  - 目前建议（并在工具/后端配置中固定）：备份目录直接使用 `/mnt/replica/RagflowAuth`（避免写入服务器根分区 50GB 导致空间不足）。
 
 ---
@@ -46,7 +50,7 @@
 - 刷新列表：重新读取服务器备份目录
 - 查看详情：显示某个备份包里的关键文件（例如是否包含 `replication_manifest.json`）
 - 删除选中：删除指定备份
-- 清空旧备份（30天前）：批量清理
+- 清理旧备份：按“保留天数”批量清理（默认 30 天，可调整）
 
 排障建议：
 - 如果发现“备份文件分散在两个目录”，优先以当前后端备份实现为准，并保持容器内可见路径一致

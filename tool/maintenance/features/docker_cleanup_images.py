@@ -54,6 +54,7 @@ def cleanup_docker_images(
     *,
     ssh: SSHExecutor,
     log: Callable[[str, str], None],
+    keep_last_n: int = 5,
 ) -> DockerCleanupResult:
     log("[CLEANUP-IMAGES] Step 1: list running container images", "INFO")
     ok, out = ssh.execute("docker ps --format '{{.Image}}'")
@@ -64,6 +65,21 @@ def cleanup_docker_images(
     running_images: set[str] = {line.strip() for line in out.splitlines() if line.strip()}
     log(f"[CLEANUP-IMAGES] running_images={sorted(running_images)}", "DEBUG")
 
+    # Keep rollback points: latest N ragflowauth-backend/frontend images, even if not currently running.
+    keep_images: set[str] = set(running_images)
+    keep_last_n = max(0, int(keep_last_n or 0))
+    if keep_last_n:
+        for repo in ("ragflowauth-backend", "ragflowauth-frontend"):
+            cmd = f"docker images {repo} --format '{{{{.Repository}}}}:{{{{.Tag}}}}' 2>/dev/null | head -n {keep_last_n} || true"
+            ok_repo, out_repo = ssh.execute(cmd)
+            out_repo = _clean_ssh_output(out_repo or "")
+            if ok_repo and out_repo:
+                for line in out_repo.splitlines():
+                    img = line.strip()
+                    if img and img != f"{repo}:<none>" and img != f"{repo}:" and "<none>" not in img:
+                        keep_images.add(img)
+    log(f"[CLEANUP-IMAGES] keep_images={sorted(keep_images)}", "DEBUG")
+
     log("[CLEANUP-IMAGES] Step 2: list ragflowauth images", "INFO")
     ok, out = ssh.execute("docker images --format '{{.Repository}}:{{.Tag}}' | grep 'ragflowauth' || echo 'NO_IMAGES'")
     out = _clean_ssh_output(out or "")
@@ -71,7 +87,7 @@ def cleanup_docker_images(
         raise RuntimeError("获取镜像列表失败或没有镜像")
 
     all_images = [line.strip() for line in out.splitlines() if line.strip() and "ragflowauth" in line]
-    unused = [img for img in all_images if img not in running_images]
+    unused = [img for img in all_images if img not in keep_images]
     log(f"[CLEANUP-IMAGES] unused_images={unused}", "DEBUG")
 
     deleted: list[str] = []
@@ -96,4 +112,3 @@ def cleanup_docker_images(
         failed=failed,
         docker_df=docker_df,
     )
-

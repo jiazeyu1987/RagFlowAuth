@@ -146,7 +146,13 @@ def read_compose_project_name(compose_file: Path) -> str:
     return compose_file.parent.name
 
 
-def docker_tar_volume(volume_name: str, dest_tar_gz: Path, *, heartbeat: callable | None = None) -> None:
+def docker_tar_volume(
+    volume_name: str,
+    dest_tar_gz: Path,
+    *,
+    heartbeat: callable | None = None,
+    cancel_check: callable | None = None,
+) -> None:
     ensure_dir(dest_tar_gz.parent)
     backup_dir = dest_tar_gz.parent.resolve()
 
@@ -174,7 +180,7 @@ def docker_tar_volume(volume_name: str, dest_tar_gz: Path, *, heartbeat: callabl
         "-lc",
         f"tar -czf /backup/{dest_tar_gz.name} -C /data .",
     ]
-    code, out = run_cmd_live(cmd, heartbeat=heartbeat, heartbeat_interval_s=15.0)
+    code, out = run_cmd_live(cmd, heartbeat=heartbeat, heartbeat_interval_s=15.0, cancel_check=cancel_check)
     if code != 0:
         raise RuntimeError(f"备份 volume 失败：{volume_name}\n{out}")
 
@@ -187,7 +193,13 @@ def list_compose_images(compose_file: Path) -> tuple[list[str], str | None]:
     return images, None
 
 
-def docker_save_images(images: list[str], dest_tar: Path, *, heartbeat: callable | None = None) -> tuple[bool, str | None]:
+def docker_save_images(
+    images: list[str],
+    dest_tar: Path,
+    *,
+    heartbeat: callable | None = None,
+    cancel_check: callable | None = None,
+) -> tuple[bool, str | None]:
     if not images:
         return False, None
 
@@ -201,7 +213,12 @@ def docker_save_images(images: list[str], dest_tar: Path, *, heartbeat: callable
     # Do NOT translate to a host-only path like `/opt/...`, otherwise the file can't be created.
     dest_tar_str = str(dest_tar).replace("\\", "/")
 
-    code, out = run_cmd_live(["docker", "save", "-o", dest_tar_str, *images], heartbeat=heartbeat, heartbeat_interval_s=15.0)
+    code, out = run_cmd_live(
+        ["docker", "save", "-o", dest_tar_str, *images],
+        heartbeat=heartbeat,
+        heartbeat_interval_s=15.0,
+        cancel_check=cancel_check,
+    )
     if code != 0:
         return False, out or "docker save failed"
 

@@ -20,6 +20,7 @@ import logging
 import tempfile
 from pathlib import Path
 from datetime import datetime
+import re
 
 # Allow importing `tool.*` modules when this file is executed directly.
 if __package__ is None or __package__ == "":
@@ -43,6 +44,7 @@ from tool.maintenance.core.environments import ENVIRONMENTS
 from tool.maintenance.core.logging_setup import logger, log_to_file
 from tool.maintenance.core.server_config import ServerConfig
 from tool.maintenance.core.ssh_executor import SSHExecutor
+from tool.maintenance.core.task_runner import TaskRunner
 from tool.maintenance.features.docker_cleanup_images import cleanup_docker_images as feature_cleanup_docker_images
 from tool.maintenance.features.docker_containers_with_mounts import (
     show_containers_with_mounts as feature_show_containers_with_mounts,
@@ -61,6 +63,13 @@ from tool.maintenance.features.release_publish_local_to_test import (
 from tool.maintenance.features.release_publish_data_test_to_prod import (
     publish_data_from_test_to_prod as feature_publish_data_from_test_to_prod,
 )
+from tool.maintenance.features.smoke_test import feature_run_smoke_test
+from tool.maintenance.features.release_rollback import (
+    feature_list_ragflowauth_versions as feature_list_ragflowauth_versions,
+    feature_rollback_ragflowauth_to_version as feature_rollback_ragflowauth_to_version,
+)
+from tool.maintenance.features.release_history import load_release_history as feature_load_release_history
+from tool.maintenance.features.cancel_backup_job import cancel_active_backup_job as feature_cancel_active_backup_job
 
 # （日志配置已迁移到 tool.maintenance.core.logging_setup）
 # （配置/环境/固定共享常量已迁移到 tool.maintenance.core.*）
@@ -464,12 +473,15 @@ class RagflowAuthTool:
         self.notebook = ttk.Notebook(self.root)
         self.notebook.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
 
+        self.task_runner = TaskRunner(ui_call=lambda fn: self.root.after(0, fn))
+
         # 创建选项卡
         self.create_tools_tab()
         self.create_web_links_tab()
         self.create_backup_tab()
         self.create_restore_tab()
         self.create_release_tab()
+        self.create_smoke_tab()
         self.create_backup_files_tab()  # 新增：备份文件管理
         self.create_logs_tab()
 
@@ -478,390 +490,28 @@ class RagflowAuthTool:
         self.status_bar.pack(fill=tk.X, padx=10, pady=(0, 10))
 
     def create_tools_tab(self):
-        """创建工具选项卡"""
-        tab = ttk.Frame(self.notebook)
-        self.notebook.add(tab, text="  工具  ")
+        """工具页签 UI（拆分到独立模块）。"""
+        from tool.maintenance.ui.tools_tab import build_tools_tab
 
-        # 滚动容器
-        canvas = tk.Canvas(tab)
-        scrollbar = ttk.Scrollbar(tab, orient="vertical", command=canvas.yview)
-        scrollable_frame = ttk.Frame(canvas)
-
-        scrollable_frame.bind(
-            "<Configure>",
-            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
-        )
-
-        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
-        canvas.configure(yscrollcommand=scrollbar.set)
-
-        canvas.pack(side="left", fill="both", expand=True)
-        scrollbar.pack(side="right", fill="y")
-
-        # 工具按钮
-        tools = [
-            {
-                "title": "清理 Docker 镜像",
-                "desc": "清理服务器上未使用的 Docker 镜像，释放磁盘空间（仅保留当前运行的镜像）",
-                "cmd": "__cleanup_docker_images__"
-            },
-            {
-                "title": "挂载 Windows 共享",
-                "desc": "挂载 Windows 网络共享到服务器（固定挂载到 /mnt/replica）",
-                "cmd": "__mount_windows_share__"
-            },
-            {
-                "title": "卸载 Windows 共享",
-                "desc": "卸载 Windows 网络共享（停止自动备份同步）",
-                "cmd": "__unmount_windows_share__"
-            },
-            {
-                "title": "检查挂载状态",
-                "desc": "检查 Windows 共享挂载状态和可用空间",
-                "cmd": "__check_mount_status__"
-            },
-            {
-                "title": "快速部署",
-                "desc": "快速部署到服务器（使用 Windows 本地构建的镜像）",
-                "cmd": "quick-deploy"
-            },
-            {
-                "title": "快速重启容器",
-                "desc": "使用现有镜像快速重启容器（自动检测镜像标签并修复挂载）",
-                "cmd": "__smart_quick_restart__"
-            },
-            {
-                "title": "查看运行中的容器",
-                "desc": "列出所有运行中的 Docker 容器及其状态（包括挂载信息）",
-                "cmd": "__show_containers_with_mounts__"
-            },
-            {
-                "title": "查看所有容器",
-                "desc": "列出所有 Docker 容器（包括已停止的）",
-                "cmd": "docker ps -a"
-            },
-            {
-                "title": "查看 Docker 镜像",
-                "desc": "列出所有 Docker 镜像及其大小",
-                "cmd": "docker images"
-            },
-            {
-                "title": "查看磁盘使用情况",
-                "desc": "显示 Docker 占用的磁盘空间",
-                "cmd": "docker system df"
-            },
-            {
-                "title": "查看后端日志",
-                "desc": "显示后端容器最近的日志输出",
-                "cmd": "docker logs --tail 50 ragflowauth-backend"
-            },
-            {
-                "title": "查看前端日志",
-                "desc": "显示前端容器最近的日志输出",
-                "cmd": "docker logs --tail 50 ragflowauth-frontend"
-            },
-            {
-                "title": "重启所有容器",
-                "desc": "重启 RagflowAuth 的所有容器",
-                "cmd": "docker restart ragflowauth-backend ragflowauth-frontend"
-            },
-            {
-                "title": "停止所有容器",
-                "desc": "停止 RagflowAuth 的所有容器",
-                "cmd": "docker stop ragflowauth-backend ragflowauth-frontend"
-            },
-            {
-                "title": "启动所有容器",
-                "desc": "启动 RagflowAuth 的所有容器",
-                "cmd": "docker start ragflowauth-backend ragflow-frontend"
-            },
-        ]
-
-        # 创建网格布局容器
-        grid_frame = ttk.Frame(scrollable_frame)
-        grid_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
-
-        for i, tool in enumerate(tools):
-            row = i // 3  # 每行3个按钮
-            col = i % 3   # 列索引
-
-            # 创建按钮框架（包含按钮和注释）
-            tool_frame = ttk.Frame(grid_frame, relief="ridge", borderwidth=1)
-            tool_frame.grid(row=row, column=col, padx=5, pady=5, sticky="nsew")
-
-            # 配置网格权重，使列均匀分布
-            grid_frame.columnconfigure(col, weight=1)
-            grid_frame.rowconfigure(row, weight=1)
-
-            # 工具按钮（充满框架宽度，放大字体和尺寸）
-            btn = ttk.Button(
-                tool_frame,
-                text=tool['title'],
-                command=lambda cmd=tool["cmd"]: self.execute_ssh_command(cmd),
-                style="Large.TButton"
-            )
-            btn.pack(fill=tk.X, expand=True, pady=(8, 4), padx=8)
-
-            # 工具注释说明（充满框架宽度，放大字体）
-            desc_label = ttk.Label(
-                tool_frame,
-                text=tool['desc'],
-                wraplength=250,
-                foreground="gray",
-                font=("Arial", 10),
-                justify="left",
-                anchor="w"
-            )
-            desc_label.pack(fill=tk.BOTH, expand=True, pady=(0, 8), padx=8)
+        build_tools_tab(self)
 
     def create_web_links_tab(self):
-        """创建 Web 链接选项卡"""
-        tab = ttk.Frame(self.notebook)
-        self.notebook.add(tab, text="  Web 管理界面  ")
+        """Web 管理页签 UI（拆分到独立模块）。"""
+        from tool.maintenance.ui.web_links_tab import build_web_links_tab
 
-        # 标题
-        title_label = ttk.Label(
-            tab,
-            text="Web 管理界面快速访问",
-            font=("Arial", 14, "bold")
-        )
-        title_label.pack(pady=20)
-
-        # 按钮容器
-        button_frame = ttk.Frame(tab)
-        button_frame.pack(pady=20)
-
-        # 前端按钮（放在第一位）
-        frontend_btn = ttk.Button(
-            button_frame,
-            text="🏠 打开 RagflowAuth 前端",
-            command=self.open_frontend,
-            width=30
-        )
-        frontend_btn.grid(row=0, column=0, pady=10, padx=10)
-
-        # 前端说明
-        frontend_desc = ttk.Label(
-            tab,
-            text="RagflowAuth 前端应用\n"
-                 "用户登录、知识库管理、文档管理等",
-            justify=tk.CENTER,
-            foreground="gray"
-        )
-        frontend_desc.pack(pady=(0, 10))
-
-        # Portainer 按钮
-        portainer_btn = ttk.Button(
-            button_frame,
-            text="🚀 打开 Portainer",
-            command=self.open_portainer,
-            width=30
-        )
-        portainer_btn.grid(row=1, column=0, pady=10, padx=10)
-
-        # Portainer 说明
-        portainer_desc = ttk.Label(
-            tab,
-            text="Portainer - Docker 容器管理平台 (HTTPS 端口 9002)\n"
-                 "可以可视化管理容器、镜像、网络等 Docker 资源",
-            justify=tk.CENTER,
-            foreground="gray"
-        )
-        portainer_desc.pack(pady=(0, 10))
-
-        # Web 管理界面按钮
-        web_btn = ttk.Button(
-            button_frame,
-            text="🌐 打开 Web 管理界面",
-            command=self.open_web_console,
-            width=30
-        )
-        web_btn.grid(row=2, column=0, pady=10, padx=10)
-
-        # Web 管理说明（动态显示当前服务器IP）
-        self.web_desc_label = ttk.Label(
-            tab,
-            text=f"Web 管理界面 - RagflowAuth 后台管理\n"
-                 f"访问 https://{self.config.ip}:9090/ 进行后台管理",
-            justify=tk.CENTER,
-            foreground="gray"
-        )
-        self.web_desc_label.pack(pady=(0, 20))
-
-        # 手动输入 URL
-        url_frame = ttk.LabelFrame(tab, text="自定义 URL", padding=10)
-        url_frame.pack(fill=tk.X, padx=50, pady=20)
-
-        ttk.Label(url_frame, text="URL:").grid(row=0, column=0, padx=5)
-        self.url_var = tk.StringVar(value="http://")
-        url_entry = ttk.Entry(url_frame, textvariable=self.url_var, width=40)
-        url_entry.grid(row=0, column=1, padx=5, pady=5)
-
-        open_url_btn = ttk.Button(url_frame, text="打开", command=self.open_custom_url)
-        open_url_btn.grid(row=0, column=2, padx=5)
+        build_web_links_tab(self)
 
     def create_backup_tab(self):
-        """创建备份选项卡"""
-        tab = ttk.Frame(self.notebook)
-        self.notebook.add(tab, text="  备份管理  ")
+        """备份管理页签 UI（拆分到独立模块，回调仍在 tool.py 里）。"""
+        from tool.maintenance.ui.backup_tab import build_backup_tab
 
-        # 标题
-        title_label = ttk.Label(
-            tab,
-            text="服务器备份管理",
-            font=("Arial", 14, "bold")
-        )
-        title_label.pack(pady=20)
-
-        # 备份工具
-        backup_frame = ttk.LabelFrame(tab, text="备份操作", padding=10)
-        backup_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=10)
-
-        tools = [
-            {
-                "title": "查看最近的备份",
-                "desc": "列出服务器上最近的备份目录",
-                "cmd": "ls -lht /opt/ragflowauth/data/backups/ | head -10"
-            },
-            {
-                "title": "查看备份磁盘使用",
-                "desc": "显示备份占用的磁盘空间",
-                "cmd": "du -sh /opt/ragflowauth/data/backups/* | sort -hr"
-            },
-            {
-                "title": "查看 Windows 共享备份",
-                "desc": "查看同步到 Windows 共享的备份",
-                "cmd": "ls -lht /mnt/replica/RagflowAuth/ | head -10"
-            },
-            {
-                "title": "检查 SMB 挂载状态",
-                "desc": "验证 Windows 共享是否正确挂载",
-                "cmd": "df -h | grep replica"
-            },
-        ]
-
-        for i, tool in enumerate(tools):
-            frame = ttk.LabelFrame(backup_frame, text=tool["title"], padding=10)
-            frame.pack(fill=tk.X, padx=10, pady=5)
-
-            desc = ttk.Label(frame, text=tool["desc"], foreground="gray", wraplength=600)
-            desc.pack(anchor=tk.W, pady=(0, 5))
-
-            btn = ttk.Button(
-                frame,
-                text="执行",
-                command=lambda cmd=tool["cmd"]: self.execute_ssh_command(cmd),
-                width=15
-            )
-            btn.pack(anchor=tk.W)
+        build_backup_tab(self)
 
     def create_restore_tab(self):
-        """创建数据还原选项卡"""
-        tab = ttk.Frame(self.notebook)
-        self.notebook.add(tab, text="  数据还原  ")
+        """数据还原页签 UI（拆分到独立模块；还原只允许测试服务器）。"""
+        from tool.maintenance.ui.restore_tab import build_restore_tab
 
-        # 标题
-        title_label = ttk.Label(
-            tab,
-            text="数据还原",
-            font=("Arial", 14, "bold")
-        )
-        title_label.pack(pady=20)
-
-        # 说明
-        info_label = ttk.Label(
-            tab,
-            text=(
-                "⚠️ 注意：本页签【只会还原到测试服务器】（不会影响正式服务器）\n"
-                f"目标服务器：{TEST_SERVER_IP}\n"
-                "本机固定目录：D:\\datas\\RagflowAuth\n"
-                "还原内容：auth.db + volumes；若存在 images.tar 也会还原镜像"
-            ),
-            foreground="gray",
-            justify=tk.CENTER,
-        )
-        info_label.pack(pady=10)
-
-        # 本地备份列表（固定目录）
-        folder_frame = ttk.LabelFrame(tab, text="选择本地备份（固定目录：D:\\datas\\RagflowAuth）", padding=10)
-        folder_frame.pack(fill=tk.BOTH, expand=False, padx=20, pady=10)
-
-        toolbar = ttk.Frame(folder_frame)
-        toolbar.pack(fill=tk.X, pady=(0, 8))
-        ttk.Button(toolbar, text="刷新列表", command=self.refresh_local_restore_list).pack(side=tk.LEFT, padx=5)
-        self.restore_start_btn = ttk.Button(
-            toolbar,
-            text="开始还原",
-            command=self.restore_data,
-            state=tk.DISABLED,
-            width=12,
-        )
-        self.restore_start_btn.pack(side=tk.LEFT, padx=5)
-
-        columns = ("label", "has_images", "folder")
-        self.restore_tree = ttk.Treeview(folder_frame, columns=columns, show="headings", height=6, selectmode="browse")
-        self.restore_tree.heading("label", text="备份时间")
-        self.restore_tree.heading("has_images", text="有镜像")
-        self.restore_tree.heading("folder", text="文件夹")
-        self.restore_tree.column("label", width=160, anchor=tk.W)
-        self.restore_tree.column("has_images", width=80, anchor=tk.CENTER)
-        self.restore_tree.column("folder", width=440, anchor=tk.W)
-        self.restore_tree.pack(fill=tk.X, expand=False)
-        self.restore_tree.bind("<<TreeviewSelect>>", self.on_restore_backup_selected)
-
-        self.restore_backup_map = {}
-
-        # 文件夹信息显示
-        self.restore_info_label = ttk.Label(folder_frame, text="", foreground="blue", justify=tk.LEFT)
-        self.restore_info_label.pack(anchor=tk.W, padx=10, pady=5)
-
-        # 进度显示
-        progress_frame = ttk.LabelFrame(tab, text="还原进度", padding=10)
-        progress_frame.pack(fill=tk.X, padx=20, pady=10)
-
-        self.restore_progress = ttk.Progressbar(
-            progress_frame,
-            mode='indeterminate',
-            length=400
-        )
-        self.restore_progress.pack(pady=5)
-
-        self.restore_status_label = ttk.Label(progress_frame, text="", foreground="gray")
-        self.restore_status_label.pack(pady=5)
-
-        # 还原按钮
-        restore_btn_frame = ttk.Frame(tab)
-        restore_btn_frame.pack(pady=10)
-
-        self.restore_btn = ttk.Button(
-            restore_btn_frame,
-            text="开始还原数据",
-            command=self.restore_data,
-            state=tk.DISABLED,
-            width=20
-        )
-        self.restore_btn.pack()
-
-        # 输出区域
-        output_frame = ttk.LabelFrame(tab, text="还原日志", padding=5)
-        output_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=(0, 10))
-
-        self.restore_output = scrolledtext.ScrolledText(
-            output_frame,
-            height=15,
-            width=80,
-            state=tk.DISABLED,
-            font=("Consolas", 9)
-        )
-        self.restore_output.pack(fill=tk.BOTH, expand=True)
-
-        # 初始化还原状态
-        self.restore_images_exists = False
-        self.restore_volumes_exists = False
-        self.selected_restore_folder = None
-        self.restore_target_ip = TEST_SERVER_IP
-        self.restore_target_user = "root"
-        self.root.after(0, self.refresh_local_restore_list)
+        build_restore_tab(self)
 
     def refresh_local_restore_list(self):
         root_dir = Path(r"D:\datas\RagflowAuth")
@@ -898,49 +548,83 @@ class RagflowAuthTool:
         self.validate_restore_folder()
 
     def create_release_tab(self):
-        """发布：包含两个子页签（本机->测试、测试->正式）"""
-        tab = ttk.Frame(self.notebook)
-        self.notebook.add(tab, text="  发布  ")
+        """发布：发布页签 UI（拆分到独立模块，回调仍在 tool.py 里）。"""
+        from tool.maintenance.ui.release_tab import build_release_tab
 
-        title = ttk.Label(tab, text="发布到生产（测试 -> 正式）", font=("Arial", 14, "bold"))
-        title.pack(pady=10)
+        build_release_tab(self)
 
-        # Unified version input for both publish flows
-        version_frame = ttk.Frame(tab)
-        version_frame.pack(fill=tk.X, padx=20, pady=(0, 8))
-        ttk.Label(version_frame, text="版本号（留空自动生成）:").pack(side=tk.LEFT)
-        self.release_version_var = tk.StringVar(value="")
-        ttk.Entry(version_frame, textvariable=self.release_version_var, width=28).pack(side=tk.LEFT, padx=6)
-        ttk.Button(version_frame, text="生成版本号", command=self._release_generate_version).pack(side=tk.LEFT, padx=6)
+    def create_smoke_tab(self):
+        """冒烟测试页签 UI（拆分到独立模块）。"""
+        from tool.maintenance.ui.smoke_tab import build_smoke_tab
 
-        desc = ttk.Label(
-            tab,
-            text=(
-                "本页包含两个发布流：\n"
-                f"- 本机 -> 测试：把本机构建的镜像发布到测试服务器 {TEST_SERVER_IP}\n"
-                f"- 测试 -> 正式：把测试服务器当前运行的镜像发布到正式服务器 {PROD_SERVER_IP}\n"
-            ),
-            foreground="gray",
-            justify=tk.LEFT,
-        )
-        desc.pack(pady=(0, 10), padx=20, anchor=tk.W)
+        build_smoke_tab(self)
 
-        # Sub-tabs (make them visually distinct and easier to click)
+    def run_smoke_test(self, server_ip: str):
+        """
+        Run smoke tests in a background thread and render the report.
+        This is a read-only operation.
+        """
+
+        if hasattr(self, "status_bar"):
+            self.status_bar.config(text=f"冒烟测试运行中... {server_ip}")
+
+        def do_work():
+            return feature_run_smoke_test(server_ip=server_ip)
+
+        def on_done(res):
+            if not res.ok or not res.value:
+                if hasattr(self, "status_bar"):
+                    self.status_bar.config(text="冒烟测试失败")
+                return
+            report = (res.value.report or "") + "\n"
+            if hasattr(self, "smoke_output"):
+                self._set_smoke_output(report)
+            if hasattr(self, "status_bar"):
+                self.status_bar.config(text=f"冒烟测试完成：{'通过' if res.value.ok else '失败'}")
+
+        self.task_runner.run(name="smoke_test", fn=do_work, on_done=on_done)
+
+    def _set_smoke_output(self, text: str):
         try:
-            style = ttk.Style()
-            style.configure("Release.TNotebook.Tab", font=("Arial", 14, "bold"), padding=(22, 12))
+            self.smoke_output.delete("1.0", tk.END)
+            self.smoke_output.insert(tk.END, text)
         except Exception:
             pass
 
-        self.release_notebook = ttk.Notebook(tab, style="Release.TNotebook")
-        self.release_notebook.pack(fill=tk.BOTH, expand=True, padx=10, pady=(0, 10))
+    @staticmethod
+    def _extract_version_from_release_log(text: str | None) -> str | None:
+        if not text:
+            return None
+        m = re.search(r"\bVERSION=([0-9_]+)\b", text)
+        if m:
+            return m.group(1)
+        return None
 
-        self._create_release_local_to_test_tab()
-        self._create_release_test_to_prod_tab()
-        self._create_release_test_data_to_prod_tab()
+    def _record_release_event(self, *, event: str, server_ip: str, version: str, details: str) -> None:
+        """
+        Append a local release record for audit/rollback purposes.
 
-        # Defer initial refresh until after the UI is fully initialized (status_bar created).
-        self.root.after(0, self.refresh_release_versions)
+        File is inside the repo so it can be committed if needed.
+        """
+        p = Path("doc/maintenance/release_history.md")
+        ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        version = (version or "").strip() or "(unknown)"
+        details = (details or "").strip()
+
+        header = "# 发布记录（自动追加）\n\n> 说明：由 `tool/maintenance/tool.py` 自动写入，用于追溯发布/回滚历史。\n\n"
+        line = f"- {ts} | {event} | server={server_ip} | version={version}\n"
+        if details:
+            rendered = details.replace("\r\n", "\n").replace("\r", "\n")
+            line += "  - " + rendered.replace("\n", "\n  - ") + "\n"
+
+        try:
+            if not p.exists():
+                p.parent.mkdir(parents=True, exist_ok=True)
+                p.write_text(header, encoding="utf-8")
+            with p.open("a", encoding="utf-8") as f:
+                f.write(line)
+        except Exception as e:
+            log_to_file(f"[ReleaseRecord] write failed: {e}", "ERROR")
 
     def _release_generate_version(self):
         self.release_version_var.set(time.strftime("%Y%m%d_%H%M%S", time.localtime()))
@@ -948,91 +632,6 @@ class RagflowAuthTool:
     def _release_version_arg(self) -> str | None:
         v = (self.release_version_var.get() or "").strip()
         return v or None
-
-    def _create_release_local_to_test_tab(self):
-        tab = ttk.Frame(self.release_notebook)
-        self.release_notebook.add(tab, text="① 本机 → 测试")
-
-        button_frame = ttk.Frame(tab)
-        button_frame.pack(fill=tk.X, padx=20, pady=(10, 10))
-        ttk.Button(button_frame, text="刷新测试版本", command=self.refresh_release_test_versions).pack(side=tk.LEFT, padx=5)
-        ttk.Button(button_frame, text="发布本机到测试", command=self.publish_local_to_test).pack(side=tk.LEFT, padx=5)
-
-        info_frame = ttk.Frame(tab)
-        info_frame.pack(fill=tk.BOTH, expand=False, padx=20, pady=(0, 10))
-        before = ttk.LabelFrame(info_frame, text=f"测试发布前版本 ({TEST_SERVER_IP})", padding=10)
-        after = ttk.LabelFrame(info_frame, text=f"测试发布后版本 ({TEST_SERVER_IP})", padding=10)
-        before.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 10))
-        after.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        self.release_test_before_text = scrolledtext.ScrolledText(before, height=10, width=60)
-        self.release_test_before_text.pack(fill=tk.BOTH, expand=True)
-        self.release_test_after_text = scrolledtext.ScrolledText(after, height=10, width=60)
-        self.release_test_after_text.pack(fill=tk.BOTH, expand=True)
-
-        log_frame = ttk.LabelFrame(tab, text="发布日志（本机 -> 测试）", padding=10)
-        log_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=(0, 10))
-        self.release_local_log_text = scrolledtext.ScrolledText(log_frame, height=18)
-        self.release_local_log_text.pack(fill=tk.BOTH, expand=True)
-
-    def _create_release_test_to_prod_tab(self):
-        tab = ttk.Frame(self.release_notebook)
-        self.release_notebook.add(tab, text="② 测试 → 正式（镜像）")
-
-        button_frame = ttk.Frame(tab)
-        button_frame.pack(fill=tk.X, padx=20, pady=(10, 10))
-        ttk.Button(button_frame, text="刷新版本信息", command=self.refresh_release_versions).pack(side=tk.LEFT, padx=5)
-        ttk.Button(button_frame, text="从测试发布到正式", command=self.publish_test_to_prod).pack(side=tk.LEFT, padx=5)
-        # Optional: also publish RAGFlow images, so PROD can run even when offline (no docker pull).
-        self.release_include_ragflow_var = tk.BooleanVar(value=False)
-        ttk.Checkbutton(button_frame, text="同步 RAGFlow 镜像", variable=self.release_include_ragflow_var).pack(
-            side=tk.LEFT, padx=(10, 0)
-        )
-
-        info_frame = ttk.Frame(tab)
-        info_frame.pack(fill=tk.BOTH, expand=False, padx=20, pady=(0, 10))
-
-        left = ttk.LabelFrame(info_frame, text=f"测试版本信息 ({TEST_SERVER_IP})", padding=10)
-        right = ttk.LabelFrame(info_frame, text=f"正式版本信息 ({PROD_SERVER_IP})", padding=10)
-        left.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 10))
-        right.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-
-        self.release_test_text = scrolledtext.ScrolledText(left, height=10, width=60)
-        self.release_test_text.pack(fill=tk.BOTH, expand=True)
-        self.release_prod_text = scrolledtext.ScrolledText(right, height=10, width=60)
-        self.release_prod_text.pack(fill=tk.BOTH, expand=True)
-
-        log_frame = ttk.LabelFrame(tab, text="发布日志（测试 -> 正式）", padding=10)
-        log_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=(0, 10))
-        self.release_log_text = scrolledtext.ScrolledText(log_frame, height=18)
-        self.release_log_text.pack(fill=tk.BOTH, expand=True)
-
-    def _create_release_test_data_to_prod_tab(self):
-        tab = ttk.Frame(self.release_notebook)
-        self.release_notebook.add(tab, text="③ 测试 → 正式（数据）")
-
-        desc = ttk.Label(
-            tab,
-            text=(
-                "将【测试服务器】数据同步到【正式服务器】（高风险/覆盖生产数据）：\n"
-                f"- 测试: {TEST_SERVER_IP} -> 正式: {PROD_SERVER_IP}\n"
-                "- 内容: auth.db + RAGFlow volumes（ragflow_compose_*）\n"
-                "- 发布过程中会自动把正式服务器 ragflow_config.json 的 base_url 修正为正式服务器\n"
-            ),
-            foreground="gray",
-            justify=tk.LEFT,
-        )
-        desc.pack(fill=tk.X, padx=20, pady=(10, 6), anchor=tk.W)
-
-        button_frame = ttk.Frame(tab)
-        button_frame.pack(fill=tk.X, padx=20, pady=(6, 10))
-        ttk.Button(button_frame, text="从测试发布数据到正式", command=self.publish_test_data_to_prod).pack(
-            side=tk.LEFT, padx=5
-        )
-
-        log_frame = ttk.LabelFrame(tab, text="发布日志（测试数据 -> 正式）", padding=10)
-        log_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=(0, 10))
-        self.release_data_log_text = scrolledtext.ScrolledText(log_frame, height=18)
-        self.release_data_log_text.pack(fill=tk.BOTH, expand=True)
 
     def _format_version_info(self, info) -> str:
         if not info:
@@ -1048,27 +647,184 @@ class RagflowAuthTool:
         )
 
     def refresh_release_versions(self):
+        if hasattr(self, "status_bar"):
+            self.status_bar.config(text="刷新版本信息...")
+
+        def do_work():
+            return (
+                feature_get_server_version_info(server_ip=TEST_SERVER_IP),
+                feature_get_server_version_info(server_ip=PROD_SERVER_IP),
+            )
+
+        def on_done(res):
+            if not res.ok or not res.value:
+                if hasattr(self, "status_bar"):
+                    self.status_bar.config(text="刷新版本信息：失败")
+                return
+            test_info, prod_info = res.value
+            if hasattr(self, "release_test_text"):
+                self.release_test_text.delete("1.0", tk.END)
+                self.release_test_text.insert(tk.END, self._format_version_info(test_info))
+            if hasattr(self, "release_prod_text"):
+                self.release_prod_text.delete("1.0", tk.END)
+                self.release_prod_text.insert(tk.END, self._format_version_info(prod_info))
+            if hasattr(self, "status_bar"):
+                self.status_bar.config(text="刷新版本信息：成功")
+
+        self.task_runner.run(name="refresh_release_versions", fn=do_work, on_done=on_done)
+
+    def refresh_release_history(self):
+        if hasattr(self, "status_bar"):
+            self.status_bar.config(text="刷新发布记录...")
+
+        def do_work():
+            return feature_load_release_history(tail_lines=220)
+
+        def on_done(res):
+            if not res.ok or not res.value:
+                if hasattr(self, "status_bar"):
+                    self.status_bar.config(text="刷新发布记录：失败")
+                return
+            view = res.value
+            if hasattr(self, "release_history_text"):
+                try:
+                    self.release_history_text.delete("1.0", tk.END)
+                    self.release_history_text.insert(tk.END, view.text)
+                except Exception:
+                    pass
+            if hasattr(self, "status_bar"):
+                self.status_bar.config(text="刷新发布记录：完成")
+
+        self.task_runner.run(name="refresh_release_history", fn=do_work, on_done=on_done)
+
+    def copy_release_history_to_clipboard(self):
+        try:
+            text = ""
+            if hasattr(self, "release_history_text"):
+                text = self.release_history_text.get("1.0", tk.END)
+            if not text.strip():
+                messagebox.showwarning("提示", "暂无可复制的发布记录")
+                return
+            self.root.clipboard_clear()
+            self.root.clipboard_append(text)
+            if hasattr(self, "status_bar"):
+                self.status_bar.config(text="发布记录已复制到剪贴板")
+        except Exception as e:
+            log_to_file(f"[ReleaseHistory] copy failed: {e}", "ERROR")
+            messagebox.showerror("错误", f"复制失败：{e}")
+
+    def cancel_active_backup_job(self):
+        """
+        Cancel the current queued/running backup job on the selected server.
+
+        Implemented via SSH + docker exec (no HTTP auth dependency).
+        """
+        confirm = messagebox.askyesno(
+            "二次确认",
+            f"即将取消当前服务器({self.config.user}@{self.config.ip})正在运行/排队的备份任务。\n\n确定继续吗？",
+        )
+        if not confirm:
+            return
+
+        server_ip = self.config.ip
+        server_user = self.config.user
+
+        if hasattr(self, "status_bar"):
+            self.status_bar.config(text="取消备份任务中...")
+
+        def do_work():
+            return feature_cancel_active_backup_job(server_ip=server_ip, server_user=server_user)
+
+        def on_done(res):
+            if not res.ok or not res.value:
+                if hasattr(self, "status_bar"):
+                    self.status_bar.config(text="取消备份任务：失败")
+                return
+
+            result = res.value
+            log_to_file(f"[BackupCancel] {result.raw}", "INFO" if result.ok else "ERROR")
+            if result.ok:
+                if hasattr(self, "status_bar"):
+                    if getattr(result, "final", False):
+                        self.status_bar.config(text=f"已取消：job#{result.job_id}")
+                    else:
+                        self.status_bar.config(text=f"已请求取消：job#{result.job_id}（仍在停止）")
+
+                waited = getattr(result, "waited_seconds", 0)
+                final = getattr(result, "final", False)
+                if final:
+                    messagebox.showinfo(
+                        "完成",
+                        f"已取消备份任务：job#{result.job_id}\nstatus={result.status}\nwaited={waited}s",
+                    )
+                else:
+                    messagebox.showinfo(
+                        "已请求取消，仍在停止",
+                        f"已请求取消备份任务：job#{result.job_id}\nstatus={result.status}\nwaited={waited}s\n\n"
+                        "如果仍然提示 409/Conflict，请等待几秒后重试；也可在备份/日志页查看服务端进度。",
+                    )
+            else:
+                if hasattr(self, "status_bar"):
+                    self.status_bar.config(text="取消备份任务：无活动任务/失败")
+                messagebox.showwarning("提示", f"未找到可取消的任务（或取消失败）\n\nraw:\n{result.raw}")
+
+        self.task_runner.run(name="cancel_active_backup_job", fn=do_work, on_done=on_done)
+
+    def refresh_prod_rollback_versions(self):
+        if hasattr(self, "status_bar"):
+            self.status_bar.config(text="刷新可回滚版本...")
+
+        def do_work():
+            return feature_list_ragflowauth_versions(server_ip=PROD_SERVER_IP, limit=30)
+
+        def on_done(res):
+            if not res.ok or res.value is None:
+                if hasattr(self, "status_bar"):
+                    self.status_bar.config(text="刷新可回滚版本：失败")
+                return
+            versions = res.value
+            if hasattr(self, "rollback_version_combo"):
+                self.rollback_version_combo.configure(values=versions)
+                if versions and not (self.rollback_version_var.get() or "").strip():
+                    self.rollback_version_var.set(versions[0])
+            if hasattr(self, "status_bar"):
+                self.status_bar.config(text="刷新可回滚版本：完成")
+
+        self.task_runner.run(name="refresh_prod_rollback_versions", fn=do_work, on_done=on_done)
+
+    def rollback_prod_to_selected_version(self):
+        v = (getattr(self, "rollback_version_var", None).get() if hasattr(self, "rollback_version_var") else "").strip()
+        if not v:
+            messagebox.showwarning("提示", "请先选择要回滚的版本")
+            return
+        confirm = messagebox.askyesno(
+            "二次确认",
+            f"即将对【正式服务器 {PROD_SERVER_IP}】执行版本回滚：\n\n"
+            f"- 版本：{v}\n"
+            f"- 影响：ragflowauth-backend / ragflowauth-frontend 会被重建\n\n"
+            "确定继续吗？",
+        )
+        if not confirm:
+            return
+
         def worker():
             try:
                 if hasattr(self, "status_bar"):
-                    self.status_bar.config(text="刷新版本信息...")
-                test_info = feature_get_server_version_info(server_ip=TEST_SERVER_IP)
-                prod_info = feature_get_server_version_info(server_ip=PROD_SERVER_IP)
-
-                if hasattr(self, "release_test_text"):
-                    self.release_test_text.delete("1.0", tk.END)
-                    self.release_test_text.insert(tk.END, self._format_version_info(test_info))
-
-                if hasattr(self, "release_prod_text"):
-                    self.release_prod_text.delete("1.0", tk.END)
-                    self.release_prod_text.insert(tk.END, self._format_version_info(prod_info))
-
+                    self.status_bar.config(text=f"回滚中... {v}")
+                result = feature_rollback_ragflowauth_to_version(server_ip=PROD_SERVER_IP, version=v)
+                if hasattr(self, "release_log_text"):
+                    self.root.after(0, lambda: self.release_log_text.insert(tk.END, (result.log or "") + "\n"))
                 if hasattr(self, "status_bar"):
-                    self.status_bar.config(text="刷新版本信息：成功")
+                    self.root.after(
+                        0,
+                        lambda: self.status_bar.config(text=f"回滚完成：{'成功' if result.ok else '失败'}"),
+                    )
+                if result.ok:
+                    self._record_release_event(event="PROD(ROLLBACK)", server_ip=PROD_SERVER_IP, version=v, details="")
             except Exception as e:
+                log_to_file(f"[Rollback] failed: {e}", "ERROR")
                 if hasattr(self, "status_bar"):
-                    self.status_bar.config(text="刷新版本信息：失败")
-                log_to_file(f"[Release] Refresh version failed: {e}", "ERROR")
+                    self.root.after(0, lambda: self.status_bar.config(text="回滚失败"))
 
         threading.Thread(target=worker, daemon=True).start()
 
@@ -1121,6 +877,12 @@ class RagflowAuthTool:
                     self.release_test_after_text.insert(tk.END, self._format_version_info(result.version_after))
 
                 if result.ok:
+                    self._record_release_event(
+                        event="LOCAL->TEST",
+                        server_ip=TEST_SERVER_IP,
+                        version=self._extract_version_from_release_log(result.log) or (self._release_version_arg() or ""),
+                        details=self._format_version_info(result.version_after) if result.version_after else "",
+                    )
                     for line in (result.log or "").splitlines():
                         log_to_file(f"[ReleaseFlow] {line}", "INFO")
                     log_to_file("[Release] Publish local->test succeeded", "INFO")
@@ -1163,6 +925,12 @@ class RagflowAuthTool:
                 self.release_log_text.insert(tk.END, (result.log or "") + "\n")
 
                 if result.ok:
+                    self._record_release_event(
+                        event="TEST->PROD(IMAGE)",
+                        server_ip=PROD_SERVER_IP,
+                        version=self._extract_version_from_release_log(result.log) or (self._release_version_arg() or ""),
+                        details=self._format_version_info(result.version_after) if result.version_after else "",
+                    )
                     for line in (result.log or "").splitlines():
                         log_to_file(f"[ReleaseFlow] {line}", "INFO")
                     log_to_file("[Release] Publish succeeded", "INFO")
@@ -1219,6 +987,12 @@ class RagflowAuthTool:
                 result = feature_publish_data_from_test_to_prod(version=self._release_version_arg(), log_cb=ui_log)
 
                 if result.ok:
+                    self._record_release_event(
+                        event="TEST->PROD(DATA)",
+                        server_ip=PROD_SERVER_IP,
+                        version=self._extract_version_from_release_log(result.log) or (self._release_version_arg() or ""),
+                        details="sync auth.db + ragflow volumes",
+                    )
                     for line in (result.log or "").splitlines():
                         log_to_file(f"[ReleaseDataFlow] {line}", "INFO")
                     log_to_file("[ReleaseData] Publish succeeded", "INFO")
@@ -1240,147 +1014,16 @@ class RagflowAuthTool:
         threading.Thread(target=worker, daemon=True).start()
 
     def create_logs_tab(self):
-        """创建日志选项卡"""
-        tab = ttk.Frame(self.notebook)
-        self.notebook.add(tab, text="  日志查看  ")
+        """日志查看页签 UI（拆分到独立模块）。"""
+        from tool.maintenance.ui.logs_tab import build_logs_tab
 
-        # 标题
-        title_label = ttk.Label(
-            tab,
-            text="实时日志查看",
-            font=("Arial", 14, "bold")
-        )
-        title_label.pack(pady=20)
-
-        # 日志查看工具
-        log_frame = ttk.LabelFrame(tab, text="日志查看", padding=10)
-        log_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=10)
-
-        tools = [
-            {
-                "title": "实时后端日志",
-                "desc": "实时显示后端容器日志（Ctrl+C 停止）",
-                "cmd": "docker logs -f ragflowauth-backend"
-            },
-            {
-                "title": "实时前端日志",
-                "desc": "实时显示前端容器日志（Ctrl+C 停止）",
-                "cmd": "docker logs -f ragflowauth-frontend"
-            },
-            {
-                "title": "查看系统日志",
-                "desc": "显示系统最近的系统日志",
-                "cmd": "journalctl -n 50 --no-pager"
-            },
-            {
-                "title": "查看 Docker 服务日志",
-                "desc": "显示 Docker 服务的日志",
-                "cmd": "journalctl -u docker -n 50 --no-pager"
-            },
-        ]
-
-        for i, tool in enumerate(tools):
-            frame = ttk.LabelFrame(log_frame, text=tool["title"], padding=10)
-            frame.pack(fill=tk.X, padx=10, pady=5)
-
-            desc = ttk.Label(frame, text=tool["desc"], foreground="gray", wraplength=600)
-            desc.pack(anchor=tk.W, pady=(0, 5))
-
-            btn = ttk.Button(
-                frame,
-                text="在新窗口中查看",
-                command=lambda cmd=tool["cmd"]: self.open_log_window(cmd),
-                width=20
-            )
-            btn.pack(anchor=tk.W)
+        build_logs_tab(self)
 
     def create_backup_files_tab(self):
-        """创建备份文件管理选项卡"""
-        tab = ttk.Frame(self.notebook)
-        self.notebook.add(tab, text="  备份文件  ")
+        """备份文件页签 UI（拆分到独立模块）。"""
+        from tool.maintenance.ui.backup_files_tab import build_backup_files_tab
 
-        # 标题
-        title_label = ttk.Label(
-            tab,
-            text="服务器备份文件管理",
-            font=("Arial", 14, "bold")
-        )
-        title_label.pack(pady=10)
-
-        # 说明
-        desc_label = ttk.Label(
-            tab,
-            text="管理服务器上的备份文件，支持查看和删除两个位置的备份：\n"
-                 "• /opt/ragflowauth/data/backups/ - 主要存储 auth.db\n"
-                 "• /opt/ragflowauth/backups/ - 主要存储 volumes/*.tar.gz",
-            foreground="gray",
-            justify=tk.LEFT
-        )
-        desc_label.pack(pady=(0, 10), padx=20)
-
-        # 操作按钮区域
-        button_frame = ttk.Frame(tab)
-        button_frame.pack(fill=tk.X, padx=20, pady=(0, 10))
-
-        ttk.Button(button_frame, text="刷新文件列表", command=self.refresh_backup_files).pack(side=tk.LEFT, padx=5)
-        ttk.Button(button_frame, text="删除选中文件", command=self.delete_selected_backup_files).pack(side=tk.LEFT, padx=5)
-        ttk.Button(button_frame, text="清空旧备份（30天前）", command=self.cleanup_old_backups).pack(side=tk.LEFT, padx=5)
-
-        # 创建左右两个区域的 PanedWindow
-        paned = ttk.PanedWindow(tab, orient=tk.HORIZONTAL)
-        paned.pack(fill=tk.BOTH, expand=True, padx=20, pady=(0, 10))
-
-        # 左侧：/opt/ragflowauth/data/backups/
-        left_frame = ttk.LabelFrame(paned, text="/opt/ragflowauth/data/backups/ (auth.db)")
-        paned.add(left_frame, weight=1)
-
-        # Treeview for left side
-        left_columns = ("name", "size", "date")
-        self.left_tree = ttk.Treeview(left_frame, columns=left_columns, show="tree headings", selectmode="extended")
-        self.left_tree.heading("#0", text="文件名")
-        self.left_tree.heading("size", text="大小")
-        self.left_tree.heading("date", text="日期")
-
-        self.left_tree.column("#0", width=250)
-        self.left_tree.column("size", width=100)
-        self.left_tree.column("date", width=150)
-
-        left_scrollbar = ttk.Scrollbar(left_frame, orient=tk.VERTICAL, command=self.left_tree.yview)
-        self.left_tree.configure(yscrollcommand=left_scrollbar.set)
-
-        self.left_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        left_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-
-        # 双击事件
-        self.left_tree.bind("<Double-1>", lambda _: self.show_backup_file_details("left"))
-
-        # 右侧：/opt/ragflowauth/backups/
-        right_frame = ttk.LabelFrame(paned, text="/opt/ragflowauth/backups/ (volumes)")
-        paned.add(right_frame, weight=1)
-
-        # Treeview for right side
-        right_columns = ("name", "size", "date")
-        self.right_tree = ttk.Treeview(right_frame, columns=right_columns, show="tree headings", selectmode="extended")
-        self.right_tree.heading("#0", text="文件名")
-        self.right_tree.heading("size", text="大小")
-        self.right_tree.heading("date", text="日期")
-
-        self.right_tree.column("#0", width=250)
-        self.right_tree.column("size", width=100)
-        self.right_tree.column("date", width=150)
-
-        right_scrollbar = ttk.Scrollbar(right_frame, orient=tk.VERTICAL, command=self.right_tree.yview)
-        self.right_tree.configure(yscrollcommand=right_scrollbar.set)
-
-        self.right_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        right_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-
-        # 双击事件
-        self.right_tree.bind("<Double-1>", lambda _: self.show_backup_file_details("right"))
-
-        # 状态标签
-        self.backup_files_status = ttk.Label(tab, text="点击'刷新文件列表'加载数据", relief=tk.SUNKEN)
-        self.backup_files_status.pack(fill=tk.X, padx=20, pady=(0, 10))
+        build_backup_files_tab(self)
 
     def refresh_backup_files(self):
         """刷新备份文件列表"""
@@ -1561,10 +1204,19 @@ class RagflowAuthTool:
             messagebox.showerror("错误", f"删除失败:\n" + "\n".join(failed))
 
     def cleanup_old_backups(self):
-        """清理30天前的旧备份"""
+        """清理超过 N 天的旧备份（默认 30 天）。"""
+        try:
+            days = int((self.backup_keep_days_var.get() or "30").strip())
+        except Exception:
+            days = 30
+        if days < 1:
+            days = 1
+        if days > 3650:
+            days = 3650
+
         confirm = messagebox.askyesno("确认清理",
-                                       "确定要删除30天前的所有备份吗？\n\n"
-                                       "这将删除以下两个目录中30天前的文件：\n"
+                                       f"确定要删除超过 {days} 天的所有备份吗？\n\n"
+                                       f"这将删除以下两个目录中超过 {days} 天的目录：\n"
                                        "• /opt/ragflowauth/data/backups/\n"
                                        "• /opt/ragflowauth/backups/")
         if not confirm:
@@ -1575,15 +1227,15 @@ class RagflowAuthTool:
 
         def cleanup():
             # 清理两个目录
-            cmd1 = "find /opt/ragflowauth/data/backups/ -maxdepth 1 -type d -mtime +30 -exec rm -rf {} + 2>/dev/null"
-            cmd2 = "find /opt/ragflowauth/backups/ -maxdepth 1 -type d -mtime +30 -exec rm -rf {} + 2>/dev/null"
+            cmd1 = f"find /opt/ragflowauth/data/backups/ -maxdepth 1 -type d -mtime +{days} -exec rm -rf {{}} + 2>/dev/null"
+            cmd2 = f"find /opt/ragflowauth/backups/ -maxdepth 1 -type d -mtime +{days} -exec rm -rf {{}} + 2>/dev/null"
 
             self.ssh_executor.execute(cmd1)
             self.ssh_executor.execute(cmd2)
 
             # 刷新列表
             self.root.after(0, self.refresh_backup_files)
-            self.root.after(0, lambda: messagebox.showinfo("清理完成", "30天前的旧备份已删除"))
+            self.root.after(0, lambda: messagebox.showinfo("清理完成", f"超过 {days} 天的旧备份已删除"))
 
         thread = threading.Thread(target=cleanup, daemon=True)
         thread.start()
@@ -1981,6 +1633,11 @@ class RagflowAuthTool:
         # 特殊处理：检查挂载状态
         if command == "__check_mount_status__":
             self.check_mount_status()
+            return
+
+        # 特殊处理：取消当前备份任务（后端 DataSecurity 任务）
+        if command == "__cancel_active_backup_job__":
+            self.cancel_active_backup_job()
             return
 
         if not self.ssh_executor:

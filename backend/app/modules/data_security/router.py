@@ -102,3 +102,19 @@ async def run_full_backup(_: AdminOnly) -> dict[str, Any]:
     except RuntimeError as e:
         raise HTTPException(status_code=409, detail=str(e))
 
+
+@router.post("/admin/data-security/backup/jobs/{job_id}/cancel")
+async def cancel_backup_job(_: AdminOnly, job_id: int, body: dict[str, Any] | None = None) -> dict[str, Any]:
+    """
+    Request cooperative cancellation for a queued/running backup job.
+
+    Notes:
+    - Cancellation is best-effort; long-running docker operations will be interrupted at heartbeat checkpoints.
+    - On success, the job will transition to `canceling` then `canceled`.
+    """
+    store = DataSecurityStore()
+    try:
+        job = store.request_cancel_job(job_id, reason=(body or {}).get("reason"))
+    except KeyError:
+        raise HTTPException(status_code=404, detail="job_not_found")
+    return job.as_dict()

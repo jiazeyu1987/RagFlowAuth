@@ -36,9 +36,9 @@ class _FakeUserStore:
     def get_by_user_id(self, user_id: str):
         return self.user
 
-    def update_user_password(self, user_id: str, new_password_hash: str):
+    def update_password(self, user_id: str, new_password: str) -> None:
         self.update_called = True
-        self.update_password_hash = new_password_hash
+        self.update_password_hash = hash_password(new_password)
 
 
 class _FakeDeps:
@@ -110,7 +110,7 @@ class TestPasswordChangeAPI(unittest.TestCase):
                 "/api/auth/password",
                 json={
                     "old_password": "OldPass123",
-                    "new_password": "Short1"
+                    "new_password": "Abc12"
                 }
             )
 

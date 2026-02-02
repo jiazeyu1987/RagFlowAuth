@@ -15,6 +15,7 @@ from .chat_sessions import ensure_chat_sessions_table
 from .data_security import (
     add_cron_schedule_columns_to_data_security,
     add_backup_job_kind_column,
+    add_cancel_columns_to_backup_jobs,
     add_full_backup_columns_to_data_security,
     add_last_backup_time_columns_to_data_security,
     add_replica_columns_to_data_security,
@@ -67,6 +68,7 @@ def ensure_schema(db_path: str | Path) -> None:
         ensure_backup_jobs_table(conn)
         ensure_backup_locks_table(conn)
         add_backup_job_kind_column(conn)
+        add_cancel_columns_to_backup_jobs(conn)
         add_full_backup_columns_to_data_security(conn)
         add_cron_schedule_columns_to_data_security(conn)
         add_last_backup_time_columns_to_data_security(conn)

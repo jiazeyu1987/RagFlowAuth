@@ -23,16 +23,24 @@ class TestDockerCleanupImagesUnit(unittest.TestCase):
         fake = _FakeSSH(
             {
                 "docker ps --format '{{.Image}}'": (True, "ragflowauth-backend:1.0.0\n"),
+                "docker images ragflowauth-backend --format '{{.Repository}}:{{.Tag}}' 2>/dev/null | head -n 1 || true": (
+                    True,
+                    "ragflowauth-backend:1.0.0\n",
+                ),
+                "docker images ragflowauth-frontend --format '{{.Repository}}:{{.Tag}}' 2>/dev/null | head -n 1 || true": (
+                    True,
+                    "ragflowauth-frontend:1.0.0\n",
+                ),
                 "docker images --format '{{.Repository}}:{{.Tag}}' | grep 'ragflowauth' || echo 'NO_IMAGES'": (
                     True,
-                    "ragflowauth-backend:1.0.0\nragflowauth-frontend:1.0.0\n",
+                    "ragflowauth-backend:1.0.0\nragflowauth-backend:0.9.0\nragflowauth-frontend:1.0.0\nragflowauth-frontend:0.9.0\n",
                 ),
-                "docker rmi ragflowauth-frontend:1.0.0 2>&1 || echo 'FAILED'": (True, "Untagged\n"),
+                "docker rmi ragflowauth-backend:0.9.0 2>&1 || echo 'FAILED'": (True, "Untagged\n"),
+                "docker rmi ragflowauth-frontend:0.9.0 2>&1 || echo 'FAILED'": (True, "Untagged\n"),
                 "docker system df 2>&1 || true": (True, "TYPE TOTAL ACTIVE\n"),
             }
         )
 
-        res = cleanup_docker_images(ssh=fake, log=lambda *_: None)
-        self.assertEqual(res.deleted, ["ragflowauth-frontend:1.0.0"])
+        res = cleanup_docker_images(ssh=fake, log=lambda *_: None, keep_last_n=1)
+        self.assertEqual(res.deleted, ["ragflowauth-backend:0.9.0", "ragflowauth-frontend:0.9.0"])
         self.assertEqual(res.failed, [])
-

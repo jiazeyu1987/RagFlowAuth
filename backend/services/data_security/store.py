@@ -299,12 +299,90 @@ class DataSecurityStore:
             conn.close()
         return self.get_job(job_id)
 
+    def request_cancel_job(self, job_id: int, *, reason: str | None = None) -> BackupJob:
+        """
+        Request cooperative cancellation for a job.
+
+        The running worker checks this flag at safe checkpoints and during long operations via heartbeat.
+        """
+        now_ms = int(time.time() * 1000)
+        reason = (reason or "").strip() or "user_requested"
+        conn = self._conn()
+        try:
+            conn.execute(
+                """
+                UPDATE backup_jobs
+                SET cancel_requested_at_ms = ?,
+                    cancel_reason = ?,
+                    status = CASE
+                        WHEN status IN ('queued', 'running') THEN 'canceling'
+                        ELSE status
+                    END,
+                    message = CASE
+                        WHEN status IN ('queued', 'running') THEN '取消中...'
+                        ELSE message
+                    END
+                WHERE id = ?
+                """,
+                (now_ms, reason, int(job_id)),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+        return self.get_job(int(job_id))
+
+    def is_cancel_requested(self, job_id: int) -> bool:
+        conn = self._conn()
+        try:
+            row = conn.execute(
+                "SELECT status, cancel_requested_at_ms FROM backup_jobs WHERE id = ?",
+                (int(job_id),),
+            ).fetchone()
+            if not row:
+                return False
+            status = str(row["status"] or "")
+            if status in ("canceling", "canceled"):
+                return True
+            return row["cancel_requested_at_ms"] is not None
+        finally:
+            conn.close()
+
+    def mark_job_canceled(self, job_id: int, *, message: str | None = None, detail: str | None = None) -> BackupJob:
+        now_ms = int(time.time() * 1000)
+        message = message if message is not None else "已取消"
+        conn = self._conn()
+        try:
+            conn.execute(
+                """
+                UPDATE backup_jobs
+                SET status = 'canceled',
+                    progress = 100,
+                    message = ?,
+                    detail = ?,
+                    canceled_at_ms = ?,
+                    finished_at_ms = COALESCE(finished_at_ms, ?)
+                WHERE id = ?
+                """,
+                (message, detail, now_ms, now_ms, int(job_id)),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+        return self.get_job(int(job_id))
+
     def get_job(self, job_id: int) -> BackupJob:
         conn = self._conn()
         try:
             row = conn.execute("SELECT * FROM backup_jobs WHERE id = ?", (int(job_id),)).fetchone()
             if not row:
                 raise KeyError(f"job not found: {job_id}")
+
+            def get_col(key: str, default=None):
+                try:
+                    return row[key]
+                except Exception:
+                    return default
+
             return BackupJob(
                 id=int(row["id"]),
                 kind=str(row["kind"] or "incremental"),
@@ -316,6 +394,11 @@ class DataSecurityStore:
                 created_at_ms=int(row["created_at_ms"] or 0),
                 started_at_ms=int(row["started_at_ms"]) if row["started_at_ms"] is not None else None,
                 finished_at_ms=int(row["finished_at_ms"]) if row["finished_at_ms"] is not None else None,
+                cancel_requested_at_ms=(
+                    int(get_col("cancel_requested_at_ms")) if get_col("cancel_requested_at_ms") is not None else None
+                ),
+                cancel_reason=get_col("cancel_reason"),
+                canceled_at_ms=(int(get_col("canceled_at_ms")) if get_col("canceled_at_ms") is not None else None),
             )
         finally:
             conn.close()
@@ -340,6 +423,13 @@ class DataSecurityStore:
                     created_at_ms=int(r["created_at_ms"] or 0),
                     started_at_ms=int(r["started_at_ms"]) if r["started_at_ms"] is not None else None,
                     finished_at_ms=int(r["finished_at_ms"]) if r["finished_at_ms"] is not None else None,
+                    cancel_requested_at_ms=(
+                        int(r["cancel_requested_at_ms"]) if "cancel_requested_at_ms" in r.keys() and r["cancel_requested_at_ms"] is not None else None
+                    ),
+                    cancel_reason=(r["cancel_reason"] if "cancel_reason" in r.keys() else None),
+                    canceled_at_ms=(
+                        int(r["canceled_at_ms"]) if "canceled_at_ms" in r.keys() and r["canceled_at_ms"] is not None else None
+                    ),
                 )
                 for r in rows
             ]

@@ -29,6 +29,7 @@ def run_cmd_live(
     heartbeat: callable | None = None,
     heartbeat_interval_s: float = 15.0,
     timeout_s: float | None = None,
+    cancel_check: callable | None = None,
 ) -> tuple[int, str]:
     """
     Run a command and periodically invoke `heartbeat()` while it's running.
@@ -41,6 +42,7 @@ def run_cmd_live(
     start = time.time()
     last_hb = start
     lines: list[str] = []
+    cancelled = False
 
     proc = subprocess.Popen(
         cmd,
@@ -65,15 +67,44 @@ def run_cmd_live(
                 pass
             last_hb = now
 
+    def _cancel_requested() -> bool:
+        if cancel_check is None:
+            return False
+        try:
+            return bool(cancel_check())
+        except Exception:
+            return False
+
     # Windows' `select.select()` only works with sockets; `selectors` can raise WinError 10038 on pipes.
     # Use a simpler communicate-with-timeout loop on Windows.
     if os.name == "nt":
         try:
             while True:
                 _maybe_heartbeat()
+                if _cancel_requested():
+                    cancelled = True
+                    try:
+                        proc.kill()
+                    except Exception:
+                        pass
+                    # Reap the process to avoid zombie / ResourceWarning on Windows.
+                    try:
+                        out2, _ = proc.communicate(timeout=1)
+                        if out2:
+                            lines.extend(str(out2).splitlines())
+                    except Exception:
+                        pass
+                    lines.append("[cancelled] user requested cancel")
+                    break
                 if timeout_s is not None and time.time() - start > timeout_s:
                     try:
                         proc.kill()
+                    except Exception:
+                        pass
+                    try:
+                        out2, _ = proc.communicate(timeout=1)
+                        if out2:
+                            lines.extend(str(out2).splitlines())
                     except Exception:
                         pass
                     lines.append("[timeout] command exceeded timeout")
@@ -89,7 +120,10 @@ def run_cmd_live(
                     continue
         finally:
             out = "\n".join(lines).strip()
-            rc = proc.returncode if proc.returncode is not None else 1
+            if cancelled:
+                rc = 130
+            else:
+                rc = proc.returncode if proc.returncode is not None else 1
             return int(rc), out
 
     sel = selectors.DefaultSelector()
@@ -99,6 +133,15 @@ def run_cmd_live(
     try:
         while True:
             _maybe_heartbeat()
+
+            if _cancel_requested():
+                cancelled = True
+                try:
+                    proc.kill()
+                except Exception:
+                    pass
+                lines.append("[cancelled] user requested cancel")
+                break
 
             if timeout_s is not None and time.time() - start > timeout_s:
                 try:
@@ -164,5 +207,8 @@ def run_cmd_live(
             pass
 
     out = "\n".join(lines).strip()
-    rc = proc.returncode if proc.returncode is not None else 1
+    if cancelled:
+        rc = 130
+    else:
+        rc = proc.returncode if proc.returncode is not None else 1
     return int(rc), out
