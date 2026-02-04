@@ -2832,7 +2832,7 @@ conn.close()
             messagebox.showwarning("警告", "请输入有效的 URL")
 
     def open_log_window(self, command):
-        """在新窗口中查看日志"""
+        """在新窗口中查看日志（通过 SSH 连接到当前选择的服务器）。"""
         if not self.ssh_executor:
             self.update_ssh_executor()
 
@@ -2847,38 +2847,102 @@ conn.close()
         )
         output_text.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
 
-        # 关闭按钮
-        close_btn = ttk.Button(
-            log_window,
-            text="关闭",
-            command=log_window.destroy
-        )
-        close_btn.pack(pady=5)
+        # Buttons
+        btn_frame = ttk.Frame(log_window)
+        btn_frame.pack(fill=tk.X, padx=10, pady=(0, 10))
 
-        # 在后台执行命令并实时显示输出
-        def tail_log():
+        stop_state = {"stopped": False}
+        process_holder = {"p": None}
+
+        def _append(text: str) -> None:
+            output_text.insert(tk.END, text)
+            output_text.see(tk.END)
+
+        def _stop_process() -> None:
+            stop_state["stopped"] = True
+            p = process_holder.get("p")
             try:
-                full_command = f"{self.ssh_executor.user}@{self.ssh_executor.ip} {command}"
-                process = subprocess.Popen(
-                    ["ssh", full_command],
-                    shell=True,
+                if p and p.poll() is None:
+                    p.terminate()
+            except Exception:
+                pass
+
+        def _on_close() -> None:
+            _stop_process()
+            log_window.destroy()
+
+        ttk.Button(btn_frame, text="停止", command=_stop_process).pack(side=tk.LEFT)
+        ttk.Button(btn_frame, text="关闭", command=_on_close).pack(side=tk.LEFT, padx=(8, 0))
+
+        log_window.protocol("WM_DELETE_WINDOW", _on_close)
+
+        import queue
+
+        q: "queue.Queue[str | None]" = queue.Queue()
+
+        # 在后台执行命令并实时输出（通过队列回到主线程更新 UI）
+        def tail_log_worker():
+            try:
+                user = self.ssh_executor.user
+                host = self.ssh_executor.ip
+                ssh_argv = [
+                    "ssh",
+                    "-o",
+                    "BatchMode=yes",
+                    "-o",
+                    "ConnectTimeout=10",
+                    "-o",
+                    "ControlMaster=no",
+                    f"{user}@{host}",
+                    command,
+                ]
+                p = subprocess.Popen(
+                    ssh_argv,
                     stdout=subprocess.PIPE,
                     stderr=subprocess.STDOUT,
+                    stdin=subprocess.DEVNULL,
                     text=True,
-                    bufsize=1
+                    encoding="utf-8",
+                    errors="replace",
+                    bufsize=1,
                 )
-
-                for line in process.stdout:
-                    output_text.insert(tk.END, line)
-                    output_text.see(tk.END)
-                    output_text.update()
-
-                process.wait()
+                process_holder["p"] = p
+                if not p.stdout:
+                    q.put("[ERROR] stdout is not available\n")
+                    return
+                for line in p.stdout:
+                    if stop_state["stopped"]:
+                        break
+                    q.put(line)
+                try:
+                    if p.poll() is None:
+                        p.terminate()
+                except Exception:
+                    pass
             except Exception as e:
-                output_text.insert(tk.END, f"\n错误: {str(e)}")
+                q.put(f"\n[ERROR] {e}\n")
+            finally:
+                q.put(None)
 
-        thread = threading.Thread(target=tail_log, daemon=True)
+        def poll_queue():
+            try:
+                while True:
+                    item = q.get_nowait()
+                    if item is None:
+                        _append("\n[INFO] 已停止。\n")
+                        return
+                    _append(item)
+            except Exception:
+                # empty or UI destroyed
+                pass
+            if not stop_state["stopped"] and log_window.winfo_exists():
+                log_window.after(80, poll_queue)
+
+        _append(f"[TARGET] {self.ssh_executor.user}@{self.ssh_executor.ip}\n$ {command}\n\n")
+
+        thread = threading.Thread(target=tail_log_worker, daemon=True)
         thread.start()
+        log_window.after(80, poll_queue)
 
     def select_restore_folder(self):
         """选择备份文件夹"""

@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { httpClient } from '../shared/http/httpClient';
 import { chatApi } from '../features/chat/api';
+import ReactMarkdown from 'react-markdown';
 
 const Chat = () => {
   const [chats, setChats] = useState([]);
@@ -12,6 +13,8 @@ const Chat = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState({ show: false, sessionId: null, sessionName: '' });
+  const [renameDialog, setRenameDialog] = useState({ show: false, sessionId: null, value: '' });
+  const [previewDialog, setPreviewDialog] = useState({ show: false, title: '', loading: false, error: '', payload: null });
 
   const messagesEndRef = useRef(null);
   const assistantMessageRef = useRef('');
@@ -35,16 +38,167 @@ const Chat = () => {
     return out;
   }, []);
 
+  const extractCitationIds = useCallback((value) => {
+    const text = String(value ?? '');
+    const ids = new Set();
+    const re = /\[ID:(\d+)\]/g;
+    let match = null;
+    while ((match = re.exec(text)) !== null) {
+      const n = Number(match[1]);
+      if (!Number.isNaN(n)) ids.add(n);
+    }
+    return Array.from(ids).sort((a, b) => a - b);
+  }, []);
+
+  const normalizeThinkForDisplay = useCallback((value) => {
+    const text = String(value ?? '');
+    if (!text) return '';
+
+    // Streaming may produce "growing prefix" repetitions:
+    // line1, line1+more, line1+more+more...
+    // Collapse by removing lines that are prefixes of any later line.
+    const rawLines = text
+      .split('\n')
+      .map((l) => String(l ?? '').replace(/\r/g, ''))
+      .map((l) => l.trim())
+      .filter(Boolean);
+    if (rawLines.length <= 1) return rawLines[0] || '';
+
+    const norm = (s) =>
+      String(s ?? '')
+        .trim()
+        .replace(/\s+/g, ' ')
+        .replace(/[“”]/g, '"')
+        .replace(/[‘’]/g, "'");
+
+    const normLines = rawLines.map(norm);
+
+    const keep = new Array(rawLines.length).fill(true);
+    for (let i = 0; i < rawLines.length; i++) {
+      const li = normLines[i];
+      for (let j = i + 1; j < rawLines.length; j++) {
+        const lj = normLines[j];
+        if (!li) continue;
+        if (lj.length >= li.length && (lj === li || lj.startsWith(li))) {
+          keep[i] = false;
+          break;
+        }
+      }
+    }
+
+    const out = rawLines.filter((_, idx) => keep[idx]);
+
+    // If it's clearly a cumulative chain, prefer showing only the last line for readability.
+    const keptCount = out.length;
+    if (rawLines.length >= 3 && keptCount === 1) return out[0];
+
+    // Dedupe exact repeats (after whitespace normalization)
+    const seen = new Set();
+    const deduped = [];
+    for (const line of out) {
+      const key = norm(line);
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      deduped.push(line);
+    }
+
+    return deduped.join('\n');
+  }, []);
+
+  const normalizeSource = useCallback((src) => {
+    const s = src && typeof src === 'object' ? src : {};
+    const docId =
+      s.doc_id || s.docId || s.document_id || s.documentId || s.ragflow_doc_id || s.ragflowDocId || s.id || '';
+    const dataset =
+      s.dataset_id ||
+      s.datasetId ||
+      s.dataset ||
+      s.dataset_name ||
+      s.datasetName ||
+      s.kb_id ||
+      s.kbId ||
+      s.kb_name ||
+      s.kbName ||
+      '';
+    const title =
+      s.filename ||
+      s.doc_name ||
+      s.docName ||
+      s.document_name ||
+      s.documentName ||
+      s.name ||
+      s.title ||
+      docId ||
+      'unknown';
+    return { docId: String(docId || ''), dataset: String(dataset || ''), title: String(title || '') };
+  }, []);
+
+  const debugChatCitations = useCallback(() => {
+    try {
+      return String(window?.localStorage?.getItem('RAGFLOWAUTH_DEBUG_CHAT_CITATIONS') || '') === '1';
+    } catch {
+      return false;
+    }
+  }, []);
+
+  const debugLogCitations = useCallback(
+    (...args) => {
+      if (!debugChatCitations()) return;
+      // eslint-disable-next-line no-console
+      console.debug('[Chat:Citations]', ...args);
+    },
+    [debugChatCitations]
+  );
+
   const upsertAssistantMessage = useCallback((content) => {
     setMessages((prev) => {
       const next = [...prev];
       const last = next[next.length - 1];
       if (last && last.role === 'assistant') {
-        next[next.length - 1] = { role: 'assistant', content };
+        next[next.length - 1] = { ...last, role: 'assistant', content };
       }
       return next;
     });
   }, []);
+
+  const markAssistantMessageFinal = useCallback(() => {
+    setMessages((prev) => {
+      const next = [...prev];
+      const last = next[next.length - 1];
+      if (last && last.role === 'assistant') {
+        next[next.length - 1] = { ...last, role: 'assistant', isFinal: true };
+      }
+      return next;
+    });
+  }, []);
+
+  const upsertAssistantSources = useCallback((sources) => {
+    const list = Array.isArray(sources) ? sources : [];
+    try {
+      debugLogCitations(
+        'sources received',
+        list.map((s) => {
+          const n = normalizeSource(s);
+          return {
+            raw_title: s?.filename || s?.title || s?.name || '',
+            normalized_title: n.title,
+            docId: n.docId,
+            dataset: n.dataset,
+          };
+        })
+      );
+    } catch {
+      // ignore
+    }
+    setMessages((prev) => {
+      const next = [...prev];
+      const last = next[next.length - 1];
+      if (last && last.role === 'assistant') {
+        next[next.length - 1] = { ...last, role: 'assistant', sources: list };
+      }
+      return next;
+    });
+  }, [debugLogCitations, normalizeSource]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -107,7 +261,11 @@ const Chat = () => {
   const createSession = async () => {
     if (!selectedChatId) return;
     try {
-      const session = await chatApi.createChatSession(selectedChatId, '新会话');
+      const selectedChat = chats.find((c) => c.id === selectedChatId);
+      const chatName = String(selectedChat?.name || '').trim();
+      const sessionName = chatName || '新会话';
+
+      const session = await chatApi.createChatSession(selectedChatId, sessionName);
       setSessions((prev) => [session, ...prev]);
       setSelectedSessionId(session.id);
       setMessages(session.messages || []);
@@ -127,23 +285,96 @@ const Chat = () => {
     if (!deleteConfirm.sessionId || !selectedChatId) return;
     try {
       await chatApi.deleteChatSessions(selectedChatId, [deleteConfirm.sessionId]);
-      setSessions((prev) => prev.filter((s) => s.id !== deleteConfirm.sessionId));
-      if (selectedSessionId === deleteConfirm.sessionId) {
-        setSelectedSessionId(null);
-        setMessages([]);
-      }
+      setSessions((prev) => {
+        const remaining = prev.filter((s) => s.id !== deleteConfirm.sessionId);
+        if (selectedSessionId === deleteConfirm.sessionId) {
+          if (remaining.length > 0) {
+            setSelectedSessionId(remaining[0].id);
+            setMessages(remaining[0].messages || []);
+          } else {
+            setSelectedSessionId(null);
+            setMessages([]);
+          }
+        }
+        return remaining;
+      });
       setDeleteConfirm({ show: false, sessionId: null, sessionName: '' });
     } catch (err) {
       setError(err.message || '删除会话失败');
     }
   };
 
+  const confirmRenameSession = async () => {
+    if (!renameDialog.sessionId || !selectedChatId) return;
+    const newName = String(renameDialog.value || '').trim();
+    if (!newName) return;
+    try {
+      await chatApi.renameChatSession(selectedChatId, renameDialog.sessionId, newName);
+      setSessions((prev) => prev.map((s) => (s.id === renameDialog.sessionId ? { ...s, name: newName } : s)));
+      setRenameDialog({ show: false, sessionId: null, value: '' });
+    } catch (err) {
+      setError(err.message || '重命名失败');
+    }
+  };
+
+  const openSourcePreview = useCallback(
+    async (rawSource) => {
+      const source = normalizeSource(rawSource);
+      if (!source.docId || !source.dataset) return;
+      debugLogCitations('download GET start', { before_title: source.title, docId: source.docId, dataset: source.dataset });
+      debugLogCitations('preview GET start', { before_title: source.title, docId: source.docId, dataset: source.dataset });
+      setPreviewDialog({ show: true, title: source.title, loading: true, error: '', payload: null });
+      try {
+        const qs = new URLSearchParams({ dataset: source.dataset }).toString();
+        const data = await httpClient.requestJson(`/api/ragflow/documents/${encodeURIComponent(source.docId)}/preview?${qs}`);
+        debugLogCitations('preview GET done', { before_title: source.title, after_title: data?.filename || '', type: data?.type || '' });
+        setPreviewDialog({ show: true, title: data?.filename || source.title, loading: false, error: '', payload: data });
+      } catch (e) {
+        debugLogCitations('preview GET fail', { before_title: source.title, error: e?.message || String(e || '') });
+        setPreviewDialog({ show: true, title: source.title, loading: false, error: e?.message || '预览失败', payload: null });
+      }
+    },
+    [debugLogCitations, normalizeSource]
+  );
+
+  const downloadSource = useCallback(
+    async (rawSource) => {
+      const source = normalizeSource(rawSource);
+      if (!source.docId || !source.dataset) return;
+      const qs = new URLSearchParams({ dataset: source.dataset, filename: source.title }).toString();
+      const res = await httpClient.request(`/api/ragflow/documents/${encodeURIComponent(source.docId)}/download?${qs}`, { method: 'GET' });
+      if (!res.ok) {
+        let message = `下载失败 (${res.status})`;
+        try {
+          const data = await res.json();
+          message = data?.detail || data?.message || message;
+        } catch {
+          // ignore
+        }
+        throw new Error(message);
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      try {
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = source.title || `document_${source.docId}`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      } finally {
+        URL.revokeObjectURL(url);
+      }
+    },
+    [debugLogCitations, normalizeSource]
+  );
+
   const sendMessage = async () => {
-    if (!inputMessage.trim() || !selectedChatId) return;
+    if (!inputMessage.trim() || !selectedChatId || !selectedSessionId) return;
     const question = inputMessage.trim();
     const userMessage = { role: 'user', content: question };
 
-    setMessages((prev) => [...prev, userMessage, { role: 'assistant', content: '' }]);
+    setMessages((prev) => [...prev, userMessage, { role: 'assistant', content: '', sources: [] }]);
     setInputMessage('');
     setError(null);
 
@@ -163,9 +394,9 @@ const Chat = () => {
       let buffer = '';
       assistantMessageRef.current = '';
 
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
+       while (true) {
+         const { done, value } = await reader.read();
+         if (done) break;
 
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split('\n');
@@ -178,6 +409,9 @@ const Chat = () => {
 
           try {
             const data = JSON.parse(dataStr);
+            if (data?.code === 0 && data?.data && Array.isArray(data.data.sources)) {
+              upsertAssistantSources(data.data.sources);
+            }
             if (data.code === 0 && data.data && data.data.answer) {
               const incoming = String(data.data.answer ?? '');
               if (!incoming) continue;
@@ -191,10 +425,33 @@ const Chat = () => {
               const currentNorm = normalizeForCompare(current);
               const incomingNorm = normalizeForCompare(incoming);
               let next = '';
+
+              // Heuristic: treat as "cumulative so far" when the incoming text shares a very long common prefix
+              // with what we already have, even if it doesn't strictly startWith due to minor formatting changes.
+              if (currentNorm && incomingNorm && incomingNorm.length > currentNorm.length) {
+                let prefixLen = 0;
+                const max = Math.min(currentNorm.length, incomingNorm.length);
+                for (let k = 0; k < max; k++) {
+                  if (currentNorm[k] !== incomingNorm[k]) break;
+                  prefixLen++;
+                }
+                const ratio = prefixLen / Math.max(1, currentNorm.length);
+                if (ratio >= 0.8 || prefixLen >= 400) {
+                  next = incoming;
+                }
+              }
+              if (next) {
+                assistantMessageRef.current = next;
+                upsertAssistantMessage(stripThinkTags(next));
+                continue;
+              }
               if (incomingNorm === currentNorm) {
                 next = current;
               } else if (incomingNorm.startsWith(currentNorm)) {
                 next = incoming; // cumulative
+              } else if (incomingNorm.includes(currentNorm)) {
+                // cumulative but may not start with the exact same prefix (e.g. leading whitespace changes)
+                next = incoming;
               } else if (currentNorm.startsWith(incomingNorm)) {
                 next = current; // incoming is older/shorter
               } else if (currentNorm.includes(incomingNorm)) {
@@ -221,7 +478,7 @@ const Chat = () => {
                       break;
                     }
                   }
-                  next = current + incoming.slice(rawOverlap || overlap);
+                  next = rawOverlap > 0 ? current + incoming.slice(rawOverlap) : incoming;
                 } else {
                   next = current + incoming;
                 }
@@ -234,8 +491,9 @@ const Chat = () => {
             // ignore malformed SSE chunks
           }
         }
-      }
-    } catch (err) {
+       }
+
+     } catch (err) {
       setError(err.message || '发送失败');
       // remove placeholder assistant message
       setMessages((prev) => prev.slice(0, -1));
@@ -245,7 +503,9 @@ const Chat = () => {
   const handleKeyPress = (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      sendMessage();
+      if (selectedChatId && selectedSessionId) {
+        sendMessage();
+      }
     }
   };
 
@@ -346,6 +606,23 @@ const Chat = () => {
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
+                    setRenameDialog({ show: true, sessionId: s.id, value: s.name || '' });
+                  }}
+                  data-testid={`chat-session-rename-${s.id}`}
+                  style={{
+                    padding: '6px 10px',
+                    borderRadius: '4px',
+                    border: 'none',
+                    backgroundColor: '#6b7280',
+                    color: 'white',
+                    cursor: 'pointer',
+                  }}
+                >
+                  重命名
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
                     setDeleteConfirm({ show: true, sessionId: s.id, sessionName: s.name || s.id });
                   }}
                   data-testid={`chat-session-delete-${s.id}`}
@@ -382,7 +659,30 @@ const Chat = () => {
         </div>
 
         <div data-testid="chat-messages" style={{ flex: 1, overflowY: 'auto', padding: '16px' }}>
-          {messages.length === 0 ? (
+          {!selectedChatId ? (
+            <div style={{ color: '#6b7280' }}>请先选择聊天助手</div>
+          ) : !selectedSessionId ? (
+            <div style={{ color: '#6b7280' }}>
+              当前没有会话页签，请先新建一个会话。
+              <div style={{ marginTop: '12px' }}>
+                <button
+                  onClick={createSession}
+                  data-testid="chat-create-session-empty"
+                  style={{
+                    padding: '10px 14px',
+                    borderRadius: '6px',
+                    border: 'none',
+                    backgroundColor: '#3b82f6',
+                    color: 'white',
+                    cursor: 'pointer',
+                    fontWeight: 600,
+                  }}
+                >
+                  新建会话
+                </button>
+              </div>
+            </div>
+          ) : messages.length === 0 ? (
             <div style={{ color: '#6b7280' }}>开始新的对话...</div>
           ) : (
             messages.map((m, idx) => (
@@ -402,10 +702,146 @@ const Chat = () => {
                     borderRadius: '10px',
                     backgroundColor: m.role === 'user' ? '#3b82f6' : '#f3f4f6',
                     color: m.role === 'user' ? 'white' : '#111827',
-                    whiteSpace: 'pre-wrap',
+                    lineHeight: 1.5,
+                    overflowX: 'auto',
                   }}
                 >
-                  {m.content}
+                  {(() => {
+                    const display = m.role === 'assistant' ? stripThinkTags(m.content) : String(m.content ?? '');
+                    const citationIds = m.role === 'assistant' ? extractCitationIds(display) : [];
+                    const sources = Array.isArray(m.sources) ? m.sources : [];
+                    const uniqueCitationIds = (() => {
+                      const out = [];
+                      const seen = new Set();
+                      for (const id of citationIds) {
+                        const raw = sources[id];
+                        if (!raw) continue;
+                        const src = normalizeSource(raw);
+                        const key = String(src.title || src.docId || '').trim();
+                        if (!key || seen.has(key)) continue;
+                        seen.add(key);
+                        out.push(id);
+                      }
+                      return out;
+                    })();
+                    const markdownComponents = {
+                      p: ({ node, ...props }) => <p style={{ margin: '0 0 10px 0' }} {...props} />,
+                      ul: ({ node, ...props }) => <ul style={{ margin: '0 0 10px 18px' }} {...props} />,
+                      ol: ({ node, ...props }) => <ol style={{ margin: '0 0 10px 18px' }} {...props} />,
+                      pre: ({ node, ...props }) => (
+                        <pre
+                          style={{
+                            margin: '0 0 10px 0',
+                            padding: '10px 12px',
+                            background: m.role === 'user' ? 'rgba(255,255,255,0.12)' : '#111827',
+                            color: m.role === 'user' ? 'white' : '#f9fafb',
+                            borderRadius: '8px',
+                            overflowX: 'auto',
+                          }}
+                          {...props}
+                        />
+                      ),
+                      code: ({ node, inline, className, children, ...props }) => (
+                        <code
+                          className={className}
+                          style={
+                            inline
+                              ? {
+                                  padding: '0 6px',
+                                  borderRadius: '6px',
+                                  background: m.role === 'user' ? 'rgba(255,255,255,0.18)' : '#e5e7eb',
+                                }
+                              : undefined
+                          }
+                          {...props}
+                        >
+                          {children}
+                        </code>
+                      ),
+                      a: ({ node, ...props }) => (
+                        <a
+                          {...props}
+                          target="_blank"
+                          rel="noreferrer"
+                          style={{ color: m.role === 'user' ? 'white' : '#2563eb', textDecoration: 'underline' }}
+                        />
+                      ),
+                    };
+
+                    return (
+                      <>
+                        <ReactMarkdown components={markdownComponents}>
+                          {display}
+                        </ReactMarkdown>
+
+                        {m.role === 'assistant' && uniqueCitationIds.length > 0 ? (
+                          <div style={{ marginTop: '8px', borderTop: '1px solid #e5e7eb', paddingTop: '8px' }}>
+                            <div style={{ fontSize: '0.85rem', color: '#6b7280', marginBottom: '6px' }}>引用文件</div>
+                            {uniqueCitationIds.map((id) => {
+                              const raw = sources[id];
+                              const src = raw ? normalizeSource(raw) : null;
+                              const canOpen = Boolean(src?.docId && src?.dataset);
+                              return (
+                                <div
+                                  key={id}
+                                  style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'space-between',
+                                    gap: '10px',
+                                    padding: '6px 8px',
+                                    borderRadius: '6px',
+                                    background: '#ffffff',
+                                    border: '1px solid #e5e7eb',
+                                    marginBottom: '6px',
+                                  }}
+                                >
+                                  <div style={{ minWidth: 0, flex: 1 }}>
+                                    <div style={{ fontSize: '0.9rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                      {src ? src.title : '未知文件'}
+                                    </div>
+
+                                  </div>
+                                  <div style={{ display: 'flex', gap: '8px' }}>
+                                    <button
+                                      disabled={!canOpen}
+                                      onClick={() => openSourcePreview(raw)}
+                                      style={{
+                                        padding: '6px 10px',
+                                        borderRadius: '6px',
+                                        border: '1px solid #d1d5db',
+                                        background: canOpen ? '#ffffff' : '#f3f4f6',
+                                        color: canOpen ? '#111827' : '#9ca3af',
+                                        cursor: canOpen ? 'pointer' : 'not-allowed',
+                                      }}
+                                    >
+                                      查看
+                                    </button>
+                                    <button
+                                      disabled={!canOpen}
+                                      onClick={() => {
+                                        downloadSource(raw).catch((e) => setError(e?.message || '下载失败'));
+                                      }}
+                                      style={{
+                                        padding: '6px 10px',
+                                        borderRadius: '6px',
+                                        border: 'none',
+                                        background: canOpen ? '#3b82f6' : '#9ca3af',
+                                        color: 'white',
+                                        cursor: canOpen ? 'pointer' : 'not-allowed',
+                                      }}
+                                    >
+                                      下载
+                                    </button>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        ) : null}
+                      </>
+                    );
+                  })()}
                 </div>
               </div>
             ))
@@ -417,42 +853,65 @@ const Chat = () => {
           <div data-testid="chat-error" style={{ padding: '10px 16px', backgroundColor: '#fee2e2', color: '#991b1b' }}>{error}</div>
         )}
 
-        <div style={{ padding: '12px', borderTop: '1px solid #e5e7eb', display: 'flex', gap: '10px' }}>
-          <textarea
-            value={inputMessage}
-            onChange={(e) => setInputMessage(e.target.value)}
-            onKeyDown={handleKeyPress}
-            data-testid="chat-input"
-            placeholder="输入消息...（Enter 发送，Shift+Enter 换行）"
-            style={{
-              flex: 1,
-              resize: 'none',
-              padding: '10px 12px',
-              borderRadius: '6px',
-              border: '1px solid #d1d5db',
-              outline: 'none',
-              minHeight: '44px',
-              maxHeight: '120px',
-            }}
-            disabled={!selectedChatId}
-          />
-          <button
-            onClick={sendMessage}
-            disabled={!selectedChatId || !inputMessage.trim()}
-            data-testid="chat-send"
-            style={{
-              padding: '0 16px',
-              borderRadius: '6px',
-              border: 'none',
-              backgroundColor: !selectedChatId || !inputMessage.trim() ? '#9ca3af' : '#3b82f6',
-              color: 'white',
-              cursor: !selectedChatId || !inputMessage.trim() ? 'not-allowed' : 'pointer',
-              fontWeight: 600,
-            }}
-          >
-            发送
-          </button>
-        </div>
+        {!selectedChatId ? (
+          <div style={{ padding: '12px', borderTop: '1px solid #e5e7eb', color: '#6b7280' }}>
+            请先选择聊天助手
+          </div>
+        ) : !selectedSessionId ? (
+          <div style={{ padding: '12px', borderTop: '1px solid #e5e7eb' }}>
+            <button
+              onClick={createSession}
+              data-testid="chat-create-session-bottom"
+              style={{
+                padding: '10px 14px',
+                borderRadius: '6px',
+                border: 'none',
+                backgroundColor: '#3b82f6',
+                color: 'white',
+                cursor: 'pointer',
+                fontWeight: 600,
+              }}
+            >
+              新建会话
+            </button>
+          </div>
+        ) : (
+          <div style={{ padding: '12px', borderTop: '1px solid #e5e7eb', display: 'flex', gap: '10px' }}>
+            <textarea
+              value={inputMessage}
+              onChange={(e) => setInputMessage(e.target.value)}
+              onKeyDown={handleKeyPress}
+              data-testid="chat-input"
+              placeholder="输入消息...（Enter 发送，Shift+Enter 换行）"
+              style={{
+                flex: 1,
+                resize: 'none',
+                padding: '10px 12px',
+                borderRadius: '6px',
+                border: '1px solid #d1d5db',
+                outline: 'none',
+                minHeight: '44px',
+                maxHeight: '120px',
+              }}
+            />
+            <button
+              onClick={sendMessage}
+              disabled={!inputMessage.trim()}
+              data-testid="chat-send"
+              style={{
+                padding: '0 16px',
+                borderRadius: '6px',
+                border: 'none',
+                backgroundColor: !inputMessage.trim() ? '#9ca3af' : '#3b82f6',
+                color: 'white',
+                cursor: !inputMessage.trim() ? 'not-allowed' : 'pointer',
+                fontWeight: 600,
+              }}
+            >
+              发送
+            </button>
+          </div>
+        )}
       </div>
 
       {deleteConfirm.show && (
@@ -507,6 +966,138 @@ const Chat = () => {
               >
                 确认删除
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {renameDialog.show && (
+        <div
+          data-testid="chat-rename-modal"
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            zIndex: 1000,
+          }}
+        >
+          <div style={{ backgroundColor: 'white', padding: '24px', borderRadius: '8px', width: '100%', maxWidth: '420px' }}>
+            <h3 style={{ margin: '0 0 12px 0' }}>重命名会话</h3>
+            <div style={{ marginBottom: '12px' }}>
+              <input
+                value={renameDialog.value}
+                onChange={(e) => setRenameDialog((prev) => ({ ...prev, value: e.target.value }))}
+                data-testid="chat-rename-input"
+                placeholder="请输入会话名称"
+                style={{
+                  width: '100%',
+                  padding: '10px 12px',
+                  borderRadius: '6px',
+                  border: '1px solid #d1d5db',
+                  outline: 'none',
+                }}
+              />
+            </div>
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <button
+                onClick={() => setRenameDialog({ show: false, sessionId: null, value: '' })}
+                data-testid="chat-rename-cancel"
+                style={{
+                  flex: 1,
+                  padding: '10px',
+                  backgroundColor: '#6b7280',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                }}
+              >
+                取消
+              </button>
+              <button
+                onClick={confirmRenameSession}
+                data-testid="chat-rename-confirm"
+                disabled={!String(renameDialog.value || '').trim()}
+                style={{
+                  flex: 1,
+                  padding: '10px',
+                  backgroundColor: !String(renameDialog.value || '').trim() ? '#9ca3af' : '#3b82f6',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '6px',
+                  cursor: !String(renameDialog.value || '').trim() ? 'not-allowed' : 'pointer',
+                }}
+              >
+                确定
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {previewDialog.show && (
+        <div
+          data-testid="chat-preview-modal"
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.35)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1100,
+            padding: '16px',
+          }}
+          onClick={() => setPreviewDialog({ show: false, title: '', loading: false, error: '', payload: null })}
+        >
+          <div
+            style={{
+              width: 'min(920px, 100%)',
+              maxHeight: '80vh',
+              backgroundColor: 'white',
+              borderRadius: '10px',
+              overflow: 'hidden',
+              boxShadow: '0 10px 30px rgba(0,0,0,0.25)',
+              display: 'flex',
+              flexDirection: 'column',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ padding: '12px 14px', borderBottom: '1px solid #e5e7eb', display: 'flex', justifyContent: 'space-between', gap: '10px' }}>
+              <div style={{ fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{previewDialog.title || '预览'}</div>
+              <button
+                onClick={() => setPreviewDialog({ show: false, title: '', loading: false, error: '', payload: null })}
+                style={{ border: 'none', background: '#ef4444', color: 'white', padding: '6px 10px', borderRadius: '6px', cursor: 'pointer' }}
+              >
+                关闭
+              </button>
+            </div>
+            <div style={{ padding: '14px', overflow: 'auto' }}>
+              {previewDialog.loading ? (
+                <div style={{ color: '#6b7280' }}>加载中...</div>
+              ) : previewDialog.error ? (
+                <div style={{ color: '#991b1b' }}>{previewDialog.error}</div>
+              ) : previewDialog.payload ? (
+                (() => {
+                  const p = previewDialog.payload;
+                  if (p.type === 'text') return <pre style={{ whiteSpace: 'pre-wrap' }}>{p.content}</pre>;
+                  if (p.type === 'image') return <img alt={p.filename || 'image'} style={{ maxWidth: '100%' }} src={`data:image/${p.image_type || 'png'};base64,${p.content}`} />;
+                  if (p.type === 'pdf') return <iframe title="pdf-preview" style={{ width: '100%', height: '70vh', border: 'none' }} src={`data:application/pdf;base64,${p.content}`} />;
+                  if (p.type === 'html') return <iframe title="html-preview" style={{ width: '100%', height: '70vh', border: 'none' }} src={`data:text/html;base64,${p.content}`} />;
+                  return <div style={{ color: '#6b7280' }}>{p.message || '不支持预览，请下载查看。'}</div>;
+                })()
+              ) : (
+                <div style={{ color: '#6b7280' }}>暂无内容</div>
+              )}
             </div>
           </div>
         </div>

@@ -23,5 +23,11 @@ export const chatApi = {
       body: JSON.stringify({ ids }),
     });
   },
-};
 
+  renameChatSession(chatId, sessionId, name) {
+    return httpClient.requestJson(authBackendUrl(`/api/chats/${chatId}/sessions/${encodeURIComponent(sessionId)}`), {
+      method: 'PUT',
+      body: JSON.stringify({ name }),
+    });
+  },
+};

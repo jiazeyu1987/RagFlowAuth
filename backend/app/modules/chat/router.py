@@ -6,7 +6,8 @@ import logging
 from pydantic import BaseModel
 
 from backend.app.core.authz import AuthContextDep
-from backend.app.core.permission_resolver import ResourceScope, normalize_accessible_chat_ids
+from backend.app.core.kb_refs import resolve_kb_ref
+from backend.app.core.permission_resolver import ResourceScope, allowed_dataset_ids, normalize_accessible_chat_ids
 
 
 router = APIRouter()
@@ -35,6 +36,11 @@ class ChatCompletionRequest(BaseModel):
 class DeleteSessionsRequest(BaseModel):
     """Delete sessions request model"""
     ids: Optional[list[str]] = None
+
+
+class RenameSessionRequest(BaseModel):
+    """Rename a chat session (stored locally for display)."""
+    name: str
 
 
 @router.get("/chats")
@@ -196,10 +202,66 @@ async def list_sessions(
         user_id=user.user_id
     )
 
+    # Overlay session name from local store (supports user rename).
+    try:
+        local_sessions = deps.chat_session_store.get_user_sessions(chat_id=chat_id, user_id=user.user_id)
+        name_map = {str(s.get("id")): str(s.get("name") or "") for s in (local_sessions or [])}
+        for s in sessions or []:
+            sid = str(s.get("id") or "")
+            local_name = (name_map.get(sid) or "").strip()
+            if local_name:
+                s["name"] = local_name
+    except Exception:
+        logger.exception("Failed to overlay session names from local store")
+
     return {
         "sessions": sessions,
         "count": len(sessions)
     }
+
+
+@router.put("/chats/{chat_id}/sessions/{session_id}")
+async def rename_session(
+    chat_id: str,
+    session_id: str,
+    ctx: AuthContextDep,
+    body: RenameSessionRequest = Body(...),
+):
+    """
+    Rename a chat session for easier recognition.
+
+    Notes:
+    - Name is stored in RagflowAuth local DB and used to override display name.
+    - This does not require RAGFlow to support rename endpoint.
+    """
+    deps = ctx.deps
+    user = ctx.user
+    snapshot = ctx.snapshot
+    if not snapshot.is_admin:
+        _assert_chat_access(snapshot, chat_id=chat_id)
+
+    new_name = str((body.name if body else "") or "").strip()
+    if not new_name:
+        raise HTTPException(status_code=400, detail="name_required")
+    if len(new_name) > 120:
+        raise HTTPException(status_code=400, detail="name_too_long")
+
+    # Non-admin can only rename own sessions.
+    if not snapshot.is_admin:
+        owns_session = deps.chat_session_store.check_ownership(session_id=session_id, chat_id=chat_id, user_id=user.user_id)
+        if not owns_session:
+            raise HTTPException(status_code=403, detail=f"无权重命名会话 {session_id}")
+
+    ok = deps.chat_session_store.set_session_name(
+        session_id=session_id,
+        chat_id=chat_id,
+        user_id=user.user_id,
+        name=new_name,
+    )
+    if not ok:
+        raise HTTPException(status_code=500, detail="rename_failed")
+
+    return {"id": session_id, "name": new_name}
 
 
 @router.post("/chats/{chat_id}/completions")
@@ -234,6 +296,172 @@ async def chat_completion(
     async def generate():
         try:
             logger.info(f"[CHAT] Starting chat stream for session {body.session_id}")
+
+            # Best-effort: resolve retrieval sources so the UI can map [ID:n] -> file.
+            try:
+                ragflow_service = getattr(deps, "ragflow_service", None)
+                if ragflow_service is not None:
+                    all_datasets = ragflow_service.list_datasets() or []
+                    dataset_ids = allowed_dataset_ids(snapshot, all_datasets)
+                    if dataset_ids:
+                        dataset_candidates: list[str] = []
+                        try:
+                            for ds_id in dataset_ids:
+                                try:
+                                    name = ragflow_service.resolve_dataset_name(ds_id)
+                                except Exception:
+                                    name = None
+                                dataset_candidates.append(name or ds_id)
+                        except Exception:
+                            dataset_candidates = []
+
+                        retrieval = deps.ragflow_chat_service.retrieve_chunks(
+                            question=body.question,
+                            dataset_ids=dataset_ids,
+                            page=1,
+                            page_size=30,
+                            similarity_threshold=0.2,
+                            top_k=30,
+                            keyword=False,
+                            highlight=False,
+                        )
+                        chunks = retrieval.get("chunks") if isinstance(retrieval, dict) else None
+                        sources: list[dict] = []
+                        name_cache: dict[tuple[str, str], str] = {}
+                        doc_dataset_cache: dict[str, str] = {}
+                        if isinstance(chunks, list):
+                            for ch in chunks:
+                                if not isinstance(ch, dict):
+                                    continue
+                                doc_id = (
+                                    ch.get("document_id")
+                                    or ch.get("docId")
+                                    or ch.get("documentId")
+                                    or ch.get("doc_id")
+                                    or ch.get("id")
+                                )
+                                dataset_ref = (
+                                    ch.get("dataset_id")
+                                    or ch.get("dataset")
+                                    or ch.get("kb_id")
+                                    or ch.get("kb")
+                                    or ch.get("kb_name")
+                                    or ch.get("dataset_name")
+                                )
+                                filename = (
+                                    ch.get("filename")
+                                    or ch.get("doc_name")
+                                    or ch.get("document_name")
+                                    or ch.get("title")
+                                    or ch.get("name")
+                                )
+                                if not isinstance(doc_id, str) or not doc_id:
+                                    continue
+                                dataset_ref = dataset_ref if isinstance(dataset_ref, str) else ""
+                                filename = filename if isinstance(filename, str) else ""
+
+                                def _looks_like_placeholder(name: str) -> bool:
+                                    if not name:
+                                        return True
+                                    n = name.strip()
+                                    if not n:
+                                        return True
+                                    if n == doc_id:
+                                        return True
+                                    if n.startswith("document_") and doc_id in n:
+                                        return True
+                                    return False
+
+                                resolved_name = ""
+                                resolved_dataset = ""
+
+                                if doc_id in doc_dataset_cache:
+                                    resolved_dataset = doc_dataset_cache[doc_id]
+
+                                # Prefer dataset from chunk; otherwise try all accessible datasets (best-effort).
+                                candidates = []
+                                if dataset_ref:
+                                    try:
+                                        ds_name = ragflow_service.resolve_dataset_name(dataset_ref)
+                                    except Exception:
+                                        ds_name = None
+                                    candidates = [ds_name or dataset_ref]
+                                else:
+                                    candidates = dataset_candidates[:6]
+
+                                # Resolve dataset + name if filename is missing or looks like placeholder.
+                                if _looks_like_placeholder(filename) or not resolved_dataset:
+                                    for dataset_name in candidates:
+                                        if not dataset_name:
+                                            continue
+                                        cache_key = (dataset_name, doc_id)
+                                        if cache_key in name_cache:
+                                            resolved_name = name_cache[cache_key]
+                                            resolved_dataset = dataset_name
+                                            break
+
+                                        # Prefer local DB mapping (original uploaded filename) when available.
+                                        try:
+                                            kb_store = getattr(deps, "kb_store", None)
+                                        except Exception:
+                                            kb_store = None
+                                        if kb_store is not None:
+                                            try:
+                                                kb_info = resolve_kb_ref(deps, dataset_name)
+                                                local_doc = kb_store.get_document_by_ragflow_id(
+                                                    doc_id,
+                                                    kb_id=(kb_info.name or kb_info.ref),
+                                                    kb_refs=list(kb_info.variants),
+                                                )
+                                            except Exception:
+                                                local_doc = None
+                                                kb_info = None
+
+                                            local_name = ""
+                                            if local_doc is not None:
+                                                try:
+                                                    local_name = str(getattr(local_doc, "filename", "") or "").strip()
+                                                except Exception:
+                                                    local_name = ""
+
+                                            if local_name:
+                                                resolved_name = local_name
+                                                resolved_dataset = (kb_info.name if kb_info is not None else None) or dataset_name
+                                                # Cache by the dataset_name we just tried, to speed up repeated chunks.
+                                                name_cache[cache_key] = local_name
+                                                break
+
+                                        try:
+                                            detail = ragflow_service.get_document_detail(doc_id, dataset_name=dataset_name)
+                                        except Exception:
+                                            detail = None
+                                        if isinstance(detail, dict):
+                                            n = str(detail.get("name") or "").strip()
+                                            if n:
+                                                resolved_name = n
+                                                resolved_dataset = dataset_name
+                                                name_cache[cache_key] = n
+                                                break
+
+                                if resolved_dataset:
+                                    doc_dataset_cache[doc_id] = resolved_dataset
+
+                                final_dataset = resolved_dataset or (candidates[0] if candidates else dataset_ref)
+                                final_name = resolved_name or ("" if _looks_like_placeholder(filename) else filename) or doc_id
+
+                                sources.append(
+                                    {
+                                        "doc_id": doc_id,
+                                        "dataset": final_dataset,
+                                        "filename": final_name,
+                                    }
+                                )
+
+                        if sources:
+                            yield f"data: {json.dumps({'code': 0, 'data': {'sources': sources}}, ensure_ascii=False)}\n\n"
+            except Exception as e:
+                logger.warning("[CHAT] Failed to build sources: %s", e)
+
             async for chunk in deps.ragflow_chat_service.chat(
                 chat_id=chat_id,
                 question=body.question,

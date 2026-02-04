@@ -64,6 +64,7 @@ adminTest('chat can create session, stream response, and delete session (mock) @
 
   await expect(page.getByTestId('chat-message-0-user')).toContainText('hi');
   await expect(page.getByTestId('chat-message-1-assistant')).toContainText('Hello world!');
+  await expect(page.getByTestId('chat-message-1-assistant')).not.toContainText('ignore');
   await expect(page.getByTestId('chat-error')).toHaveCount(0);
 
   await page.getByTestId('chat-session-delete-s_1').click();
@@ -71,4 +72,3 @@ adminTest('chat can create session, stream response, and delete session (mock) @
   await page.getByTestId('chat-delete-confirm').click();
   await expect(page.getByTestId('chat-session-item-s_1')).toHaveCount(0);
 });
-

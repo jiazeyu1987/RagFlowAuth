@@ -101,6 +101,69 @@ class ChatSessionStore:
             logging.getLogger(__name__).exception("Failed to update session: %s", e)
             return False
 
+    def set_session_name(
+        self,
+        *,
+        session_id: str,
+        chat_id: str,
+        user_id: str,
+        name: str,
+    ) -> bool:
+        """
+        Set (upsert) session name for a user's session.
+
+        Notes:
+        - If the row exists (even if marked deleted), it will be updated and un-deleted.
+        - If it does not exist, a new row will be inserted.
+        """
+        name = (name or "").strip() or "新会话"
+        try:
+            conn = self._get_connection()
+            cursor = conn.cursor()
+            now_ms = int(time.time() * 1000)
+
+            cursor.execute(
+                """
+                UPDATE chat_sessions
+                SET name = ?, is_deleted = 0, deleted_at_ms = NULL, deleted_by = NULL
+                WHERE session_id = ? AND chat_id = ? AND user_id = ?
+                """,
+                (name, session_id, chat_id, user_id),
+            )
+            if cursor.rowcount == 0:
+                cursor.execute(
+                    """
+                    INSERT INTO chat_sessions (session_id, chat_id, user_id, name, created_at_ms, is_deleted)
+                    VALUES (?, ?, ?, ?, ?, 0)
+                    """,
+                    (session_id, chat_id, user_id, name, now_ms),
+                )
+            conn.commit()
+            conn.close()
+            return True
+        except sqlite3.IntegrityError:
+            # Row exists but maybe under different user_id; fallback to a best-effort update without user_id.
+            try:
+                conn = self._get_connection()
+                cursor = conn.cursor()
+                cursor.execute(
+                    """
+                    UPDATE chat_sessions
+                    SET name = ?, is_deleted = 0, deleted_at_ms = NULL, deleted_by = NULL
+                    WHERE session_id = ? AND chat_id = ?
+                    """,
+                    (name, session_id, chat_id),
+                )
+                conn.commit()
+                conn.close()
+                return True
+            except Exception as e:
+                logging.getLogger(__name__).exception("Failed to set session name after integrity error: %s", e)
+                return False
+        except Exception as e:
+            logging.getLogger(__name__).exception("Failed to set session name: %s", e)
+            return False
+
     def get_user_sessions(
         self,
         chat_id: str,
