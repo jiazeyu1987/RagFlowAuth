@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { httpClient } from '../shared/http/httpClient';
 import { chatApi } from '../features/chat/api';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 const Chat = () => {
   const [chats, setChats] = useState([]);
@@ -916,7 +917,7 @@ const Chat = () => {
 
                     return (
                       <>
-                        <ReactMarkdown components={markdownComponents}>
+                        <ReactMarkdown components={markdownComponents} remarkPlugins={[remarkGfm]}>
                           {markdownText}
                         </ReactMarkdown>
 
