@@ -26,7 +26,9 @@ class Settings(BaseSettings):
     # File Upload
     UPLOAD_DIR: str = "data/uploads"
     MAX_FILE_SIZE: int = 16 * 1024 * 1024  # 16MB
-    ALLOWED_EXTENSIONS: set = {".txt", ".pdf", ".doc", ".docx", ".md", ".ppt", ".pptx", ".xlsx", ".xls", ".csv"}
+    # Note: we intentionally do NOT accept legacy Office formats like .doc/.ppt/.pptx
+    # to reduce preview/convert dependency complexity and user-facing failures.
+    ALLOWED_EXTENSIONS: set = {".txt", ".pdf", ".docx", ".md", ".xlsx", ".xls", ".csv"}
 
     # CORS
     CORS_ORIGINS: list[str] = ["*"]

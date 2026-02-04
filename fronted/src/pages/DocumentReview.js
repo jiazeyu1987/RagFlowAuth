@@ -6,8 +6,10 @@ import { authBackendUrl } from '../config/backend';
 import ReactMarkdown from 'react-markdown';
 import { httpClient } from '../shared/http/httpClient';
 import ReactDiffViewer from 'react-diff-viewer-continued';
-import * as XLSX from 'xlsx';
 import mammoth from 'mammoth';
+import { excelArrayBufferToSheetsHtml } from '../shared/preview/excelPreview';
+import { ensureTablePreviewStyles } from '../shared/preview/tablePreviewStyles';
+import { useEscapeClose } from '../shared/hooks/useEscapeClose';
 
 const escapeHtml = (s) =>
   String(s ?? '')
@@ -143,35 +145,7 @@ const DocumentReview = ({ embedded = false }) => {
 
   // Inject table styles for Excel/CSV preview
   useEffect(() => {
-    if (typeof document !== 'undefined' && !document.getElementById('table-preview-styles')) {
-      const style = document.createElement('style');
-      style.id = 'table-preview-styles';
-      style.textContent = `
-        .table-preview table {
-          border-collapse: collapse;
-          width: 100%;
-          font-size: 0.875rem;
-        }
-        .table-preview th,
-        .table-preview td {
-          border: 1px solid #d1d5db;
-          padding: 8px 12px;
-          text-align: left;
-        }
-        .table-preview th {
-          background-color: #f3f4f6;
-          font-weight: 600;
-          color: #1f2937;
-        }
-        .table-preview tr:nth-child(even) {
-          background-color: #f9fafb;
-        }
-        .table-preview tr:hover {
-          background-color: #f3f4f6;
-        }
-      `;
-      document.head.appendChild(style);
-    }
+    ensureTablePreviewStyles();
   }, []);
 
   const activeDocMap = useMemo(() => {
@@ -192,6 +166,13 @@ const DocumentReview = ({ embedded = false }) => {
     setPreviewExcelNote(null);
     setPreviewHtml(null);
   };
+
+  const closeDiff = useCallback(() => {
+    setDiffOpen(false);
+  }, []);
+
+  useEscapeClose(previewOpen, closePreview);
+  useEscapeClose(diffOpen, closeDiff);
 
   const isMarkdownFile = (filename) => {
     if (!filename) return false;
@@ -328,14 +309,8 @@ const DocumentReview = ({ embedded = false }) => {
         setPreviewHtml(result.value || '');
       } else if (isExcelFile(filename)) {
         const arrayBuffer = await blob.arrayBuffer();
-        const workbook = XLSX.read(arrayBuffer, { type: 'array' });
-        const sheetNames = workbook.SheetNames || [];
-        const sheetsData = {};
-        sheetNames.forEach((sheetName) => {
-          const worksheet = workbook.Sheets[sheetName];
-          const html = XLSX.utils.sheet_to_html(worksheet);
-          sheetsData[sheetName] = html;
-        });
+        const { sheets } = excelArrayBufferToSheetsHtml(arrayBuffer);
+        const sheetsData = sheets;
         setPreviewKind('excel');
         setPreviewExcelData(sheetsData);
       } else if (isCsvFile(filename)) {
@@ -826,12 +801,12 @@ const DocumentReview = ({ embedded = false }) => {
         >
           <div
             style={{
-              width: 'min(980px, 100%)',
+              width: 'min(1200px, 100%)',
               background: 'white',
               borderRadius: '12px',
               border: '1px solid #e5e7eb',
               padding: '16px',
-              height: '80vh',
+              height: '85vh',
               display: 'flex',
               flexDirection: 'column',
             }}
@@ -840,41 +815,6 @@ const DocumentReview = ({ embedded = false }) => {
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: '10px', alignItems: 'center' }}>
               <div style={{ fontWeight: 700, fontSize: '1.05rem' }}>{previewDocName || '在线查看'}</div>
               <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                {previewDocId && isExcelFile(previewDocName) && (
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      try {
-                        setError(null);
-                        setPreviewing(true);
-                        const htmlBlob = await fetchLocalPreviewBlob(previewDocId, { render: 'html' });
-                        const url = window.URL.createObjectURL(htmlBlob);
-                        if (previewUrl) window.URL.revokeObjectURL(previewUrl);
-                        setPreviewUrl(url);
-                        setPreviewKind('blob');
-                        setPreviewExcelData(null);
-                        setPreviewExcelNote(null);
-                        setPreviewHtml(null);
-                      } catch (e) {
-                        setError(e.message || '预览失败');
-                      } finally {
-                        setPreviewing(false);
-                      }
-                    }}
-                    style={{
-                      padding: '6px 10px',
-                      backgroundColor: '#3b82f6',
-                      color: 'white',
-                      border: 'none',
-                      borderRadius: '6px',
-                      cursor: 'pointer',
-                      fontSize: '0.85rem',
-                    }}
-                    data-testid="docs-preview-render-pdf"
-                  >
-                    原样预览(HTML)
-                  </button>
-                )}
                 <button
                   type="button"
                   onClick={closePreview}
@@ -923,6 +863,58 @@ const DocumentReview = ({ embedded = false }) => {
                 </div>
               ) : previewKind === 'excel' && previewExcelData ? (
                 <div className="table-preview" style={{ padding: '12px 12px 24px 12px' }}>
+                  {previewDocId && isExcelFile(previewDocName) && (
+                    <div
+                      style={{
+                        marginBottom: 16,
+                        background: '#eff6ff',
+                        border: '1px solid #bfdbfe',
+                        borderRadius: 8,
+                        padding: '12px 14px',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        gap: 12,
+                      }}
+                    >
+                      <div style={{ color: '#1e40af', fontSize: '0.95rem', lineHeight: 1.5 }}>
+                        如果 Excel 里包含流程图/形状，表格模式可能看不到；可点“原样预览(HTML)”查看。
+                      </div>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          try {
+                            setError(null);
+                            setPreviewing(true);
+                            const htmlBlob = await fetchLocalPreviewBlob(previewDocId, { render: 'html' });
+                            const url = window.URL.createObjectURL(htmlBlob);
+                            if (previewUrl) window.URL.revokeObjectURL(previewUrl);
+                            setPreviewUrl(url);
+                            setPreviewKind('blob');
+                            setPreviewExcelData(null);
+                            setPreviewExcelNote(null);
+                            setPreviewHtml(null);
+                          } catch (e) {
+                            setError(e.message || '预览失败');
+                          } finally {
+                            setPreviewing(false);
+                          }
+                        }}
+                        style={{
+                          padding: '6px 12px',
+                          backgroundColor: '#3b82f6',
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: '6px',
+                          cursor: 'pointer',
+                          fontSize: '0.85rem',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        原样预览(HTML)
+                      </button>
+                    </div>
+                  )}
                   {previewExcelNote && (
                     <div style={{ marginBottom: 12, color: '#6b7280', fontSize: '0.9rem' }}>
                       {previewExcelNote}

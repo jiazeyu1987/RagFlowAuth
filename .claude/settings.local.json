@@ -8,7 +8,9 @@
       "Bash(powershell:*)",
       "Bash(python:*)",
       "Bash(curl:*)",
-      "Bash(docker compose build:*)"
+      "Bash(docker compose build:*)",
+      "Bash(dir \"C:\\\\Users\\\\BJB110\\\\.claude\\\\skills\")",
+      "Bash(dir:*)"
     ]
   }
 }

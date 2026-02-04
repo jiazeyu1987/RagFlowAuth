@@ -3,6 +3,9 @@ import { httpClient } from '../shared/http/httpClient';
 import { chatApi } from '../features/chat/api';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { excelBlobToSheetsHtml, isExcelFilename } from '../shared/preview/excelPreview';
+import { ensureTablePreviewStyles } from '../shared/preview/tablePreviewStyles';
+import { useEscapeClose } from '../shared/hooks/useEscapeClose';
 
 const Chat = () => {
   const [chats, setChats] = useState([]);
@@ -21,6 +24,27 @@ const Chat = () => {
   const messagesEndRef = useRef(null);
   const assistantMessageRef = useRef('');
   const assistantSourcesRef = useRef([]);
+
+  const closeDeleteConfirm = useCallback(() => {
+    setDeleteConfirm({ show: false, sessionId: null, sessionName: '' });
+  }, []);
+
+  const closeRenameDialog = useCallback(() => {
+    setRenameDialog({ show: false, sessionId: null, value: '' });
+  }, []);
+
+  const closePreviewDialog = useCallback(() => {
+    setPreviewDialog({ show: false, title: '', loading: false, error: '', payload: null });
+  }, []);
+
+  useEscapeClose(deleteConfirm.show, closeDeleteConfirm);
+  useEscapeClose(renameDialog.show, closeRenameDialog);
+  useEscapeClose(previewDialog.show, closePreviewDialog);
+
+  // Inject shared table styles for Excel/CSV preview
+  useEffect(() => {
+    ensureTablePreviewStyles();
+  }, []);
 
   const normalizeForCompare = useCallback((value) => {
     return String(value ?? '')
@@ -425,8 +449,28 @@ const Chat = () => {
       try {
         const qs = new URLSearchParams({ dataset: source.dataset }).toString();
         const data = await httpClient.requestJson(`/api/ragflow/documents/${encodeURIComponent(source.docId)}/preview?${qs}`);
-        debugLogCitations('preview GET done', { before_title: source.title, after_title: data?.filename || '', type: data?.type || '' });
-        setPreviewDialog({ show: true, title: data?.filename || source.title, loading: false, error: '', payload: data });
+        const resolvedName = String(data?.filename || source.title || '');
+
+        // For Excel, always render client-side (same as DocumentReview) for consistent output.
+        if (isExcelFilename(resolvedName)) {
+          debugLogCitations('preview excel via download', { docId: source.docId, dataset: source.dataset, filename: resolvedName });
+          const qs2 = new URLSearchParams({ dataset: source.dataset, filename: resolvedName }).toString();
+          const res = await httpClient.request(`/api/ragflow/documents/${encodeURIComponent(source.docId)}/download?${qs2}`, { method: 'GET' });
+          if (!res.ok) throw new Error(`download failed (${res.status})`);
+          const blob = await res.blob();
+          const { sheets } = await excelBlobToSheetsHtml(blob);
+          setPreviewDialog({
+            show: true,
+            title: resolvedName,
+            loading: false,
+            error: '',
+            payload: { type: 'excel', filename: resolvedName, sheets, docId: source.docId, dataset: source.dataset },
+          });
+          return;
+        }
+
+        debugLogCitations('preview GET done', { before_title: source.title, after_title: resolvedName || '', type: data?.type || '' });
+        setPreviewDialog({ show: true, title: resolvedName || source.title, loading: false, error: '', payload: data });
       } catch (e) {
         debugLogCitations('preview GET fail', { before_title: source.title, error: e?.message || String(e || '') });
         setPreviewDialog({ show: true, title: source.title, loading: false, error: e?.message || '预览失败', payload: null });
@@ -1220,11 +1264,8 @@ const Chat = () => {
           data-testid="chat-preview-modal"
           style={{
             position: 'fixed',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: 'rgba(0, 0, 0, 0.35)',
+            inset: 0,
+            background: 'rgba(0,0,0,0.35)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -1235,27 +1276,29 @@ const Chat = () => {
         >
           <div
             style={{
-              width: 'min(920px, 100%)',
-              maxHeight: '80vh',
-              backgroundColor: 'white',
-              borderRadius: '10px',
-              overflow: 'hidden',
-              boxShadow: '0 10px 30px rgba(0,0,0,0.25)',
+              width: 'min(1200px, 100%)',
+              background: 'white',
+              borderRadius: '12px',
+              border: '1px solid #e5e7eb',
+              padding: '16px',
+              height: '85vh',
               display: 'flex',
               flexDirection: 'column',
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div style={{ padding: '12px 14px', borderBottom: '1px solid #e5e7eb', display: 'flex', justifyContent: 'space-between', gap: '10px' }}>
-              <div style={{ fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{previewDialog.title || '预览'}</div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: '10px', alignItems: 'center' }}>
+              <div style={{ fontWeight: 700, fontSize: '1.05rem' }}>{previewDialog.title || '在线查看'}</div>
               <button
+                type="button"
                 onClick={() => setPreviewDialog({ show: false, title: '', loading: false, error: '', payload: null })}
-                style={{ border: 'none', background: '#ef4444', color: 'white', padding: '6px 10px', borderRadius: '6px', cursor: 'pointer' }}
+                style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontSize: '1.2rem' }}
               >
-                关闭
+                ×
               </button>
             </div>
-            <div style={{ padding: '14px', overflow: 'auto' }}>
+
+            <div style={{ marginTop: '12px', flex: 1, overflow: 'auto' }}>
               {previewDialog.loading ? (
                 <div style={{ color: '#6b7280' }}>加载中...</div>
               ) : previewDialog.error ? (
@@ -1267,6 +1310,70 @@ const Chat = () => {
                   if (p.type === 'image') return <img alt={p.filename || 'image'} style={{ maxWidth: '100%' }} src={`data:image/${p.image_type || 'png'};base64,${p.content}`} />;
                   if (p.type === 'pdf') return <iframe title="pdf-preview" style={{ width: '100%', height: '70vh', border: 'none' }} src={`data:application/pdf;base64,${p.content}`} />;
                   if (p.type === 'html') return <iframe title="html-preview" style={{ width: '100%', height: '70vh', border: 'none' }} src={`data:text/html;base64,${p.content}`} />;
+                  if (p.type === 'excel' && p.sheets) {
+                    const sheetNames = Object.keys(p.sheets || {});
+                    return (
+                      <div className="table-preview" style={{ padding: '12px 12px 24px 12px' }}>
+                        {p.docId && p.dataset && (
+                          <div
+                            style={{
+                              marginBottom: 16,
+                              background: '#eff6ff',
+                              border: '1px solid #bfdbfe',
+                              borderRadius: 8,
+                              padding: '12px 14px',
+                              display: 'flex',
+                              justifyContent: 'space-between',
+                              alignItems: 'center',
+                              gap: 12,
+                            }}
+                          >
+                            <div style={{ color: '#1e40af', fontSize: '0.95rem', lineHeight: 1.5 }}>
+                              如果 Excel 里包含流程图/形状，表格模式可能看不到；可点“原样预览(HTML)”查看。
+                            </div>
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                try {
+                                  setPreviewDialog((prev) => ({ ...prev, loading: true, error: '' }));
+                                  const qs = new URLSearchParams({ dataset: p.dataset }).toString();
+                                  const data = await httpClient.requestJson(`/api/ragflow/documents/${encodeURIComponent(p.docId)}/preview?${qs}`);
+                                  if (data?.type === 'html') {
+                                    setPreviewDialog((prev) => ({ ...prev, loading: false, error: '', title: data?.filename || prev.title, payload: data }));
+                                  } else {
+                                    const msg = data?.message || '无法进行原样预览(HTML)';
+                                    setPreviewDialog((prev) => ({ ...prev, loading: false, error: msg }));
+                                  }
+                                } catch (e) {
+                                  setPreviewDialog((prev) => ({ ...prev, loading: false, error: e?.message || '预览失败' }));
+                                }
+                              }}
+                              style={{
+                                padding: '6px 12px',
+                                backgroundColor: '#3b82f6',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '6px',
+                                cursor: 'pointer',
+                                fontSize: '0.85rem',
+                                whiteSpace: 'nowrap',
+                              }}
+                            >
+                              原样预览(HTML)
+                            </button>
+                          </div>
+                        )}
+                        {sheetNames.map((sheetName, index) => (
+                          <div key={sheetName} style={{ marginBottom: index < sheetNames.length - 1 ? '32px' : 0 }}>
+                            {sheetNames.length > 1 && (
+                              <div style={{ marginBottom: 8, fontWeight: 600, color: '#111827' }}>{sheetName}</div>
+                            )}
+                            <div style={{ overflowX: 'auto' }} dangerouslySetInnerHTML={{ __html: p.sheets[sheetName] }} />
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  }
                   return <div style={{ color: '#6b7280' }}>{p.message || '不支持预览，请下载查看。'}</div>;
                 })()
               ) : (

@@ -1,7 +1,15 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import authClient from '../api/authClient';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import rehypeRaw from 'rehype-raw';
+import rehypeSanitize from 'rehype-sanitize';
 import { useAuth } from '../hooks/useAuth';
 import { agentsApi } from '../features/agents/api';
+import { excelBlobToSheetsHtml, isExcelFilename } from '../shared/preview/excelPreview';
+import { ensureTablePreviewStyles } from '../shared/preview/tablePreviewStyles';
+import { httpClient } from '../shared/http/httpClient';
+import { useEscapeClose } from '../shared/hooks/useEscapeClose';
 
 const Agents = () => {
   const { canDownload } = useAuth();
@@ -48,6 +56,18 @@ const Agents = () => {
       document.head.appendChild(style);
     }
   }, []);
+
+  // Inject shared table styles for Excel/CSV preview
+  useEffect(() => {
+    ensureTablePreviewStyles();
+  }, []);
+
+  const closePreviewModal = () => {
+    setShowPreviewModal(false);
+    setPreviewData(null);
+  };
+
+  useEscapeClose(showPreviewModal, closePreviewModal);
 
   // Load available datasets on mount
   useEffect(() => {
@@ -200,9 +220,27 @@ const Agents = () => {
       const dataset = datasets.find(ds => ds.id === datasetId);
       const datasetName = dataset ? (dataset.name || dataset.id) : '展厅';
 
-      // Call preview API
+      // For Excel, render client-side (same as DocumentReview) for consistent output.
+      // Some search results may not carry the real filename (e.g. "document_xxx"), so we also
+      // detect based on the resolved preview filename.
+      if (isExcelFilename(docName)) {
+        const blob = await authClient.previewRagflowDocumentBlob(docId, datasetName, docName);
+        const { sheets } = await excelBlobToSheetsHtml(blob);
+        setPreviewData({ type: 'excel', filename: docName, sheets, docId, dataset: datasetName });
+        return;
+      }
+
+      // Call preview API (also helps resolve the real filename for Excel fallback).
       const data = await authClient.previewDocument(docId, datasetName);
-      setPreviewData(data);
+      const resolvedName = String(data?.filename || docName || '');
+      if (isExcelFilename(resolvedName)) {
+        const blob = await authClient.previewRagflowDocumentBlob(docId, datasetName, resolvedName);
+        const { sheets } = await excelBlobToSheetsHtml(blob);
+        setPreviewData({ type: 'excel', filename: resolvedName, sheets, docId, dataset: datasetName });
+        return;
+      }
+
+      setPreviewData({ ...(data || {}), docId, dataset: datasetName });
     } catch (err) {
       setError(`预览文档失败: ${err.message}`);
       setShowPreviewModal(false);
@@ -211,10 +249,155 @@ const Agents = () => {
     }
   };
 
-  const closePreviewModal = () => {
-    setShowPreviewModal(false);
-    setPreviewData(null);
-  };
+  const normalizeInlinePipeKvTables = useMemo(() => {
+    const makeTable = (pairs) => {
+      const rows = pairs
+        .filter((p) => p && typeof p.key === 'string' && typeof p.value === 'string')
+        .map((p) => `| ${p.key} | ${p.value} |`);
+      if (rows.length === 0) return '';
+      return ['| 属性 | 值 |', '|---|---|', ...rows].join('\n');
+    };
+
+    return (text) => {
+      const input = String(text ?? '');
+      if (!input.includes('|')) return input;
+      const lines = input.split('\n');
+      const out = [];
+
+      for (const line of lines) {
+        const raw = String(line ?? '');
+        const trimmed = raw.trim();
+
+        // Only rewrite a "single line" pseudo-table like:
+        // | 注册证名称 | / | | 注册证号 | xxx | | 生效时间 | ... |
+        // into a real 2-column markdown table.
+        if (
+          trimmed.startsWith('|') &&
+          trimmed.includes('|') &&
+          !trimmed.includes('|---') &&
+          !trimmed.includes('<table') &&
+          !trimmed.includes('</table>')
+        ) {
+          const tokens = trimmed
+            .split('|')
+            .map((t) => t.trim())
+            .filter((t) => t.length > 0);
+
+          // Must be key/value pairs.
+          // Some sources end with an "empty value" like: "| 备注 | |"
+          // which becomes an odd-length token array after filtering empties.
+          if (tokens.length >= 3 && tokens.length % 2 === 1) tokens.push('');
+
+          if (tokens.length >= 4 && tokens.length % 2 === 0) {
+            const pairs = [];
+            for (let i = 0; i < tokens.length; i += 2) {
+              const key = tokens[i];
+              const value = tokens[i + 1] ?? '';
+              pairs.push({ key, value });
+            }
+            const table = makeTable(pairs);
+            if (table) {
+              out.push(table);
+              continue;
+            }
+          }
+        }
+
+        out.push(raw);
+      }
+
+      return out.join('\n');
+    };
+  }, []);
+
+  const isMarkdownPreview = useMemo(() => {
+    const name = String(previewData?.filename || '').toLowerCase().trim();
+    if (name.endsWith('.md') || name.endsWith('.markdown')) return true;
+    // If backend didn't provide a filename, try a light heuristic on content.
+    const text = String(previewData?.content || '');
+    if (!text) return false;
+    if (text.includes('\n|') && text.includes('|---')) return true;
+    if (/^#{1,6}\s+/m.test(text)) return true;
+    return false;
+  }, [previewData]);
+
+  const markdownComponents = useMemo(
+    () => ({
+      p: ({ node, ...props }) => <p style={{ margin: '0 0 10px 0' }} {...props} />,
+      ul: ({ node, ...props }) => <ul style={{ margin: '0 0 10px 18px' }} {...props} />,
+      ol: ({ node, ...props }) => <ol style={{ margin: '0 0 10px 18px' }} {...props} />,
+      table: ({ node, ...props }) => (
+        <table
+          style={{
+            width: '100%',
+            borderCollapse: 'collapse',
+            margin: '8px 0 12px 0',
+            fontSize: '0.9rem',
+          }}
+          {...props}
+        />
+      ),
+      th: ({ node, ...props }) => (
+        <th
+          style={{
+            border: '1px solid #e5e7eb',
+            padding: '8px 10px',
+            textAlign: 'left',
+            background: '#f9fafb',
+            fontWeight: 600,
+          }}
+          {...props}
+        />
+      ),
+      td: ({ node, ...props }) => (
+        <td
+          style={{
+            border: '1px solid #e5e7eb',
+            padding: '8px 10px',
+            verticalAlign: 'top',
+            whiteSpace: 'pre-wrap',
+          }}
+          {...props}
+        />
+      ),
+      code: ({ node, inline, className, children, ...props }) => (
+        <code
+          className={className}
+          style={
+            inline
+              ? {
+                  padding: '0 6px',
+                  borderRadius: '6px',
+                  background: '#e5e7eb',
+                }
+              : undefined
+          }
+          {...props}
+        >
+          {children}
+        </code>
+      ),
+      pre: ({ node, ...props }) => (
+        <pre
+          style={{
+            margin: '0 0 10px 0',
+            padding: '10px 12px',
+            background: '#111827',
+            color: '#f9fafb',
+            borderRadius: '8px',
+            overflowX: 'auto',
+          }}
+          {...props}
+        />
+      ),
+      a: ({ node, ...props }) => (
+        <a {...props} target="_blank" rel="noreferrer" style={{ color: '#2563eb', textDecoration: 'underline' }}>
+          {props.children}
+        </a>
+      ),
+    }),
+    []
+  );
 
   // Manual highlight function as fallback
   const highlightText = (text, query) => {
@@ -490,7 +673,20 @@ const Agents = () => {
                 const datasetId = chunk.dataset_id || chunk.dataset || chunk.kb_id;
 
                 // Choose content based on highlight setting
-                let displayContent = chunk.content || '';
+                const rawContent = String(chunk.content || '');
+                let displayContent = rawContent;
+
+                const looksLikeMarkdown = (() => {
+                  const name = String(docName || '').toLowerCase().trim();
+                  if (name.endsWith('.md') || name.endsWith('.markdown')) return true;
+                  const t = rawContent;
+                  if (!t) return false;
+                  // Headings / tables / lists
+                  if (/^#{1,6}\s+/m.test(t)) return true;
+                  if (/\n\|.*\|\n\|[-:| ]+\|/m.test(t) || /\|[-:| ]+\|/m.test(t)) return true; // has table divider
+                  if (/^\s*[-*+]\s+/m.test(t) || /^\s*\d+\.\s+/m.test(t)) return true;
+                  return false;
+                })();
 
                 // Debug: Log content info
                 if (index === 0) {
@@ -507,9 +703,9 @@ const Agents = () => {
                 }
 
                 // If highlight is enabled and backend didn't return highlighted content, do it manually
-                if (highlight && !chunk.content_with_weight) {
+                if (!looksLikeMarkdown && highlight && !chunk.content_with_weight) {
                   displayContent = highlightText(displayContent, searchQuery);
-                } else if (chunk.content_with_weight) {
+                } else if (!looksLikeMarkdown && chunk.content_with_weight) {
                   displayContent = chunk.content_with_weight;
                 }
 
@@ -611,17 +807,25 @@ const Agents = () => {
                     </div>
                   </div>
 
-                  <div
-                    style={{
-                      fontSize: '0.875rem',
-                      lineHeight: '1.6',
-                      color: '#1f2937',
-                      whiteSpace: 'pre-wrap'
-                    }}
-                    dangerouslySetInnerHTML={{
-                      __html: displayContent
-                    }}
-                  />
+                  {looksLikeMarkdown ? (
+                    <div style={{ fontSize: '0.9rem', lineHeight: 1.65, color: '#111827' }}>
+                      <ReactMarkdown components={markdownComponents} remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw, rehypeSanitize]}>
+                        {normalizeInlinePipeKvTables(rawContent)}
+                      </ReactMarkdown>
+                    </div>
+                  ) : (
+                    <div
+                      style={{
+                        fontSize: '0.875rem',
+                        lineHeight: '1.6',
+                        color: '#1f2937',
+                        whiteSpace: 'pre-wrap'
+                      }}
+                      dangerouslySetInnerHTML={{
+                        __html: displayContent
+                      }}
+                    />
+                  )}
                 </div>
                 );
               })}
@@ -719,80 +923,72 @@ const Agents = () => {
 
       {/* Preview Modal */}
       {showPreviewModal && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backgroundColor: 'rgba(0, 0, 0, 0.7)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 2000
-        }}>
-          <div style={{
-            backgroundColor: 'white',
-            borderRadius: '8px',
-            maxWidth: '90vw',
-            width: '80%',
-            maxHeight: '80vh',
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0,0,0,0.35)',
             display: 'flex',
-            flexDirection: 'column',
-            boxShadow: '0 4px 20px rgba(0, 0, 0, 0.3)'
-          }}>
-            {/* Header */}
-            <div style={{
-              padding: '16px 24px',
-              borderBottom: '1px solid #e5e7eb',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 2000,
+            padding: '16px',
+          }}
+          onClick={closePreviewModal}
+        >
+          <div
+            style={{
+              width: 'min(1200px, 100%)',
+              background: 'white',
+              borderRadius: '12px',
+              border: '1px solid #e5e7eb',
+              padding: '16px',
+              height: '85vh',
               display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center'
-            }}>
-              <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: '600', color: '#111827' }}>
-                文档预览 - {previewData?.filename || ''}
-              </h3>
+              flexDirection: 'column',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: '10px', alignItems: 'center' }}>
+              <div style={{ fontWeight: 700, fontSize: '1.05rem' }}>{previewData?.filename || '在线查看'}</div>
               <button
+                type="button"
                 onClick={closePreviewModal}
                 style={{
-                  background: 'none',
                   border: 'none',
-                  fontSize: '1.5rem',
+                  background: 'transparent',
                   cursor: 'pointer',
-                  color: '#6b7280',
-                  padding: '0',
-                  width: '32px',
-                  height: '32px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center'
+                  fontSize: '1.2rem',
                 }}
-                onMouseEnter={(e) => e.target.style.color = '#111827'}
-                onMouseLeave={(e) => e.target.style.color = '#6b7280'}
               >
                 ×
               </button>
             </div>
 
             {/* Content */}
-            <div style={{
-              padding: '24px',
-              overflowY: 'auto',
-              flex: 1
-            }}>
+            <div style={{ marginTop: '12px', flex: 1, overflow: 'auto' }}>
               {previewLoading ? (
                 <div style={{ textAlign: 'center', padding: '40px' }}>加载中...</div>
               ) : previewData?.type === 'text' ? (
-                <pre style={{
-                  margin: 0,
-                  whiteSpace: 'pre-wrap',
-                  wordWrap: 'break-word',
-                  fontFamily: 'monospace',
-                  fontSize: '0.875rem',
-                  lineHeight: '1.6'
-                }}>
-                  {previewData.content}
-                </pre>
+                isMarkdownPreview ? (
+                  <div style={{ fontSize: '0.95rem', lineHeight: 1.6, color: '#111827' }}>
+                    <ReactMarkdown components={markdownComponents} remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw, rehypeSanitize]}>
+                      {normalizeInlinePipeKvTables(String(previewData.content || ''))}
+                    </ReactMarkdown>
+                  </div>
+                ) : (
+                  <pre style={{
+                    margin: 0,
+                    whiteSpace: 'pre-wrap',
+                    wordWrap: 'break-word',
+                    fontFamily: 'monospace',
+                    fontSize: '0.875rem',
+                    lineHeight: '1.6'
+                  }}>
+                    {previewData.content}
+                  </pre>
+                )
               ) : previewData?.type === 'image' ? (
                 <div style={{ textAlign: 'center' }}>
                   <img
@@ -812,6 +1008,77 @@ const Agents = () => {
                     }}
                     title={previewData.filename}
                   />
+                </div>
+              ) : previewData?.type === 'html' ? (
+                <div style={{ textAlign: 'center' }}>
+                  <iframe
+                    title={previewData.filename || 'html-preview'}
+                    style={{ width: '100%', height: '70vh', border: 'none' }}
+                    src={`data:text/html;base64,${previewData.content}`}
+                    sandbox=""
+                  />
+                </div>
+              ) : previewData?.type === 'excel' && previewData?.sheets ? (
+                <div className="table-preview" style={{ padding: '12px 12px 24px 12px' }}>
+                  {previewData.docId && previewData.dataset && (
+                    <div
+                      style={{
+                        marginBottom: 16,
+                        background: '#eff6ff',
+                        border: '1px solid #bfdbfe',
+                        borderRadius: 8,
+                        padding: '12px 14px',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        gap: 12,
+                      }}
+                    >
+                      <div style={{ color: '#1e40af', fontSize: '0.95rem', lineHeight: 1.5 }}>
+                        如果 Excel 里包含流程图/形状，表格模式可能看不到；可点“原样预览(HTML)”查看。
+                      </div>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          try {
+                            setPreviewLoading(true);
+                            const qs = new URLSearchParams({ dataset: previewData.dataset }).toString();
+                            const data = await httpClient.requestJson(`/api/ragflow/documents/${encodeURIComponent(previewData.docId)}/preview?${qs}`);
+                            if (data?.type === 'html') {
+                              setPreviewData({ ...(data || {}), docId: previewData.docId, dataset: previewData.dataset });
+                            } else {
+                              const msg = data?.message || '无法进行原样预览(HTML)';
+                              setError(msg);
+                            }
+                          } catch (e) {
+                            setError(e?.message || '预览失败');
+                          } finally {
+                            setPreviewLoading(false);
+                          }
+                        }}
+                        style={{
+                          padding: '6px 12px',
+                          backgroundColor: '#3b82f6',
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: '6px',
+                          cursor: 'pointer',
+                          fontSize: '0.85rem',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        原样预览(HTML)
+                      </button>
+                    </div>
+                  )}
+                  {Object.keys(previewData.sheets).map((sheetName, index) => (
+                    <div key={sheetName} style={{ marginBottom: index < Object.keys(previewData.sheets).length - 1 ? '32px' : 0 }}>
+                      {Object.keys(previewData.sheets).length > 1 && (
+                        <div style={{ marginBottom: 8, fontWeight: 600, color: '#111827' }}>{sheetName}</div>
+                      )}
+                      <div style={{ overflowX: 'auto' }} dangerouslySetInnerHTML={{ __html: previewData.sheets[sheetName] }} />
+                    </div>
+                  ))}
                 </div>
               ) : previewData?.type === 'unsupported' ? (
                 <div style={{
