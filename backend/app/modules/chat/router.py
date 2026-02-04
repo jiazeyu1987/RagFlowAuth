@@ -355,10 +355,22 @@ async def chat_completion(
                                     or ch.get("title")
                                     or ch.get("name")
                                 )
+                                chunk_text = (
+                                    ch.get("content")
+                                    or ch.get("chunk")
+                                    or ch.get("text")
+                                    or ch.get("snippet")
+                                    or ch.get("content_with_weight")
+                                )
                                 if not isinstance(doc_id, str) or not doc_id:
                                     continue
                                 dataset_ref = dataset_ref if isinstance(dataset_ref, str) else ""
                                 filename = filename if isinstance(filename, str) else ""
+                                if not isinstance(chunk_text, str):
+                                    chunk_text = ""
+                                chunk_text = chunk_text.strip()
+                                if len(chunk_text) > 2000:
+                                    chunk_text = chunk_text[:2000] + "…"
 
                                 def _looks_like_placeholder(name: str) -> bool:
                                     if not name:
@@ -454,6 +466,7 @@ async def chat_completion(
                                         "doc_id": doc_id,
                                         "dataset": final_dataset,
                                         "filename": final_name,
+                                        "chunk": chunk_text,
                                     }
                                 )
 

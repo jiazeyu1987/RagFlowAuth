@@ -15,9 +15,11 @@ const Chat = () => {
   const [deleteConfirm, setDeleteConfirm] = useState({ show: false, sessionId: null, sessionName: '' });
   const [renameDialog, setRenameDialog] = useState({ show: false, sessionId: null, value: '' });
   const [previewDialog, setPreviewDialog] = useState({ show: false, title: '', loading: false, error: '', payload: null });
+  const [citationHover, setCitationHover] = useState(null);
 
   const messagesEndRef = useRef(null);
   const assistantMessageRef = useRef('');
+  const assistantSourcesRef = useRef([]);
 
   const normalizeForCompare = useCallback((value) => {
     return String(value ?? '')
@@ -130,7 +132,13 @@ const Chat = () => {
       s.title ||
       docId ||
       'unknown';
-    return { docId: String(docId || ''), dataset: String(dataset || ''), title: String(title || '') };
+    const chunk = s.chunk || s.chunk_text || s.chunkText || s.content || s.text || '';
+    return {
+      docId: String(docId || ''),
+      dataset: String(dataset || ''),
+      title: String(title || ''),
+      chunk: String(chunk || ''),
+    };
   }, []);
 
   const debugChatCitations = useCallback(() => {
@@ -148,6 +156,94 @@ const Chat = () => {
       console.debug('[Chat:Citations]', ...args);
     },
     [debugChatCitations]
+  );
+
+  const rewriteCitationLinks = useCallback((text) => {
+    const input = String(text ?? '');
+    // Turn "[ID:6]" into a safe in-page anchor so ReactMarkdown doesn't sanitize it away.
+    // We'll render "#cid-6" as a custom hover-only control via the <a> component.
+    return input.replace(/\[ID:(\d+)\]/g, (_m, id) => `[ID:${id}](#cid-${id})`);
+  }, []);
+
+  const onCitationClick = useCallback((e, { id, chunk }) => {
+    const rect = e?.currentTarget?.getBoundingClientRect?.();
+    const x = rect ? rect.left + rect.width / 2 : (e?.clientX ?? 0);
+    const y = rect ? rect.top : (e?.clientY ?? 0);
+    // eslint-disable-next-line no-console
+    console.debug('[Chat:CitationPopup] open', { id, chunkLen: String(chunk || '').length, x, y });
+    setCitationHover({
+      id,
+      chunk: String(chunk || '').trim() || '(未获取到chunk内容)',
+      x,
+      y,
+    });
+  }, []);
+
+  const onCitationPopupLeave = useCallback(() => {
+    // eslint-disable-next-line no-console
+    console.debug('[Chat:CitationPopup] close');
+    setCitationHover(null);
+  }, []);
+
+  const computeMessageKey = useCallback((chatId, sessionId, content) => {
+    const text = String(content ?? '');
+    // Simple stable hash (djb2)
+    let hash = 5381;
+    for (let i = 0; i < text.length; i++) {
+      hash = ((hash << 5) + hash) ^ text.charCodeAt(i);
+      hash >>>= 0;
+    }
+    return `ragflowauth_chat_sources_v1:${String(chatId || '')}:${String(sessionId || '')}:${hash.toString(16)}`;
+  }, []);
+
+  const saveSourcesForAssistantMessage = useCallback(
+    (chatId, sessionId, content, sources) => {
+      const list = Array.isArray(sources) ? sources : [];
+      if (!chatId || !sessionId || !content || list.length === 0) return;
+      try {
+        const key = computeMessageKey(chatId, sessionId, content);
+        window.localStorage.setItem(key, JSON.stringify(list));
+        debugLogCitations('persist sources', { key, count: list.length });
+      } catch (e) {
+        debugLogCitations('persist sources failed', { error: e?.message || String(e || '') });
+      }
+    },
+    [computeMessageKey, debugLogCitations]
+  );
+
+  const loadSourcesForAssistantMessage = useCallback(
+    (chatId, sessionId, content) => {
+      if (!chatId || !sessionId || !content) return null;
+      try {
+        const key = computeMessageKey(chatId, sessionId, content);
+        const raw = window.localStorage.getItem(key);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        return Array.isArray(parsed) ? parsed : null;
+      } catch {
+        return null;
+      }
+    },
+    [computeMessageKey]
+  );
+
+  const restoreSourcesIntoMessages = useCallback(
+    (chatId, sessionId, messageList) => {
+      const msgs = Array.isArray(messageList) ? messageList : [];
+      return msgs.map((m) => {
+        if (!m || typeof m !== 'object') return m;
+        if (m.role !== 'assistant') return m;
+        const content = stripThinkTags(m.content);
+        const existing = Array.isArray(m.sources) ? m.sources : [];
+        if (existing.length > 0) return m;
+        const restored = loadSourcesForAssistantMessage(chatId, sessionId, content);
+        if (Array.isArray(restored) && restored.length > 0) {
+          return { ...m, sources: restored };
+        }
+        return m;
+      });
+    },
+    [loadSourcesForAssistantMessage, stripThinkTags]
   );
 
   const upsertAssistantMessage = useCallback((content) => {
@@ -174,6 +270,7 @@ const Chat = () => {
 
   const upsertAssistantSources = useCallback((sources) => {
     const list = Array.isArray(sources) ? sources : [];
+    assistantSourcesRef.current = list;
     try {
       debugLogCitations(
         'sources received',
@@ -234,7 +331,7 @@ const Chat = () => {
       setSessions(list);
       if (list.length > 0) {
         setSelectedSessionId(list[0].id);
-        setMessages(list[0].messages || []);
+        setMessages(restoreSourcesIntoMessages(chatId, list[0].id, list[0].messages || []));
       } else {
         setSelectedSessionId(null);
         setMessages([]);
@@ -268,7 +365,7 @@ const Chat = () => {
       const session = await chatApi.createChatSession(selectedChatId, sessionName);
       setSessions((prev) => [session, ...prev]);
       setSelectedSessionId(session.id);
-      setMessages(session.messages || []);
+      setMessages(restoreSourcesIntoMessages(selectedChatId, session.id, session.messages || []));
     } catch (err) {
       setError(err.message || '新建会话失败');
     }
@@ -278,7 +375,7 @@ const Chat = () => {
     const session = sessions.find((s) => s.id === sessionId);
     if (!session) return;
     setSelectedSessionId(sessionId);
-    setMessages(session.messages || []);
+    setMessages(restoreSourcesIntoMessages(selectedChatId, sessionId, session.messages || []));
   };
 
   const confirmDeleteSession = async () => {
@@ -290,7 +387,7 @@ const Chat = () => {
         if (selectedSessionId === deleteConfirm.sessionId) {
           if (remaining.length > 0) {
             setSelectedSessionId(remaining[0].id);
-            setMessages(remaining[0].messages || []);
+            setMessages(restoreSourcesIntoMessages(selectedChatId, remaining[0].id, remaining[0].messages || []));
           } else {
             setSelectedSessionId(null);
             setMessages([]);
@@ -393,6 +490,7 @@ const Chat = () => {
       const decoder = new TextDecoder();
       let buffer = '';
       assistantMessageRef.current = '';
+      assistantSourcesRef.current = [];
 
        while (true) {
          const { done, value } = await reader.read();
@@ -492,6 +590,16 @@ const Chat = () => {
           }
         }
        }
+
+
+      // Persist sources for this assistant message (so history can be restored later).
+      try {
+        const finalText = stripThinkTags(assistantMessageRef.current || '');
+        const finalSources = assistantSourcesRef.current || [];
+        saveSourcesForAssistantMessage(selectedChatId, selectedSessionId, finalText, finalSources);
+      } catch {
+        // ignore
+      }
 
      } catch (err) {
       setError(err.message || '发送失败');
@@ -708,6 +816,7 @@ const Chat = () => {
                 >
                   {(() => {
                     const display = m.role === 'assistant' ? stripThinkTags(m.content) : String(m.content ?? '');
+                    const markdownText = m.role === 'assistant' ? rewriteCitationLinks(display) : display;
                     const citationIds = m.role === 'assistant' ? extractCitationIds(display) : [];
                     const sources = Array.isArray(m.sources) ? m.sources : [];
                     const uniqueCitationIds = (() => {
@@ -758,20 +867,57 @@ const Chat = () => {
                           {children}
                         </code>
                       ),
-                      a: ({ node, ...props }) => (
-                        <a
-                          {...props}
-                          target="_blank"
-                          rel="noreferrer"
-                          style={{ color: m.role === 'user' ? 'white' : '#2563eb', textDecoration: 'underline' }}
-                        />
-                      ),
+                      a: ({ node, href, children, ...props }) => {
+                        const h = String(href || '');
+                        if (m.role === 'assistant' && h.startsWith('#cid-')) {
+                          const idRaw = h.slice('#cid-'.length);
+                          const id = Number(idRaw);
+                          const raw = Number.isFinite(id) ? sources[id] : null;
+                          const src = raw ? normalizeSource(raw) : null;
+                          const chunk = src?.chunk || '';
+                          return (
+                            <span
+                              onClick={(e) => {
+                                e.preventDefault?.();
+                                e.stopPropagation?.();
+                                onCitationClick(e, { id: Number.isFinite(id) ? id : -1, chunk });
+                              }}
+                              style={{
+                                display: 'inline-block',
+                                padding: '0 6px',
+                                margin: '0 2px',
+                                borderRadius: '999px',
+                                background: '#e5e7eb',
+                                color: '#111827',
+                                fontSize: '0.85em',
+                                lineHeight: 1.6,
+                                cursor: 'pointer',
+                                userSelect: 'none',
+                              }}
+                              title="点击查看chunk"
+                            >
+                              {children}
+                            </span>
+                          );
+                        }
+                        return (
+                          <a
+                            {...props}
+                            href={href}
+                            target="_blank"
+                            rel="noreferrer"
+                            style={{ color: m.role === 'user' ? 'white' : '#2563eb', textDecoration: 'underline' }}
+                          >
+                            {children}
+                          </a>
+                        );
+                      },
                     };
 
                     return (
                       <>
                         <ReactMarkdown components={markdownComponents}>
-                          {display}
+                          {markdownText}
                         </ReactMarkdown>
 
                         {m.role === 'assistant' && uniqueCitationIds.length > 0 ? (
@@ -913,6 +1059,33 @@ const Chat = () => {
           </div>
         )}
       </div>
+
+      {citationHover && (
+        <div
+          data-testid="chat-citation-tooltip"
+          onMouseLeave={onCitationPopupLeave}
+          style={{
+            position: 'fixed',
+            left: Math.min(Math.max(10, (citationHover.x || 0) - 220), window.innerWidth - 450),
+            top: Math.min(Math.max(10, (citationHover.y || 0) - 10), window.innerHeight - 300),
+            width: '440px',
+            maxWidth: 'calc(100vw - 20px)',
+            maxHeight: '280px',
+            overflow: 'auto',
+            background: '#111827',
+            color: '#f9fafb',
+            border: '1px solid rgba(255,255,255,0.12)',
+            borderRadius: '10px',
+            padding: '10px 12px',
+            zIndex: 900,
+            boxShadow: '0 10px 25px rgba(0,0,0,0.25)',
+            whiteSpace: 'pre-wrap',
+            lineHeight: 1.45,
+          }}
+        >
+          {citationHover.chunk}
+        </div>
+      )}
 
       {deleteConfirm.show && (
         <div
