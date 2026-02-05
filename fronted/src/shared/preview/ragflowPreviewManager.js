@@ -4,7 +4,7 @@ import { excelBlobToSheetsHtml, isExcelFilename } from './excelPreview';
 const isDocxFilename = (name) => String(name || '').toLowerCase().endsWith('.docx');
 
 /**
- * Unifies the "view/preview" flow for Ragflow documents across Chat/Search/Browser.
+ * Unifies the "view/preview" flow for both Ragflow and local Knowledge documents.
  *
  * Contract:
  * - getPreviewJson: ({ docId, dataset }) -> { type, filename, content, ... }
@@ -14,9 +14,11 @@ const isDocxFilename = (name) => String(name || '').toLowerCase().endsWith('.doc
  * - excel: { type:'excel', filename, sheets, docId, dataset }
  * - docx:  { type:'docx', filename, html, docId, dataset }
  * - passthrough preview json for other types (text/image/pdf/html/unsupported...)
+ *
+ * Note: `dataset` is optional for Knowledge docs; it will be ignored by callers if not needed.
  */
-export const loadRagflowPreview = async ({ docId, dataset, title, getPreviewJson, getDownloadBlob }) => {
-  if (!docId) throw new Error('缺少文档信息，无法预览');
+export const loadDocumentPreview = async ({ docId, dataset, title, getPreviewJson, getDownloadBlob }) => {
+  if (!docId) throw new Error('Missing document id; cannot preview.');
   if (typeof getPreviewJson !== 'function') throw new Error('getPreviewJson is required');
 
   const data = await getPreviewJson({ docId, dataset });
@@ -43,3 +45,7 @@ export const loadRagflowPreview = async ({ docId, dataset, title, getPreviewJson
 
   return { ...(data || {}), filename: String(data?.filename || title || resolvedName) };
 };
+
+// Backward compatible alias (older code imports this name).
+export const loadRagflowPreview = loadDocumentPreview;
+

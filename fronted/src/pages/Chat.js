@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { httpClient } from '../shared/http/httpClient';
-import authClient from '../api/authClient';
 import { chatApi } from '../features/chat/api';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -8,9 +7,9 @@ import rehypeRaw from 'rehype-raw';
 import rehypeSanitize from 'rehype-sanitize';
 import { ensureTablePreviewStyles } from '../shared/preview/tablePreviewStyles';
 import { useEscapeClose } from '../shared/hooks/useEscapeClose';
-import { isMarkdownFilename, MarkdownPreview } from '../shared/preview/markdownPreview';
-import { loadRagflowPreview } from '../shared/preview/ragflowPreviewManager';
+import documentClient, { DOCUMENT_SOURCE } from '../shared/documents/documentClient';
 import { useAuth } from '../hooks/useAuth';
+import { DocumentPreviewModal } from '../shared/documents/preview/DocumentPreviewModal';
 
 const Chat = () => {
   const { canDownload } = useAuth();
@@ -25,8 +24,8 @@ const Chat = () => {
   const [error, setError] = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState({ show: false, sessionId: null, sessionName: '' });
   const [renameDialog, setRenameDialog] = useState({ show: false, sessionId: null, value: '' });
-  const [previewDialog, setPreviewDialog] = useState({ show: false, title: '', loading: false, error: '', payload: null });
-  const [previewObjectUrl, setPreviewObjectUrl] = useState(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewTarget, setPreviewTarget] = useState(null);
   const [citationHover, setCitationHover] = useState(null);
 
   const messagesEndRef = useRef(null);
@@ -41,44 +40,14 @@ const Chat = () => {
     setRenameDialog({ show: false, sessionId: null, value: '' });
   }, []);
 
-  const closePreviewDialog = useCallback(() => {
-    setPreviewDialog({ show: false, title: '', loading: false, error: '', payload: null });
+  const closePreview = useCallback(() => {
+    setPreviewOpen(false);
+    setPreviewTarget(null);
   }, []);
-
-  useEffect(() => {
-    if (!previewDialog.show) {
-      if (previewObjectUrl) window.URL.revokeObjectURL(previewObjectUrl);
-      setPreviewObjectUrl(null);
-      return;
-    }
-
-    const p = previewDialog.payload;
-    if (!p || !p.type || !p.content) return;
-
-    if (previewObjectUrl) {
-      window.URL.revokeObjectURL(previewObjectUrl);
-      setPreviewObjectUrl(null);
-    }
-
-    if (p.type === 'pdf' || p.type === 'html') {
-      try {
-        const binary = atob(p.content);
-        const bytes = new Uint8Array(binary.length);
-        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-        const mime = p.type === 'pdf' ? 'application/pdf' : 'text/html; charset=utf-8';
-        const blob = new Blob([bytes], { type: mime });
-        const url = window.URL.createObjectURL(blob);
-        setPreviewObjectUrl(url);
-      } catch (e) {
-        setPreviewObjectUrl(null);
-      }
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [previewDialog.show, previewDialog.payload]);
 
   useEscapeClose(deleteConfirm.show, closeDeleteConfirm);
   useEscapeClose(renameDialog.show, closeRenameDialog);
-  useEscapeClose(previewDialog.show, closePreviewDialog);
+  useEscapeClose(previewOpen, closePreview);
 
   // Inject shared table styles for Excel/CSV preview
   useEffect(() => {
@@ -209,6 +178,7 @@ const Chat = () => {
     (chatId, sessionId, content, sources) => {
       const list = Array.isArray(sources) ? sources : [];
       if (!chatId || !sessionId || !content || list.length === 0) return;
+
       try {
         const key = computeMessageKey(chatId, sessionId, content);
         window.localStorage.setItem(key, JSON.stringify(list));
@@ -303,7 +273,7 @@ const Chat = () => {
     scrollToBottom();
   }, [messages]);
 
-  const fetchChats = async () => {
+  const fetchChats = useCallback(async () => {
     try {
       setLoading(true);
       const data = await chatApi.listMyChats();
@@ -319,9 +289,9 @@ const Chat = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const fetchSessions = async (chatId) => {
+  const fetchSessions = useCallback(async (chatId) => {
     if (!chatId) return;
     try {
       const data = await chatApi.listChatSessions(chatId);
@@ -337,11 +307,11 @@ const Chat = () => {
     } catch (err) {
       setError(err.message || '加载会话失败');
     }
-  };
+  }, [restoreSourcesIntoMessages]);
 
   useEffect(() => {
     fetchChats();
-  }, []);
+  }, [fetchChats]);
 
   useEffect(() => {
     if (selectedChatId) {
@@ -351,7 +321,7 @@ const Chat = () => {
       setSelectedSessionId(null);
       setMessages([]);
     }
-  }, [selectedChatId]);
+  }, [selectedChatId, fetchSessions]);
 
   const createSession = async () => {
     if (!selectedChatId) return;
@@ -416,20 +386,31 @@ const Chat = () => {
     async (rawSource) => {
       const source = normalizeSource(rawSource);
       if (!source.docId || !source.dataset) return;
-      debugLogCitations('download GET start', { before_title: source.title, docId: source.docId, dataset: source.dataset });
-      debugLogCitations('preview GET start', { before_title: source.title, docId: source.docId, dataset: source.dataset });
-      setPreviewDialog({ show: true, title: source.title, loading: true, error: '', payload: null });
-      try {
+      debugLogCitations('preview open', { before_title: source.title, docId: source.docId, dataset: source.dataset });
+      setPreviewTarget({
+        source: DOCUMENT_SOURCE.RAGFLOW,
+        docId: source.docId,
+        datasetName: source.dataset,
+        filename: source.title,
+      });
+      setPreviewOpen(true);
+      return;
+      /*
         const payload = await loadRagflowPreview({
           docId: source.docId,
           dataset: source.dataset,
           title: source.title,
           getPreviewJson: async ({ docId, dataset }) => {
-            return authClient.previewDocument(docId, dataset);
+            return documentClient.preview({ source: DOCUMENT_SOURCE.RAGFLOW, docId, datasetName: dataset });
           },
           getDownloadBlob: canDownloadFiles
             ? async ({ docId, dataset, filename }) => {
-                return authClient.previewRagflowDocumentBlob(docId, dataset, filename);
+                return documentClient.downloadBlob({
+                  source: DOCUMENT_SOURCE.RAGFLOW,
+                  docId,
+                  datasetName: dataset,
+                  filename,
+                });
               }
             : undefined,
         });
@@ -440,9 +421,9 @@ const Chat = () => {
       } catch (e) {
         debugLogCitations('preview GET fail', { before_title: source.title, error: e?.message || String(e || '') });
         setPreviewDialog({ show: true, title: source.title, loading: false, error: e?.message || '预览失败', payload: null });
-      }
+      */
     },
-    [debugLogCitations, normalizeSource, canDownloadFiles]
+    [debugLogCitations, normalizeSource]
   );
 
   const downloadSource = useCallback(
@@ -450,7 +431,12 @@ const Chat = () => {
       const source = normalizeSource(rawSource);
       if (!source.docId || !source.dataset) return;
       if (!canDownloadFiles) throw new Error('no_download_permission');
-      const blob = await authClient.previewRagflowDocumentBlob(source.docId, source.dataset, source.title);
+      const blob = await documentClient.downloadBlob({
+        source: DOCUMENT_SOURCE.RAGFLOW,
+        docId: source.docId,
+        datasetName: source.dataset,
+        filename: source.title,
+      });
       const url = URL.createObjectURL(blob);
       try {
         const a = document.createElement('a');
@@ -463,7 +449,7 @@ const Chat = () => {
         URL.revokeObjectURL(url);
       }
     },
-    [debugLogCitations, normalizeSource]
+    [normalizeSource, canDownloadFiles]
   );
 
   const sendMessage = async () => {
@@ -1264,7 +1250,7 @@ const Chat = () => {
         </div>
       )}
 
-      {previewDialog.show && (
+      {/*
         <div
           data-testid="chat-preview-modal"
           style={{
@@ -1401,7 +1387,14 @@ const Chat = () => {
             </div>
           </div>
         </div>
-      )}
+      */}
+
+      <DocumentPreviewModal
+        open={previewOpen}
+        target={previewTarget}
+        onClose={closePreview}
+        canDownloadFiles={canDownloadFiles}
+      />
     </div>
   );
 };

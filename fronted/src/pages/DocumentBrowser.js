@@ -2,12 +2,8 @@ import React, { useEffect, useState, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import authClient from '../api/authClient';
-import { MarkdownPreview } from '../shared/preview/markdownPreview';
-import { loadRagflowPreview } from '../shared/preview/ragflowPreviewManager';
-import * as pdfjsLib from 'pdfjs-dist';
-
-// Configure PDF.js worker to use local file
-pdfjsLib.GlobalWorkerOptions.workerSrc = process.env.PUBLIC_URL + '/js/pdf.worker.min.mjs';
+import documentClient, { DOCUMENT_SOURCE } from '../shared/documents/documentClient';
+import { DocumentPreviewModal } from '../shared/documents/preview/DocumentPreviewModal';
 
 const Spinner = ({ size = 16 }) => (
   <svg
@@ -68,87 +64,14 @@ const DocumentBrowser = () => {
   const [expandedDatasets, setExpandedDatasets] = useState(new Set());
   const [actionLoading, setActionLoading] = useState({});
   const [selectedDocs, setSelectedDocs] = useState({});
-  const [previewUrl, setPreviewUrl] = useState(null);
   const [previewOpen, setPreviewOpen] = useState(false);
-  const [previewDocName, setPreviewDocName] = useState(null);
-  const [previewLoading, setPreviewLoading] = useState(false);
-  const [markdownContent, setMarkdownContent] = useState(null);
-  const [plainTextContent, setPlainTextContent] = useState(null);
-  const [docxContent, setDocxContent] = useState(null);
-
-  const [excelData, setExcelData] = useState(null);
-  const [excelRenderHint, setExcelRenderHint] = useState(null);
-  const [pdfDocument, setPdfDocument] = useState(null);
-  const [pdfNumPages, setPdfNumPages] = useState(0);
-  const [pdfCurrentPage, setPdfCurrentPage] = useState(1);
-  const [pdfScale, setPdfScale] = useState(1.5);
-  const canvasRef = useRef(null);
+  const [previewTarget, setPreviewTarget] = useState(null);
   const handleViewRef = useRef(null);
-  const closePreviewRef = useRef(null);
-  const previewDocIdRef = useRef(null);
-  const previewDatasetRef = useRef(null);
-  const [imageScale, setImageScale] = useState(1);
-  const [imageRotation, setImageRotation] = useState(0);
   const [canDeleteDocs, setCanDeleteDocs] = useState(false);
 
   useEffect(() => {
     fetchAllDatasets();
   }, [accessibleKbs, user]); // 当用户权限变化时重新加载
-
-  // Inject table styles for Excel/DOCX preview
-  useEffect(() => {
-    if (typeof document !== 'undefined' && !document.getElementById('table-preview-styles')) {
-      const style = document.createElement('style');
-      style.id = 'table-preview-styles';
-      style.textContent = `
-        .table-preview table {
-          border-collapse: collapse;
-          width: 100%;
-          font-size: 0.875rem;
-        }
-        .table-preview th,
-        .table-preview td {
-          border: 1px solid #d1d5db;
-          padding: 8px 12px;
-          text-align: left;
-        }
-        .table-preview th {
-          background-color: #f3f4f6;
-          font-weight: 600;
-          color: #1f2937;
-        }
-        .table-preview tr:nth-child(even) {
-          background-color: #f9fafb;
-        }
-        .table-preview tr:hover {
-          background-color: #f3f4f6;
-        }
-      `;
-      document.head.appendChild(style);
-    }
-  }, []);
-
-  // Render PDF page when document or page number changes
-  useEffect(() => {
-    if (pdfDocument && canvasRef.current) {
-      const renderPage = async () => {
-        const page = await pdfDocument.getPage(pdfCurrentPage);
-        const canvas = canvasRef.current;
-        const context = canvas.getContext('2d');
-
-        const viewport = page.getViewport({ scale: pdfScale });
-        canvas.height = viewport.height;
-        canvas.width = viewport.width;
-
-        await page.render({
-          canvasContext: context,
-          viewport: viewport
-        }).promise;
-      };
-
-      renderPage();
-    }
-  }, [pdfDocument, pdfCurrentPage, pdfScale]);
 
   // Handle navigation from search page - locate and preview specific document
   useEffect(() => {
@@ -196,7 +119,6 @@ const DocumentBrowser = () => {
     setDocuments({});
     setExpandedDatasets(new Set());
     setSelectedDocs({});
-    setPreviewUrl(null);
   }, [user?.user_id]);
 
   useEffect(() => {
@@ -290,326 +212,16 @@ const DocumentBrowser = () => {
   const handleView = async (docId, datasetName) => {
     const doc = documents[datasetName]?.find(d => d.id === docId);
     const docName = doc?.name || `document_${docId}`;
-    const canDownloadFiles = typeof canDownload === 'function' ? !!canDownload() : false;
 
-    try {
-      setPreviewOpen(true);
-      setPreviewLoading(true);
-      setActionLoading(prev => ({ ...prev, [`${docId}-view`]: true }));
-      previewDocIdRef.current = docId;
-      previewDatasetRef.current = datasetName;
-      setPreviewDocName(docName);
-      setMarkdownContent(null);
-      setPlainTextContent(null);
-      setDocxContent(null);
-      setExcelData(null);
-      setExcelRenderHint(null);
-      setPdfDocument(null);
-      setPdfNumPages(0);
-      setPdfCurrentPage(1);
-      if (previewUrl) window.URL.revokeObjectURL(previewUrl);
-      setPreviewUrl(null);
-
-      // Reset image state
-      if (isImageFile(docName)) {
-        setImageScale(1);
-        setImageRotation(0);
-      }
-
-      // Unified preview flow (same as Chat/Search): call backend /preview first, and only use /download when allowed.
-      // This keeps "view" working even without download permission.
-      const base64ToBytes = (b64) => {
-        const binary = atob(b64 || '');
-        const bytes = new Uint8Array(binary.length);
-        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-        return bytes;
-      };
-
-      const mimeFromImageType = (imageType) => {
-        const t = String(imageType || '').toLowerCase();
-        if (t === 'jpg') return 'image/jpeg';
-        if (t === 'svg') return 'image/svg+xml';
-        return t ? `image/${t}` : 'application/octet-stream';
-      };
-
-      const payload = await loadRagflowPreview({
-        docId,
-        dataset: datasetName,
-        title: docName,
-        getPreviewJson: async ({ docId, dataset }) => authClient.previewDocument(docId, dataset),
-        getDownloadBlob: canDownloadFiles
-          ? async ({ docId, dataset, filename }) => authClient.previewRagflowDocumentBlob(docId, dataset, filename)
-          : undefined,
-      });
-
-      const resolvedName = String(payload?.filename || docName);
-      setPreviewDocName(resolvedName);
-
-      if (payload?.type === 'excel') {
-        setExcelData(payload.sheets || {});
-        setExcelRenderHint('如果 Excel 里包含流程图/形状，表格模式可能看不到；可点“原样预览(HTML)”查看。');
-        return;
-      }
-
-      if (payload?.type === 'docx') {
-        setDocxContent(payload.html || '');
-        return;
-      }
-
-      if (payload?.type === 'text') {
-        const text = String(payload.content || '');
-        if (isCsvFile(resolvedName)) {
-          const firstLine = String(text || '').split(/\r?\n/)[0] || '';
-          const delimiter = detectDelimiter(firstLine);
-          const rows = parseDelimited(text, delimiter);
-          const { html, truncated } = rowsToHtmlTable(rows);
-          setExcelData({ CSV: html });
-          setExcelRenderHint(null);
-          if (truncated) console.warn('[preview] CSV truncated for display (too large).');
-          return;
-        }
-        if (isMarkdownFile(resolvedName)) setMarkdownContent(text);
-        else setPlainTextContent(text);
-        return;
-      }
-
-      if (payload?.type === 'html') {
-        if (!payload?.content) throw new Error(payload?.message || 'Unsupported preview');
-        const bytes = base64ToBytes(payload.content);
-        const blob = new Blob([bytes], { type: 'text/html; charset=utf-8' });
-        const url = window.URL.createObjectURL(blob);
-        setPreviewUrl(url);
-        return;
-      }
-
-      if (payload?.type === 'pdf') {
-        if (!payload?.content) throw new Error(payload?.message || 'PDF preview failed');
-        const bytes = base64ToBytes(payload.content);
-        const blob = new Blob([bytes], { type: 'application/pdf' });
-        const url = window.URL.createObjectURL(blob);
-        const arrayBuffer = await blob.arrayBuffer();
-        const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
-        const pdf = await loadingTask.promise;
-        setPdfDocument(pdf);
-        setPdfNumPages(pdf.numPages);
-        setPdfCurrentPage(1);
-        setPreviewUrl(url);
-        return;
-      }
-
-      if (payload?.type === 'image') {
-        if (!payload?.content) throw new Error(payload?.message || 'Image preview failed');
-        const bytes = base64ToBytes(payload.content);
-        const mime = payload?.mime_type || mimeFromImageType(payload?.image_type);
-        const blob = new Blob([bytes], { type: mime });
-        const url = window.URL.createObjectURL(blob);
-        setPreviewUrl(url);
-        return;
-      }
-
-      throw new Error(payload?.message || 'Unsupported preview');
-    } catch (err) {
-      setError(err.message || '预览失败');
-      setPreviewUrl(null);
-      setMarkdownContent(null);
-      setPlainTextContent(null);
-      setDocxContent(null);
-      setExcelData(null);
-      setExcelRenderHint(null);
-      setPdfDocument(null);
-    } finally {
-      setPreviewLoading(false);
-      setActionLoading(prev => ({ ...prev, [`${docId}-view`]: false }));
-    }
+    setPreviewTarget({ source: DOCUMENT_SOURCE.RAGFLOW, docId, datasetName, filename: docName });
+    setPreviewOpen(true);
   };
 
   handleViewRef.current = handleView;
 
   const closePreview = () => {
-    if (previewUrl) {
-      window.URL.revokeObjectURL(previewUrl);
-    }
     setPreviewOpen(false);
-    setPreviewUrl(null);
-    setPreviewDocName(null);
-    previewDocIdRef.current = null;
-    previewDatasetRef.current = null;
-    setMarkdownContent(null);
-    setPlainTextContent(null);
-    setDocxContent(null);
-    setExcelData(null);
-    setExcelRenderHint(null);
-    setPdfDocument(null);
-    setPdfNumPages(0);
-    setPdfCurrentPage(1);
-  };
-
-  closePreviewRef.current = closePreview;
-
-  useEffect(() => {
-    if (!previewOpen) return;
-    const onKeyDown = (e) => {
-      if (e.key === 'Escape') {
-        if (closePreviewRef.current) closePreviewRef.current();
-      }
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [previewOpen]);
-
-  const isGenericPreviewable = (filename) => {
-    if (!filename) return false;
-    const ext = filename.toLowerCase().split('.').pop();
-    // HTML previews produced by backend (e.g. Office -> HTML).
-    return ext === 'html' || ext === 'htm';
-  };
-
-  const isMarkdownFile = (filename) => {
-    if (!filename) return false;
-    const ext = filename.toLowerCase().split('.').pop();
-    return ext === 'md' || ext === 'markdown';
-  };
-
-  const isPlainTextFile = (filename) => {
-    if (!filename) return false;
-    const ext = filename.toLowerCase().split('.').pop();
-    return ext === 'txt' || ext === 'ini' || ext === 'log';
-  };
-
-  const isDocxFile = (filename) => {
-    if (!filename) return false;
-    const ext = filename.toLowerCase().split('.').pop();
-    return ext === 'docx';
-  };
-
-  const isPptxFile = (filename) => {
-    if (!filename) return false;
-    const ext = filename.toLowerCase().split('.').pop();
-    return ext === 'pptx';
-  };
-
-  const isPptFile = (filename) => {
-    if (!filename) return false;
-    const ext = filename.toLowerCase().split('.').pop();
-    return ext === 'ppt';
-  };
-
-  const isExcelFile = (filename) => {
-    if (!filename) return false;
-    const ext = filename.toLowerCase().split('.').pop();
-    return ext === 'xlsx' || ext === 'xls';
-  };
-
-  const isCsvFile = (filename) => {
-    if (!filename) return false;
-    const ext = filename.toLowerCase().split('.').pop();
-    return ext === 'csv';
-  };
-
-  const escapeHtml = (s) =>
-    String(s ?? '')
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#39;');
-
-  const detectDelimiter = (line) => {
-    const candidates = [',', ';', '\t'];
-    let best = ',';
-    let bestCount = -1;
-    for (const d of candidates) {
-      const c = (line.match(new RegExp(`\\${d}`, 'g')) || []).length;
-      if (c > bestCount) {
-        bestCount = c;
-        best = d;
-      }
-    }
-    return best;
-  };
-
-  const parseDelimited = (text, delimiter) => {
-    const rows = [];
-    let row = [];
-    let cell = '';
-    let inQuotes = false;
-
-    const s = String(text ?? '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-    for (let i = 0; i < s.length; i++) {
-      const ch = s[i];
-      if (inQuotes) {
-        if (ch === '"') {
-          const next = s[i + 1];
-          if (next === '"') {
-            cell += '"';
-            i++;
-          } else {
-            inQuotes = false;
-          }
-        } else {
-          cell += ch;
-        }
-        continue;
-      }
-
-      if (ch === '"') {
-        inQuotes = true;
-        continue;
-      }
-      if (ch === delimiter) {
-        row.push(cell);
-        cell = '';
-        continue;
-      }
-      if (ch === '\n') {
-        row.push(cell);
-        cell = '';
-        if (!(row.length === 1 && row[0] === '' && rows.length === 0)) rows.push(row);
-        row = [];
-        continue;
-      }
-      cell += ch;
-    }
-    row.push(cell);
-    if (row.length > 1 || row[0] !== '') rows.push(row);
-    return rows;
-  };
-
-  const rowsToHtmlTable = (rows, { maxRows = 2000, maxCols = 100 } = {}) => {
-    const limitedRows = rows.slice(0, maxRows);
-    const colCount = Math.min(
-      maxCols,
-      Math.max(0, ...limitedRows.map((r) => (Array.isArray(r) ? r.length : 0)))
-    );
-
-    const head = limitedRows[0] || [];
-    const body = limitedRows.slice(1);
-
-    const thead =
-      colCount > 0
-        ? `<thead><tr>${Array.from({ length: colCount })
-            .map((_, i) => `<th>${escapeHtml(head[i] ?? '')}</th>`)
-            .join('')}</tr></thead>`
-        : '';
-
-    const tbody = `<tbody>${body
-      .map((r) => {
-        const cells = Array.from({ length: colCount })
-          .map((_, i) => `<td>${escapeHtml(r?.[i] ?? '')}</td>`)
-          .join('');
-        return `<tr>${cells}</tr>`;
-      })
-      .join('')}</tbody>`;
-
-    const table = `<table>${thead}${tbody}</table>`;
-    const truncated = rows.length > maxRows || rows.some((r) => (r?.length || 0) > maxCols);
-    return { html: table, truncated };
-  };
-
-  const isImageFile = (filename) => {
-    if (!filename) return false;
-    const ext = filename.toLowerCase().split('.').pop();
-    return ['png', 'jpg', 'jpeg', 'gif', 'bmp', 'svg', 'webp'].includes(ext);
+    setPreviewTarget(null);
   };
 
   const handleDownload = async (docId, datasetName) => {
@@ -618,7 +230,23 @@ const DocumentBrowser = () => {
 
     try {
       setActionLoading(prev => ({ ...prev, [`${docId}-download`]: true }));
-      await authClient.downloadRagflowDocument(docId, datasetName, docName);
+      const blob = await documentClient.downloadBlob({
+        source: DOCUMENT_SOURCE.RAGFLOW,
+        docId,
+        datasetName,
+        filename: docName,
+      });
+      const url = window.URL.createObjectURL(blob);
+      try {
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = docName || `document_${docId}`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      } finally {
+        window.URL.revokeObjectURL(url);
+      }
     } catch (err) {
       setError(err.message || '下载失败');
     } finally {
@@ -631,7 +259,7 @@ const DocumentBrowser = () => {
 
     try {
       setActionLoading(prev => ({ ...prev, [`${docId}-delete`]: true }));
-      await authClient.deleteRagflowDocument(docId, datasetName);
+      await documentClient.delete({ source: DOCUMENT_SOURCE.RAGFLOW, docId, datasetName });
 
       setDocuments(prev => {
         const updated = { ...prev };
@@ -703,7 +331,7 @@ const DocumentBrowser = () => {
         if (doc) {
           allSelectedDocs.push({
             doc_id: docId,
-            dataset_name: datasetName,
+            dataset: datasetName,
             name: doc.name
           });
         }
@@ -719,7 +347,7 @@ const DocumentBrowser = () => {
       setError(null);
       setActionLoading(prev => ({ ...prev, [batchDownloadKey]: true }));
 
-      await authClient.batchDownloadRagflowDocuments(allSelectedDocs);
+      await documentClient.batchDownloadRagflowToBrowser(allSelectedDocs);
 
       clearAllSelections();
     } catch (err) {
@@ -1135,564 +763,12 @@ const DocumentBrowser = () => {
         </div>
       )}
 
-      {previewOpen && (
-        <div
-          onClick={closePreview}
-          data-testid="browser-preview-modal"
-          style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: 'rgba(0, 0, 0, 0.75)',
-            zIndex: 1000,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}>
-          <div
-            onClick={(e) => e.stopPropagation()}
-            style={{
-              backgroundColor: 'white',
-              borderRadius: '8px',
-              maxWidth: '90vw',
-              maxHeight: '90vh',
-              width: '90%',
-              display: 'flex',
-              flexDirection: 'column',
-              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)',
-            }}>
-            <div style={{
-              padding: '16px 24px',
-              borderBottom: '1px solid #e5e7eb',
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-            }}>
-              <h3 style={{ margin: 0, fontSize: '1.1rem', color: '#1f2937' }}>
-                {previewDocName}
-              </h3>
-              <button
-                onClick={closePreview}
-                data-testid="browser-preview-close"
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  fontSize: '1.5rem',
-                  cursor: 'pointer',
-                  color: '#6b7280',
-                  padding: '0',
-                  width: '32px',
-                  height: '32px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-                onMouseEnter={(e) => e.target.style.color = '#1f2937'}
-                onMouseLeave={(e) => e.target.style.color = '#6b7280'}
-              >
-                ×
-              </button>
-            </div>
-
-            <div style={{ flex: 1, overflow: 'auto', padding: '24px' }}>
-              {previewLoading ? (
-                <div style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  height: '400px',
-                  gap: '16px'
-                }}>
-                  <Spinner size={32} />
-                  <div style={{ color: '#6b7280' }}>加载中...</div>
-                </div>
-              ) : isMarkdownFile(previewDocName) ? (
-                <MarkdownPreview content={markdownContent} />
-              ) : isPlainTextFile(previewDocName) ? (
-                <div style={{
-                  padding: '24px',
-                  backgroundColor: 'white',
-                  borderRadius: '8px',
-                  height: '70vh',
-                  overflow: 'auto',
-                  border: '1px solid #e5e7eb'
-                }}>
-                  <pre style={{
-                    margin: 0,
-                    fontSize: '0.875rem',
-                    lineHeight: '1.6',
-                    color: '#111827',
-                    whiteSpace: 'pre-wrap',
-                    wordBreak: 'break-word',
-                    fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace"
-                  }}>{plainTextContent}</pre>
-                </div>
-              ) : isDocxFile(previewDocName) ? (
-                <div className="table-preview" style={{
-                  padding: '24px',
-                  backgroundColor: 'white',
-                  borderRadius: '8px',
-                  height: '70vh',
-                  overflow: 'auto',
-                  border: '1px solid #e5e7eb'
-                }}>
-                  <div
-                    style={{
-                      fontSize: '0.875rem',
-                      lineHeight: '1.6',
-                      color: '#1f2937'
-                    }}
-                    dangerouslySetInnerHTML={{ __html: docxContent }}
-                  />
-                </div>
-              ) : isPptxFile(previewDocName) ? (
-                <div style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  height: '70vh',
-                  backgroundColor: '#fef3c7',
-                  borderRadius: '8px',
-                  padding: '48px',
-                  border: '2px solid #f59e0b'
-                }}>
-                  <div style={{ fontSize: '4rem', marginBottom: '24px' }}>📊</div>
-                  <div style={{
-                    fontSize: '1.5rem',
-                    fontWeight: 'bold',
-                    color: '#92400e',
-                    marginBottom: '16px',
-                    textAlign: 'center'
-                  }}>
-                    PowerPoint演示文稿（.pptx）
-                  </div>
-                  <div style={{
-                    fontSize: '1rem',
-                    color: '#78350f',
-                    textAlign: 'center',
-                    maxWidth: '600px',
-                    marginBottom: '32px',
-                    lineHeight: '1.6'
-                  }}>
-                    由于PPTX文件格式复杂，无法在浏览器中完整渲染视觉效果。<br />
-                    建议您使用"下载"按钮保存文件后，使用Microsoft PowerPoint、WPS或其他兼容软件打开查看。
-                  </div>
-                  <div style={{
-                    padding: '16px 24px',
-                    backgroundColor: '#fffbeb',
-                    border: '1px solid #fcd34d',
-                    borderRadius: '8px',
-                    fontSize: '0.875rem',
-                    color: '#92400e',
-                    textAlign: 'center'
-                  }}>
-                    💡 <strong>提示：</strong>
-                    <ul style={{ margin: '8px 0 0 0', paddingLeft: '20px', textAlign: 'left' }}>
-                      <li>PPTX文件包含复杂的布局、动画和多媒体元素</li>
-                      <li>浏览器无法完整渲染PowerPoint的视觉效果</li>
-                      <li>下载后使用PowerPoint打开可获得完整体验</li>
-                    </ul>
-                  </div>
-                </div>
-              ) : isPptFile(previewDocName) ? (
-                <div style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  height: '70vh',
-                  backgroundColor: '#fef3c7',
-                  borderRadius: '8px',
-                  padding: '48px',
-                  border: '2px solid #f59e0b'
-                }}>
-                  <div style={{ fontSize: '4rem', marginBottom: '24px' }}>📊</div>
-                  <div style={{
-                    fontSize: '1.5rem',
-                    fontWeight: 'bold',
-                    color: '#92400e',
-                    marginBottom: '16px',
-                    textAlign: 'center'
-                  }}>
-                    老版本PowerPoint文件（.ppt）
-                  </div>
-                  <div style={{
-                    fontSize: '1rem',
-                    color: '#78350f',
-                    textAlign: 'center',
-                    maxWidth: '500px',
-                    marginBottom: '32px',
-                    lineHeight: '1.6'
-                  }}>
-                    由于技术限制，老版本PPT文件（.ppt）无法在浏览器中直接预览。<br />
-                    建议您使用"下载"按钮保存文件后，使用Microsoft PowerPoint或其他兼容软件打开。
-                  </div>
-                  <div style={{
-                    padding: '16px 24px',
-                    backgroundColor: '#fffbeb',
-                    border: '1px solid #fcd34d',
-                    borderRadius: '8px',
-                    fontSize: '0.875rem',
-                    color: '#92400e',
-                    textAlign: 'center'
-                  }}>
-                    💡 <strong>建议：</strong>如果可能，建议将PPT文件转换为PPTX格式后再上传，<br />
-                    以获得更好的兼容性和在线预览体验。
-                  </div>
-                </div>
-              ) : ((isExcelFile(previewDocName) || isCsvFile(previewDocName)) && excelData) ? (
-                <div className="table-preview" style={{
-                  padding: '24px',
-                  backgroundColor: 'white',
-                  borderRadius: '8px',
-                  height: '70vh',
-                  overflow: 'auto',
-                  border: '1px solid #e5e7eb'
-                }}>
-                  {excelRenderHint && isExcelFile(previewDocName) && (
-                    <div style={{
-                      display: 'flex',
-                      gap: '10px',
-                      alignItems: 'center',
-                      marginBottom: '16px',
-                      padding: '10px 12px',
-                      backgroundColor: '#eff6ff',
-                      border: '1px solid #bfdbfe',
-                      borderRadius: '8px',
-                      color: '#1e3a8a',
-                      fontSize: '0.9rem',
-                    }}>
-                      <div style={{ flex: 1 }}>{excelRenderHint}</div>
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          try {
-                            setError(null);
-                            setPreviewLoading(true);
-                            const docId = previewDocIdRef.current;
-                            const dataset = previewDatasetRef.current;
-                            if (!docId || !dataset) throw new Error('缺少文档信息，无法预览');
-
-                            const data = await authClient.previewDocument(docId, dataset);
-                            if (data?.type !== 'html' || !data?.content) {
-                              throw new Error(data?.message || '此文件类型不支持在线预览，请下载后查看');
-                            }
-                            const binary = atob(data.content);
-                            const bytes = new Uint8Array(binary.length);
-                            for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-                            const htmlBlob = new Blob([bytes], { type: 'text/html; charset=utf-8' });
-                            const url = window.URL.createObjectURL(htmlBlob);
-                            setPdfDocument(null);
-                            setPdfNumPages(0);
-                            setPdfCurrentPage(1);
-                            setPreviewUrl(url);
-                            if (data?.filename) setPreviewDocName(data.filename);
-                            setExcelData(null);
-                            setExcelRenderHint(null);
-                          } catch (e) {
-                            setError(e.message || '预览失败');
-                          } finally {
-                            setPreviewLoading(false);
-                          }
-                        }}
-                        style={{
-                          padding: '8px 12px',
-                          backgroundColor: '#3b82f6',
-                          color: 'white',
-                          border: 'none',
-                          borderRadius: '6px',
-                          cursor: 'pointer',
-                          fontSize: '0.85rem',
-                          flexShrink: 0,
-                        }}
-                      >
-                        原样预览(HTML)
-                      </button>
-                    </div>
-                  )}
-                  {Object.keys(excelData).map((sheetName, index) => (
-                    <div key={sheetName} style={{ marginBottom: index < Object.keys(excelData).length - 1 ? '32px' : 0 }}>
-                      <h3 style={{
-                        fontSize: '1.1rem',
-                        fontWeight: 'bold',
-                        marginBottom: '12px',
-                        color: '#1f2937',
-                        borderBottom: '2px solid #e5e7eb',
-                        paddingBottom: '8px'
-                      }}>
-                        {sheetName}
-                      </h3>
-                      <div
-                        style={{
-                          fontSize: '0.875rem',
-                          overflow: 'auto'
-                        }}
-                        dangerouslySetInnerHTML={{ __html: excelData[sheetName] }}
-                      />
-                    </div>
-                  ))}
-                </div>
-              ) : pdfDocument ? (
-                <div style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  height: '70vh',
-                  backgroundColor: '#525659',
-                  borderRadius: '8px',
-                  overflow: 'hidden'
-                }}>
-                  {/* PDF Controls */}
-                  <div style={{
-                    padding: '12px 16px',
-                    backgroundColor: '#323639',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '12px',
-                    borderBottom: '1px solid #4a4e51'
-                  }}>
-                    <button
-                      onClick={() => setPdfCurrentPage(p => Math.max(1, p - 1))}
-                      disabled={pdfCurrentPage <= 1}
-                      style={{
-                        padding: '6px 12px',
-                        fontSize: '0.875rem',
-                        backgroundColor: pdfCurrentPage <= 1 ? '#4a4e51' : '#4a90e2',
-                        color: 'white',
-                        border: 'none',
-                        borderRadius: '4px',
-                        cursor: pdfCurrentPage <= 1 ? 'not-allowed' : 'pointer'
-                      }}
-                    >
-                      上一页
-                    </button>
-
-                    <span style={{
-                      color: '#fff',
-                      fontSize: '0.875rem',
-                      minWidth: '120px',
-                      textAlign: 'center'
-                    }}>
-                      {pdfCurrentPage} / {pdfNumPages}
-                    </span>
-
-                    <button
-                      onClick={() => setPdfCurrentPage(p => Math.min(pdfNumPages, p + 1))}
-                      disabled={pdfCurrentPage >= pdfNumPages}
-                      style={{
-                        padding: '6px 12px',
-                        fontSize: '0.875rem',
-                        backgroundColor: pdfCurrentPage >= pdfNumPages ? '#4a4e51' : '#4a90e2',
-                        color: 'white',
-                        border: 'none',
-                        borderRadius: '4px',
-                        cursor: pdfCurrentPage >= pdfNumPages ? 'not-allowed' : 'pointer'
-                      }}
-                    >
-                      下一页
-                    </button>
-
-                    <div style={{ flex: 1 }} />
-
-                    <select
-                      value={pdfScale}
-                      onChange={(e) => setPdfScale(parseFloat(e.target.value))}
-                      style={{
-                        padding: '6px 12px',
-                        fontSize: '0.875rem',
-                        backgroundColor: '#4a4e51',
-                        color: 'white',
-                        border: '1px solid #5a5e61',
-                        borderRadius: '4px',
-                        cursor: 'pointer'
-                      }}
-                    >
-                      <option value={0.75}>75%</option>
-                      <option value={1}>100%</option>
-                      <option value={1.25}>125%</option>
-                      <option value={1.5}>150%</option>
-                      <option value={2}>200%</option>
-                    </select>
-                  </div>
-
-                  {/* PDF Canvas */}
-                  <div style={{
-                    flex: 1,
-                    overflow: 'auto',
-                    display: 'flex',
-                    justifyContent: 'center',
-                    padding: '16px'
-                  }}>
-                    <canvas
-                      ref={canvasRef}
-                      style={{
-                        boxShadow: '0 2px 8px rgba(0, 0, 0, 0.3)',
-                        maxWidth: '100%'
-                      }}
-                    />
-                  </div>
-                </div>
-              ) : isImageFile(previewDocName) ? (
-                <div style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  height: '70vh',
-                  backgroundColor: '#1a1a1a',
-                  borderRadius: '8px',
-                  overflow: 'hidden'
-                }}>
-                  {/* Image Controls */}
-                  <div style={{
-                    padding: '12px 16px',
-                    backgroundColor: '#2d2d2d',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '12px',
-                    borderBottom: '1px solid #3d3d3d'
-                  }}>
-                    <button
-                      onClick={() => setImageScale(s => Math.max(0.25, s - 0.25))}
-                      disabled={imageScale <= 0.25}
-                      style={{
-                        padding: '6px 12px',
-                        fontSize: '0.875rem',
-                        backgroundColor: imageScale <= 0.25 ? '#3d3d3d' : '#4a90e2',
-                        color: 'white',
-                        border: 'none',
-                        borderRadius: '4px',
-                        cursor: imageScale <= 0.25 ? 'not-allowed' : 'pointer'
-                      }}
-                    >
-                      缩小
-                    </button>
-
-                    <span style={{
-                      color: '#fff',
-                      fontSize: '0.875rem',
-                      minWidth: '80px',
-                      textAlign: 'center'
-                    }}>
-                      {Math.round(imageScale * 100)}%
-                    </span>
-
-                    <button
-                      onClick={() => setImageScale(s => Math.min(5, s + 0.25))}
-                      disabled={imageScale >= 5}
-                      style={{
-                        padding: '6px 12px',
-                        fontSize: '0.875rem',
-                        backgroundColor: imageScale >= 5 ? '#3d3d3d' : '#4a90e2',
-                        color: 'white',
-                        border: 'none',
-                        borderRadius: '4px',
-                        cursor: imageScale >= 5 ? 'not-allowed' : 'pointer'
-                      }}
-                    >
-                      放大
-                    </button>
-
-                    <button
-                      onClick={() => setImageScale(1)}
-                      style={{
-                        padding: '6px 12px',
-                        fontSize: '0.875rem',
-                        backgroundColor: '#4a90e2',
-                        color: 'white',
-                        border: 'none',
-                        borderRadius: '4px',
-                        cursor: 'pointer'
-                      }}
-                    >
-                      重置
-                    </button>
-
-                    <div style={{ flex: 1 }} />
-
-                    <button
-                      onClick={() => setImageRotation(r => (r - 90) % 360)}
-                      style={{
-                        padding: '6px 12px',
-                        fontSize: '0.875rem',
-                        backgroundColor: '#4a90e2',
-                        color: 'white',
-                        border: 'none',
-                        borderRadius: '4px',
-                        cursor: 'pointer'
-                      }}
-                    >
-                      ↺ 左旋
-                    </button>
-
-                    <button
-                      onClick={() => setImageRotation(r => (r + 90) % 360)}
-                      style={{
-                        padding: '6px 12px',
-                        fontSize: '0.875rem',
-                        backgroundColor: '#4a90e2',
-                        color: 'white',
-                        border: 'none',
-                        borderRadius: '4px',
-                        cursor: 'pointer'
-                      }}
-                    >
-                      右旋 ↻
-                    </button>
-                  </div>
-
-                  {/* Image Display */}
-                  <div style={{
-                    flex: 1,
-                    overflow: 'auto',
-                    display: 'flex',
-                    justifyContent: 'center',
-                    alignItems: 'center',
-                    padding: '16px'
-                  }}>
-                    <img
-                      src={previewUrl}
-                      alt={previewDocName}
-                      style={{
-                        maxWidth: '100%',
-                        maxHeight: '100%',
-                        objectFit: 'contain',
-                        transform: `scale(${imageScale}) rotate(${imageRotation}deg)`,
-                        transition: 'transform 0.3s ease',
-                        boxShadow: '0 4px 16px rgba(0, 0, 0, 0.5)'
-                      }}
-                    />
-                  </div>
-                </div>
-              ) : isGenericPreviewable(previewDocName) ? (
-                <iframe
-                  src={previewUrl}
-                  style={{
-                    width: '100%',
-                    height: '70vh',
-                    border: 'none',
-                    borderRadius: '4px',
-                  }}
-                  title={previewDocName}
-                />
-              ) : (
-                <div style={{
-                  textAlign: 'center',
-                  padding: '48px',
-                  color: '#6b7280'
-                }}>
-                  <div style={{ fontSize: '3rem', marginBottom: '16px' }}>📄</div>
-                  <div style={{ fontSize: '1.1rem', marginBottom: '8px' }}>此文件类型不支持在线预览</div>
-                  <div style={{ fontSize: '0.9rem' }}>
-                    请使用"下载"按钮保存文件到本地查看
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
+      <DocumentPreviewModal
+        open={previewOpen}
+        target={previewTarget}
+        onClose={closePreview}
+        canDownloadFiles={typeof canDownload === 'function' ? !!canDownload() : false}
+      />
     </div>
   );
 };

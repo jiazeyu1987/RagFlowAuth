@@ -2,114 +2,11 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { reviewApi } from '../features/review/api';
 import { knowledgeApi } from '../features/knowledge/api';
-import { MarkdownPreview } from '../shared/preview/markdownPreview';
 import ReactDiffViewer from 'react-diff-viewer-continued';
-import mammoth from 'mammoth';
-import { excelArrayBufferToSheetsHtml } from '../shared/preview/excelPreview';
-import { ensureTablePreviewStyles } from '../shared/preview/tablePreviewStyles';
 import { useEscapeClose } from '../shared/hooks/useEscapeClose';
-import authClient from '../api/authClient';
+import documentClient, { DOCUMENT_SOURCE } from '../shared/documents/documentClient';
+import { DocumentPreviewModal } from '../shared/documents/preview/DocumentPreviewModal';
 
-const escapeHtml = (s) =>
-  String(s ?? '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-
-const detectDelimiter = (line) => {
-  const candidates = [',', ';', '\t'];
-  let best = ',';
-  let bestCount = -1;
-  for (const d of candidates) {
-    const c = (line.match(new RegExp(`\\${d}`, 'g')) || []).length;
-    if (c > bestCount) {
-      bestCount = c;
-      best = d;
-    }
-  }
-  return best;
-};
-
-const parseDelimited = (text, delimiter) => {
-  const rows = [];
-  let row = [];
-  let cell = '';
-  let inQuotes = false;
-
-  const s = String(text ?? '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-  for (let i = 0; i < s.length; i++) {
-    const ch = s[i];
-    if (inQuotes) {
-      if (ch === '"') {
-        const next = s[i + 1];
-        if (next === '"') {
-          cell += '"';
-          i++;
-        } else {
-          inQuotes = false;
-        }
-      } else {
-        cell += ch;
-      }
-      continue;
-    }
-
-    if (ch === '"') {
-      inQuotes = true;
-      continue;
-    }
-    if (ch === delimiter) {
-      row.push(cell);
-      cell = '';
-      continue;
-    }
-    if (ch === '\n') {
-      row.push(cell);
-      cell = '';
-      // skip last empty line
-      if (!(row.length === 1 && row[0] === '' && rows.length === 0)) rows.push(row);
-      row = [];
-      continue;
-    }
-    cell += ch;
-  }
-  row.push(cell);
-  if (row.length > 1 || row[0] !== '') rows.push(row);
-  return rows;
-};
-
-const rowsToHtmlTable = (rows, { maxRows = 2000, maxCols = 100 } = {}) => {
-  const limitedRows = rows.slice(0, maxRows);
-  const colCount = Math.min(
-    maxCols,
-    Math.max(0, ...limitedRows.map((r) => (Array.isArray(r) ? r.length : 0)))
-  );
-
-  const head = limitedRows[0] || [];
-  const body = limitedRows.slice(1);
-
-  const thead =
-    colCount > 0
-      ? `<thead><tr>${Array.from({ length: colCount })
-          .map((_, i) => `<th>${escapeHtml(head[i] ?? '')}</th>`)
-          .join('')}</tr></thead>`
-      : '';
-
-  const tbody = `<tbody>${body
-    .map((r) => {
-      const cells = Array.from({ length: colCount })
-        .map((_, i) => `<td>${escapeHtml(r?.[i] ?? '')}</td>`)
-        .join('');
-      return `<tr>${cells}</tr>`;
-    })
-    .join('')}</tbody>`;
-
-  const table = `<table>${thead}${tbody}</table>`;
-  const truncated = rows.length > maxRows || rows.some((r) => (r?.length || 0) > maxCols);
-  return { html: table, truncated, rowCount: rows.length, colLimit: maxCols, rowLimit: maxRows };
-};
 
 const DocumentReview = ({ embedded = false }) => {
   const { user, isReviewer, isAdmin, canDownload } = useAuth();
@@ -125,16 +22,8 @@ const DocumentReview = ({ embedded = false }) => {
   const [selectedDataset, setSelectedDataset] = useState(null); // null=未加载；''=全部；其它=知识库
   const [loadingDatasets, setLoadingDatasets] = useState(true);
   const [overwritePrompt, setOverwritePrompt] = useState(null); // { newDocId, oldDoc, normalized }
-  const [previewing, setPreviewing] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
-  const [previewDocId, setPreviewDocId] = useState(null);
-  const [previewDocName, setPreviewDocName] = useState(null);
-  const [previewKind, setPreviewKind] = useState(null); // 'md' | 'text' | 'excel' | 'html' | 'blob'
-  const [previewText, setPreviewText] = useState(null);
-  const [previewUrl, setPreviewUrl] = useState(null);
-  const [previewExcelData, setPreviewExcelData] = useState(null); // { [sheetName]: html }
-  const [previewExcelNote, setPreviewExcelNote] = useState(null);
-  const [previewHtml, setPreviewHtml] = useState(null);
+  const [previewTarget, setPreviewTarget] = useState(null);
   const [diffOpen, setDiffOpen] = useState(false);
   const [diffLoading, setDiffLoading] = useState(false);
   const [diffOnly, setDiffOnly] = useState(true);
@@ -142,35 +31,19 @@ const DocumentReview = ({ embedded = false }) => {
   const [diffOldText, setDiffOldText] = useState('');
   const [diffNewText, setDiffNewText] = useState('');
 
-  // Inject table styles for Excel/CSV preview
-  useEffect(() => {
-    ensureTablePreviewStyles();
-  }, []);
-
   const activeDocMap = useMemo(() => {
     const m = new Map();
     for (const d of documents) m.set(d.doc_id, d);
     return m;
   }, [documents]);
-
   const closePreview = () => {
-    if (previewUrl) window.URL.revokeObjectURL(previewUrl);
     setPreviewOpen(false);
-    setPreviewDocId(null);
-    setPreviewDocName(null);
-    setPreviewKind(null);
-    setPreviewText(null);
-    setPreviewUrl(null);
-    setPreviewExcelData(null);
-    setPreviewExcelNote(null);
-    setPreviewHtml(null);
+    setPreviewTarget(null);
   };
 
   const closeDiff = useCallback(() => {
     setDiffOpen(false);
   }, []);
-
-  useEscapeClose(previewOpen, closePreview);
   useEscapeClose(diffOpen, closeDiff);
 
   const isMarkdownFile = (filename) => {
@@ -185,37 +58,6 @@ const DocumentReview = ({ embedded = false }) => {
     return ext === 'txt' || ext === 'ini' || ext === 'log';
   };
 
-  const isDocxFile = (filename) => {
-    if (!filename) return false;
-    const ext = filename.toLowerCase().split('.').pop();
-    return ext === 'docx';
-  };
-
-  const isExcelFile = (filename) => {
-    if (!filename) return false;
-    const ext = filename.toLowerCase().split('.').pop();
-    return ext === 'xlsx' || ext === 'xls';
-  };
-
-  const isCsvFile = (filename) => {
-    if (!filename) return false;
-    const ext = filename.toLowerCase().split('.').pop();
-    return ext === 'csv';
-  };
-
-  const base64ToBlobUrl = (b64, mime) => {
-    const binary = atob(b64 || '');
-    const bytes = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-    const blob = new Blob([bytes], { type: mime || 'application/octet-stream' });
-    return window.URL.createObjectURL(blob);
-  };
-
-  const fetchLocalPreviewJson = async (docId) => {
-    // Unified preview gateway: returns the same JSON contract as ragflow preview.
-    return await authClient.previewKnowledgeDocument(docId);
-  };
-
   const isTextComparable = (filename) => isMarkdownFile(filename) || isPlainTextFile(filename);
 
   const countLines = (s) => {
@@ -223,11 +65,10 @@ const DocumentReview = ({ embedded = false }) => {
     if (!t) return 0;
     return t.split('\n').length;
   };
-
   const fetchLocalPreviewText = async (docId) => {
-    const data = await fetchLocalPreviewJson(docId);
+    const data = await documentClient.preview({ source: DOCUMENT_SOURCE.KNOWLEDGE, docId });
     if (data?.type !== 'text') {
-      throw new Error(data?.message || '预览失败：非文本文件');
+      throw new Error(data?.message || 'Preview failed: not a text document');
     }
     return String(data.content || '');
   };
@@ -257,93 +98,9 @@ const DocumentReview = ({ embedded = false }) => {
       setDiffLoading(false);
     }
   };
-
   const openLocalPreview = async (docId, filename) => {
-    setError(null);
-    setPreviewing(true);
+    setPreviewTarget({ source: DOCUMENT_SOURCE.KNOWLEDGE, docId, filename });
     setPreviewOpen(true);
-    setPreviewDocId(docId);
-    setPreviewDocName(filename || `document_${docId}`);
-    setPreviewKind(null);
-    setPreviewText(null);
-    setPreviewExcelData(null);
-    setPreviewExcelNote(null);
-    setPreviewHtml(null);
-    if (previewUrl) window.URL.revokeObjectURL(previewUrl);
-    setPreviewUrl(null);
-
-    try {
-      const data = await fetchLocalPreviewJson(docId);
-      const title = filename || data?.source_filename || data?.filename || `document_${docId}`;
-      setPreviewDocName(title);
-
-      if (data?.type === 'text') {
-        const text = String(data.content || '');
-        if (isCsvFile(title)) {
-          const firstLine = String(text || '').split(/\r?\n/)[0] || '';
-          const delimiter = detectDelimiter(firstLine);
-          const rows = parseDelimited(text, delimiter);
-          const { html, truncated } = rowsToHtmlTable(rows);
-          setPreviewKind('excel');
-          setPreviewExcelData({ CSV: html });
-          setPreviewExcelNote(null);
-          if (truncated) setPreviewExcelNote('提示：内容较大，已在页面中截断显示（请下载查看完整内容）。');
-          return;
-        }
-        if (isMarkdownFile(title)) setPreviewKind('md');
-        else setPreviewKind('text');
-        setPreviewText(text);
-        return;
-      }
-
-      // Prefer client-side parsing when the user can download.
-      if (canDownload() && isDocxFile(title)) {
-        const blob = await authClient.downloadLocalDocumentBlob(docId);
-        const arrayBuffer = await blob.arrayBuffer();
-        const result = await mammoth.convertToHtml({ arrayBuffer });
-        setPreviewKind('html');
-        setPreviewHtml(result.value || '');
-        return;
-      }
-      if (canDownload() && isExcelFile(title)) {
-        const blob = await authClient.downloadLocalDocumentBlob(docId);
-        const arrayBuffer = await blob.arrayBuffer();
-        const { sheets } = excelArrayBufferToSheetsHtml(arrayBuffer);
-        setPreviewKind('excel');
-        setPreviewExcelData(sheets);
-        setPreviewExcelNote(null);
-        return;
-      }
-
-      if (data?.type === 'pdf' && data?.content) {
-        const url = base64ToBlobUrl(data.content, 'application/pdf');
-        setPreviewUrl(url);
-        setPreviewKind('blob');
-        return;
-      }
-      if (data?.type === 'image' && data?.content) {
-        const ext = String(data.image_type || '').toLowerCase();
-        const mime =
-          ext === 'jpg' ? 'image/jpeg' : ext === 'svg' ? 'image/svg+xml' : ext ? `image/${ext}` : 'application/octet-stream';
-        const url = base64ToBlobUrl(data.content, mime);
-        setPreviewUrl(url);
-        setPreviewKind('blob');
-        return;
-      }
-      if (data?.type === 'html' && data?.content) {
-        const url = base64ToBlobUrl(data.content, 'text/html; charset=utf-8');
-        setPreviewUrl(url);
-        setPreviewKind('blob');
-        return;
-      }
-
-      throw new Error(data?.message || '此文件类型不支持在线预览');
-    } catch (e) {
-      closePreview();
-      setError(e.message || '预览失败');
-    } finally {
-      setPreviewing(false);
-    }
   };
 
   useEffect(() => {
@@ -487,8 +244,8 @@ const DocumentReview = ({ embedded = false }) => {
 
     setActionLoading(docId);
     try {
-      console.log('[DocumentReview] Calling authClient.deleteDocument...');
-      await knowledgeApi.deleteLocalDocument(docId);
+      console.log('[DocumentReview] Calling documentClient.delete...');
+      await documentClient.delete({ source: DOCUMENT_SOURCE.KNOWLEDGE, docId });
       console.log('[DocumentReview] Delete successful, refreshing documents...');
       fetchRagflowDocuments();
     } catch (err) {
@@ -798,161 +555,8 @@ const DocumentReview = ({ embedded = false }) => {
         </div>
       )}
 
-      {previewOpen && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(0,0,0,0.35)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 60,
-            padding: '16px',
-          }}
-          onClick={closePreview}
-        >
-          <div
-            style={{
-              width: 'min(1200px, 100%)',
-              background: 'white',
-              borderRadius: '12px',
-              border: '1px solid #e5e7eb',
-              padding: '16px',
-              height: '85vh',
-              display: 'flex',
-              flexDirection: 'column',
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div style={{ display: 'flex', justifyContent: 'space-between', gap: '10px', alignItems: 'center' }}>
-              <div style={{ fontWeight: 700, fontSize: '1.05rem' }}>{previewDocName || '在线查看'}</div>
-              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                <button
-                  type="button"
-                  onClick={closePreview}
-                  style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontSize: '1.2rem' }}
-                >
-                  ×
-                </button>
-              </div>
-            </div>
+      <DocumentPreviewModal open={previewOpen} target={previewTarget} onClose={closePreview} canDownloadFiles={!!canDownload()} />
 
-            <div style={{ marginTop: '12px', flex: 1, overflow: 'auto' }}>
-              {previewing ? (
-                <div style={{ color: '#6b7280', padding: '24px' }}>加载中…</div>
-              ) : previewKind === 'md' ? (
-                <MarkdownPreview content={previewText || ''} />
-              ) : previewKind === 'text' ? (
-                <pre
-                  style={{
-                    margin: 0,
-                    padding: '24px',
-                    fontSize: '0.875rem',
-                    lineHeight: '1.6',
-                    color: '#111827',
-                    whiteSpace: 'pre-wrap',
-                    wordBreak: 'break-word',
-                    fontFamily:
-                      "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace",
-                  }}
-                >
-                  {previewText || ''}
-                </pre>
-              ) : previewKind === 'html' ? (
-                <div className="table-preview" style={{ padding: '24px' }}>
-                  <div
-                    style={{
-                      fontSize: '0.875rem',
-                      lineHeight: '1.6',
-                      color: '#1f2937',
-                    }}
-                    dangerouslySetInnerHTML={{ __html: previewHtml || '' }}
-                  />
-                </div>
-              ) : previewKind === 'excel' && previewExcelData ? (
-                <div className="table-preview" style={{ padding: '12px 12px 24px 12px' }}>
-                  {previewDocId && isExcelFile(previewDocName) && (
-                    <div
-                      style={{
-                        marginBottom: 16,
-                        background: '#eff6ff',
-                        border: '1px solid #bfdbfe',
-                        borderRadius: 8,
-                        padding: '12px 14px',
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        gap: 12,
-                      }}
-                    >
-                      <div style={{ color: '#1e40af', fontSize: '0.95rem', lineHeight: 1.5 }}>
-                        如果 Excel 里包含流程图/形状，表格模式可能看不到；可点“原样预览(HTML)”查看。
-                      </div>
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          try {
-                            setError(null);
-                            setPreviewing(true);
-                            const data = await fetchLocalPreviewJson(previewDocId);
-                            if (!data?.type || data.type !== 'html' || !data.content) {
-                              throw new Error(data?.message || '无法进行原样预览(HTML)');
-                            }
-                            const url = base64ToBlobUrl(data.content, 'text/html; charset=utf-8');
-                            if (previewUrl) window.URL.revokeObjectURL(previewUrl);
-                            setPreviewUrl(url);
-                            setPreviewKind('blob');
-                            setPreviewExcelData(null);
-                            setPreviewExcelNote(null);
-                            setPreviewHtml(null);
-                          } catch (e) {
-                            setError(e.message || '预览失败');
-                          } finally {
-                            setPreviewing(false);
-                          }
-                        }}
-                        style={{
-                          padding: '6px 12px',
-                          backgroundColor: '#3b82f6',
-                          color: 'white',
-                          border: 'none',
-                          borderRadius: '6px',
-                          cursor: 'pointer',
-                          fontSize: '0.85rem',
-                          whiteSpace: 'nowrap',
-                        }}
-                      >
-                        原样预览(HTML)
-                      </button>
-                    </div>
-                  )}
-                  {previewExcelNote && (
-                    <div style={{ marginBottom: 12, color: '#6b7280', fontSize: '0.9rem' }}>
-                      {previewExcelNote}
-                    </div>
-                  )}
-                  {Object.keys(previewExcelData).map((sheetName, index) => (
-                    <div key={sheetName} style={{ marginBottom: index < Object.keys(previewExcelData).length - 1 ? '32px' : 0 }}>
-                      {Object.keys(previewExcelData).length > 1 && (
-                        <div style={{ marginBottom: 8, fontWeight: 600, color: '#111827' }}>{sheetName}</div>
-                      )}
-                      <div
-                        style={{ overflowX: 'auto' }}
-                        dangerouslySetInnerHTML={{ __html: previewExcelData[sheetName] }}
-                      />
-                    </div>
-                  ))}
-                </div>
-              ) : previewUrl ? (
-                <iframe title={previewDocName || 'preview'} src={previewUrl} style={{ width: '100%', height: '100%', border: 'none' }} />
-              ) : (
-                <div style={{ color: '#6b7280', padding: '24px' }}>无法预览</div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
 
       <div style={{ marginBottom: '24px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>

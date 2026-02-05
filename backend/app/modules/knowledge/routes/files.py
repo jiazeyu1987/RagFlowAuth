@@ -11,6 +11,7 @@ from backend.app.core.permission_resolver import (
     assert_can_review,
     assert_kb_allowed,
 )
+from backend.services.documents.document_manager import DocumentManager
 
 
 router = APIRouter()
@@ -21,29 +22,8 @@ async def download_document(
     doc_id: str,
     ctx: AuthContextDep,
 ):
-    deps = ctx.deps
-    snapshot = ctx.snapshot
-    assert_can_download(snapshot)
-
-    doc = deps.kb_store.get_document(doc_id)
-    if not doc:
-        raise HTTPException(status_code=404, detail="文档不存在")
-
-    assert_kb_allowed(snapshot, doc.kb_id)
-
-    if not os.path.exists(doc.file_path):
-        raise HTTPException(status_code=404, detail="文件不存在")
-
-    deps.download_log_store.log_download(
-        doc_id=doc.doc_id,
-        filename=doc.filename,
-        kb_id=(doc.kb_name or doc.kb_id),
-        downloaded_by=ctx.payload.sub,
-        kb_dataset_id=doc.kb_dataset_id,
-        kb_name=doc.kb_name,
-    )
-
-    return FileResponse(path=doc.file_path, filename=doc.filename, media_type=doc.mime_type)
+    mgr = DocumentManager(ctx.deps)
+    return mgr.download_knowledge_response(doc_id=doc_id, ctx=ctx)
 
 
 @router.get("/documents/{doc_id}/preview")
@@ -56,10 +36,7 @@ async def preview_document(
     snapshot = ctx.snapshot
 
     # allow either review or download capability to preview
-    try:
-        assert_can_download(snapshot)
-    except Exception:
-        assert_can_review(snapshot)
+    DocumentManager(deps).assert_can_preview_knowledge(snapshot)
 
     doc = deps.kb_store.get_document(doc_id)
     if not doc:

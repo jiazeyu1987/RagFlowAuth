@@ -1,17 +1,13 @@
 from fastapi import APIRouter, HTTPException, Request, UploadFile, File
-import uuid
-import mimetypes
-from pathlib import Path
 
 from backend.app.core.authz import AuthContextDep
 from backend.app.core.kb_refs import resolve_kb_ref
-from backend.app.core.paths import resolve_repo_path
 from backend.app.core.permission_resolver import (
     assert_can_upload,
     assert_kb_allowed,
 )
 from backend.models.document import DocumentResponse
-from backend.app.core.config import settings
+from backend.services.documents.document_manager import DocumentManager
 
 
 router = APIRouter()
@@ -41,50 +37,8 @@ async def upload_document(
     assert_kb_allowed(snapshot, kb_ref)
 
     logger.info(f"[UPLOAD] User {user.username} uploading to kb_id={kb_ref}")
-
-    content = await file.read()
-    if len(content) > settings.MAX_FILE_SIZE:
-        raise HTTPException(status_code=400, detail="文件大小超过限制")
-
-    file_ext = Path(file.filename).suffix.lower()
-    if file_ext not in settings.ALLOWED_EXTENSIONS:
-        raise HTTPException(status_code=400, detail="不支持的文件类型")
-
-    uploads_dir = resolve_repo_path(settings.UPLOAD_DIR)
-    uploads_dir.mkdir(parents=True, exist_ok=True)
-
-    unique_filename = f"{uuid.uuid4()}_{file.filename}"
-    file_path = uploads_dir / unique_filename
-
-    with open(file_path, "wb") as f:
-        f.write(content)
-
-    logger.info("[UPLOAD] Saved file to: %s", file_path)
-
-    guessed_mime, _ = mimetypes.guess_type(file.filename)
-    mime_type = (file.content_type or guessed_mime or "application/octet-stream").strip()
-    if file_ext in {".txt", ".ini", ".log"}:
-        mime_type = "text/plain; charset=utf-8"
-    elif file_ext in {".md", ".markdown"}:
-        mime_type = "text/markdown; charset=utf-8"
-    elif file_ext in {".csv"}:
-        mime_type = "text/csv; charset=utf-8"
-    elif file_ext in {".xlsx"}:
-        mime_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    elif file_ext in {".xls"}:
-        mime_type = "application/vnd.ms-excel"
-
-    doc = deps.kb_store.create_document(
-        filename=file.filename,
-        file_path=str(file_path),
-        file_size=len(content),
-        mime_type=mime_type,
-        uploaded_by=ctx.payload.sub,
-        kb_id=(kb_info.dataset_id or kb_ref),
-        kb_dataset_id=kb_info.dataset_id,
-        kb_name=(kb_info.name or kb_ref),
-        status="pending",
-    )
+    mgr = DocumentManager(deps)
+    doc = await mgr.stage_upload_knowledge(kb_ref=kb_ref, upload_file=file, ctx=ctx)
 
     logger.info(
         "[UPLOAD] Created local doc record: doc_id=%s filename=%s kb_id=%s status=%s uploaded_by=%s",

@@ -276,7 +276,7 @@ class AuthClient {
     const formData = new FormData();
     formData.append('file', file);
 
-    const url = authBackendUrl(`/api/knowledge/upload?kb_id=${encodeURIComponent(kbId)}`);
+    const url = authBackendUrl(`/api/documents/knowledge/upload?kb_id=${encodeURIComponent(kbId)}`);
     console.log('[authClient] Step 8 - Sending request to:', url);
 
     const response = await this.fetchWithAuth(
@@ -354,7 +354,7 @@ class AuthClient {
 
   async deleteDocument(docId) {
     const response = await this.fetchWithAuth(
-      authBackendUrl(`/api/knowledge/documents/${docId}`),
+      authBackendUrl(`/api/documents/knowledge/${docId}`),
       { method: 'DELETE' }
     );
 
@@ -367,7 +367,7 @@ class AuthClient {
 
   async downloadLocalDocument(docId) {
     const response = await this.fetchWithAuth(
-      authBackendUrl(`/api/knowledge/documents/${docId}/download`),
+      authBackendUrl(`/api/documents/knowledge/${docId}/download`),
       { method: 'GET' }
     );
 
@@ -409,7 +409,7 @@ class AuthClient {
 
   async downloadLocalDocumentBlob(docId) {
     const response = await this.fetchWithAuth(
-      authBackendUrl(`/api/knowledge/documents/${docId}/download`),
+      authBackendUrl(`/api/documents/knowledge/${docId}/download`),
       { method: 'GET' }
     );
 
@@ -423,7 +423,7 @@ class AuthClient {
 
   async batchDownloadLocalDocuments(docIds) {
     const response = await this.fetchWithAuth(
-      authBackendUrl('/api/knowledge/documents/batch/download'),
+      authBackendUrl('/api/documents/knowledge/batch/download'),
       {
         method: 'POST',
         body: JSON.stringify({ doc_ids: docIds }),
@@ -522,7 +522,7 @@ class AuthClient {
 
   async downloadDocument(docId, datasetName = '展厅') {
     const response = await this.fetchWithAuth(
-      authBackendUrl(`/api/ragflow/documents/${docId}/download?dataset_name=${encodeURIComponent(datasetName)}`),
+      authBackendUrl(`/api/documents/ragflow/${docId}/download?dataset=${encodeURIComponent(datasetName)}`),
       { method: 'GET' }
     );
 
@@ -540,7 +540,7 @@ class AuthClient {
     }
 
     const response = await this.fetchWithAuth(
-      authBackendUrl(`/api/ragflow/documents/${docId}/download?${params}`),
+      authBackendUrl(`/api/documents/ragflow/${docId}/download?${params}`),
       { method: 'GET' }
     );
 
@@ -621,7 +621,7 @@ class AuthClient {
     }
 
     const response = await this.fetchWithAuth(
-      authBackendUrl(`/api/ragflow/documents/${docId}/download?${params}`),
+      authBackendUrl(`/api/documents/ragflow/${docId}/download?${params}`),
       { method: 'GET' }
     );
 
@@ -635,10 +635,10 @@ class AuthClient {
 
   async batchDownload(documentsInfo) {
     const response = await this.fetchWithAuth(
-      authBackendUrl('/api/ragflow/documents/batch/download'),
+      authBackendUrl('/api/documents/ragflow/batch/download'),
       {
         method: 'POST',
-        body: JSON.stringify({ documents_info: documentsInfo }),
+        body: JSON.stringify({ documents: documentsInfo }),
       }
     );
 
@@ -651,7 +651,7 @@ class AuthClient {
 
   async batchDownloadRagflowDocuments(selectedDocs) {
     const response = await this.fetchWithAuth(
-      authBackendUrl('/api/ragflow/documents/batch/download'),
+      authBackendUrl('/api/documents/ragflow/batch/download'),
       {
         method: 'POST',
         body: JSON.stringify({ documents: selectedDocs }),
@@ -695,7 +695,7 @@ class AuthClient {
 
   async deleteRagflowDocument(docId, datasetName = '展厅') {
     const response = await this.fetchWithAuth(
-      authBackendUrl(`/api/ragflow/documents/${docId}?dataset_name=${encodeURIComponent(datasetName)}`),
+      authBackendUrl(`/api/documents/ragflow/${docId}?dataset_name=${encodeURIComponent(datasetName)}`),
       { method: 'DELETE' }
     );
 

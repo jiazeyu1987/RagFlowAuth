@@ -11,6 +11,8 @@ from backend.app.core.permission_resolver import (
     assert_can_download,
     assert_kb_allowed,
 )
+from backend.services.documents.document_manager import DocumentManager
+from backend.services.documents.models import DocumentRef
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -65,54 +67,9 @@ async def download_document(
     dataset: str = "展厅",
     filename: str = None,
 ):
-    import urllib.parse
-
     logger.info("[DOWNLOAD] doc_id=%s dataset=%s user=%s", doc_id, dataset, ctx.payload.sub)
-
-    deps = ctx.deps
-    snapshot = ctx.snapshot
-    assert_can_download(snapshot)
-    assert_kb_allowed(snapshot, dataset)
-    kb_info = resolve_kb_ref(deps, dataset)
-
-    try:
-        file_content, ragflow_filename = deps.ragflow_service.download_document(doc_id, dataset)
-
-        if file_content is None:
-            logger.error(f"[DOWNLOAD] Failed to download document {doc_id} from RAGFlow")
-            raise HTTPException(status_code=404, detail="文档不存在或下载失败")
-
-        deps.download_log_store.log_download(
-            doc_id=doc_id,
-            filename=ragflow_filename or f"document_{doc_id}",
-            kb_id=(kb_info.dataset_id or dataset),
-            downloaded_by=ctx.payload.sub,
-            ragflow_doc_id=doc_id,
-            is_batch=False,
-            kb_dataset_id=kb_info.dataset_id,
-            kb_name=(kb_info.name or dataset),
-        )
-
-        final_filename = filename or ragflow_filename or f"document_{doc_id}"
-
-        try:
-            final_filename.encode("ascii")
-            content_disposition = f'attachment; filename="{final_filename}"'
-        except UnicodeEncodeError:
-            ascii_filename = final_filename.encode("ascii", "replace").decode("ascii")
-            encoded_filename = urllib.parse.quote(final_filename)
-            content_disposition = f"attachment; filename=\"{ascii_filename}\"; filename*=UTF-8''{encoded_filename}"
-
-        return Response(
-            content=file_content,
-            media_type="application/octet-stream",
-            headers={"Content-Disposition": content_disposition},
-        )
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.exception("[DOWNLOAD] Exception during download: %s", e)
-        raise HTTPException(status_code=500, detail=f"下载失败: {str(e)}")
+    mgr = DocumentManager(ctx.deps)
+    return mgr.download_ragflow_response(doc_id=doc_id, dataset=dataset, filename=filename, ctx=ctx)
 
 
 @router.get("/documents/{doc_id}/preview")
@@ -123,26 +80,10 @@ async def preview_document(
 ):
     logger.info("[PREVIEW] doc_id=%s dataset=%s user=%s", doc_id, dataset, ctx.payload.sub)
 
-    deps = ctx.deps
     snapshot = ctx.snapshot
     assert_kb_allowed(snapshot, dataset)
-
-    try:
-        file_content, filename = deps.ragflow_service.download_document(doc_id, dataset)
-
-        if file_content is None:
-            logger.error(f"[PREVIEW] Failed to download document {doc_id}")
-            raise HTTPException(status_code=404, detail="文档不存在")
-
-        from backend.services.unified_preview import build_preview_payload
-
-        return build_preview_payload(file_content, filename, doc_id=doc_id)
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.exception("[PREVIEW] Exception: %s", e)
-        raise HTTPException(status_code=500, detail=f"预览失败: {str(e)}")
+    mgr = DocumentManager(ctx.deps)
+    return mgr.preview_payload(DocumentRef(source="ragflow", doc_id=doc_id, dataset_name=dataset))
 
 
 @router.delete("/documents/{doc_id}")
@@ -152,52 +93,8 @@ async def delete_ragflow_document(
     dataset_name: str = "展厅",
 ):
     logger.info("[DELETE] doc_id=%s dataset=%s user=%s", doc_id, dataset_name, ctx.payload.sub)
-
-    deps = ctx.deps
-    snapshot = ctx.snapshot
-    assert_can_delete(snapshot)
-    assert_kb_allowed(snapshot, dataset_name)
-
-    kb_info = resolve_kb_ref(deps, dataset_name)
-    local_doc = deps.kb_store.get_document_by_ragflow_id(doc_id, dataset_name, kb_refs=list(kb_info.variants))
-
-    success = deps.ragflow_service.delete_document(doc_id, dataset_name)
-    if not success:
-        logger.error(f"[DELETE RAGFLOW] Failed to delete from RAGFlow: {doc_id}")
-        raise HTTPException(status_code=404, detail="文档不存在或删除失败")
-
-    if local_doc:
-        deps.deletion_log_store.log_deletion(
-            doc_id=local_doc.doc_id,
-            filename=local_doc.filename,
-            kb_id=local_doc.kb_id,
-            deleted_by=ctx.payload.sub,
-            kb_dataset_id=getattr(local_doc, "kb_dataset_id", None),
-            kb_name=getattr(local_doc, "kb_name", None),
-            original_uploader=local_doc.uploaded_by,
-            original_reviewer=local_doc.reviewed_by,
-            ragflow_doc_id=doc_id,
-        )
-
-        import os
-
-        if os.path.exists(local_doc.file_path):
-            os.remove(local_doc.file_path)
-
-        deps.kb_store.delete_document(local_doc.doc_id)
-    else:
-        deps.deletion_log_store.log_deletion(
-            doc_id=doc_id,
-            filename=f"RAGFlow文档({doc_id[:8]}...)",
-            kb_id=(kb_info.dataset_id or dataset_name),
-            deleted_by=ctx.payload.sub,
-            kb_dataset_id=kb_info.dataset_id,
-            kb_name=(kb_info.name or dataset_name),
-            original_uploader=None,
-            original_reviewer=None,
-            ragflow_doc_id=doc_id,
-        )
-
+    mgr = DocumentManager(ctx.deps)
+    mgr.delete_ragflow_document(doc_id=doc_id, dataset_name=dataset_name, ctx=ctx)
     return {"message": "文档已从RAGFlow删除"}
 
 

@@ -1,15 +1,14 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import authClient from '../api/authClient';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
 import rehypeSanitize from 'rehype-sanitize';
-import { loadRagflowPreview } from '../shared/preview/ragflowPreviewManager';
+import documentClient, { DOCUMENT_SOURCE } from '../shared/documents/documentClient';
 import { useAuth } from '../hooks/useAuth';
 import { agentsApi } from '../features/agents/api';
 import { ensureTablePreviewStyles } from '../shared/preview/tablePreviewStyles';
-import { httpClient } from '../shared/http/httpClient';
 import { useEscapeClose } from '../shared/hooks/useEscapeClose';
+import { DocumentPreviewModal } from '../shared/documents/preview/DocumentPreviewModal';
 
 const Agents = () => {
   const { canDownload } = useAuth();
@@ -21,11 +20,9 @@ const Agents = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  // Preview states
-  const [previewData, setPreviewData] = useState(null);
-  const [previewLoading, setPreviewLoading] = useState(false);
-  const [showPreviewModal, setShowPreviewModal] = useState(false);
-  const [previewObjectUrl, setPreviewObjectUrl] = useState(null);
+  // Preview states (shared modal)
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewTarget, setPreviewTarget] = useState(null);
 
   // Search parameters
   const [page, setPage] = useState(1);
@@ -64,39 +61,12 @@ const Agents = () => {
     ensureTablePreviewStyles();
   }, []);
 
-  const closePreviewModal = () => {
-    setShowPreviewModal(false);
-    setPreviewData(null);
-    if (previewObjectUrl) window.URL.revokeObjectURL(previewObjectUrl);
-    setPreviewObjectUrl(null);
-  };
+  const closePreviewModal = useCallback(() => {
+    setPreviewOpen(false);
+    setPreviewTarget(null);
+  }, []);
 
-  useEscapeClose(showPreviewModal, closePreviewModal);
-
-  useEffect(() => {
-    if (!showPreviewModal) return;
-    if (!previewData || !previewData.type) return;
-    if (previewObjectUrl) {
-      window.URL.revokeObjectURL(previewObjectUrl);
-      setPreviewObjectUrl(null);
-    }
-
-    if ((previewData.type === 'pdf' || previewData.type === 'html') && previewData.content) {
-      try {
-        const binary = atob(previewData.content);
-        const bytes = new Uint8Array(binary.length);
-        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-        const mime = previewData.type === 'pdf' ? 'application/pdf' : 'text/html; charset=utf-8';
-        const blob = new Blob([bytes], { type: mime });
-        const url = window.URL.createObjectURL(blob);
-        setPreviewObjectUrl(url);
-      } catch (e) {
-        // If base64 decoding fails, fall back to existing data: URL rendering.
-        setPreviewObjectUrl(null);
-      }
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [showPreviewModal, previewData]);
+  useEscapeClose(previewOpen, closePreviewModal);
 
   // Load available datasets on mount
   useEffect(() => {
@@ -227,13 +197,26 @@ const Agents = () => {
     try {
       setError(null);
 
-      // Find the dataset name from the selected datasets
       const dataset = datasets.find(ds => ds.id === datasetId);
       const datasetName = dataset ? (dataset.name || dataset.id) : '展厅';
 
-      // Use the existing download method from authClient
-      // This will download the complete source file with the original filename
-      await authClient.downloadRagflowDocument(docId, datasetName, docName);
+      const blob = await documentClient.downloadBlob({
+        source: DOCUMENT_SOURCE.RAGFLOW,
+        docId,
+        datasetName,
+        filename: docName,
+      });
+      const url = window.URL.createObjectURL(blob);
+      try {
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = docName || `document_${docId}`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      } finally {
+        window.URL.revokeObjectURL(url);
+      }
     } catch (err) {
       setError(`下载文档失败: ${err.message}`);
     }
@@ -242,29 +225,20 @@ const Agents = () => {
   const handlePreviewDocument = async (docId, docName, datasetId) => {
     try {
       setError(null);
-      setPreviewLoading(true);
-      setShowPreviewModal(true);
 
-      // Find the dataset name from the selected datasets
-      const dataset = datasets.find(ds => ds.id === datasetId);
-      const datasetName = dataset ? (dataset.name || dataset.id) : '展厅';
-
-      const payload = await loadRagflowPreview({
+      const datasetSafe = datasets.find((ds) => ds.id === datasetId);
+      const datasetNameSafe = datasetSafe ? datasetSafe.name || datasetSafe.id : '';
+      setPreviewTarget({
+        source: DOCUMENT_SOURCE.RAGFLOW,
         docId,
-        dataset: datasetName,
-        title: docName,
-        getPreviewJson: async ({ docId, dataset }) => authClient.previewDocument(docId, dataset),
-        getDownloadBlob: canDownloadFiles
-          ? async ({ docId, dataset, filename }) => authClient.previewRagflowDocumentBlob(docId, dataset, filename)
-          : undefined,
+        datasetName: datasetNameSafe,
+        filename: docName,
       });
-
-      setPreviewData(payload);
+      setPreviewOpen(true);
+      return;
     } catch (err) {
       setError(`预览文档失败: ${err.message}`);
-      setShowPreviewModal(false);
     } finally {
-      setPreviewLoading(false);
     }
   };
 
@@ -328,17 +302,6 @@ const Agents = () => {
       return out.join('\n');
     };
   }, []);
-
-  const isMarkdownPreview = useMemo(() => {
-    const name = String(previewData?.filename || '').toLowerCase().trim();
-    if (name.endsWith('.md') || name.endsWith('.markdown')) return true;
-    // If backend didn't provide a filename, try a light heuristic on content.
-    const text = String(previewData?.content || '');
-    if (!text) return false;
-    if (text.includes('\n|') && text.includes('|---')) return true;
-    if (/^#{1,6}\s+/m.test(text)) return true;
-    return false;
-  }, [previewData]);
 
   const markdownComponents = useMemo(
     () => ({
@@ -940,188 +903,12 @@ const Agents = () => {
         </div>
       )}
 
-      {/* Preview Modal */}
-      {showPreviewModal && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(0,0,0,0.35)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 2000,
-            padding: '16px',
-          }}
-          onClick={closePreviewModal}
-        >
-          <div
-            style={{
-              width: 'min(1200px, 100%)',
-              background: 'white',
-              borderRadius: '12px',
-              border: '1px solid #e5e7eb',
-              padding: '16px',
-              height: '85vh',
-              display: 'flex',
-              flexDirection: 'column',
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Header */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', gap: '10px', alignItems: 'center' }}>
-              <div style={{ fontWeight: 700, fontSize: '1.05rem' }}>{previewData?.filename || '在线查看'}</div>
-              <button
-                type="button"
-                onClick={closePreviewModal}
-                style={{
-                  border: 'none',
-                  background: 'transparent',
-                  cursor: 'pointer',
-                  fontSize: '1.2rem',
-                }}
-              >
-                ×
-              </button>
-            </div>
-
-            {/* Content */}
-            <div style={{ marginTop: '12px', flex: 1, overflow: 'auto' }}>
-              {previewLoading ? (
-                <div style={{ textAlign: 'center', padding: '40px' }}>加载中...</div>
-              ) : previewData?.type === 'text' ? (
-                isMarkdownPreview ? (
-                  <div style={{ fontSize: '0.95rem', lineHeight: 1.6, color: '#111827' }}>
-                    <ReactMarkdown components={markdownComponents} remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw, rehypeSanitize]}>
-                      {normalizeInlinePipeKvTables(String(previewData.content || ''))}
-                    </ReactMarkdown>
-                  </div>
-                ) : (
-                  <pre style={{
-                    margin: 0,
-                    whiteSpace: 'pre-wrap',
-                    wordWrap: 'break-word',
-                    fontFamily: 'monospace',
-                    fontSize: '0.875rem',
-                    lineHeight: '1.6'
-                  }}>
-                    {previewData.content}
-                  </pre>
-                )
-              ) : previewData?.type === 'image' ? (
-                <div style={{ textAlign: 'center' }}>
-                  <img
-                    src={`data:image/${previewData.image_type};base64,${previewData.content}`}
-                    alt={previewData.filename}
-                    style={{ maxWidth: '100%', maxHeight: '70vh' }}
-                  />
-                </div>
-              ) : previewData?.type === 'docx' ? (
-                <div className="table-preview" style={{ padding: '24px' }}>
-                  <div
-                    style={{ fontSize: '0.875rem', lineHeight: '1.6', color: '#1f2937' }}
-                    dangerouslySetInnerHTML={{ __html: previewData.html || '' }}
-                  />
-                </div>
-              ) : previewData?.type === 'pdf' ? (
-                <div style={{ textAlign: 'center' }}>
-                  <iframe
-                    src={previewObjectUrl || `data:application/pdf;base64,${previewData.content}`}
-                    style={{
-                      width: '100%',
-                      height: '70vh',
-                      border: 'none'
-                    }}
-                    title={previewData.filename}
-                  />
-                </div>
-              ) : previewData?.type === 'html' ? (
-                <div style={{ textAlign: 'center' }}>
-                  <iframe
-                    title={previewData.filename || 'html-preview'}
-                    style={{ width: '100%', height: '70vh', border: 'none' }}
-                    src={previewObjectUrl || `data:text/html;base64,${previewData.content}`}
-                    sandbox=""
-                  />
-                </div>
-              ) : previewData?.type === 'excel' && previewData?.sheets ? (
-                <div className="table-preview" style={{ padding: '12px 12px 24px 12px' }}>
-                  {previewData.docId && previewData.dataset && (
-                    <div
-                      style={{
-                        marginBottom: 16,
-                        background: '#eff6ff',
-                        border: '1px solid #bfdbfe',
-                        borderRadius: 8,
-                        padding: '12px 14px',
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        gap: 12,
-                      }}
-                    >
-                      <div style={{ color: '#1e40af', fontSize: '0.95rem', lineHeight: 1.5 }}>
-                        如果 Excel 里包含流程图/形状，表格模式可能看不到；可点“原样预览(HTML)”查看。
-                      </div>
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          try {
-                            setPreviewLoading(true);
-                            const qs = new URLSearchParams({ dataset: previewData.dataset }).toString();
-                            const data = await httpClient.requestJson(`/api/preview/documents/ragflow/${encodeURIComponent(previewData.docId)}/preview?${qs}`);
-                            if (data?.type === 'html') {
-                              setPreviewData({ ...(data || {}), docId: previewData.docId, dataset: previewData.dataset });
-                            } else {
-                              const msg = data?.message || '无法进行原样预览(HTML)';
-                              setError(msg);
-                            }
-                          } catch (e) {
-                            setError(e?.message || '预览失败');
-                          } finally {
-                            setPreviewLoading(false);
-                          }
-                        }}
-                        style={{
-                          padding: '6px 12px',
-                          backgroundColor: '#3b82f6',
-                          color: 'white',
-                          border: 'none',
-                          borderRadius: '6px',
-                          cursor: 'pointer',
-                          fontSize: '0.85rem',
-                          whiteSpace: 'nowrap',
-                        }}
-                      >
-                        原样预览(HTML)
-                      </button>
-                    </div>
-                  )}
-                  {Object.keys(previewData.sheets).map((sheetName, index) => (
-                    <div key={sheetName} style={{ marginBottom: index < Object.keys(previewData.sheets).length - 1 ? '32px' : 0 }}>
-                      {Object.keys(previewData.sheets).length > 1 && (
-                        <div style={{ marginBottom: 8, fontWeight: 600, color: '#111827' }}>{sheetName}</div>
-                      )}
-                      <div style={{ overflowX: 'auto' }} dangerouslySetInnerHTML={{ __html: previewData.sheets[sheetName] }} />
-                    </div>
-                  ))}
-                </div>
-              ) : previewData?.type === 'unsupported' ? (
-                <div style={{
-                  textAlign: 'center',
-                  padding: '40px',
-                  color: '#6b7280'
-                }}>
-                  <div style={{ fontSize: '3rem', marginBottom: '16px' }}>📄</div>
-                  <div>{previewData.message}</div>
-                </div>
-              ) : (
-                <div style={{ textAlign: 'center', padding: '40px' }}>无法预览</div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
+      <DocumentPreviewModal
+        open={previewOpen}
+        target={previewTarget}
+        onClose={closePreviewModal}
+        canDownloadFiles={canDownloadFiles}
+      />
     </div>
   );
 };
