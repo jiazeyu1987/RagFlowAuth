@@ -27,6 +27,14 @@ def build_restore_tab(app) -> None:
     )
     info_label.pack(pady=10)
 
+    base_url_frame = ttk.Frame(tab)
+    base_url_frame.pack(fill=tk.X, padx=20, pady=(0, 10))
+    if not hasattr(app, "ragflow_base_url_test_var"):
+        app.ragflow_base_url_test_var = tk.StringVar(value="")
+    ttk.Label(base_url_frame, text="测试服务器 RAGFlow base_url:").pack(side=tk.LEFT)
+    ttk.Label(base_url_frame, textvariable=app.ragflow_base_url_test_var, foreground="blue").pack(side=tk.LEFT, padx=(6, 0))
+    ttk.Button(base_url_frame, text="刷新", command=app.refresh_ragflow_base_urls).pack(side=tk.RIGHT)
+
     folder_frame = ttk.LabelFrame(tab, text="选择本地备份（固定目录：D:\\datas\\RagflowAuth）", padding=10)
     folder_frame.pack(fill=tk.BOTH, expand=False, padx=20, pady=10)
 
@@ -91,4 +99,4 @@ def build_restore_tab(app) -> None:
     app.restore_target_ip = TEST_SERVER_IP
     app.restore_target_user = "root"
     app.root.after(0, app.refresh_local_restore_list)
-
+    app.root.after(0, app.refresh_ragflow_base_urls)

@@ -100,33 +100,74 @@ def _stop_services_and_verify(
     if ok and out.strip():
         log(f"[{who}] docker compose down output:\n{out.strip()}")
 
-    # Fallback stop any containers with the expected prefix (covers cases where compose dir isn't present).
+    # Fallback (1): stop any containers with the expected prefix (covers some compose project names).
     stop_prefix_cmd = r"""
-set -e
-names=$(docker ps --format '{{.Names}}' | grep -E '^(ragflow_compose-)' || true)
-if [ -n "$names" ]; then
-  echo "$names" | xargs -r docker stop 2>&1 || true
-fi
-""".strip()
+ set -e
+ ids=$(docker ps -q --filter "name=^ragflow_compose-" || true)
+ if [ -n "$ids" ]; then
+   docker stop $ids 2>&1 || true
+ fi
+ """.strip()
     ok, out = _ssh(ip, stop_prefix_cmd)
     if ok and out.strip():
         log(f"[{who}] docker stop ragflow_compose-* output:\n{out.strip()}")
+
+    # Fallback (2): stop ragflow stack containers by *image* match.
+    #
+    # Why: some environments use a different compose project name (container names don't start with `ragflow_compose-`),
+    # but the images are still distinct (ragflow/es/mysql/redis/minio). We must stop them to take a consistent snapshot,
+    # otherwise ES index volume backups can become inconsistent and force re-chunk/reindex after restore.
+    stop_by_image_cmd = r"""
+ set -e
+ ids=$(
+   (
+     docker ps -q --filter ancestor=infiniflow/ragflow || true
+     docker ps -q --filter ancestor=elasticsearch || true
+     docker ps -q --filter ancestor=docker.elastic.co/elasticsearch/elasticsearch || true
+     docker ps -q --filter ancestor=mysql || true
+     docker ps -q --filter ancestor=valkey/valkey || true
+     docker ps -q --filter ancestor=redis || true
+     docker ps -q --filter ancestor=minio/minio || true
+     docker ps -q --filter ancestor=quay.io/minio/minio || true
+   ) | sort -u
+ )
+ if [ -n "$ids" ]; then
+   docker stop $ids 2>&1 || true
+ fi
+ """.strip()
+    ok, out = _ssh(ip, stop_by_image_cmd)
+    if ok and out.strip():
+        log(f"[{who}] docker stop ragflow stack by image output:\n{out.strip()}")
 
     log(f"[{who}] verifying containers are stopped (timeout {timeout_s}s)")
     deadline = time.time() + timeout_s
     while time.time() < deadline:
         # Marker helps unit tests recognize this check.
         check_cmd = r"""
-set -e
-echo RAGFLOWAUTH_STOP_CHECK >/dev/null
-running=$(docker ps --format '{{.Names}}' | grep -E '^(ragflowauth-(backend|frontend)|ragflow_compose-)' || true)
-if [ -n "$running" ]; then
-  echo "RUNNING:"
-  echo "$running"
-  exit 2
-fi
-echo "STOPPED"
-""".strip()
+ set -e
+ echo RAGFLOWAUTH_STOP_CHECK >/dev/null
+ running_ids=$(
+   (
+     docker ps -q --filter "name=^ragflowauth-backend$" || true
+     docker ps -q --filter "name=^ragflowauth-frontend$" || true
+     docker ps -q --filter "name=^ragflow_compose-" || true
+     docker ps -q --filter ancestor=infiniflow/ragflow || true
+     docker ps -q --filter ancestor=elasticsearch || true
+     docker ps -q --filter ancestor=docker.elastic.co/elasticsearch/elasticsearch || true
+     docker ps -q --filter ancestor=mysql || true
+     docker ps -q --filter ancestor=valkey/valkey || true
+     docker ps -q --filter ancestor=redis || true
+     docker ps -q --filter ancestor=minio/minio || true
+     docker ps -q --filter ancestor=quay.io/minio/minio || true
+   ) | sort -u
+ )
+ if [ -n "$running_ids" ]; then
+   echo "RUNNING:"
+   echo "$running_ids"
+   exit 2
+ fi
+ echo "STOPPED"
+ """.strip()
         ok, out = _ssh(ip, check_cmd)
         text = (out or "").strip()
         if ok and text.endswith("STOPPED"):
@@ -134,7 +175,12 @@ echo "STOPPED"
             return True
         time.sleep(3)
 
-    ok, out = _ssh(ip, "docker ps --format '{{.Names}}\\t{{.Image}}\\t{{.Status}}' | grep -E '^(ragflowauth-|ragflow_compose-)' 2>&1 || true")
+    ok, out = _ssh(
+        ip,
+        "docker ps --no-trunc 2>&1 | "
+        "grep -E '(ragflowauth-|ragflow_compose-|infiniflow/ragflow|elasticsearch|docker\\.elastic\\.co/elasticsearch/elasticsearch|mysql|valkey/valkey|redis|minio/minio|quay\\.io/minio/minio)' "
+        "2>&1 || true",
+    )
     if ok and out.strip():
         log(f"[{who}] [ERROR] containers still running:\n{out.strip()}")
     else:

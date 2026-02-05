@@ -107,6 +107,10 @@ class RagflowDatasetsMixin:
         return names
 
     def list_datasets(self) -> List[dict]:
+        reload_cfg = getattr(self, "_reload_config_if_changed", None)
+        if callable(reload_cfg):
+            reload_cfg()
+
         api_key = self.config.get("api_key", "")
         if not self.client:
             # Fallback to HTTP API list endpoint when SDK client isn't available.
@@ -147,4 +151,3 @@ class RagflowDatasetsMixin:
         except Exception as e:
             self.logger.error(f"Failed to list datasets: {e}")
             return []
-

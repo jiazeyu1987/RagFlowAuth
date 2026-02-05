@@ -1,13 +1,20 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { httpClient } from '../shared/http/httpClient';
+import authClient from '../api/authClient';
 import { chatApi } from '../features/chat/api';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { excelBlobToSheetsHtml, isExcelFilename } from '../shared/preview/excelPreview';
+import rehypeRaw from 'rehype-raw';
+import rehypeSanitize from 'rehype-sanitize';
 import { ensureTablePreviewStyles } from '../shared/preview/tablePreviewStyles';
 import { useEscapeClose } from '../shared/hooks/useEscapeClose';
+import { isMarkdownFilename, MarkdownPreview } from '../shared/preview/markdownPreview';
+import { loadRagflowPreview } from '../shared/preview/ragflowPreviewManager';
+import { useAuth } from '../hooks/useAuth';
 
 const Chat = () => {
+  const { canDownload } = useAuth();
+  const canDownloadFiles = typeof canDownload === 'function' ? !!canDownload() : false;
   const [chats, setChats] = useState([]);
   const [selectedChatId, setSelectedChatId] = useState(null);
   const [sessions, setSessions] = useState([]);
@@ -19,6 +26,7 @@ const Chat = () => {
   const [deleteConfirm, setDeleteConfirm] = useState({ show: false, sessionId: null, sessionName: '' });
   const [renameDialog, setRenameDialog] = useState({ show: false, sessionId: null, value: '' });
   const [previewDialog, setPreviewDialog] = useState({ show: false, title: '', loading: false, error: '', payload: null });
+  const [previewObjectUrl, setPreviewObjectUrl] = useState(null);
   const [citationHover, setCitationHover] = useState(null);
 
   const messagesEndRef = useRef(null);
@@ -36,6 +44,37 @@ const Chat = () => {
   const closePreviewDialog = useCallback(() => {
     setPreviewDialog({ show: false, title: '', loading: false, error: '', payload: null });
   }, []);
+
+  useEffect(() => {
+    if (!previewDialog.show) {
+      if (previewObjectUrl) window.URL.revokeObjectURL(previewObjectUrl);
+      setPreviewObjectUrl(null);
+      return;
+    }
+
+    const p = previewDialog.payload;
+    if (!p || !p.type || !p.content) return;
+
+    if (previewObjectUrl) {
+      window.URL.revokeObjectURL(previewObjectUrl);
+      setPreviewObjectUrl(null);
+    }
+
+    if (p.type === 'pdf' || p.type === 'html') {
+      try {
+        const binary = atob(p.content);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+        const mime = p.type === 'pdf' ? 'application/pdf' : 'text/html; charset=utf-8';
+        const blob = new Blob([bytes], { type: mime });
+        const url = window.URL.createObjectURL(blob);
+        setPreviewObjectUrl(url);
+      } catch (e) {
+        setPreviewObjectUrl(null);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [previewDialog.show, previewDialog.payload]);
 
   useEscapeClose(deleteConfirm.show, closeDeleteConfirm);
   useEscapeClose(renameDialog.show, closeRenameDialog);
@@ -75,61 +114,6 @@ const Chat = () => {
       if (!Number.isNaN(n)) ids.add(n);
     }
     return Array.from(ids).sort((a, b) => a - b);
-  }, []);
-
-  const normalizeThinkForDisplay = useCallback((value) => {
-    const text = String(value ?? '');
-    if (!text) return '';
-
-    // Streaming may produce "growing prefix" repetitions:
-    // line1, line1+more, line1+more+more...
-    // Collapse by removing lines that are prefixes of any later line.
-    const rawLines = text
-      .split('\n')
-      .map((l) => String(l ?? '').replace(/\r/g, ''))
-      .map((l) => l.trim())
-      .filter(Boolean);
-    if (rawLines.length <= 1) return rawLines[0] || '';
-
-    const norm = (s) =>
-      String(s ?? '')
-        .trim()
-        .replace(/\s+/g, ' ')
-        .replace(/[“”]/g, '"')
-        .replace(/[‘’]/g, "'");
-
-    const normLines = rawLines.map(norm);
-
-    const keep = new Array(rawLines.length).fill(true);
-    for (let i = 0; i < rawLines.length; i++) {
-      const li = normLines[i];
-      for (let j = i + 1; j < rawLines.length; j++) {
-        const lj = normLines[j];
-        if (!li) continue;
-        if (lj.length >= li.length && (lj === li || lj.startsWith(li))) {
-          keep[i] = false;
-          break;
-        }
-      }
-    }
-
-    const out = rawLines.filter((_, idx) => keep[idx]);
-
-    // If it's clearly a cumulative chain, prefer showing only the last line for readability.
-    const keptCount = out.length;
-    if (rawLines.length >= 3 && keptCount === 1) return out[0];
-
-    // Dedupe exact repeats (after whitespace normalization)
-    const seen = new Set();
-    const deduped = [];
-    for (const line of out) {
-      const key = norm(line);
-      if (!key || seen.has(key)) continue;
-      seen.add(key);
-      deduped.push(line);
-    }
-
-    return deduped.join('\n');
   }, []);
 
   const normalizeSource = useCallback((src) => {
@@ -277,17 +261,6 @@ const Chat = () => {
       const last = next[next.length - 1];
       if (last && last.role === 'assistant') {
         next[next.length - 1] = { ...last, role: 'assistant', content };
-      }
-      return next;
-    });
-  }, []);
-
-  const markAssistantMessageFinal = useCallback(() => {
-    setMessages((prev) => {
-      const next = [...prev];
-      const last = next[next.length - 1];
-      if (last && last.role === 'assistant') {
-        next[next.length - 1] = { ...last, role: 'assistant', isFinal: true };
       }
       return next;
     });
@@ -447,55 +420,37 @@ const Chat = () => {
       debugLogCitations('preview GET start', { before_title: source.title, docId: source.docId, dataset: source.dataset });
       setPreviewDialog({ show: true, title: source.title, loading: true, error: '', payload: null });
       try {
-        const qs = new URLSearchParams({ dataset: source.dataset }).toString();
-        const data = await httpClient.requestJson(`/api/ragflow/documents/${encodeURIComponent(source.docId)}/preview?${qs}`);
-        const resolvedName = String(data?.filename || source.title || '');
+        const payload = await loadRagflowPreview({
+          docId: source.docId,
+          dataset: source.dataset,
+          title: source.title,
+          getPreviewJson: async ({ docId, dataset }) => {
+            return authClient.previewDocument(docId, dataset);
+          },
+          getDownloadBlob: canDownloadFiles
+            ? async ({ docId, dataset, filename }) => {
+                return authClient.previewRagflowDocumentBlob(docId, dataset, filename);
+              }
+            : undefined,
+        });
 
-        // For Excel, always render client-side (same as DocumentReview) for consistent output.
-        if (isExcelFilename(resolvedName)) {
-          debugLogCitations('preview excel via download', { docId: source.docId, dataset: source.dataset, filename: resolvedName });
-          const qs2 = new URLSearchParams({ dataset: source.dataset, filename: resolvedName }).toString();
-          const res = await httpClient.request(`/api/ragflow/documents/${encodeURIComponent(source.docId)}/download?${qs2}`, { method: 'GET' });
-          if (!res.ok) throw new Error(`download failed (${res.status})`);
-          const blob = await res.blob();
-          const { sheets } = await excelBlobToSheetsHtml(blob);
-          setPreviewDialog({
-            show: true,
-            title: resolvedName,
-            loading: false,
-            error: '',
-            payload: { type: 'excel', filename: resolvedName, sheets, docId: source.docId, dataset: source.dataset },
-          });
-          return;
-        }
-
-        debugLogCitations('preview GET done', { before_title: source.title, after_title: resolvedName || '', type: data?.type || '' });
-        setPreviewDialog({ show: true, title: resolvedName || source.title, loading: false, error: '', payload: data });
+        const resolvedName = String(payload?.filename || source.title || '');
+        debugLogCitations('preview GET done', { before_title: source.title, after_title: resolvedName || '', type: payload?.type || '' });
+        setPreviewDialog({ show: true, title: resolvedName || source.title, loading: false, error: '', payload });
       } catch (e) {
         debugLogCitations('preview GET fail', { before_title: source.title, error: e?.message || String(e || '') });
         setPreviewDialog({ show: true, title: source.title, loading: false, error: e?.message || '预览失败', payload: null });
       }
     },
-    [debugLogCitations, normalizeSource]
+    [debugLogCitations, normalizeSource, canDownloadFiles]
   );
 
   const downloadSource = useCallback(
     async (rawSource) => {
       const source = normalizeSource(rawSource);
       if (!source.docId || !source.dataset) return;
-      const qs = new URLSearchParams({ dataset: source.dataset, filename: source.title }).toString();
-      const res = await httpClient.request(`/api/ragflow/documents/${encodeURIComponent(source.docId)}/download?${qs}`, { method: 'GET' });
-      if (!res.ok) {
-        let message = `下载失败 (${res.status})`;
-        try {
-          const data = await res.json();
-          message = data?.detail || data?.message || message;
-        } catch {
-          // ignore
-        }
-        throw new Error(message);
-      }
-      const blob = await res.blob();
+      if (!canDownloadFiles) throw new Error('no_download_permission');
+      const blob = await authClient.previewRagflowDocumentBlob(source.docId, source.dataset, source.title);
       const url = URL.createObjectURL(blob);
       try {
         const a = document.createElement('a');
@@ -989,7 +944,7 @@ const Chat = () => {
                                 >
                                   <div style={{ minWidth: 0, flex: 1 }}>
                                     <div style={{ fontSize: '0.9rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                      {src ? src.title : '未知文件'}
+                                  {src ? src.title : '未知文件'}
                                     </div>
 
                                   </div>
@@ -1008,22 +963,24 @@ const Chat = () => {
                                     >
                                       查看
                                     </button>
-                                    <button
-                                      disabled={!canOpen}
-                                      onClick={() => {
-                                        downloadSource(raw).catch((e) => setError(e?.message || '下载失败'));
-                                      }}
-                                      style={{
-                                        padding: '6px 10px',
-                                        borderRadius: '6px',
-                                        border: 'none',
-                                        background: canOpen ? '#3b82f6' : '#9ca3af',
-                                        color: 'white',
-                                        cursor: canOpen ? 'pointer' : 'not-allowed',
-                                      }}
-                                    >
-                                      下载
-                                    </button>
+                                    {canDownloadFiles ? (
+                                      <button
+                                        disabled={!canOpen}
+                                        onClick={() => {
+                                          downloadSource(raw).catch((e) => setError(e?.message || '下载失败'));
+                                        }}
+                                        style={{
+                                          padding: '6px 10px',
+                                          borderRadius: '6px',
+                                          border: 'none',
+                                          background: canOpen ? '#3b82f6' : '#9ca3af',
+                                          color: 'white',
+                                          cursor: canOpen ? 'pointer' : 'not-allowed',
+                                        }}
+                                      >
+                                        下载
+                                      </button>
+                                    ) : null}
                                   </div>
                                 </div>
                               );
@@ -1128,7 +1085,55 @@ const Chat = () => {
             lineHeight: 1.45,
           }}
         >
-          {citationHover.chunk}
+          <style>{`
+            .citation-tooltip-markdown table {
+              border-collapse: collapse;
+              width: 100%;
+              font-size: 0.875rem;
+            }
+            .citation-tooltip-markdown th,
+            .citation-tooltip-markdown td {
+              border: 1px solid rgba(255,255,255,0.14);
+              padding: 8px 10px;
+              text-align: left;
+              vertical-align: top;
+            }
+            .citation-tooltip-markdown th {
+              background: rgba(255,255,255,0.08);
+              font-weight: 700;
+              color: #f9fafb;
+            }
+            .citation-tooltip-markdown tr:nth-child(even) {
+              background: rgba(255,255,255,0.04);
+            }
+            .citation-tooltip-markdown a {
+              color: #93c5fd;
+            }
+            .citation-tooltip-markdown p {
+              margin: 0.35rem 0;
+            }
+            .citation-tooltip-markdown h1,
+            .citation-tooltip-markdown h2,
+            .citation-tooltip-markdown h3 {
+              margin: 0.5rem 0 0.35rem 0;
+            }
+            .citation-tooltip-markdown code {
+              background: rgba(255,255,255,0.08);
+              padding: 0.1rem 0.25rem;
+              border-radius: 4px;
+            }
+            .citation-tooltip-markdown pre {
+              background: rgba(0,0,0,0.25);
+              padding: 10px 12px;
+              border-radius: 8px;
+              overflow: auto;
+            }
+          `}</style>
+          <div className="citation-tooltip-markdown">
+            <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw, rehypeSanitize]}>
+              {citationHover.chunk}
+            </ReactMarkdown>
+          </div>
         </div>
       )}
 
@@ -1306,10 +1311,24 @@ const Chat = () => {
               ) : previewDialog.payload ? (
                 (() => {
                   const p = previewDialog.payload;
-                  if (p.type === 'text') return <pre style={{ whiteSpace: 'pre-wrap' }}>{p.content}</pre>;
+                  if (p.type === 'text') {
+                    const name = p.filename || previewDialog.title || '';
+                    if (isMarkdownFilename(name)) return <MarkdownPreview content={p.content} />;
+                    return <pre style={{ whiteSpace: 'pre-wrap' }}>{p.content}</pre>;
+                  }
+                  if (p.type === 'docx') {
+                    return (
+                      <div className="table-preview" style={{ padding: '24px' }}>
+                        <div
+                          style={{ fontSize: '0.875rem', lineHeight: '1.6', color: '#1f2937' }}
+                          dangerouslySetInnerHTML={{ __html: p.html || '' }}
+                        />
+                      </div>
+                    );
+                  }
                   if (p.type === 'image') return <img alt={p.filename || 'image'} style={{ maxWidth: '100%' }} src={`data:image/${p.image_type || 'png'};base64,${p.content}`} />;
-                  if (p.type === 'pdf') return <iframe title="pdf-preview" style={{ width: '100%', height: '70vh', border: 'none' }} src={`data:application/pdf;base64,${p.content}`} />;
-                  if (p.type === 'html') return <iframe title="html-preview" style={{ width: '100%', height: '70vh', border: 'none' }} src={`data:text/html;base64,${p.content}`} />;
+                  if (p.type === 'pdf') return <iframe title="pdf-preview" style={{ width: '100%', height: '70vh', border: 'none' }} src={previewObjectUrl || `data:application/pdf;base64,${p.content}`} />;
+                  if (p.type === 'html') return <iframe title="html-preview" style={{ width: '100%', height: '70vh', border: 'none' }} src={previewObjectUrl || `data:text/html;base64,${p.content}`} />;
                   if (p.type === 'excel' && p.sheets) {
                     const sheetNames = Object.keys(p.sheets || {});
                     return (
@@ -1337,7 +1356,7 @@ const Chat = () => {
                                 try {
                                   setPreviewDialog((prev) => ({ ...prev, loading: true, error: '' }));
                                   const qs = new URLSearchParams({ dataset: p.dataset }).toString();
-                                  const data = await httpClient.requestJson(`/api/ragflow/documents/${encodeURIComponent(p.docId)}/preview?${qs}`);
+                                  const data = await httpClient.requestJson(`/api/preview/documents/ragflow/${encodeURIComponent(p.docId)}/preview?${qs}`);
                                   if (data?.type === 'html') {
                                     setPreviewDialog((prev) => ({ ...prev, loading: false, error: '', title: data?.filename || prev.title, payload: data }));
                                   } else {

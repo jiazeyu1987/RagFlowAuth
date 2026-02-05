@@ -39,6 +39,10 @@ class SSHExecutor:
             "-o",
             "BatchMode=yes",
             "-o",
+            "NumberOfPasswordPrompts=0",
+            "-o",
+            "StrictHostKeyChecking=no",
+            "-o",
             "ConnectTimeout=10",
             "-o",
             "ControlMaster=no",
@@ -48,11 +52,16 @@ class SSHExecutor:
 
         log_to_file(f"[SSH] Execute: {command}", "DEBUG")
 
+        # IMPORTANT: In a GUI process, inheriting stdin can cause SSH to hang waiting for
+        # interactive prompts (host key verification / password) that will never be answered.
+        # Use DEVNULL by default so SSH fails fast with a clear error instead of timing out.
+        stdin = subprocess.PIPE if stdin_data is not None else subprocess.DEVNULL
+
         process = subprocess.Popen(
             ssh_argv,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            stdin=subprocess.PIPE if stdin_data is not None else None,
+            stdin=stdin,
             text=True,
             encoding="utf-8",
             errors="replace",

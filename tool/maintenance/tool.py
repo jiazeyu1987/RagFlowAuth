@@ -21,6 +21,7 @@ import tempfile
 from pathlib import Path
 from datetime import datetime
 import re
+import tarfile
 
 # Allow importing `tool.*` modules when this file is executed directly.
 if __package__ is None or __package__ == "":
@@ -34,11 +35,14 @@ from tool.maintenance.core.constants import (
     DEFAULT_WINDOWS_SHARE_NAME,
     DEFAULT_WINDOWS_SHARE_PASSWORD,
     DEFAULT_WINDOWS_SHARE_USERNAME,
+    LOCAL_RAGFLOW_BASE_URL,
     LOG_FILE,
     MOUNT_POINT,
     PROD_SERVER_IP,
+    PROD_RAGFLOW_BASE_URL,
     REPLICA_TARGET_DIR,
     TEST_SERVER_IP,
+    TEST_RAGFLOW_BASE_URL,
 )
 from tool.maintenance.core.environments import ENVIRONMENTS
 from tool.maintenance.core.logging_setup import logger, log_to_file
@@ -76,6 +80,13 @@ from tool.maintenance.features.restart_services import (
 from tool.maintenance.features.stop_services import stop_ragflow_and_ragflowauth as feature_stop_ragflow_and_ragflowauth
 from tool.maintenance.features.kill_backup_job import (
     kill_running_backup_job as feature_kill_running_backup_job,
+)
+from tool.maintenance.core.ragflow_base_url_guard import (
+    LOCAL_RAGFLOW_CONFIG_PATH,
+    ensure_local_base_url,
+    ensure_remote_base_url,
+    read_local_base_url,
+    read_remote_base_url,
 )
 
 # （日志配置已迁移到 tool.maintenance.core.logging_setup）
@@ -674,6 +685,104 @@ class RagflowAuthTool:
 
         self.task_runner.run(name="refresh_release_versions", fn=do_work, on_done=on_done)
 
+    def refresh_ragflow_base_urls(self):
+        """
+        Refresh base_url display for Local/TEST/PROD ragflow_config.json.
+        Used as a guardrail to avoid environment cross-reading.
+        """
+        # Local (fast)
+        try:
+            if hasattr(self, "ragflow_base_url_local_var"):
+                ok, val = read_local_base_url(LOCAL_RAGFLOW_CONFIG_PATH)
+                self.ragflow_base_url_local_var.set(val if ok else f"(error) {val}")
+        except Exception as e:
+            if hasattr(self, "ragflow_base_url_local_var"):
+                self.ragflow_base_url_local_var.set(f"(error) {e}")
+
+        # Remote (SSH - run async)
+        if hasattr(self, "ragflow_base_url_test_var"):
+            self.ragflow_base_url_test_var.set("(loading...)")
+        if hasattr(self, "ragflow_base_url_prod_var"):
+            self.ragflow_base_url_prod_var.set("(loading...)")
+
+        log_to_file("[BASE_URL] refresh start", "DEBUG")
+
+        def do_work():
+            return (
+                read_remote_base_url(server_ip=TEST_SERVER_IP, app_dir="/opt/ragflowauth", timeout_seconds=20),
+                read_remote_base_url(server_ip=PROD_SERVER_IP, app_dir="/opt/ragflowauth", timeout_seconds=20),
+            )
+
+        def on_done(res):
+            if not res.ok:
+                err = str(res.error) if res.error else "unknown error"
+                log_to_file(f"[BASE_URL] refresh failed: {err}", "ERROR")
+                if hasattr(self, "ragflow_base_url_test_var"):
+                    self.ragflow_base_url_test_var.set(f"(error) {err}")
+                if hasattr(self, "ragflow_base_url_prod_var"):
+                    self.ragflow_base_url_prod_var.set(f"(error) {err}")
+                return
+
+            if not res.value:
+                log_to_file("[BASE_URL] refresh failed: empty result", "ERROR")
+                if hasattr(self, "ragflow_base_url_test_var"):
+                    self.ragflow_base_url_test_var.set("(error) empty result")
+                if hasattr(self, "ragflow_base_url_prod_var"):
+                    self.ragflow_base_url_prod_var.set("(error) empty result")
+                return
+
+            (ok_t, val_t), (ok_p, val_p) = res.value
+            log_to_file(
+                f"[BASE_URL] refresh done: test_ok={ok_t} prod_ok={ok_p} test={val_t!s} prod={val_p!s}",
+                "DEBUG",
+            )
+            if hasattr(self, "ragflow_base_url_test_var"):
+                self.ragflow_base_url_test_var.set(val_t if ok_t else f"(error) {val_t}")
+            if hasattr(self, "ragflow_base_url_prod_var"):
+                self.ragflow_base_url_prod_var.set(val_p if ok_p else f"(error) {val_p}")
+
+        self.task_runner.run(name="refresh_ragflow_base_urls", fn=do_work, on_done=on_done)
+
+    def _guard_ragflow_base_url(self, *, role: str, stage: str, ui_log=None) -> None:
+        role_norm = (role or "").strip().lower()
+
+        def _log(msg: str) -> None:
+            text = f"[BASE_URL] [{stage}] {msg}"
+            log_to_file(text, "INFO")
+            if ui_log:
+                try:
+                    ui_log(text)
+                except Exception:
+                    pass
+
+        if role_norm == "local":
+            res = ensure_local_base_url(desired=LOCAL_RAGFLOW_BASE_URL, path=LOCAL_RAGFLOW_CONFIG_PATH)
+            if not res.ok:
+                raise RuntimeError(f"Local base_url guard failed: {res.error}")
+            _log(f"LOCAL before={res.before} after={res.after}" + (" (changed)" if res.changed else ""))
+            return
+
+        if role_norm == "test":
+            ip = TEST_SERVER_IP
+            desired = TEST_RAGFLOW_BASE_URL
+            role_name = "TEST"
+        elif role_norm == "prod":
+            ip = PROD_SERVER_IP
+            desired = PROD_RAGFLOW_BASE_URL
+            role_name = "PROD"
+        else:
+            raise ValueError(f"unknown role: {role!r}")
+
+        res = ensure_remote_base_url(
+            server_ip=ip,
+            desired=desired,
+            app_dir="/opt/ragflowauth",
+            role_name=role_name,
+            log=lambda m: _log(m),
+        )
+        if not res.ok:
+            raise RuntimeError(f"{role_name} base_url guard failed: {res.error}")
+
     def refresh_release_history(self):
         if hasattr(self, "status_bar"):
             self.status_bar.config(text="刷新发布记录...")
@@ -900,13 +1009,82 @@ class RagflowAuthTool:
 
         threading.Thread(target=worker, daemon=True).start()
 
+    def refresh_release_local_backup_list(self):
+        """
+        Refresh local backup catalog for the "LOCAL -> TEST (sync data)" flow.
+
+        Source dir is fixed: D:\\datas\\RagflowAuth
+        """
+        try:
+            root_dir = Path(r"D:\datas\RagflowAuth")
+            entries = feature_list_local_backups(root_dir)
+
+            self.release_local_backup_map = {}
+            values = []
+            for e in entries:
+                # Display: readable time label + folder name
+                disp = f"{e.label}  ({e.path.name})"
+                values.append(disp)
+                self.release_local_backup_map[disp] = e.path
+
+            if hasattr(self, "release_local_backup_combo"):
+                self.release_local_backup_combo["values"] = values
+
+            # Default to newest entry.
+            if values:
+                current = ""
+                try:
+                    current = str(getattr(self, "release_local_backup_var", None).get() if hasattr(self, "release_local_backup_var") else "")
+                except Exception:
+                    current = ""
+                if (not current) or (current not in self.release_local_backup_map):
+                    if hasattr(self, "release_local_backup_var"):
+                        self.release_local_backup_var.set(values[0])
+                if hasattr(self, "release_local_backup_note"):
+                    self.release_local_backup_note.config(text=f"当前可用备份: {len(values)} 个（默认选择最新）", foreground="gray")
+            else:
+                if hasattr(self, "release_local_backup_var"):
+                    self.release_local_backup_var.set("")
+                if hasattr(self, "release_local_backup_note"):
+                    self.release_local_backup_note.config(text=f"未找到备份（需要包含 auth.db）：{root_dir}", foreground="red")
+        except Exception as e:
+            log_to_file(f"[Release] refresh local backup list failed: {e}", "ERROR")
+            if hasattr(self, "release_local_backup_note"):
+                self.release_local_backup_note.config(text=f"刷新备份列表失败: {e}", foreground="red")
+
     def publish_local_to_test(self):
-        if not messagebox.askyesno(
-            "确认发布",
+        want_sync_data = bool(getattr(self, "release_local_sync_data_var", None).get() if hasattr(self, "release_local_sync_data_var") else False)
+
+        selected_pack = None
+        if want_sync_data:
+            try:
+                disp = str(getattr(self, "release_local_backup_var", None).get() if hasattr(self, "release_local_backup_var") else "").strip()
+                m = getattr(self, "release_local_backup_map", None) or {}
+                selected_pack = m.get(disp)
+            except Exception:
+                selected_pack = None
+
+        confirm_msg = (
             f"确认要从本机发布到测试服务器 {TEST_SERVER_IP} 吗？\n"
-            "注意：这会重启测试环境容器。",
-        ):
+            "注意：这会重启测试环境容器。\n"
+        )
+        if want_sync_data:
+            chosen = str(selected_pack) if selected_pack else "（未选择：将自动使用最新备份）"
+            confirm_msg += (
+                "\n并且将执行【发布后同步数据到测试】（覆盖测试数据）：\n"
+                "- auth.db\n"
+                "- RAGFlow volumes（MySQL/MinIO/ES 等）\n"
+                f"\n数据来源：{chosen}\n"
+            )
+
+        if not messagebox.askyesno("确认发布", confirm_msg):
             return
+
+        if want_sync_data and (not messagebox.askyesno(
+            "确认同步数据到测试",
+            "再次确认：同步数据会覆盖【测试服务器】上的 auth.db 和 RAGFlow volumes。\n\n是否继续？",
+        )):
+            want_sync_data = False
 
         def worker():
             try:
@@ -915,6 +1093,14 @@ class RagflowAuthTool:
                 if hasattr(self, "status_bar"):
                     self.status_bar.config(text="发布本机->测试中...")
                 log_to_file("[Release] Start publish local->test", "INFO")
+
+                # Guardrail: ensure each environment reads its own RAGFlow.
+                self._guard_ragflow_base_url(role="local", stage="LOCAL->TEST PRE")
+                self._guard_ragflow_base_url(role="test", stage="LOCAL->TEST PRE")
+                try:
+                    self.root.after(0, self.refresh_ragflow_base_urls)
+                except Exception:
+                    pass
 
                 result = feature_publish_from_local_to_test(version=self._release_version_arg())
                 if hasattr(self, "release_local_log_text"):
@@ -940,6 +1126,36 @@ class RagflowAuthTool:
                     log_to_file("[Release] Publish local->test succeeded", "INFO")
                     if hasattr(self, "status_bar"):
                         self.status_bar.config(text="发布本机->测试：成功")
+
+                    # Optional: sync latest local backup data (auth.db + RAGFlow volumes) to TEST.
+                    if want_sync_data:
+                        def ui_log(line: str) -> None:
+                            if not hasattr(self, "release_local_log_text"):
+                                return
+
+                            def _append() -> None:
+                                self.release_local_log_text.insert(tk.END, line + "\n")
+                                self.release_local_log_text.see(tk.END)
+                            self.root.after(0, _append)
+
+                        ui_log("")
+                        ui_log("[SYNC] 发布成功，开始同步本机最新备份到测试（auth.db + RAGFlow volumes）...")
+                        try:
+                            self._sync_local_backup_to_test(pack_dir=selected_pack, ui_log=ui_log)
+                            ui_log("[SYNC] 同步完成")
+                            if hasattr(self, "status_bar"):
+                                self.root.after(0, lambda: self.status_bar.config(text="发布本机->测试：成功（数据已同步）"))
+                        except Exception as e:
+                            ui_log(f"[SYNC] [ERROR] 同步失败: {e}")
+                            log_to_file(f"[Release] local->test sync data failed: {e}", "ERROR")
+                            if hasattr(self, "status_bar"):
+                                self.root.after(0, lambda: self.status_bar.config(text="发布本机->测试：成功（数据同步失败）"))
+                    # Post-check (defensive): publish/sync may overwrite config; enforce again.
+                    self._guard_ragflow_base_url(role="test", stage="LOCAL->TEST POST")
+                    try:
+                        self.root.after(0, self.refresh_ragflow_base_urls)
+                    except Exception:
+                        pass
                 else:
                     for line in (result.log or "").splitlines():
                         log_to_file(f"[ReleaseFlow] {line}", "ERROR")
@@ -954,6 +1170,214 @@ class RagflowAuthTool:
                     self.status_bar.config(text="发布本机->测试：失败")
 
         threading.Thread(target=worker, daemon=True).start()
+
+    def _sync_local_backup_to_test(self, *, pack_dir: Path | None, ui_log) -> None:
+        """
+        Apply a local backup under D:\\datas\\RagflowAuth to the TEST server (data only):
+        - auth.db
+        - RAGFlow volumes (ragflow_compose_* docker volumes)
+
+        IMPORTANT:
+        - This must NOT restore images.tar (to avoid overriding freshly published images).
+        - This is destructive to TEST data; caller must confirm in UI.
+        """
+        if pack_dir is None:
+            root_dir = Path(r"D:\datas\RagflowAuth")
+            entries = feature_list_local_backups(root_dir)
+            if not entries:
+                raise RuntimeError(f"未找到可用备份（需要包含 auth.db）：{root_dir}")
+            pack_dir = entries[0].path
+
+        ui_log(f"[SYNC] 选择备份: {pack_dir}")
+        auth_db = pack_dir / "auth.db"
+        if not auth_db.exists():
+            raise RuntimeError(f"备份缺少 auth.db: {pack_dir}")
+
+        volumes_dir = pack_dir / "volumes"
+        has_volumes = volumes_dir.exists() and volumes_dir.is_dir()
+        if not has_volumes:
+            ui_log("[SYNC] [WARN] 备份中未发现 volumes 目录，将只同步 auth.db（不包含 RAGFlow 数据）")
+
+        # Use SSH to operate on TEST server.
+        ssh = SSHExecutor(TEST_SERVER_IP, "root")
+
+        def ssh_exec(cmd: str) -> tuple[bool, str]:
+            ok, out = ssh.execute(cmd)
+            return ok, out or ""
+
+        # 0) Ensure TEST base_url points to TEST (defensive; avoid TEST reading PROD).
+        cfg_path = "/opt/ragflowauth/ragflow_config.json"
+        desired = f"http://{TEST_SERVER_IP}:9380"
+        ok, out = ssh_exec(
+            f"test -f {cfg_path} || (echo MISSING && exit 0); "
+            f"sed -n 's/.*\"base_url\"[[:space:]]*:[[:space:]]*\"\\([^\\\"]*\\)\".*/\\1/p' {cfg_path} | head -n 1"
+        )
+        base_url = (out or "").strip().splitlines()[-1].strip() if (out or "").strip() else ""
+        ui_log(f"[SYNC] [PRECHECK] TEST base_url: {base_url or '(empty)'}")
+        if ok and base_url and (desired not in base_url):
+            ui_log(f"[SYNC] [PRECHECK] 修正 TEST base_url -> {desired}")
+            fix_cmd = (
+                f"set -e; "
+                f"cp -f {cfg_path} {cfg_path}.bak.$(date +%Y%m%d_%H%M%S) 2>/dev/null || true; "
+                f"tmp=$(mktemp); "
+                f"sed -E 's#(\"base_url\"[[:space:]]*:[[:space:]]*\")([^\\\"]+)(\")#\\1{desired}\\3#' {cfg_path} > $tmp; "
+                f"mv -f $tmp {cfg_path}; "
+                f"sed -n 's/.*\"base_url\"[[:space:]]*:[[:space:]]*\"\\([^\\\"]*\\)\".*/\\1/p' {cfg_path} | head -n 1"
+            )
+            ok2, out2 = ssh_exec(fix_cmd)
+            new_val = (out2 or "").strip().splitlines()[-1].strip() if (out2 or "").strip() else ""
+            ui_log(f"[SYNC] [PRECHECK] TEST base_url after: {new_val or '(empty)'}")
+            if (not ok2) or (desired not in new_val):
+                raise RuntimeError(f"无法修正 TEST base_url。输出: {out2}")
+
+        # 1) Stop services strictly (ragflowauth + ragflow_compose-*)
+        ui_log("[SYNC] [1/5] Stop services on TEST (strict)")
+        ssh_exec("docker stop ragflowauth-backend ragflowauth-frontend 2>&1 || true")
+        ssh_exec("cd /opt/ragflowauth/ragflow_compose 2>/dev/null && docker compose down 2>&1 || true")
+        ssh_exec(
+            r"""
+ set -e
+ ids=$(
+   (
+     docker ps -q --filter "name=^ragflow_compose-" || true
+     docker ps -q --filter ancestor=infiniflow/ragflow || true
+     docker ps -q --filter ancestor=elasticsearch || true
+     docker ps -q --filter ancestor=docker.elastic.co/elasticsearch/elasticsearch || true
+     docker ps -q --filter ancestor=mysql || true
+     docker ps -q --filter ancestor=valkey/valkey || true
+     docker ps -q --filter ancestor=redis || true
+     docker ps -q --filter ancestor=minio/minio || true
+     docker ps -q --filter ancestor=quay.io/minio/minio || true
+   ) | sort -u
+ )
+ if [ -n "$ids" ]; then
+   docker stop $ids 2>&1 || true
+ fi
+ """.strip()
+        )
+
+        deadline = time.time() + 90
+        while time.time() < deadline:
+            okc, outc = ssh_exec(
+                r"""
+ set -e
+ running_ids=$(
+   (
+     docker ps -q --filter "name=^ragflowauth-backend$" || true
+     docker ps -q --filter "name=^ragflowauth-frontend$" || true
+     docker ps -q --filter "name=^ragflow_compose-" || true
+     docker ps -q --filter ancestor=infiniflow/ragflow || true
+     docker ps -q --filter ancestor=elasticsearch || true
+     docker ps -q --filter ancestor=docker.elastic.co/elasticsearch/elasticsearch || true
+     docker ps -q --filter ancestor=mysql || true
+     docker ps -q --filter ancestor=valkey/valkey || true
+     docker ps -q --filter ancestor=redis || true
+     docker ps -q --filter ancestor=minio/minio || true
+     docker ps -q --filter ancestor=quay.io/minio/minio || true
+   ) | sort -u
+ )
+ if [ -n "$running_ids" ]; then
+   echo "$running_ids"
+   exit 2
+ fi
+ echo "STOPPED"
+ """.strip()
+            )
+            if okc and (outc or "").strip().endswith("STOPPED"):
+                ui_log("[SYNC] ✅ TEST services stopped")
+                break
+            time.sleep(3)
+        else:
+            okps, ps_out = ssh_exec(
+                "docker ps --no-trunc 2>&1 | grep -E '(ragflowauth-|ragflow_compose-|infiniflow/ragflow|elasticsearch|docker\\.elastic\\.co/elasticsearch/elasticsearch|mysql|valkey/valkey|redis|minio/minio|quay\\.io/minio/minio)' 2>&1 || true"
+            )
+            if okps and (ps_out or "").strip():
+                ui_log("[SYNC] [DEBUG] docker ps -a (related):")
+                ui_log(ps_out.strip())
+            raise RuntimeError("停止服务未完成：检测到相关容器仍在运行（已中止，避免不一致快照）")
+
+        # 2) Backup current auth.db (best-effort) then upload auth.db
+        ui_log("[SYNC] [2/5] Upload auth.db to TEST")
+        ts = time.strftime("%Y%m%d_%H%M%S", time.localtime())
+        ssh_exec(f"mkdir -p /tmp/restore_backup_{ts} >/dev/null 2>&1 || true; cp -f /opt/ragflowauth/data/auth.db /tmp/restore_backup_{ts}/auth.db 2>/dev/null || true")
+
+        scp_cmd = [
+            "scp",
+            "-o",
+            "BatchMode=yes",
+            "-o",
+            "ConnectTimeout=10",
+            str(auth_db),
+            f"root@{TEST_SERVER_IP}:/opt/ragflowauth/data/auth.db",
+        ]
+        proc = subprocess.run(scp_cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
+        if proc.returncode != 0:
+            raise RuntimeError(f"SCP auth.db 失败: {(proc.stderr or proc.stdout or '').strip()}")
+
+        # 3) Restore ragflow volumes (if present)
+        if has_volumes:
+            ui_log("[SYNC] [3/5] Restore RAGFlow volumes on TEST")
+            tmp_tar = Path(tempfile.mkdtemp(prefix="ragflowauth_sync_")) / "volumes.tar.gz"
+            with tarfile.open(tmp_tar, "w:gz") as tar:
+                tar.add(str(volumes_dir), arcname="volumes")
+
+            ssh_exec("mkdir -p /var/lib/docker/tmp >/dev/null 2>&1 || true")
+            scp_cmd2 = [
+                "scp",
+                "-o",
+                "BatchMode=yes",
+                "-o",
+                "ConnectTimeout=10",
+                str(tmp_tar),
+                f"root@{TEST_SERVER_IP}:/var/lib/docker/tmp/volumes.tar.gz",
+            ]
+            proc2 = subprocess.run(scp_cmd2, capture_output=True, text=True, encoding="utf-8", errors="replace")
+            if proc2.returncode != 0:
+                raise RuntimeError(f"SCP volumes.tar.gz 失败: {(proc2.stderr or proc2.stdout or '').strip()}")
+
+            workdir = f"/tmp/ragflowauth_restore_{ts}"
+            okx, outx = ssh_exec(f"rm -rf {workdir}; mkdir -p {workdir} && tar -xzf /var/lib/docker/tmp/volumes.tar.gz -C {workdir} && rm -f /var/lib/docker/tmp/volumes.tar.gz && echo OK")
+            if not okx:
+                raise RuntimeError(f"解压 volumes.tar.gz 失败: {outx}")
+
+            restore_cmd = r"""
+set -e
+docker image inspect alpine >/dev/null 2>&1 || docker pull alpine:latest >/dev/null 2>&1 || true
+files=$(ls -1 "{workdir}/volumes"/*.tar.gz 2>/dev/null || true)
+if [ -z "$files" ]; then
+  echo "NO_VOLUME_TARS"
+  exit 0
+fi
+for f in $files; do
+  name=$(basename "$f" .tar.gz)
+  echo "RESTORE $name"
+  docker volume inspect "$name" >/dev/null 2>&1 || docker volume create "$name" >/dev/null
+  docker run --rm -v "$name:/data" -v "{workdir}/volumes:/backup:ro" alpine sh -lc "rm -rf /data/* /data/.[!.]* /data/..?* 2>/dev/null || true; tar -xzf /backup/${{name}}.tar.gz -C /data"
+done
+""".strip().format(workdir=workdir)
+            okr, outr = ssh_exec(restore_cmd)
+            if not okr:
+                raise RuntimeError(f"还原 volumes 失败:\n{outr}")
+            if (outr or "").strip():
+                ui_log((outr or "").strip())
+
+        # 4) Restart services
+        ui_log("[SYNC] [4/5] Restart services on TEST")
+        ssh_exec("cd /opt/ragflowauth/ragflow_compose 2>/dev/null && docker compose up -d 2>&1 || true")
+        ssh_exec("docker start ragflowauth-backend ragflowauth-frontend 2>&1 || true")
+
+        # 5) Healthcheck (best-effort)
+        ui_log("[SYNC] [5/5] Healthcheck on TEST (best-effort)")
+        okh, outh = ssh_exec("command -v curl >/dev/null 2>&1 && (curl -fsS http://127.0.0.1:8001/health >/dev/null && echo BACKEND_OK || echo BACKEND_FAIL) || echo NO_CURL")
+        if okh and (outh or "").strip():
+            ui_log(f"[SYNC] backend health: {(outh or '').strip().splitlines()[-1]}")
+
+        # Post-check (defensive): enforce TEST base_url after sync.
+        self._guard_ragflow_base_url(role="test", stage="LOCAL->TEST SYNC POST", ui_log=ui_log)
+        try:
+            self.root.after(0, self.refresh_ragflow_base_urls)
+        except Exception:
+            pass
 
     def publish_test_to_prod(self):
         if not messagebox.askyesno(
@@ -970,11 +1394,26 @@ class RagflowAuthTool:
                 log_to_file("[Release] Start publish test->prod", "INFO")
 
                 include_ragflow = bool(getattr(self, "release_include_ragflow_var", tk.BooleanVar(value=False)).get())
+                # Guardrail: enforce base_url isolation before publish.
+                self._guard_ragflow_base_url(role="test", stage="TEST->PROD(IMAGE) PRE")
+                self._guard_ragflow_base_url(role="prod", stage="TEST->PROD(IMAGE) PRE")
+                try:
+                    self.root.after(0, self.refresh_ragflow_base_urls)
+                except Exception:
+                    pass
+
                 result = feature_publish_from_test_to_prod(
                     version=self._release_version_arg(),
                     include_ragflow_images=include_ragflow,
                 )
                 self.release_log_text.insert(tk.END, (result.log or "") + "\n")
+
+                # Post-check: enforce PROD base_url after publish attempt (success or fail).
+                self._guard_ragflow_base_url(role="prod", stage="TEST->PROD(IMAGE) POST")
+                try:
+                    self.root.after(0, self.refresh_ragflow_base_urls)
+                except Exception:
+                    pass
 
                 if result.ok:
                     self._record_release_event(
@@ -1036,7 +1475,22 @@ class RagflowAuthTool:
 
                     self.root.after(0, _append)
 
+                # Guardrail: enforce base_url isolation before data sync.
+                self._guard_ragflow_base_url(role="test", stage="TEST->PROD(DATA) PRE", ui_log=ui_log)
+                self._guard_ragflow_base_url(role="prod", stage="TEST->PROD(DATA) PRE", ui_log=ui_log)
+                try:
+                    self.root.after(0, self.refresh_ragflow_base_urls)
+                except Exception:
+                    pass
+
                 result = feature_publish_data_from_test_to_prod(version=self._release_version_arg(), log_cb=ui_log)
+
+                # Post-check: enforce base_url after sync attempt.
+                self._guard_ragflow_base_url(role="prod", stage="TEST->PROD(DATA) POST", ui_log=ui_log)
+                try:
+                    self.root.after(0, self.refresh_ragflow_base_urls)
+                except Exception:
+                    pass
 
                 if result.ok:
                     self._record_release_event(
@@ -3172,22 +3626,85 @@ conn.close()
             self.append_restore_log("\n[1/7] 停止 Docker 容器...")
             self.update_restore_status("正在停止容器...")
 
-            # 停止 RagflowAuth 容器
-            self.append_restore_log("  停止 RagflowAuth 容器...")
-            success, output = self.ssh_executor.execute(
-                "docker stop ragflowauth-backend ragflowauth-frontend 2>/dev/null || true"
-            )
-            self.append_restore_log(f"  {output}")
+            def _stop_and_verify_services(*, timeout_s: int = 60) -> None:
+                """
+                Stop RagflowAuth + (optional) RAGFlow containers and verify they are NOT running.
 
-            # 停止 RAGFlow 容器（如果存在 volumes）
-            if self.restore_volumes_exists:
-                self.append_restore_log("  停止 RAGFlow 容器...")
-                success, output = self.ssh_executor.execute(
-                    "cd /opt/ragflowauth/ragflow_compose && docker compose down 2>/dev/null || true"
+                Why strict: restoring volumes while services are running can produce inconsistent snapshots,
+                especially for Elasticsearch (ragflow_compose_esdata01), which later forces a re-chunk/reindex.
+                """
+                # Stop RagflowAuth containers (best-effort)
+                self.append_restore_log("  [STOP] 停止 RagflowAuth 容器...")
+                _, out1 = self.ssh_executor.execute("docker stop ragflowauth-backend ragflowauth-frontend 2>&1 || true")
+                if (out1 or "").strip():
+                    self.append_restore_log(f"  {out1.strip()}")
+
+                # Stop RAGFlow compose stack (best-effort)
+                if self.restore_volumes_exists:
+                    self.append_restore_log("  [STOP] 停止 RAGFlow（docker compose down）...")
+                    _, out2 = self.ssh_executor.execute(
+                        "cd /opt/ragflowauth/ragflow_compose 2>/dev/null && docker compose down 2>&1 || true"
+                    )
+                    if (out2 or "").strip():
+                        self.append_restore_log(f"  {out2.strip()}")
+
+                # Fallback: stop containers by name prefix (ragflow_compose-)
+                if self.restore_volumes_exists:
+                    self.append_restore_log("  [STOP] 兜底停止 ragflow_compose-* 容器...")
+                    stop_prefix_cmd = r"""
+set -e
+ids=$(docker ps -q --filter "name=^ragflow_compose-" || true)
+if [ -n "$ids" ]; then
+  docker stop $ids 2>&1 || true
+fi
+""".strip()
+                    _, out3 = self.ssh_executor.execute(stop_prefix_cmd)
+                    if (out3 or "").strip():
+                        self.append_restore_log(f"  {out3.strip()}")
+
+                # Verify stopped (strict)
+                self.append_restore_log(f"  [VERIFY] 校验容器已停止（超时 {timeout_s}s）...")
+                import time as _time
+                deadline = _time.time() + timeout_s
+                last_running = ""
+                while _time.time() < deadline:
+                    check_cmd = r"""
+set -e
+running_ids=$(
+  (
+    docker ps -q --filter "name=^ragflowauth-backend$" || true
+    docker ps -q --filter "name=^ragflowauth-frontend$" || true
+    docker ps -q --filter "name=^ragflow_compose-" || true
+  ) | sort -u
+)
+if [ -n "$running_ids" ]; then
+  echo "$running_ids"
+  exit 2
+fi
+echo "STOPPED"
+""".strip()
+                    okc, outc = self.ssh_executor.execute(check_cmd)
+                    text = (outc or "").strip()
+                    if okc and text.endswith("STOPPED"):
+                        self.append_restore_log("  ✅ 校验通过：相关容器已停止")
+                        return
+                    last_running = text
+                    _time.sleep(3)
+
+                # Still running: provide actionable output and abort.
+                okps, ps_out = self.ssh_executor.execute(
+                    "docker ps -a --format '{{.Names}}\\t{{.Image}}\\t{{.Status}}' | grep -E '^(ragflowauth-|ragflow_compose-)' 2>&1 || true"
                 )
-                self.append_restore_log(f"  {output}")
-            else:
-                self.append_restore_log("  跳过 RAGFlow 容器（未找到 volumes 数据）")
+                self.append_restore_log("  ❌ 校验失败：容器可能仍在运行，已中止还原以避免索引/数据不一致。")
+                if okps and (ps_out or "").strip():
+                    self.append_restore_log("  [DEBUG] docker ps -a（相关容器）:")
+                    self.append_restore_log(ps_out.strip())
+                if last_running:
+                    self.append_restore_log("  [DEBUG] 最近一次检测到仍在运行的容器名:")
+                    self.append_restore_log(last_running)
+                raise Exception("停止服务未完成：检测到相关容器仍在运行（请先确认已停止后再重试）")
+
+            _stop_and_verify_services(timeout_s=90)
 
             # 2. 备份服务器现有数据
             self.append_restore_log("\n[2/7] 备份服务器现有数据...")
@@ -3679,7 +4196,7 @@ conn.close()
 
             # 容器状态
             success, output = self.ssh_executor.execute(
-                "docker ps -a --format '{{.Names}}\t{{.Image}}\t{{.Status}}' | grep -E 'ragflowauth-|ragflow_compose-' || true"
+                "docker ps --no-trunc 2>&1 | grep -E '(ragflowauth-|ragflow_compose-)' 2>&1 || true"
             )
             if output:
                 self.append_restore_log(output)
@@ -3721,6 +4238,13 @@ conn.close()
             msg = f"[INFO] 数据还原完成\\n{success_msg}"
             print(msg)
             log_to_file(msg)
+            # Post-check: enforce TEST base_url after restore (defensive).
+            try:
+                self._guard_ragflow_base_url(role="test", stage="RESTORE POST")
+                self.root.after(0, self.refresh_ragflow_base_urls)
+            except Exception as _exc:
+                self.append_restore_log(f"[WARN] base_url post-check failed: {_exc}")
+
             messagebox.showinfo("还原完成", success_msg)
 
         except Exception as e:

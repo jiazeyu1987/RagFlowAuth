@@ -26,6 +26,20 @@ def build_release_tab(app) -> None:
     ttk.Entry(version_frame, textvariable=app.release_version_var, width=28).pack(side=tk.LEFT, padx=6)
     ttk.Button(version_frame, text="生成版本号", command=app._release_generate_version).pack(side=tk.LEFT, padx=6)
 
+    base_url_frame = ttk.Frame(tab)
+    base_url_frame.pack(fill=tk.X, padx=20, pady=(0, 8))
+    ttk.Label(base_url_frame, text="RAGFlow base_url:").pack(side=tk.LEFT)
+    app.ragflow_base_url_local_var = tk.StringVar(value="")
+    app.ragflow_base_url_test_var = tk.StringVar(value="")
+    app.ragflow_base_url_prod_var = tk.StringVar(value="")
+    ttk.Label(base_url_frame, text="本机").pack(side=tk.LEFT, padx=(10, 2))
+    ttk.Label(base_url_frame, textvariable=app.ragflow_base_url_local_var, foreground="blue").pack(side=tk.LEFT)
+    ttk.Label(base_url_frame, text="测试").pack(side=tk.LEFT, padx=(12, 2))
+    ttk.Label(base_url_frame, textvariable=app.ragflow_base_url_test_var, foreground="blue").pack(side=tk.LEFT)
+    ttk.Label(base_url_frame, text="正式").pack(side=tk.LEFT, padx=(12, 2))
+    ttk.Label(base_url_frame, textvariable=app.ragflow_base_url_prod_var, foreground="blue").pack(side=tk.LEFT)
+    ttk.Button(base_url_frame, text="刷新", command=app.refresh_ragflow_base_urls).pack(side=tk.RIGHT)
+
     desc = ttk.Label(
         tab,
         text=(
@@ -56,7 +70,10 @@ def build_release_tab(app) -> None:
 
     # Defer initial refresh until after the UI is fully initialized (status_bar created).
     app.root.after(0, app.refresh_release_versions)
+    app.root.after(0, app.refresh_ragflow_base_urls)
     app.root.after(0, app.refresh_release_history)
+    if hasattr(app, "refresh_release_local_backup_list"):
+        app.root.after(0, app.refresh_release_local_backup_list)
 
 
 def _create_release_local_to_test_tab(app) -> None:
@@ -67,6 +84,38 @@ def _create_release_local_to_test_tab(app) -> None:
     button_frame.pack(fill=tk.X, padx=20, pady=(10, 10))
     ttk.Button(button_frame, text="刷新测试版本", command=app.refresh_release_test_versions).pack(side=tk.LEFT, padx=5)
     ttk.Button(button_frame, text="发布本机到测试", command=app.publish_local_to_test).pack(side=tk.LEFT, padx=5)
+    app.release_local_sync_data_var = tk.BooleanVar(value=False)
+    ttk.Checkbutton(
+        button_frame,
+        text="发布后同步数据到测试（auth.db + RAGFlow volumes；覆盖测试数据）",
+        variable=app.release_local_sync_data_var,
+    ).pack(side=tk.LEFT, padx=(12, 0))
+
+    hint = ttk.Label(
+        tab,
+        text="提示：勾选后会自动选择本机固定目录 D:\\datas\\RagflowAuth 下最新的 migration_pack_* 备份进行同步。",
+        foreground="gray",
+        justify=tk.LEFT,
+    )
+    hint.pack(fill=tk.X, padx=20, pady=(0, 8), anchor=tk.W)
+
+    backup_frame = ttk.LabelFrame(tab, text="数据同步来源（本机固定目录：D:\\datas\\RagflowAuth）", padding=10)
+    backup_frame.pack(fill=tk.X, padx=20, pady=(0, 10))
+    row = ttk.Frame(backup_frame)
+    row.pack(fill=tk.X)
+    ttk.Label(row, text="选择备份:").pack(side=tk.LEFT)
+    app.release_local_backup_var = tk.StringVar(value="")
+    app.release_local_backup_combo = ttk.Combobox(row, textvariable=app.release_local_backup_var, width=46, state="readonly")
+    app.release_local_backup_combo.pack(side=tk.LEFT, padx=6)
+    ttk.Button(row, text="刷新备份列表", command=app.refresh_release_local_backup_list).pack(side=tk.LEFT, padx=6)
+
+    app.release_local_backup_note = ttk.Label(
+        backup_frame,
+        text="默认选择最新备份；仅用于“发布后同步数据到测试”。",
+        foreground="gray",
+        justify=tk.LEFT,
+    )
+    app.release_local_backup_note.pack(anchor=tk.W, pady=(6, 0))
 
     info_frame = ttk.Frame(tab)
     info_frame.pack(fill=tk.BOTH, expand=False, padx=20, pady=(0, 10))

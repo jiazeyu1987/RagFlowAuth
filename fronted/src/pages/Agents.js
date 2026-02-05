@@ -4,15 +4,16 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
 import rehypeSanitize from 'rehype-sanitize';
+import { loadRagflowPreview } from '../shared/preview/ragflowPreviewManager';
 import { useAuth } from '../hooks/useAuth';
 import { agentsApi } from '../features/agents/api';
-import { excelBlobToSheetsHtml, isExcelFilename } from '../shared/preview/excelPreview';
 import { ensureTablePreviewStyles } from '../shared/preview/tablePreviewStyles';
 import { httpClient } from '../shared/http/httpClient';
 import { useEscapeClose } from '../shared/hooks/useEscapeClose';
 
 const Agents = () => {
   const { canDownload } = useAuth();
+  const canDownloadFiles = typeof canDownload === 'function' ? !!canDownload() : false;
   const [datasets, setDatasets] = useState([]);
   const [selectedDatasetIds, setSelectedDatasetIds] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -24,6 +25,7 @@ const Agents = () => {
   const [previewData, setPreviewData] = useState(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [showPreviewModal, setShowPreviewModal] = useState(false);
+  const [previewObjectUrl, setPreviewObjectUrl] = useState(null);
 
   // Search parameters
   const [page, setPage] = useState(1);
@@ -65,9 +67,36 @@ const Agents = () => {
   const closePreviewModal = () => {
     setShowPreviewModal(false);
     setPreviewData(null);
+    if (previewObjectUrl) window.URL.revokeObjectURL(previewObjectUrl);
+    setPreviewObjectUrl(null);
   };
 
   useEscapeClose(showPreviewModal, closePreviewModal);
+
+  useEffect(() => {
+    if (!showPreviewModal) return;
+    if (!previewData || !previewData.type) return;
+    if (previewObjectUrl) {
+      window.URL.revokeObjectURL(previewObjectUrl);
+      setPreviewObjectUrl(null);
+    }
+
+    if ((previewData.type === 'pdf' || previewData.type === 'html') && previewData.content) {
+      try {
+        const binary = atob(previewData.content);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+        const mime = previewData.type === 'pdf' ? 'application/pdf' : 'text/html; charset=utf-8';
+        const blob = new Blob([bytes], { type: mime });
+        const url = window.URL.createObjectURL(blob);
+        setPreviewObjectUrl(url);
+      } catch (e) {
+        // If base64 decoding fails, fall back to existing data: URL rendering.
+        setPreviewObjectUrl(null);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showPreviewModal, previewData]);
 
   // Load available datasets on mount
   useEffect(() => {
@@ -220,27 +249,17 @@ const Agents = () => {
       const dataset = datasets.find(ds => ds.id === datasetId);
       const datasetName = dataset ? (dataset.name || dataset.id) : '展厅';
 
-      // For Excel, render client-side (same as DocumentReview) for consistent output.
-      // Some search results may not carry the real filename (e.g. "document_xxx"), so we also
-      // detect based on the resolved preview filename.
-      if (isExcelFilename(docName)) {
-        const blob = await authClient.previewRagflowDocumentBlob(docId, datasetName, docName);
-        const { sheets } = await excelBlobToSheetsHtml(blob);
-        setPreviewData({ type: 'excel', filename: docName, sheets, docId, dataset: datasetName });
-        return;
-      }
+      const payload = await loadRagflowPreview({
+        docId,
+        dataset: datasetName,
+        title: docName,
+        getPreviewJson: async ({ docId, dataset }) => authClient.previewDocument(docId, dataset),
+        getDownloadBlob: canDownloadFiles
+          ? async ({ docId, dataset, filename }) => authClient.previewRagflowDocumentBlob(docId, dataset, filename)
+          : undefined,
+      });
 
-      // Call preview API (also helps resolve the real filename for Excel fallback).
-      const data = await authClient.previewDocument(docId, datasetName);
-      const resolvedName = String(data?.filename || docName || '');
-      if (isExcelFilename(resolvedName)) {
-        const blob = await authClient.previewRagflowDocumentBlob(docId, datasetName, resolvedName);
-        const { sheets } = await excelBlobToSheetsHtml(blob);
-        setPreviewData({ type: 'excel', filename: resolvedName, sheets, docId, dataset: datasetName });
-        return;
-      }
-
-      setPreviewData({ ...(data || {}), docId, dataset: datasetName });
+      setPreviewData(payload);
     } catch (err) {
       setError(`预览文档失败: ${err.message}`);
       setShowPreviewModal(false);
@@ -997,10 +1016,17 @@ const Agents = () => {
                     style={{ maxWidth: '100%', maxHeight: '70vh' }}
                   />
                 </div>
+              ) : previewData?.type === 'docx' ? (
+                <div className="table-preview" style={{ padding: '24px' }}>
+                  <div
+                    style={{ fontSize: '0.875rem', lineHeight: '1.6', color: '#1f2937' }}
+                    dangerouslySetInnerHTML={{ __html: previewData.html || '' }}
+                  />
+                </div>
               ) : previewData?.type === 'pdf' ? (
                 <div style={{ textAlign: 'center' }}>
                   <iframe
-                    src={`data:application/pdf;base64,${previewData.content}`}
+                    src={previewObjectUrl || `data:application/pdf;base64,${previewData.content}`}
                     style={{
                       width: '100%',
                       height: '70vh',
@@ -1014,7 +1040,7 @@ const Agents = () => {
                   <iframe
                     title={previewData.filename || 'html-preview'}
                     style={{ width: '100%', height: '70vh', border: 'none' }}
-                    src={`data:text/html;base64,${previewData.content}`}
+                    src={previewObjectUrl || `data:text/html;base64,${previewData.content}`}
                     sandbox=""
                   />
                 </div>
@@ -1043,7 +1069,7 @@ const Agents = () => {
                           try {
                             setPreviewLoading(true);
                             const qs = new URLSearchParams({ dataset: previewData.dataset }).toString();
-                            const data = await httpClient.requestJson(`/api/ragflow/documents/${encodeURIComponent(previewData.docId)}/preview?${qs}`);
+                            const data = await httpClient.requestJson(`/api/preview/documents/ragflow/${encodeURIComponent(previewData.docId)}/preview?${qs}`);
                             if (data?.type === 'html') {
                               setPreviewData({ ...(data || {}), docId: previewData.docId, dataset: previewData.dataset });
                             } else {

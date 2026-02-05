@@ -121,14 +121,10 @@ async def preview_document(
     ctx: AuthContextDep,
     dataset: str = "展厅",
 ):
-    import base64
-    from pathlib import Path
-
     logger.info("[PREVIEW] doc_id=%s dataset=%s user=%s", doc_id, dataset, ctx.payload.sub)
 
     deps = ctx.deps
     snapshot = ctx.snapshot
-    assert_can_download(snapshot)
     assert_kb_allowed(snapshot, dataset)
 
     try:
@@ -138,55 +134,9 @@ async def preview_document(
             logger.error(f"[PREVIEW] Failed to download document {doc_id}")
             raise HTTPException(status_code=404, detail="文档不存在")
 
-        file_ext = Path(filename).suffix.lower() if filename else ""
+        from backend.services.unified_preview import build_preview_payload
 
-        text_extensions = [".txt", ".md", ".csv", ".json", ".xml", ".log", ".svg", ".html", ".css", ".js"]
-        image_extensions = [".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp"]
-
-        if file_ext in text_extensions:
-            try:
-                text_content = file_content.decode("utf-8")
-                return {"type": "text", "filename": filename, "content": text_content}
-            except UnicodeDecodeError:
-                try:
-                    text_content = file_content.decode("gbk")
-                    return {"type": "text", "filename": filename, "content": text_content}
-                except Exception:
-                    logger.error("[PREVIEW] Failed to decode text file")
-                    raise HTTPException(status_code=400, detail="无法解码文本文件")
-
-        if file_ext in image_extensions:
-            base64_image = base64.b64encode(file_content).decode("utf-8")
-            image_type = file_ext[1:]
-            return {"type": "image", "filename": filename, "content": base64_image, "image_type": image_type}
-
-        if file_ext == ".pdf":
-            base64_pdf = base64.b64encode(file_content).decode("utf-8")
-            return {"type": "pdf", "filename": filename, "content": base64_pdf}
-
-        if file_ext == ".doc":
-            try:
-                from backend.services.office_to_html import convert_office_bytes_to_html_bytes
-
-                html_bytes = convert_office_bytes_to_html_bytes(file_content, filename=filename or "input.doc")
-                base64_html = base64.b64encode(html_bytes).decode("utf-8")
-                out_name = f"{Path(filename).stem}.html" if filename else f"document_{doc_id}.html"
-                return {"type": "html", "filename": out_name, "content": base64_html}
-            except Exception as e:
-                return {"type": "unsupported", "filename": filename, "message": f"DOC 在线预览不可用：{str(e)}"}
-
-        if file_ext in {".xlsx", ".xls"}:
-            try:
-                from backend.services.office_to_html import convert_office_bytes_to_html_bytes
-
-                html_bytes = convert_office_bytes_to_html_bytes(file_content, filename=filename or "input.xlsx")
-                base64_html = base64.b64encode(html_bytes).decode("utf-8")
-                out_name = f"{Path(filename).stem}.html" if filename else f"document_{doc_id}.html"
-                return {"type": "html", "filename": out_name, "content": base64_html}
-            except Exception as e:
-                return {"type": "unsupported", "filename": filename, "message": f"Excel 在线预览不可用：{str(e)}"}
-
-        return {"type": "unsupported", "filename": filename, "message": f"不支持的文件类型: {file_ext}，请下载后查看"}
+        return build_preview_payload(file_content, filename, doc_id=doc_id)
 
     except HTTPException:
         raise

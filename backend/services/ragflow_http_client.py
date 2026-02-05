@@ -23,6 +23,9 @@ class RagflowHttpClient:
     def config(self) -> RagflowHttpClientConfig:
         return self._config
 
+    def set_config(self, config: RagflowHttpClientConfig) -> None:
+        self._config = config
+
     def headers(self) -> dict[str, str]:
         return self._headers()
 

@@ -7,6 +7,10 @@ from ...ragflow_config import DEFAULT_RAGFLOW_BASE_URL
 
 class RagflowDocumentsMixin:
     def list_documents(self, dataset_name: str = "展厅") -> List[dict]:
+        reload_cfg = getattr(self, "_reload_config_if_changed", None)
+        if callable(reload_cfg):
+            reload_cfg()
+
         if not self.client:
             return []
 
@@ -44,6 +48,10 @@ class RagflowDocumentsMixin:
             return []
 
     def upload_document(self, file_path: str, kb_id: str = "展厅") -> str:
+        reload_cfg = getattr(self, "_reload_config_if_changed", None)
+        if callable(reload_cfg):
+            reload_cfg()
+
         if not self.client:
             raise ValueError("RAGFlow client not initialized")
 
@@ -63,6 +71,10 @@ class RagflowDocumentsMixin:
         return doc_id
 
     def upload_document_blob(self, file_filename: str, file_content: bytes, kb_id: str = "展厅") -> str:
+        reload_cfg = getattr(self, "_reload_config_if_changed", None)
+        if callable(reload_cfg):
+            reload_cfg()
+
         """
         Upload document to RAGFlow using official HTTP API
         Reference: https://ragflow.io/docs/http_api
@@ -175,6 +187,10 @@ class RagflowDocumentsMixin:
         return None
 
     def parse_documents(self, *, dataset_ref: str, document_ids: list[str]) -> bool:
+        reload_cfg = getattr(self, "_reload_config_if_changed", None)
+        if callable(reload_cfg):
+            reload_cfg()
+
         dataset_id = self._normalize_dataset_id_for_http(dataset_ref)
         if not dataset_id:
             self.logger.warning("parse_documents: cannot resolve dataset_id for dataset_ref=%r", dataset_ref)
@@ -216,9 +232,17 @@ class RagflowDocumentsMixin:
         return True
 
     def parse_document(self, *, dataset_ref: str, document_id: str) -> bool:
+        reload_cfg = getattr(self, "_reload_config_if_changed", None)
+        if callable(reload_cfg):
+            reload_cfg()
+
         return self.parse_documents(dataset_ref=dataset_ref, document_ids=[document_id])
 
     def delete_document(self, document_id: str, dataset_name: str = "展厅") -> bool:
+        reload_cfg = getattr(self, "_reload_config_if_changed", None)
+        if callable(reload_cfg):
+            reload_cfg()
+
         if not self.client:
             self.logger.error("RAGFlow client not initialized")
             return False
@@ -260,6 +284,10 @@ class RagflowDocumentsMixin:
             return False
 
     def get_document_status(self, document_id: str, dataset_name: str = "展厅") -> Optional[str]:
+        reload_cfg = getattr(self, "_reload_config_if_changed", None)
+        if callable(reload_cfg):
+            reload_cfg()
+
         if not self.client:
             return None
 
@@ -280,6 +308,10 @@ class RagflowDocumentsMixin:
             return None
 
     def get_document_detail(self, document_id: str, dataset_name: str = "展厅") -> Optional[dict]:
+        reload_cfg = getattr(self, "_reload_config_if_changed", None)
+        if callable(reload_cfg):
+            reload_cfg()
+
         if not self.client:
             return None
 
@@ -312,6 +344,10 @@ class RagflowDocumentsMixin:
             return None
 
     def download_document(self, document_id: str, dataset_name: str = "展厅"):
+        reload_cfg = getattr(self, "_reload_config_if_changed", None)
+        if callable(reload_cfg):
+            reload_cfg()
+
         if not self.client:
             raise ValueError("RAGFlow client not initialized")
 
@@ -355,6 +391,10 @@ class RagflowDocumentsMixin:
             return None, None
 
     def batch_download_documents(self, documents_info: list) -> tuple:
+        reload_cfg = getattr(self, "_reload_config_if_changed", None)
+        if callable(reload_cfg):
+            reload_cfg()
+
         import io
         import zipfile
         import time
@@ -385,4 +425,3 @@ class RagflowDocumentsMixin:
 
         zip_buffer.seek(0)
         return zip_buffer.getvalue(), zip_filename
-

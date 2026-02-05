@@ -47,7 +47,7 @@ const Layout = ({ children }) => {
           alignItems: 'center',
         }}>
           <h2 style={{ margin: 0, fontSize: sidebarOpen ? '1.5rem' : '0.9rem' }}>
-            {sidebarOpen ? '权限管理' : 'Auth'}
+            {sidebarOpen ? '瑛泰知识库' : 'KB'}
           </h2>
           <button
             onClick={() => setSidebarOpen(!sidebarOpen)}

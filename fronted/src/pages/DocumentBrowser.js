@@ -2,9 +2,8 @@ import React, { useEffect, useState, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import authClient from '../api/authClient';
-import ReactMarkdown from 'react-markdown';
-import mammoth from 'mammoth';
-import * as XLSX from 'xlsx';
+import { MarkdownPreview } from '../shared/preview/markdownPreview';
+import { loadRagflowPreview } from '../shared/preview/ragflowPreviewManager';
 import * as pdfjsLib from 'pdfjs-dist';
 
 // Configure PDF.js worker to use local file
@@ -70,6 +69,7 @@ const DocumentBrowser = () => {
   const [actionLoading, setActionLoading] = useState({});
   const [selectedDocs, setSelectedDocs] = useState({});
   const [previewUrl, setPreviewUrl] = useState(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
   const [previewDocName, setPreviewDocName] = useState(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [markdownContent, setMarkdownContent] = useState(null);
@@ -84,6 +84,7 @@ const DocumentBrowser = () => {
   const [pdfScale, setPdfScale] = useState(1.5);
   const canvasRef = useRef(null);
   const handleViewRef = useRef(null);
+  const closePreviewRef = useRef(null);
   const previewDocIdRef = useRef(null);
   const previewDatasetRef = useRef(null);
   const [imageScale, setImageScale] = useState(1);
@@ -289,8 +290,10 @@ const DocumentBrowser = () => {
   const handleView = async (docId, datasetName) => {
     const doc = documents[datasetName]?.find(d => d.id === docId);
     const docName = doc?.name || `document_${docId}`;
+    const canDownloadFiles = typeof canDownload === 'function' ? !!canDownload() : false;
 
     try {
+      setPreviewOpen(true);
       setPreviewLoading(true);
       setActionLoading(prev => ({ ...prev, [`${docId}-view`]: true }));
       previewDocIdRef.current = docId;
@@ -304,6 +307,8 @@ const DocumentBrowser = () => {
       setPdfDocument(null);
       setPdfNumPages(0);
       setPdfCurrentPage(1);
+      if (previewUrl) window.URL.revokeObjectURL(previewUrl);
+      setPreviewUrl(null);
 
       // Reset image state
       if (isImageFile(docName)) {
@@ -311,91 +316,98 @@ const DocumentBrowser = () => {
         setImageRotation(0);
       }
 
-      if (isMarkdownFile(docName)) {
-        const blob = await authClient.previewRagflowDocumentBlob(docId, datasetName, docName);
-        const url = window.URL.createObjectURL(blob);
-        const text = await blob.text();
-        setMarkdownContent(text);
-        setPreviewUrl(url);
-      } else if (isPlainTextFile(docName)) {
-        const blob = await authClient.previewRagflowDocumentBlob(docId, datasetName, docName);
-        const url = window.URL.createObjectURL(blob);
-        const text = await blob.text();
-        setPlainTextContent(text);
-        setPreviewUrl(url);
-      } else if (isDocxFile(docName)) {
-        const blob = await authClient.previewRagflowDocumentBlob(docId, datasetName, docName);
-        const url = window.URL.createObjectURL(blob);
-        const arrayBuffer = await blob.arrayBuffer();
-        const result = await mammoth.convertToHtml({ arrayBuffer });
-        setDocxContent(result.value);
-        setPreviewUrl(url);
-      } else if (isDocFile(docName)) {
-        // Use backend preview endpoint: it can convert legacy .doc to HTML for online viewing.
-        const data = await authClient.previewDocument(docId, datasetName);
-        if (data?.type !== 'html' || !data?.content) {
-          throw new Error(data?.message || '此文件类型不支持在线预览，请下载后查看');
-        }
-
-        const binary = atob(data.content);
+      // Unified preview flow (same as Chat/Search): call backend /preview first, and only use /download when allowed.
+      // This keeps "view" working even without download permission.
+      const base64ToBytes = (b64) => {
+        const binary = atob(b64 || '');
         const bytes = new Uint8Array(binary.length);
         for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+        return bytes;
+      };
+
+      const mimeFromImageType = (imageType) => {
+        const t = String(imageType || '').toLowerCase();
+        if (t === 'jpg') return 'image/jpeg';
+        if (t === 'svg') return 'image/svg+xml';
+        return t ? `image/${t}` : 'application/octet-stream';
+      };
+
+      const payload = await loadRagflowPreview({
+        docId,
+        dataset: datasetName,
+        title: docName,
+        getPreviewJson: async ({ docId, dataset }) => authClient.previewDocument(docId, dataset),
+        getDownloadBlob: canDownloadFiles
+          ? async ({ docId, dataset, filename }) => authClient.previewRagflowDocumentBlob(docId, dataset, filename)
+          : undefined,
+      });
+
+      const resolvedName = String(payload?.filename || docName);
+      setPreviewDocName(resolvedName);
+
+      if (payload?.type === 'excel') {
+        setExcelData(payload.sheets || {});
+        setExcelRenderHint('如果 Excel 里包含流程图/形状，表格模式可能看不到；可点“原样预览(HTML)”查看。');
+        return;
+      }
+
+      if (payload?.type === 'docx') {
+        setDocxContent(payload.html || '');
+        return;
+      }
+
+      if (payload?.type === 'text') {
+        const text = String(payload.content || '');
+        if (isCsvFile(resolvedName)) {
+          const firstLine = String(text || '').split(/\r?\n/)[0] || '';
+          const delimiter = detectDelimiter(firstLine);
+          const rows = parseDelimited(text, delimiter);
+          const { html, truncated } = rowsToHtmlTable(rows);
+          setExcelData({ CSV: html });
+          setExcelRenderHint(null);
+          if (truncated) console.warn('[preview] CSV truncated for display (too large).');
+          return;
+        }
+        if (isMarkdownFile(resolvedName)) setMarkdownContent(text);
+        else setPlainTextContent(text);
+        return;
+      }
+
+      if (payload?.type === 'html') {
+        if (!payload?.content) throw new Error(payload?.message || 'Unsupported preview');
+        const bytes = base64ToBytes(payload.content);
         const blob = new Blob([bytes], { type: 'text/html; charset=utf-8' });
         const url = window.URL.createObjectURL(blob);
-        setPdfDocument(null);
-        setPdfNumPages(0);
-        setPdfCurrentPage(1);
         setPreviewUrl(url);
-        if (data?.filename) setPreviewDocName(data.filename);
-      } else if (isPptxFile(docName)) {
-        const blob = await authClient.previewRagflowDocumentBlob(docId, datasetName, docName);
-        const url = window.URL.createObjectURL(blob);
-        setPreviewUrl(url);
-      } else if (isExcelFile(docName)) {
-        const blob = await authClient.previewRagflowDocumentBlob(docId, datasetName, docName);
+        return;
+      }
+
+      if (payload?.type === 'pdf') {
+        if (!payload?.content) throw new Error(payload?.message || 'PDF preview failed');
+        const bytes = base64ToBytes(payload.content);
+        const blob = new Blob([bytes], { type: 'application/pdf' });
         const url = window.URL.createObjectURL(blob);
         const arrayBuffer = await blob.arrayBuffer();
-        const workbook = XLSX.read(arrayBuffer, { type: 'array' });
-        const sheetNames = workbook.SheetNames;
-        const sheetsData = {};
-
-        sheetNames.forEach(sheetName => {
-          const worksheet = workbook.Sheets[sheetName];
-          const html = XLSX.utils.sheet_to_html(worksheet);
-          sheetsData[sheetName] = html;
-        });
-
-        setExcelData(sheetsData);
-        setExcelRenderHint('如果 Excel 里包含流程图/形状，表格模式可能看不到；可点“原样预览(HTML)”查看。');
-        setPreviewUrl(url);
-      } else if (isCsvFile(docName)) {
-        const blob = await authClient.previewRagflowDocumentBlob(docId, datasetName, docName);
-        const url = window.URL.createObjectURL(blob);
-        const text = await blob.text();
-        const firstLine = String(text || '').split(/\r?\n/)[0] || '';
-        const delimiter = detectDelimiter(firstLine);
-        const rows = parseDelimited(text, delimiter);
-        const { html, truncated } = rowsToHtmlTable(rows);
-        setExcelData({ CSV: html });
-        setExcelRenderHint(null);
-        setPreviewUrl(url);
-        if (truncated) console.warn('[preview] CSV truncated for display (too large).');
-      } else if (isPdfFile(docName)) {
-        const blob = await authClient.previewRagflowDocumentBlob(docId, datasetName, docName);
-        const url = window.URL.createObjectURL(blob);
-        const arrayBuffer = await blob.arrayBuffer();
-
         const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
         const pdf = await loadingTask.promise;
-
         setPdfDocument(pdf);
         setPdfNumPages(pdf.numPages);
         setPdfCurrentPage(1);
         setPreviewUrl(url);
-      } else {
-        const url = await authClient.previewRagflowDocument(docId, datasetName, docName);
-        setPreviewUrl(url);
+        return;
       }
+
+      if (payload?.type === 'image') {
+        if (!payload?.content) throw new Error(payload?.message || 'Image preview failed');
+        const bytes = base64ToBytes(payload.content);
+        const mime = payload?.mime_type || mimeFromImageType(payload?.image_type);
+        const blob = new Blob([bytes], { type: mime });
+        const url = window.URL.createObjectURL(blob);
+        setPreviewUrl(url);
+        return;
+      }
+
+      throw new Error(payload?.message || 'Unsupported preview');
     } catch (err) {
       setError(err.message || '预览失败');
       setPreviewUrl(null);
@@ -417,6 +429,7 @@ const DocumentBrowser = () => {
     if (previewUrl) {
       window.URL.revokeObjectURL(previewUrl);
     }
+    setPreviewOpen(false);
     setPreviewUrl(null);
     setPreviewDocName(null);
     previewDocIdRef.current = null;
@@ -430,6 +443,19 @@ const DocumentBrowser = () => {
     setPdfNumPages(0);
     setPdfCurrentPage(1);
   };
+
+  closePreviewRef.current = closePreview;
+
+  useEffect(() => {
+    if (!previewOpen) return;
+    const onKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        if (closePreviewRef.current) closePreviewRef.current();
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [previewOpen]);
 
   const isGenericPreviewable = (filename) => {
     if (!filename) return false;
@@ -454,12 +480,6 @@ const DocumentBrowser = () => {
     if (!filename) return false;
     const ext = filename.toLowerCase().split('.').pop();
     return ext === 'docx';
-  };
-
-  const isDocFile = (filename) => {
-    if (!filename) return false;
-    const ext = filename.toLowerCase().split('.').pop();
-    return ext === 'doc';
   };
 
   const isPptxFile = (filename) => {
@@ -584,12 +604,6 @@ const DocumentBrowser = () => {
     const table = `<table>${thead}${tbody}</table>`;
     const truncated = rows.length > maxRows || rows.some((r) => (r?.length || 0) > maxCols);
     return { html: table, truncated };
-  };
-
-  const isPdfFile = (filename) => {
-    if (!filename) return false;
-    const ext = filename.toLowerCase().split('.').pop();
-    return ext === 'pdf';
   };
 
   const isImageFile = (filename) => {
@@ -1121,7 +1135,7 @@ const DocumentBrowser = () => {
         </div>
       )}
 
-      {previewUrl && (
+      {previewOpen && (
         <div
           onClick={closePreview}
           data-testid="browser-preview-modal"
@@ -1196,22 +1210,7 @@ const DocumentBrowser = () => {
                   <div style={{ color: '#6b7280' }}>加载中...</div>
                 </div>
               ) : isMarkdownFile(previewDocName) ? (
-                <div style={{
-                  padding: '24px',
-                  backgroundColor: 'white',
-                  borderRadius: '8px',
-                  height: '70vh',
-                  overflow: 'auto',
-                  border: '1px solid #e5e7eb'
-                }}>
-                  <div style={{
-                    fontSize: '0.875rem',
-                    lineHeight: '1.6',
-                    color: '#1f2937'
-                  }}>
-                    <ReactMarkdown>{markdownContent}</ReactMarkdown>
-                  </div>
-                </div>
+                <MarkdownPreview content={markdownContent} />
               ) : isPlainTextFile(previewDocName) ? (
                 <div style={{
                   padding: '24px',

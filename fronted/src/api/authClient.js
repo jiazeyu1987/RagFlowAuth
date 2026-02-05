@@ -407,6 +407,20 @@ class AuthClient {
     return { success: true, filename };
   }
 
+  async downloadLocalDocumentBlob(docId) {
+    const response = await this.fetchWithAuth(
+      authBackendUrl(`/api/knowledge/documents/${docId}/download`),
+      { method: 'GET' }
+    );
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(error.detail || 'Failed to download document');
+    }
+
+    return response.blob();
+  }
+
   async batchDownloadLocalDocuments(docIds) {
     const response = await this.fetchWithAuth(
       authBackendUrl('/api/knowledge/documents/batch/download'),
@@ -568,12 +582,26 @@ class AuthClient {
     const params = new URLSearchParams({ dataset });
 
     const response = await this.fetchWithAuth(
-      authBackendUrl(`/api/ragflow/documents/${docId}/preview?${params}`),
+      authBackendUrl(`/api/preview/documents/ragflow/${docId}/preview?${params}`),
       { method: 'GET' }
     );
 
     if (!response.ok) {
       const error = await response.json();
+      throw new Error(error.detail || 'Failed to preview document');
+    }
+
+    return await response.json();
+  }
+
+  async previewKnowledgeDocument(docId) {
+    const response = await this.fetchWithAuth(
+      authBackendUrl(`/api/preview/documents/knowledge/${docId}/preview`),
+      { method: 'GET' }
+    );
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
       throw new Error(error.detail || 'Failed to preview document');
     }
 

@@ -2,14 +2,13 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { reviewApi } from '../features/review/api';
 import { knowledgeApi } from '../features/knowledge/api';
-import { authBackendUrl } from '../config/backend';
-import ReactMarkdown from 'react-markdown';
-import { httpClient } from '../shared/http/httpClient';
+import { MarkdownPreview } from '../shared/preview/markdownPreview';
 import ReactDiffViewer from 'react-diff-viewer-continued';
 import mammoth from 'mammoth';
 import { excelArrayBufferToSheetsHtml } from '../shared/preview/excelPreview';
 import { ensureTablePreviewStyles } from '../shared/preview/tablePreviewStyles';
 import { useEscapeClose } from '../shared/hooks/useEscapeClose';
+import authClient from '../api/authClient';
 
 const escapeHtml = (s) =>
   String(s ?? '')
@@ -192,12 +191,6 @@ const DocumentReview = ({ embedded = false }) => {
     return ext === 'docx';
   };
 
-  const isDocFile = (filename) => {
-    if (!filename) return false;
-    const ext = filename.toLowerCase().split('.').pop();
-    return ext === 'doc';
-  };
-
   const isExcelFile = (filename) => {
     if (!filename) return false;
     const ext = filename.toLowerCase().split('.').pop();
@@ -210,19 +203,17 @@ const DocumentReview = ({ embedded = false }) => {
     return ext === 'csv';
   };
 
-  const fetchLocalPreviewBlob = async (docId, { render } = {}) => {
-    const params = new URLSearchParams();
-    if (render) params.set('render', render);
-    const qs = params.toString();
-    const response = await httpClient.request(
-      authBackendUrl(`/api/knowledge/documents/${docId}/preview${qs ? `?${qs}` : ''}`),
-      { method: 'GET' }
-    );
-    if (!response.ok) {
-      const data = await response.json().catch(() => ({}));
-      throw new Error(data?.detail || `预览失败 (${response.status})`);
-    }
-    return response.blob();
+  const base64ToBlobUrl = (b64, mime) => {
+    const binary = atob(b64 || '');
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    const blob = new Blob([bytes], { type: mime || 'application/octet-stream' });
+    return window.URL.createObjectURL(blob);
+  };
+
+  const fetchLocalPreviewJson = async (docId) => {
+    // Unified preview gateway: returns the same JSON contract as ragflow preview.
+    return await authClient.previewKnowledgeDocument(docId);
   };
 
   const isTextComparable = (filename) => isMarkdownFile(filename) || isPlainTextFile(filename);
@@ -234,13 +225,11 @@ const DocumentReview = ({ embedded = false }) => {
   };
 
   const fetchLocalPreviewText = async (docId) => {
-    const response = await httpClient.request(authBackendUrl(`/api/knowledge/documents/${docId}/preview`), { method: 'GET' });
-    if (!response.ok) {
-      const data = await response.json().catch(() => ({}));
-      throw new Error(data?.detail || `预览失败 (${response.status})`);
+    const data = await fetchLocalPreviewJson(docId);
+    if (data?.type !== 'text') {
+      throw new Error(data?.message || '预览失败：非文本文件');
     }
-    const blob = await response.blob();
-    return await blob.text();
+    return String(data.content || '');
   };
 
   const openDiff = async (oldDocId, oldFilename, newDocId, newFilename) => {
@@ -284,47 +273,71 @@ const DocumentReview = ({ embedded = false }) => {
     setPreviewUrl(null);
 
     try {
-      const blob = await fetchLocalPreviewBlob(docId);
-      const url = window.URL.createObjectURL(blob);
-      setPreviewUrl(url);
+      const data = await fetchLocalPreviewJson(docId);
+      const title = filename || data?.source_filename || data?.filename || `document_${docId}`;
+      setPreviewDocName(title);
 
-      if (isMarkdownFile(filename)) {
-        const text = await blob.text();
-        setPreviewKind('md');
+      if (data?.type === 'text') {
+        const text = String(data.content || '');
+        if (isCsvFile(title)) {
+          const firstLine = String(text || '').split(/\r?\n/)[0] || '';
+          const delimiter = detectDelimiter(firstLine);
+          const rows = parseDelimited(text, delimiter);
+          const { html, truncated } = rowsToHtmlTable(rows);
+          setPreviewKind('excel');
+          setPreviewExcelData({ CSV: html });
+          setPreviewExcelNote(null);
+          if (truncated) setPreviewExcelNote('提示：内容较大，已在页面中截断显示（请下载查看完整内容）。');
+          return;
+        }
+        if (isMarkdownFile(title)) setPreviewKind('md');
+        else setPreviewKind('text');
         setPreviewText(text);
-      } else if (isPlainTextFile(filename)) {
-        const text = await blob.text();
-        setPreviewKind('text');
-        setPreviewText(text);
-      } else if (isDocFile(filename)) {
-        const htmlBlob = await fetchLocalPreviewBlob(docId, { render: 'html' });
-        const url2 = window.URL.createObjectURL(htmlBlob);
-        if (previewUrl) window.URL.revokeObjectURL(previewUrl);
-        setPreviewUrl(url2);
-        setPreviewKind('blob');
-      } else if (isDocxFile(filename)) {
+        return;
+      }
+
+      // Prefer client-side parsing when the user can download.
+      if (canDownload() && isDocxFile(title)) {
+        const blob = await authClient.downloadLocalDocumentBlob(docId);
         const arrayBuffer = await blob.arrayBuffer();
         const result = await mammoth.convertToHtml({ arrayBuffer });
         setPreviewKind('html');
         setPreviewHtml(result.value || '');
-      } else if (isExcelFile(filename)) {
+        return;
+      }
+      if (canDownload() && isExcelFile(title)) {
+        const blob = await authClient.downloadLocalDocumentBlob(docId);
         const arrayBuffer = await blob.arrayBuffer();
         const { sheets } = excelArrayBufferToSheetsHtml(arrayBuffer);
-        const sheetsData = sheets;
         setPreviewKind('excel');
-        setPreviewExcelData(sheetsData);
-      } else if (isCsvFile(filename)) {
-        const text = await blob.text();
-        const firstLine = String(text || '').split(/\r?\n/)[0] || '';
-        const delimiter = detectDelimiter(firstLine);
-        const rows = parseDelimited(text, delimiter);
-        const { html, truncated } = rowsToHtmlTable(rows);
-        setPreviewKind('excel');
-        setPreviewExcelData({ CSV: html });
-        if (truncated) setPreviewExcelNote('提示：内容较大，已在页面中截断显示（请下载查看完整内容）。');
-      } else {
-        setPreviewKind('blob');
+        setPreviewExcelData(sheets);
+        setPreviewExcelNote(null);
+        return;
       }
+
+      if (data?.type === 'pdf' && data?.content) {
+        const url = base64ToBlobUrl(data.content, 'application/pdf');
+        setPreviewUrl(url);
+        setPreviewKind('blob');
+        return;
+      }
+      if (data?.type === 'image' && data?.content) {
+        const ext = String(data.image_type || '').toLowerCase();
+        const mime =
+          ext === 'jpg' ? 'image/jpeg' : ext === 'svg' ? 'image/svg+xml' : ext ? `image/${ext}` : 'application/octet-stream';
+        const url = base64ToBlobUrl(data.content, mime);
+        setPreviewUrl(url);
+        setPreviewKind('blob');
+        return;
+      }
+      if (data?.type === 'html' && data?.content) {
+        const url = base64ToBlobUrl(data.content, 'text/html; charset=utf-8');
+        setPreviewUrl(url);
+        setPreviewKind('blob');
+        return;
+      }
+
+      throw new Error(data?.message || '此文件类型不支持在线预览');
     } catch (e) {
       closePreview();
       setError(e.message || '预览失败');
@@ -829,11 +842,7 @@ const DocumentReview = ({ embedded = false }) => {
               {previewing ? (
                 <div style={{ color: '#6b7280', padding: '24px' }}>加载中…</div>
               ) : previewKind === 'md' ? (
-                <div style={{ padding: '24px' }}>
-                  <div style={{ fontSize: '0.875rem', lineHeight: '1.6', color: '#1f2937' }}>
-                    <ReactMarkdown>{previewText || ''}</ReactMarkdown>
-                  </div>
-                </div>
+                <MarkdownPreview content={previewText || ''} />
               ) : previewKind === 'text' ? (
                 <pre
                   style={{
@@ -886,8 +895,11 @@ const DocumentReview = ({ embedded = false }) => {
                           try {
                             setError(null);
                             setPreviewing(true);
-                            const htmlBlob = await fetchLocalPreviewBlob(previewDocId, { render: 'html' });
-                            const url = window.URL.createObjectURL(htmlBlob);
+                            const data = await fetchLocalPreviewJson(previewDocId);
+                            if (!data?.type || data.type !== 'html' || !data.content) {
+                              throw new Error(data?.message || '无法进行原样预览(HTML)');
+                            }
+                            const url = base64ToBlobUrl(data.content, 'text/html; charset=utf-8');
                             if (previewUrl) window.URL.revokeObjectURL(previewUrl);
                             setPreviewUrl(url);
                             setPreviewKind('blob');

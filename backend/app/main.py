@@ -72,6 +72,7 @@ def create_app() -> FastAPI:
         me,
         org_directory,
         permission_groups,
+        preview,
         ragflow,
         review,
         users,
@@ -82,6 +83,7 @@ def create_app() -> FastAPI:
     app.include_router(knowledge.router, prefix="/api/knowledge", tags=["Knowledge Base"])
     app.include_router(review.router, prefix="/api/knowledge", tags=["Document Review"])
     app.include_router(ragflow.router, prefix="/api/ragflow", tags=["RAGFlow Integration"])
+    app.include_router(preview.router, prefix="/api", tags=["Preview Gateway"])
     app.include_router(chat.router, prefix="/api", tags=["Chat"])
     app.include_router(agents.router, prefix="/api", tags=["Agents"])
     app.include_router(me.router, prefix="/api", tags=["Me"])

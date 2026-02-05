@@ -28,6 +28,8 @@ class TestReleasePublishDataTestToProdUnit(unittest.TestCase):
             # stop verification checks
             if "RAGFLOWAUTH_STOP_CHECK" in cmd:
                 return True, "STOPPED"
+            if "infiniflow/ragflow" in cmd and "docker ps" in cmd:
+                return True, "OK"
             return True, "OK"
 
         before = ServerVersionInfo(
@@ -70,3 +72,9 @@ class TestReleasePublishDataTestToProdUnit(unittest.TestCase):
         read_prod = any(ip == PROD_SERVER_IP and "ragflow_config.json" in cmd and "sed -n" in cmd for ip, cmd in calls_ssh)
         self.assertTrue(read_test)
         self.assertTrue(read_prod)
+
+        # Stop/verify should include the "stop ragflow stack by image" fallback (not name-prefix only).
+        has_stop_by_image = any(
+            "docker ps -q" in cmd and "ancestor=infiniflow/ragflow" in cmd and "sort -u" in cmd for _, cmd in calls_ssh
+        )
+        self.assertTrue(has_stop_by_image, "expected stop-by-image fallback in ssh commands")
