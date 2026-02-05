@@ -10,6 +10,7 @@ from tool.maintenance.core.ssh_executor import SSHExecutor
 
 
 DEFAULT_REMOTE_APP_DIR = "/opt/ragflowauth"
+DEFAULT_REMOTE_STAGING_DIR = "/var/lib/docker/tmp"
 
 
 @dataclass(frozen=True)
@@ -431,8 +432,9 @@ def publish_from_test_to_prod(
         )
     tag = (version or time.strftime("%Y%m%d_%H%M%S", time.localtime())).strip()
     releases_dir = f"{app_dir}/releases"
-    tar_on_test = f"/tmp/ragflowauth_release_{tag}.tar"
-    tar_on_prod = f"/tmp/ragflowauth_release_{tag}.tar"
+    # Store large image tar on the biggest partition (avoid filling rootfs).
+    tar_on_test = f"{DEFAULT_REMOTE_STAGING_DIR}/ragflowauth_release_{tag}.tar"
+    tar_on_prod = f"{DEFAULT_REMOTE_STAGING_DIR}/ragflowauth_release_{tag}.tar"
 
     log(f"TEST={test_ip} PROD={prod_ip} VERSION={tag}")
     log(f"Detected TEST images: backend={test_version.backend_image} frontend={test_version.frontend_image}")
@@ -483,6 +485,18 @@ def publish_from_test_to_prod(
         log(f"[ERROR] PROD mkdir failed: {out}")
         return PublishResult(False, "\n".join(log_lines), version_before, None)
 
+    # Ensure staging dirs exist (best-effort).
+    _ssh_cmd(test_ip, f"mkdir -p {DEFAULT_REMOTE_STAGING_DIR} 2>/dev/null || true")
+    _ssh_cmd(prod_ip, f"mkdir -p {DEFAULT_REMOTE_STAGING_DIR} 2>/dev/null || true")
+
+    # Cleanup legacy rootfs temp files on PROD (previous versions wrote tar under /tmp).
+    # This is safe and helps prevent root partition from filling up silently.
+    log("[CLEANUP] Remove legacy /tmp release tar files on PROD (rootfs)")
+    _ssh_cmd(
+        prod_ip,
+        "rm -f /tmp/ragflowauth_release_*.tar /tmp/ragflowauth-images_*.tar /tmp/volumes*.tar* /tmp/images*.tar* 2>/dev/null || true",
+    )
+
     log("[2/6] Export images on TEST (docker save)")
     images_to_save = [test_version.backend_image, test_version.frontend_image] + ragflow_images
     # Deduplicate while keeping order
@@ -522,11 +536,17 @@ def publish_from_test_to_prod(
         log(f"[ERROR] scp tar failed: {out}")
         return PublishResult(False, "\n".join(log_lines), version_before, None)
 
+    # Cleanup TEST tar after successful transfer (avoid filling rootfs).
+    _ssh_cmd(test_ip, f"rm -f {tar_on_test} 2>/dev/null || true")
+
     log("[4/6] Load images on PROD (docker load)")
     ok, out = _ssh_cmd(prod_ip, f"docker load -i {tar_on_prod}")
     if not ok:
         log(f"[ERROR] docker load failed: {out}")
         return PublishResult(False, "\n".join(log_lines), version_before, None)
+
+    # Cleanup PROD tar after successful load.
+    _ssh_cmd(prod_ip, f"rm -f {tar_on_prod} 2>/dev/null || true")
 
     log("[5/6] Recreate PROD containers with TEST images")
     prod_backend = _docker_inspect(prod_ip, "ragflowauth-backend")

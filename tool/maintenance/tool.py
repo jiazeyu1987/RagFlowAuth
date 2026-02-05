@@ -1094,6 +1094,24 @@ class RagflowAuthTool:
                     self.status_bar.config(text="发布本机->测试中...")
                 log_to_file("[Release] Start publish local->test", "INFO")
 
+                def ui_log(line: str) -> None:
+                    if not hasattr(self, "release_local_log_text"):
+                        return
+
+                    def _append() -> None:
+                        try:
+                            self.release_local_log_text.insert(tk.END, line + "\n")
+                            self.release_local_log_text.see(tk.END)
+                        except Exception:
+                            pass
+
+                    try:
+                        self.root.after(0, _append)
+                    except Exception:
+                        pass
+
+                ui_log("[START] 发布本机 -> 测试：开始执行（可能需要较长时间，请勿关闭工具）")
+
                 # Guardrail: ensure each environment reads its own RAGFlow.
                 self._guard_ragflow_base_url(role="local", stage="LOCAL->TEST PRE")
                 self._guard_ragflow_base_url(role="test", stage="LOCAL->TEST PRE")
@@ -1102,9 +1120,7 @@ class RagflowAuthTool:
                 except Exception:
                     pass
 
-                result = feature_publish_from_local_to_test(version=self._release_version_arg())
-                if hasattr(self, "release_local_log_text"):
-                    self.release_local_log_text.insert(tk.END, (result.log or "") + "\n")
+                result = feature_publish_from_local_to_test(version=self._release_version_arg(), ui_log=ui_log)
 
                 # Show before/after on test
                 if result.version_before and hasattr(self, "release_test_before_text"):
@@ -1124,6 +1140,7 @@ class RagflowAuthTool:
                     for line in (result.log or "").splitlines():
                         log_to_file(f"[ReleaseFlow] {line}", "INFO")
                     log_to_file("[Release] Publish local->test succeeded", "INFO")
+                    ui_log("[DONE] 发布本机 -> 测试：成功")
                     if hasattr(self, "status_bar"):
                         self.status_bar.config(text="发布本机->测试：成功")
 
@@ -1160,6 +1177,7 @@ class RagflowAuthTool:
                     for line in (result.log or "").splitlines():
                         log_to_file(f"[ReleaseFlow] {line}", "ERROR")
                     log_to_file("[Release] Publish local->test failed", "ERROR")
+                    ui_log("[DONE] 发布本机 -> 测试：失败（请查看上方日志与 tool_log.log）")
                     if hasattr(self, "status_bar"):
                         self.status_bar.config(text="发布本机->测试：失败")
             except Exception as e:

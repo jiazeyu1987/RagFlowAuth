@@ -21,6 +21,11 @@ class TestReleasePublishLocalToTestUnit(unittest.TestCase):
 
         def fake_run_local(command: str, *, cwd=None, timeout_s: int = 3600):
             calls.append(command)
+            if command.strip().startswith("ssh ") and "df -Pk" in command:
+                # Filesystem 1024-blocks Used Available Capacity Mounted on
+                return True, "/dev/vdb 102400 0 102400 0% /tmp"
+            if command.strip().startswith("ssh ") and "echo OK" in command:
+                return True, "OK"
             # Simulate docker save creating the tar file.
             if "docker save" in command and "-o" in command:
                 # Extract quoted tar path (simple heuristic).
@@ -83,6 +88,10 @@ class TestReleasePublishLocalToTestUnit(unittest.TestCase):
 
         def fake_run_local(command: str, *, cwd=None, timeout_s: int = 3600):
             calls.append(command)
+            if command.strip().startswith("ssh ") and "df -Pk" in command:
+                return True, "/dev/vdb 102400 0 102400 0% /tmp"
+            if command.strip().startswith("ssh ") and "echo OK" in command:
+                return True, "OK"
             # Simulate docker save creating the tar file.
             if "docker save" in command and "-o" in command:
                 marker = '-o "'
@@ -130,3 +139,59 @@ class TestReleasePublishLocalToTestUnit(unittest.TestCase):
 
         mock_recreate.assert_called()
         mock_bootstrap.assert_called()
+
+    def test_ui_log_callback_receives_progress_lines(self) -> None:
+        tmp_root = Path(tempfile.mkdtemp(prefix="ragflowauth_ut_"))
+
+        def fake_mkdtemp(prefix: str):
+            return str(tmp_root)
+
+        def fake_run_local(command: str, *, cwd=None, timeout_s: int = 3600):
+            # Simulate docker save creating the tar file.
+            if command.strip().startswith("ssh ") and "df -Pk" in command:
+                return True, "/dev/vdb 102400 0 102400 0% /tmp"
+            if command.strip().startswith("ssh ") and "echo OK" in command:
+                return True, "OK"
+            if "docker save" in command and "-o" in command:
+                marker = '-o "'
+                if marker in command:
+                    tar_path = command.split(marker, 1)[1].split('"', 1)[0]
+                    Path(tar_path).write_bytes(b"tar")
+            return True, "ok"
+
+        before = ServerVersionInfo(
+            server_ip=TEST_SERVER_IP,
+            backend_image="ragflowauth-backend:old",
+            frontend_image="ragflowauth-frontend:old",
+            compose_path="",
+            env_path="",
+            compose_sha256="",
+            env_sha256="",
+        )
+        after = ServerVersionInfo(
+            server_ip=TEST_SERVER_IP,
+            backend_image="ragflowauth-backend:new",
+            frontend_image="ragflowauth-frontend:new",
+            compose_path="",
+            env_path="",
+            compose_sha256="",
+            env_sha256="",
+        )
+
+        ui_lines: list[str] = []
+
+        with patch.object(release_publish_local_to_test, "_run_local", side_effect=fake_run_local), patch.object(
+            release_publish_local_to_test.tempfile, "mkdtemp", side_effect=fake_mkdtemp
+        ), patch.object(
+            release_publish_local_to_test, "docker_load_tar_on_server", return_value=(True, "OK")
+        ), patch.object(
+            release_publish_local_to_test, "recreate_server_containers_from_inspect", return_value=(True, "OK")
+        ), patch.object(
+            release_publish_local_to_test, "preflight_check_ragflow_base_url", return_value=True
+        ), patch.object(
+            release_publish_local_to_test, "get_server_version_info", side_effect=[before, after]
+        ):
+            res = release_publish_local_to_test.publish_from_local_to_test(version="v123", ui_log=ui_lines.append)
+            self.assertTrue(res.ok, res.log)
+
+        self.assertTrue(any("LOCAL -> TEST" in ln for ln in ui_lines), ui_lines[:5])
