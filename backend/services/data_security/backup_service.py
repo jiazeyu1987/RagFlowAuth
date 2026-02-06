@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import logging
+import shutil
 import time
 from pathlib import Path
 
@@ -25,6 +27,56 @@ from .docker_utils import (
 # Keep a compatibility helper for older modules that import `_run` from `data_security_backup`.
 def _run(cmd: list[str], *, cwd: Path | None = None) -> tuple[int, str]:
     return run_cmd(cmd, cwd=cwd)
+
+
+def _list_migration_packs(target_dir: Path) -> list[Path]:
+    """
+    List `migration_pack_*` directories under target_dir, oldest-first.
+
+    Sorting uses mtime as a best-effort proxy for creation time. We deliberately avoid parsing
+    timestamps from names because older backups may include different suffixes.
+    """
+    try:
+        items = [p for p in target_dir.iterdir() if p.is_dir() and p.name.startswith("migration_pack_")]
+    except Exception:
+        return []
+
+    def _mtime(p: Path) -> float:
+        try:
+            return float(p.stat().st_mtime)
+        except Exception:
+            return 0.0
+
+    return sorted(items, key=_mtime)
+
+
+def _prune_old_backup_packs(*, target_dir: Path, keep_max: int, keep_dir: Path) -> list[Path]:
+    """
+    Prune old migration packs under `target_dir`, keeping at most `keep_max` directories.
+
+    Never deletes `keep_dir`. Returns deleted directories.
+    """
+    keep_max = int(keep_max)
+    if keep_max <= 0:
+        return []
+
+    packs = _list_migration_packs(target_dir)
+    if not packs:
+        return []
+
+    deleted: list[Path] = []
+    # Exclude the current pack from deletion candidates.
+    candidates = [p for p in packs if p.resolve() != keep_dir.resolve()]
+    # If we have more packs than keep_max, delete the oldest ones.
+    excess = max(0, len(packs) - keep_max)
+    for p in candidates[:excess]:
+        try:
+            shutil.rmtree(p)
+            deleted.append(p)
+        except Exception:
+            # Best-effort: pruning must never fail the backup job.
+            continue
+    return deleted
 
 
 class DataSecurityBackupService:
@@ -68,6 +120,22 @@ class DataSecurityBackupService:
             raise RuntimeError("pack_dir not prepared")
         pack_dir = ctx.pack_dir
 
+        # Retention: prune older backup packs under the same target directory.
+        # This keeps the backup directory bounded without changing where backups are written.
+        try:
+            keep_max = int(getattr(settings, "backup_retention_max", 30) or 30)
+            keep_max = max(1, min(100, keep_max))
+            deleted = _prune_old_backup_packs(target_dir=pack_dir.parent, keep_max=keep_max, keep_dir=pack_dir)
+            if deleted:
+                logging.getLogger(__name__).info(
+                    "[Backup] pruned old packs: keep_max=%s deleted=%s target=%s",
+                    keep_max,
+                    len(deleted),
+                    str(pack_dir.parent),
+                )
+        except Exception as e:
+            logging.getLogger(__name__).warning("[Backup] retention prune skipped: %s", e, exc_info=True)
+
         backup_done_ms = int(time.time() * 1000)
         # Keep job running while we perform post-backup steps (replication).
         self.store.update_job(job_id, status="running", progress=90, message="备份完成，准备同步")
@@ -88,7 +156,6 @@ class DataSecurityBackupService:
             replicated = bool(replica_svc.replicate_backup(pack_dir, job_id))
         except Exception as e:
             # Replication failure should not mark the backup as failed
-            import logging
             logger = logging.getLogger(__name__)
             logger.error(f"Replication failed: {e}", exc_info=True)
             # Update message to indicate replication failure, but keep status as "completed"

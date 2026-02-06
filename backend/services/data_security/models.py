@@ -27,6 +27,8 @@ class DataSecuritySettings:
     # 全量备份
     full_backup_enabled: bool
     full_backup_include_images: bool
+    # Retention
+    backup_retention_max: int
     # Cron-based scheduling
     incremental_schedule: str | None  # Cron expression for incremental backups
     full_backup_schedule: str | None  # Cron expression for full backups

@@ -38,7 +38,26 @@ const DataSecurity = () => {
   const [settings, setSettings] = useState(null);
   const [jobs, setJobs] = useState([]);
   const [activeJob, setActiveJob] = useState(null);
+  const [savingRetention, setSavingRetention] = useState(false);
   const pollTimer = useRef(null);
+
+  const saveRetention = async () => {
+    if (!settings) return;
+    setError(null);
+    setSavingRetention(true);
+    try {
+      const n = Number(settings.backup_retention_max ?? 30);
+      const clamped = Math.max(1, Math.min(100, Number.isFinite(n) ? n : 30));
+      const s = await dataSecurityApi.updateSettings({ backup_retention_max: clamped });
+      // Backward-compatible: older backends may not return `backup_retention_max` in the payload.
+      // Keep the UI value stable to avoid "save -> reset to 30" confusion.
+      setSettings((prev) => ({ ...(prev || {}), ...(s || {}), backup_retention_max: (s && s.backup_retention_max != null) ? s.backup_retention_max : clamped }));
+    } catch (e) {
+      setError(e.message || '保存失败');
+    } finally {
+      setSavingRetention(false);
+    }
+  };
 
   // 定时备份（目前 UI 隐藏设置区，但保留状态以便内部逻辑/后续扩展）
   const [incrementalSchedule, setIncrementalSchedule] = useState(
@@ -180,6 +199,59 @@ const DataSecurity = () => {
           {error}
         </div>
       )}
+
+      <Card title="备份保留策略">
+        <div style={{ display: 'grid', gap: '12px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
+            <div style={{ color: '#6b7280' }}>
+              备份路径： <span style={{ color: '#111827' }}>{settings?.backup_target_path || targetPreview || '-'}</span>
+            </div>
+            <div style={{ color: '#6b7280' }}>
+              当前备份数量： <span style={{ color: '#111827', fontWeight: 700 }}>{Number(settings?.backup_pack_count || 0)}</span>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+            <label style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+              保留最多备份至
+              <input
+                type="number"
+                min={1}
+                max={100}
+                step={1}
+                value={settings?.backup_retention_max ?? 30}
+                onChange={(e) => {
+                  const raw = Number(e.target.value);
+                  const v = Math.max(1, Math.min(100, Number.isFinite(raw) ? raw : 30));
+                  setSettings((p) => ({ ...(p || {}), backup_retention_max: v }));
+                }}
+                style={{ width: '90px', padding: '8px', border: '1px solid #d1d5db', borderRadius: '8px' }}
+              />
+              个（1~100）
+            </label>
+
+            <button
+              onClick={saveRetention}
+              disabled={savingRetention}
+              data-testid="ds-retention-save"
+              style={{
+                padding: '10px 14px',
+                borderRadius: '8px',
+                border: 'none',
+                cursor: savingRetention ? 'not-allowed' : 'pointer',
+                background: savingRetention ? '#9ca3af' : '#111827',
+                color: 'white',
+              }}
+            >
+              {savingRetention ? '保存中…' : '保存'}
+            </button>
+
+            <div style={{ color: '#6b7280', fontSize: '0.9rem' }}>
+              超出数量，系统会在备份任务完成后自动删除最老的 `migration_pack_*`。
+            </div>
+          </div>
+        </div>
+      </Card>
 
       {false && (
       <Card title="备份设置">

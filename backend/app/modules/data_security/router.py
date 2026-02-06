@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, HTTPException
@@ -11,11 +12,31 @@ from backend.services.data_security_store import DataSecurityStore
 router = APIRouter()
 
 
+def _backup_pack_stats(s) -> dict[str, Any]:
+    target = None
+    try:
+        target = s.target_path()
+    except Exception:
+        target = None
+
+    if not target:
+        return {"backup_target_path": "", "backup_pack_count": 0}
+
+    p = Path(str(target))
+    try:
+        count = 0
+        if p.exists() and p.is_dir():
+            count = sum(1 for child in p.iterdir() if child.is_dir() and child.name.startswith("migration_pack_"))
+        return {"backup_target_path": str(p), "backup_pack_count": int(count)}
+    except Exception:
+        return {"backup_target_path": str(p), "backup_pack_count": 0}
+
+
 @router.get("/admin/data-security/settings")
 async def get_settings(_: AdminOnly) -> dict[str, Any]:
     store = DataSecurityStore()
     s = store.get_settings()
-    return {
+    resp: dict[str, Any] = {
         "enabled": s.enabled,
         "interval_minutes": s.interval_minutes,
         "target_mode": s.target_mode,
@@ -36,14 +57,17 @@ async def get_settings(_: AdminOnly) -> dict[str, Any]:
         "replica_enabled": getattr(s, 'replica_enabled', False),
         "replica_target_path": getattr(s, 'replica_target_path') or "",
         "replica_subdir_format": getattr(s, 'replica_subdir_format') or "flat",
+        "backup_retention_max": int(getattr(s, "backup_retention_max", 30) or 30),
     }
+    resp.update(_backup_pack_stats(s))
+    return resp
 
 
 @router.put("/admin/data-security/settings")
 async def update_settings(_: AdminOnly, body: dict[str, Any]) -> dict[str, Any]:
     store = DataSecurityStore()
     s = store.update_settings(body or {})
-    return {
+    resp: dict[str, Any] = {
         "enabled": s.enabled,
         "interval_minutes": s.interval_minutes,
         "target_mode": s.target_mode,
@@ -64,7 +88,10 @@ async def update_settings(_: AdminOnly, body: dict[str, Any]) -> dict[str, Any]:
         "replica_enabled": getattr(s, 'replica_enabled', False),
         "replica_target_path": getattr(s, 'replica_target_path') or "",
         "replica_subdir_format": getattr(s, 'replica_subdir_format') or "flat",
+        "backup_retention_max": int(getattr(s, "backup_retention_max", 30) or 30),
     }
+    resp.update(_backup_pack_stats(s))
+    return resp
 
 
 @router.post("/admin/data-security/backup/run")

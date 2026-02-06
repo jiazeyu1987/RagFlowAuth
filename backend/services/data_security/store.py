@@ -114,6 +114,11 @@ class DataSecurityStore:
             ragflow_stop_services = bool(row["ragflow_stop_services"])
             auth_db_path = str(row["auth_db_path"] or "data/auth.db")
             full_backup_include_images = bool(get_col("full_backup_include_images", 1))
+            try:
+                backup_retention_max = int(get_col("backup_retention_max", 30) or 30)
+            except Exception:
+                backup_retention_max = 30
+            backup_retention_max = max(1, min(100, backup_retention_max))
             replica_target_path = get_col("replica_target_path")
 
             # If the standard mount is present (Linux server / Docker), keep key backup paths fixed.
@@ -153,6 +158,7 @@ class DataSecurityStore:
                 upload_target_path=get_col("upload_target_path"),
                 full_backup_enabled=bool(get_col("full_backup_enabled", 0)),
                 full_backup_include_images=full_backup_include_images,
+                backup_retention_max=backup_retention_max,
                 incremental_schedule=get_col("incremental_schedule"),
                 full_backup_schedule=get_col("full_backup_schedule"),
                 last_incremental_backup_time_ms=int(get_col("last_incremental_backup_time_ms")) if get_col("last_incremental_backup_time_ms") is not None else None,
@@ -180,6 +186,7 @@ class DataSecurityStore:
             "auth_db_path",
             "full_backup_enabled",
             "full_backup_include_images",
+            "backup_retention_max",
             "incremental_schedule",
             "full_backup_schedule",
             "replica_enabled",
@@ -187,6 +194,13 @@ class DataSecurityStore:
             "replica_subdir_format",
         }
         fields = {k: updates.get(k) for k in allowed if k in updates}
+
+        if "backup_retention_max" in fields:
+            try:
+                n = int(fields["backup_retention_max"])
+                fields["backup_retention_max"] = max(1, min(100, n))
+            except Exception:
+                fields.pop("backup_retention_max", None)
 
         # If the standard mount is present (Linux server / Docker), keep key backup paths fixed.
         # This prevents UI mistakes from writing huge backups to `/` and avoids cross-env drift.

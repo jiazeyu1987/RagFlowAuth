@@ -80,6 +80,17 @@ def add_full_backup_columns_to_data_security(conn: sqlite3.Connection) -> None:
     add_column_if_missing(conn, "data_security_settings", "full_backup_enabled INTEGER NOT NULL DEFAULT 0")
     add_column_if_missing(conn, "data_security_settings", "full_backup_include_images INTEGER NOT NULL DEFAULT 1")
 
+def add_backup_retention_columns_to_data_security(conn: sqlite3.Connection) -> None:
+    """
+    Add retention settings for backup packs.
+
+    We keep backup path/format unchanged; we only prune old `migration_pack_*` directories
+    after a successful backup, keeping at most `backup_retention_max` packs.
+    """
+    if not table_exists(conn, "data_security_settings"):
+        return
+    add_column_if_missing(conn, "data_security_settings", "backup_retention_max INTEGER NOT NULL DEFAULT 30")
+
 
 def add_cron_schedule_columns_to_data_security(conn: sqlite3.Connection) -> None:
     """Add cron-based scheduling columns to data_security_settings table."""
