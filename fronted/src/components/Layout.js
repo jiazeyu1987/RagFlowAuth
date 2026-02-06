@@ -23,6 +23,7 @@ const Layout = ({ children }) => {
     { name: '文档审核', path: '/documents', show: canReview },
     { name: '上传文档', path: '/upload', show: canUpload },
     { name: '修改密码', path: '/change-password' },
+    { name: '工具', path: '/tools' },
     { name: '用户管理', path: '/users', allowedRoles: ['admin'] },
     { name: '公司/部门', path: '/org-directory', allowedRoles: ['admin'] },
     { name: '权限组管理', path: '/permission-groups', allowedRoles: ['admin'] },
@@ -30,23 +31,30 @@ const Layout = ({ children }) => {
     { name: '日志', path: '/logs', allowedRoles: ['admin'] },
   ];
 
+  const currentTitle = navigation.find((item) => item.path === location.pathname)?.name || 'Dashboard';
+
   return (
     <div style={{ display: 'flex', height: '100vh' }}>
-      <aside style={{
-        width: sidebarOpen ? '250px' : '60px',
-        backgroundColor: '#1f2937',
-        color: 'white',
-        transition: 'width 0.3s',
-        display: 'flex',
-        flexDirection: 'column',
-      }} data-testid="layout-sidebar">
-        <div style={{
-          padding: '20px',
-          borderBottom: '1px solid #374151',
+      <aside
+        style={{
+          width: sidebarOpen ? '250px' : '60px',
+          backgroundColor: '#1f2937',
+          color: 'white',
+          transition: 'width 0.3s',
           display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-        }}>
+          flexDirection: 'column',
+        }}
+        data-testid="layout-sidebar"
+      >
+        <div
+          style={{
+            padding: '20px',
+            borderBottom: '1px solid #374151',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+          }}
+        >
           <h2 style={{ margin: 0, fontSize: sidebarOpen ? '1.5rem' : '0.9rem' }}>
             {sidebarOpen ? '瑛泰知识库' : 'KB'}
           </h2>
@@ -60,6 +68,7 @@ const Layout = ({ children }) => {
               cursor: 'pointer',
               fontSize: '1.2rem',
             }}
+            aria-label="toggle sidebar"
           >
             {sidebarOpen ? '◀' : '▶'}
           </button>
@@ -67,10 +76,7 @@ const Layout = ({ children }) => {
 
         <nav style={{ flex: 1, padding: '10px 0' }}>
           {navigation.map((item) => {
-            // 检查是否应该显示此菜单项
-            if (item.show !== undefined && !item.show()) {
-              return null;
-            }
+            if (item.show !== undefined && !item.show()) return null;
 
             return (
               <PermissionGuard key={item.path} allowedRoles={item.allowedRoles} fallback={null}>
@@ -88,14 +94,10 @@ const Layout = ({ children }) => {
                     overflow: 'hidden',
                   }}
                   onMouseEnter={(e) => {
-                    if (!isActive(item.path)) {
-                      e.target.style.backgroundColor = '#374151';
-                    }
+                    if (!isActive(item.path)) e.target.style.backgroundColor = '#374151';
                   }}
                   onMouseLeave={(e) => {
-                    if (!isActive(item.path)) {
-                      e.target.style.backgroundColor = 'transparent';
-                    }
+                    if (!isActive(item.path)) e.target.style.backgroundColor = 'transparent';
                   }}
                 >
                   {sidebarOpen ? item.name : item.name[0]}
@@ -105,14 +107,15 @@ const Layout = ({ children }) => {
           })}
         </nav>
 
-        <div style={{
-          padding: '20px',
-          borderTop: '1px solid #374151',
-        }}>
+        <div style={{ padding: '20px', borderTop: '1px solid #374151' }}>
           {sidebarOpen && (
             <div style={{ marginBottom: '10px', fontSize: '0.9rem' }}>
-              <div style={{ fontWeight: 'bold' }} data-testid="layout-user-name">{user?.username}</div>
-              <div style={{ color: '#9ca3af', fontSize: '0.8rem' }} data-testid="layout-user-role">{user?.role}</div>
+              <div style={{ fontWeight: 'bold' }} data-testid="layout-user-name">
+                {user?.username}
+              </div>
+              <div style={{ color: '#9ca3af', fontSize: '0.8rem' }} data-testid="layout-user-role">
+                {user?.role}
+              </div>
             </div>
           )}
           <button
@@ -127,29 +130,33 @@ const Layout = ({ children }) => {
               borderRadius: '4px',
               cursor: 'pointer',
             }}
-            onMouseEnter={(e) => e.target.style.backgroundColor = '#dc2626'}
-            onMouseLeave={(e) => e.target.style.backgroundColor = '#ef4444'}
+            onMouseEnter={(e) => {
+              e.target.style.backgroundColor = '#dc2626';
+            }}
+            onMouseLeave={(e) => {
+              e.target.style.backgroundColor = '#ef4444';
+            }}
           >
-            {sidebarOpen ? '登出' : '▰'}
+            {sidebarOpen ? '登出' : '⏻'}
           </button>
         </div>
       </aside>
 
       <main style={{ flex: 1, overflow: 'auto', backgroundColor: '#f9fafb' }}>
-        <header style={{
-          backgroundColor: 'white',
-          padding: '16px 24px',
-          borderBottom: '1px solid #e5e7eb',
-          boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)',
-        }}>
+        <header
+          style={{
+            backgroundColor: 'white',
+            padding: '16px 24px',
+            borderBottom: '1px solid #e5e7eb',
+            boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)',
+          }}
+        >
           <h1 style={{ margin: 0, fontSize: '1.5rem', color: '#111827' }} data-testid="layout-header-title">
-            {navigation.find(item => item.path === location.pathname)?.name || 'Dashboard'}
+            {currentTitle}
           </h1>
         </header>
 
-        <div style={{ padding: '24px' }}>
-          {children}
-        </div>
+        <div style={{ padding: '24px' }}>{children}</div>
       </main>
     </div>
   );
