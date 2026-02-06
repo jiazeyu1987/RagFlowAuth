@@ -82,8 +82,8 @@ test('upload -> approve -> visible in browser and previewable (real backend) @in
     await expect(page.getByTestId(rowId)).toBeVisible({ timeout: 30_000 });
 
     await page.getByTestId(`browser-doc-view-${dataset.id}-${ragflowDocId}`).click();
-    await expect(page.getByTestId('browser-preview-modal')).toBeVisible({ timeout: 30_000 });
-    await expect(page.getByTestId('browser-preview-modal').getByRole('heading', { name: filename })).toBeVisible();
+    await expect(page.getByTestId('document-preview-modal')).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByTestId('document-preview-modal').getByText(filename, { exact: false })).toBeVisible();
     await expect(page.getByText(content.trim(), { exact: false })).toBeVisible();
   } finally {
     try {

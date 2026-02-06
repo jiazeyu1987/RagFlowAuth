@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { dataSecurityApi } from '../features/dataSecurity/api';
-import { cronToSchedule, scheduleToCron, formatSchedule } from '../features/dataSecurity/scheduleUtils';
+import { cronToSchedule, formatSchedule } from '../features/dataSecurity/scheduleUtils';
 
 const formatTime = (ms) => {
   if (!ms) return '';
@@ -33,7 +33,6 @@ const Card = ({ title, children }) => (
 
 const DataSecurity = () => {
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
   const [running, setRunning] = useState(false);
   const [error, setError] = useState(null);
   const [settings, setSettings] = useState(null);
@@ -41,7 +40,7 @@ const DataSecurity = () => {
   const [activeJob, setActiveJob] = useState(null);
   const pollTimer = useRef(null);
 
-  // 定时备份状态
+  // 定时备份（目前 UI 隐藏设置区，但保留状态以便内部逻辑/后续扩展）
   const [incrementalSchedule, setIncrementalSchedule] = useState(
     cronToSchedule(null) || { type: 'daily', hour: '18', minute: '30' }
   );
@@ -49,6 +48,7 @@ const DataSecurity = () => {
     cronToSchedule(null) || { type: 'weekly', hour: '04', minute: '00', weekday: '1' }
   );
 
+  // 定时备份状态
   const targetPreview = useMemo(() => {
     if (!settings) return '';
     if (settings.target_mode === 'local') return settings.target_local_dir || '';
@@ -105,47 +105,9 @@ const DataSecurity = () => {
     };
   }, []);
 
-  const saveSettings = async () => {
-    if (!settings) return;
-    setSaving(true);
-    setError(null);
-    try {
-      const settingsWithCron = {
-        ...settings,
-        incremental_schedule: scheduleToCron(incrementalSchedule),
-        full_backup_schedule: scheduleToCron(fullBackupSchedule),
-      };
-      const updated = await dataSecurityApi.updateSettings(settingsWithCron);
-      setSettings(updated);
-    } catch (e) {
-      setError(e.message || '保存失败');
-    } finally {
-      setSaving(false);
-    }
-  };
-
   const runNow = async () => {
     setError(null);
     try {
-      if (!settings) return;
-      if (settings.target_mode === 'local') {
-        if (!String(settings.target_local_dir || '').trim()) {
-          setError('请先填写"本机目标目录"，再点击"立即备份"。');
-          return;
-        }
-      } else {
-        if (!String(settings.target_ip || '').trim() || !String(settings.target_share_name || '').trim()) {
-          setError('请先填写"目标电脑 IP"和"共享名"，再点击"立即备份"。');
-          return;
-        }
-      }
-
-      // "立即备份"默认使用你当前看到的设置（无需先点"保存设置"）
-      setSaving(true);
-      const updated = await dataSecurityApi.updateSettings(settings);
-      setSettings(updated);
-      setSaving(false);
-
       const res = await dataSecurityApi.runBackup();
       if (res.job_id) {
         setRunning(true);
@@ -155,31 +117,12 @@ const DataSecurity = () => {
       }
     } catch (e) {
       setError(e.message || '启动失败');
-      setSaving(false);
     }
   };
 
   const runFullBackupNow = async () => {
     setError(null);
     try {
-      if (!settings) return;
-      if (settings.target_mode === 'local') {
-        if (!String(settings.target_local_dir || '').trim()) {
-          setError('请先填写"本机目标目录"，再点击"全量备份"。');
-          return;
-        }
-      } else {
-        if (!String(settings.target_ip || '').trim() || !String(settings.target_share_name || '').trim()) {
-          setError('请先填写"目标电脑 IP"和"共享名"，再点击"全量备份"。');
-          return;
-        }
-      }
-
-      setSaving(true);
-      const updated = await dataSecurityApi.updateSettings(settings);
-      setSettings(updated);
-      setSaving(false);
-
       const res = await dataSecurityApi.runFullBackup();
       if (res.job_id) {
         setRunning(true);
@@ -189,7 +132,6 @@ const DataSecurity = () => {
       }
     } catch (e) {
       setError(e.message || '全量备份启动失败');
-      setSaving(false);
     }
   };
 
@@ -230,20 +172,6 @@ const DataSecurity = () => {
           >
             {running ? '备份中…' : '全量备份'}
           </button>
-          <button
-            onClick={saveSettings}
-            disabled={saving || !settings}
-            data-testid="ds-save"
-            style={{
-              padding: '10px 14px',
-              borderRadius: '8px',
-              border: '1px solid #d1d5db',
-              cursor: saving ? 'not-allowed' : 'pointer',
-              background: 'white',
-            }}
-          >
-            {saving ? '保存中…' : '保存设置'}
-          </button>
         </div>
       </div>
 
@@ -253,6 +181,7 @@ const DataSecurity = () => {
         </div>
       )}
 
+      {false && (
       <Card title="备份设置">
         <div style={{ display: 'grid', gap: '12px' }}>
           <label style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
@@ -453,6 +382,7 @@ const DataSecurity = () => {
           </div>
         </div>
       </Card>
+      )}
 
       <Card title="备份进度">
         {activeJob ? (

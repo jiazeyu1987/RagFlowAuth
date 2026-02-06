@@ -13,6 +13,7 @@ from backend.app.dependencies import AppDependencies
 from backend.models.auth import LoginRequest, TokenResponse, ChangePasswordRequest
 from backend.services.user_store import hash_password
 from backend.services.users import validate_password_requirements
+from backend.services.audit_helpers import actor_fields_from_user
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -42,6 +43,18 @@ async def login(
     auth.set_refresh_cookies(refresh_token, response)
 
     deps.user_store.update_last_login(user.user_id)
+    audit = getattr(deps, "audit_log_store", None)
+    if audit:
+        try:
+            audit.log_event(
+                action="auth_login",
+                actor=user.user_id,
+                source="auth",
+                meta={"username": user.username},
+                **actor_fields_from_user(deps, user),
+            )
+        except Exception:
+            pass
 
     return TokenResponse(
         access_token=access_token,
@@ -89,7 +102,27 @@ async def refresh_token(request: Request):
 
 
 @router.post("/logout")
-async def logout(response: Response):
+async def logout(request: Request, response: Response, deps: AppDependencies = Depends(get_deps)):
+    actor = None
+    try:
+        token = await auth.get_access_token_from_request(request)
+        payload = auth.verify_token(token, verify_type=True)
+        actor = payload.sub
+    except Exception:
+        actor = None
+
+    audit = getattr(deps, "audit_log_store", None)
+    if audit and actor:
+        try:
+            user = deps.user_store.get_by_user_id(actor)
+            audit.log_event(
+                action="auth_logout",
+                actor=actor,
+                source="auth",
+                **(actor_fields_from_user(deps, user) if user else {}),
+            )
+        except Exception:
+            pass
     auth.unset_cookies(response)
     return {"message": "登出成功"}
 

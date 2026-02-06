@@ -102,18 +102,49 @@ class DataSecurityStore:
                 except IndexError:
                     return default
 
+            enabled = bool(row["enabled"])
+            interval_minutes = int(row["interval_minutes"] or 1440)
+            target_mode = str(row["target_mode"] or "share")
+            target_ip = row["target_ip"]
+            target_share_name = row["target_share_name"]
+            target_subdir = row["target_subdir"]
+            target_local_dir = row["target_local_dir"]
+            ragflow_compose_path = row["ragflow_compose_path"]
+            ragflow_project_name = row["ragflow_project_name"]
+            ragflow_stop_services = bool(row["ragflow_stop_services"])
+            auth_db_path = str(row["auth_db_path"] or "data/auth.db")
+            full_backup_include_images = bool(get_col("full_backup_include_images", 1))
+            replica_target_path = get_col("replica_target_path")
+
+            # If the standard mount is present (Linux server / Docker), keep key backup paths fixed.
+            # This prevents "environment drift" caused by UI edits and avoids writing large backups to `/`.
+            if Path("/mnt/replica").exists():
+                target_mode = "local"
+                target_local_dir = "/mnt/replica/RagflowAuth"
+                target_ip = None
+                target_share_name = None
+                target_subdir = None
+                replica_target_path = "/mnt/replica/RagflowAuth"
+
+                # These paths are inside the backend container.
+                ragflow_compose_path = "/app/ragflow_compose/docker-compose.yml"
+                auth_db_path = "data/auth.db"
+
+                # Full backup should include images on servers so it can be restored offline.
+                full_backup_include_images = True
+
             return DataSecuritySettings(
-                enabled=bool(row["enabled"]),
-                interval_minutes=int(row["interval_minutes"] or 1440),
-                target_mode=str(row["target_mode"] or "share"),
-                target_ip=row["target_ip"],
-                target_share_name=row["target_share_name"],
-                target_subdir=row["target_subdir"],
-                target_local_dir=row["target_local_dir"],
-                ragflow_compose_path=row["ragflow_compose_path"],
-                ragflow_project_name=row["ragflow_project_name"],
-                ragflow_stop_services=bool(row["ragflow_stop_services"]),
-                auth_db_path=str(row["auth_db_path"] or "data/auth.db"),
+                enabled=enabled,
+                interval_minutes=interval_minutes,
+                target_mode=target_mode,
+                target_ip=target_ip,
+                target_share_name=target_share_name,
+                target_subdir=target_subdir,
+                target_local_dir=target_local_dir,
+                ragflow_compose_path=ragflow_compose_path,
+                ragflow_project_name=ragflow_project_name,
+                ragflow_stop_services=ragflow_stop_services,
+                auth_db_path=auth_db_path,
                 updated_at_ms=int(row["updated_at_ms"] or 0),
                 last_run_at_ms=int(row["last_run_at_ms"]) if row["last_run_at_ms"] is not None else None,
                 upload_after_backup=bool(get_col("upload_after_backup", 0)),
@@ -121,13 +152,13 @@ class DataSecurityStore:
                 upload_username=get_col("upload_username"),
                 upload_target_path=get_col("upload_target_path"),
                 full_backup_enabled=bool(get_col("full_backup_enabled", 0)),
-                full_backup_include_images=bool(get_col("full_backup_include_images", 1)),
+                full_backup_include_images=full_backup_include_images,
                 incremental_schedule=get_col("incremental_schedule"),
                 full_backup_schedule=get_col("full_backup_schedule"),
                 last_incremental_backup_time_ms=int(get_col("last_incremental_backup_time_ms")) if get_col("last_incremental_backup_time_ms") is not None else None,
                 last_full_backup_time_ms=int(get_col("last_full_backup_time_ms")) if get_col("last_full_backup_time_ms") is not None else None,
                 replica_enabled=bool(get_col("replica_enabled", 0)),
-                replica_target_path=get_col("replica_target_path"),
+                replica_target_path=replica_target_path,
                 replica_subdir_format=get_col("replica_subdir_format") or "flat",
             )
         finally:
@@ -157,21 +188,15 @@ class DataSecurityStore:
         }
         fields = {k: updates.get(k) for k in allowed if k in updates}
 
-        # Target local dir is fixed to the mounted Windows share to avoid filling the server root disk.
-        # This keeps full backups (especially `images.tar`) on the large `/mnt/replica` filesystem.
-        #
-        # Notes:
-        # - `/mnt/replica` is the fixed mount point used by the server tools.
-        # - Backups are stored under `/mnt/replica/RagflowAuth` for consistency.
-        if "target_mode" in fields or "target_local_dir" in fields:
-            if (str(fields.get("target_mode") or "") or "").strip() == "local" or "target_local_dir" in fields:
-                fields["target_mode"] = "local"
-                fields["target_local_dir"] = "/mnt/replica/RagflowAuth"
-
-        # Replica target path is fixed to avoid drift/misconfig between systems.
-        # It must match the mount point used by the server tools and the backend replication check.
-        if "replica_target_path" in fields or "replica_enabled" in fields:
+        # If the standard mount is present (Linux server / Docker), keep key backup paths fixed.
+        # This prevents UI mistakes from writing huge backups to `/` and avoids cross-env drift.
+        if Path("/mnt/replica").exists():
+            fields["target_mode"] = "local"
+            fields["target_local_dir"] = "/mnt/replica/RagflowAuth"
             fields["replica_target_path"] = "/mnt/replica/RagflowAuth"
+            fields["ragflow_compose_path"] = "/app/ragflow_compose/docker-compose.yml"
+            fields["auth_db_path"] = "data/auth.db"
+            fields["full_backup_include_images"] = True
         fields["updated_at_ms"] = now_ms
 
         conn = self._conn()

@@ -248,6 +248,26 @@ $HashPath = "$TarPath.sha256"
 $TarSize = (Get-Item $TarPath).Length / 1MB
 Write-Success "Images exported ($([math]::Round($TarSize, 2)) MB)"
 
+function Resolve-RemoteStagingDir {
+  param(
+    [Parameter(Mandatory = $true)]
+    [string]$Host,
+
+    [Parameter(Mandatory = $true)]
+    [string]$User
+  )
+
+  # Pick a writable dir with the most free space.
+  # Prefer non-root partitions first to avoid filling / (common cause of scp failures to /tmp).
+  $pickCmd = 'bash -lc ''set -e; candidates="/var/lib/docker/tmp /mnt/replica/_tmp /home/root/_tmp /tmp"; best=""; best_avail=-1; for d in $candidates; do mkdir -p "$d" 2>/dev/null || true; t="$d/.ragflowauth_write_test_$$"; (touch "$t" 2>/dev/null && rm -f "$t") || continue; avail=$(df -Pk "$d" 2>/dev/null | tail -n 1 | awk "{print \$4}"); [ -n "$avail" ] || continue; if [ "$avail" -gt "$best_avail" ]; then best="$d"; best_avail="$avail"; fi; done; echo "$best"'''
+  $out = ssh "${User}@${Host}" $pickCmd 2>$null
+  $dir = ($out | Select-Object -Last 1).Trim()
+  if (-not $dir) {
+    return "/tmp"
+  }
+  return $dir
+}
+
 # ==================== Step 3: Transfer to Server ====================
 if (-not $SkipTransfer) {
   Write-Step "Step 3/4: Transferring images to server"
@@ -255,7 +275,11 @@ if (-not $SkipTransfer) {
   Write-Info "Target server: ${ServerUser}@${ServerHost}"
   Write-Info "Transferring file: $TarName"
 
-  scp $TarPath "${ServerUser}@${ServerHost}:/tmp/"
+  $RemoteStagingDir = Resolve-RemoteStagingDir -Host $ServerHost -User $ServerUser
+  Write-Info "Remote staging dir: $RemoteStagingDir"
+  ssh "${ServerUser}@${ServerHost}" "mkdir -p '$RemoteStagingDir'"
+  $RemoteTarPath = "${RemoteStagingDir}/$TarName"
+  scp $TarPath "${ServerUser}@${ServerHost}:$RemoteTarPath"
 
   if ($LASTEXITCODE -ne 0) {
     throw "File transfer failed"
@@ -284,6 +308,9 @@ if (-not $SkipDeploy) {
 
   # Use the existing remote-deploy.sh script
   $localDeployScript = Join-Path $PSScriptRoot "remote-deploy.sh"
+  if (-not (Test-Path $localDeployScript)) {
+    $localDeployScript = Join-Path $RepoRoot "tool/scripts/remote-deploy.sh"
+  }
 
   if (Test-Path $localDeployScript) {
     Write-Info "Uploading deploy script..."
@@ -293,20 +320,22 @@ if (-not $SkipDeploy) {
     ssh "${ServerUser}@${ServerHost}" "sed -i 's/\r$//' /tmp/remote-deploy.sh"
 
     Write-Info "Executing remote deploy script..."
-    ssh "${ServerUser}@${ServerHost}" "chmod +x /tmp/remote-deploy.sh && TAG=$Tag SKIP_CONFIG_CREATE=1 /tmp/remote-deploy.sh"
+    $remoteTar = if ($RemoteTarPath) { $RemoteTarPath } else { "/tmp/$TarName" }
+    ssh "${ServerUser}@${ServerHost}" "chmod +x /tmp/remote-deploy.sh && TAG=$Tag TAR_FILE='$remoteTar' SKIP_CONFIG_CREATE=1 /tmp/remote-deploy.sh --tag '$Tag' --tar-file '$remoteTar'"
   } else {
     Write-Warn "Deploy script not found, using manual commands..."
 
     # Manual deployment commands
+    $remoteTar = if ($RemoteTarPath) { $RemoteTarPath } else { "/tmp/$TarName" }
     $commands = @(
-      "docker load -i '/tmp/$TarName'",
+      "docker load -i '$remoteTar'",
       "mkdir -p /opt/ragflowauth/data /opt/ragflowauth/uploads /opt/ragflowauth/ragflow_compose /opt/ragflowauth/backups",
       "docker network ls | grep ragflowauth-network || docker network create ragflowauth-network",
       "docker stop ragflowauth-backend ragflowauth-frontend 2>/dev/null || true",
       "docker rm ragflowauth-backend ragflowauth-frontend 2>/dev/null || true",
       "docker run -d --name ragflowauth-backend --network ragflowauth-network -p 8001:8001 -v /opt/ragflowauth/data:/app/data -v /opt/ragflowauth/uploads:/app/uploads -v /opt/ragflowauth/ragflow_config.json:/app/ragflow_config.json:ro -v /opt/ragflowauth/ragflow_compose:/app/ragflow_compose:ro -v /opt/ragflowauth/backups:/app/data/backups -v /var/run/docker.sock:/var/run/docker.sock ragflowauth-backend:$Tag",
       "docker run -d --name ragflowauth-frontend --network ragflowauth-network -p 3001:80 --link ragflowauth-backend:backend ragflowauth-frontend:$Tag",
-      "rm -f '/tmp/$TarName'"
+      "rm -f '$remoteTar'"
     )
 
     foreach ($cmd in $commands) {
@@ -331,6 +360,11 @@ if (-not $SkipCleanup) {
   Remove-Item $TarPath -Force -ErrorAction SilentlyContinue
   Remove-Item $HashPath -Force -ErrorAction SilentlyContinue
   Write-Success "Temporary files deleted"
+
+  if ($RemoteTarPath) {
+    Write-Info "Cleaning remote tar: $RemoteTarPath"
+    ssh "${ServerUser}@${ServerHost}" "rm -f '$RemoteTarPath' 2>/dev/null || true"
+  }
 
   # Clean up old images on server
   Write-Step "Cleaning up old Docker images on server"

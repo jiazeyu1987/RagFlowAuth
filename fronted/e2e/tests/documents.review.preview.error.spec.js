@@ -26,7 +26,7 @@ adminTest('documents preview failure shows error (mock) @regression @documents',
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ documents: [doc], count: 1 }) });
   });
 
-  await page.route('**/api/knowledge/documents/d1/preview', async (route) => {
+  await page.route('**/api/preview/documents/knowledge/d1/preview', async (route) => {
     if (route.request().method() !== 'GET') return route.fallback();
     await route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ detail: 'preview failed' }) });
   });
@@ -39,4 +39,3 @@ adminTest('documents preview failure shows error (mock) @regression @documents',
 
   await expectErrorVisible(page, 'preview failed');
 });
-

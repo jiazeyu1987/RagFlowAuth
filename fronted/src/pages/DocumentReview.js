@@ -259,7 +259,7 @@ const DocumentReview = ({ embedded = false }) => {
   const handleDownload = async (docId) => {
     setDownloadLoading(docId);
     try {
-      await knowledgeApi.downloadLocalDocument(docId);
+      await documentClient.downloadToBrowser({ source: DOCUMENT_SOURCE.KNOWLEDGE, docId });
     } catch (err) {
       setError(err.message);
     } finally {
@@ -293,7 +293,7 @@ const DocumentReview = ({ embedded = false }) => {
 
     setBatchDownloadLoading(true);
     try {
-      await knowledgeApi.batchDownloadLocalDocuments(Array.from(selectedDocIds));
+      await documentClient.batchDownloadKnowledgeToBrowser(Array.from(selectedDocIds));
       setSelectedDocIds(new Set());
     } catch (err) {
       setError(err.message);
@@ -364,7 +364,8 @@ const DocumentReview = ({ embedded = false }) => {
                   </button>
                   <button
                     type="button"
-                    onClick={() => knowledgeApi.downloadLocalDocument(overwritePrompt.oldDoc.doc_id)} data-testid="docs-overwrite-old-download"
+                    onClick={() => documentClient.downloadToBrowser({ source: DOCUMENT_SOURCE.KNOWLEDGE, docId: overwritePrompt.oldDoc.doc_id })}
+                    data-testid="docs-overwrite-old-download"
                     style={{
                       padding: '8px 12px',
                       borderRadius: '8px',
@@ -402,7 +403,8 @@ const DocumentReview = ({ embedded = false }) => {
                   </button>
                   <button
                     type="button"
-                    onClick={() => knowledgeApi.downloadLocalDocument(overwritePrompt.newDocId)} data-testid="docs-overwrite-new-download"
+                    onClick={() => documentClient.downloadToBrowser({ source: DOCUMENT_SOURCE.KNOWLEDGE, docId: overwritePrompt.newDocId })}
+                    data-testid="docs-overwrite-new-download"
                     style={{
                       padding: '8px 12px',
                       borderRadius: '8px',
@@ -706,6 +708,7 @@ const DocumentReview = ({ embedded = false }) => {
                     {doc.status === 'pending' && (
                       <button
                         onClick={() => openLocalPreview(doc.doc_id, doc.filename)}
+                        data-testid={`docs-preview-${String(doc.doc_id || '')}`}
                         style={{
                           padding: '6px 12px',
                           backgroundColor: '#10b981',

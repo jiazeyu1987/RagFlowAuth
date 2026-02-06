@@ -88,6 +88,7 @@ from tool.maintenance.core.ragflow_base_url_guard import (
     read_local_base_url,
     read_remote_base_url,
 )
+from tool.maintenance.core.service_controller import ServiceController
 
 # （日志配置已迁移到 tool.maintenance.core.logging_setup）
 # （配置/环境/固定共享常量已迁移到 tool.maintenance.core.*）
@@ -321,9 +322,17 @@ class ToolButton(ttk.Frame):
             # self.output.delete(1.0, tk.END)
             # self.output.config(state=tk.DISABLED)
 
-            # 在后台线程执行
-            thread = threading.Thread(target=self.command, daemon=True)
-            thread.start()
+            # Prefer the app-wide TaskRunner when available (consistent error handling + UI-safe callbacks).
+            runner = None
+            w = self
+            while w is not None and runner is None:
+                runner = getattr(w, "task_runner", None)
+                w = getattr(w, "master", None)
+            if runner is not None:
+                runner.run(name="tool_button", fn=self.command)
+            else:
+                thread = threading.Thread(target=self.command, daemon=True)
+                thread.start()
 
     def append_output(self, text):
         """追加输出（已禁用）"""
@@ -987,7 +996,7 @@ class RagflowAuthTool:
                 if hasattr(self, "status_bar"):
                     self.root.after(0, lambda: self.status_bar.config(text="回滚失败"))
 
-        threading.Thread(target=worker, daemon=True).start()
+        self.task_runner.run(name="publish_local_to_test", fn=worker)
 
     def refresh_release_test_versions(self):
         def worker():
@@ -1007,7 +1016,7 @@ class RagflowAuthTool:
                     self.status_bar.config(text="刷新测试版本：失败")
                 log_to_file(f"[Release] Refresh test version failed: {e}", "ERROR")
 
-        threading.Thread(target=worker, daemon=True).start()
+        self.task_runner.run(name="publish_test_to_prod", fn=worker)
 
     def refresh_release_local_backup_list(self):
         """
@@ -1187,7 +1196,7 @@ class RagflowAuthTool:
                 if hasattr(self, "status_bar"):
                     self.status_bar.config(text="发布本机->测试：失败")
 
-        threading.Thread(target=worker, daemon=True).start()
+        self.task_runner.run(name="publish_test_data_to_prod", fn=worker)
 
     def _sync_local_backup_to_test(self, *, pack_dir: Path | None, ui_log) -> None:
         """
@@ -1248,71 +1257,15 @@ class RagflowAuthTool:
             if (not ok2) or (desired not in new_val):
                 raise RuntimeError(f"无法修正 TEST base_url。输出: {out2}")
 
-        # 1) Stop services strictly (ragflowauth + ragflow_compose-*)
+        # 1) Stop services strictly (ragflowauth + ragflow stack), and verify clean stop.
         ui_log("[SYNC] [1/5] Stop services on TEST (strict)")
-        ssh_exec("docker stop ragflowauth-backend ragflowauth-frontend 2>&1 || true")
-        ssh_exec("cd /opt/ragflowauth/ragflow_compose 2>/dev/null && docker compose down 2>&1 || true")
-        ssh_exec(
-            r"""
- set -e
- ids=$(
-   (
-     docker ps -q --filter "name=^ragflow_compose-" || true
-     docker ps -q --filter ancestor=infiniflow/ragflow || true
-     docker ps -q --filter ancestor=elasticsearch || true
-     docker ps -q --filter ancestor=docker.elastic.co/elasticsearch/elasticsearch || true
-     docker ps -q --filter ancestor=mysql || true
-     docker ps -q --filter ancestor=valkey/valkey || true
-     docker ps -q --filter ancestor=redis || true
-     docker ps -q --filter ancestor=minio/minio || true
-     docker ps -q --filter ancestor=quay.io/minio/minio || true
-   ) | sort -u
- )
- if [ -n "$ids" ]; then
-   docker stop $ids 2>&1 || true
- fi
- """.strip()
+        controller = ServiceController(
+            exec_fn=lambda c, t: ssh.execute(c, timeout_seconds=t),
+            log=lambda m: ui_log(f"[SYNC] {m}"),
         )
-
-        deadline = time.time() + 90
-        while time.time() < deadline:
-            okc, outc = ssh_exec(
-                r"""
- set -e
- running_ids=$(
-   (
-     docker ps -q --filter "name=^ragflowauth-backend$" || true
-     docker ps -q --filter "name=^ragflowauth-frontend$" || true
-     docker ps -q --filter "name=^ragflow_compose-" || true
-     docker ps -q --filter ancestor=infiniflow/ragflow || true
-     docker ps -q --filter ancestor=elasticsearch || true
-     docker ps -q --filter ancestor=docker.elastic.co/elasticsearch/elasticsearch || true
-     docker ps -q --filter ancestor=mysql || true
-     docker ps -q --filter ancestor=valkey/valkey || true
-     docker ps -q --filter ancestor=redis || true
-     docker ps -q --filter ancestor=minio/minio || true
-     docker ps -q --filter ancestor=quay.io/minio/minio || true
-   ) | sort -u
- )
- if [ -n "$running_ids" ]; then
-   echo "$running_ids"
-   exit 2
- fi
- echo "STOPPED"
- """.strip()
-            )
-            if okc and (outc or "").strip().endswith("STOPPED"):
-                ui_log("[SYNC] ✅ TEST services stopped")
-                break
-            time.sleep(3)
-        else:
-            okps, ps_out = ssh_exec(
-                "docker ps --no-trunc 2>&1 | grep -E '(ragflowauth-|ragflow_compose-|infiniflow/ragflow|elasticsearch|docker\\.elastic\\.co/elasticsearch/elasticsearch|mysql|valkey/valkey|redis|minio/minio|quay\\.io/minio/minio)' 2>&1 || true"
-            )
-            if okps and (ps_out or "").strip():
-                ui_log("[SYNC] [DEBUG] docker ps -a (related):")
-                ui_log(ps_out.strip())
-            raise RuntimeError("停止服务未完成：检测到相关容器仍在运行（已中止，避免不一致快照）")
+        stop_res = controller.stop_and_verify(app_dir="/opt/ragflowauth", mode="down", timeout_s=90, who="TEST")
+        if not stop_res.ok:
+            raise RuntimeError(f"停止服务未完成：{stop_res.error}")
 
         # 2) Backup current auth.db (best-effort) then upload auth.db
         ui_log("[SYNC] [2/5] Upload auth.db to TEST")
@@ -1353,7 +1306,8 @@ class RagflowAuthTool:
             if proc2.returncode != 0:
                 raise RuntimeError(f"SCP volumes.tar.gz 失败: {(proc2.stderr or proc2.stdout or '').strip()}")
 
-            workdir = f"/tmp/ragflowauth_restore_{ts}"
+            # Avoid /tmp (often on rootfs). Use docker tmp dir when possible.
+            workdir = f"/var/lib/docker/tmp/ragflowauth_restore_{ts}"
             okx, outx = ssh_exec(f"rm -rf {workdir}; mkdir -p {workdir} && tar -xzf /var/lib/docker/tmp/volumes.tar.gz -C {workdir} && rm -f /var/lib/docker/tmp/volumes.tar.gz && echo OK")
             if not okx:
                 raise RuntimeError(f"解压 volumes.tar.gz 失败: {outx}")
@@ -1378,6 +1332,7 @@ done
                 raise RuntimeError(f"还原 volumes 失败:\n{outr}")
             if (outr or "").strip():
                 ui_log((outr or "").strip())
+            ssh_exec(f"rm -rf {workdir} 2>/dev/null || true")
 
         # 4) Restart services
         ui_log("[SYNC] [4/5] Restart services on TEST")
@@ -1456,7 +1411,7 @@ done
                 log_to_file(f"[Release] Publish exception: {e}", "ERROR")
                 self.status_bar.config(text="发布：失败")
 
-        threading.Thread(target=worker, daemon=True).start()
+        self.task_runner.run(name="publish_test_to_prod", fn=worker)
 
     def publish_test_data_to_prod(self):
         if not messagebox.askyesno(
@@ -1535,7 +1490,7 @@ done
                 if hasattr(self, "status_bar"):
                     self.status_bar.config(text="数据发布：失败")
 
-        threading.Thread(target=worker, daemon=True).start()
+        self.task_runner.run(name="publish_test_data_to_prod", fn=worker)
 
     def create_logs_tab(self):
         """日志查看页签 UI（拆分到独立模块）。"""
@@ -1572,8 +1527,7 @@ done
             self.root.after(0, lambda: self._update_file_trees(left_files, right_files))
 
         # 在后台线程中执行
-        thread = threading.Thread(target=load_files, daemon=True)
-        thread.start()
+        self.task_runner.run(name="refresh_backup_files", fn=load_files)
 
     def refresh_replica_backups(self):
         """刷新共享备份列表（测试+正式：/opt/ragflowauth/data/backups）。"""
@@ -1615,7 +1569,7 @@ done
 
             self.root.after(0, apply)
 
-        threading.Thread(target=worker, daemon=True).start()
+        self.task_runner.run(name="refresh_replica_backups", fn=worker)
 
     def delete_selected_replica_backup(self, which: str):
         which = (which or "").strip().lower()
@@ -1673,7 +1627,7 @@ done
 
             self.root.after(0, apply)
 
-        threading.Thread(target=worker, daemon=True).start()
+        self.task_runner.run(name="delete_selected_replica_backup", fn=worker)
 
     def _get_backup_files(self, directory):
         """获取指定目录的备份文件列表"""
@@ -1814,8 +1768,7 @@ done
             # 更新UI
             self.root.after(0, lambda: self._delete_complete(deleted, failed))
 
-        thread = threading.Thread(target=delete_files, daemon=True)
-        thread.start()
+        self.task_runner.run(name="backup_files_delete", fn=delete_files)
 
     def _delete_complete(self, deleted, failed):
         """删除完成回调"""
@@ -1867,8 +1820,7 @@ done
             self.root.after(0, self.refresh_backup_files)
             self.root.after(0, lambda: messagebox.showinfo("清理完成", f"超过 {days} 天的旧备份已删除"))
 
-        thread = threading.Thread(target=cleanup, daemon=True)
-        thread.start()
+        self.task_runner.run(name="docker_cleanup_images", fn=cleanup)
 
     def mount_windows_share(self):
         """挂载 Windows 网络共享"""
@@ -1921,8 +1873,7 @@ done
                 self.root.after(0, lambda: self.status_bar.config(text="挂载失败"))
 
         # 在后台线程执行
-        thread = threading.Thread(target=do_mount, daemon=True)
-        thread.start()
+        self.task_runner.run(name="mount_windows_share", fn=do_mount)
 
 
     def _pre_mount_diagnostic(self):
@@ -2082,8 +2033,7 @@ done
                 self.root.after(0, lambda: self.status_bar.config(text="卸载失败"))
 
         # 在后台线程执行
-        thread = threading.Thread(target=do_unmount, daemon=True)
-        thread.start()
+        self.task_runner.run(name="unmount_windows_share", fn=do_unmount)
 
     def check_mount_status(self):
         """检查 Windows 共享挂载状态"""
@@ -2149,8 +2099,7 @@ done
                 self.root.after(0, lambda: self.status_bar.config(text="检查失败"))
 
         # 在后台线程执行
-        thread = threading.Thread(target=do_check, daemon=True)
-        thread.start()
+        self.task_runner.run(name="check_windows_share_mount", fn=do_check)
 
     def on_environment_changed(self, event=None):
         """环境切换回调"""
@@ -2298,8 +2247,7 @@ done
                 # 不显示弹窗，只更新状态栏和记录日志
                 # messagebox.showerror("失败", f"命令执行失败！\n\n错误: {output}")
 
-        thread = threading.Thread(target=execute, daemon=True)
-        thread.start()
+        self.task_runner.run(name="restart_services", fn=execute)
 
     def run_quick_deploy(self):
         """执行快速部署（7步部署流程）"""
@@ -2561,8 +2509,7 @@ done
                 print(msg)
                 log_to_file(msg, "ERROR")
 
-        thread = threading.Thread(target=execute, daemon=True)
-        thread.start()
+        self.task_runner.run(name="stop_services", fn=execute)
 
     def cleanup_docker_images(self):
         """清理服务器上未使用的 Docker 镜像（仅保留当前运行的镜像）"""
@@ -2581,7 +2528,7 @@ done
                 log_to_file(f"[CLEANUP-IMAGES] ERROR: {e}", "ERROR")
                 self.show_text_window("错误", f"[RED]镜像清理失败：{str(e)}[/RED]")
 
-        threading.Thread(target=execute_refactored, daemon=True).start()
+        self.task_runner.run(name="docker_cleanup_images_refactored", fn=execute_refactored)
         return
         self.status_bar.config(text="正在清理 Docker 镜像...")
 
@@ -2740,8 +2687,7 @@ done
                 # 不显示弹窗，只更新状态栏和记录日志
                 # messagebox.showerror("镜像清理失败", error_msg)
 
-        thread = threading.Thread(target=execute, daemon=True)
-        thread.start()
+        self.task_runner.run(name="replica_backups_delete", fn=execute)
 
     def show_containers_with_mounts(self):
         """(已移除) 原“查看运行中的容器”按钮对应功能。"""
@@ -3200,8 +3146,7 @@ conn.close()
                 # messagebox.showerror("错误", error_msg)
                 self.status_bar.config(text="获取容器信息失败")
 
-        thread = threading.Thread(target=execute, daemon=True)
-        thread.start()
+        self.task_runner.run(name="smoke_test", fn=execute)
 
     def show_result_window(self, title, content):
         """显示结果窗口（支持ANSI颜色代码）"""
@@ -3412,8 +3357,7 @@ conn.close()
 
         _append(f"[TARGET] {self.ssh_executor.user}@{self.ssh_executor.ip}\n$ {command}\n\n")
 
-        thread = threading.Thread(target=tail_log_worker, daemon=True)
-        thread.start()
+        self.task_runner.run(name="tail_logs", fn=tail_log_worker)
         log_window.after(80, poll_queue)
 
     def select_restore_folder(self):
@@ -3630,8 +3574,7 @@ conn.close()
         self.update_restore_status("正在准备还原...")
 
         # 在后台线程执行还原
-        thread = threading.Thread(target=self._execute_restore, daemon=True)
-        thread.start()
+        self.task_runner.run(name="restore_data", fn=self._execute_restore)
 
     def _execute_restore(self):
         """执行还原操作（在后台线程中）"""

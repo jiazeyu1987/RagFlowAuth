@@ -8,6 +8,7 @@ from .audit_logs import (
     ensure_deletion_log_extended_columns,
     ensure_deletion_logs_table,
     ensure_download_logs_table,
+    ensure_audit_events_table,
     ensure_kb_ref_columns,
     ensure_kb_ref_indexes,
 )
@@ -85,6 +86,7 @@ def ensure_schema(db_path: str | Path) -> None:
         # Audit tables
         ensure_download_logs_table(conn)
         ensure_deletion_logs_table(conn)
+        ensure_audit_events_table(conn)
 
         # Cross-table KB reference columns & indexes
         ensure_kb_ref_columns(conn)

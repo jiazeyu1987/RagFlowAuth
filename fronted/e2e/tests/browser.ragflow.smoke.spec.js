@@ -25,11 +25,11 @@ adminTest('document browser loads and previews a text file @regression', async (
     });
   });
 
-  await page.route('**/api/ragflow/documents/doc1/download?*', async (route) => {
+  await page.route('**/api/preview/documents/ragflow/doc1/preview?*', async (route) => {
     await route.fulfill({
       status: 200,
-      headers: { 'Content-Type': 'text/plain; charset=utf-8' },
-      body: 'hello from ragflow preview',
+      contentType: 'application/json',
+      body: JSON.stringify({ type: 'text', filename: 'readme.txt', content: 'hello from ragflow preview' }),
     });
   });
 
@@ -38,6 +38,7 @@ adminTest('document browser loads and previews a text file @regression', async (
   await expect(page.getByText('readme.txt', { exact: true })).toBeVisible();
 
   await page.getByRole('button', { name: '查看' }).click();
-  await expect(page.getByRole('heading', { name: 'readme.txt' })).toBeVisible();
+  await expect(page.getByTestId('document-preview-modal')).toBeVisible();
+  await expect(page.getByTestId('document-preview-modal').getByText('readme.txt', { exact: false })).toBeVisible();
   await expect(page.getByText('hello from ragflow preview')).toBeVisible();
 });

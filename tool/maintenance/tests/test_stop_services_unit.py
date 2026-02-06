@@ -51,5 +51,5 @@ class TestStopServicesUnit(unittest.TestCase):
             res = stop_ragflow_and_ragflowauth(server_ip="172.30.30.58", server_user="root")
 
         self.assertTrue(res.ok)
-        self.assertTrue(any(c.startswith("docker stop ragflow_compose-") for c in calls))
-
+        # Fallback path should include stopping containers by name prefix.
+        self.assertTrue(any("grep '^ragflow_compose-'" in c for c in calls))

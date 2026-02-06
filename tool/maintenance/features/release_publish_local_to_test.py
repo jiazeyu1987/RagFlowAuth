@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 import subprocess
-import tempfile
 import time
-from dataclasses import dataclass
 from pathlib import Path
 
 from tool.maintenance.core.constants import DEFAULT_SERVER_USER, TEST_SERVER_IP
+from tool.maintenance.core.remote_staging import RemoteStagingManager
+from tool.maintenance.core.tempdir import cleanup_dir, make_temp_dir
 from tool.maintenance.features.release_publish import (
     DEFAULT_REMOTE_APP_DIR,
     PublishResult,
@@ -16,14 +16,6 @@ from tool.maintenance.features.release_publish import (
     get_server_version_info,
     preflight_check_ragflow_base_url,
     recreate_server_containers_from_inspect,
-)
-
-_REMOTE_STAGING_DIR_CANDIDATES = (
-    # Prefer large, non-root partitions first.
-    "/var/lib/docker/tmp",  # typically a dedicated docker disk (largest)
-    "/mnt/replica/_tmp",  # optional: Windows share (large, but slower)
-    "/home/root/_tmp",  # fallback when /home is separate
-    "/tmp",  # LAST RESORT: often on rootfs (can be full)
 )
 
 
@@ -54,66 +46,6 @@ def _ssh(server_ip: str, command: str, *, timeout_s: int = 60) -> tuple[bool, st
     return _run_local(
         f'ssh -o BatchMode=yes -o ConnectTimeout=10 {DEFAULT_SERVER_USER}@{server_ip} "{command}"',
         timeout_s=timeout_s,
-    )
-
-
-def _remote_available_kb(server_ip: str, path: str) -> int | None:
-    ok, out = _ssh(server_ip, f"df -Pk {path} 2>/dev/null | tail -n 1", timeout_s=20)
-    if not ok:
-        return None
-    # Expected: Filesystem 1024-blocks Used Available Capacity Mounted on
-    parts = (out or "").strip().split()
-    if len(parts) < 4:
-        return None
-    try:
-        return int(parts[3])
-    except Exception:
-        return None
-
-
-def _remote_dir_writable(server_ip: str, path: str) -> tuple[bool, str]:
-    cmd = (
-        f"set -e; mkdir -p {path}; "
-        f"t={path}/.ragflowauth_write_test_$$; "
-        f"touch $t 2>/dev/null && rm -f $t && echo OK"
-    )
-    ok, out = _ssh(server_ip, cmd, timeout_s=20)
-    if ok and ("OK" in (out or "")):
-        return True, "OK"
-    return False, (out or "").strip() or "not_writable"
-
-
-def _pick_remote_tar_path(server_ip: str, *, tar_size_bytes: int, tag: str, log) -> str:
-    need_kb = int((tar_size_bytes + 1024 * 1024 - 1) // (1024 * 1024)) * 1024  # round up to MB, in KB
-
-    best_dir: str | None = None
-    best_avail_kb: int = -1
-
-    for d in _REMOTE_STAGING_DIR_CANDIDATES:
-        writable, why = _remote_dir_writable(server_ip, d)
-        if not writable:
-            log(f"[STAGING] skip {d}: not writable ({why})")
-            continue
-        avail_kb = _remote_available_kb(server_ip, d)
-        if avail_kb is None:
-            log(f"[STAGING] skip {d}: cannot read free space (df failed)")
-            continue
-        if avail_kb < need_kb:
-            log(f"[STAGING] skip {d}: insufficient space (need~{need_kb}KB avail={avail_kb}KB)")
-            continue
-        if avail_kb > best_avail_kb:
-            best_dir = d
-            best_avail_kb = avail_kb
-
-    if best_dir:
-        if best_dir == "/tmp":
-            log("[STAGING] [WARN] selected /tmp as staging dir; this is on rootfs on many servers.")
-        log(f"[STAGING] selected remote staging dir: {best_dir} (avail={best_avail_kb}KB)")
-        return f"{best_dir}/ragflowauth_release_{tag}.tar"
-
-    raise RuntimeError(
-        "No suitable remote staging directory found (disk full or not writable). "
-        "Try freeing space on the server or ensure /var/lib/docker or /mnt/replica is mounted."
     )
 
 
@@ -179,7 +111,7 @@ def publish_from_local_to_test(
         return finish(False, before, None)
 
     log("[2/6] Export images locally (docker save)")
-    tmp_dir = Path(tempfile.mkdtemp(prefix="ragflowauth_release_"))
+    tmp_dir = make_temp_dir(prefix="ragflowauth_release")
     tar_local = tmp_dir / f"ragflowauth_release_{tag}.tar"
     ok, out = _run_local(f'docker save {backend_image} {frontend_image} -o "{tar_local}"', timeout_s=7200)
     if not ok or not tar_local.exists():
@@ -190,7 +122,12 @@ def publish_from_local_to_test(
     log(f"[STAGING] local tar size: {tar_size} bytes")
 
     # Pick a remote staging location with enough free space.
-    tar_on_test = _pick_remote_tar_path(test_ip, tar_size_bytes=tar_size, tag=tag, log=log)
+    staging_mgr = RemoteStagingManager(exec_fn=lambda c: _ssh(test_ip, c, timeout_s=60), log=log)
+    log("[CLEANUP] pre-clean legacy /tmp release artifacts on TEST (best-effort)")
+    staging_mgr.cleanup_legacy_tmp_release_files()
+    pick = staging_mgr.pick_dir_for_bytes(size_bytes=tar_size)
+    tar_on_test = staging_mgr.join(pick.dir, f"ragflowauth_release_{tag}.tar")
+    log(f"[STAGING] remote tar path: {tar_on_test}")
     log("[3/6] Transfer images to TEST (scp)")
     log(f"scp tar: {tar_local} -> {DEFAULT_SERVER_USER}@{test_ip}:{tar_on_test}")
     ok, out = _run_local(f'scp "{tar_local}" {DEFAULT_SERVER_USER}@{test_ip}:{tar_on_test}', timeout_s=7200)
@@ -206,7 +143,7 @@ def publish_from_local_to_test(
 
     # Cleanup remote tar on success (avoid filling rootfs).
     log("[CLEANUP] remove remote staging tar on TEST")
-    _ssh(test_ip, f"rm -f {tar_on_test} 2>/dev/null || true", timeout_s=60)
+    staging_mgr.cleanup_path(tar_on_test)
 
     log("[5/6] Recreate TEST containers with local images")
     ok, msg = recreate_server_containers_from_inspect(
@@ -243,8 +180,5 @@ def publish_from_local_to_test(
         tar_local.unlink(missing_ok=True)
     except Exception:
         pass
-    try:
-        tmp_dir.rmdir()
-    except Exception:
-        pass
+    cleanup_dir(tmp_dir)
     return finish(True, before, after)

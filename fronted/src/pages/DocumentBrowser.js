@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useMemo, useState, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import authClient from '../api/authClient';
@@ -58,6 +58,8 @@ const DocumentBrowser = () => {
   const location = useLocation();
   const { user, can, canDownload, accessibleKbs } = useAuth();
   const [datasets, setDatasets] = useState([]);
+  const [datasetFilterKeyword, setDatasetFilterKeyword] = useState('');
+  const [recentDatasetKeywords, setRecentDatasetKeywords] = useState([]);
   const [documents, setDocuments] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -72,6 +74,21 @@ const DocumentBrowser = () => {
   useEffect(() => {
     fetchAllDatasets();
   }, [accessibleKbs, user]); // 当用户权限变化时重新加载
+
+  useEffect(() => {
+    const storageKey = `ragflowauth_recent_dataset_keywords_v1:${user?.user_id || 'anon'}`;
+    try {
+      const raw = window.localStorage.getItem(storageKey);
+      const arr = JSON.parse(raw || '[]');
+      if (Array.isArray(arr)) {
+        setRecentDatasetKeywords(arr.filter((x) => typeof x === 'string' && x.trim()).slice(0, 5));
+      } else {
+        setRecentDatasetKeywords([]);
+      }
+    } catch {
+      setRecentDatasetKeywords([]);
+    }
+  }, [user?.user_id]);
 
   // Handle navigation from search page - locate and preview specific document
   useEffect(() => {
@@ -175,6 +192,16 @@ const DocumentBrowser = () => {
     }
   };
 
+  const normalizedKeyword = (datasetFilterKeyword || '').trim().toLowerCase();
+  const visibleDatasets = useMemo(() => {
+    if (!normalizedKeyword) return datasets;
+    return datasets.filter((d) => {
+      const name = String(d?.name || '').toLowerCase();
+      const id = String(d?.id || '').toLowerCase();
+      return name.includes(normalizedKeyword) || id.includes(normalizedKeyword);
+    });
+  }, [datasets, normalizedKeyword]);
+
   const toggleDataset = (datasetName) => {
     const newExpanded = new Set(expandedDatasets);
     if (newExpanded.has(datasetName)) {
@@ -189,9 +216,9 @@ const DocumentBrowser = () => {
   };
 
   const expandAll = () => {
-    const allDatasets = new Set(datasets.map(d => d.name));
+    const allDatasets = new Set(visibleDatasets.map(d => d.name));
     setExpandedDatasets(allDatasets);
-    datasets.forEach((dataset) => {
+    visibleDatasets.forEach((dataset) => {
       if (!documents[dataset.name]) {
         fetchDocumentsForDataset(dataset.name);
       }
@@ -230,23 +257,12 @@ const DocumentBrowser = () => {
 
     try {
       setActionLoading(prev => ({ ...prev, [`${docId}-download`]: true }));
-      const blob = await documentClient.downloadBlob({
+      await documentClient.downloadToBrowser({
         source: DOCUMENT_SOURCE.RAGFLOW,
         docId,
         datasetName,
         filename: docName,
       });
-      const url = window.URL.createObjectURL(blob);
-      try {
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = docName || `document_${docId}`;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-      } finally {
-        window.URL.revokeObjectURL(url);
-      }
     } catch (err) {
       setError(err.message || '下载失败');
     } finally {
@@ -378,6 +394,24 @@ const DocumentBrowser = () => {
     }, 0);
   };
 
+  const commitDatasetKeywordToHistory = (value) => {
+    const v = String(value || '').trim();
+    if (!v) return;
+
+    const next = [v, ...(recentDatasetKeywords || [])]
+      .filter((x) => typeof x === 'string' && x.trim())
+      .filter((x, idx, arr) => arr.findIndex((y) => y.toLowerCase() === x.toLowerCase()) === idx)
+      .slice(0, 5);
+
+    setRecentDatasetKeywords(next);
+    try {
+      const storageKey = `ragflowauth_recent_dataset_keywords_v1:${user?.user_id || 'anon'}`;
+      window.localStorage.setItem(storageKey, JSON.stringify(next));
+    } catch {
+      // ignore
+    }
+  };
+
   if (loading) {
     return (
       <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '400px' }}>
@@ -500,13 +534,94 @@ const DocumentBrowser = () => {
         <div style={{ display: 'flex', gap: '32px', fontSize: '0.9rem' }}>
           <div>
             <span style={{ color: '#6b7280' }}>知识库数量: </span>
-            <strong>{datasets.length}</strong>
+            <strong>{visibleDatasets.length}{visibleDatasets.length !== datasets.length ? ` / ${datasets.length}` : ''}</strong>
           </div>
           <div>
             <span style={{ color: '#6b7280' }}>文档总数: </span>
             <strong>{getTotalDocumentCount()}</strong>
           </div>
         </div>
+      </div>
+
+      <div style={{
+        backgroundColor: 'white',
+        padding: '16px',
+        borderRadius: '8px',
+        border: '1px solid #e5e7eb',
+        marginBottom: '16px',
+      }}>
+        <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: '0.85rem', color: '#6b7280', marginBottom: '6px' }}>知识库筛选（关键词）</div>
+            <input
+              value={datasetFilterKeyword}
+              onChange={(e) => setDatasetFilterKeyword(e.target.value)}
+              onBlur={() => commitDatasetKeywordToHistory(datasetFilterKeyword)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  commitDatasetKeywordToHistory(datasetFilterKeyword);
+                }
+              }}
+              placeholder="输入关键词，只显示包含该关键词的知识库（名称或ID）"
+              data-testid="browser-dataset-filter"
+              list="browser-dataset-filter-recent"
+              style={{
+                width: '100%',
+                padding: '10px 12px',
+                borderRadius: '6px',
+                border: '1px solid #d1d5db',
+                outline: 'none',
+              }}
+            />
+            <datalist id="browser-dataset-filter-recent">
+              {(recentDatasetKeywords || []).map((k) => (
+                <option key={k} value={k} />
+              ))}
+            </datalist>
+          </div>
+          <button
+            type="button"
+            onClick={() => setDatasetFilterKeyword('')}
+            data-testid="browser-dataset-filter-clear"
+            style={{
+              padding: '10px 14px',
+              backgroundColor: '#f3f4f6',
+              color: '#111827',
+              border: '1px solid #e5e7eb',
+              borderRadius: '6px',
+              cursor: 'pointer',
+              marginTop: '22px',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            清空
+          </button>
+        </div>
+
+        {(recentDatasetKeywords || []).length > 0 && (
+          <div style={{ marginTop: '10px', display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+            <div style={{ fontSize: '0.85rem', color: '#6b7280' }}>最近:</div>
+            {(recentDatasetKeywords || []).slice(0, 5).map((k) => (
+              <button
+                key={k}
+                type="button"
+                onClick={() => setDatasetFilterKeyword(k)}
+                style={{
+                  padding: '4px 10px',
+                  border: '1px solid #d1d5db',
+                  backgroundColor: '#fff',
+                  borderRadius: '999px',
+                  cursor: 'pointer',
+                  fontSize: '0.85rem',
+                  color: '#374151',
+                }}
+                title="点击填入关键词"
+              >
+                {k}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {error && (
@@ -532,9 +647,22 @@ const DocumentBrowser = () => {
           <div style={{ fontSize: '3rem', marginBottom: '16px' }}>📚</div>
           <div>暂无知识库</div>
         </div>
+      ) : visibleDatasets.length === 0 ? (
+        <div style={{
+          backgroundColor: 'white',
+          padding: '48px',
+          borderRadius: '8px',
+          textAlign: 'center',
+          color: '#6b7280',
+          border: '1px solid #e5e7eb',
+        }}>
+          <div style={{ fontSize: '2rem', marginBottom: '12px' }}>🔎</div>
+          <div style={{ fontWeight: 700, marginBottom: '6px', color: '#374151' }}>没有匹配的知识库</div>
+          <div style={{ fontSize: '0.9rem' }}>请调整关键词，或点击“清空”显示全部。</div>
+        </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          {datasets.map((dataset) => {
+          {visibleDatasets.map((dataset) => {
             const datasetDocs = documents[dataset.name] || [];
             const isExpanded = expandedDatasets.has(dataset.name);
             const loadingDocs = !documents[dataset.name];

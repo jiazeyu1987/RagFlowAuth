@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import shutil
 import logging
+import tempfile
 from pathlib import Path
 
 from backend.app.core.paths import repo_root
@@ -32,11 +33,14 @@ def backup_sqlite_db(ctx: BackupContext) -> None:
     dest_db_norm = str(dest_db).replace("\\", "/")
 
     # NOTE: Writing sqlite online backup directly to a CIFS mount can hang (many small page writes).
-    # If the pack dir is on `/mnt/replica`, stage the sqlite backup locally then copy to the share.
-    if dest_db_norm.startswith("/mnt/replica/"):
+    # If the target dir is on `/mnt/replica`, stage the sqlite backup locally then copy to the share.
+    target_dir_norm = str(Path(settings.replica_target_path)).replace("\\", "/").rstrip("/")
+    if target_dir_norm.startswith("/mnt/replica/") or target_dir_norm == "/mnt/replica" or dest_db_norm.startswith(
+        "/mnt/replica/"
+    ):
         logger = logging.getLogger(__name__)
 
-        tmp_root = Path("/tmp/ragflowauth_sqlite_backup")
+        tmp_root = Path(tempfile.gettempdir()) / "ragflowauth_sqlite_backup"
         ensure_dir(tmp_root)
         tmp_db = tmp_root / f"auth_{ctx.job_id}_{timestamp()}.db"
         try:

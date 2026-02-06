@@ -21,12 +21,12 @@ adminTest('document browser shows unsupported preview message (mock) @regression
     });
   });
 
-  await page.route('**/api/ragflow/documents/doc1/download?*', async (route) => {
+  await page.route('**/api/preview/documents/ragflow/doc1/preview?*', async (route) => {
     if (route.request().method() !== 'GET') return route.fallback();
     await route.fulfill({
       status: 200,
-      headers: { 'Content-Type': 'application/octet-stream' },
-      body: 'BINARY',
+      contentType: 'application/json',
+      body: JSON.stringify({ type: 'unsupported', filename: 'archive.bin', message: '不支持在线预览' }),
     });
   });
 
@@ -35,7 +35,6 @@ adminTest('document browser shows unsupported preview message (mock) @regression
   await expect(page.getByTestId('browser-doc-row-ds1-doc1')).toBeVisible();
 
   await page.getByTestId('browser-doc-view-ds1-doc1').click();
-  await expect(page.getByTestId('browser-preview-modal')).toBeVisible();
+  await expect(page.getByTestId('document-preview-modal')).toBeVisible();
   await expect(page.getByText(/不支持在线预览/)).toBeVisible();
 });
-

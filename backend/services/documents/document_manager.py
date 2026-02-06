@@ -18,6 +18,7 @@ from backend.services.documents.errors import DocumentNotFound, DocumentSourceEr
 from backend.services.documents.models import DeleteResult, DocumentRef
 from backend.services.documents.sources.knowledge_source import KnowledgeDocumentSource
 from backend.services.documents.sources.ragflow_source import RagflowDocumentSource
+from backend.services.audit_helpers import actor_fields_from_ctx
 
 
 @dataclass
@@ -39,7 +40,7 @@ class DocumentManager:
 
     # -------------------- Preview (JSON contract) --------------------
 
-    def preview_payload(self, ref: DocumentRef, *, preview_filename: str | None = None):
+    def preview_payload(self, ref: DocumentRef, *, preview_filename: str | None = None, render: str = "default"):
         """
         Return a unified preview JSON payload.
         This is used by the unified preview gateway and can be reused by other modules.
@@ -55,6 +56,7 @@ class DocumentManager:
             doc_bytes.content,
             preview_filename or doc_bytes.filename,
             doc_id=ref.doc_id,
+            render=render,
         )
 
     # -------------------- Download --------------------
@@ -84,6 +86,22 @@ class DocumentManager:
             kb_dataset_id=None,
             kb_name=kb_id,
         )
+        audit = getattr(self.deps, "audit_log_store", None)
+        if audit:
+            try:
+                audit.log_event(
+                    action="document_download",
+                    actor=ctx.payload.sub,
+                    source="ragflow",
+                    doc_id=doc_id,
+                    filename=final_filename,
+                    kb_id=kb_id,
+                    kb_name=kb_id,
+                    meta={"is_batch": False},
+                    **actor_fields_from_ctx(self.deps, ctx),
+                )
+            except Exception:
+                pass
 
         return Response(
             content=doc_bytes.content,
@@ -112,6 +130,23 @@ class DocumentManager:
             kb_dataset_id=doc.kb_dataset_id,
             kb_name=doc.kb_name,
         )
+        audit = getattr(deps, "audit_log_store", None)
+        if audit:
+            try:
+                audit.log_event(
+                    action="document_download",
+                    actor=ctx.payload.sub,
+                    source="knowledge",
+                    doc_id=doc.doc_id,
+                    filename=doc.filename,
+                    kb_id=(doc.kb_name or doc.kb_id),
+                    kb_dataset_id=getattr(doc, "kb_dataset_id", None),
+                    kb_name=getattr(doc, "kb_name", None) or (doc.kb_name or doc.kb_id),
+                    meta={"is_batch": False},
+                    **actor_fields_from_ctx(deps, ctx),
+                )
+            except Exception:
+                pass
         return FileResponse(path=doc.file_path, filename=doc.filename, media_type=doc.mime_type)
 
     # -------------------- Upload (knowledge local staging) --------------------
@@ -173,6 +208,23 @@ class DocumentManager:
             kb_name=(kb_info.name or kb_ref),
             status="pending",
         )
+        audit = getattr(deps, "audit_log_store", None)
+        if audit:
+            try:
+                audit.log_event(
+                    action="document_upload",
+                    actor=ctx.payload.sub,
+                    source="knowledge",
+                    doc_id=doc.doc_id,
+                    filename=doc.filename,
+                    kb_id=(doc.kb_name or doc.kb_id),
+                    kb_dataset_id=getattr(doc, "kb_dataset_id", None),
+                    kb_name=getattr(doc, "kb_name", None) or (doc.kb_name or doc.kb_id),
+                    meta={"file_size": getattr(doc, "file_size", None), "status": getattr(doc, "status", None)},
+                    **actor_fields_from_ctx(deps, ctx),
+                )
+            except Exception:
+                pass
         return doc
 
     # -------------------- Delete --------------------
@@ -213,6 +265,23 @@ class DocumentManager:
             ragflow_deleted=ragflow_ok,
             ragflow_delete_error=ragflow_err,
         )
+        audit = getattr(deps, "audit_log_store", None)
+        if audit:
+            try:
+                audit.log_event(
+                    action="document_delete",
+                    actor=ctx.payload.sub,
+                    source="knowledge",
+                    doc_id=doc.doc_id,
+                    filename=doc.filename,
+                    kb_id=(doc.kb_name or doc.kb_id),
+                    kb_dataset_id=getattr(doc, "kb_dataset_id", None),
+                    kb_name=getattr(doc, "kb_name", None) or (doc.kb_name or doc.kb_id),
+                    meta={"ragflow_deleted": bool(ragflow_ok == 1) if ragflow_ok is not None else None},
+                    **actor_fields_from_ctx(deps, ctx),
+                )
+            except Exception:
+                pass
 
         if ragflow_ok == 0:
             raise HTTPException(status_code=500, detail=f"无法从 RAGFlow 删除该文件：{ragflow_err}")
@@ -242,6 +311,24 @@ class DocumentManager:
         success = self._ragflow.delete(DocumentRef(source="ragflow", doc_id=doc_id, dataset_name=dataset_name))
         if not success:
             raise HTTPException(status_code=404, detail="文档不存在或删除失败")
+
+        audit = getattr(self.deps, "audit_log_store", None)
+        if audit:
+            try:
+                audit.log_event(
+                    action="document_delete",
+                    actor=ctx.payload.sub,
+                    source="ragflow",
+                    doc_id=doc_id,
+                    filename=(local_doc.filename if local_doc else None),
+                    kb_id=(getattr(local_doc, "kb_name", None) or getattr(local_doc, "kb_id", None) or dataset_name),
+                    kb_dataset_id=getattr(local_doc, "kb_dataset_id", None) if local_doc else None,
+                    kb_name=getattr(local_doc, "kb_name", None) if local_doc else dataset_name,
+                    meta={"ragflow_deleted": True},
+                    **actor_fields_from_ctx(self.deps, ctx),
+                )
+            except Exception:
+                pass
 
         if local_doc:
             self.deps.deletion_log_store.log_deletion(

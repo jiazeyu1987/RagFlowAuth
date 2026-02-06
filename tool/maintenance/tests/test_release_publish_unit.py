@@ -15,9 +15,17 @@ class TestReleasePublishUnit(unittest.TestCase):
             calls.append(argv)
             return True, "ok"
 
+        def fake_ssh_cmd(ip: str, command: str):
+            # RemoteStagingManager probes df + writability.
+            if "df -Pk" in command:
+                return True, "/dev/vdb 102400 0 102400 0% /var/lib/docker/tmp"
+            if "echo OK" in command:
+                return True, "OK"
+            return True, "OK"
+
         # Make ssh calls succeed without touching real servers.
         with patch.object(release_publish, "_run_local", side_effect=fake_run_local), patch.object(
-            release_publish, "_ssh_cmd", return_value=(True, "OK")
+            release_publish, "_ssh_cmd", side_effect=fake_ssh_cmd
         ), patch.object(release_publish, "_docker_inspect", return_value={"HostConfig": {"NetworkMode": "ragflowauth-network"}}), patch.object(
             release_publish, "_build_recreate_from_inspect", return_value="echo docker-run"
         ), patch.object(release_publish, "_ensure_network", return_value=(True, "")), patch.object(
@@ -73,9 +81,16 @@ class TestReleasePublishUnit(unittest.TestCase):
             calls.append(argv)
             return True, "ok"
 
+        def fake_ssh_cmd(ip: str, command: str):
+            if "df -Pk" in command:
+                return True, "/dev/vdb 102400 0 102400 0% /var/lib/docker/tmp"
+            if "echo OK" in command:
+                return True, "OK"
+            return True, "OK"
+
         # Simulate: compose missing on TEST; should still transfer tar, but must NOT attempt scp compose/env.
         with patch.object(release_publish, "_run_local", side_effect=fake_run_local), patch.object(
-            release_publish, "_ssh_cmd", return_value=(True, "OK")
+            release_publish, "_ssh_cmd", side_effect=fake_ssh_cmd
         ), patch.object(
             release_publish, "_docker_inspect", return_value={"HostConfig": {"NetworkMode": "ragflowauth-network"}}  # minimal
         ), patch.object(
@@ -161,6 +176,10 @@ class TestReleasePublishUnit(unittest.TestCase):
         def fake_ssh_cmd(ip: str, command: str):
             if ip == TEST_SERVER_IP and "docker save" in command:
                 docker_save_cmds.append(command)
+            if "df -Pk" in command:
+                return True, "/dev/vdb 102400 0 102400 0% /var/lib/docker/tmp"
+            if "echo OK" in command:
+                return True, "OK"
             return True, "OK"
 
         with patch.object(release_publish, "_ssh_cmd", side_effect=fake_ssh_cmd), patch.object(

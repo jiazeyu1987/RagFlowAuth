@@ -200,23 +200,12 @@ const Agents = () => {
       const dataset = datasets.find(ds => ds.id === datasetId);
       const datasetName = dataset ? (dataset.name || dataset.id) : '展厅';
 
-      const blob = await documentClient.downloadBlob({
+      await documentClient.downloadToBrowser({
         source: DOCUMENT_SOURCE.RAGFLOW,
         docId,
         datasetName,
         filename: docName,
       });
-      const url = window.URL.createObjectURL(blob);
-      try {
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = docName || `document_${docId}`;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-      } finally {
-        window.URL.revokeObjectURL(url);
-      }
     } catch (err) {
       setError(`下载文档失败: ${err.message}`);
     }
@@ -743,6 +732,7 @@ const Agents = () => {
                       {docId && (
                         <button
                           onClick={() => handlePreviewDocument(docId, docName, datasetId)}
+                          data-testid={`agents-doc-view-${String(datasetId || '')}-${String(docId || '')}`}
                           style={{
                             padding: '6px 14px',
                             fontSize: '0.875rem',
@@ -763,7 +753,7 @@ const Agents = () => {
                           👁️ 查看
                         </button>
                       )}
-                      {docId && canDownload() && (
+                      {docId && canDownloadFiles && (
                         <button
                           onClick={() => handleDownloadDocument(docId, docName, datasetId)}
                           style={{

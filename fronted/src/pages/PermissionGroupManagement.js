@@ -1,5 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { permissionGroupsApi } from '../features/permissionGroups/api';
+
+const KEYWORD_STORAGE_KEY = 'permission_group_keywords_v1';
+const KEYWORD_ACTIVE_KEY = 'permission_group_keywords_active_v1';
 
 const PermissionGroupManagement = () => {
   const [groups, setGroups] = useState([]);
@@ -13,6 +16,8 @@ const PermissionGroupManagement = () => {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [groupToDelete, setGroupToDelete] = useState(null);
 
+  const [keyword, setKeyword] = useState('');
+  const [recentKeywords, setRecentKeywords] = useState([]);
   const [formData, setFormData] = useState({
     group_name: '',
     description: '',
@@ -25,6 +30,17 @@ const PermissionGroupManagement = () => {
   });
 
   useEffect(() => {
+    try {
+      const stored = localStorage.getItem(KEYWORD_STORAGE_KEY);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed)) setRecentKeywords(parsed.slice(0, 5));
+      }
+      const active = localStorage.getItem(KEYWORD_ACTIVE_KEY) || '';
+      setKeyword(active);
+    } catch (e) {
+      // ignore storage errors
+    }
     fetchData();
   }, []);
 
@@ -114,6 +130,16 @@ const PermissionGroupManagement = () => {
     setGroupToDelete(null);
   };
 
+  const visibleGroups = useMemo(() => {
+    const kw = (keyword || '').trim().toLowerCase();
+    if (!kw) return groups;
+    return groups.filter((group) => {
+      const name = (group.group_name || '').toString().toLowerCase();
+      const desc = (group.description || '').toString().toLowerCase();
+      return name.includes(kw) || desc.includes(kw);
+    });
+  }, [groups, keyword]);
+
   const handleSubmitCreate = async (e) => {
     e.preventDefault();
 
@@ -139,6 +165,21 @@ const PermissionGroupManagement = () => {
     } catch (err) {
       setError(err.message || '更新失败');
     }
+  };
+
+  const commitKeyword = (value) => {
+    const kw = String(value || '').trim();
+    try {
+      localStorage.setItem(KEYWORD_ACTIVE_KEY, kw);
+    } catch { }
+    if (!kw) return;
+    setRecentKeywords((prev) => {
+      const next = [kw, ...(prev || []).filter((x) => x !== kw)].slice(0, 5);
+      try {
+        localStorage.setItem(KEYWORD_STORAGE_KEY, JSON.stringify(next));
+      } catch { }
+      return next;
+    });
   };
 
   const toggleKbAccess = (kbId) => {
@@ -189,6 +230,61 @@ const PermissionGroupManagement = () => {
           + 创建权限组
         </button>
       </div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', alignItems: 'center', marginBottom: '16px' }}>
+        <input
+          value={keyword}
+          onChange={(e) => {
+            const v = e.target.value;
+            setKeyword(v);
+            try {
+              localStorage.setItem(KEYWORD_ACTIVE_KEY, v);
+            } catch { }
+          }}
+          onBlur={(e) => commitKeyword(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), commitKeyword(keyword))}
+          placeholder="关键字过滤权限组（名称/描述）"
+          style={{ flex: '1 1 360px', padding: '10px 12px', border: '1px solid #d1d5db', borderRadius: '8px' }}
+        />
+        <button
+          type="button"
+          onClick={() => {
+            setKeyword('');
+            try { localStorage.setItem(KEYWORD_ACTIVE_KEY, ''); } catch { }
+          }}
+          style={{ padding: '10px 16px', borderRadius: '8px', border: '1px solid #d1d5db', background: 'white', cursor: 'pointer' }}
+        >
+          清空
+        </button>
+        <div style={{ color: '#6b7280', fontSize: '0.9rem' }} data-testid="pg-filter-count">
+          显示 {visibleGroups.length} / {groups.length}
+        </div>
+        {recentKeywords.length > 0 && (
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+            <span style={{ color: '#6b7280', fontSize: '0.85rem' }}>最近：</span>
+            {recentKeywords.map((kw) => (
+              <button
+                key={kw}
+                type="button"
+                onClick={() => {
+                  setKeyword(kw);
+                  commitKeyword(kw);
+                }}
+                style={{
+                  padding: '6px 10px',
+                  borderRadius: '999px',
+                  border: '1px solid #d1d5db',
+                  background: 'white',
+                  cursor: 'pointer',
+                  fontSize: '0.85rem',
+                  color: '#374151'
+                }}
+              >
+                {kw}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
 
       {error && (
         <div style={{
@@ -235,7 +331,7 @@ const PermissionGroupManagement = () => {
             </tr>
           </thead>
           <tbody>
-            {groups.map((group) => (
+            {visibleGroups.map((group) => (
               <tr key={group.group_id} style={{ borderBottom: '1px solid #e5e7eb' }}>
                 <td style={{ padding: '12px 16px' }}>
                   <div style={{ fontWeight: '500', color: '#111827' }}>
@@ -320,10 +416,10 @@ const PermissionGroupManagement = () => {
                 </td>
               </tr>
             ))}
-            {groups.length === 0 && (
+            {visibleGroups.length === 0 && (
               <tr>
                 <td colSpan="7" style={{ padding: '48px', textAlign: 'center', color: '#6b7280' }}>
-                  暂无权限组
+                  暂无匹配的权限组
                 </td>
               </tr>
             )}

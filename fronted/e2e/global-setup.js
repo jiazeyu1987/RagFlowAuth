@@ -1,7 +1,7 @@
 // @ts-check
 const fs = require('node:fs');
 const path = require('node:path');
-const { chromium, request } = require('@playwright/test');
+const { request } = require('@playwright/test');
 const { getAppVersionFromFrontend } = require('./helpers/appVersion');
 const { getEnv } = require('./helpers/env');
 
@@ -11,32 +11,24 @@ const { getEnv } = require('./helpers/env');
  * so we must set appVersion too.
  */
 async function writeStorageState({ storagePath, frontendBaseURL, appVersion, accessToken, refreshToken, user }) {
-  const browser = await chromium.launch();
-  const context = await browser.newContext();
-
-  await context.addInitScript(
-    ({ accessTokenValue, refreshTokenValue, userValue, appVersionValue }) => {
-      localStorage.setItem('accessToken', accessTokenValue);
-      localStorage.setItem('refreshToken', refreshTokenValue);
-      localStorage.setItem('user', JSON.stringify(userValue));
-      localStorage.setItem('appVersion', String(appVersionValue));
-    },
-    {
-      accessTokenValue: accessToken,
-      refreshTokenValue: refreshToken,
-      userValue: user,
-      appVersionValue: appVersion,
-    }
-  );
-
-  const page = await context.newPage();
-  await page.goto(frontendBaseURL, { waitUntil: 'domcontentloaded' });
+  const origin = new URL(frontendBaseURL).origin;
+  const storageState = {
+    cookies: [],
+    origins: [
+      {
+        origin,
+        localStorage: [
+          { name: 'accessToken', value: String(accessToken || '') },
+          { name: 'refreshToken', value: String(refreshToken || '') },
+          { name: 'user', value: JSON.stringify(user || {}) },
+          { name: 'appVersion', value: String(appVersion || '') },
+        ],
+      },
+    ],
+  };
 
   await fs.promises.mkdir(path.dirname(storagePath), { recursive: true });
-  await context.storageState({ path: storagePath });
-
-  await context.close();
-  await browser.close();
+  await fs.promises.writeFile(storagePath, JSON.stringify(storageState, null, 2), 'utf8');
 }
 
 async function apiLogin(api, username, password) {
@@ -116,6 +108,56 @@ async function createViewerUser(api, adminAccessToken, username, password) {
 module.exports = async () => {
   const env = getEnv();
   const appVersion = getAppVersionFromFrontend();
+
+  if (env.mode === 'mock') {
+    const authDir = path.join(__dirname, '.auth');
+    const adminStatePath = path.join(authDir, 'admin.json');
+    const viewerStatePath = path.join(authDir, 'viewer.json');
+
+    const adminUser = {
+      user_id: 'e2e_admin',
+      username: env.adminUsername || 'admin',
+      role: 'admin',
+      status: 'active',
+      group_ids: [1],
+      permissions: { can_upload: true, can_review: true, can_download: true, can_delete: true },
+      accessible_kbs: [],
+      accessible_kb_ids: [],
+      accessible_chats: [],
+    };
+
+    const viewerUser = {
+      user_id: 'e2e_viewer',
+      username: 'viewer',
+      role: 'viewer',
+      status: 'active',
+      group_ids: [2],
+      permissions: { can_upload: false, can_review: false, can_download: true, can_delete: false },
+      accessible_kbs: [],
+      accessible_kb_ids: [],
+      accessible_chats: [],
+    };
+
+    await writeStorageState({
+      storagePath: adminStatePath,
+      frontendBaseURL: env.frontendBaseURL,
+      appVersion,
+      accessToken: 'e2e_access_token',
+      refreshToken: 'e2e_refresh_token',
+      user: adminUser,
+    });
+
+    await writeStorageState({
+      storagePath: viewerStatePath,
+      frontendBaseURL: env.frontendBaseURL,
+      appVersion,
+      accessToken: 'e2e_access_token_viewer',
+      refreshToken: 'e2e_refresh_token_viewer',
+      user: viewerUser,
+    });
+
+    return;
+  }
 
   const api = await request.newContext({ baseURL: env.backendBaseURL });
 

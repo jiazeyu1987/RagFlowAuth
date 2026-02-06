@@ -1,16 +1,68 @@
 from __future__ import annotations
 
 import base64
+import html
+import io
 from pathlib import Path
 
 
-def build_preview_payload(file_content: bytes, filename: str | None, doc_id: str | None = None) -> dict:
+def _xlsx_bytes_to_sheets_html(file_content: bytes, *, max_rows: int = 200, max_cols: int = 60) -> dict[str, str]:
     """
-    Return a unified preview JSON payload compatible with the Ragflow preview contract:
-      - text: {type:'text', filename, content}
+    Convert an .xlsx file to a lightweight HTML table per sheet (no styles/shapes).
+
+    This is intentionally "lossy": shapes/flowcharts and rich formatting are not preserved.
+    For those cases callers can request `render=html` to get an "original preview" HTML.
+    """
+    import openpyxl
+
+    wb = openpyxl.load_workbook(io.BytesIO(file_content), read_only=True, data_only=True)
+    sheets: dict[str, str] = {}
+
+    for ws in wb.worksheets:
+        rows_html: list[str] = []
+        for r_idx, row in enumerate(ws.iter_rows(values_only=True), start=1):
+            if r_idx > max_rows:
+                break
+            cells = []
+            for c_idx, value in enumerate(row, start=1):
+                if c_idx > max_cols:
+                    break
+                text = "" if value is None else str(value)
+                cells.append(f"<td>{html.escape(text)}</td>")
+            rows_html.append("<tr>" + "".join(cells) + "</tr>")
+        table_html = "<table><tbody>" + "".join(rows_html) + "</tbody></table>"
+        title = str(ws.title or f"Sheet{len(sheets) + 1}")
+        sheets[title] = table_html
+
+    return sheets
+
+
+def _sheets_html_to_single_html(sheets: dict[str, str]) -> bytes:
+    parts: list[str] = [
+        "<!doctype html><html><head><meta charset=\"utf-8\" />",
+        "<title>Excel Preview</title>",
+        "<style>",
+        "body{font-family:system-ui,Segoe UI,Arial; padding:16px;} h3{margin:18px 0 10px 0;}",
+        "table{border-collapse:collapse; width:100%;} td,th{border:1px solid #ddd;padding:6px 8px;vertical-align:top;}",
+        "tr:nth-child(even){background:#fafafa}",
+        "</style>",
+        "</head><body>",
+    ]
+    for name, table in sheets.items():
+        parts.append(f"<h3>{html.escape(name)}</h3>")
+        parts.append(table)
+    parts.append("</body></html>")
+    return "\n".join(parts).encode("utf-8")
+
+
+def build_preview_payload(file_content: bytes, filename: str | None, doc_id: str | None = None, *, render: str = "default") -> dict:
+    """
+    Return a unified preview JSON payload:
+      - text:  {type:'text', filename, content}
       - image: {type:'image', filename, content(base64), image_type}
-      - pdf: {type:'pdf', filename, content(base64)}
-      - html (office conversion): {type:'html', filename, content(base64)}
+      - pdf:   {type:'pdf', filename, content(base64)}
+      - html:  {type:'html', filename, source_filename, content(base64)}
+      - excel: {type:'excel', filename, sheets:{sheetName: html}}
       - unsupported: {type:'unsupported', filename, message}
     """
     filename = filename or (f"document_{doc_id}" if doc_id else "document")
@@ -63,6 +115,18 @@ def build_preview_payload(file_content: bytes, filename: str | None, doc_id: str
             return {"type": "unsupported", "filename": filename, "message": f"{label} preview unavailable: {str(e)}"}
 
     if file_ext in {".xlsx", ".xls"}:
+        mode = (render or "default").strip().lower()
+
+        if mode != "html":
+            if file_ext == ".xlsx":
+                try:
+                    sheets = _xlsx_bytes_to_sheets_html(file_content)
+                    return {"type": "excel", "filename": filename, "sheets": sheets}
+                except Exception as e:
+                    return {"type": "unsupported", "filename": filename, "message": f"Excel 预览失败：{str(e)}"}
+            return {"type": "unsupported", "filename": filename, "message": "暂不支持 .xls 在线预览（请下载查看）"}
+
+        # render=html
         try:
             from backend.services.office_to_html import convert_office_bytes_to_html_bytes
 
@@ -70,7 +134,17 @@ def build_preview_payload(file_content: bytes, filename: str | None, doc_id: str
             base64_html = base64.b64encode(html_bytes).decode("utf-8")
             out_name = f"{Path(filename).stem}.html" if filename else f"document_{doc_id}.html"
             return {"type": "html", "filename": out_name, "source_filename": filename, "content": base64_html}
-        except Exception as e:
-            return {"type": "unsupported", "filename": filename, "message": f"Excel 在线预览不可用：{str(e)}"}
+        except Exception:
+            if file_ext == ".xlsx":
+                try:
+                    sheets = _xlsx_bytes_to_sheets_html(file_content)
+                    html_bytes = _sheets_html_to_single_html(sheets)
+                    base64_html = base64.b64encode(html_bytes).decode("utf-8")
+                    out_name = f"{Path(filename).stem}.html" if filename else f"document_{doc_id}.html"
+                    return {"type": "html", "filename": out_name, "source_filename": filename, "content": base64_html}
+                except Exception as e2:
+                    return {"type": "unsupported", "filename": filename, "message": f"Excel 原样预览(HTML)失败：{str(e2)}"}
+            return {"type": "unsupported", "filename": filename, "message": "暂不支持 .xls 原样预览(HTML)（请下载查看）"}
 
-    return {"type": "unsupported", "filename": filename, "message": f"不支持的文件类型: {file_ext}，请下载后查看"}
+    return {"type": "unsupported", "filename": filename, "message": f"不支持的文件类型: {file_ext}（请下载后查看）"}
+

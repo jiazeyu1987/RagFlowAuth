@@ -16,6 +16,7 @@ import OrgDirectoryManagement from './pages/OrgDirectoryManagement';
 import Unauthorized from './pages/Unauthorized';
 import PermissionGuard from './components/PermissionGuard';
 import ChangePassword from './pages/ChangePassword';
+import AuditLogs from './pages/AuditLogs';
 
 function App() {
   return (
@@ -137,6 +138,16 @@ function App() {
               <PermissionGuard allowedRoles={['admin']}>
                 <Layout>
                   <DataSecurity />
+                </Layout>
+              </PermissionGuard>
+            }
+          />
+          <Route
+            path="/logs"
+            element={
+              <PermissionGuard allowedRoles={['admin']}>
+                <Layout>
+                  <AuditLogs />
                 </Layout>
               </PermissionGuard>
             }

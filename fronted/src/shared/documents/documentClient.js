@@ -47,24 +47,31 @@ const parseContentDispositionFilename = (contentDisposition, fallbackName) => {
  * - delete
  *
  * Callers should pass a normalized `ref`:
- *   { source: 'ragflow'|'knowledge', docId, datasetName?, filename? }
+ *   { source: 'ragflow'|'knowledge', docId, datasetName?, filename?, render? }
  */
 class DocumentClient {
   async preview(ref) {
     const source = String(ref?.source || '').toLowerCase();
     const docId = ref?.docId;
+    const render = ref?.render;
     if (!docId) throw new Error('missing_doc_id');
 
     if (source === DOCUMENT_SOURCE.RAGFLOW) {
-      const datasetName = ref?.datasetName || ref?.dataset || '灞曞巺';
+      const datasetName = ref?.datasetName || ref?.dataset || '';
+      if (!datasetName) throw new Error('missing_dataset');
       return httpClient.requestJson(
-        `/api/preview/documents/ragflow/${encodeURIComponent(docId)}/preview${buildQuery({ dataset: datasetName })}`,
+        `/api/preview/documents/ragflow/${encodeURIComponent(docId)}/preview${buildQuery({ dataset: datasetName, render })}`,
         { method: 'GET' }
       );
     }
+
     if (source === DOCUMENT_SOURCE.KNOWLEDGE) {
-      return httpClient.requestJson(`/api/preview/documents/knowledge/${encodeURIComponent(docId)}/preview`, { method: 'GET' });
+      return httpClient.requestJson(
+        `/api/preview/documents/knowledge/${encodeURIComponent(docId)}/preview${buildQuery({ render })}`,
+        { method: 'GET' }
+      );
     }
+
     throw new Error('invalid_source');
   }
 
@@ -74,7 +81,8 @@ class DocumentClient {
     if (!docId) throw new Error('missing_doc_id');
 
     if (source === DOCUMENT_SOURCE.RAGFLOW) {
-      const datasetName = ref?.datasetName || ref?.dataset || '灞曞巺';
+      const datasetName = ref?.datasetName || ref?.dataset || '';
+      if (!datasetName) throw new Error('missing_dataset');
       const filename = ref?.filename || ref?.title || '';
       const path = `/api/documents/ragflow/${encodeURIComponent(docId)}/download${buildQuery({
         dataset: datasetName,
@@ -202,20 +210,24 @@ class DocumentClient {
     if (!docId) throw new Error('missing_doc_id');
 
     if (source === DOCUMENT_SOURCE.RAGFLOW) {
-      const datasetName = ref?.datasetName || ref?.dataset || '灞曞巺';
+      const datasetName = ref?.datasetName || ref?.dataset || '';
+      if (!datasetName) throw new Error('missing_dataset');
       return httpClient.requestJson(
         `/api/documents/ragflow/${encodeURIComponent(docId)}${buildQuery({ dataset_name: datasetName })}`,
         { method: 'DELETE' }
       );
     }
+
     if (source === DOCUMENT_SOURCE.KNOWLEDGE) {
       return httpClient.requestJson(`/api/documents/knowledge/${encodeURIComponent(docId)}`, { method: 'DELETE' });
     }
+
     throw new Error('invalid_source');
   }
 
-  async uploadKnowledge(file, kbId = '灞曞巺') {
+  async uploadKnowledge(file, kbId) {
     if (!file) throw new Error('missing_file');
+    if (!kbId) throw new Error('missing_kb_id');
     const formData = new FormData();
     formData.append('file', file);
     return httpClient.requestJson(`/api/documents/knowledge/upload${buildQuery({ kb_id: kbId })}`, {
@@ -228,3 +240,4 @@ class DocumentClient {
 
 const documentClient = new DocumentClient();
 export default documentClient;
+

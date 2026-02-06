@@ -27,6 +27,7 @@ const Layout = ({ children }) => {
     { name: '公司/部门', path: '/org-directory', allowedRoles: ['admin'] },
     { name: '权限组管理', path: '/permission-groups', allowedRoles: ['admin'] },
     { name: '数据安全', path: '/data-security', allowedRoles: ['admin'] },
+    { name: '日志', path: '/logs', allowedRoles: ['admin'] },
   ];
 
   return (

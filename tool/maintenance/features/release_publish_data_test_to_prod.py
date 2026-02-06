@@ -6,6 +6,8 @@ from dataclasses import dataclass
 from typing import Callable
 
 from tool.maintenance.core.constants import DEFAULT_SERVER_USER, PROD_SERVER_IP, TEST_SERVER_IP
+from tool.maintenance.core.service_controller import ServiceController
+from tool.maintenance.core.remote_staging import RemoteStagingManager
 from tool.maintenance.core.ssh_executor import SSHExecutor
 from tool.maintenance.features.release_publish import DEFAULT_REMOTE_APP_DIR, PublishResult, ServerVersionInfo, get_server_version_info
 
@@ -82,110 +84,9 @@ def _stop_services_and_verify(
     who: str,
     timeout_s: int = 60,
 ) -> bool:
-    """
-    Stop RagflowAuth + RAGFlow containers and verify they are not running.
-
-    Why strict: taking/restoring volumes while services are running can create inconsistent snapshots and startup issues.
-    """
-    compose_dir = f"{app_dir}/ragflow_compose"
-
-    log(f"[{who}] stopping ragflowauth containers")
-    ok, out = _ssh(ip, "docker stop ragflowauth-backend ragflowauth-frontend 2>&1 || true")
-    if ok and out.strip():
-        log(f"[{who}] docker stop ragflowauth output:\n{out.strip()}")
-
-    # Prefer docker compose down when possible, but fall back to docker stop by name prefix.
-    log(f"[{who}] stopping ragflow compose stack (best-effort)")
-    ok, out = _ssh(ip, f"cd {compose_dir} 2>/dev/null && docker compose down 2>&1 || true")
-    if ok and out.strip():
-        log(f"[{who}] docker compose down output:\n{out.strip()}")
-
-    # Fallback (1): stop any containers with the expected prefix (covers some compose project names).
-    stop_prefix_cmd = r"""
- set -e
- ids=$(docker ps -q --filter "name=^ragflow_compose-" || true)
- if [ -n "$ids" ]; then
-   docker stop $ids 2>&1 || true
- fi
- """.strip()
-    ok, out = _ssh(ip, stop_prefix_cmd)
-    if ok and out.strip():
-        log(f"[{who}] docker stop ragflow_compose-* output:\n{out.strip()}")
-
-    # Fallback (2): stop ragflow stack containers by *image* match.
-    #
-    # Why: some environments use a different compose project name (container names don't start with `ragflow_compose-`),
-    # but the images are still distinct (ragflow/es/mysql/redis/minio). We must stop them to take a consistent snapshot,
-    # otherwise ES index volume backups can become inconsistent and force re-chunk/reindex after restore.
-    stop_by_image_cmd = r"""
- set -e
- ids=$(
-   (
-     docker ps -q --filter ancestor=infiniflow/ragflow || true
-     docker ps -q --filter ancestor=elasticsearch || true
-     docker ps -q --filter ancestor=docker.elastic.co/elasticsearch/elasticsearch || true
-     docker ps -q --filter ancestor=mysql || true
-     docker ps -q --filter ancestor=valkey/valkey || true
-     docker ps -q --filter ancestor=redis || true
-     docker ps -q --filter ancestor=minio/minio || true
-     docker ps -q --filter ancestor=quay.io/minio/minio || true
-   ) | sort -u
- )
- if [ -n "$ids" ]; then
-   docker stop $ids 2>&1 || true
- fi
- """.strip()
-    ok, out = _ssh(ip, stop_by_image_cmd)
-    if ok and out.strip():
-        log(f"[{who}] docker stop ragflow stack by image output:\n{out.strip()}")
-
-    log(f"[{who}] verifying containers are stopped (timeout {timeout_s}s)")
-    deadline = time.time() + timeout_s
-    while time.time() < deadline:
-        # Marker helps unit tests recognize this check.
-        check_cmd = r"""
- set -e
- echo RAGFLOWAUTH_STOP_CHECK >/dev/null
- running_ids=$(
-   (
-     docker ps -q --filter "name=^ragflowauth-backend$" || true
-     docker ps -q --filter "name=^ragflowauth-frontend$" || true
-     docker ps -q --filter "name=^ragflow_compose-" || true
-     docker ps -q --filter ancestor=infiniflow/ragflow || true
-     docker ps -q --filter ancestor=elasticsearch || true
-     docker ps -q --filter ancestor=docker.elastic.co/elasticsearch/elasticsearch || true
-     docker ps -q --filter ancestor=mysql || true
-     docker ps -q --filter ancestor=valkey/valkey || true
-     docker ps -q --filter ancestor=redis || true
-     docker ps -q --filter ancestor=minio/minio || true
-     docker ps -q --filter ancestor=quay.io/minio/minio || true
-   ) | sort -u
- )
- if [ -n "$running_ids" ]; then
-   echo "RUNNING:"
-   echo "$running_ids"
-   exit 2
- fi
- echo "STOPPED"
- """.strip()
-        ok, out = _ssh(ip, check_cmd)
-        text = (out or "").strip()
-        if ok and text.endswith("STOPPED"):
-            log(f"[{who}] containers stopped: OK")
-            return True
-        time.sleep(3)
-
-    ok, out = _ssh(
-        ip,
-        "docker ps --no-trunc 2>&1 | "
-        "grep -E '(ragflowauth-|ragflow_compose-|infiniflow/ragflow|elasticsearch|docker\\.elastic\\.co/elasticsearch/elasticsearch|mysql|valkey/valkey|redis|minio/minio|quay\\.io/minio/minio)' "
-        "2>&1 || true",
-    )
-    if ok and out.strip():
-        log(f"[{who}] [ERROR] containers still running:\n{out.strip()}")
-    else:
-        log(f"[{who}] [ERROR] containers may still be running; unable to verify clean stop. out={out}")
-    return False
+    controller = ServiceController(exec_fn=lambda cmd, t: _ssh(ip, cmd), log=lambda m: log(m))
+    res = controller.stop_and_verify(app_dir=app_dir, mode="down", timeout_s=timeout_s, who=who)
+    return bool(res.ok)
 
 
 def _ssh_must(ip: str, cmd: str, *, log, hint: str) -> str | None:
@@ -441,29 +342,66 @@ def publish_data_from_test_to_prod(
         log("[PRECHECK] [ERROR] unable to ensure PROD base_url; refusing to publish data.")
         return finish(False, before, None)
 
-    # Prepare server-side pack on TEST
-    workdir_test = f"/tmp/ragflowauth_data_release_{tag}"
-    tar_test = f"/tmp/ragflowauth_data_release_{tag}.tar.gz"
-    tar_prod = tar_test
+    staging_test = RemoteStagingManager(exec_fn=lambda c: _ssh(test_ip, c), log=log)
+    staging_prod = RemoteStagingManager(exec_fn=lambda c: _ssh(prod_ip, c), log=log)
 
-    log("[1/7] Prepare pack dir on TEST")
-    ok, out = _ssh(test_ip, f"rm -rf {workdir_test} {tar_test}; mkdir -p {workdir_test}/volumes && echo OK")
-    if not ok:
-        log(f"[ERROR] TEST prepare failed: {out}")
-        return finish(False, before, None)
+    workdir_test: str | None = None
+    tar_test: str | None = None
+    workdir_prod: str | None = None
+    tar_prod: str | None = None
 
-    log("[2/7] Stop services on TEST (for consistent snapshot)")
-    if not _stop_services_and_verify(test_ip, app_dir=app_dir, log=log, who="TEST"):
-        log("[ERROR] TEST services did not stop cleanly; aborting to avoid inconsistent snapshot")
-        return finish(False, before, None)
+    def cleanup_best_effort() -> None:
+        # Only cleanup our temporary artifacts (NEVER touch backups or /opt/ragflowauth/data/backups).
+        staging_test.cleanup_legacy_tmp_release_files()
+        staging_prod.cleanup_legacy_tmp_release_files()
+        _ssh(test_ip, "rm -rf /tmp/ragflowauth_data_release_* 2>/dev/null || true")
+        _ssh(prod_ip, "rm -rf /tmp/ragflowauth_data_release_* 2>/dev/null || true")
+        if tar_test:
+            staging_test.cleanup_path(tar_test)
+        if workdir_test:
+            _ssh(test_ip, f"rm -rf {workdir_test} 2>/dev/null || true")
+        if tar_prod:
+            staging_prod.cleanup_path(tar_prod)
+        if workdir_prod:
+            _ssh(prod_ip, f"rm -rf {workdir_prod} 2>/dev/null || true")
 
-    log("[3/7] Export auth.db + ragflow volumes on TEST")
-    ok, out = _ssh(test_ip, f"cp -f {app_dir}/data/auth.db {workdir_test}/auth.db 2>/dev/null || true; ls -lh {workdir_test}/auth.db 2>&1 || true")
-    if not ok:
-        log(f"[ERROR] copy auth.db on TEST failed: {out}")
-        return finish(False, before, None)
+    try:
+        log("[PRECHECK] Clean legacy tmp artifacts (best-effort)")
+        staging_test.cleanup_legacy_tmp_release_files()
+        staging_prod.cleanup_legacy_tmp_release_files()
+        _ssh(test_ip, "rm -rf /tmp/ragflowauth_data_release_* 2>/dev/null || true")
+        _ssh(prod_ip, "rm -rf /tmp/ragflowauth_data_release_* 2>/dev/null || true")
 
-    export_cmd = r"""
+        # Pick staging dirs on both servers to avoid filling rootfs (/tmp is often on /).
+        pick_test = staging_test.pick_best_dir()
+        pick_prod = staging_prod.pick_best_dir()
+
+        workdir_test = RemoteStagingManager.join(pick_test.dir, f"ragflowauth_data_release_{tag}")
+        tar_test = RemoteStagingManager.join(pick_test.dir, f"ragflowauth_data_release_{tag}.tar.gz")
+        workdir_prod = RemoteStagingManager.join(pick_prod.dir, f"ragflowauth_data_release_{tag}")
+        tar_prod = RemoteStagingManager.join(pick_prod.dir, f"ragflowauth_data_release_{tag}.tar.gz")
+
+        log("[1/7] Prepare pack dir on TEST")
+        ok, out = _ssh(test_ip, f"rm -rf {workdir_test} {tar_test}; mkdir -p {workdir_test}/volumes && echo OK")
+        if not ok:
+            log(f"[ERROR] TEST prepare failed: {out}")
+            return finish(False, before, None)
+
+        log("[2/7] Stop services on TEST (for consistent snapshot)")
+        if not _stop_services_and_verify(test_ip, app_dir=app_dir, log=log, who="TEST"):
+            log("[ERROR] TEST services did not stop cleanly; aborting to avoid inconsistent snapshot")
+            return finish(False, before, None)
+
+        log("[3/7] Export auth.db + ragflow volumes on TEST")
+        ok, out = _ssh(
+            test_ip,
+            f"cp -f {app_dir}/data/auth.db {workdir_test}/auth.db 2>/dev/null || true; ls -lh {workdir_test}/auth.db 2>&1 || true",
+        )
+        if not ok:
+            log(f"[ERROR] copy auth.db on TEST failed: {out}")
+            return finish(False, before, None)
+
+        export_cmd = r"""
 set -e
 mkdir -p "{workdir}/volumes"
 docker image inspect alpine >/dev/null 2>&1 || docker pull alpine:latest >/dev/null 2>&1 || true
@@ -477,69 +415,85 @@ for v in $vols; do
   docker run --rm -v "$v:/data:ro" -v "{workdir}/volumes:/backup" alpine sh -lc "cd /data && tar -czf /backup/${{v}}.tar.gz ."
 done
 """.strip().format(workdir=workdir_test)
-    ok, out = _ssh(test_ip, export_cmd)
-    if not ok:
-        log(f"[ERROR] export volumes on TEST failed:\n{out}")
-        return finish(False, before, None)
-    if out.strip():
-        log(out.strip())
+        ok, out = _ssh(test_ip, export_cmd)
+        if not ok:
+            log(f"[ERROR] export volumes on TEST failed:\n{out}")
+            return finish(False, before, None)
+        if out.strip():
+            log(out.strip())
 
-    log("[4/7] Pack data tar on TEST")
-    ok, out = _ssh(test_ip, f"tar -czf {tar_test} -C {workdir_test} auth.db volumes && ls -lh {tar_test} 2>&1 || true")
-    if not ok:
-        log(f"[ERROR] tar pack on TEST failed: {out}")
-        return finish(False, before, None)
+        log("[4/7] Pack data tar on TEST")
+        ok, out = _ssh(test_ip, f"tar -czf {tar_test} -C {workdir_test} auth.db volumes && ls -lh {tar_test} 2>&1 || true")
+        if not ok:
+            log(f"[ERROR] tar pack on TEST failed: {out}")
+            return finish(False, before, None)
 
-    log("[5/7] Transfer data tar TEST -> PROD (scp -3)")
-    scp_cmd = [
-        "scp",
-        "-3",
-        "-o",
-        "BatchMode=yes",
-        "-o",
-        "ConnectTimeout=10",
-        "-o",
-        "StrictHostKeyChecking=no",
-        "-o",
-        "UserKnownHostsFile=/dev/null",
-        f"{DEFAULT_SERVER_USER}@{test_ip}:{tar_test}",
-        f"{DEFAULT_SERVER_USER}@{prod_ip}:{tar_prod}",
-    ]
-    ok, out = _run_local(
-        scp_cmd,
-        timeout_s=7200,
-    )
-    if not ok:
-        log(f"[ERROR] scp -3 failed: {out}")
-        return finish(False, before, None)
+        # Free TEST workdir ASAP (tar already created).
+        _ssh(test_ip, f"rm -rf {workdir_test} 2>/dev/null || true")
+        workdir_test = None
 
-    # Apply on PROD
-    workdir_prod = workdir_test
-    log("[6/7] Apply on PROD (stop, backup, restore)")
-    _ssh(prod_ip, "mkdir -p /var/lib/docker/tmp >/dev/null 2>&1 || true")
+        log("[5/7] Transfer data tar TEST -> PROD (scp -3)")
+        scp_cmd = [
+            "scp",
+            "-3",
+            "-o",
+            "BatchMode=yes",
+            "-o",
+            "ConnectTimeout=10",
+            "-o",
+            "StrictHostKeyChecking=no",
+            "-o",
+            "UserKnownHostsFile=/dev/null",
+            f"{DEFAULT_SERVER_USER}@{test_ip}:{tar_test}",
+            f"{DEFAULT_SERVER_USER}@{prod_ip}:{tar_prod}",
+        ]
+        ok, out = _run_local(
+            scp_cmd,
+            timeout_s=7200,
+        )
+        if not ok:
+            log(f"[ERROR] scp -3 failed: {out}")
+            return finish(False, before, None)
 
-    # Stop services (strict)
-    if not _stop_services_and_verify(prod_ip, app_dir=app_dir, log=log, who="PROD"):
-        log("[ERROR] PROD services did not stop cleanly; aborting to avoid partial restore")
-        return finish(False, before, None)
+        # Remove TEST tar after transfer succeeds.
+        staging_test.cleanup_path(tar_test)
+        tar_test = None
 
-    # Backup current db (best-effort)
-    ts = time.strftime("%Y%m%d_%H%M%S", time.localtime())
-    _ssh(prod_ip, f"mkdir -p /tmp/restore_backup_{ts} >/dev/null 2>&1 || true; cp -f {app_dir}/data/auth.db /tmp/restore_backup_{ts}/auth.db 2>/dev/null || true")
+        log("[6/7] Apply on PROD (stop, backup, restore)")
 
-    ok, out = _ssh(prod_ip, f"rm -rf {workdir_prod}; mkdir -p {workdir_prod} && tar -xzf {tar_prod} -C {workdir_prod} && echo OK")
-    if not ok:
-        log(f"[ERROR] extract on PROD failed: {out}")
-        return finish(False, before, None)
+        # Stop services (strict)
+        if not _stop_services_and_verify(prod_ip, app_dir=app_dir, log=log, who="PROD"):
+            log("[ERROR] PROD services did not stop cleanly; aborting to avoid partial restore")
+            return finish(False, before, None)
 
-    # Restore auth.db
-    ok, out = _ssh(prod_ip, f"cp -f {workdir_prod}/auth.db {app_dir}/data/auth.db && echo OK")
-    if not ok:
-        log(f"[ERROR] restore auth.db on PROD failed: {out}")
-        return finish(False, before, None)
+        # Backup current db (best-effort)
+        ts = time.strftime("%Y%m%d_%H%M%S", time.localtime())
+        _ssh(
+            prod_ip,
+            f"mkdir -p /tmp/restore_backup_{ts} >/dev/null 2>&1 || true; "
+            f"cp -f {app_dir}/data/auth.db /tmp/restore_backup_{ts}/auth.db 2>/dev/null || true",
+        )
 
-    # Restore volumes
-    restore_vol_cmd = r"""
+        ok, out = _ssh(
+            prod_ip,
+            f"rm -rf {workdir_prod}; mkdir -p {workdir_prod} && tar -xzf {tar_prod} -C {workdir_prod} && echo OK",
+        )
+        if not ok:
+            log(f"[ERROR] extract on PROD failed: {out}")
+            return finish(False, before, None)
+
+        # Remove PROD tar after extraction succeeds.
+        staging_prod.cleanup_path(tar_prod)
+        tar_prod = None
+
+        # Restore auth.db
+        ok, out = _ssh(prod_ip, f"cp -f {workdir_prod}/auth.db {app_dir}/data/auth.db && echo OK")
+        if not ok:
+            log(f"[ERROR] restore auth.db on PROD failed: {out}")
+            return finish(False, before, None)
+
+        # Restore volumes
+        restore_vol_cmd = r"""
 set -e
 if [ ! -d "{workdir}/volumes" ]; then
   echo "NO_VOLUMES_DIR"
@@ -557,25 +511,28 @@ for f in $files; do
   docker run --rm -v "$name:/data" -v "{workdir}/volumes:/backup:ro" alpine sh -lc "rm -rf /data/* /data/.[!.]* /data/..?* 2>/dev/null || true; tar -xzf /backup/${{name}}.tar.gz -C /data"
 done
 """.strip().format(workdir=workdir_prod)
-    ok, out = _ssh(prod_ip, restore_vol_cmd)
-    if not ok:
-        log(f"[ERROR] restore volumes on PROD failed:\n{out}")
-        return finish(False, before, None)
-    if out.strip():
-        log(out.strip())
+        ok, out = _ssh(prod_ip, restore_vol_cmd)
+        if not ok:
+            log(f"[ERROR] restore volumes on PROD failed:\n{out}")
+            return finish(False, before, None)
+        if out.strip():
+            log(out.strip())
 
-    log("[7/8] Restart services on PROD")
-    if not _ensure_ragflow_running_on_prod(prod_ip, app_dir=app_dir, log=log):
-        log("[ERROR] PROD ragflow services did not start cleanly; aborting")
-        return finish(False, before, None)
+        log("[7/8] Restart services on PROD")
+        if not _ensure_ragflow_running_on_prod(prod_ip, app_dir=app_dir, log=log):
+            log("[ERROR] PROD ragflow services did not start cleanly; aborting")
+            return finish(False, before, None)
 
-    if not _ensure_ragflowauth_running_on_prod(prod_ip, log=log):
-        log("[ERROR] PROD ragflowauth services did not start cleanly; aborting")
-        return finish(False, before, None)
+        if not _ensure_ragflowauth_running_on_prod(prod_ip, log=log):
+            log("[ERROR] PROD ragflowauth services did not start cleanly; aborting")
+            return finish(False, before, None)
 
-    log("[8/8] Cleanup temporary artifacts on PROD")
-    _ssh(prod_ip, f"rm -f {tar_prod} 2>/dev/null || true")
+        log("[8/8] Cleanup temporary artifacts on PROD")
+        _ssh(prod_ip, f"rm -rf {workdir_prod} 2>/dev/null || true")
+        workdir_prod = None
 
-    after = get_server_version_info(server_ip=prod_ip, app_dir=app_dir)
-    log("Publish data completed")
-    return finish(True, before, after)
+        after = get_server_version_info(server_ip=prod_ip, app_dir=app_dir)
+        log("Publish data completed")
+        return finish(True, before, after)
+    finally:
+        cleanup_best_effort()

@@ -37,7 +37,9 @@ playwright-report/
 test-results/
 fronted/playwright-report/
 fronted/test-results/
+fronted/test-results*/
 fronted/e2e/.auth/
+backend/tests/_tmp/
 
 # =============================================================================
 # Environment & Secrets

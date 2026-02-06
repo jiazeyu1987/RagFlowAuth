@@ -19,6 +19,11 @@ class TestReleasePublishDataTestToProdUnit(unittest.TestCase):
 
         def fake_ssh(ip: str, cmd: str):
             calls_ssh.append((ip, cmd))
+            if cmd.strip().startswith("df -Pk "):
+                # df output is parsed with parts[3] as available KB
+                return True, "/dev/sda1 1000000 1 900000 1% /"
+            if ".ragflowauth_write_test_" in cmd or "ragflowauth_write_test" in cmd:
+                return True, "OK"
             # base_url reads
             if "sed -n" in cmd and "ragflow_config.json" in cmd:
                 if ip == TEST_SERVER_IP:

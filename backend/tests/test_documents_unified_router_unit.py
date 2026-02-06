@@ -1,6 +1,5 @@
-import io
+﻿import io
 import os
-import tempfile
 import unittest
 import zipfile
 
@@ -10,6 +9,7 @@ from fastapi.testclient import TestClient
 
 from backend.app.core import auth as auth_module
 from backend.app.modules.documents.router import router as documents_router
+from backend.tests._util_tempdir import cleanup_dir, make_temp_dir
 
 
 class _User:
@@ -67,7 +67,7 @@ class _RagflowService:
     def download_document(self, doc_id: str, dataset: str):  # noqa: ARG002
         return b"hello", "a.txt"
 
-    def delete_document(self, document_id: str, dataset_name: str = "灞曞巺"):  # noqa: ARG002
+    def delete_document(self, document_id: str, dataset_name: str = "kb1"):  # noqa: ARG002
         return True
 
     def batch_download_documents(self, documents_info):  # noqa: ARG002
@@ -102,12 +102,13 @@ def _override_get_current_payload(_: Request) -> TokenPayload:
 
 class TestDocumentsUnifiedRouterUnit(unittest.TestCase):
     def test_unified_download_knowledge(self):
-        with tempfile.TemporaryDirectory() as td:
-            path = os.path.join(td, "a.txt")
+        td = make_temp_dir(prefix="ragflowauth_documents_router")
+        try:
+            path = os.path.join(str(td), "a.txt")
             with open(path, "wb") as f:
                 f.write(b"hello")
 
-            kb_doc = _KbDoc(doc_id="k1", kb_id="灞曞巺", file_path=path, filename="a.txt")
+            kb_doc = _KbDoc(doc_id="k1", kb_id="kb1", file_path=path, filename="a.txt")
             app = FastAPI()
             app.state.deps = _Deps(kb_doc)
             app.include_router(documents_router, prefix="/api")
@@ -118,33 +119,39 @@ class TestDocumentsUnifiedRouterUnit(unittest.TestCase):
 
             self.assertEqual(resp.status_code, 200)
             self.assertEqual(resp.content, b"hello")
+        finally:
+            cleanup_dir(td)
 
     def test_unified_download_ragflow(self):
-        with tempfile.TemporaryDirectory() as td:
-            path = os.path.join(td, "x.txt")
+        td = make_temp_dir(prefix="ragflowauth_documents_router")
+        try:
+            path = os.path.join(str(td), "x.txt")
             with open(path, "wb") as f:
                 f.write(b"x")
 
-            kb_doc = _KbDoc(doc_id="k1", kb_id="灞曞巺", file_path=path, filename="x.txt")
+            kb_doc = _KbDoc(doc_id="k1", kb_id="kb1", file_path=path, filename="x.txt")
             app = FastAPI()
             app.state.deps = _Deps(kb_doc)
             app.include_router(documents_router, prefix="/api")
             app.dependency_overrides[auth_module.get_current_payload] = _override_get_current_payload
 
             with TestClient(app) as client:
-                resp = client.get("/api/documents/ragflow/r1/download?dataset=灞曞巺")
+                resp = client.get("/api/documents/ragflow/r1/download?dataset=kb1")
 
             self.assertEqual(resp.status_code, 200)
             self.assertEqual(resp.content, b"hello")
             self.assertIn("Content-Disposition", resp.headers)
+        finally:
+            cleanup_dir(td)
 
     def test_unified_batch_download_knowledge(self):
-        with tempfile.TemporaryDirectory() as td:
-            path = os.path.join(td, "a.txt")
+        td = make_temp_dir(prefix="ragflowauth_documents_router")
+        try:
+            path = os.path.join(str(td), "a.txt")
             with open(path, "wb") as f:
                 f.write(b"hello")
 
-            kb_doc = _KbDoc(doc_id="k1", kb_id="灞曞巺", file_path=path, filename="a.txt")
+            kb_doc = _KbDoc(doc_id="k1", kb_id="kb1", file_path=path, filename="a.txt")
             app = FastAPI()
             app.state.deps = _Deps(kb_doc)
             app.include_router(documents_router, prefix="/api")
@@ -158,10 +165,13 @@ class TestDocumentsUnifiedRouterUnit(unittest.TestCase):
             with zipfile.ZipFile(io.BytesIO(resp.content), "r") as zf:
                 self.assertIn("a.txt", zf.namelist())
                 self.assertEqual(zf.read("a.txt"), b"hello")
+        finally:
+            cleanup_dir(td)
 
     def test_unified_batch_download_ragflow(self):
-        with tempfile.TemporaryDirectory() as td:
-            path = os.path.join(td, "a.txt")
+        td = make_temp_dir(prefix="ragflowauth_documents_router")
+        try:
+            path = os.path.join(str(td), "a.txt")
             with open(path, "wb") as f:
                 f.write(b"hello")
 
@@ -182,3 +192,6 @@ class TestDocumentsUnifiedRouterUnit(unittest.TestCase):
             self.assertIn("Content-Disposition", resp.headers)
             with zipfile.ZipFile(io.BytesIO(resp.content), "r") as zf:
                 self.assertIn("a.txt", zf.namelist())
+                self.assertEqual(zf.read("a.txt"), b"hello")
+        finally:
+            cleanup_dir(td)

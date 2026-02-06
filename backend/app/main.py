@@ -63,6 +63,7 @@ def create_app() -> FastAPI:
     authx_auth.handle_errors(app)
 
     from backend.api import (
+        audit,
         agents,
         auth,
         chat,
@@ -80,6 +81,7 @@ def create_app() -> FastAPI:
     )
 
     app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
+    app.include_router(audit.router, prefix="/api", tags=["Audit"])
     app.include_router(users.router, prefix="/api/users", tags=["Users"])
     app.include_router(knowledge.router, prefix="/api/knowledge", tags=["Knowledge Base"])
     app.include_router(review.router, prefix="/api/knowledge", tags=["Document Review"])

@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import json
-import tempfile
 import unittest
 from pathlib import Path
 
+from tool.maintenance.core.tempdir import cleanup_dir, make_temp_dir
 from tool.maintenance.core.ragflow_base_url_guard import (
     BaseUrlFixResult,
     desired_base_url_for_role,
@@ -19,7 +19,8 @@ class TestRagflowBaseUrlGuardUnit(unittest.TestCase):
         self.assertIn("172.30.30.57", desired_base_url_for_role("prod"))
 
     def test_ensure_local_base_url_rewrites_json(self) -> None:
-        with tempfile.TemporaryDirectory() as td:
+        td = make_temp_dir(prefix="ragflowauth_base_url_guard")
+        try:
             path = Path(td) / "ragflow_config.json"
             path.write_text(json.dumps({"base_url": "http://1.2.3.4:9380"}, ensure_ascii=False), encoding="utf-8")
 
@@ -29,4 +30,5 @@ class TestRagflowBaseUrlGuardUnit(unittest.TestCase):
             self.assertTrue(res.changed)
             self.assertIn("1.2.3.4", res.before)
             self.assertIn("127.0.0.1", res.after)
-
+        finally:
+            cleanup_dir(td)

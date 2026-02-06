@@ -195,7 +195,11 @@ export const AuthProvider = ({ children }) => {
     }
 
     if (resource === 'ragflow_documents') {
-      if (action === 'view' || action === 'download' || action === 'preview') return !!ops.can_download;
+      // 说明：查看/预览不等于下载。
+      // 目标：无下载权限的用户也可以“查看/预览”，但不能“下载”。
+      // 后端仍会做最终权限校验（下载接口需要 can_download）。
+      if (action === 'view' || action === 'preview') return accessibleKbs.length > 0;
+      if (action === 'download') return !!ops.can_download;
       if (action === 'delete') return !!ops.can_delete;
       return false;
     }

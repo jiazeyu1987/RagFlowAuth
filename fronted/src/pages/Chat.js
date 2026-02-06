@@ -394,34 +394,6 @@ const Chat = () => {
         filename: source.title,
       });
       setPreviewOpen(true);
-      return;
-      /*
-        const payload = await loadRagflowPreview({
-          docId: source.docId,
-          dataset: source.dataset,
-          title: source.title,
-          getPreviewJson: async ({ docId, dataset }) => {
-            return documentClient.preview({ source: DOCUMENT_SOURCE.RAGFLOW, docId, datasetName: dataset });
-          },
-          getDownloadBlob: canDownloadFiles
-            ? async ({ docId, dataset, filename }) => {
-                return documentClient.downloadBlob({
-                  source: DOCUMENT_SOURCE.RAGFLOW,
-                  docId,
-                  datasetName: dataset,
-                  filename,
-                });
-              }
-            : undefined,
-        });
-
-        const resolvedName = String(payload?.filename || source.title || '');
-        debugLogCitations('preview GET done', { before_title: source.title, after_title: resolvedName || '', type: payload?.type || '' });
-        setPreviewDialog({ show: true, title: resolvedName || source.title, loading: false, error: '', payload });
-      } catch (e) {
-        debugLogCitations('preview GET fail', { before_title: source.title, error: e?.message || String(e || '') });
-        setPreviewDialog({ show: true, title: source.title, loading: false, error: e?.message || '预览失败', payload: null });
-      */
     },
     [debugLogCitations, normalizeSource]
   );
@@ -431,23 +403,12 @@ const Chat = () => {
       const source = normalizeSource(rawSource);
       if (!source.docId || !source.dataset) return;
       if (!canDownloadFiles) throw new Error('no_download_permission');
-      const blob = await documentClient.downloadBlob({
+      await documentClient.downloadToBrowser({
         source: DOCUMENT_SOURCE.RAGFLOW,
         docId: source.docId,
         datasetName: source.dataset,
         filename: source.title,
       });
-      const url = URL.createObjectURL(blob);
-      try {
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = source.title || `document_${source.docId}`;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-      } finally {
-        URL.revokeObjectURL(url);
-      }
     },
     [normalizeSource, canDownloadFiles]
   );
@@ -938,6 +899,7 @@ const Chat = () => {
                                     <button
                                       disabled={!canOpen}
                                       onClick={() => openSourcePreview(raw)}
+                                      data-testid={`chat-source-view-${id}`}
                                       style={{
                                         padding: '6px 10px',
                                         borderRadius: '6px',
@@ -1250,144 +1212,6 @@ const Chat = () => {
         </div>
       )}
 
-      {/*
-        <div
-          data-testid="chat-preview-modal"
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(0,0,0,0.35)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 1100,
-            padding: '16px',
-          }}
-          onClick={() => setPreviewDialog({ show: false, title: '', loading: false, error: '', payload: null })}
-        >
-          <div
-            style={{
-              width: 'min(1200px, 100%)',
-              background: 'white',
-              borderRadius: '12px',
-              border: '1px solid #e5e7eb',
-              padding: '16px',
-              height: '85vh',
-              display: 'flex',
-              flexDirection: 'column',
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div style={{ display: 'flex', justifyContent: 'space-between', gap: '10px', alignItems: 'center' }}>
-              <div style={{ fontWeight: 700, fontSize: '1.05rem' }}>{previewDialog.title || '在线查看'}</div>
-              <button
-                type="button"
-                onClick={() => setPreviewDialog({ show: false, title: '', loading: false, error: '', payload: null })}
-                style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontSize: '1.2rem' }}
-              >
-                ×
-              </button>
-            </div>
-
-            <div style={{ marginTop: '12px', flex: 1, overflow: 'auto' }}>
-              {previewDialog.loading ? (
-                <div style={{ color: '#6b7280' }}>加载中...</div>
-              ) : previewDialog.error ? (
-                <div style={{ color: '#991b1b' }}>{previewDialog.error}</div>
-              ) : previewDialog.payload ? (
-                (() => {
-                  const p = previewDialog.payload;
-                  if (p.type === 'text') {
-                    const name = p.filename || previewDialog.title || '';
-                    if (isMarkdownFilename(name)) return <MarkdownPreview content={p.content} />;
-                    return <pre style={{ whiteSpace: 'pre-wrap' }}>{p.content}</pre>;
-                  }
-                  if (p.type === 'docx') {
-                    return (
-                      <div className="table-preview" style={{ padding: '24px' }}>
-                        <div
-                          style={{ fontSize: '0.875rem', lineHeight: '1.6', color: '#1f2937' }}
-                          dangerouslySetInnerHTML={{ __html: p.html || '' }}
-                        />
-                      </div>
-                    );
-                  }
-                  if (p.type === 'image') return <img alt={p.filename || 'image'} style={{ maxWidth: '100%' }} src={`data:image/${p.image_type || 'png'};base64,${p.content}`} />;
-                  if (p.type === 'pdf') return <iframe title="pdf-preview" style={{ width: '100%', height: '70vh', border: 'none' }} src={previewObjectUrl || `data:application/pdf;base64,${p.content}`} />;
-                  if (p.type === 'html') return <iframe title="html-preview" style={{ width: '100%', height: '70vh', border: 'none' }} src={previewObjectUrl || `data:text/html;base64,${p.content}`} />;
-                  if (p.type === 'excel' && p.sheets) {
-                    const sheetNames = Object.keys(p.sheets || {});
-                    return (
-                      <div className="table-preview" style={{ padding: '12px 12px 24px 12px' }}>
-                        {p.docId && p.dataset && (
-                          <div
-                            style={{
-                              marginBottom: 16,
-                              background: '#eff6ff',
-                              border: '1px solid #bfdbfe',
-                              borderRadius: 8,
-                              padding: '12px 14px',
-                              display: 'flex',
-                              justifyContent: 'space-between',
-                              alignItems: 'center',
-                              gap: 12,
-                            }}
-                          >
-                            <div style={{ color: '#1e40af', fontSize: '0.95rem', lineHeight: 1.5 }}>
-                              如果 Excel 里包含流程图/形状，表格模式可能看不到；可点“原样预览(HTML)”查看。
-                            </div>
-                            <button
-                              type="button"
-                              onClick={async () => {
-                                try {
-                                  setPreviewDialog((prev) => ({ ...prev, loading: true, error: '' }));
-                                  const qs = new URLSearchParams({ dataset: p.dataset }).toString();
-                                  const data = await httpClient.requestJson(`/api/preview/documents/ragflow/${encodeURIComponent(p.docId)}/preview?${qs}`);
-                                  if (data?.type === 'html') {
-                                    setPreviewDialog((prev) => ({ ...prev, loading: false, error: '', title: data?.filename || prev.title, payload: data }));
-                                  } else {
-                                    const msg = data?.message || '无法进行原样预览(HTML)';
-                                    setPreviewDialog((prev) => ({ ...prev, loading: false, error: msg }));
-                                  }
-                                } catch (e) {
-                                  setPreviewDialog((prev) => ({ ...prev, loading: false, error: e?.message || '预览失败' }));
-                                }
-                              }}
-                              style={{
-                                padding: '6px 12px',
-                                backgroundColor: '#3b82f6',
-                                color: 'white',
-                                border: 'none',
-                                borderRadius: '6px',
-                                cursor: 'pointer',
-                                fontSize: '0.85rem',
-                                whiteSpace: 'nowrap',
-                              }}
-                            >
-                              原样预览(HTML)
-                            </button>
-                          </div>
-                        )}
-                        {sheetNames.map((sheetName, index) => (
-                          <div key={sheetName} style={{ marginBottom: index < sheetNames.length - 1 ? '32px' : 0 }}>
-                            {sheetNames.length > 1 && (
-                              <div style={{ marginBottom: 8, fontWeight: 600, color: '#111827' }}>{sheetName}</div>
-                            )}
-                            <div style={{ overflowX: 'auto' }} dangerouslySetInnerHTML={{ __html: p.sheets[sheetName] }} />
-                          </div>
-                        ))}
-                      </div>
-                    );
-                  }
-                  return <div style={{ color: '#6b7280' }}>{p.message || '不支持预览，请下载查看。'}</div>;
-                })()
-              ) : (
-                <div style={{ color: '#6b7280' }}>暂无内容</div>
-              )}
-            </div>
-          </div>
-        </div>
-      */}
 
       <DocumentPreviewModal
         open={previewOpen}

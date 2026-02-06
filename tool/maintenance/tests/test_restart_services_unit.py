@@ -54,4 +54,5 @@ class TestRestartServicesUnit(unittest.TestCase):
             res = restart_ragflow_and_ragflowauth(server_ip="172.30.30.58", server_user="root")
 
         self.assertTrue(res.ok)
-        self.assertTrue(any(c.startswith("docker restart ragflow_compose-") for c in calls))
+        # Fallback path should include restarting containers by name prefix.
+        self.assertTrue(any("grep '^ragflow_compose-'" in c for c in calls))

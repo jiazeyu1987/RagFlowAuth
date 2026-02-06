@@ -6,6 +6,7 @@ from dataclasses import dataclass
 import json
 
 from tool.maintenance.core.constants import DEFAULT_SERVER_USER, PROD_SERVER_IP, TEST_SERVER_IP
+from tool.maintenance.core.remote_staging import RemoteStagingManager
 from tool.maintenance.core.ssh_executor import SSHExecutor
 
 
@@ -432,9 +433,22 @@ def publish_from_test_to_prod(
         )
     tag = (version or time.strftime("%Y%m%d_%H%M%S", time.localtime())).strip()
     releases_dir = f"{app_dir}/releases"
-    # Store large image tar on the biggest partition (avoid filling rootfs).
-    tar_on_test = f"{DEFAULT_REMOTE_STAGING_DIR}/ragflowauth_release_{tag}.tar"
-    tar_on_prod = f"{DEFAULT_REMOTE_STAGING_DIR}/ragflowauth_release_{tag}.tar"
+
+    staging_test = RemoteStagingManager(exec_fn=lambda c: _ssh_cmd(test_ip, c), log=log)
+    staging_prod = RemoteStagingManager(exec_fn=lambda c: _ssh_cmd(prod_ip, c), log=log)
+
+    log("[CLEANUP] pre-clean legacy /tmp release artifacts on TEST/PROD (best-effort)")
+    staging_test.cleanup_legacy_tmp_release_files()
+    staging_prod.cleanup_legacy_tmp_release_files()
+
+    # Store large image tar on the biggest writable partition (avoid filling rootfs).
+    # We don't know the final tar size upfront here, so pick the best dir by free space.
+    pick_test = staging_test.pick_best_dir()
+    pick_prod = staging_prod.pick_best_dir()
+    tar_on_test = staging_test.join(pick_test.dir, f"ragflowauth_release_{tag}.tar")
+    tar_on_prod = staging_prod.join(pick_prod.dir, f"ragflowauth_release_{tag}.tar")
+    log(f"[STAGING] TEST tar path: {tar_on_test}")
+    log(f"[STAGING] PROD tar path: {tar_on_prod}")
 
     log(f"TEST={test_ip} PROD={prod_ip} VERSION={tag}")
     log(f"Detected TEST images: backend={test_version.backend_image} frontend={test_version.frontend_image}")
@@ -489,13 +503,7 @@ def publish_from_test_to_prod(
     _ssh_cmd(test_ip, f"mkdir -p {DEFAULT_REMOTE_STAGING_DIR} 2>/dev/null || true")
     _ssh_cmd(prod_ip, f"mkdir -p {DEFAULT_REMOTE_STAGING_DIR} 2>/dev/null || true")
 
-    # Cleanup legacy rootfs temp files on PROD (previous versions wrote tar under /tmp).
-    # This is safe and helps prevent root partition from filling up silently.
-    log("[CLEANUP] Remove legacy /tmp release tar files on PROD (rootfs)")
-    _ssh_cmd(
-        prod_ip,
-        "rm -f /tmp/ragflowauth_release_*.tar /tmp/ragflowauth-images_*.tar /tmp/volumes*.tar* /tmp/images*.tar* 2>/dev/null || true",
-    )
+    # Legacy /tmp artifacts are cleaned by RemoteStagingManager above.
 
     log("[2/6] Export images on TEST (docker save)")
     images_to_save = [test_version.backend_image, test_version.frontend_image] + ragflow_images
@@ -537,7 +545,7 @@ def publish_from_test_to_prod(
         return PublishResult(False, "\n".join(log_lines), version_before, None)
 
     # Cleanup TEST tar after successful transfer (avoid filling rootfs).
-    _ssh_cmd(test_ip, f"rm -f {tar_on_test} 2>/dev/null || true")
+    staging_test.cleanup_path(tar_on_test)
 
     log("[4/6] Load images on PROD (docker load)")
     ok, out = _ssh_cmd(prod_ip, f"docker load -i {tar_on_prod}")
@@ -546,7 +554,7 @@ def publish_from_test_to_prod(
         return PublishResult(False, "\n".join(log_lines), version_before, None)
 
     # Cleanup PROD tar after successful load.
-    _ssh_cmd(prod_ip, f"rm -f {tar_on_prod} 2>/dev/null || true")
+    staging_prod.cleanup_path(tar_on_prod)
 
     log("[5/6] Recreate PROD containers with TEST images")
     prod_backend = _docker_inspect(prod_ip, "ragflowauth-backend")
