@@ -62,15 +62,69 @@ const Chat = () => {
       .join('');
   }, []);
 
+  const containsReasoningMarkers = useCallback((value) => {
+    const s = String(value ?? '').toLowerCase();
+    if (!s) return false;
+    // Heuristics: these tags often come from "thinking/tool" streams and may arrive as cumulative text.
+    return (
+      s.includes('<think') ||
+      s.includes('</think>') ||
+      s.includes('<begin_') ||
+      s.includes('</begin_') ||
+      s.includes('<tool') ||
+      s.includes('</tool>')
+    );
+  }, []);
+
   const stripThinkTags = useCallback((value) => {
     const text = String(value ?? '');
     if (!text) return '';
 
     // Remove <think>...</think> blocks (including multiline).
-    let out = text.replace(/<think>[\s\S]*?<\/think>/g, '');
+    // Some backends/models may emit attributes/spaces: <think ...>
+    let out = text.replace(/<think\b[^>]*>[\s\S]*?<\/think>/gi, '');
     // If streaming ended mid-think, hide the unfinished tail.
-    out = out.replace(/<think>[\s\S]*$/g, '');
+    out = out.replace(/<think\b[^>]*>[\s\S]*$/gi, '');
     return out;
+  }, []);
+
+  const parseThinkSegments = useCallback((value) => {
+    const text = String(value ?? '');
+    if (!text) return [];
+
+    const segs = [];
+    let i = 0;
+
+    while (i < text.length) {
+      const open = text.toLowerCase().indexOf('<think', i);
+      if (open === -1) {
+        const tail = text.slice(i);
+        if (tail) segs.push({ type: 'text', text: tail });
+        break;
+      }
+      if (open > i) segs.push({ type: 'text', text: text.slice(i, open) });
+
+      const openEnd = text.indexOf('>', open);
+      if (openEnd === -1) {
+        // Malformed start tag; just treat the rest as text.
+        segs.push({ type: 'text', text: text.slice(open) });
+        break;
+      }
+
+      const thinkStart = openEnd + 1;
+      const close = text.toLowerCase().indexOf('</think>', thinkStart);
+      if (close === -1) {
+        // Streaming may end mid-think; show what we have incrementally.
+        const thinkTail = text.slice(thinkStart);
+        if (thinkTail) segs.push({ type: 'think', text: thinkTail });
+        break;
+      }
+      const thinkBody = text.slice(thinkStart, close);
+      if (thinkBody) segs.push({ type: 'think', text: thinkBody });
+      i = close + '</think>'.length;
+    }
+
+    return segs;
   }, []);
 
   const extractCitationIds = useCallback((value) => {
@@ -457,9 +511,12 @@ const Chat = () => {
             if (data?.code === 0 && data?.data && Array.isArray(data.data.sources)) {
               upsertAssistantSources(data.data.sources);
             }
-            if (data.code === 0 && data.data && data.data.answer) {
+            // Some streaming implementations omit `code` (or use non-0 codes) but still carry `data.answer`.
+            if (data?.data && typeof data.data.answer === 'string') {
               const incoming = String(data.data.answer ?? '');
               if (!incoming) continue;
+              // eslint-disable-next-line no-console
+              if (incoming.toLowerCase().includes('<think')) console.debug('[Chat:stream] think detected');
 
               // RAGFlow streaming payloads may be either:
               // - delta chunks (append-only), or
@@ -471,9 +528,28 @@ const Chat = () => {
               const incomingNorm = normalizeForCompare(incoming);
               let next = '';
 
+              // Fast path for cumulative streams: raw incoming already contains what we have.
+              // This avoids overlap heuristics going wrong (especially when <think>/<tool> blocks are present).
+              if (current && incoming.startsWith(current)) {
+                next = incoming;
+              } else if (current && current.startsWith(incoming)) {
+                next = current; // incoming is older/shorter
+              } else if (current && incoming.includes(current) && incoming.length >= current.length) {
+                next = incoming;
+              }
+
+              // Special handling for reasoning/tool-tag streams:
+              // some backends emit cumulative "answer so far" with minor variations, which can defeat overlap detection
+              // and cause duplicated content. For these streams, prefer treating incoming as the full content so far.
+              if (!next && (containsReasoningMarkers(incoming) || containsReasoningMarkers(current))) {
+                if (incomingNorm.length >= currentNorm.length) {
+                  next = incoming;
+                }
+              }
+
               // Heuristic: treat as "cumulative so far" when the incoming text shares a very long common prefix
               // with what we already have, even if it doesn't strictly startWith due to minor formatting changes.
-              if (currentNorm && incomingNorm && incomingNorm.length > currentNorm.length) {
+              if (!next && currentNorm && incomingNorm && incomingNorm.length > currentNorm.length) {
                 let prefixLen = 0;
                 const max = Math.min(currentNorm.length, incomingNorm.length);
                 for (let k = 0; k < max; k++) {
@@ -487,7 +563,7 @@ const Chat = () => {
               }
               if (next) {
                 assistantMessageRef.current = next;
-                upsertAssistantMessage(stripThinkTags(next));
+                upsertAssistantMessage(next);
                 continue;
               }
               if (incomingNorm === currentNorm) {
@@ -530,7 +606,14 @@ const Chat = () => {
               }
 
               assistantMessageRef.current = next;
-              upsertAssistantMessage(stripThinkTags(next));
+              upsertAssistantMessage(next);
+            }
+
+            // Surface backend error chunks in UI; otherwise the user sees an empty assistant bubble.
+            if (typeof data?.code === 'number' && data.code !== 0) {
+              const msg = String(data?.message || data?.detail || 'backend_error');
+              setError(msg);
+              upsertAssistantMessage(msg);
             }
           } catch {
             // ignore malformed SSE chunks
@@ -762,7 +845,20 @@ const Chat = () => {
                   }}
                 >
                   {(() => {
-                    const display = m.role === 'assistant' ? stripThinkTags(m.content) : String(m.content ?? '');
+                    const raw = String(m.content ?? '');
+                    const assistantSegments = m.role === 'assistant' ? parseThinkSegments(raw) : [];
+                    // eslint-disable-next-line no-console
+                    if (m.role === 'assistant' && raw.toLowerCase().includes('<think') && !assistantSegments.some((s) => s.type === 'think')) {
+                      console.debug('[Chat:render] think tag present but no think segment parsed');
+                    }
+                    const assistantVisible = m.role === 'assistant'
+                      ? assistantSegments
+                          .filter((s) => s && s.type === 'text')
+                          .map((s) => String(s.text ?? ''))
+                          .join('')
+                      : '';
+
+                    const display = m.role === 'assistant' ? assistantVisible : raw;
                     const markdownText = m.role === 'assistant' ? rewriteCitationLinks(display) : display;
                     const citationIds = m.role === 'assistant' ? extractCitationIds(display) : [];
                     const sources = Array.isArray(m.sources) ? m.sources : [];
@@ -863,9 +959,45 @@ const Chat = () => {
 
                     return (
                       <>
-                        <ReactMarkdown components={markdownComponents} remarkPlugins={[remarkGfm]}>
-                          {markdownText}
-                        </ReactMarkdown>
+                        {m.role === 'assistant' ? (
+                          <>
+                            {assistantSegments.map((seg, segIdx) => {
+                              if (!seg || !seg.text) return null;
+                              if (seg.type === 'think') {
+                                return (
+                                  <div
+                                    key={`think-${segIdx}`}
+                                    style={{
+                                      color: '#6b7280',
+                                      fontSize: '0.9em',
+                                      whiteSpace: 'pre-wrap',
+                                      borderLeft: '3px solid #d1d5db',
+                                      paddingLeft: '10px',
+                                      margin: '0 0 10px 0',
+                                    }}
+                                  >
+                                    {String(seg.text ?? '')}
+                                  </div>
+                                );
+                              }
+                              const part = rewriteCitationLinks(String(seg.text ?? ''));
+                              if (!part) return null;
+                              return (
+                                <ReactMarkdown
+                                  key={`text-${segIdx}`}
+                                  components={markdownComponents}
+                                  remarkPlugins={[remarkGfm]}
+                                >
+                                  {part}
+                                </ReactMarkdown>
+                              );
+                            })}
+                          </>
+                        ) : (
+                          <ReactMarkdown components={markdownComponents} remarkPlugins={[remarkGfm]}>
+                            {markdownText}
+                          </ReactMarkdown>
+                        )}
 
                         {m.role === 'assistant' && uniqueCitationIds.length > 0 ? (
                           <div style={{ marginTop: '8px', borderTop: '1px solid #e5e7eb', paddingTop: '8px' }}>

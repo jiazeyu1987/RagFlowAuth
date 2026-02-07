@@ -3,7 +3,6 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './hooks/useAuth';
 import LoginPage from './pages/LoginPage';
 import Layout from './components/Layout';
-import Dashboard from './pages/Dashboard';
 import UserManagement from './pages/UserManagement';
 import KnowledgeUpload from './pages/KnowledgeUpload';
 import DocumentBrowser from './pages/DocumentBrowser';
@@ -30,7 +29,7 @@ function App() {
             element={
               <PermissionGuard>
                 <Layout>
-                  <Dashboard />
+                  <Navigate to="/chat" replace />
                 </Layout>
               </PermissionGuard>
             }

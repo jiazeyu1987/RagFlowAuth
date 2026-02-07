@@ -9,6 +9,16 @@ const Layout = ({ children }) => {
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
+  const permissionGroupLabel = (() => {
+    const groups = (user?.permission_groups || [])
+      .map((g) => (g && typeof g.group_name === 'string' ? g.group_name.trim() : ''))
+      .filter(Boolean);
+    const unique = Array.from(new Set(groups));
+    if (unique.length > 0) return unique.join('、');
+    // Admin accounts often have no explicit permission group assignment.
+    return user?.role || '';
+  })();
+
   const handleLogout = async () => {
     await logout();
     navigate('/login');
@@ -17,18 +27,20 @@ const Layout = ({ children }) => {
   const isActive = (path) => location.pathname === path;
 
   const navigation = [
-    { name: 'AI对话', path: '/chat' },
-    { name: '搜索', path: '/agents' },
-    { name: '文档浏览', path: '/browser' },
-    { name: '文档审核', path: '/documents', show: canReview },
-    { name: '上传文档', path: '/upload', show: canUpload },
-    { name: '修改密码', path: '/change-password' },
-    { name: '工具', path: '/tools' },
-    { name: '用户管理', path: '/users', allowedRoles: ['admin'] },
-    { name: '公司/部门', path: '/org-directory', allowedRoles: ['admin'] },
-    { name: '权限组管理', path: '/permission-groups', allowedRoles: ['admin'] },
-    { name: '数据安全', path: '/data-security', allowedRoles: ['admin'] },
-    { name: '日志', path: '/logs', allowedRoles: ['admin'] },
+    // Keep each label exactly 4 Chinese chars so sidebar items align.
+    // When collapsed, show icon only (no truncated text).
+    { name: '智能对话', path: '/chat', icon: '💬' },
+    { name: '全库搜索', path: '/agents', icon: '🔎' },
+    { name: '文档浏览', path: '/browser', icon: '📁' },
+    { name: '文档审核', path: '/documents', icon: '✅', show: canReview },
+    { name: '文档上传', path: '/upload', icon: '⬆️', show: canUpload },
+    { name: '修改密码', path: '/change-password', icon: '🔑' },
+    { name: '实用工具', path: '/tools', icon: '🧰' },
+    { name: '用户管理', path: '/users', icon: '👤', allowedRoles: ['admin'] },
+    { name: '组织管理', path: '/org-directory', icon: '🏢', allowedRoles: ['admin'] },
+    { name: '权限分组', path: '/permission-groups', icon: '🛡️', allowedRoles: ['admin'] },
+    { name: '数据安全', path: '/data-security', icon: '🔒', allowedRoles: ['admin'] },
+    { name: '日志审计', path: '/logs', icon: '📜', allowedRoles: ['admin'] },
   ];
 
   const currentTitle = navigation.find((item) => item.path === location.pathname)?.name || 'Dashboard';
@@ -56,7 +68,7 @@ const Layout = ({ children }) => {
           }}
         >
           <h2 style={{ margin: 0, fontSize: sidebarOpen ? '1.5rem' : '0.9rem' }}>
-            {sidebarOpen ? '瑛泰知识库' : 'KB'}
+            {sidebarOpen ? '瑛泰知识库' : '📚'}
           </h2>
           <button
             onClick={() => setSidebarOpen(!sidebarOpen)}
@@ -84,8 +96,11 @@ const Layout = ({ children }) => {
                   to={item.path}
                   data-testid={`nav-${item.path.replace('/', '') || 'home'}`}
                   style={{
-                    display: 'block',
-                    padding: '12px 20px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: sidebarOpen ? 'flex-start' : 'center',
+                    gap: sidebarOpen ? '10px' : '0px',
+                    padding: sidebarOpen ? '12px 20px' : '12px 0px',
                     color: isActive(item.path) ? '#60a5fa' : '#d1d5db',
                     textDecoration: 'none',
                     backgroundColor: isActive(item.path) ? '#374151' : 'transparent',
@@ -94,13 +109,26 @@ const Layout = ({ children }) => {
                     overflow: 'hidden',
                   }}
                   onMouseEnter={(e) => {
-                    if (!isActive(item.path)) e.target.style.backgroundColor = '#374151';
+                    if (!isActive(item.path)) e.currentTarget.style.backgroundColor = '#374151';
                   }}
                   onMouseLeave={(e) => {
-                    if (!isActive(item.path)) e.target.style.backgroundColor = 'transparent';
+                    if (!isActive(item.path)) e.currentTarget.style.backgroundColor = 'transparent';
                   }}
                 >
-                  {sidebarOpen ? item.name : item.name[0]}
+                  <span
+                    aria-hidden
+                    style={{
+                      width: '24px',
+                      textAlign: 'center',
+                      fontSize: sidebarOpen ? '1.05rem' : '1.15rem',
+                      lineHeight: 1,
+                      flexShrink: 0,
+                    }}
+                    title={item.name}
+                  >
+                    {item.icon || '•'}
+                  </span>
+                  {sidebarOpen && <span style={{ flex: 1 }}>{item.name}</span>}
                 </Link>
               </PermissionGuard>
             );
@@ -114,7 +142,7 @@ const Layout = ({ children }) => {
                 {user?.username}
               </div>
               <div style={{ color: '#9ca3af', fontSize: '0.8rem' }} data-testid="layout-user-role">
-                {user?.role}
+                {permissionGroupLabel}
               </div>
             </div>
           )}
@@ -131,10 +159,10 @@ const Layout = ({ children }) => {
               cursor: 'pointer',
             }}
             onMouseEnter={(e) => {
-              e.target.style.backgroundColor = '#dc2626';
+              e.currentTarget.style.backgroundColor = '#dc2626';
             }}
             onMouseLeave={(e) => {
-              e.target.style.backgroundColor = '#ef4444';
+              e.currentTarget.style.backgroundColor = '#ef4444';
             }}
           >
             {sidebarOpen ? '登出' : '⏻'}
