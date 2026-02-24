@@ -15,6 +15,7 @@ from backend.services.ragflow_chat_service import RagflowChatService
 from backend.services.ragflow_service import RagflowService
 from backend.services.org_directory_store import OrgDirectoryStore
 from backend.services.user_store import UserStore
+from backend.services.search_config_store import SearchConfigStore
 
 
 @dataclass
@@ -31,6 +32,7 @@ class AppDependencies:
     permission_group_store: PermissionGroupStore
     org_directory_store: OrgDirectoryStore
     data_security_store: DataSecurityStore
+    search_config_store: SearchConfigStore
 
 
 def create_dependencies(db_path: str | None = None) -> AppDependencies:
@@ -42,6 +44,7 @@ def create_dependencies(db_path: str | None = None) -> AppDependencies:
     ragflow_conn = create_ragflow_connection()
     data_security_store = DataSecurityStore(db_path=str(db_path))
     chat_message_sources_store = ChatMessageSourcesStore(db_path=str(db_path))
+    search_config_store = SearchConfigStore(db_path=str(db_path))
 
     return AppDependencies(
         user_store=UserStore(db_path=str(db_path)),
@@ -56,4 +59,5 @@ def create_dependencies(db_path: str | None = None) -> AppDependencies:
         permission_group_store=PermissionGroupStore(database_path=str(db_path)),
         org_directory_store=OrgDirectoryStore(db_path=str(db_path)),
         data_security_store=data_security_store,
+        search_config_store=search_config_store,
     )

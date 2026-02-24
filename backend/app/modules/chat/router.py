@@ -45,6 +45,131 @@ class RenameSessionRequest(BaseModel):
     name: str
 
 
+@router.post("/chats/{chat_id}/clear-parsed-files")
+async def clear_parsed_files(
+    chat_id: str,
+    ctx: AuthContextDep,
+):
+    deps = ctx.deps
+    snapshot = ctx.snapshot
+
+    if not snapshot.is_admin:
+        raise HTTPException(status_code=403, detail="admin_required")
+
+    try:
+        updated = deps.ragflow_chat_service.clear_chat_parsed_files(chat_id)
+    except ValueError as e:
+        code = str(e) or "chat_clear_parsed_failed"
+        if code == "chat_not_found":
+            raise HTTPException(status_code=404, detail="chat_not_found")
+        raise HTTPException(status_code=422, detail=code)
+    except Exception as e:
+        logger.error("[chats.clear_parsed] error: %s", e, exc_info=True)
+        raise HTTPException(status_code=502, detail=str(e) or "chat_clear_parsed_failed")
+
+    if not updated:
+        raise HTTPException(status_code=500, detail="chat_clear_parsed_failed")
+
+    return {"chat": updated}
+
+
+@router.post("/chats")
+async def create_chat(
+    ctx: AuthContextDep,
+    body: dict = Body(...),
+):
+    deps = ctx.deps
+    snapshot = ctx.snapshot
+
+    if not snapshot.is_admin:
+        raise HTTPException(status_code=403, detail="admin_required")
+
+    if not isinstance(body, dict):
+        raise HTTPException(status_code=400, detail="invalid_body")
+
+    name = body.get("name")
+    if not isinstance(name, str) or not name.strip():
+        raise HTTPException(status_code=400, detail="missing_name")
+
+    payload = dict(body)
+    payload["name"] = name.strip()
+    payload.pop("id", None)
+    payload.pop("chat_id", None)
+
+    created = None
+    try:
+        created = deps.ragflow_chat_service.create_chat(payload)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e) or "chat_create_failed")
+    except Exception as e:
+        logger.error("[chats.create] error: %s", e, exc_info=True)
+        raise HTTPException(status_code=502, detail=str(e) or "chat_create_failed")
+
+    if not created:
+        raise HTTPException(status_code=500, detail="chat_create_failed")
+
+    return {"chat": created}
+
+
+@router.put("/chats/{chat_id}")
+async def update_chat(
+    chat_id: str,
+    ctx: AuthContextDep,
+    updates: dict = Body(...),
+):
+    deps = ctx.deps
+    snapshot = ctx.snapshot
+
+    if not snapshot.is_admin:
+        raise HTTPException(status_code=403, detail="admin_required")
+
+    if not isinstance(updates, dict):
+        raise HTTPException(status_code=400, detail="invalid_updates")
+
+    updates = dict(updates)
+    updates.pop("id", None)
+    updates.pop("chat_id", None)
+
+    updated = None
+    try:
+        updated = deps.ragflow_chat_service.update_chat(chat_id, updates)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e) or "chat_update_failed")
+    except Exception as e:
+        logger.error("[chats.update] error: %s", e, exc_info=True)
+        raise HTTPException(status_code=502, detail=str(e) or "chat_update_failed")
+
+    if not updated:
+        raise HTTPException(status_code=500, detail="chat_update_failed")
+
+    return {"chat": updated}
+
+
+@router.delete("/chats/{chat_id}")
+async def delete_chat(
+    chat_id: str,
+    ctx: AuthContextDep,
+):
+    deps = ctx.deps
+    snapshot = ctx.snapshot
+
+    if not snapshot.is_admin:
+        raise HTTPException(status_code=403, detail="admin_required")
+
+    try:
+        deps.ragflow_chat_service.delete_chat(chat_id)
+    except ValueError as e:
+        code = str(e) or "chat_delete_failed"
+        if code == "chat_not_found":
+            raise HTTPException(status_code=404, detail="chat_not_found")
+        raise HTTPException(status_code=422, detail=code)
+    except Exception as e:
+        logger.error("[chats.delete] error: %s", e, exc_info=True)
+        raise HTTPException(status_code=502, detail=str(e) or "chat_delete_failed")
+
+    return {"ok": True}
+
+
 @router.get("/chats")
 async def list_chats(
     ctx: AuthContextDep,

@@ -31,6 +31,7 @@ const Layout = ({ children }) => {
     // When collapsed, show icon only (no truncated text).
     { name: '智能对话', path: '/chat', icon: '💬' },
     { name: '全库搜索', path: '/agents', icon: '🔎' },
+    { name: '知识配置', path: '/kbs', icon: '🗂️' },
     { name: '文档浏览', path: '/browser', icon: '📁' },
     { name: '文档审核', path: '/documents', icon: '✅', show: canReview },
     { name: '文档上传', path: '/upload', icon: '⬆️', show: canUpload },

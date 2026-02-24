@@ -17,6 +17,7 @@ import PermissionGuard from './components/PermissionGuard';
 import ChangePassword from './pages/ChangePassword';
 import AuditLogs from './pages/AuditLogs';
 import Tools from './pages/Tools';
+import KnowledgeBases from './pages/KnowledgeBases';
 
 function App() {
   return (
@@ -110,6 +111,16 @@ function App() {
               <PermissionGuard>
                 <Layout>
                   <Tools />
+                </Layout>
+              </PermissionGuard>
+            }
+          />
+          <Route
+            path="/kbs"
+            element={
+              <PermissionGuard>
+                <Layout>
+                  <KnowledgeBases />
                 </Layout>
               </PermissionGuard>
             }

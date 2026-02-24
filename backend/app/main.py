@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import logging
 from contextlib import asynccontextmanager
+import sys
+from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -21,6 +23,26 @@ async def lifespan(app: FastAPI):
 
     app.state.deps = create_dependencies()
     logger.info("Dependencies initialized")
+
+    # Help diagnose "stale code" / wrong interpreter issues on Windows.
+    try:
+        import backend.services.ragflow_chat_service as rcs
+
+        p = Path(getattr(rcs, "__file__", "") or "")
+        m = None
+        try:
+            if p and p.exists():
+                m = getattr(p.stat(), "st_mtime_ns", None) or int(p.stat().st_mtime * 1_000_000_000)
+        except Exception:
+            m = None
+        logging.getLogger("uvicorn.error").warning(
+            "Runtime python=%s ragflow_chat_service=%s mtime_ns=%s",
+            sys.executable,
+            str(p) if p else "(unknown)",
+            str(m) if m is not None else "(unknown)",
+        )
+    except Exception:
+        pass
 
     try:
         deps = app.state.deps
@@ -77,6 +99,7 @@ def create_app() -> FastAPI:
         preview,
         ragflow,
         review,
+        search_configs,
         users,
     )
 
@@ -90,6 +113,7 @@ def create_app() -> FastAPI:
     app.include_router(documents.router, prefix="/api", tags=["Documents"])
     app.include_router(chat.router, prefix="/api", tags=["Chat"])
     app.include_router(agents.router, prefix="/api", tags=["Agents"])
+    app.include_router(search_configs.router, prefix="/api", tags=["Search Configs"])
     app.include_router(me.router, prefix="/api", tags=["Me"])
     app.include_router(data_security.router, prefix="/api", tags=["Data Security"])
     app.include_router(permission_groups.create_router(), prefix="/api", tags=["Permission Groups"])

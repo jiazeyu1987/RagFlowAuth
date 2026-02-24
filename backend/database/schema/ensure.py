@@ -14,6 +14,7 @@ from .audit_logs import (
 )
 from .chat_sessions import ensure_chat_sessions_table
 from .chat_message_sources import ensure_chat_message_sources_table
+from .search_configs import ensure_search_configs_table
 from .data_security import (
     add_cron_schedule_columns_to_data_security,
     add_backup_job_kind_column,
@@ -59,6 +60,7 @@ def ensure_schema(db_path: str | Path) -> None:
         ensure_kb_documents_table(conn)
         ensure_chat_sessions_table(conn)
         ensure_chat_message_sources_table(conn)
+        ensure_search_configs_table(conn)
 
         # Permission groups (authorization model)
         ensure_permission_groups_table(conn)

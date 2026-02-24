@@ -75,7 +75,15 @@ class RagflowHttpClient:
             return None
 
         if resp.status_code != 200:
-            self._logger.error("RAGFlow POST %s failed: HTTP %s", url, resp.status_code)
+            body_preview = ""
+            try:
+                body_preview = (resp.text or "")[:500]
+            except Exception:
+                body_preview = ""
+            if body_preview:
+                self._logger.error("RAGFlow POST %s failed: HTTP %s body=%s", url, resp.status_code, body_preview)
+            else:
+                self._logger.error("RAGFlow POST %s failed: HTTP %s", url, resp.status_code)
             return None
 
         try:
@@ -86,18 +94,57 @@ class RagflowHttpClient:
 
         return data if isinstance(data, dict) else None
 
-    def delete_json(
+    def put_json(
         self, path: str, *, body: dict[str, Any] | None = None, params: dict[str, Any] | None = None
     ) -> dict[str, Any] | None:
         url = f"{self._config.base_url.rstrip('/')}{path}"
         try:
-            resp = requests.delete(
+            resp = requests.put(
                 url,
                 headers=self._headers(),
                 params=params,
                 json=body or {},
                 timeout=self._timeout(None),
             )
+        except Exception as exc:
+            self._logger.error("RAGFlow PUT %s failed: %s", url, exc)
+            return None
+
+        if resp.status_code != 200:
+            body_preview = ""
+            try:
+                body_preview = (resp.text or "")[:500]
+            except Exception:
+                body_preview = ""
+            if body_preview:
+                self._logger.error("RAGFlow PUT %s failed: HTTP %s body=%s", url, resp.status_code, body_preview)
+            else:
+                self._logger.error("RAGFlow PUT %s failed: HTTP %s", url, resp.status_code)
+            return None
+
+        try:
+            data = resp.json()
+        except Exception as exc:
+            self._logger.error("RAGFlow PUT %s invalid JSON: %s", url, exc)
+            return None
+
+        return data if isinstance(data, dict) else None
+
+    def delete_json(
+        self, path: str, *, body: dict[str, Any] | None = None, params: dict[str, Any] | None = None
+    ) -> dict[str, Any] | None:
+        url = f"{self._config.base_url.rstrip('/')}{path}"
+        try:
+            kwargs: dict[str, Any] = {
+                "headers": self._headers(),
+                "params": params,
+                "timeout": self._timeout(None),
+            }
+            # Some gateways/proxies reject or strip DELETE request bodies. Allow callers to
+            # omit the body by passing `body=None`.
+            if body is not None:
+                kwargs["json"] = body
+            resp = requests.delete(url, **kwargs)
         except Exception as exc:
             self._logger.error("RAGFlow DELETE %s failed: %s", url, exc)
             return None
