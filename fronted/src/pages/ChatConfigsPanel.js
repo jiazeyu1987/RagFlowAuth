@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { knowledgeApi } from '../features/knowledge/api';
 
@@ -19,41 +19,22 @@ function parseJson(text) {
 function sanitizeChatPayload(payload) {
   const body = payload && typeof payload === 'object' && !Array.isArray(payload) ? { ...payload } : {};
 
-  // Identity is controlled by path params for update, and by backend for create.
   delete body.id;
   delete body.chat_id;
 
-  // Common read-only / computed fields observed in RAGFlow payloads.
-  for (const k of [
-    'tenant_id',
-    'create_time',
-    'update_time',
-    'status',
-    'token_num',
-    'document_count',
-    'chunk_count',
-  ]) {
+  for (const k of ['tenant_id', 'create_time', 'update_time', 'status', 'token_num', 'document_count', 'chunk_count']) {
     delete body[k];
   }
 
-  // Task metadata fields.
   for (const k of Object.keys(body)) {
-    if (k.endsWith('_task_id') || k.endsWith('_task_finish_at') || k.endsWith('_task_start_at')) {
-      delete body[k];
-    }
+    if (k.endsWith('_task_id') || k.endsWith('_task_finish_at') || k.endsWith('_task_start_at')) delete body[k];
   }
 
-  // Normalize dataset linkage for create/update:
-  // - The UI may have `datasets` (objects) from list responses
-  // - Create/update endpoints typically expect `dataset_ids` (string[])
-  // Keep existing explicit ids if provided; otherwise derive from `datasets`.
   const derivedIds = getSelectedDatasetIdsFromChatJson(body);
   const hasExplicitIds = Array.isArray(body.dataset_ids) || Array.isArray(body.kb_ids);
-  if (!hasExplicitIds && derivedIds.length) {
-    body.dataset_ids = derivedIds;
-  }
-  delete body.datasets;
+  if (!hasExplicitIds && derivedIds.length) body.dataset_ids = derivedIds;
 
+  delete body.datasets;
   return body;
 }
 
@@ -75,34 +56,22 @@ function normalizeDatasetListResponse(res) {
 
 function getSelectedDatasetIdsFromChatJson(val) {
   const obj = val && typeof val === 'object' && !Array.isArray(val) ? val : {};
-  const a = obj.dataset_ids;
-  const b = obj.kb_ids;
-  const a2 = obj.datasetIds;
-  const b2 = obj.kbIds;
-  const a1 = obj.dataset_id ?? obj.datasetId;
-  const b1 = obj.kb_id ?? obj.kbId;
-  // RAGFlow responses differ by version:
-  // - Some use `dataset_ids` (string[])
-  // - Some use `kb_ids` (string[])
-  // - Some use `datasetIds` / `kbIds` (string[])
-  // - Some use `dataset_id` / `kb_id` (string)
-  // - Some return `datasets` as a list of dataset objects or ids
-  const aIds = Array.isArray(a) ? a.map((x) => String(x || '').trim()).filter(Boolean) : [];
-  if (aIds.length) return aIds;
-  const bIds = Array.isArray(b) ? b.map((x) => String(x || '').trim()).filter(Boolean) : [];
-  if (bIds.length) return bIds;
-  const a2Ids = Array.isArray(a2) ? a2.map((x) => String(x || '').trim()).filter(Boolean) : [];
-  if (a2Ids.length) return a2Ids;
-  const b2Ids = Array.isArray(b2) ? b2.map((x) => String(x || '').trim()).filter(Boolean) : [];
-  if (b2Ids.length) return b2Ids;
+  const candidates = [obj.dataset_ids, obj.kb_ids, obj.datasetIds, obj.kbIds];
+  for (const arr of candidates) {
+    if (Array.isArray(arr)) {
+      const ids = arr.map((x) => String(x || '').trim()).filter(Boolean);
+      if (ids.length) return ids;
+    }
+  }
 
-  const one = [a1, b1].map((x) => String(x || '').trim()).filter(Boolean);
+  const one = [obj.dataset_id, obj.datasetId, obj.kb_id, obj.kbId]
+    .map((x) => String(x || '').trim())
+    .filter(Boolean);
   if (one.length) return one;
 
-  const ds = obj.datasets;
-  if (Array.isArray(ds)) {
+  if (Array.isArray(obj.datasets)) {
     const ids = [];
-    for (const item of ds) {
+    for (const item of obj.datasets) {
       if (!item) continue;
       if (typeof item === 'string' || typeof item === 'number') {
         const s = String(item).trim();
@@ -110,13 +79,7 @@ function getSelectedDatasetIdsFromChatJson(val) {
         continue;
       }
       if (typeof item === 'object') {
-        const raw =
-          item.id ??
-          item.dataset_id ??
-          item.kb_id ??
-          item.datasetId ??
-          item.kbId ??
-          '';
+        const raw = item.id ?? item.dataset_id ?? item.kb_id ?? item.datasetId ?? item.kbId ?? '';
         const s = String(raw || '').trim();
         if (s) ids.push(s);
       }
@@ -149,12 +112,11 @@ export function ChatConfigsPanel() {
   const [chatNameText, setChatNameText] = useState('');
   const [chatJsonText, setChatJsonText] = useState('{}');
   const [chatSaveStatus, setChatSaveStatus] = useState('');
-  const [chatLocked, setChatLocked] = useState(null); // { message: string, desiredPayload: object }
+  const [chatLocked, setChatLocked] = useState(null);
 
   const [busy, setBusy] = useState(false);
 
   const [createOpen, setCreateOpen] = useState(false);
-  const [createMode, setCreateMode] = useState('blank'); // blank | copy
   const [createName, setCreateName] = useState('');
   const [createFromId, setCreateFromId] = useState('');
   const [createJsonText, setCreateJsonText] = useState('{}');
@@ -183,7 +145,7 @@ export function ChatConfigsPanel() {
       setChatList(normalizeChatListResponse(res));
     } catch (e) {
       setChatList([]);
-      setChatError(e?.message || '鍔犺浇瀵硅瘽澶辫触');
+      setChatError(e?.message || '加载对话失败');
     } finally {
       setChatLoading(false);
     }
@@ -217,7 +179,7 @@ export function ChatConfigsPanel() {
       setChatJsonText(prettyJson(sanitizeChatPayload(chat)));
     } catch (e) {
       setChatSelected(null);
-      setChatDetailError(e?.message || '鍔犺浇澶辫触');
+      setChatDetailError(e?.message || '加载失败');
     } finally {
       setChatDetailLoading(false);
     }
@@ -230,8 +192,7 @@ export function ChatConfigsPanel() {
   }, [chatJsonText]);
 
   function toggleDatasetSelection(datasetId) {
-    if (!isAdmin) return;
-    if (!datasetId) return;
+    if (!isAdmin || !datasetId) return;
     setChatDetailError('');
     setChatSaveStatus('');
 
@@ -278,7 +239,7 @@ export function ChatConfigsPanel() {
 
     const name = String(chatNameText || chatSelected.name || '').trim();
     if (!name) {
-      setChatDetailError('鍚嶇О涓嶈兘涓虹┖');
+      setChatDetailError('名称不能为空');
       return;
     }
 
@@ -286,14 +247,12 @@ export function ChatConfigsPanel() {
     setBusy(true);
     try {
       const updated = await knowledgeApi.updateRagflowChat(chatSelected.id, updates);
-      if (!updated || !updated.id) throw new Error('Save succeeded but no latest config returned');
+      if (!updated || !updated.id) throw new Error('保存成功但未返回最新配置');
       setChatSelected(updated);
       setChatNameText(String(updated?.name || name));
       setChatJsonText(prettyJson(sanitizeChatPayload(updated)));
       setChatSaveStatus('已保存');
       await fetchChatList();
-      // Refresh this chat detail from server, so the panel always reflects the
-      // canonical config after save (different RAGFlow versions vary fields).
       try {
         const fresh = await knowledgeApi.getRagflowChat(chatSelected.id);
         if (fresh && fresh.id) {
@@ -301,18 +260,14 @@ export function ChatConfigsPanel() {
           setChatNameText(String(fresh?.name || name));
           setChatJsonText(prettyJson(sanitizeChatPayload(fresh)));
         }
-      } catch (e) {
-        // Keep UI state from update response if refresh fails.
-      }
+      } catch (_) {}
     } catch (e) {
       const msg = String(e?.message || '');
       if (msg.includes('chat_dataset_locked') || msg.includes("doesn't own parsed file")) {
         setChatLocked({ message: msg, desiredPayload: updates });
-        setChatDetailError(
-          '该对话已关联已解析文档，当前配置不允许直接切换到不包含这些文档的知识库。可复制为新对话后再调整知识库。'
-        );
+        setChatDetailError('该对话已关联已解析文档，当前配置不允许直接切换到不包含这些文档的知识库。可复制为新对话后再调整知识库。');
       } else {
-        setChatDetailError(msg || '淇濆瓨澶辫触');
+        setChatDetailError(msg || '保存失败');
       }
     } finally {
       setBusy(false);
@@ -323,7 +278,7 @@ export function ChatConfigsPanel() {
     if (!chatSelected?.id) return;
     const name = String(chatNameText || chatSelected.name || '').trim();
     if (!name) {
-      setChatDetailError('鍚嶇О涓嶈兘涓虹┖');
+      setChatDetailError('名称不能为空');
       return;
     }
     setChatDetailError('');
@@ -331,7 +286,7 @@ export function ChatConfigsPanel() {
     setBusy(true);
     try {
       const updated = await knowledgeApi.updateRagflowChat(chatSelected.id, { name });
-      if (!updated || !updated.id) throw new Error('Save succeeded but no latest config returned');
+      if (!updated || !updated.id) throw new Error('保存成功但未返回最新配置');
       setChatSelected(updated);
       setChatNameText(String(updated?.name || name));
       setChatJsonText(prettyJson(sanitizeChatPayload(updated)));
@@ -339,40 +294,37 @@ export function ChatConfigsPanel() {
       setChatLocked(null);
       await fetchChatList();
     } catch (e) {
-      setChatDetailError(e?.message || '淇濆瓨澶辫触');
+      setChatDetailError(e?.message || '保存失败');
     } finally {
       setBusy(false);
     }
   }
 
   async function copyToNewChat() {
-    if (!isAdmin) return;
-    if (!chatLocked?.desiredPayload) return;
+    if (!isAdmin || !chatLocked?.desiredPayload) return;
     const baseName = String(chatNameText || chatSelected?.name || '新对话').trim() || '新对话';
     const name = String(baseName) + '_copy';
     setBusy(true);
     try {
       const created = await knowledgeApi.createRagflowChat({ ...chatLocked.desiredPayload, name });
-      if (!created || !created.id) throw new Error('鏂板缓鎴愬姛浣嗘湭杩斿洖瀵硅瘽淇℃伅');
+      if (!created || !created.id) throw new Error('新建成功但未返回对话信息');
       setChatLocked(null);
       setChatDetailError('');
       setChatSaveStatus('已复制为新对话');
       await fetchChatList();
       await loadChatDetail(created.id);
     } catch (e) {
-      setChatDetailError(e?.message || '澶嶅埗鍒涘缓澶辫触');
+      setChatDetailError(e?.message || '复制创建失败');
     } finally {
       setBusy(false);
     }
   }
 
   async function clearParsedFiles() {
-    if (!chatSelected?.id) return;
-    if (!isAdmin) return;
-    const ok = window.confirm(
-      '确认清除该对话的已解析文件绑定？\n\n这将尝试解除 RAGFlow 的 parsed files 归属限制，以便你切换知识库。\n如果 RAGFlow 不支持清除，该操作可能无效果。',
-    );
+    if (!chatSelected?.id || !isAdmin) return;
+    const ok = window.confirm('确认清除该对话的已解析文件绑定？\n\n这将尝试解除 RAGFlow 的 parsed files 归属限制，以便切换知识库。');
     if (!ok) return;
+
     setChatDetailError('');
     setChatSaveStatus('');
     setChatLocked(null);
@@ -381,9 +333,9 @@ export function ChatConfigsPanel() {
       await knowledgeApi.clearRagflowChatParsedFiles(chatSelected.id);
       await fetchChatList();
       await loadChatDetail(chatSelected.id);
-      setChatSaveStatus('宸叉竻闄よВ鏋愮粦瀹氾紙濡傛敮鎸侊級');
+      setChatSaveStatus('已清除解析绑定（如支持）');
     } catch (e) {
-      setChatDetailError(e?.message || '娓呴櫎澶辫触');
+      setChatDetailError(e?.message || '清除失败');
     } finally {
       setBusy(false);
     }
@@ -399,18 +351,19 @@ export function ChatConfigsPanel() {
       if (chatSelected?.id === chat.id) setChatSelected(null);
       await fetchChatList();
     } catch (e) {
-      setChatError(e?.message || '鍒犻櫎澶辫触');
+      setChatError(e?.message || '删除失败');
     } finally {
       setBusy(false);
     }
   }
 
   function openCreate() {
-    setCreateMode('blank');
     setCreateName('');
-    setCreateFromId('');
+    const firstId = String(chatList[0]?.id || '');
+    setCreateFromId(firstId);
     setCreateJsonText('{}');
     setCreateError('');
+    if (firstId) syncCreateJsonFromCopy(firstId);
     setCreateOpen(true);
   }
 
@@ -447,12 +400,12 @@ export function ChatConfigsPanel() {
     setBusy(true);
     try {
       const created = await knowledgeApi.createRagflowChat(payload);
-      if (!created || !created.id) throw new Error('鏂板缓鎴愬姛浣嗘湭杩斿洖瀵硅瘽淇℃伅');
+      if (!created || !created.id) throw new Error('新建成功但未返回对话信息');
       setCreateOpen(false);
       await fetchChatList();
       await loadChatDetail(created.id);
     } catch (e) {
-      setCreateError(e?.message || '鍒涘缓澶辫触');
+      setCreateError(e?.message || '创建失败');
     } finally {
       setBusy(false);
     }
@@ -474,27 +427,14 @@ export function ChatConfigsPanel() {
     boxShadow: '0 6px 18px rgba(15, 23, 42, 0.06)',
   };
 
-  const headerBtn = (active) => ({
-    flex: '1 1 140px',
-    padding: '10px 12px',
-    borderRadius: '10px',
-    border: '1px solid ' + (active ? '#1d4ed8' : '#e5e7eb'),
-    background: active ? '#1d4ed8' : '#ffffff',
-    color: active ? '#ffffff' : '#111827',
-    cursor: 'pointer',
-    fontWeight: 900,
-  });
-
   return (
     <div style={shellStyle}>
       <section style={panelStyle}>
         <div style={{ padding: '14px 16px', borderBottom: '1px solid #e5e7eb' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: '10px' }}>
-            <div style={{ fontSize: '1rem', fontWeight: 950, color: '#111827' }}>瀵硅瘽</div>
+            <div style={{ fontSize: '1rem', fontWeight: 950, color: '#111827' }}>对话</div>
             <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-              <div style={{ fontSize: '0.85rem', color: '#6b7280' }}>
-                {chatLoading ? '加载中...' : String(chatList.length) + ' 个'}
-              </div>
+              <div style={{ fontSize: '0.85rem', color: '#6b7280' }}>{chatLoading ? '加载中...' : String(chatList.length) + ' 个'}</div>
               {isAdmin && (
                 <button
                   onClick={openCreate}
@@ -508,7 +448,7 @@ export function ChatConfigsPanel() {
                     fontWeight: 900,
                   }}
                 >
-                  鏂板缓
+                  新建
                 </button>
               )}
             </div>
@@ -519,13 +459,7 @@ export function ChatConfigsPanel() {
               value={chatFilter}
               onChange={(e) => setChatFilter(e.target.value)}
               placeholder="按名称 / ID / 描述筛选"
-              style={{
-                flex: 1,
-                padding: '10px 12px',
-                border: '1px solid #e5e7eb',
-                borderRadius: '10px',
-                outline: 'none',
-              }}
+              style={{ flex: 1, padding: '10px 12px', border: '1px solid #e5e7eb', borderRadius: '10px', outline: 'none' }}
             />
             <button
               onClick={fetchChatList}
@@ -539,7 +473,7 @@ export function ChatConfigsPanel() {
                 fontWeight: 800,
               }}
             >
-              鍒锋柊
+              刷新
             </button>
           </div>
 
@@ -568,12 +502,8 @@ export function ChatConfigsPanel() {
                   }}
                   title={id}
                 >
-                  <div style={{ fontWeight: 950, color: '#111827', fontSize: '0.95rem', lineHeight: 1.2 }}>
-                    {name || '(鏈懡鍚?'}
-                  </div>
-                  <div style={{ marginTop: '6px', color: '#6b7280', fontSize: '0.8rem' }}>
-                    {id ? 'ID: ' + id : 'ID: (unknown)'}
-                  </div>
+                  <div style={{ fontWeight: 950, color: '#111827', fontSize: '0.95rem', lineHeight: 1.2 }}>{name || '(未命名)'}</div>
+                  <div style={{ marginTop: '6px', color: '#6b7280', fontSize: '0.8rem' }}>{id ? 'ID: ' + id : 'ID: (unknown)'}</div>
                 </button>
 
                 {isAdmin && (
@@ -598,7 +528,7 @@ export function ChatConfigsPanel() {
                       fontWeight: 900,
                     }}
                   >
-                    鍒犻櫎
+                    删除
                   </button>
                 )}
               </div>
@@ -610,7 +540,7 @@ export function ChatConfigsPanel() {
       <section style={panelStyle}>
         <div style={{ padding: '14px 16px', borderBottom: '1px solid #e5e7eb' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: '10px' }}>
-            <div style={{ fontSize: '1rem', fontWeight: 950, color: '#111827' }}>閰嶇疆</div>
+            <div style={{ fontSize: '1rem', fontWeight: 950, color: '#111827' }}>配置</div>
             <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
               {chatSaveStatus && <div style={{ color: '#047857', fontWeight: 900 }}>{chatSaveStatus}</div>}
               {isAdmin && (
@@ -627,7 +557,7 @@ export function ChatConfigsPanel() {
                     fontWeight: 950,
                   }}
                 >
-                  淇濆瓨
+                  保存
                 </button>
               )}
             </div>
@@ -680,19 +610,18 @@ export function ChatConfigsPanel() {
                   cursor: !isAdmin || busy || !chatSelected?.id ? 'not-allowed' : 'pointer',
                   fontWeight: 950,
                 }}
-                title="Clear parsed-file bindings so you can change dataset selection"
               >
                 清除解析文件绑定
               </button>
-              <div style={{ color: '#6b7280', fontSize: '0.8rem' }}>{String(chatLocked.message || '').slice(0, 180)}</div>
             </div>
           )}
+
           {!chatSelected?.id ? (
             <div style={{ color: '#6b7280' }}>未加载</div>
           ) : (
             <>
               <div style={{ display: 'grid', gridTemplateColumns: '160px 1fr', gap: '10px', alignItems: 'center' }}>
-                <div style={{ fontWeight: 900, color: '#111827' }}>鍚嶇О</div>
+                <div style={{ fontWeight: 900, color: '#111827' }}>名称</div>
                 <input
                   value={chatNameText}
                   onChange={(e) => setChatNameText(e.target.value)}
@@ -712,9 +641,7 @@ export function ChatConfigsPanel() {
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: '10px' }}>
                   <div style={{ fontWeight: 950, color: '#111827' }}>知识库</div>
                   <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-                    <div style={{ fontSize: '0.85rem', color: '#6b7280' }}>
-                      {kbLoading ? '加载中...' : String(kbList.length) + ' 个'}
-                    </div>
+                    <div style={{ fontSize: '0.85rem', color: '#6b7280' }}>{kbLoading ? '加载中...' : String(kbList.length) + ' 个'}</div>
                     <button
                       onClick={fetchKbList}
                       disabled={kbLoading}
@@ -727,33 +654,17 @@ export function ChatConfigsPanel() {
                         fontWeight: 800,
                       }}
                     >
-                      鍒锋柊
+                      刷新
                     </button>
                   </div>
                 </div>
 
                 {kbError && <div style={{ marginTop: '8px', color: '#b91c1c' }}>{kbError}</div>}
 
-                <div
-                  style={{
-                    marginTop: '10px',
-                    border: '1px solid #e5e7eb',
-                    borderRadius: '12px',
-                    overflow: 'hidden',
-                    background: '#ffffff',
-                  }}
-                >
-                  <div
-                    style={{
-                      maxHeight: '220px',
-                      overflow: 'auto',
-                      padding: '10px',
-                      display: 'grid',
-                      gap: '8px',
-                    }}
-                  >
+                <div style={{ marginTop: '10px', border: '1px solid #e5e7eb', borderRadius: '12px', overflow: 'hidden', background: '#ffffff' }}>
+                  <div style={{ maxHeight: '220px', overflow: 'auto', padding: '10px', display: 'grid', gap: '8px' }}>
                     {kbList.length === 0 ? (
-                      <div style={{ color: '#6b7280' }}>{kbLoading ? '鍔犺浇涓?.' : '鏃犵煡璇嗗簱'}</div>
+                      <div style={{ color: '#6b7280' }}>{kbLoading ? '加载中...' : '无知识库'}</div>
                     ) : (
                       kbList.map((kb) => {
                         const id = String(kb?.id || '').trim();
@@ -773,18 +684,10 @@ export function ChatConfigsPanel() {
                               cursor: isAdmin ? 'pointer' : 'default',
                             }}
                           >
-                            <input
-                              type="checkbox"
-                              checked={checked}
-                              disabled={!isAdmin || !id}
-                              onChange={() => toggleDatasetSelection(id)}
-                              style={{ marginTop: '2px' }}
-                            />
+                            <input type="checkbox" checked={checked} disabled={!isAdmin || !id} onChange={() => toggleDatasetSelection(id)} style={{ marginTop: '2px' }} />
                             <div style={{ minWidth: 0 }}>
                               <div style={{ fontWeight: 950, color: '#111827', lineHeight: 1.2 }}>{name}</div>
-                              <div style={{ marginTop: '4px', color: '#6b7280', fontSize: '0.82rem' }}>
-                                ID: {id || '(unknown)'}
-                              </div>
+                              <div style={{ marginTop: '4px', color: '#6b7280', fontSize: '0.82rem' }}>ID: {id || '(unknown)'}</div>
                             </div>
                           </label>
                         );
@@ -793,11 +696,8 @@ export function ChatConfigsPanel() {
                   </div>
                 </div>
 
-                <div style={{ marginTop: '8px', color: '#6b7280', fontSize: '0.85rem' }}>
-                  勾选知识库后，点击右上角保存才会生效。
-                </div>
+                <div style={{ marginTop: '8px', color: '#6b7280', fontSize: '0.85rem' }}>勾选知识库后，点击右上角保存才会生效。</div>
               </div>
-
             </>
           )}
         </div>
@@ -831,125 +731,57 @@ export function ChatConfigsPanel() {
               boxShadow: '0 20px 50px rgba(0,0,0,0.35)',
             }}
           >
-            <div
-              style={{
-                padding: '14px 16px',
-                borderBottom: '1px solid #e5e7eb',
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-              }}
-            >
-              <div style={{ fontWeight: 950, color: '#111827' }}>鏂板缓瀵硅瘽</div>
+            <div style={{ padding: '14px 16px', borderBottom: '1px solid #e5e7eb', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ fontWeight: 950, color: '#111827' }}>新建对话</div>
               <button
                 onClick={() => setCreateOpen(false)}
-                style={{
-                  border: '1px solid #e5e7eb',
-                  background: '#ffffff',
-                  borderRadius: '10px',
-                  padding: '8px 10px',
-                  cursor: 'pointer',
-                  fontWeight: 900,
-                }}
+                style={{ border: '1px solid #e5e7eb', background: '#ffffff', borderRadius: '10px', padding: '8px 10px', cursor: 'pointer', fontWeight: 900 }}
               >
-                鍏抽棴
+                关闭
               </button>
             </div>
 
             <div style={{ padding: '14px 16px' }}>
               <div style={{ display: 'grid', gridTemplateColumns: '160px 1fr', gap: '10px', alignItems: 'center' }}>
-                <div style={{ fontWeight: 900, color: '#111827' }}>鍚嶇О</div>
+                <div style={{ fontWeight: 900, color: '#111827' }}>名称</div>
                 <input
                   value={createName}
                   onChange={(e) => setCreateName(e.target.value)}
                   placeholder="输入新对话名称"
-                  style={{
-                    width: '100%',
-                    padding: '10px 12px',
-                    borderRadius: '10px',
-                    border: '1px solid #e5e7eb',
-                    outline: 'none',
-                  }}
+                  style={{ width: '100%', padding: '10px 12px', borderRadius: '10px', border: '1px solid #e5e7eb', outline: 'none' }}
                 />
               </div>
 
-              <div style={{ marginTop: '12px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                <button
-                  onClick={() => {
-                    setCreateMode('blank');
-                    setCreateFromId('');
-                    setCreateJsonText('{}');
-                    setCreateError('');
+              <div style={{ marginTop: '12px', display: 'grid', gridTemplateColumns: '160px 1fr', gap: '10px' }}>
+                <div style={{ fontWeight: 900, color: '#111827' }}>复制配置</div>
+                <select
+                  value={createFromId}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setCreateFromId(v);
+                    syncCreateJsonFromCopy(v);
                   }}
-                  style={headerBtn(createMode === 'blank')}
+                  style={{ padding: '10px 12px', borderRadius: '10px', border: '1px solid #e5e7eb' }}
+                  disabled={!chatList.length}
                 >
-                  鍗曠嫭鏂板缓
-                </button>
-                <button
-                  onClick={() => {
-                    setCreateMode('copy');
-                    setCreateError('');
-                    if (!createFromId && chatList.length) {
-                      const firstId = String(chatList[0]?.id || '');
-                      setCreateFromId(firstId);
-                      syncCreateJsonFromCopy(firstId);
-                    } else if (createFromId) {
-                      syncCreateJsonFromCopy(createFromId);
-                    }
-                  }}
-                  style={headerBtn(createMode === 'copy')}
-                >
-                  澶嶅埗閰嶇疆
-                </button>
+                  {chatList.map((c) => (
+                    <option key={String(c?.id || '')} value={String(c?.id || '')}>
+                      {String(c?.name || c?.id || '')}
+                    </option>
+                  ))}
+                </select>
               </div>
-
-              {createMode === 'copy' && (
-                <div style={{ marginTop: '12px', display: 'grid', gridTemplateColumns: '160px 1fr', gap: '10px' }}>
-                  <div style={{ fontWeight: 900, color: '#111827' }}>鏉ユ簮瀵硅瘽</div>
-                  <select
-                    value={createFromId}
-                    onChange={(e) => {
-                      const v = e.target.value;
-                      setCreateFromId(v);
-                      syncCreateJsonFromCopy(v);
-                    }}
-                    style={{ padding: '10px 12px', borderRadius: '10px', border: '1px solid #e5e7eb' }}
-                  >
-                    <option value="">璇烽€夋嫨...</option>
-                    {chatList.map((c) => (
-                      <option key={String(c?.id || '')} value={String(c?.id || '')}>
-                        {String(c?.name || c?.id || '')}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
-
+              {!chatList.length && <div style={{ marginTop: '8px', color: '#6b7280' }}>暂无可复制来源对话</div>}
 
               {createError && <div style={{ marginTop: '10px', color: '#b91c1c' }}>{createError}</div>}
             </div>
 
-            <div
-              style={{
-                padding: '14px 16px',
-                borderTop: '1px solid #e5e7eb',
-                display: 'flex',
-                justifyContent: 'flex-end',
-                gap: '10px',
-              }}
-            >
+            <div style={{ padding: '14px 16px', borderTop: '1px solid #e5e7eb', display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
               <button
                 onClick={() => setCreateOpen(false)}
-                style={{
-                  padding: '10px 14px',
-                  borderRadius: '12px',
-                  border: '1px solid #e5e7eb',
-                  background: '#ffffff',
-                  cursor: 'pointer',
-                  fontWeight: 900,
-                }}
+                style={{ padding: '10px 14px', borderRadius: '12px', border: '1px solid #e5e7eb', background: '#ffffff', cursor: 'pointer', fontWeight: 900 }}
               >
-                鍙栨秷
+                取消
               </button>
               <button
                 onClick={createChat}
@@ -964,7 +796,7 @@ export function ChatConfigsPanel() {
                   fontWeight: 950,
                 }}
               >
-                鍒涘缓
+                创建
               </button>
             </div>
           </div>
