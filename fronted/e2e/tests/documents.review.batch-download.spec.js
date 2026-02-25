@@ -22,7 +22,7 @@ adminTest('documents supports select-all and batch download (mock) @regression @
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ documents: docs, count: docs.length }) });
   });
 
-  await page.route('**/api/knowledge/documents/batch/download', async (route) => {
+  await page.route('**/api/documents/knowledge/batch/download', async (route) => {
     if (route.request().method() !== 'POST') return route.fallback();
     capturedBody = route.request().postDataJSON();
     await route.fulfill({
@@ -38,11 +38,10 @@ adminTest('documents supports select-all and batch download (mock) @regression @
   await page.goto('/documents');
   await expect(page.locator('tr', { hasText: 'a.txt' })).toBeVisible();
 
-  await page.getByRole('button', { name: '全选' }).click();
+  await page.getByRole('button', { name: /全选|取消全选/ }).click();
   await page.getByRole('button', { name: /下载选中/ }).click();
 
   expect(capturedBody).toBeTruthy();
   expect(Array.isArray(capturedBody.doc_ids)).toBe(true);
   expect(capturedBody.doc_ids).toEqual(['d1', 'd2']);
 });
-

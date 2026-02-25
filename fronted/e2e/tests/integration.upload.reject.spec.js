@@ -3,22 +3,14 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { test, expect, request } = require('@playwright/test');
-
-const FRONTEND_BASE_URL = process.env.E2E_FRONTEND_BASE_URL || 'http://localhost:8080';
-const BACKEND_BASE_URL = process.env.E2E_BACKEND_BASE_URL || 'http://localhost:8001';
-const ADMIN_USER = process.env.E2E_ADMIN_USER || 'admin';
-const ADMIN_PASS = process.env.E2E_ADMIN_PASS || 'admin123';
-
-async function backendIsReady() {
-  try {
-    const api = await request.newContext({ baseURL: BACKEND_BASE_URL });
-    const resp = await api.get('/docs');
-    await api.dispose();
-    return resp.ok();
-  } catch {
-    return false;
-  }
-}
+const {
+  FRONTEND_BASE_URL,
+  BACKEND_BASE_URL,
+  ADMIN_USER,
+  ADMIN_PASS,
+  backendIsReady,
+  uiLogin,
+} = require('../helpers/integration');
 
 test('upload -> reject -> appears in records @integration', async ({ page }) => {
   test.setTimeout(120_000);
@@ -53,11 +45,8 @@ test('upload -> reject -> appears in records @integration', async ({ page }) => 
   }
   await api.dispose();
 
-  await page.goto(`${FRONTEND_BASE_URL}/login`);
-  await page.getByTestId('login-username').fill(ADMIN_USER);
-  await page.getByTestId('login-password').fill(ADMIN_PASS);
-  await page.getByTestId('login-submit').click();
-  await expect(page).toHaveURL(/\/$/);
+  await uiLogin(page, ADMIN_USER, ADMIN_PASS);
+  await expect(page).toHaveURL(/\/chat$/);
 
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ragflowauth-e2e-'));
   const filename = `e2e_${Date.now()}_${Math.random().toString(16).slice(2, 8)}.txt`;

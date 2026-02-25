@@ -13,19 +13,23 @@ adminTest('org directory audit refresh shows error on failure @regression @admin
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([]) });
   });
 
-  let auditCalls = 0;
+  let failAudit = false;
   await page.route('**/api/org/audit**', async (route) => {
     if (route.request().method() !== 'GET') return route.fallback();
-    auditCalls += 1;
-    if (auditCalls === 1) {
+    if (!failAudit) {
       return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([]) });
     }
     return route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ detail: 'audit failed' }) });
   });
 
   await page.goto('/org-directory');
+  await expect(page.getByTestId('org-tab-audit')).toBeVisible();
   await page.getByTestId('org-tab-audit').click();
-  await page.getByTestId('org-audit-refresh').click();
-  await expect(page.getByText('Error: audit failed')).toBeVisible();
-});
 
+  failAudit = true;
+  await page.getByTestId('org-audit-refresh').click();
+  await expect(page.getByTestId('org-audit-error')).toContainText('audit failed');
+  await expect(page.getByTestId('org-page')).toBeVisible();
+  await page.getByTestId('org-tab-companies').click();
+  await expect(page.getByTestId('org-company-add')).toBeVisible();
+});

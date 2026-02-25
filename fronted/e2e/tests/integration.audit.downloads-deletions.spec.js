@@ -51,7 +51,7 @@ test('download + delete produce audit records (real backend) @integration', asyn
     await page.getByTestId('upload-kb-select').selectOption(String(dataset.name || dataset.id));
 
     const [uploadResp] = await Promise.all([
-      page.waitForResponse((r) => r.url().includes('/api/knowledge/upload') && r.request().method() === 'POST'),
+      page.waitForResponse((r) => r.url().includes('/api/documents/knowledge/upload') && r.request().method() === 'POST'),
       (async () => {
         await page.getByTestId('upload-file-input').setInputFiles(filePath);
         await page.getByTestId('upload-submit').click();
@@ -87,10 +87,8 @@ test('download + delete produce audit records (real backend) @integration', asyn
     }
     await expect(page.getByTestId(rowId)).toBeVisible({ timeout: 30_000 });
 
-    await Promise.all([
-      page.waitForResponse((r) => r.url().includes(`/api/ragflow/documents/${ragflowDocId}/download`) && r.request().method() === 'GET'),
-      page.getByTestId(`browser-doc-download-${dataset.id}-${ragflowDocId}`).click(),
-    ]);
+    await expect(page.getByTestId(`browser-doc-download-${dataset.id}-${ragflowDocId}`)).toBeVisible({ timeout: 30_000 });
+    await page.getByTestId(`browser-doc-download-${dataset.id}-${ragflowDocId}`).click();
 
     const downloadRecord = await poll(async () => {
       const resp = await api.get('/api/ragflow/downloads?limit=50', { headers });

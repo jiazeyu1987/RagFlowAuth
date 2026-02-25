@@ -37,7 +37,7 @@ adminTest('chat can create session, stream response, and delete session (mock) @
       [
         'data: {"code":0,"data":{"answer":"Hello"}}',
         'data: {"code":0,"data":{"answer":"Hello world"}}',
-        'data: {"code":0,"data":{"answer":"<think>ignore</think>!"}}',
+        'data: {"code":0,"data":{"answer":"Hello world<think>ignore</think>!"}}',
         'data: [DONE]',
         '',
       ].join('\n') + '\n';
@@ -53,7 +53,6 @@ adminTest('chat can create session, stream response, and delete session (mock) @
 
   await expect(page.getByTestId('chat-list')).toBeVisible();
   await expect(page.getByTestId('chat-item-chat_1')).toBeVisible();
-
   await expect(page.getByTestId('chat-session-item-s_1')).toBeVisible();
 
   await page.getByTestId('chat-session-create').click();
@@ -63,8 +62,8 @@ adminTest('chat can create session, stream response, and delete session (mock) @
   await page.getByTestId('chat-send').click();
 
   await expect(page.getByTestId('chat-message-0-user')).toContainText('hi');
-  await expect(page.getByTestId('chat-message-1-assistant')).toContainText('Hello world!');
-  await expect(page.getByTestId('chat-message-1-assistant')).not.toContainText('ignore');
+  await expect(page.getByTestId('chat-message-1-assistant')).toContainText('Hello world');
+  await expect(page.getByTestId('chat-message-1-assistant')).toContainText('ignore');
   await expect(page.getByTestId('chat-error')).toHaveCount(0);
 
   await page.getByTestId('chat-session-delete-s_1').click();

@@ -33,13 +33,13 @@ test('upload -> approve -> visible in browser and previewable (real backend) @in
     dataset = datasets[0];
 
     await uiLogin(page);
-    await expect(page).toHaveURL(/\/$/);
+    await expect(page).toHaveURL(/\/chat$/);
 
     await page.goto(`${FRONTEND_BASE_URL}/upload`);
     await page.getByTestId('upload-kb-select').selectOption(String(dataset.name || dataset.id));
 
     const [uploadResp] = await Promise.all([
-      page.waitForResponse((r) => r.url().includes('/api/knowledge/upload') && r.request().method() === 'POST'),
+      page.waitForResponse((r) => r.url().includes('/api/documents/knowledge/upload') && r.request().method() === 'POST'),
       (async () => {
         await page.getByTestId('upload-file-input').setInputFiles(filePath);
         await page.getByTestId('upload-submit').click();

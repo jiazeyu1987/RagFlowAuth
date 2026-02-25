@@ -16,7 +16,7 @@ test('org directory edit + delete (real backend) @integration', async ({ page })
   let deptId = null;
 
   await uiLogin(page);
-  await expect(page).toHaveURL(/\/$/);
+  await expect(page).toHaveURL(/\/chat$/);
 
   try {
     await page.goto(`${FRONTEND_BASE_URL}/org-directory`);

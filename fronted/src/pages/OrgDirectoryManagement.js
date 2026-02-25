@@ -33,6 +33,7 @@ const OrgDirectoryManagement = () => {
   const [tab, setTab] = useState('companies'); // companies | departments | audit
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [auditError, setAuditError] = useState(null);
 
   const [companies, setCompanies] = useState([]);
   const [departments, setDepartments] = useState([]);
@@ -47,14 +48,36 @@ const OrgDirectoryManagement = () => {
     try {
       setLoading(true);
       setError(null);
-      const [c, d, a] = await Promise.all([
+      setAuditError(null);
+      const [c, d, a] = await Promise.allSettled([
         orgDirectoryApi.listCompanies(),
         orgDirectoryApi.listDepartments(),
         orgDirectoryApi.listAudit({ limit: 200 }),
       ]);
-      setCompanies(Array.isArray(c) ? c : []);
-      setDepartments(Array.isArray(d) ? d : []);
-      setAuditLogs(Array.isArray(a) ? a : []);
+
+      if (c.status === 'fulfilled') {
+        setCompanies(Array.isArray(c.value) ? c.value : []);
+      } else {
+        setCompanies([]);
+      }
+
+      if (d.status === 'fulfilled') {
+        setDepartments(Array.isArray(d.value) ? d.value : []);
+      } else {
+        setDepartments([]);
+      }
+
+      if (a.status === 'fulfilled') {
+        setAuditLogs(Array.isArray(a.value) ? a.value : []);
+      } else {
+        setAuditLogs([]);
+        setAuditError(a.reason?.message || String(a.reason || '加载操作记录失败'));
+      }
+
+      if (c.status === 'rejected' || d.status === 'rejected') {
+        const firstErr = c.status === 'rejected' ? c.reason : d.reason;
+        setError(firstErr?.message || String(firstErr || '加载组织信息失败'));
+      }
     } catch (err) {
       setError(err.message || String(err));
     } finally {
@@ -67,6 +90,7 @@ const OrgDirectoryManagement = () => {
   }, []);
 
   const refreshAudit = async () => {
+    setAuditError(null);
     const params = {
       limit: auditFilter.limit || 200,
     };
@@ -143,11 +167,26 @@ const OrgDirectoryManagement = () => {
   const auditRows = useMemo(() => auditLogs || [], [auditLogs]);
 
   if (loading) return <div>Loading...</div>;
-  if (error) return <div style={{ color: '#ef4444' }}>Error: {error}</div>;
 
   return (
     <div data-testid="org-page">
       <h2 style={{ margin: '0 0 16px 0' }}>公司 / 部门管理</h2>
+
+      {error ? (
+        <div
+          data-testid="org-error"
+          style={{
+            color: '#991b1b',
+            backgroundColor: '#fee2e2',
+            border: '1px solid #fecaca',
+            borderRadius: 6,
+            padding: '8px 12px',
+            marginBottom: 12,
+          }}
+        >
+          Error: {error}
+        </div>
+      ) : null}
 
       <div style={{ display: 'flex', gap: '8px', marginBottom: 0 }}>
         <button type="button" data-testid="org-tab-companies" onClick={() => setTab('companies')} style={tabButtonStyle(tab === 'companies')}>
@@ -348,6 +387,21 @@ const OrgDirectoryManagement = () => {
 
         {tab === 'audit' && (
           <div>
+            {auditError ? (
+              <div
+                data-testid="org-audit-error"
+                style={{
+                  color: '#991b1b',
+                  backgroundColor: '#fee2e2',
+                  border: '1px solid #fecaca',
+                  borderRadius: 6,
+                  padding: '8px 12px',
+                  marginBottom: 12,
+                }}
+              >
+                Error: {auditError}
+              </div>
+            ) : null}
             <div style={{ display: 'flex', gap: '12px', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap' }}>
               <div>
                 <div style={{ fontSize: '0.85rem', color: '#6b7280', marginBottom: '6px' }}>类型</div>
@@ -396,7 +450,7 @@ const OrgDirectoryManagement = () => {
                   try {
                     await refreshAudit();
                   } catch (err) {
-                    setError(err.message || String(err));
+                    setAuditError(err.message || String(err));
                   }
                 }}
                 style={{

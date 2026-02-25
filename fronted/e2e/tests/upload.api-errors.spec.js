@@ -19,11 +19,11 @@ adminTest('upload shows error when backend upload fails (mock) @regression @uplo
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify({ datasets: [{ id: 'ds1', name: '灞曞巺' }], count: 1 }),
+      body: JSON.stringify({ datasets: [{ id: 'ds1', name: 'kb-one' }], count: 1 }),
     });
   });
 
-  await page.route('**/api/knowledge/upload?*', async (route) => {
+  await page.route('**/api/documents/knowledge/upload?*', async (route) => {
     if (route.request().method() !== 'POST') return route.fallback();
     await route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ detail: 'upload failed' }) });
   });
@@ -49,4 +49,3 @@ viewerTest('upload for viewer shows no-datasets message (mock) @regression @uplo
   await page.goto('/upload');
   await expect(page.getByTestId('upload-error')).toBeVisible();
 });
-

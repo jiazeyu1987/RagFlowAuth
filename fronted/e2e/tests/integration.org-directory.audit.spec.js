@@ -14,7 +14,7 @@ test('org directory create -> audit visible (real backend) @integration', async 
   let deptId = null;
 
   await uiLogin(page);
-  await expect(page).toHaveURL(/\/$/);
+  await expect(page).toHaveURL(/\/chat$/);
 
   try {
     await page.goto(`${FRONTEND_BASE_URL}/org-directory`);
@@ -57,4 +57,3 @@ test('org directory create -> audit visible (real backend) @integration', async 
     }
   }
 });
-

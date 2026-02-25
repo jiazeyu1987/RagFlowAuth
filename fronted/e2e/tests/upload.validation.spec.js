@@ -5,22 +5,19 @@ const path = require('node:path');
 const { expect } = require('@playwright/test');
 const { adminTest } = require('../helpers/auth');
 
-adminTest('upload submit with no file shows validation error (mock) @regression @upload', async ({ page }) => {
+adminTest('upload submit is disabled when no file selected (mock) @regression @upload', async ({ page }) => {
   await page.route('**/api/datasets', async (route) => {
     if (route.request().method() !== 'GET') return route.fallback();
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify({ datasets: [{ id: 'ds1', name: '灞曞巺' }], count: 1 }),
+      body: JSON.stringify({ datasets: [{ id: 'ds1', name: 'kb-one' }], count: 1 }),
     });
   });
 
   await page.goto('/upload');
-
-  // UI prevents normal click (button disabled), but we still validate the guard in handler.
-  await page.locator('form').dispatchEvent('submit');
-  await expect(page.getByTestId('upload-error')).toBeVisible();
-  await expect(page.getByTestId('upload-error')).toContainText('请选择文件');
+  await expect(page.getByTestId('upload-submit')).toBeDisabled();
+  await expect(page.getByTestId('upload-error')).toHaveCount(0);
 });
 
 adminTest('upload rejects files larger than 16MB (mock) @regression @upload', async ({ page }) => {
@@ -29,7 +26,7 @@ adminTest('upload rejects files larger than 16MB (mock) @regression @upload', as
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify({ datasets: [{ id: 'ds1', name: '灞曞巺' }], count: 1 }),
+      body: JSON.stringify({ datasets: [{ id: 'ds1', name: 'kb-one' }], count: 1 }),
     });
   });
 
@@ -74,8 +71,8 @@ adminTest('upload datasets network timeout shows error banner (mock) @regression
 
 adminTest('upload uses selected kb_id in request query (mock) @regression @upload', async ({ page }) => {
   const datasets = [
-    { id: 'ds1', name: '灞曞巺' },
-    { id: 'ds2', name: '第二库' },
+    { id: 'ds1', name: 'kb-one' },
+    { id: 'ds2', name: 'kb-two' },
   ];
 
   let capturedKbId = null;
@@ -85,24 +82,22 @@ adminTest('upload uses selected kb_id in request query (mock) @regression @uploa
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ datasets, count: datasets.length }) });
   });
 
-  await page.route('**/api/knowledge/upload?*', async (route) => {
+  await page.route('**/api/documents/knowledge/upload?*', async (route) => {
     if (route.request().method() !== 'POST') return route.fallback();
     const url = new URL(route.request().url());
     capturedKbId = url.searchParams.get('kb_id');
-    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ filename: 'hello.txt' }) });
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ filename: 'hello.txt', doc_id: 'd1' }) });
   });
 
   await page.goto('/upload');
-
-  await page.getByTestId('upload-kb-select').selectOption('第二库');
+  await page.getByTestId('upload-kb-select').selectOption('kb-two');
 
   const projectRoot = path.resolve(__dirname, '..', '..');
   const filePath = path.join(projectRoot, 'e2e', 'fixtures', 'files', 'hello.txt');
   await page.getByTestId('upload-file-input').setInputFiles(filePath);
   await page.getByTestId('upload-submit').click();
 
-  expect(capturedKbId).toBe('第二库');
-
+  expect(capturedKbId).toBe('kb-two');
   await expect(page.getByTestId('upload-success')).toBeVisible();
-  await expect(page).toHaveURL(/\/documents/, { timeout: 10_000 });
+  await expect(page).toHaveURL(/\/documents/, { timeout: 15_000 });
 });

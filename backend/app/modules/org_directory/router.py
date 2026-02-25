@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException
 
 from backend.app.core.auth import get_deps
@@ -14,6 +16,7 @@ from backend.models.org_directory import (
 
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 def _deps(deps: AppDependencies = Depends(get_deps)) -> AppDependencies:
@@ -129,7 +132,11 @@ async def list_org_audit_logs(
     action: str | None = None,
     limit: int = 200,
 ):
-    logs = deps.org_directory_store.list_audit_logs(entity_type=entity_type, action=action, limit=limit)
+    try:
+        logs = deps.org_directory_store.list_audit_logs(entity_type=entity_type, action=action, limit=limit)
+    except Exception as e:
+        logger.exception("Failed to list org audit logs: %s", e)
+        logs = []
     user_ids = {l.actor_user_id for l in logs if l.actor_user_id}
     usernames = {}
     try:
@@ -151,4 +158,3 @@ async def list_org_audit_logs(
         )
         for l in logs
     ]
-

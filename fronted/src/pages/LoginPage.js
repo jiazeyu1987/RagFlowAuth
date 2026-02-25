@@ -150,6 +150,7 @@ const LoginPage = () => {
               {error ? (
                 <div
                   role="alert"
+                  data-testid="login-error"
                   style={{
                     background: 'rgba(239,68,68,0.14)',
                     border: '1px solid rgba(239,68,68,0.35)',

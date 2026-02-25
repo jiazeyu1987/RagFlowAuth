@@ -25,7 +25,7 @@ test('chat can create and delete session (real backend) @integration', async ({ 
   }
 
   await uiLogin(page);
-  await expect(page).toHaveURL(/\/$/);
+  await expect(page).toHaveURL(/\/chat$/);
 
   await page.goto(`${FRONTEND_BASE_URL}/chat`);
   await expect(page.getByTestId('chat-list')).toBeVisible({ timeout: 30_000 });

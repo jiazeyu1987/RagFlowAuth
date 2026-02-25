@@ -12,7 +12,7 @@ test('permission groups create -> edit -> delete (real backend) @integration', a
   let groupId = null;
 
   await uiLogin(page);
-  await expect(page).toHaveURL(/\/$/);
+  await expect(page).toHaveURL(/\/chat$/);
 
   try {
     await page.goto(`${FRONTEND_BASE_URL}/permission-groups`);
@@ -65,4 +65,3 @@ test('permission groups create -> edit -> delete (real backend) @integration', a
     }
   }
 });
-

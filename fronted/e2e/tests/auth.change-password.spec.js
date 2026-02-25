@@ -29,7 +29,7 @@ test.describe('Password Change Flow', () => {
 
       // Login with old password
       await uiLogin(page, username, oldPassword);
-      await page.waitForURL(/\/$/, { timeout: 30_000 });
+      await page.waitForURL(/\/chat$/, { timeout: 30_000 });
 
       // Navigate to change password page
       await page.getByTestId('nav-change-password').click();
@@ -79,7 +79,7 @@ test.describe('Password Change Flow', () => {
         page.getByTestId('login-submit').click(),
       ]);
       expect(newLoginResp.ok()).toBeTruthy();
-      await page.waitForURL(/\/$/, { timeout: 30_000 });
+      await page.waitForURL(/\/chat$/, { timeout: 30_000 });
 
       // Verify we're logged in
       await expect(page.getByTestId('layout-user-name')).toHaveText(username);
@@ -118,7 +118,7 @@ test.describe('Password Change Flow', () => {
 
       // Login
       await uiLogin(page, username, password);
-      await page.waitForURL(/\/$/, { timeout: 30_000 });
+      await page.waitForURL(/\/chat$/, { timeout: 30_000 });
 
       // Navigate to change password page
       await page.getByTestId('nav-change-password').click();
@@ -169,7 +169,7 @@ test.describe('Password Change Flow', () => {
 
       // Login
       await uiLogin(page, username, password);
-      await page.waitForURL(/\/$/, { timeout: 30_000 });
+      await page.waitForURL(/\/chat$/, { timeout: 30_000 });
 
       // Navigate to change password page
       await page.getByTestId('nav-change-password').click();
@@ -215,7 +215,7 @@ test.describe('Password Change Flow', () => {
 
       // Login
       await uiLogin(page, username, password);
-      await page.waitForURL(/\/$/, { timeout: 30_000 });
+      await page.waitForURL(/\/chat$/, { timeout: 30_000 });
 
       // Navigate to change password page
       await page.getByTestId('nav-change-password').click();
@@ -272,7 +272,7 @@ test.describe('Password Change Flow', () => {
 
       // Login
       await uiLogin(page, username, password);
-      await page.waitForURL(/\/$/, { timeout: 30_000 });
+      await page.waitForURL(/\/chat$/, { timeout: 30_000 });
 
       // Navigate to change password page
       await page.getByTestId('nav-change-password').click();
@@ -283,14 +283,21 @@ test.describe('Password Change Flow', () => {
       await page.getByTestId('change-password-new').fill('NewPassw0rd!456');
       await page.getByTestId('change-password-confirm').fill('NewPassw0rd!456');
 
-      // Submit and verify button is disabled during submission
-      const submitPromise = page.getByTestId('change-password-submit').click();
-      await expect(page.getByTestId('change-password-submit')).toBeDisabled();
-      await expect(page.getByTestId('change-password-submit')).toHaveText('提交中...');
+      await page.route('**/api/auth/password', async (route) => {
+        if (route.request().method() !== 'PUT') return route.fallback();
+        await new Promise((resolve) => setTimeout(resolve, 600));
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ ok: true }),
+        });
+      });
 
-      // Wait for submission to complete
-      await submitPromise;
-      await page.waitForLoadState('networkidle');
+      // Submit and verify button is disabled during submission
+      await page.getByTestId('change-password-submit').click();
+      await expect(page.getByTestId('change-password-submit')).toBeDisabled({ timeout: 5_000 });
+      await expect(page.getByTestId('change-password-submit')).toHaveText('提交中...');
+      await expect(page.getByTestId('change-password-success')).toHaveText('密码修改成功');
 
       // Verify button is re-enabled after submission
       await expect(page.getByTestId('change-password-submit')).toBeEnabled();

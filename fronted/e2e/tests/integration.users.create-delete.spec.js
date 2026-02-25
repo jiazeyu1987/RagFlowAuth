@@ -16,7 +16,7 @@ test('users create -> delete (real backend) @integration', async ({ page }) => {
   let departmentId = null;
 
   await uiLogin(page);
-  await expect(page).toHaveURL(/\/$/);
+  await expect(page).toHaveURL(/\/chat$/);
 
   try {
     // Company/Department are required fields in the UI. Create minimal fixtures to keep the test isolated.

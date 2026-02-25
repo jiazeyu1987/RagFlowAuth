@@ -18,7 +18,7 @@ test('users assign permission groups (real backend) @integration', async ({ page
   let groupId = null;
 
   await uiLogin(page);
-  await expect(page).toHaveURL(/\/$/);
+  await expect(page).toHaveURL(/\/chat$/);
 
   try {
     const seedApi = await request.newContext({ baseURL: BACKEND_BASE_URL });
@@ -103,4 +103,3 @@ test('users assign permission groups (real backend) @integration', async ({ page
     }
   }
 });
-

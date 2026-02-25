@@ -30,7 +30,7 @@ adminTest('admin can delete a local document (mock) @regression @documents', asy
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ documents: pending, count: pending.length }) });
   });
 
-  await page.route('**/api/knowledge/documents/d1', async (route) => {
+  await page.route('**/api/documents/knowledge/d1', async (route) => {
     if (route.request().method() !== 'DELETE') return route.fallback();
     deleteSeen = true;
     pending = [];
@@ -47,4 +47,3 @@ adminTest('admin can delete a local document (mock) @regression @documents', asy
   await expect(page.locator('tr', { hasText: 'to_delete.txt' })).toHaveCount(0);
   expect(deleteSeen).toBe(true);
 });
-

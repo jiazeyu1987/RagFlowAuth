@@ -1,7 +1,7 @@
 // @ts-check
 const { request } = require('@playwright/test');
 
-const FRONTEND_BASE_URL = process.env.E2E_FRONTEND_BASE_URL || 'http://localhost:8080';
+const FRONTEND_BASE_URL = process.env.E2E_FRONTEND_BASE_URL || 'http://localhost:3000';
 const BACKEND_BASE_URL = process.env.E2E_BACKEND_BASE_URL || 'http://localhost:8001';
 const ADMIN_USER = process.env.E2E_ADMIN_USER || 'admin';
 const ADMIN_PASS = process.env.E2E_ADMIN_PASS || 'admin123';
@@ -50,7 +50,7 @@ async function uiLogin(page, username = ADMIN_USER, password = ADMIN_PASS) {
   if (!loginResp.ok()) {
     throw new Error(`UI login failed: ${loginResp.status()}`);
   }
-  await page.waitForURL(/\/$/, { timeout: 30_000 });
+  await page.waitForURL(/(\/|\/chat)$/, { timeout: 30_000 });
 }
 
 module.exports = {
