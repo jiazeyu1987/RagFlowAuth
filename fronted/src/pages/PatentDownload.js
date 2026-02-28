@@ -12,7 +12,7 @@ const LAST_CONFIG_KEY = 'patent_download_last_config_v1';
 const LOCAL_KB_REF = '[本地专利]';
 
 const sourceLabelMap = {
-  uspto: 'USPTO',
+  uspto: 'USPTO（美国专利商标局）',
   google_patents: 'Google Patents',
 };
 

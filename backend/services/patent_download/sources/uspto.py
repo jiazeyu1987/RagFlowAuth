@@ -9,7 +9,7 @@ from .base import PatentCandidate, PatentSourceError
 
 class UsptoSource:
     SOURCE_KEY = "uspto"
-    SOURCE_LABEL = "USPTO"
+    SOURCE_LABEL = "USPTO（美国专利商标局）"
 
     _API_BASE = "https://ppubs.uspto.gov/api"
     _SESSION_URL = f"{_API_BASE}/users/me/session"
