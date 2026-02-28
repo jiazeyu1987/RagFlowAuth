@@ -610,6 +610,9 @@ export default function PatentDownload() {
                 <span>{sourceLabelMap[item.source] || item.source}</span>
                 <span>{item.publication_number || '-'}</span>
                 <span>{item.publication_date || '-'}</span>
+                <span>申请人：{item.assignee || '-'}</span>
+                <span>发明人：{item.inventor || '-'}</span>
+                <span>专利ID：{item.patent_id || '-'}</span>
                 {item.error ? <span style={{ color: '#b91c1c' }}>{item.error}</span> : null}
               </div>
               {item.detail_url ? (
