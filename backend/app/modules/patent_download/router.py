@@ -81,6 +81,20 @@ async def get_patent_download_history_items(
     return mgr.get_history_group_payload(history_key=history_key, ctx=ctx)
 
 
+@router.post("/patent-download/history/keywords/{history_key}/add-all-to-local-kb")
+async def add_all_patent_history_items_to_local_kb(
+    history_key: str,
+    body: PatentAddRequest,
+    ctx: AuthContextDep,
+):
+    mgr = PatentDownloadManager(ctx.deps)
+    return mgr.add_history_group_to_local_kb(
+        history_key=history_key,
+        ctx=ctx,
+        kb_ref=(body.kb_ref or LOCAL_PATENTS_KB_REF),
+    )
+
+
 @router.delete("/patent-download/history/keywords/{history_key}")
 async def delete_patent_download_history_keyword(
     history_key: str,

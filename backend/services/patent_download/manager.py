@@ -90,6 +90,10 @@ class PatentDownloadManager:
         return " ".join(keywords) if use_and else " OR ".join(keywords)
 
     @staticmethod
+    def _contains_chinese(text: str) -> bool:
+        return bool(re.search(r"[\u4e00-\u9fff]", str(text or "")))
+
+    @staticmethod
     def _normalize_source_configs(source_configs: dict[str, Any] | None) -> dict[str, dict[str, Any]]:
         src = source_configs if isinstance(source_configs, dict) else {}
         out: dict[str, dict[str, Any]] = {}
@@ -896,7 +900,10 @@ class PatentDownloadManager:
         source_errors_seed: dict[str, str] = {}
         if "uspto" in enabled_sources:
             try:
-                source_queries["uspto"] = self._translate_query_for_uspto(query)
+                if self._contains_chinese(query):
+                    source_queries["uspto"] = self._translate_query_for_uspto(query)
+                else:
+                    source_queries["uspto"] = query
             except Exception as e:
                 source_queries["uspto"] = query
                 source_errors_seed["uspto"] = f"translate_failed_fallback_original_query: {e}"
@@ -1007,14 +1014,28 @@ class PatentDownloadManager:
                 return s
         return f"session:{getattr(item, 'session_id', '')}:item:{getattr(item, 'item_id', 0)}"
 
+    @staticmethod
+    def _has_effective_analysis_text(text: str | None) -> bool:
+        s = str(text or "").strip()
+        if not s:
+            return False
+        s_l = s.lower()
+        if s.startswith("自动分析失败："):
+            return False
+        if s_l.startswith("**error**") or s_l.startswith("error:") or "llm_error_response" in s_l:
+            return False
+        return True
+
     def list_history_keywords(self, *, ctx: Any) -> dict[str, Any]:
         actor = str(ctx.payload.sub)
         sessions = self.store.list_sessions_by_creator(created_by=actor, limit=1000)
         grouped: dict[str, dict[str, Any]] = {}
+        grouped_sessions: dict[str, list[Any]] = {}
         for s in sessions:
             key, keywords, use_and = self._history_group_from_session(s)
             if not keywords:
                 continue
+            grouped_sessions.setdefault(key, []).append(s)
             node = grouped.get(key)
             if not node:
                 node = {
@@ -1031,6 +1052,22 @@ class PatentDownloadManager:
             if int(s.created_at_ms) >= int(node["latest_at_ms"]):
                 node["latest_at_ms"] = int(s.created_at_ms)
                 node["latest_session_id"] = s.session_id
+
+        for key, node in grouped.items():
+            merged: dict[str, Any] = {}
+            for s in sorted(grouped_sessions.get(key, []), key=lambda x: int(x.created_at_ms), reverse=True):
+                for item in self.store.list_items(session_id=s.session_id):
+                    k = self._history_item_key(item)
+                    existing = merged.get(k)
+                    if existing is None or int(getattr(item, "created_at_ms", 0) or 0) >= int(getattr(existing, "created_at_ms", 0) or 0):
+                        merged[k] = item
+            merged_items = list(merged.values())
+            downloaded_count = sum(1 for i in merged_items if self._is_downloaded_status(getattr(i, "status", None)))
+            analyzed_count = sum(1 for i in merged_items if self._has_effective_analysis_text(getattr(i, "analysis_text", None)))
+            added_count = sum(1 for i in merged_items if bool(getattr(i, "added_doc_id", None)))
+            node["downloaded_count"] = int(downloaded_count)
+            node["analyzed_count"] = int(analyzed_count)
+            node["added_count"] = int(added_count)
 
         history = sorted(grouped.values(), key=lambda x: int(x.get("latest_at_ms", 0)), reverse=True)
         return {"history": history, "count": len(history)}
@@ -1111,6 +1148,61 @@ class PatentDownloadManager:
             "deleted_items": deleted_items,
             "deleted_files": deleted_files,
             "errors": errors,
+        }
+
+    def add_history_group_to_local_kb(self, *, history_key: str, ctx: Any, kb_ref: str = LOCAL_PATENTS_KB_REF) -> dict[str, Any]:
+        actor = str(ctx.payload.sub)
+        sessions = self.store.list_sessions_by_creator(created_by=actor, limit=1000)
+        target_sessions: list[Any] = []
+        for s in sessions:
+            key, _, _ = self._history_group_from_session(s)
+            if key == str(history_key):
+                target_sessions.append(s)
+        if not target_sessions:
+            raise HTTPException(status_code=404, detail="history_keyword_not_found")
+
+        merged: dict[str, Any] = {}
+        for s in sorted(target_sessions, key=lambda x: int(x.created_at_ms), reverse=True):
+            for item in self.store.list_items(session_id=s.session_id):
+                k = self._history_item_key(item)
+                existing = merged.get(k)
+                if existing is None or int(getattr(item, "created_at_ms", 0) or 0) >= int(getattr(existing, "created_at_ms", 0) or 0):
+                    merged[k] = item
+
+        success = 0
+        failed = 0
+        skipped = 0
+        details: list[dict[str, Any]] = []
+        for item in merged.values():
+            if not self._is_downloaded_status(getattr(item, "status", None)):
+                skipped += 1
+                details.append({"session_id": item.session_id, "item_id": int(item.item_id), "ok": False, "skipped": True, "reason": "not_downloaded"})
+                continue
+            if getattr(item, "added_doc_id", None):
+                skipped += 1
+                details.append({"session_id": item.session_id, "item_id": int(item.item_id), "ok": True, "already_added": True})
+                continue
+            try:
+                self.add_item_to_local_kb(
+                    session_id=str(item.session_id),
+                    item_id=int(item.item_id),
+                    ctx=ctx,
+                    kb_ref=kb_ref,
+                    from_batch=True,
+                )
+                success += 1
+                details.append({"session_id": item.session_id, "item_id": int(item.item_id), "ok": True})
+            except Exception as e:
+                failed += 1
+                details.append({"session_id": item.session_id, "item_id": int(item.item_id), "ok": False, "error": str(e)})
+
+        return {
+            "ok": True,
+            "history_key": str(history_key),
+            "success": success,
+            "failed": failed,
+            "skipped": skipped,
+            "items": details,
         }
 
     def get_item_preview_payload(self, *, session_id: str, item_id: int, ctx: Any, render: str = "default") -> dict[str, Any]:

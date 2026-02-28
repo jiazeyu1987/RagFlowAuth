@@ -129,6 +129,7 @@ export default function PatentDownload() {
   const [historyPayload, setHistoryPayload] = useState(null);
   const [historyItemsLoading, setHistoryItemsLoading] = useState(false);
   const [deletingHistoryKey, setDeletingHistoryKey] = useState('');
+  const [addingHistoryKey, setAddingHistoryKey] = useState('');
   const [configReady, setConfigReady] = useState(false);
 
   const parsedKeywords = useMemo(() => patentDownloadManager.parseKeywords(keywordText), [keywordText]);
@@ -231,7 +232,47 @@ export default function PatentDownload() {
     setHistoryError('');
     try {
       const res = await patentDownloadManager.listHistoryKeywords();
-      const list = Array.isArray(res?.history) ? res.history : [];
+      const rawList = Array.isArray(res?.history) ? res.history : [];
+      let list = rawList;
+      const needEnrich = rawList.some(
+        (row) =>
+          typeof row?.downloaded_count !== 'number' ||
+          typeof row?.analyzed_count !== 'number' ||
+          typeof row?.added_count !== 'number'
+      );
+      if (needEnrich) {
+        const settled = await Promise.all(
+          rawList.map(async (row) => {
+            const key = String(row?.history_key || '');
+            if (!key) return row;
+            try {
+              const payload = await patentDownloadManager.getHistoryByKeyword(key);
+              const items = Array.isArray(payload?.items) ? payload.items : [];
+              const downloadedCount = items.filter((it) =>
+                ['downloaded', 'downloaded_cached'].includes(String(it?.status || ''))
+              ).length;
+              const analyzedCount = items.filter(
+                (it) => String(it?.analysis_text || '').trim() && !isAnalysisErrorText(it?.analysis_text)
+              ).length;
+              const addedCount = items.filter((it) => Boolean(it?.added_doc_id)).length;
+              return {
+                ...row,
+                downloaded_count: downloadedCount,
+                analyzed_count: analyzedCount,
+                added_count: addedCount,
+              };
+            } catch (_) {
+              return {
+                ...row,
+                downloaded_count: Number(row?.downloaded_count || 0),
+                analyzed_count: Number(row?.analyzed_count || 0),
+                added_count: Number(row?.added_count || 0),
+              };
+            }
+          })
+        );
+        list = settled;
+      }
       setHistoryKeywords(list);
       if (!selectedHistoryKey && list.length) setSelectedHistoryKey(String(list[0].history_key || ''));
       if (selectedHistoryKey && !list.some((x) => String(x.history_key || '') === String(selectedHistoryKey))) {
@@ -480,6 +521,43 @@ export default function PatentDownload() {
       setError(e?.message || '删除历史关键词失败');
     } finally {
       setDeletingHistoryKey('');
+    }
+  };
+
+  const addHistoryKeywordToKb = async (row) => {
+    const key = String(row?.history_key || '');
+    if (!key) return;
+    setAddingHistoryKey(key);
+    setError('');
+    setInfo('');
+    try {
+      const res = await patentDownloadManager.addHistoryToLocalKb(key, LOCAL_KB_REF);
+      setInfo(`历史关键词批量添加完成：成功 ${res?.success || 0}，失败 ${res?.failed || 0}`);
+      await loadHistoryKeywords();
+      if (selectedHistoryKey === key) await loadHistoryItems(key);
+      if (sessionId) await refreshSession(sessionId);
+    } catch (e) {
+      setError(e?.message || '历史关键词批量添加失败');
+    } finally {
+      setAddingHistoryKey('');
+    }
+  };
+
+  const refreshHistoryPanel = async () => {
+    setError('');
+    setInfo('');
+    try {
+      const list = await loadHistoryKeywords();
+      const activeKey = selectedHistoryKey || (list.length ? String(list[0].history_key || '') : '');
+      if (activeKey) {
+        setSelectedHistoryKey(activeKey);
+        await loadHistoryItems(activeKey);
+      } else {
+        setHistoryPayload(null);
+      }
+      setInfo('历史记录已刷新');
+    } catch (e) {
+      setError(e?.message || '刷新历史记录失败');
     }
   };
 
@@ -752,59 +830,6 @@ export default function PatentDownload() {
               >
                 {loading ? '下载中...' : '一键下载'}
               </button>
-              <button
-                type="button"
-                onClick={stopDownload}
-                disabled={!sessionId || !['running', 'stopping'].includes(String(sessionStatus || '')) || stopping}
-                style={{
-                  padding: '10px 14px',
-                  borderRadius: '10px',
-                  border: '1px solid #f59e0b',
-                  background: stopping ? '#fde68a' : '#f59e0b',
-                  color: '#fff',
-                  cursor:
-                    !sessionId || !['running', 'stopping'].includes(String(sessionStatus || '')) || stopping
-                      ? 'not-allowed'
-                      : 'pointer',
-                  fontWeight: 800,
-                }}
-              >
-                {stopping ? '停止中...' : '停止'}
-              </button>
-
-              <button
-                type="button"
-                onClick={addAll}
-                disabled={!sessionId || addingAll}
-                style={{
-                  padding: '10px 14px',
-                  borderRadius: '10px',
-                  border: '1px solid #059669',
-                  background: addingAll ? '#6ee7b7' : '#10b981',
-                  color: '#fff',
-                  cursor: !sessionId || addingAll ? 'not-allowed' : 'pointer',
-                  fontWeight: 800,
-                }}
-              >
-                {addingAll ? '批量添加中...' : '一键全部添加'}
-              </button>
-
-              <button
-                type="button"
-                onClick={removeSession}
-                disabled={!sessionId || deletingSession}
-                style={{
-                  padding: '10px 14px',
-                  borderRadius: '10px',
-                  border: '1px solid #ef4444',
-                  background: deletingSession ? '#fecaca' : '#ef4444',
-                  color: '#fff',
-                  cursor: !sessionId || deletingSession ? 'not-allowed' : 'pointer',
-                  fontWeight: 800,
-                }}
-              >
-                全部删除（仅本次）
-              </button>
             </div>
 
             {Object.keys(sourceStats || {}).length > 0 && (
@@ -869,6 +894,61 @@ export default function PatentDownload() {
               历史记录
             </button>
           </div>
+          {resultTab === 'current' ? (
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '8px' }}>
+              <button
+                type="button"
+                onClick={stopDownload}
+                disabled={!sessionId || !['running', 'stopping'].includes(String(sessionStatus || '')) || stopping}
+                style={{
+                  padding: '9px 12px',
+                  borderRadius: '10px',
+                  border: '1px solid #f59e0b',
+                  background: stopping ? '#fde68a' : '#f59e0b',
+                  color: '#fff',
+                  cursor:
+                    !sessionId || !['running', 'stopping'].includes(String(sessionStatus || '')) || stopping
+                      ? 'not-allowed'
+                      : 'pointer',
+                  fontWeight: 800,
+                }}
+              >
+                {stopping ? '停止中...' : '停止下载'}
+              </button>
+              <button
+                type="button"
+                onClick={addAll}
+                disabled={!sessionId || addingAll}
+                style={{
+                  padding: '9px 12px',
+                  borderRadius: '10px',
+                  border: '1px solid #059669',
+                  background: addingAll ? '#6ee7b7' : '#10b981',
+                  color: '#fff',
+                  cursor: !sessionId || addingAll ? 'not-allowed' : 'pointer',
+                  fontWeight: 800,
+                }}
+              >
+                {addingAll ? '批量添加中...' : '全部添加知识库'}
+              </button>
+              <button
+                type="button"
+                onClick={removeSession}
+                disabled={!sessionId || deletingSession}
+                style={{
+                  padding: '9px 12px',
+                  borderRadius: '10px',
+                  border: '1px solid #ef4444',
+                  background: deletingSession ? '#fecaca' : '#ef4444',
+                  color: '#fff',
+                  cursor: !sessionId || deletingSession ? 'not-allowed' : 'pointer',
+                  fontWeight: 800,
+                }}
+              >
+                全部删除
+              </button>
+            </div>
+          ) : null}
 
           {resultTab === 'current' ? (
             !items.length ? (
@@ -881,12 +961,40 @@ export default function PatentDownload() {
           ) : (
             <div style={{ display: 'grid', gridTemplateColumns: '280px minmax(420px, 1fr)', gap: '10px' }}>
               <div style={{ border: '1px solid #e5e7eb', borderRadius: '10px', padding: '8px', maxHeight: '70vh', overflow: 'auto' }}>
-                <div style={{ fontWeight: 800, color: '#111827', marginBottom: '6px' }}>历史关键词</div>
+                <div style={{ fontWeight: 800, color: '#111827', marginBottom: '6px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <span>历史关键词</span>
+                  <button
+                    type="button"
+                    onClick={refreshHistoryPanel}
+                    disabled={historyLoading || historyItemsLoading}
+                    style={{
+                      padding: '4px 8px',
+                      borderRadius: '7px',
+                      border: '1px solid #2563eb',
+                      background: historyLoading || historyItemsLoading ? '#93c5fd' : '#2563eb',
+                      color: '#fff',
+                      cursor: historyLoading || historyItemsLoading ? 'not-allowed' : 'pointer',
+                      fontSize: '0.78rem',
+                      fontWeight: 700,
+                    }}
+                  >
+                    刷新
+                  </button>
+                </div>
                 {historyLoading ? <div style={{ color: '#6b7280', fontSize: '0.86rem' }}>加载中...</div> : null}
                 {!historyLoading && !historyKeywords.length ? <div style={{ color: '#9ca3af', fontSize: '0.86rem' }}>暂无历史关键词</div> : null}
                 <div style={{ display: 'grid', gap: '6px' }}>
                   {historyKeywords.map((row) => {
                     const active = String(row.history_key || '') === String(selectedHistoryKey || '');
+                    const downloadedCount = Number(row?.downloaded_count || 0);
+                    const analyzedCount = Number(row?.analyzed_count || 0);
+                    const addedCount = Number(row?.added_count || 0);
+                    const canAdd = downloadedCount > 0 && addedCount < downloadedCount;
+                    const adding = addingHistoryKey === String(row.history_key || '');
+                    const allAdded = downloadedCount > 0 && addedCount >= downloadedCount;
+                    const partialAdded = addedCount > 0 && addedCount < downloadedCount;
+                    const addBtnBg = allAdded ? '#d1d5db' : partialAdded ? '#f59e0b' : '#16a34a';
+                    const addBtnBorder = allAdded ? '#9ca3af' : partialAdded ? '#d97706' : '#15803d';
                     return (
                       <div
                         key={row.history_key}
@@ -911,9 +1019,27 @@ export default function PatentDownload() {
                           }}
                         >
                           <div style={{ fontWeight: 700, color: '#111827', fontSize: '0.88rem' }}>{row.keyword_display || '-'}</div>
-                          <div style={{ fontSize: '0.78rem', color: '#6b7280', marginTop: '4px' }}>会话 {row.session_count || 0}</div>
+                          <div style={{ fontSize: '0.78rem', color: '#6b7280', marginTop: '4px' }}>下载 {downloadedCount}，已分析 {analyzedCount}，已入库 {addedCount}</div>
                         </button>
-                        <div>
+                        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                          <button
+                            type="button"
+                            onClick={() => addHistoryKeywordToKb(row)}
+                            disabled={!canAdd || adding}
+                            style={{
+                              padding: '4px 8px',
+                              borderRadius: '7px',
+                              border: `1px solid ${addBtnBorder}`,
+                              background: addBtnBg,
+                              color: '#fff',
+                              cursor: !canAdd || adding ? 'not-allowed' : 'pointer',
+                              fontSize: '0.78rem',
+                              fontWeight: 700,
+                              opacity: !canAdd || adding ? 0.75 : 1,
+                            }}
+                          >
+                            {adding ? '添加中...' : '添加知识库'}
+                          </button>
                           <button
                             type="button"
                             onClick={() => deleteHistoryKeyword(row)}

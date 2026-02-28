@@ -49,6 +49,16 @@ class PatentDownloadManager {
     );
   }
 
+  async addHistoryToLocalKb(historyKey, kbRef = DEFAULT_LOCAL_KB) {
+    return httpClient.requestJson(
+      authBackendUrl(`/api/patent-download/history/keywords/${encodeURIComponent(historyKey)}/add-all-to-local-kb`),
+      {
+        method: 'POST',
+        body: JSON.stringify({ kb_ref: kbRef }),
+      }
+    );
+  }
+
   async deleteHistoryKeyword(historyKey) {
     return httpClient.requestJson(authBackendUrl('/api/patent-download/history/keywords/delete'), {
       method: 'POST',
