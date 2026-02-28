@@ -9,7 +9,9 @@ from backend.services.chat_message_sources_store import ChatMessageSourcesStore
 from backend.services.deletion_log_store import DeletionLogStore
 from backend.services.download_log_store import DownloadLogStore
 from backend.services.kb_store import KbStore
+from backend.services.knowledge_directory_store import KnowledgeDirectoryManager, KnowledgeDirectoryStore
 from backend.services.permission_group_store import PermissionGroupStore
+from backend.services.permission_group_folder_store import PermissionGroupFolderManager, PermissionGroupFolderStore
 from backend.services.patent_download.store import PatentDownloadStore
 from backend.services.paper_download.store import PaperDownloadStore
 from backend.services.ragflow_connection import create_ragflow_connection
@@ -37,6 +39,10 @@ class AppDependencies:
     search_config_store: SearchConfigStore
     patent_download_store: PatentDownloadStore
     paper_download_store: PaperDownloadStore
+    knowledge_directory_store: KnowledgeDirectoryStore
+    knowledge_directory_manager: KnowledgeDirectoryManager
+    permission_group_folder_store: PermissionGroupFolderStore
+    permission_group_folder_manager: PermissionGroupFolderManager
 
 
 def create_dependencies(db_path: str | None = None) -> AppDependencies:
@@ -49,6 +55,10 @@ def create_dependencies(db_path: str | None = None) -> AppDependencies:
     data_security_store = DataSecurityStore(db_path=str(db_path))
     chat_message_sources_store = ChatMessageSourcesStore(db_path=str(db_path))
     search_config_store = SearchConfigStore(db_path=str(db_path))
+    knowledge_directory_store = KnowledgeDirectoryStore(db_path=str(db_path))
+    knowledge_directory_manager = KnowledgeDirectoryManager(store=knowledge_directory_store)
+    permission_group_folder_store = PermissionGroupFolderStore(db_path=str(db_path))
+    permission_group_folder_manager = PermissionGroupFolderManager(store=permission_group_folder_store)
 
     return AppDependencies(
         user_store=UserStore(db_path=str(db_path)),
@@ -66,4 +76,8 @@ def create_dependencies(db_path: str | None = None) -> AppDependencies:
         search_config_store=search_config_store,
         patent_download_store=PatentDownloadStore(db_path=str(db_path)),
         paper_download_store=PaperDownloadStore(db_path=str(db_path)),
+        knowledge_directory_store=knowledge_directory_store,
+        knowledge_directory_manager=knowledge_directory_manager,
+        permission_group_folder_store=permission_group_folder_store,
+        permission_group_folder_manager=permission_group_folder_manager,
     )

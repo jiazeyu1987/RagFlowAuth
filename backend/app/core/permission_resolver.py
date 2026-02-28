@@ -89,6 +89,7 @@ def resolve_permissions(deps: AppDependencies, user: Any) -> PermissionSnapshot:
     can_download = False
     can_delete = False
     kb_names: set[str] = set()
+    kb_node_ids: set[str] = set()
     chat_ids: set[str] = set()
 
     dataset_index: dict[str, dict[str, str]] | None = None
@@ -114,10 +115,38 @@ def resolve_permissions(deps: AppDependencies, user: Any) -> PermissionSnapshot:
 
         for name in _safe_list(group.get("accessible_kbs")):
             if isinstance(name, str) and name:
-                _add_kb_ref(kb_names, name, dataset_index)
+                ref = name.strip()
+                if not ref:
+                    continue
+                if ref.startswith("node:"):
+                    node_id = ref[5:].strip()
+                    if node_id:
+                        kb_node_ids.add(node_id)
+                    continue
+                if ref.startswith("dataset:"):
+                    dataset_ref = ref[8:].strip()
+                    if dataset_ref:
+                        _add_kb_ref(kb_names, dataset_ref, dataset_index)
+                    continue
+                _add_kb_ref(kb_names, ref, dataset_index)
+        for node_id in _safe_list(group.get("accessible_kb_nodes")):
+            if isinstance(node_id, str):
+                clean = node_id.strip()
+                if clean:
+                    kb_node_ids.add(clean)
         for cid in _safe_list(group.get("accessible_chats")):
             if isinstance(cid, str) and cid:
                 chat_ids.add(cid)
+
+    if kb_node_ids:
+        manager = getattr(deps, "knowledge_directory_manager", None)
+        if manager is not None:
+            try:
+                dataset_ids = manager.resolve_dataset_ids_from_nodes(kb_node_ids)
+            except Exception:
+                dataset_ids = []
+            for dataset_id in dataset_ids:
+                _add_kb_ref(kb_names, dataset_id, dataset_index)
 
     # NOTE:
     # 业务授权以“权限组（resolver）”为准，不再合并按用户单独授权的 KB/Chat 可见性。

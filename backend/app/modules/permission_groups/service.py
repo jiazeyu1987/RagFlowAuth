@@ -29,5 +29,20 @@ class PermissionGroupsService:
     def list_knowledge_bases(self) -> list[dict[str, str]]:
         return self._repo.list_knowledge_bases()
 
+    def list_knowledge_tree(self) -> dict[str, Any]:
+        return self._repo.list_knowledge_tree()
+
     def list_chat_agents(self) -> list[dict[str, str]]:
         return self._repo.list_chat_agents()
+
+    def list_group_folders(self) -> dict[str, Any]:
+        return self._repo.list_group_folders()
+
+    def create_group_folder(self, name: str, parent_id: str | None, *, created_by: str | None) -> dict[str, Any]:
+        return self._repo.create_group_folder(name=name, parent_id=parent_id, created_by=created_by)
+
+    def update_group_folder(self, folder_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+        return self._repo.update_group_folder(folder_id, payload)
+
+    def delete_group_folder(self, folder_id: str) -> bool:
+        return self._repo.delete_group_folder(folder_id)

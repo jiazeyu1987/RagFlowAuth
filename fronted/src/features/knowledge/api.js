@@ -49,6 +49,40 @@ export const knowledgeApi = {
     });
   },
 
+  listKnowledgeDirectories() {
+    return httpClient.requestJson(authBackendUrl('/api/knowledge/directories'), { method: 'GET' });
+  },
+
+  createKnowledgeDirectory(payload) {
+    return httpClient.requestJson(authBackendUrl('/api/knowledge/directories'), {
+      method: 'POST',
+      body: JSON.stringify(payload || {}),
+    });
+  },
+
+  updateKnowledgeDirectory(nodeId, payload) {
+    return httpClient.requestJson(authBackendUrl(`/api/knowledge/directories/${encodeURIComponent(nodeId)}`), {
+      method: 'PUT',
+      body: JSON.stringify(payload || {}),
+    });
+  },
+
+  deleteKnowledgeDirectory(nodeId) {
+    return httpClient.requestJson(authBackendUrl(`/api/knowledge/directories/${encodeURIComponent(nodeId)}`), {
+      method: 'DELETE',
+    });
+  },
+
+  assignDatasetDirectory(datasetRef, nodeId) {
+    return httpClient.requestJson(
+      authBackendUrl(`/api/knowledge/directories/datasets/${encodeURIComponent(datasetRef)}/node`),
+      {
+        method: 'PUT',
+        body: JSON.stringify({ node_id: nodeId || null }),
+      }
+    );
+  },
+
   listRagflowChats(params = {}) {
     const query = new URLSearchParams(params).toString();
     const path = query ? `/api/chats?${query}` : '/api/chats';

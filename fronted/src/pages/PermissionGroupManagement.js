@@ -1,818 +1,770 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { permissionGroupsApi } from '../features/permissionGroups/api';
 
-const KEYWORD_STORAGE_KEY = 'permission_group_keywords_v1';
-const KEYWORD_ACTIVE_KEY = 'permission_group_keywords_active_v1';
+const ROOT = '';
 
-const PermissionGroupManagement = () => {
-  const [groups, setGroups] = useState([]);
-  const [knowledgeBases, setKnowledgeBases] = useState([]);
-  const [chatAgents, setChatAgents] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [showCreateModal, setShowCreateModal] = useState(false);
-  const [showEditModal, setShowEditModal] = useState(false);
-  const [selectedGroup, setSelectedGroup] = useState(null);
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [groupToDelete, setGroupToDelete] = useState(null);
+const emptyForm = {
+  group_name: '',
+  description: '',
+  folder_id: null,
+  accessible_kbs: [],
+  accessible_kb_nodes: [],
+  accessible_chats: [],
+  can_upload: false,
+  can_review: false,
+  can_download: true,
+  can_delete: false,
+};
 
-  const [keyword, setKeyword] = useState('');
-  const [recentKeywords, setRecentKeywords] = useState([]);
-  const [formData, setFormData] = useState({
-    group_name: '',
-    description: '',
-    accessible_kbs: [],
-    accessible_chats: [],
-    can_upload: false,
-    can_review: false,
-    can_download: true,
-    can_delete: false
+function normalizeGroups(rawGroups, groupBindings = {}) {
+  return (rawGroups || []).map((g) => {
+    const key = String(g?.group_id ?? '');
+    const bound = Object.prototype.hasOwnProperty.call(groupBindings || {}, key) ? groupBindings[key] : undefined;
+    const folderId = g?.folder_id ?? bound ?? null;
+    return {
+      ...g,
+      folder_id: typeof folderId === 'string' && folderId ? folderId : null,
+      accessible_kbs: Array.isArray(g?.accessible_kbs) ? g.accessible_kbs : [],
+      accessible_kb_nodes: Array.isArray(g?.accessible_kb_nodes) ? g.accessible_kb_nodes : [],
+      accessible_chats: Array.isArray(g?.accessible_chats) ? g.accessible_chats : [],
+    };
   });
+}
 
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem(KEYWORD_STORAGE_KEY);
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        if (Array.isArray(parsed)) setRecentKeywords(parsed.slice(0, 5));
-      }
-      const active = localStorage.getItem(KEYWORD_ACTIVE_KEY) || '';
-      setKeyword(active);
-    } catch (e) {
-      // ignore storage errors
-    }
-    fetchData();
-  }, []);
+function buildFolderIndexes(folders) {
+  const byId = new Map();
+  const childrenByParent = new Map();
+  (folders || []).forEach((f) => {
+    if (!f?.id) return;
+    byId.set(f.id, f);
+    const parent = f.parent_id || ROOT;
+    if (!childrenByParent.has(parent)) childrenByParent.set(parent, []);
+    childrenByParent.get(parent).push(f);
+  });
+  for (const arr of childrenByParent.values()) {
+    arr.sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'zh-Hans-CN'));
+  }
+  return { byId, childrenByParent };
+}
 
-  const fetchData = async () => {
+function pathFolders(folderId, byId) {
+  if (!folderId) return [];
+  const out = [];
+  const seen = new Set();
+  let cur = folderId;
+  while (cur && !seen.has(cur)) {
+    seen.add(cur);
+    const folder = byId.get(cur);
+    if (!folder) break;
+    out.push(folder);
+    cur = folder.parent_id || ROOT;
+  }
+  return out.reverse();
+}
+
+function toggleInArray(values, item) {
+  const list = Array.isArray(values) ? values : [];
+  return list.includes(item) ? list.filter((v) => v !== item) : [...list, item];
+}
+
+function FolderTree({
+  indexes,
+  currentFolderId,
+  selectedFolderId,
+  expanded,
+  dropTargetFolderId,
+  onToggleExpand,
+  onOpenFolder,
+  onDragOverFolder,
+  onDropFolder,
+  onDragLeaveFolder,
+}) {
+  const renderFolder = (folder, depth) => {
+    const id = folder.id;
+    const children = indexes.childrenByParent.get(id) || [];
+    const hasChildren = children.length > 0;
+    const isExpanded = expanded.includes(id);
+    const isCurrent = currentFolderId === id;
+    const isSelected = selectedFolderId === id;
+    return (
+      <div key={id}>
+        <div
+          style={{
+            marginLeft: depth * 16,
+            borderRadius: 6,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
+            padding: '3px 6px',
+            background:
+              dropTargetFolderId === id
+                ? '#dcfce7'
+                : isCurrent
+                  ? '#dbeafe'
+                  : isSelected
+                    ? '#eff6ff'
+                    : 'transparent',
+          }}
+          onDragOver={(e) => onDragOverFolder(e, id)}
+          onDrop={(e) => onDropFolder(e, id)}
+          onDragLeave={(e) => onDragLeaveFolder(e, id)}
+        >
+          <button
+            type="button"
+            onClick={() => hasChildren && onToggleExpand(id)}
+            style={{ width: 14, border: 'none', background: 'transparent', cursor: hasChildren ? 'pointer' : 'default', color: '#6b7280', padding: 0 }}
+          >
+            {hasChildren ? (isExpanded ? '▾' : '▸') : ''}
+          </button>
+          <button
+            type="button"
+            onClick={() => onOpenFolder(id)}
+            style={{ border: 'none', background: 'transparent', cursor: 'pointer', width: '100%', textAlign: 'left', padding: 0 }}
+            title={folder.path || folder.name}
+          >
+            📁 {folder.name || '(未命名文件夹)'}
+          </button>
+        </div>
+        {isExpanded && children.map((c) => renderFolder(c, depth + 1))}
+      </div>
+    );
+  };
+
+  const roots = indexes.childrenByParent.get(ROOT) || [];
+  return (
+    <div>
+      <div
+        style={{
+          borderRadius: 6,
+          padding: '3px 6px',
+          marginBottom: 6,
+          background: dropTargetFolderId === ROOT ? '#dcfce7' : currentFolderId === ROOT ? '#dbeafe' : 'transparent',
+        }}
+        onDragOver={(e) => onDragOverFolder(e, ROOT)}
+        onDrop={(e) => onDropFolder(e, ROOT)}
+        onDragLeave={(e) => onDragLeaveFolder(e, ROOT)}
+      >
+        <button type="button" onClick={() => onOpenFolder(ROOT)} style={{ border: 'none', background: 'transparent', cursor: 'pointer', width: '100%', textAlign: 'left', padding: 0 }}>
+          🖥️ 根目录
+        </button>
+      </div>
+      {roots.map((f) => renderFolder(f, 0))}
+      {!roots.length && <div style={{ color: '#6b7280', fontSize: 13 }}>暂无文件夹</div>}
+    </div>
+  );
+}
+
+function FolderSelectionList({ title, items, selected, onToggle, emptyText }) {
+  return (
+    <div style={{ marginBottom: 12 }}>
+      <div style={{ fontWeight: 700, marginBottom: 8 }}>{title}</div>
+      {!items.length ? (
+        <div style={{ color: '#6b7280', fontSize: 13 }}>{emptyText}</div>
+      ) : (
+        <div style={{ maxHeight: 170, overflowY: 'auto', border: '1px solid #e5e7eb', borderRadius: 8, padding: 8 }}>
+          {items.map((item) => (
+            <label key={item.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 2px', cursor: 'pointer' }}>
+              <input type="checkbox" checked={selected.includes(item.id)} onChange={() => onToggle(item.id)} />
+              <span>{item.name}</span>
+            </label>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ChatSelection({ chatAgents, selected, onToggle }) {
+  return (
+    <div style={{ marginBottom: 12 }}>
+      <div style={{ fontWeight: 700, marginBottom: 8 }}>聊天授权</div>
+      {!chatAgents.length ? (
+        <div style={{ color: '#6b7280', fontSize: 13 }}>暂无聊天体</div>
+      ) : (
+        <div style={{ maxHeight: 170, overflowY: 'auto', border: '1px solid #e5e7eb', borderRadius: 8, padding: 8 }}>
+          {chatAgents.map((chat) => (
+            <label key={chat.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 2px', cursor: 'pointer' }}>
+              <input type="checkbox" checked={selected.includes(chat.id)} onChange={() => onToggle(chat.id)} />
+              <span>{chat.name} ({chat.type || 'chat'})</span>
+            </label>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default function PermissionGroupManagement() {
+  const [groups, setGroups] = useState([]);
+  const [groupFolders, setGroupFolders] = useState([]);
+  const [knowledgeTree, setKnowledgeTree] = useState({ nodes: [], datasets: [] });
+  const [chatAgents, setChatAgents] = useState([]);
+
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const [hint, setHint] = useState('');
+
+  const [currentFolderId, setCurrentFolderId] = useState(ROOT);
+  const [selectedFolderId, setSelectedFolderId] = useState(ROOT);
+  const [expandedFolderIds, setExpandedFolderIds] = useState([]);
+  const [searchKeyword, setSearchKeyword] = useState('');
+  const [selectedItem, setSelectedItem] = useState(null); // { kind: 'folder'|'group', id: string|number }
+  const [dragGroupId, setDragGroupId] = useState(null);
+  const [dropTargetFolderId, setDropTargetFolderId] = useState(null);
+
+  const [mode, setMode] = useState('');
+  const [editingGroupId, setEditingGroupId] = useState(null);
+  const [formData, setFormData] = useState({ ...emptyForm });
+
+  const folderIndexes = useMemo(() => buildFolderIndexes(groupFolders), [groupFolders]);
+
+  const folderPath = useMemo(
+    () => [{ id: ROOT, name: '根目录' }, ...pathFolders(currentFolderId, folderIndexes.byId).map((f) => ({ id: f.id, name: f.name || '(未命名文件夹)' }))],
+    [currentFolderId, folderIndexes.byId]
+  );
+
+  const groupsInCurrentFolder = useMemo(
+    () => groups.filter((g) => (g.folder_id || ROOT) === currentFolderId),
+    [groups, currentFolderId]
+  );
+
+  const contentRows = useMemo(() => {
+    const rows = [];
+    (folderIndexes.childrenByParent.get(currentFolderId) || []).forEach((folder) => {
+      rows.push({ kind: 'folder', id: folder.id, name: folder.name || '(未命名文件夹)', type: '文件夹' });
+    });
+    groupsInCurrentFolder.forEach((group) => {
+      rows.push({ kind: 'group', id: group.group_id, name: group.group_name || '(未命名权限组)', type: '权限组' });
+    });
+    return rows;
+  }, [currentFolderId, folderIndexes.childrenByParent, groupsInCurrentFolder]);
+
+  const filteredRows = useMemo(() => {
+    const kw = String(searchKeyword || '').trim().toLowerCase();
+    if (!kw) return contentRows;
+    return contentRows.filter((r) => String(r.name || '').toLowerCase().includes(kw) || String(r.id || '').toLowerCase().includes(kw));
+  }, [contentRows, searchKeyword]);
+
+  const editingGroup = useMemo(
+    () => groups.find((g) => g.group_id === editingGroupId) || null,
+    [groups, editingGroupId]
+  );
+
+  const knowledgeNodeItems = useMemo(
+    () => (knowledgeTree?.nodes || []).map((n) => ({ id: n.id, name: `${n.name || '(未命名目录)'} (${n.path || '/'})` })),
+    [knowledgeTree?.nodes]
+  );
+
+  const knowledgeDatasetItems = useMemo(
+    () => (knowledgeTree?.datasets || []).map((d) => ({ id: d.id, name: `${d.name || '(未命名知识库)'}${d.node_path && d.node_path !== '/' ? ` (${d.node_path})` : ''}` })),
+    [knowledgeTree?.datasets]
+  );
+
+  function fillFormFromGroup(group) {
+    return {
+      ...emptyForm,
+      group_name: group?.group_name || '',
+      description: group?.description || '',
+      folder_id: group?.folder_id || null,
+      accessible_kbs: group?.accessible_kbs || [],
+      accessible_kb_nodes: group?.accessible_kb_nodes || [],
+      accessible_chats: group?.accessible_chats || [],
+      can_upload: !!group?.can_upload,
+      can_review: !!group?.can_review,
+      can_download: group?.can_download !== false,
+      can_delete: !!group?.can_delete,
+    };
+  }
+
+  function ensureFolderExpanded(folderId) {
+    if (!folderId) return;
+    const ids = pathFolders(folderId, folderIndexes.byId).map((f) => f.id);
+    setExpandedFolderIds((prev) => {
+      const set = new Set(prev);
+      ids.forEach((id) => set.add(id));
+      return Array.from(set);
+    });
+  }
+
+  function openFolder(folderId) {
+    const next = folderId || ROOT;
+    setCurrentFolderId(next);
+    setSelectedFolderId(next);
+    if (next) ensureFolderExpanded(next);
+  }
+
+  function startCreateGroup() {
+    setMode('create');
+    setEditingGroupId(null);
+    setFormData({ ...emptyForm, folder_id: currentFolderId || null });
+  }
+
+  function startEditGroup(group) {
+    if (!group) return;
+    setMode('edit');
+    setEditingGroupId(group.group_id);
+    setFormData(fillFormFromGroup(group));
+  }
+
+  async function fetchAll() {
+    setLoading(true);
+    setError('');
     try {
-      setLoading(true);
-      const [groupsData, kbData, chatData] = await Promise.all([
+      const [groupsRes, folderRes, knowledgeRes, chatsRes] = await Promise.all([
         permissionGroupsApi.list(),
-        permissionGroupsApi.listKnowledgeBases().catch((e) => ({ ok: false, error: e?.message, data: [] })),
-        permissionGroupsApi.listChats().catch((e) => ({ ok: false, error: e?.message, data: [] }))
+        permissionGroupsApi.listGroupFolders(),
+        permissionGroupsApi.listKnowledgeTree(),
+        permissionGroupsApi.listChats(),
       ]);
-
-      setGroups(groupsData.data || []);
-
-      if (kbData?.ok) {
-        setKnowledgeBases(kbData.data || []);
-      } else {
-        if (kbData?.error) console.warn('知识库加载警告:', kbData.error);
-        setKnowledgeBases([]);
-      }
-
-      if (chatData?.ok) {
-        setChatAgents(chatData.data || []);
-      } else {
-        if (chatData?.error) console.warn('聊天体加载警告:', chatData.error);
-        setChatAgents([]);
-      }
-
-      setError(null);
-    } catch (err) {
-      setError(err.message || '加载数据失败');
+      const folderData = folderRes?.data || { folders: [], group_bindings: {}, root_group_count: 0 };
+      const normalizedGroups = normalizeGroups(groupsRes?.data || [], folderData.group_bindings || {});
+      setGroups(normalizedGroups);
+      setGroupFolders(folderData.folders || []);
+      setKnowledgeTree(knowledgeRes?.data || { nodes: [], datasets: [] });
+      setChatAgents(chatsRes?.data || []);
+      return normalizedGroups;
+    } catch (e) {
+      setError(e?.message || '加载失败');
+      return [];
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleCreate = () => {
-    setFormData({
-      group_name: '',
-      description: '',
-      accessible_kbs: [],
-      accessible_chats: [],
-      can_upload: false,
-      can_review: false,
-      can_download: true,
-      can_delete: false
-    });
-    setShowCreateModal(true);
-  };
-
-  const handleEdit = (group) => {
-    setSelectedGroup(group);
-    setFormData({
-      group_name: group.group_name,
-      description: group.description || '',
-      accessible_kbs: group.accessible_kbs || [],
-      accessible_chats: group.accessible_chats || [],
-      can_upload: group.can_upload || false,
-      can_review: group.can_review || false,
-      can_download: group.can_download !== false,
-      can_delete: group.can_delete || false
-    });
-    setShowEditModal(true);
-  };
-
-  const handleDelete = (group) => {
-    setGroupToDelete(group);
-    setShowDeleteConfirm(true);
-  };
-
-  const confirmDelete = async () => {
-    if (!groupToDelete) return;
-
-    try {
-      await permissionGroupsApi.remove(groupToDelete.group_id);
-
-      setShowDeleteConfirm(false);
-      setGroupToDelete(null);
-      await fetchData();
-    } catch (err) {
-      setError(err.message || '删除失败');
-    }
-  };
-
-  const cancelDelete = () => {
-    setShowDeleteConfirm(false);
-    setGroupToDelete(null);
-  };
-
-  const visibleGroups = useMemo(() => {
-    const kw = (keyword || '').trim().toLowerCase();
-    if (!kw) return groups;
-    return groups.filter((group) => {
-      const name = (group.group_name || '').toString().toLowerCase();
-      const desc = (group.description || '').toString().toLowerCase();
-      return name.includes(kw) || desc.includes(kw);
-    });
-  }, [groups, keyword]);
-
-  const handleSubmitCreate = async (e) => {
-    e.preventDefault();
-
-    try {
-      await permissionGroupsApi.create(formData);
-
-      setShowCreateModal(false);
-      await fetchData();
-    } catch (err) {
-      setError(err.message || '创建失败');
-    }
-  };
-
-  const handleSubmitEdit = async (e) => {
-    e.preventDefault();
-
-    try {
-      await permissionGroupsApi.update(selectedGroup.group_id, formData);
-
-      setShowEditModal(false);
-      setSelectedGroup(null);
-      await fetchData();
-    } catch (err) {
-      setError(err.message || '更新失败');
-    }
-  };
-
-  const commitKeyword = (value) => {
-    const kw = String(value || '').trim();
-    try {
-      localStorage.setItem(KEYWORD_ACTIVE_KEY, kw);
-    } catch { }
-    if (!kw) return;
-    setRecentKeywords((prev) => {
-      const next = [kw, ...(prev || []).filter((x) => x !== kw)].slice(0, 5);
-      try {
-        localStorage.setItem(KEYWORD_STORAGE_KEY, JSON.stringify(next));
-      } catch { }
-      return next;
-    });
-  };
-
-  const toggleKbAccess = (kbId) => {
-    const newKbs = formData.accessible_kbs.includes(kbId)
-      ? formData.accessible_kbs.filter(id => id !== kbId)
-      : [...formData.accessible_kbs, kbId];
-    setFormData({ ...formData, accessible_kbs: newKbs });
-  };
-
-  const toggleChatAccess = (chatId) => {
-    const newChats = formData.accessible_chats.includes(chatId)
-      ? formData.accessible_chats.filter(id => id !== chatId)
-      : [...formData.accessible_chats, chatId];
-    setFormData({ ...formData, accessible_chats: newChats });
-  };
-
-  if (loading) {
-    return (
-      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '400px' }}>
-        <div>加载中...</div>
-      </div>
-    );
   }
 
+  useEffect(() => {
+    fetchAll().then((list) => {
+      if (list.length) startEditGroup(list[0]);
+      else startCreateGroup();
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function saveForm(e) {
+    e.preventDefault();
+    setSaving(true);
+    setError('');
+    setHint('');
+    try {
+      if (mode === 'create') {
+        const res = await permissionGroupsApi.create(formData);
+        const newId = res?.data?.group_id;
+        const nextGroups = await fetchAll();
+        const created = nextGroups.find((g) => g.group_id === newId) || null;
+        if (created) {
+          startEditGroup(created);
+          setHint('权限组已创建');
+        }
+      } else if (mode === 'edit' && editingGroupId != null) {
+        await permissionGroupsApi.update(editingGroupId, formData);
+        const nextGroups = await fetchAll();
+        const updated = nextGroups.find((g) => g.group_id === editingGroupId) || null;
+        if (updated) {
+          startEditGroup(updated);
+          setHint('权限组已保存');
+        }
+      }
+    } catch (e2) {
+      setError(e2?.message || '保存失败');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function cancelEdit() {
+    if (mode === 'edit' && editingGroup) {
+      setFormData(fillFormFromGroup(editingGroup));
+      return;
+    }
+    startCreateGroup();
+  }
+
+  async function removeGroup(group) {
+    if (!group?.group_id) return;
+    if (!window.confirm(`确认删除权限组「${group.group_name}」吗？`)) return;
+    setError('');
+    setHint('');
+    try {
+      await permissionGroupsApi.remove(group.group_id);
+      const nextGroups = await fetchAll();
+      if (editingGroupId === group.group_id) {
+        if (nextGroups.length) startEditGroup(nextGroups[0]);
+        else startCreateGroup();
+      }
+      setHint('权限组已删除');
+    } catch (e) {
+      setError(e?.message || '删除失败');
+    }
+  }
+
+  async function createFolder() {
+    const name = window.prompt('请输入新文件夹名称');
+    if (!name || !name.trim()) return;
+    setError('');
+    setHint('');
+    try {
+      const res = await permissionGroupsApi.createFolder({ name: name.trim(), parent_id: currentFolderId || null });
+      const newId = res?.data?.id || '';
+      await fetchAll();
+      if (newId) {
+        openFolder(newId);
+        setSelectedItem({ kind: 'folder', id: newId });
+      }
+      setHint('文件夹已创建');
+    } catch (e) {
+      setError(e?.message || '创建文件夹失败');
+    }
+  }
+
+  async function renameFolder() {
+    const targetId = selectedFolderId || ROOT;
+    if (!targetId || targetId === ROOT) return;
+    const folder = folderIndexes.byId.get(targetId);
+    const next = window.prompt('请输入新文件夹名称', folder?.name || '');
+    if (!next || !next.trim()) return;
+    setError('');
+    setHint('');
+    try {
+      await permissionGroupsApi.updateFolder(targetId, { name: next.trim() });
+      await fetchAll();
+      ensureFolderExpanded(targetId);
+      setHint('文件夹已重命名');
+    } catch (e) {
+      setError(e?.message || '重命名文件夹失败');
+    }
+  }
+
+  async function deleteFolder() {
+    const targetId = selectedFolderId || ROOT;
+    if (!targetId || targetId === ROOT) return;
+    const folder = folderIndexes.byId.get(targetId);
+    if (!window.confirm(`确认删除文件夹「${folder?.name || targetId}」吗？\n必须先清空子文件夹和权限组。`)) return;
+    setError('');
+    setHint('');
+    try {
+      await permissionGroupsApi.removeFolder(targetId);
+      const parent = folder?.parent_id || ROOT;
+      openFolder(parent);
+      setSelectedItem(null);
+      await fetchAll();
+      setHint('文件夹已删除');
+    } catch (e) {
+      setError(e?.message || '删除文件夹失败');
+    }
+  }
+
+  function toggleNodeAuth(nodeId) {
+    setFormData((prev) => ({ ...prev, accessible_kb_nodes: toggleInArray(prev.accessible_kb_nodes, nodeId) }));
+  }
+
+  function toggleKbAuth(kbId) {
+    setFormData((prev) => ({ ...prev, accessible_kbs: toggleInArray(prev.accessible_kbs, kbId) }));
+  }
+
+  function toggleChatAuth(chatId) {
+    setFormData((prev) => ({ ...prev, accessible_chats: toggleInArray(prev.accessible_chats, chatId) }));
+  }
+
+  async function moveGroupToFolder(groupId, folderId) {
+    if (!groupId) return;
+    setError('');
+    setHint('');
+    try {
+      await permissionGroupsApi.update(groupId, { folder_id: folderId || null });
+      const nextGroups = await fetchAll();
+      const moved = nextGroups.find((g) => g.group_id === groupId);
+      if (editingGroupId === groupId && moved) {
+        setFormData((prev) => ({ ...prev, folder_id: moved.folder_id || null }));
+      }
+      setHint('权限组已移动');
+    } catch (e) {
+      setError(e?.message || '移动权限组失败');
+    }
+  }
+
+  function onDragOverFolder(e, folderId) {
+    if (!dragGroupId) return;
+    e.preventDefault();
+    if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+    setDropTargetFolderId(folderId);
+  }
+
+  function onDragLeaveFolder(e, folderId) {
+    if (!dragGroupId) return;
+    const related = e.relatedTarget;
+    if (related && e.currentTarget.contains(related)) return;
+    if (dropTargetFolderId === folderId) setDropTargetFolderId(null);
+  }
+
+  async function onDropFolder(e, folderId) {
+    if (!dragGroupId) return;
+    e.preventDefault();
+    const raw = e.dataTransfer?.getData('application/x-pg-group-id');
+    const droppedId = Number(raw || dragGroupId);
+    setDropTargetFolderId(null);
+    setDragGroupId(null);
+    if (!Number.isFinite(droppedId)) return;
+    await moveGroupToFolder(droppedId, folderId);
+  }
+
+  const panelStyle = {
+    border: '1px solid #e5e7eb',
+    borderRadius: 10,
+    background: '#fff',
+  };
+
   return (
-    <div>
-      <div style={{ marginBottom: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div>
-          <h2 style={{ margin: '0 0 8px 0' }}>权限组管理</h2>
-          <p style={{ margin: 0, color: '#6b7280', fontSize: '0.9rem' }}>
-            管理权限组、资源配置和操作权限
-          </p>
-        </div>
-        <button
-          onClick={handleCreate}
-          data-testid="pg-create-open"
-          style={{
-            padding: '10px 20px',
-            backgroundColor: '#3b82f6',
-            color: 'white',
-            border: 'none',
-            borderRadius: '4px',
-            cursor: 'pointer',
-            fontSize: '0.9rem',
-            fontWeight: '500'
-          }}
-        >
-          + 创建权限组
-        </button>
-      </div>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', alignItems: 'center', marginBottom: '16px' }}>
-        <input
-          value={keyword}
-          onChange={(e) => {
-            const v = e.target.value;
-            setKeyword(v);
-            try {
-              localStorage.setItem(KEYWORD_ACTIVE_KEY, v);
-            } catch { }
-          }}
-          onBlur={(e) => commitKeyword(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), commitKeyword(keyword))}
-          placeholder="关键字过滤权限组（名称/描述）"
-          style={{ flex: '1 1 360px', padding: '10px 12px', border: '1px solid #d1d5db', borderRadius: '8px' }}
-        />
-        <button
-          type="button"
-          onClick={() => {
-            setKeyword('');
-            try { localStorage.setItem(KEYWORD_ACTIVE_KEY, ''); } catch { }
-          }}
-          style={{ padding: '10px 16px', borderRadius: '8px', border: '1px solid #d1d5db', background: 'white', cursor: 'pointer' }}
-        >
-          清空
-        </button>
-        <div style={{ color: '#6b7280', fontSize: '0.9rem' }} data-testid="pg-filter-count">
-          显示 {visibleGroups.length} / {groups.length}
-        </div>
-        {recentKeywords.length > 0 && (
-          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
-            <span style={{ color: '#6b7280', fontSize: '0.85rem' }}>最近：</span>
-            {recentKeywords.map((kw) => (
-              <button
-                key={kw}
-                type="button"
-                onClick={() => {
-                  setKeyword(kw);
-                  commitKeyword(kw);
-                }}
-                style={{
-                  padding: '6px 10px',
-                  borderRadius: '999px',
-                  border: '1px solid #d1d5db',
-                  background: 'white',
-                  cursor: 'pointer',
-                  fontSize: '0.85rem',
-                  color: '#374151'
-                }}
-              >
-                {kw}
-              </button>
-            ))}
-          </div>
-        )}
+    <div style={{ padding: 12 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'center', marginBottom: 10 }}>
+        <h2 style={{ margin: 0 }}>权限组管理</h2>
       </div>
 
-      {error && (
-        <div style={{
-          backgroundColor: '#fee2e2',
-          color: '#991b1b',
-          padding: '12px 16px',
-          borderRadius: '4px',
-          marginBottom: '20px'
-        }}>
-          {error}
-        </div>
-      )}
-
-      <div style={{
-        backgroundColor: 'white',
-        borderRadius: '8px',
-        boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
-        overflow: 'hidden'
-      }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-          <thead>
-            <tr style={{ backgroundColor: '#f9fafb', borderBottom: '2px solid #e5e7eb' }}>
-              <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '0.875rem', fontWeight: '600', color: '#374151' }}>
-                权限组名称
-              </th>
-              <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '0.875rem', fontWeight: '600', color: '#374151' }}>
-                描述
-              </th>
-              <th style={{ padding: '12px 16px', textAlign: 'center', fontSize: '0.875rem', fontWeight: '600', color: '#374151' }}>
-                知识库
-              </th>
-              <th style={{ padding: '12px 16px', textAlign: 'center', fontSize: '0.875rem', fontWeight: '600', color: '#374151' }}>
-                聊天体
-              </th>
-              <th style={{ padding: '12px 16px', textAlign: 'center', fontSize: '0.875rem', fontWeight: '600', color: '#374151' }}>
-                权限
-              </th>
-              <th style={{ padding: '12px 16px', textAlign: 'center', fontSize: '0.875rem', fontWeight: '600', color: '#374151' }}>
-                用户数
-              </th>
-              <th style={{ padding: '12px 16px', textAlign: 'center', fontSize: '0.875rem', fontWeight: '600', color: '#374151' }}>
-                操作
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {visibleGroups.map((group) => (
-              <tr key={group.group_id} style={{ borderBottom: '1px solid #e5e7eb' }}>
-                <td style={{ padding: '12px 16px' }}>
-                  <div style={{ fontWeight: '500', color: '#111827' }}>
-                    {group.group_name}
-                  </div>
-                  {group.is_system === 1 && (
-                    <span style={{
-                      fontSize: '0.75rem',
-                      color: '#6b7280',
-                      backgroundColor: '#f3f4f6',
-                      padding: '2px 6px',
-                      borderRadius: '4px',
-                      marginTop: '4px',
-                      display: 'inline-block'
-                    }}>
-                      系统权限组
-                    </span>
-                  )}
-                </td>
-                <td style={{ padding: '12px 16px', color: '#6b7280', fontSize: '0.9rem' }}>
-                  {group.description || '-'}
-                </td>
-                <td style={{ padding: '12px 16px', textAlign: 'center', fontSize: '0.85rem' }}>
-                  {group.accessible_kbs?.length === 0 ? (
-                    <span style={{ color: '#9ca3af' }}>全部</span>
-                  ) : (
-                    `${group.accessible_kbs?.length || 0} 个`
-                  )}
-                </td>
-                <td style={{ padding: '12px 16px', textAlign: 'center', fontSize: '0.85rem' }}>
-                  {group.accessible_chats?.length === 0 ? (
-                    <span style={{ color: '#9ca3af' }}>全部</span>
-                  ) : (
-                    `${group.accessible_chats?.length || 0} 个`
-                  )}
-                </td>
-                <td style={{ padding: '12px 16px', textAlign: 'center', fontSize: '0.75rem' }}>
-                  <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                    {group.can_upload && <span style={{ padding: '2px 6px', backgroundColor: '#dbeafe', color: '#1e40af', borderRadius: '4px' }}>上传</span>}
-                    {group.can_review && <span style={{ padding: '2px 6px', backgroundColor: '#fef3c7', color: '#92400e', borderRadius: '4px' }}>审核</span>}
-                    {group.can_download && <span style={{ padding: '2px 6px', backgroundColor: '#d1fae5', color: '#065f46', borderRadius: '4px' }}>下载</span>}
-                    {group.can_delete && <span style={{ padding: '2px 6px', backgroundColor: '#fee2e2', color: '#991b1b', borderRadius: '4px' }}>删除</span>}
-                  </div>
-                </td>
-                <td style={{ padding: '12px 16px', textAlign: 'center', color: '#6b7280' }}>
-                  {group.user_count || 0} 个用户
-                </td>
-                <td style={{ padding: '12px 16px', textAlign: 'center' }}>
-                  <button
-                    onClick={() => handleEdit(group)}
-                    data-testid={`pg-edit-${group.group_id}`}
-                    style={{
-                      padding: '6px 12px',
-                      backgroundColor: '#3b82f6',
-                      color: 'white',
-                      border: 'none',
-                      borderRadius: '4px',
-                      cursor: 'pointer',
-                      fontSize: '0.875rem',
-                      marginRight: '8px'
-                    }}
-                  >
-                    编辑
-                  </button>
-                  {group.is_system !== 1 && (
-                    <button
-                      onClick={() => handleDelete(group)}
-                      data-testid={`pg-delete-${group.group_id}`}
-                      style={{
-                        padding: '6px 12px',
-                        backgroundColor: '#ef4444',
-                        color: 'white',
-                        border: 'none',
-                        borderRadius: '4px',
-                        cursor: 'pointer',
-                        fontSize: '0.875rem'
-                      }}
-                    >
-                      删除
-                    </button>
-                  )}
-                </td>
-              </tr>
-            ))}
-            {visibleGroups.length === 0 && (
-              <tr>
-                <td colSpan="7" style={{ padding: '48px', textAlign: 'center', color: '#6b7280' }}>
-                  暂无匹配的权限组
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      {/* 创建/编辑模态框 */}
-      {(showCreateModal || showEditModal) && (
-        <Modal
-          title={showCreateModal ? '创建权限组' : '编辑权限组'}
-          formData={formData}
-          setFormData={setFormData}
-          knowledgeBases={knowledgeBases}
-          chatAgents={chatAgents}
-          onSubmit={showCreateModal ? handleSubmitCreate : handleSubmitEdit}
-          onClose={() => {
-            setShowCreateModal(false);
-            setShowEditModal(false);
-            setSelectedGroup(null);
-          }}
-          toggleKbAccess={toggleKbAccess}
-          toggleChatAccess={toggleChatAccess}
-          isSystem={selectedGroup?.is_system === 1}
-        />
-      )}
-
-      {/* 删除确认对话框 */}
-      {showDeleteConfirm && groupToDelete && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backgroundColor: 'rgba(0, 0, 0, 0.5)',
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-          zIndex: 1000
-        }}>
-          <div style={{
-            backgroundColor: 'white',
-            borderRadius: '8px',
-            padding: '24px',
-            width: '400px',
-            maxWidth: '90%'
-          }}>
-            <h3 style={{ margin: '0 0 16px 0', fontSize: '1.25rem', fontWeight: '600' }}>
-              确认删除
-            </h3>
-            <p style={{ margin: '0 0 24px 0', color: '#6b7280' }}>
-              确定要删除权限组 "{groupToDelete.group_name}" 吗？此操作不可撤销。
-            </p>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
-              <button
-                onClick={cancelDelete}
-                data-testid="pg-delete-cancel"
-                style={{
-                  padding: '10px 20px',
-                  backgroundColor: '#6b7280',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '4px',
-                  cursor: 'pointer',
-                  fontSize: '0.9rem'
-                }}
-              >
-                取消
-              </button>
-              <button
-                onClick={confirmDelete}
-                data-testid="pg-delete-confirm"
-                style={{
-                  padding: '10px 20px',
-                  backgroundColor: '#ef4444',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '4px',
-                  cursor: 'pointer',
-                  fontSize: '0.9rem',
-                  fontWeight: '500'
-                }}
-              >
-                删除
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
-
-// 模态框组件
-const Modal = ({
-  title,
-  formData,
-  setFormData,
-  knowledgeBases,
-  chatAgents,
-  onSubmit,
-  onClose,
-  toggleKbAccess,
-  toggleChatAccess,
-  isSystem = false
-}) => {
-  return (
-    <div style={{
-      position: 'fixed',
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
-      backgroundColor: 'rgba(0, 0, 0, 0.5)',
-      display: 'flex',
-      justifyContent: 'center',
-      alignItems: 'center',
-      zIndex: 1000
-    }} data-testid="pg-modal">
-      <div style={{
-        backgroundColor: 'white',
-        borderRadius: '8px',
-        padding: '24px',
-        width: '700px',
-        maxHeight: '80vh',
-        overflowY: 'auto'
-      }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-          <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: '600' }}>{title}</h3>
+      <section style={{ ...panelStyle, marginBottom: 12 }}>
+        <div style={{ padding: '10px 12px', borderBottom: '1px solid #e5e7eb', display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+          <input
+            value={searchKeyword}
+            onChange={(e) => setSearchKeyword(e.target.value)}
+            placeholder="筛选当前文件夹内容"
+            style={{ width: 260, maxWidth: '100%', padding: '9px 10px', border: '1px solid #d1d5db', borderRadius: 8 }}
+          />
+          <button onClick={fetchAll} style={{ border: '1px solid #d1d5db', borderRadius: 8, background: '#fff', cursor: 'pointer', padding: '9px 12px' }}>
+            刷新
+          </button>
+          <button onClick={createFolder} style={{ border: '1px solid #2563eb', borderRadius: 8, background: '#2563eb', color: '#fff', cursor: 'pointer', padding: '9px 12px' }}>
+            新建文件夹
+          </button>
           <button
-            onClick={onClose}
+            onClick={renameFolder}
+            disabled={!selectedFolderId || selectedFolderId === ROOT}
             style={{
-              background: 'none',
-              border: 'none',
-              fontSize: '1.5rem',
-              cursor: 'pointer',
-              color: '#6b7280'
+              border: '1px solid #f59e0b',
+              borderRadius: 8,
+              background: !selectedFolderId || selectedFolderId === ROOT ? '#fde68a' : '#f59e0b',
+              color: '#fff',
+              cursor: !selectedFolderId || selectedFolderId === ROOT ? 'not-allowed' : 'pointer',
+              padding: '9px 12px',
             }}
           >
-            ×
+            重命名文件夹
           </button>
+          <button
+            onClick={deleteFolder}
+            disabled={!selectedFolderId || selectedFolderId === ROOT}
+            style={{
+              border: '1px solid #ef4444',
+              borderRadius: 8,
+              background: !selectedFolderId || selectedFolderId === ROOT ? '#fecaca' : '#ef4444',
+              color: '#fff',
+              cursor: !selectedFolderId || selectedFolderId === ROOT ? 'not-allowed' : 'pointer',
+              padding: '9px 12px',
+            }}
+          >
+            删除文件夹
+          </button>
+          <button onClick={startCreateGroup} style={{ border: '1px solid #10b981', borderRadius: 8, background: '#10b981', color: '#fff', cursor: 'pointer', padding: '9px 12px' }}>
+            新建权限组
+          </button>
+          <div style={{ color: '#6b7280', fontSize: 12 }}>权限组总数: {groups.length}</div>
         </div>
+      </section>
 
-        <form onSubmit={onSubmit} data-testid="pg-form">
-          <div style={{ marginBottom: '16px' }}>
-            <label style={{
-              display: 'block',
-              marginBottom: '8px',
-              fontWeight: '500',
-              color: '#374151'
-            }}>
-              权限组名称 *
-            </label>
-            <input
-              type="text"
-              value={formData.group_name}
-              onChange={(e) => setFormData({ ...formData, group_name: e.target.value })}
-              disabled={isSystem}
-              required
-              data-testid="pg-form-group-name"
-              style={{
-                width: '100%',
-                padding: '10px',
-                border: '1px solid #d1d5db',
-                borderRadius: '4px',
-                fontSize: '1rem',
-                backgroundColor: isSystem ? '#f3f4f6' : 'white'
+      <div style={{ display: 'grid', gridTemplateColumns: '320px 1fr', gap: 12 }}>
+        <section style={panelStyle}>
+          <div style={{ padding: '10px 12px', borderBottom: '1px solid #e5e7eb', fontWeight: 800 }}>文件夹</div>
+          <div style={{ padding: 10, maxHeight: 700, overflowY: 'auto' }}>
+            <FolderTree
+              indexes={folderIndexes}
+              currentFolderId={currentFolderId}
+              selectedFolderId={selectedFolderId}
+              expanded={expandedFolderIds}
+              dropTargetFolderId={dropTargetFolderId}
+              onToggleExpand={(id) => setExpandedFolderIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]))}
+              onOpenFolder={(id) => {
+                openFolder(id);
+                setSelectedItem(id ? { kind: 'folder', id } : null);
               }}
+              onDragOverFolder={onDragOverFolder}
+              onDropFolder={onDropFolder}
+              onDragLeaveFolder={onDragLeaveFolder}
             />
-            {isSystem && (
-              <div style={{ fontSize: '0.875rem', color: '#6b7280', marginTop: '4px' }}>
-                系统权限组的名称不能修改
-              </div>
+          </div>
+        </section>
+
+        <section style={panelStyle}>
+          <div style={{ padding: '10px 12px', borderBottom: '1px solid #e5e7eb' }}>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
+              <span style={{ color: '#6b7280', fontSize: 13 }}>路径:</span>
+              {folderPath.map((f, idx) => (
+                <React.Fragment key={f.id || '__root__'}>
+                  <button
+                    type="button"
+                    onClick={() => openFolder(f.id)}
+                    style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: currentFolderId === f.id ? '#1d4ed8' : '#374151', fontWeight: currentFolderId === f.id ? 700 : 500, padding: 0 }}
+                  >
+                    {f.name}
+                  </button>
+                  {idx < folderPath.length - 1 && <span style={{ color: '#9ca3af' }}>{'>'}</span>}
+                </React.Fragment>
+              ))}
+            </div>
+            <div style={{ color: '#6b7280', fontSize: 12 }}>
+              支持拖拽：把右侧权限组拖到左侧任意文件夹，可直接移动权限组所属文件夹。
+            </div>
+            {error && <div style={{ color: '#b91c1c', marginTop: 8 }}>{error}</div>}
+            {hint && <div style={{ color: '#047857', marginTop: 8 }}>{hint}</div>}
+          </div>
+
+          <div style={{ maxHeight: 280, overflowY: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e5e7eb' }}>
+                  <th style={{ textAlign: 'left', padding: '8px 10px' }}>名称</th>
+                  <th style={{ textAlign: 'left', padding: '8px 10px', width: 90 }}>类型</th>
+                  <th style={{ textAlign: 'left', padding: '8px 10px', width: 120 }}>操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredRows.map((row) => {
+                  const selected = selectedItem?.kind === row.kind && selectedItem?.id === row.id;
+                  return (
+                    <tr
+                      key={`${row.kind}_${row.id}`}
+                      draggable={row.kind === 'group'}
+                      onDragStart={(e) => {
+                        if (row.kind !== 'group') return;
+                        e.dataTransfer.setData('application/x-pg-group-id', String(row.id));
+                        e.dataTransfer.effectAllowed = 'move';
+                        setDragGroupId(row.id);
+                        setDropTargetFolderId(null);
+                      }}
+                      onDragEnd={() => {
+                        setDragGroupId(null);
+                        setDropTargetFolderId(null);
+                      }}
+                      onClick={() => {
+                        setSelectedItem({ kind: row.kind, id: row.id });
+                        if (row.kind === 'folder') setSelectedFolderId(row.id);
+                      }}
+                      onDoubleClick={() => {
+                        if (row.kind === 'folder') openFolder(row.id);
+                        if (row.kind === 'group') {
+                          const group = groups.find((g) => g.group_id === row.id);
+                          if (group) startEditGroup(group);
+                        }
+                      }}
+                      style={{
+                        borderBottom: '1px solid #f1f5f9',
+                        background: selected ? '#eff6ff' : '#fff',
+                        cursor: row.kind === 'group' ? 'grab' : 'pointer',
+                        opacity: dragGroupId && row.kind === 'group' && dragGroupId === row.id ? 0.5 : 1,
+                      }}
+                    >
+                      <td style={{ padding: '8px 10px' }}>{row.kind === 'folder' ? '📁 ' : '👤 '}{row.name}</td>
+                      <td style={{ padding: '8px 10px', color: '#4b5563' }}>{row.type}</td>
+                      <td style={{ padding: '8px 10px' }}>
+                        {row.kind === 'group' && (
+                          <>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                const group = groups.find((g) => g.group_id === row.id);
+                                if (group) startEditGroup(group);
+                              }}
+                              style={{ border: '1px solid #3b82f6', borderRadius: 8, background: '#3b82f6', color: '#fff', cursor: 'pointer', padding: '4px 8px', marginRight: 6, fontSize: 12 }}
+                            >
+                              编辑
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                const group = groups.find((g) => g.group_id === row.id);
+                                if (group) removeGroup(group);
+                              }}
+                              style={{ border: '1px solid #ef4444', borderRadius: 8, background: '#ef4444', color: '#fff', cursor: 'pointer', padding: '4px 8px', fontSize: 12 }}
+                            >
+                              删除
+                            </button>
+                          </>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+                {!filteredRows.length && (
+                  <tr>
+                    <td colSpan={3} style={{ padding: 18, color: '#6b7280', textAlign: 'center' }}>当前文件夹为空</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          <div style={{ borderTop: '1px solid #e5e7eb', padding: 12 }}>
+            {loading ? (
+              <div style={{ color: '#6b7280' }}>加载中...</div>
+            ) : (
+              <form onSubmit={saveForm}>
+                <div style={{ display: 'grid', gridTemplateColumns: '130px 1fr', gap: 10, alignItems: 'center', marginBottom: 10 }}>
+                  <label>权限组名称</label>
+                  <input
+                    value={formData.group_name}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, group_name: e.target.value }))}
+                    required
+                    disabled={editingGroup?.is_system === 1}
+                    style={{ padding: '9px 10px', border: '1px solid #d1d5db', borderRadius: 8 }}
+                  />
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '130px 1fr', gap: 10, alignItems: 'start', marginBottom: 10 }}>
+                  <label>描述</label>
+                  <textarea
+                    value={formData.description}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, description: e.target.value }))}
+                    rows={2}
+                    style={{ padding: '9px 10px', border: '1px solid #d1d5db', borderRadius: 8 }}
+                  />
+                </div>
+
+                <FolderSelectionList
+                  title="知识目录授权"
+                  items={knowledgeNodeItems}
+                  selected={formData.accessible_kb_nodes || []}
+                  onToggle={toggleNodeAuth}
+                  emptyText="暂无知识目录"
+                />
+                <FolderSelectionList
+                  title="单知识库授权"
+                  items={knowledgeDatasetItems}
+                  selected={formData.accessible_kbs || []}
+                  onToggle={toggleKbAuth}
+                  emptyText="暂无知识库"
+                />
+                <ChatSelection chatAgents={chatAgents || []} selected={formData.accessible_chats || []} onToggle={toggleChatAuth} />
+
+                <div style={{ marginBottom: 12 }}>
+                  <div style={{ fontWeight: 700, marginBottom: 8 }}>操作权限</div>
+                  <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+                    <label><input type="checkbox" checked={formData.can_upload} onChange={(e) => setFormData((prev) => ({ ...prev, can_upload: e.target.checked }))} /> 上传</label>
+                    <label><input type="checkbox" checked={formData.can_review} onChange={(e) => setFormData((prev) => ({ ...prev, can_review: e.target.checked }))} /> 审核</label>
+                    <label><input type="checkbox" checked={formData.can_download} onChange={(e) => setFormData((prev) => ({ ...prev, can_download: e.target.checked }))} /> 下载</label>
+                    <label><input type="checkbox" checked={formData.can_delete} onChange={(e) => setFormData((prev) => ({ ...prev, can_delete: e.target.checked }))} /> 删除</label>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+                  <button type="button" onClick={cancelEdit} style={{ border: '1px solid #d1d5db', borderRadius: 8, background: '#fff', cursor: 'pointer', padding: '8px 14px' }}>
+                    取消
+                  </button>
+                  <button type="submit" disabled={saving} style={{ border: '1px solid #2563eb', borderRadius: 8, background: saving ? '#93c5fd' : '#2563eb', color: '#fff', cursor: saving ? 'not-allowed' : 'pointer', padding: '8px 14px' }}>
+                    保存
+                  </button>
+                </div>
+              </form>
             )}
           </div>
-
-          <div style={{ marginBottom: '16px' }}>
-            <label style={{
-              display: 'block',
-              marginBottom: '8px',
-              fontWeight: '500',
-              color: '#374151'
-            }}>
-              描述
-            </label>
-            <textarea
-              value={formData.description}
-              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              rows={2}
-              data-testid="pg-form-description"
-              style={{
-                width: '100%',
-                padding: '10px',
-                border: '1px solid #d1d5db',
-                borderRadius: '4px',
-                fontSize: '1rem',
-                resize: 'vertical'
-              }}
-            />
-          </div>
-
-          <div style={{ marginBottom: '16px' }}>
-            <label style={{
-              display: 'block',
-              marginBottom: '8px',
-              fontWeight: '500',
-              color: '#374151'
-            }}>
-              可访问的知识库（留空表示全部）
-            </label>
-            <div style={{
-              border: '1px solid #d1d5db',
-              borderRadius: '4px',
-              padding: '12px',
-              maxHeight: '150px',
-              overflowY: 'auto',
-              backgroundColor: '#f9fafb'
-            }}>
-              {knowledgeBases.length > 0 ? (
-                knowledgeBases.map(kb => (
-                  <label key={kb.id} style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    marginBottom: '8px',
-                    cursor: 'pointer',
-                    fontSize: '0.875rem',
-                    padding: '4px',
-                    borderRadius: '4px',
-                    backgroundColor: 'white'
-                  }}>
-                    <input
-                      type="checkbox"
-                      checked={formData.accessible_kbs.includes(kb.id)}
-                      onChange={() => toggleKbAccess(kb.id)}
-                      data-testid={`pg-form-kb-${kb.id}`}
-                      style={{ marginRight: '8px' }}
-                    />
-                    {kb.name}
-                  </label>
-                ))
-              ) : (
-                <div data-testid="pg-form-kb-empty" style={{ color: '#9ca3af', fontSize: '0.875rem', textAlign: 'center', padding: '20px' }}>
-                  暂无知识库可用
-                  <div style={{ fontSize: '0.75rem', marginTop: '4px' }}>
-                    请确保RAGFlow服务正在运行
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div style={{ marginBottom: '16px' }}>
-            <label style={{
-              display: 'block',
-              marginBottom: '8px',
-              fontWeight: '500',
-              color: '#374151'
-            }}>
-              可访问的聊天体（留空表示全部）
-            </label>
-            <div style={{
-              border: '1px solid #d1d5db',
-              borderRadius: '4px',
-              padding: '12px',
-              maxHeight: '150px',
-              overflowY: 'auto',
-              backgroundColor: '#f9fafb'
-            }}>
-              {chatAgents.length > 0 ? (
-                chatAgents.map(chat => (
-                  <label key={chat.id} style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    marginBottom: '8px',
-                    cursor: 'pointer',
-                    fontSize: '0.875rem',
-                    padding: '4px',
-                    borderRadius: '4px',
-                    backgroundColor: 'white'
-                  }}>
-                    <input
-                      type="checkbox"
-                      checked={formData.accessible_chats.includes(chat.id)}
-                      onChange={() => toggleChatAccess(chat.id)}
-                      data-testid={`pg-form-chat-${chat.id}`}
-                      style={{ marginRight: '8px' }}
-                    />
-                    {chat.name} ({chat.type === 'chat' ? '聊天' : '智能体'})
-                  </label>
-                ))
-              ) : (
-                <div data-testid="pg-form-chat-empty" style={{ color: '#9ca3af', fontSize: '0.875rem', textAlign: 'center', padding: '20px' }}>
-                  暂无聊天体可用
-                  <div style={{ fontSize: '0.75rem', marginTop: '4px' }}>
-                    请确保RAGFlow服务正在运行
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div style={{ marginBottom: '24px' }}>
-            <label style={{
-              display: 'block',
-              marginBottom: '8px',
-              fontWeight: '500',
-              color: '#374151'
-            }}>
-              操作权限
-            </label>
-            <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
-              <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
-                <input
-                  type="checkbox"
-                  checked={formData.can_upload}
-                  onChange={(e) => setFormData({ ...formData, can_upload: e.target.checked })}
-                  data-testid="pg-form-can-upload"
-                  style={{ marginRight: '6px' }}
-                />
-                上传权限
-              </label>
-              <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
-                <input
-                  type="checkbox"
-                  checked={formData.can_review}
-                  onChange={(e) => setFormData({ ...formData, can_review: e.target.checked })}
-                  data-testid="pg-form-can-review"
-                  style={{ marginRight: '6px' }}
-                />
-                审核权限
-              </label>
-              <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
-                <input
-                  type="checkbox"
-                  checked={formData.can_download}
-                  onChange={(e) => setFormData({ ...formData, can_download: e.target.checked })}
-                  data-testid="pg-form-can-download"
-                  style={{ marginRight: '6px' }}
-                />
-                下载权限
-              </label>
-              <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
-                <input
-                  type="checkbox"
-                  checked={formData.can_delete}
-                  onChange={(e) => setFormData({ ...formData, can_delete: e.target.checked })}
-                  data-testid="pg-form-can-delete"
-                  style={{ marginRight: '6px' }}
-                />
-                删除权限
-              </label>
-            </div>
-          </div>
-
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
-            <button
-              type="button"
-              onClick={onClose}
-              data-testid="pg-form-cancel"
-              style={{
-                padding: '10px 20px',
-                backgroundColor: '#6b7280',
-                color: 'white',
-                border: 'none',
-                borderRadius: '4px',
-                cursor: 'pointer',
-                fontSize: '0.9rem'
-              }}
-            >
-              取消
-            </button>
-            <button
-              type="submit"
-              data-testid="pg-form-submit"
-              style={{
-                padding: '10px 20px',
-                backgroundColor: '#3b82f6',
-                color: 'white',
-                border: 'none',
-                borderRadius: '4px',
-                cursor: 'pointer',
-                fontSize: '0.9rem',
-                fontWeight: '500'
-              }}
-            >
-              保存
-            </button>
-          </div>
-        </form>
+        </section>
       </div>
     </div>
   );
-};
-
-export default PermissionGroupManagement;
+}

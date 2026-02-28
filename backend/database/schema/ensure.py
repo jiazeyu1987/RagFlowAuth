@@ -15,6 +15,7 @@ from .audit_logs import (
 from .chat_sessions import ensure_chat_sessions_table
 from .chat_message_sources import ensure_chat_message_sources_table
 from .search_configs import ensure_search_configs_table
+from .kb_directory import ensure_kb_directory_tables
 from .data_security import (
     add_cron_schedule_columns_to_data_security,
     add_backup_job_kind_column,
@@ -43,6 +44,10 @@ from .permission_groups import (
     ensure_user_permission_groups_table,
     seed_default_permission_groups,
 )
+from .permission_group_folders import (
+    ensure_permission_group_folders_table,
+    ensure_permission_groups_folder_column,
+)
 from .users import ensure_org_columns_on_users, ensure_users_group_id_column, ensure_users_table
 
 
@@ -63,11 +68,14 @@ def ensure_schema(db_path: str | Path) -> None:
         ensure_chat_sessions_table(conn)
         ensure_chat_message_sources_table(conn)
         ensure_search_configs_table(conn)
+        ensure_kb_directory_tables(conn)
         ensure_patent_download_tables(conn)
         ensure_paper_download_tables(conn)
 
         # Permission groups (authorization model)
         ensure_permission_groups_table(conn)
+        ensure_permission_group_folders_table(conn)
+        ensure_permission_groups_folder_column(conn)
         ensure_user_permission_groups_table(conn)
         ensure_users_group_id_column(conn)
         seed_default_permission_groups(conn)

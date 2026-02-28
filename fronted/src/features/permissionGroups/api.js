@@ -28,6 +28,24 @@ export const permissionGroupsApi = {
     return response.json();
   },
 
+  async listKnowledgeTree() {
+    const response = await authClient.fetchWithAuth(
+      authBackendUrl('/api/permission-groups/resources/knowledge-tree'),
+      { method: 'GET' }
+    );
+    if (!response.ok) throw new Error(await parseError(response, 'Failed to load knowledge tree'));
+    return response.json();
+  },
+
+  async listGroupFolders() {
+    const response = await authClient.fetchWithAuth(
+      authBackendUrl('/api/permission-groups/resources/group-folders'),
+      { method: 'GET' }
+    );
+    if (!response.ok) throw new Error(await parseError(response, 'Failed to load permission group folders'));
+    return response.json();
+  },
+
   async listChats() {
     const response = await authClient.fetchWithAuth(authBackendUrl('/api/permission-groups/resources/chats'), {
       method: 'GET',
@@ -61,5 +79,30 @@ export const permissionGroupsApi = {
     if (!response.ok) throw new Error(await parseError(response, 'Failed to delete permission group'));
     return response.json();
   },
-};
 
+  async createFolder(payload) {
+    const response = await authClient.fetchWithAuth(authBackendUrl('/api/permission-groups/folders'), {
+      method: 'POST',
+      body: JSON.stringify(payload || {}),
+    });
+    if (!response.ok) throw new Error(await parseError(response, 'Failed to create folder'));
+    return response.json();
+  },
+
+  async updateFolder(folderId, payload) {
+    const response = await authClient.fetchWithAuth(authBackendUrl(`/api/permission-groups/folders/${encodeURIComponent(folderId)}`), {
+      method: 'PUT',
+      body: JSON.stringify(payload || {}),
+    });
+    if (!response.ok) throw new Error(await parseError(response, 'Failed to update folder'));
+    return response.json();
+  },
+
+  async removeFolder(folderId) {
+    const response = await authClient.fetchWithAuth(authBackendUrl(`/api/permission-groups/folders/${encodeURIComponent(folderId)}`), {
+      method: 'DELETE',
+    });
+    if (!response.ok) throw new Error(await parseError(response, 'Failed to delete folder'));
+    return response.json();
+  },
+};

@@ -11,6 +11,8 @@ from typing import Dict, List, Optional
 
 from backend.database.sqlite import connect_sqlite
 
+_UNSET = object()
+
 
 class PermissionGroupStore:
     def __init__(self, database_path: str, logger: logging.Logger = None):
@@ -36,7 +38,9 @@ class PermissionGroupStore:
         self,
         group_name: str,
         description: str = None,
+        folder_id: str | None = None,
         accessible_kbs: List[str] = None,
+        accessible_kb_nodes: List[str] = None,
         accessible_chats: List[str] = None,
         can_upload: bool = False,
         can_review: bool = False,
@@ -55,15 +59,17 @@ class PermissionGroupStore:
                 cursor.execute(
                     """
                     INSERT INTO permission_groups (
-                        group_name, description, is_system,
-                        accessible_kbs, accessible_chats,
+                        group_name, description, folder_id, is_system,
+                        accessible_kbs, accessible_kb_nodes, accessible_chats,
                         can_upload, can_review, can_download, can_delete
-                    ) VALUES (?, ?, 0, ?, ?, ?, ?, ?, ?)
+                    ) VALUES (?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         group_name,
                         description,
+                        (str(folder_id).strip() if isinstance(folder_id, str) and folder_id.strip() else None),
                         json.dumps(accessible_kbs or []),
+                        json.dumps(accessible_kb_nodes or []),
                         json.dumps(accessible_chats or []),
                         1 if can_upload else 0,
                         1 if can_review else 0,
@@ -89,7 +95,8 @@ class PermissionGroupStore:
                 cursor.execute(
                     """
                     SELECT group_id, group_name, description, is_system,
-                           accessible_kbs, accessible_chats,
+                           folder_id,
+                           accessible_kbs, accessible_kb_nodes, accessible_chats,
                            can_upload, can_review, can_download, can_delete,
                            created_at, updated_at
                     FROM permission_groups
@@ -104,6 +111,7 @@ class PermissionGroupStore:
 
                 group = dict(row)
                 group["accessible_kbs"] = json.loads(group["accessible_kbs"] or "[]")
+                group["accessible_kb_nodes"] = json.loads(group.get("accessible_kb_nodes") or "[]")
                 group["accessible_chats"] = json.loads(group["accessible_chats"] or "[]")
 
                 group["can_upload"] = bool(group["can_upload"])
@@ -126,7 +134,8 @@ class PermissionGroupStore:
                 cursor.execute(
                     """
                     SELECT group_id, group_name, description, is_system,
-                           accessible_kbs, accessible_chats,
+                           folder_id,
+                           accessible_kbs, accessible_kb_nodes, accessible_chats,
                            can_upload, can_review, can_download, can_delete,
                            created_at, updated_at
                     FROM permission_groups
@@ -141,6 +150,7 @@ class PermissionGroupStore:
 
                 group = dict(row)
                 group["accessible_kbs"] = json.loads(group["accessible_kbs"] or "[]")
+                group["accessible_kb_nodes"] = json.loads(group.get("accessible_kb_nodes") or "[]")
                 group["accessible_chats"] = json.loads(group["accessible_chats"] or "[]")
                 group["can_upload"] = bool(group["can_upload"])
                 group["can_review"] = bool(group["can_review"])
@@ -162,7 +172,8 @@ class PermissionGroupStore:
                 cursor.execute(
                     """
                     SELECT group_id, group_name, description, is_system,
-                           accessible_kbs, accessible_chats,
+                           folder_id,
+                           accessible_kbs, accessible_kb_nodes, accessible_chats,
                            can_upload, can_review, can_download, can_delete,
                            created_at, updated_at
                     FROM permission_groups
@@ -174,6 +185,7 @@ class PermissionGroupStore:
                 for row in cursor.fetchall():
                     group = dict(row)
                     group["accessible_kbs"] = json.loads(group["accessible_kbs"] or "[]")
+                    group["accessible_kb_nodes"] = json.loads(group.get("accessible_kb_nodes") or "[]")
                     group["accessible_chats"] = json.loads(group["accessible_chats"] or "[]")
                     group["can_upload"] = bool(group["can_upload"])
                     group["can_review"] = bool(group["can_review"])
@@ -194,7 +206,9 @@ class PermissionGroupStore:
         group_id: int,
         group_name: str = None,
         description: str = None,
+        folder_id: str | None | object = _UNSET,
         accessible_kbs: List[str] = None,
+        accessible_kb_nodes: List[str] = None,
         accessible_chats: List[str] = None,
         can_upload: bool = None,
         can_review: bool = None,
@@ -218,9 +232,16 @@ class PermissionGroupStore:
                 if description is not None:
                     updates.append("description = ?")
                     params.append(description)
+                if folder_id is not _UNSET:
+                    clean_folder_id = str(folder_id).strip() if isinstance(folder_id, str) and folder_id.strip() else None
+                    updates.append("folder_id = ?")
+                    params.append(clean_folder_id)
                 if accessible_kbs is not None:
                     updates.append("accessible_kbs = ?")
                     params.append(json.dumps(accessible_kbs))
+                if accessible_kb_nodes is not None:
+                    updates.append("accessible_kb_nodes = ?")
+                    params.append(json.dumps(accessible_kb_nodes))
                 if accessible_chats is not None:
                     updates.append("accessible_chats = ?")
                     params.append(json.dumps(accessible_chats))
@@ -278,4 +299,3 @@ class PermissionGroupStore:
         except Exception as e:
             self._logger.error(f"删除权限组失败: {e}")
             return False
-

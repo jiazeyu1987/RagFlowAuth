@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import sqlite3
 
-from .helpers import table_exists, columns
+from .helpers import add_column_if_missing, table_exists, columns
 
 
 def ensure_permission_groups_table(conn: sqlite3.Connection) -> None:
     if table_exists(conn, "permission_groups"):
+        ensure_permission_groups_columns(conn)
         return
     conn.execute(
         """
@@ -15,7 +16,9 @@ def ensure_permission_groups_table(conn: sqlite3.Connection) -> None:
             group_name TEXT NOT NULL UNIQUE,
             description TEXT,
             is_system INTEGER DEFAULT 0,
+            folder_id TEXT,
             accessible_kbs TEXT DEFAULT '[]',
+            accessible_kb_nodes TEXT DEFAULT '[]',
             accessible_chats TEXT DEFAULT '[]',
             can_upload INTEGER DEFAULT 0,
             can_review INTEGER DEFAULT 0,
@@ -26,6 +29,14 @@ def ensure_permission_groups_table(conn: sqlite3.Connection) -> None:
         )
         """
     )
+    ensure_permission_groups_columns(conn)
+
+
+def ensure_permission_groups_columns(conn: sqlite3.Connection) -> None:
+    if not table_exists(conn, "permission_groups"):
+        return
+    add_column_if_missing(conn, "permission_groups", "folder_id TEXT")
+    add_column_if_missing(conn, "permission_groups", "accessible_kb_nodes TEXT DEFAULT '[]'")
 
 
 def ensure_user_permission_groups_table(conn: sqlite3.Connection) -> None:
@@ -97,4 +108,3 @@ def backfill_user_permission_groups_from_users_group_id(conn: sqlite3.Connection
         )
     except Exception:
         return
-
