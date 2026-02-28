@@ -26,14 +26,14 @@ from backend.services.documents.document_manager import DocumentManager
 from backend.services.paper_download.store import PaperDownloadStore, item_to_dict, session_to_dict
 from backend.services.unified_preview import build_preview_payload
 
-from .sources import ArxivSource, PaperCandidate, PaperSourceError
+from .sources import ArxivSource, EuropePmcSource, OpenAlexSource, PaperCandidate, PaperSourceError, PubMedSource
 
 
 LOCAL_PAPERS_KB_REF = "[本地论文]"
 
 
 class PaperDownloadManager:
-    _SOURCE_ORDER = ("arxiv",)
+    _SOURCE_ORDER = ("arxiv", "pubmed", "europe_pmc", "openalex")
     _MIME_TYPE_DEFAULT = "application/pdf"
     _DOWNLOAD_USER_AGENT = (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -58,8 +58,14 @@ class PaperDownloadManager:
         self.deps = deps
         self.store: PaperDownloadStore = getattr(deps, "paper_download_store", None) or PaperDownloadStore()
         self._arxiv_source = ArxivSource()
+        self._pubmed_source = PubMedSource()
+        self._europe_pmc_source = EuropePmcSource()
+        self._openalex_source = OpenAlexSource()
         self._sources = {
             "arxiv": self._arxiv_source,
+            "pubmed": self._pubmed_source,
+            "europe_pmc": self._europe_pmc_source,
+            "openalex": self._openalex_source,
         }
 
     @staticmethod
@@ -87,6 +93,23 @@ class PaperDownloadManager:
         return " ".join(keywords) if use_and else " OR ".join(keywords)
 
     @staticmethod
+    def _build_quoted_query(keywords: list[str], use_and: bool) -> str:
+        quoted: list[str] = []
+        for raw in keywords or []:
+            kw = str(raw or "").strip()
+            if not kw:
+                continue
+            if len(kw) >= 2 and kw.startswith('"') and kw.endswith('"'):
+                quoted.append(kw)
+            else:
+                quoted.append(f'"{kw}"')
+        if not quoted:
+            return ""
+        if len(quoted) == 1:
+            return quoted[0]
+        return " ".join(quoted) if use_and else " OR ".join(quoted)
+
+    @staticmethod
     def _contains_chinese(text: str) -> bool:
         return bool(re.search(r"[\u4e00-\u9fff]", str(text or "")))
 
@@ -94,12 +117,12 @@ class PaperDownloadManager:
     def _normalize_source_configs(source_configs: dict[str, Any] | None) -> dict[str, dict[str, Any]]:
         src = source_configs if isinstance(source_configs, dict) else {}
         out: dict[str, dict[str, Any]] = {}
-        for key in ("arxiv",):
+        for key in ("arxiv", "pubmed", "europe_pmc", "openalex"):
             cfg = src.get(key)
             if not isinstance(cfg, dict):
                 cfg = {}
             enabled = bool(cfg.get("enabled", False))
-            limit = int(cfg.get("limit", 10) or 10)
+            limit = int(cfg.get("limit", 30) or 30)
             out[key] = {"enabled": enabled, "limit": max(1, min(limit, 1000))}
         return out
 
@@ -222,7 +245,7 @@ class PaperDownloadManager:
     def _build_source_stats(enabled: list[str], cfg: dict[str, dict[str, Any]]) -> dict[str, dict[str, Any]]:
         return {
             key: {
-                "requested_limit": int(cfg.get(key, {}).get("limit", 10) or 10),
+                "requested_limit": int(cfg.get(key, {}).get("limit", 30) or 30),
                 "candidates": 0,
                 "downloaded": 0,
                 "reused": 0,
@@ -662,7 +685,7 @@ class PaperDownloadManager:
                     source_errors[source_key] = "source_not_implemented"
                     self.store.update_session_runtime(session_id=session_id, status="running", source_errors=source_errors, source_stats=source_stats)
                     continue
-                limit = int(source_cfg.get(source_key, {}).get("limit", 10) or 10)
+                limit = int(source_cfg.get(source_key, {}).get("limit", 30) or 30)
                 source_query = str(source_queries.get(source_key) or query or "").strip()
                 source_stats[source_key]["query"] = source_query
                 try:
@@ -684,7 +707,7 @@ class PaperDownloadManager:
                 for idx, c in enumerate(raw or []):
                     if not isinstance(c, PaperCandidate):
                         continue
-                    if source_key == "arxiv" and not self._candidate_matches_keywords(
+                    if not self._candidate_matches_keywords(
                         candidate=c,
                         keywords=keywords,
                         use_and=use_and,
@@ -885,12 +908,9 @@ class PaperDownloadManager:
             raise HTTPException(status_code=400, detail="source_required")
 
         query = self._build_query(keywords, use_and)
-        source_queries: dict[str, str] = {key: query for key in enabled_sources}
+        quoted_query = self._build_quoted_query(keywords, use_and)
+        source_queries: dict[str, str] = {key: (quoted_query or query) for key in enabled_sources}
         source_errors_seed: dict[str, str] = {}
-        if "arxiv" in enabled_sources:
-            q = str(source_queries.get("arxiv") or "").strip()
-            if q and not (q.startswith('"') and q.endswith('"')):
-                source_queries["arxiv"] = f'"{q}"'
 
         source_stats = self._build_source_stats(enabled_sources, normalized_sources)
         for key in enabled_sources:

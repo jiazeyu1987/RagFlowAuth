@@ -196,6 +196,10 @@ class DocumentManager:
             mime_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         elif file_ext in {".xls"}:
             mime_type = "application/vnd.ms-excel"
+        elif file_ext in {".png"}:
+            mime_type = "image/png"
+        elif file_ext in {".jpg", ".jpeg"}:
+            mime_type = "image/jpeg"
 
         doc = deps.kb_store.create_document(
             filename=upload_file.filename,

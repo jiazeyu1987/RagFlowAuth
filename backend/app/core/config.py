@@ -29,7 +29,18 @@ class Settings(BaseSettings):
     MAX_FILE_SIZE: int = 16 * 1024 * 1024  # 16MB
     # Note: we intentionally do NOT accept legacy Office formats like .doc/.ppt/.pptx
     # to reduce preview/convert dependency complexity and user-facing failures.
-    ALLOWED_EXTENSIONS: set = {".txt", ".pdf", ".docx", ".md", ".xlsx", ".xls", ".csv"}
+    ALLOWED_EXTENSIONS: set = {
+        ".txt",
+        ".pdf",
+        ".docx",
+        ".md",
+        ".xlsx",
+        ".xls",
+        ".csv",
+        ".png",
+        ".jpg",
+        ".jpeg",
+    }
 
     # CORS
     CORS_ORIGINS: list[str] = ["*"]

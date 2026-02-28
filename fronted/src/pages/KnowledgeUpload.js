@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { knowledgeApi } from '../features/knowledge/api';
 
 const MAX_FILE_SIZE_BYTES = 16 * 1024 * 1024;
-const ACCEPTED_EXTENSIONS = ['.txt', '.pdf', '.docx', '.md', '.xlsx', '.xls', '.csv'];
+const ACCEPTED_EXTENSIONS = ['.txt', '.pdf', '.docx', '.md', '.xlsx', '.xls', '.csv', '.png', '.jpg', '.jpeg'];
 
 const getFileExtensionLower = (name = '') => {
   const idx = name.lastIndexOf('.');
@@ -271,7 +271,7 @@ const KnowledgeUpload = () => {
               <input
                 type="file"
                 onChange={handleFileSelect}
-                accept=".txt,.pdf,.docx,.md,.xlsx,.xls,.csv"
+                accept=".txt,.pdf,.docx,.md,.xlsx,.xls,.csv,.png,.jpg,.jpeg"
                 multiple
                 style={{ display: 'none' }}
                 id="fileInput"
@@ -365,7 +365,7 @@ const KnowledgeUpload = () => {
             )}
 
             <div style={{ marginTop: '8px', fontSize: '0.85rem', color: '#6b7280' }}>
-              支持的文件类型：.txt, .pdf, .docx, .md, .xlsx, .xls, .csv（最大 16MB）
+              支持的文件类型：.txt, .pdf, .docx, .md, .xlsx, .xls, .csv, .png, .jpg, .jpeg（最大 16MB）
             </div>
           </div>
 

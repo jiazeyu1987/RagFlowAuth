@@ -7,9 +7,17 @@ const LAST_CONFIG_KEY = 'paper_download_last_config_v1';
 const LOCAL_KB_REF = '[本地论文]';
 const DEFAULT_SOURCES = {
   arxiv: { enabled: true, limit: 30 },
+  pubmed: { enabled: false, limit: 30 },
+  europe_pmc: { enabled: false, limit: 30 },
+  openalex: { enabled: false, limit: 30 },
 };
 
-const sourceLabelMap = { arxiv: 'arXiv' };
+const sourceLabelMap = {
+  arxiv: 'arXiv',
+  pubmed: 'PubMed',
+  europe_pmc: 'Europe PMC',
+  openalex: 'OpenAlex',
+};
 
 const boxStyle = {
   background: '#fff',
@@ -89,7 +97,11 @@ export default function PaperDownload() {
         const next = {};
         Object.keys(sourceLabelMap).forEach((k) => {
           const cfg = parsed.sources[k] || {};
-          next[k] = { enabled: Boolean(cfg.enabled), limit: clampLimit(cfg.limit) };
+          const fallback = DEFAULT_SOURCES[k] || { enabled: false, limit: 30 };
+          next[k] = {
+            enabled: typeof cfg.enabled === 'boolean' ? cfg.enabled : Boolean(fallback.enabled),
+            limit: clampLimit(cfg.limit ?? fallback.limit),
+          };
         });
         setSources(next);
       }
