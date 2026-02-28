@@ -4,6 +4,7 @@ export const DOCUMENT_SOURCE = {
   RAGFLOW: 'ragflow',
   KNOWLEDGE: 'knowledge',
   PATENT: 'patent',
+  PAPER: 'paper',
 };
 
 const buildQuery = (params = {}) => {
@@ -82,6 +83,15 @@ class DocumentClient {
       );
     }
 
+    if (source === DOCUMENT_SOURCE.PAPER) {
+      const sessionId = String(ref?.sessionId || '').trim();
+      if (!sessionId) throw new Error('missing_session_id');
+      return httpClient.requestJson(
+        `/api/paper-download/sessions/${encodeURIComponent(sessionId)}/items/${encodeURIComponent(docId)}/preview${buildQuery({ render })}`,
+        { method: 'GET' }
+      );
+    }
+
     throw new Error('invalid_source');
   }
 
@@ -126,6 +136,23 @@ class DocumentClient {
       if (!sessionId) throw new Error('missing_session_id');
       const resp = await httpClient.request(
         `/api/patent-download/sessions/${encodeURIComponent(sessionId)}/items/${encodeURIComponent(docId)}/download`,
+        { method: 'GET' }
+      );
+      if (resp.ok) return resp;
+
+      const data = await parseMaybeJson(resp);
+      const message = data?.detail || data?.message || `download_failed (${resp.status})`;
+      const err = new Error(message);
+      err.status = resp.status;
+      err.data = data;
+      throw err;
+    }
+
+    if (source === DOCUMENT_SOURCE.PAPER) {
+      const sessionId = String(ref?.sessionId || '').trim();
+      if (!sessionId) throw new Error('missing_session_id');
+      const resp = await httpClient.request(
+        `/api/paper-download/sessions/${encodeURIComponent(sessionId)}/items/${encodeURIComponent(docId)}/download`,
         { method: 'GET' }
       );
       if (resp.ok) return resp;

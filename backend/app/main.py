@@ -95,6 +95,7 @@ def create_app() -> FastAPI:
         knowledge,
         me,
         org_directory,
+        paper_download,
         patent_download,
         permission_groups,
         preview,
@@ -120,6 +121,7 @@ def create_app() -> FastAPI:
     app.include_router(permission_groups.create_router(), prefix="/api", tags=["Permission Groups"])
     app.include_router(org_directory.router, prefix="/api", tags=["Org Directory"])
     app.include_router(patent_download.router, prefix="/api", tags=["Patent Download"])
+    app.include_router(paper_download.router, prefix="/api", tags=["Paper Download"])
     app.include_router(diagnostics.router, prefix="/api", tags=["Diagnostics"])
 
     @app.get("/health")

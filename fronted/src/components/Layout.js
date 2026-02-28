@@ -14,7 +14,7 @@ const Layout = ({ children }) => {
       .map((g) => (g && typeof g.group_name === 'string' ? g.group_name.trim() : ''))
       .filter(Boolean);
     const unique = Array.from(new Set(groups));
-    if (unique.length > 0) return unique.join('、');
+    if (unique.length > 0) return unique.join(' / ');
     // Admin accounts often have no explicit permission group assignment.
     return user?.role || '';
   })();
@@ -31,25 +31,24 @@ const Layout = ({ children }) => {
   };
 
   const navigation = [
-    // Keep each label exactly 4 Chinese chars so sidebar items align.
-    // When collapsed, show icon only (no truncated text).
-    { name: '智能对话', path: '/chat', icon: '💬' },
-    { name: '全库搜索', path: '/agents', icon: '🔎' },
-    { name: '知识配置', path: '/kbs', icon: '🗂️' },
-    { name: '文档浏览', path: '/browser', icon: '📁' },
-    { name: '文档审核', path: '/documents', icon: '✅', show: canReview },
-    { name: '文档上传', path: '/upload', icon: '⬆️', show: canUpload },
-    { name: '修改密码', path: '/change-password', icon: '🔑' },
-    { name: '实用工具', path: '/tools', icon: '🧰' },
-    { name: '用户管理', path: '/users', icon: '👤', allowedRoles: ['admin'] },
-    { name: '组织管理', path: '/org-directory', icon: '🏢', allowedRoles: ['admin'] },
-    { name: '权限分组', path: '/permission-groups', icon: '🛡️', allowedRoles: ['admin'] },
-    { name: '数据安全', path: '/data-security', icon: '🔒', allowedRoles: ['admin'] },
-    { name: '日志审计', path: '/logs', icon: '📜', allowedRoles: ['admin'] },
+    { name: '智能对话', path: '/chat', icon: 'C' },
+    { name: '全库搜索', path: '/agents', icon: 'S' },
+    { name: '知识配置', path: '/kbs', icon: 'K' },
+    { name: '文档浏览', path: '/browser', icon: 'B' },
+    { name: '文档审核', path: '/documents', icon: 'R', show: canReview },
+    { name: '文档上传', path: '/upload', icon: 'U', show: canUpload },
+    { name: '修改密码', path: '/change-password', icon: 'P' },
+    { name: '实用工具', path: '/tools', icon: 'T' },
+    { name: '用户管理', path: '/users', icon: 'M', allowedRoles: ['admin'] },
+    { name: '组织管理', path: '/org-directory', icon: 'O', allowedRoles: ['admin'] },
+    { name: '权限分组', path: '/permission-groups', icon: 'G', allowedRoles: ['admin'] },
+    { name: '数据安全', path: '/data-security', icon: 'D', allowedRoles: ['admin'] },
+    { name: '日志审计', path: '/logs', icon: 'L', allowedRoles: ['admin'] },
   ];
 
   const pageTitleOverrides = {
     '/tools/patent-download': '专利下载',
+    '/tools/paper-download': '论文下载',
   };
 
   const currentTitle = pageTitleOverrides[location.pathname]
@@ -79,7 +78,7 @@ const Layout = ({ children }) => {
           }}
         >
           <h2 style={{ margin: 0, fontSize: sidebarOpen ? '1.5rem' : '0.9rem' }}>
-            {sidebarOpen ? '瑛泰知识库' : '📚'}
+            {sidebarOpen ? '知识库系统' : 'KB'}
           </h2>
           <button
             onClick={() => setSidebarOpen(!sidebarOpen)}
@@ -93,7 +92,7 @@ const Layout = ({ children }) => {
             }}
             aria-label="toggle sidebar"
           >
-            {sidebarOpen ? '◀' : '▶'}
+            {sidebarOpen ? '<' : '>'}
           </button>
         </div>
 
@@ -137,7 +136,7 @@ const Layout = ({ children }) => {
                     }}
                     title={item.name}
                   >
-                    {item.icon || '•'}
+                    {item.icon || '-'}
                   </span>
                   {sidebarOpen && <span style={{ flex: 1 }}>{item.name}</span>}
                 </Link>
@@ -176,7 +175,7 @@ const Layout = ({ children }) => {
               e.currentTarget.style.backgroundColor = '#ef4444';
             }}
           >
-            {sidebarOpen ? '登出' : '⏻'}
+            {sidebarOpen ? '退出' : 'X'}
           </button>
         </div>
       </aside>
@@ -202,3 +201,5 @@ const Layout = ({ children }) => {
 };
 
 export default Layout;
+
+

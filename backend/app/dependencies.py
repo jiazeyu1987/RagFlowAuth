@@ -11,6 +11,7 @@ from backend.services.download_log_store import DownloadLogStore
 from backend.services.kb_store import KbStore
 from backend.services.permission_group_store import PermissionGroupStore
 from backend.services.patent_download.store import PatentDownloadStore
+from backend.services.paper_download.store import PaperDownloadStore
 from backend.services.ragflow_connection import create_ragflow_connection
 from backend.services.ragflow_chat_service import RagflowChatService
 from backend.services.ragflow_service import RagflowService
@@ -35,6 +36,7 @@ class AppDependencies:
     data_security_store: DataSecurityStore
     search_config_store: SearchConfigStore
     patent_download_store: PatentDownloadStore
+    paper_download_store: PaperDownloadStore
 
 
 def create_dependencies(db_path: str | None = None) -> AppDependencies:
@@ -63,4 +65,5 @@ def create_dependencies(db_path: str | None = None) -> AppDependencies:
         data_security_store=data_security_store,
         search_config_store=search_config_store,
         patent_download_store=PatentDownloadStore(db_path=str(db_path)),
+        paper_download_store=PaperDownloadStore(db_path=str(db_path)),
     )

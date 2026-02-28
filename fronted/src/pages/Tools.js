@@ -76,6 +76,12 @@ const Tools = () => {
   const tools = useMemo(() => {
     const list = [
       {
+        id: 'paper_download',
+        name: '论文下载分析',
+        description: '进入论文下载页面：配置关键词、下载源和上限，下载并添加到 [本地论文]。',
+        route: '/tools/paper-download',
+      },
+      {
         id: 'patent_download',
         name: '专利下载分析',
         description: '进入专利下载页面：配置关键词、数据源和上限，下载并添加到 [本地专利]。',

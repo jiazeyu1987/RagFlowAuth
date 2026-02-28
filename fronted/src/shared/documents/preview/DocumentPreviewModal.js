@@ -149,7 +149,10 @@ export const DocumentPreviewModal = ({ open, target, onClose, canDownloadFiles =
               source,
               docId: _id,
               datasetName: source === DOCUMENT_SOURCE.RAGFLOW ? dataset : undefined,
-              sessionId: source === DOCUMENT_SOURCE.PATENT ? sessionId : undefined,
+              sessionId:
+                source === DOCUMENT_SOURCE.PATENT || source === DOCUMENT_SOURCE.PAPER
+                  ? sessionId
+                  : undefined,
             }),
           getDownloadBlob: canDownloadFiles
             ? async ({ docId: _id, dataset, filename }) =>
@@ -157,7 +160,10 @@ export const DocumentPreviewModal = ({ open, target, onClose, canDownloadFiles =
                   source,
                   docId: _id,
                   datasetName: source === DOCUMENT_SOURCE.RAGFLOW ? dataset : undefined,
-                  sessionId: source === DOCUMENT_SOURCE.PATENT ? sessionId : undefined,
+                  sessionId:
+                    source === DOCUMENT_SOURCE.PATENT || source === DOCUMENT_SOURCE.PAPER
+                      ? sessionId
+                      : undefined,
                   filename,
                 })
             : undefined,
@@ -240,7 +246,10 @@ export const DocumentPreviewModal = ({ open, target, onClose, canDownloadFiles =
         source: target.source,
         docId: target.docId,
         datasetName: target.source === DOCUMENT_SOURCE.RAGFLOW ? target.datasetName || target.dataset : undefined,
-        sessionId: target.source === DOCUMENT_SOURCE.PATENT ? target.sessionId : undefined,
+        sessionId:
+          target.source === DOCUMENT_SOURCE.PATENT || target.source === DOCUMENT_SOURCE.PAPER
+            ? target.sessionId
+            : undefined,
         render: 'html',
       });
       if (data?.type !== 'html' || !data?.content) throw new Error(data?.message || '此文件类型不支持原样预览(HTML)');
