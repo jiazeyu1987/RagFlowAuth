@@ -25,6 +25,7 @@ class Settings(BaseSettings):
 
     # File Upload
     UPLOAD_DIR: str = "data/uploads"
+    PATENT_DOWNLOAD_DIR: str = "data/patent_downloads"
     MAX_FILE_SIZE: int = 16 * 1024 * 1024  # 16MB
     # Note: we intentionally do NOT accept legacy Office formats like .doc/.ppt/.pptx
     # to reduce preview/convert dependency complexity and user-facing failures.

@@ -2,7 +2,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from backend.app.dependencies import AppDependencies
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from backend.app.dependencies import AppDependencies
 
 
 @dataclass(frozen=True)
@@ -13,7 +16,7 @@ class KbRefInfo:
     variants: tuple[str, ...]
 
 
-def resolve_kb_ref(deps: AppDependencies, kb_ref: str) -> KbRefInfo:
+def resolve_kb_ref(deps: "AppDependencies", kb_ref: str) -> KbRefInfo:
     dataset_id: str | None = None
     name: str | None = None
 

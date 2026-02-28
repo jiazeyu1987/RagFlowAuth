@@ -24,7 +24,11 @@ const Layout = ({ children }) => {
     navigate('/login');
   };
 
-  const isActive = (path) => location.pathname === path;
+  const isActive = (path) => {
+    if (location.pathname === path) return true;
+    if (path === '/tools' && location.pathname.startsWith('/tools/')) return true;
+    return false;
+  };
 
   const navigation = [
     // Keep each label exactly 4 Chinese chars so sidebar items align.
@@ -44,7 +48,13 @@ const Layout = ({ children }) => {
     { name: '日志审计', path: '/logs', icon: '📜', allowedRoles: ['admin'] },
   ];
 
-  const currentTitle = navigation.find((item) => item.path === location.pathname)?.name || 'Dashboard';
+  const pageTitleOverrides = {
+    '/tools/patent-download': '专利下载',
+  };
+
+  const currentTitle = pageTitleOverrides[location.pathname]
+    || navigation.find((item) => item.path === location.pathname)?.name
+    || 'Dashboard';
 
   return (
     <div style={{ display: 'flex', height: '100vh' }}>

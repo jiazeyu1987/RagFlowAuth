@@ -3,6 +3,7 @@ import { httpClient } from '../http/httpClient';
 export const DOCUMENT_SOURCE = {
   RAGFLOW: 'ragflow',
   KNOWLEDGE: 'knowledge',
+  PATENT: 'patent',
 };
 
 const buildQuery = (params = {}) => {
@@ -72,6 +73,15 @@ class DocumentClient {
       );
     }
 
+    if (source === DOCUMENT_SOURCE.PATENT) {
+      const sessionId = String(ref?.sessionId || '').trim();
+      if (!sessionId) throw new Error('missing_session_id');
+      return httpClient.requestJson(
+        `/api/patent-download/sessions/${encodeURIComponent(sessionId)}/items/${encodeURIComponent(docId)}/preview${buildQuery({ render })}`,
+        { method: 'GET' }
+      );
+    }
+
     throw new Error('invalid_source');
   }
 
@@ -101,6 +111,23 @@ class DocumentClient {
 
     if (source === DOCUMENT_SOURCE.KNOWLEDGE) {
       const resp = await httpClient.request(`/api/documents/knowledge/${encodeURIComponent(docId)}/download`, { method: 'GET' });
+      if (resp.ok) return resp;
+
+      const data = await parseMaybeJson(resp);
+      const message = data?.detail || data?.message || `download_failed (${resp.status})`;
+      const err = new Error(message);
+      err.status = resp.status;
+      err.data = data;
+      throw err;
+    }
+
+    if (source === DOCUMENT_SOURCE.PATENT) {
+      const sessionId = String(ref?.sessionId || '').trim();
+      if (!sessionId) throw new Error('missing_session_id');
+      const resp = await httpClient.request(
+        `/api/patent-download/sessions/${encodeURIComponent(sessionId)}/items/${encodeURIComponent(docId)}/download`,
+        { method: 'GET' }
+      );
       if (resp.ok) return resp;
 
       const data = await parseMaybeJson(resp);
@@ -240,4 +267,3 @@ class DocumentClient {
 
 const documentClient = new DocumentClient();
 export default documentClient;
-

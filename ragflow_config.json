@@ -167,7 +167,7 @@
       "json_audio_b64": true
     }
   },
-  "timeout": 10,
+  "timeout": 60,
   "log_level": "INFO",
   "log_file": "/log",
   "max_retries": 3,

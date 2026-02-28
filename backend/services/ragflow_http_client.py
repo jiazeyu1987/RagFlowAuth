@@ -94,6 +94,57 @@ class RagflowHttpClient:
 
         return data if isinstance(data, dict) else None
 
+    def post_json_with_fallback(
+        self, path: str, *, body: dict[str, Any] | None = None, params: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
+        """
+        Prefer JSON payload; when JSON parsing fails or HTTP/request fails,
+        return a structured error object containing raw response text when available.
+        """
+        url = f"{self._config.base_url.rstrip('/')}{path}"
+        try:
+            resp = requests.post(
+                url,
+                headers=self._headers(),
+                params=params,
+                json=body or {},
+                timeout=self._timeout(None),
+            )
+        except Exception as exc:
+            self._logger.error("RAGFlow POST %s failed: %s", url, exc)
+            return {"code": -1, "message": f"request_failed: {exc}"}
+
+        raw_text = ""
+        try:
+            raw_text = str(resp.text or "")
+        except Exception:
+            raw_text = ""
+
+        if resp.status_code != 200:
+            preview = raw_text[:500] if raw_text else ""
+            if preview:
+                self._logger.error("RAGFlow POST %s failed: HTTP %s body=%s", url, resp.status_code, preview)
+            else:
+                self._logger.error("RAGFlow POST %s failed: HTTP %s", url, resp.status_code)
+            return {
+                "code": resp.status_code,
+                "message": f"http_{resp.status_code}",
+                "raw_text": preview,
+            }
+
+        try:
+            data = resp.json()
+            if isinstance(data, dict):
+                return data
+            return {"code": -1, "message": "invalid_json_root", "raw_text": raw_text[:500]}
+        except Exception as exc:
+            self._logger.error("RAGFlow POST %s invalid JSON: %s", url, exc)
+            return {
+                "code": -1,
+                "message": f"invalid_json: {exc}",
+                "raw_text": raw_text[:500],
+            }
+
     def put_json(
         self, path: str, *, body: dict[str, Any] | None = None, params: dict[str, Any] | None = None
     ) -> dict[str, Any] | None:

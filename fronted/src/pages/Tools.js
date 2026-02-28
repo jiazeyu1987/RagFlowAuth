@@ -1,80 +1,86 @@
 import React, { useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 const PAGE_SIZE = 12;
 
-const ToolCard = ({ id, name, description, onClick, disabled, background }) => {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
+const ToolCard = ({ id, name, description, onClick, disabled, background }) => (
+  <button
+    type="button"
+    onClick={onClick}
+    disabled={disabled}
+    style={{
+      textAlign: 'left',
+      padding: '21px 21px',
+      borderRadius: '18px',
+      border: '1px solid #e5e7eb',
+      background: disabled ? '#f3f4f6' : (background || 'white'),
+      cursor: disabled ? 'not-allowed' : 'pointer',
+      boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
+      transition: 'transform 0.12s ease, box-shadow 0.12s ease, border-color 0.12s ease',
+      minHeight: '210px',
+      display: 'flex',
+      flexDirection: 'column',
+      justifyContent: 'space-between',
+    }}
+    onMouseEnter={(e) => {
+      if (disabled) return;
+      e.currentTarget.style.transform = 'translateY(-1px)';
+      e.currentTarget.style.boxShadow = '0 6px 18px rgba(0,0,0,0.08)';
+      e.currentTarget.style.borderColor = '#c7d2fe';
+    }}
+    onMouseLeave={(e) => {
+      if (disabled) return;
+      e.currentTarget.style.transform = 'translateY(0px)';
+      e.currentTarget.style.boxShadow = '0 1px 2px rgba(0,0,0,0.04)';
+      e.currentTarget.style.borderColor = '#e5e7eb';
+    }}
+    data-testid={`tool-card-${id}`}
+  >
+    <div
       style={{
-        textAlign: 'left',
-        padding: '21px 21px',
-        borderRadius: '18px',
-        border: '1px solid #e5e7eb',
-        background: disabled ? '#f3f4f6' : (background || 'white'),
-        cursor: disabled ? 'not-allowed' : 'pointer',
-        boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
-        transition: 'transform 0.12s ease, box-shadow 0.12s ease, border-color 0.12s ease',
-        minHeight: '210px',
-        display: 'flex',
-        flexDirection: 'column',
-        justifyContent: 'space-between',
+        fontSize: '1.5rem',
+        fontWeight: 900,
+        color: disabled ? '#6b7280' : '#111827',
+        lineHeight: 1.2,
+        minHeight: '40%',
+        display: '-webkit-box',
+        WebkitBoxOrient: 'vertical',
+        WebkitLineClamp: 2,
+        overflow: 'hidden',
       }}
-      onMouseEnter={(e) => {
-        if (disabled) return;
-        e.currentTarget.style.transform = 'translateY(-1px)';
-        e.currentTarget.style.boxShadow = '0 6px 18px rgba(0,0,0,0.08)';
-        e.currentTarget.style.borderColor = '#c7d2fe';
-      }}
-      onMouseLeave={(e) => {
-        if (disabled) return;
-        e.currentTarget.style.transform = 'translateY(0px)';
-        e.currentTarget.style.boxShadow = '0 1px 2px rgba(0,0,0,0.04)';
-        e.currentTarget.style.borderColor = '#e5e7eb';
-      }}
-      data-testid={`tool-card-${id}`}
     >
-      <div
-        style={{
-          fontSize: '1.5rem',
-          fontWeight: 900,
-          color: disabled ? '#6b7280' : '#111827',
-          lineHeight: 1.2,
-          minHeight: '40%',
-          display: '-webkit-box',
-          WebkitBoxOrient: 'vertical',
-          WebkitLineClamp: 2,
-          overflow: 'hidden',
-        }}
-      >
-        {name}
-      </div>
-      <div
-        style={{
-          marginTop: '12px',
-          fontSize: '1.05rem',
-          color: '#4b5563',
-          lineHeight: 1.55,
-          minHeight: '50%',
-          display: '-webkit-box',
-          WebkitBoxOrient: 'vertical',
-          WebkitLineClamp: 4,
-          overflow: 'hidden',
-        }}
-      >
-        {description}
-      </div>
-    </button>
-  );
-};
+      {name}
+    </div>
+    <div
+      style={{
+        marginTop: '12px',
+        fontSize: '1.05rem',
+        color: '#4b5563',
+        lineHeight: 1.55,
+        minHeight: '50%',
+        display: '-webkit-box',
+        WebkitBoxOrient: 'vertical',
+        WebkitLineClamp: 4,
+        overflow: 'hidden',
+      }}
+    >
+      {description}
+    </div>
+  </button>
+);
 
 const Tools = () => {
+  const navigate = useNavigate();
   const [page, setPage] = useState(1);
 
   const tools = useMemo(() => {
     const list = [
+      {
+        id: 'patent_download',
+        name: '专利下载分析',
+        description: '进入专利下载页面：配置关键词、数据源和上限，下载并添加到 [本地专利]。',
+        route: '/tools/patent-download',
+      },
       {
         id: 'nhsa_code_search',
         name: '医保编码查询工具',
@@ -89,7 +95,7 @@ const Tools = () => {
       },
     ];
 
-    for (let i = 2; i <= 48; i++) {
+    for (let i = 4; i <= 48; i++) {
       list.push({
         id: `tbd_${i}`,
         name: 'TBD',
@@ -107,6 +113,10 @@ const Tools = () => {
   const pageItems = tools.slice(start, start + PAGE_SIZE);
 
   const openTool = (tool) => {
+    if (tool.route) {
+      navigate(tool.route);
+      return;
+    }
     if (tool.href) {
       window.open(tool.href, '_blank', 'noopener,noreferrer');
       return;
@@ -166,7 +176,7 @@ const Tools = () => {
             id={t.id}
             name={t.name}
             description={t.description}
-            disabled={!t.href}
+            disabled={!(t.href || t.route)}
             onClick={() => openTool(t)}
             background={idx % 2 === 0 ? '#ffffff' : '#f8fafc'}
           />

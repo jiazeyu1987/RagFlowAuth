@@ -25,6 +25,10 @@ const ACTION_OPTIONS = [
   { value: 'document_upload', label: '上传' },
   { value: 'document_download', label: '下载' },
   { value: 'document_delete', label: '删除' },
+  { value: 'patent_kb_add', label: '专利添加本地专利' },
+  { value: 'patent_kb_add_all', label: '专利批量添加本地专利' },
+  { value: 'patent_item_delete', label: '专利条目删除' },
+  { value: 'patent_session_delete', label: '专利会话删除' },
 ];
 
 const tableStyle = {
@@ -111,7 +115,7 @@ const AuditLogs = () => {
       try {
         await loadDirectory();
       } catch {
-        // Best-effort: logs can still be filtered by username/action without directory lists.
+        // best effort
       }
       await loadLogs(filters);
     })();
@@ -144,15 +148,24 @@ const AuditLogs = () => {
     <div data-testid="audit-logs-page">
       <h2 style={{ margin: '0 0 12px 0' }}>操作日志</h2>
 
-      <div style={{
-        backgroundColor: 'white',
-        border: '1px solid #e5e7eb',
-        borderRadius: '8px',
-        padding: '12px',
-        boxShadow: '0 1px 3px rgba(0, 0, 0, 0.08)',
-        marginBottom: '12px',
-      }}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, minmax(0, 1fr))', gap: '10px', alignItems: 'end' }}>
+      <div
+        style={{
+          backgroundColor: 'white',
+          border: '1px solid #e5e7eb',
+          borderRadius: '8px',
+          padding: '12px',
+          boxShadow: '0 1px 3px rgba(0, 0, 0, 0.08)',
+          marginBottom: '12px',
+        }}
+      >
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(6, minmax(0, 1fr))',
+            gap: '10px',
+            alignItems: 'end',
+          }}
+        >
           <div>
             <div style={{ fontSize: '0.85rem', color: '#6b7280', marginBottom: 4 }}>类型</div>
             <select
@@ -162,7 +175,9 @@ const AuditLogs = () => {
               data-testid="audit-filter-action"
             >
               {ACTION_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>{opt.label}</option>
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
               ))}
             </select>
           </div>
@@ -177,7 +192,9 @@ const AuditLogs = () => {
             >
               <option value="">全部</option>
               {companies.map((c) => (
-                <option key={c.id} value={String(c.id)}>{c.name}</option>
+                <option key={c.id} value={String(c.id)}>
+                  {c.name}
+                </option>
               ))}
             </select>
           </div>
@@ -192,7 +209,9 @@ const AuditLogs = () => {
             >
               <option value="">全部</option>
               {departments.map((d) => (
-                <option key={d.id} value={String(d.id)}>{d.name}</option>
+                <option key={d.id} value={String(d.id)}>
+                  {d.name}
+                </option>
               ))}
             </select>
           </div>
@@ -291,13 +310,15 @@ const AuditLogs = () => {
 
       {error && <div style={{ color: '#ef4444', marginBottom: 12 }}>Error: {error}</div>}
 
-      <div style={{
-        backgroundColor: 'white',
-        border: '1px solid #e5e7eb',
-        borderRadius: '8px',
-        overflow: 'hidden',
-        boxShadow: '0 1px 3px rgba(0, 0, 0, 0.08)',
-      }}>
+      <div
+        style={{
+          backgroundColor: 'white',
+          border: '1px solid #e5e7eb',
+          borderRadius: '8px',
+          overflow: 'hidden',
+          boxShadow: '0 1px 3px rgba(0, 0, 0, 0.08)',
+        }}
+      >
         <table style={tableStyle} data-testid="audit-table">
           <thead>
             <tr>
@@ -313,10 +334,14 @@ const AuditLogs = () => {
           </thead>
           <tbody>
             {loading && (
-              <tr><td style={tdStyle} colSpan={8}>Loading...</td></tr>
+              <tr>
+                <td style={tdStyle} colSpan={8}>Loading...</td>
+              </tr>
             )}
             {!loading && rows.length === 0 && (
-              <tr><td style={tdStyle} colSpan={8}>暂无日志</td></tr>
+              <tr>
+                <td style={tdStyle} colSpan={8}>暂无日志</td>
+              </tr>
             )}
             {!loading && rows.map((r) => (
               <tr key={r.id}>
@@ -341,4 +366,3 @@ const AuditLogs = () => {
 };
 
 export default AuditLogs;
-

@@ -28,6 +28,7 @@ from .data_security import (
     ensure_data_security_settings_table,
 )
 from .kb_documents import ensure_kb_documents_table
+from .patent_downloads import ensure_patent_download_tables
 from .org_directory import (
     ensure_companies_table,
     ensure_departments_table,
@@ -61,6 +62,7 @@ def ensure_schema(db_path: str | Path) -> None:
         ensure_chat_sessions_table(conn)
         ensure_chat_message_sources_table(conn)
         ensure_search_configs_table(conn)
+        ensure_patent_download_tables(conn)
 
         # Permission groups (authorization model)
         ensure_permission_groups_table(conn)

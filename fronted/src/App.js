@@ -17,6 +17,7 @@ import PermissionGuard from './components/PermissionGuard';
 import ChangePassword from './pages/ChangePassword';
 import AuditLogs from './pages/AuditLogs';
 import Tools from './pages/Tools';
+import PatentDownload from './pages/PatentDownload';
 import KnowledgeBases from './pages/KnowledgeBases';
 
 function App() {
@@ -111,6 +112,16 @@ function App() {
               <PermissionGuard>
                 <Layout>
                   <Tools />
+                </Layout>
+              </PermissionGuard>
+            }
+          />
+          <Route
+            path="/tools/patent-download"
+            element={
+              <PermissionGuard>
+                <Layout>
+                  <PatentDownload />
                 </Layout>
               </PermissionGuard>
             }

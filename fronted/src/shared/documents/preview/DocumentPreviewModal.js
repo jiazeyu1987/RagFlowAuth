@@ -137,6 +137,7 @@ export const DocumentPreviewModal = ({ open, target, onClose, canDownloadFiles =
         const source = target.source;
         const docId = target.docId;
         const datasetName = target.datasetName || target.dataset;
+        const sessionId = target.sessionId;
         const title = target.filename || target.title || `document_${docId}`;
 
         const data = await loadDocumentPreview({
@@ -148,6 +149,7 @@ export const DocumentPreviewModal = ({ open, target, onClose, canDownloadFiles =
               source,
               docId: _id,
               datasetName: source === DOCUMENT_SOURCE.RAGFLOW ? dataset : undefined,
+              sessionId: source === DOCUMENT_SOURCE.PATENT ? sessionId : undefined,
             }),
           getDownloadBlob: canDownloadFiles
             ? async ({ docId: _id, dataset, filename }) =>
@@ -155,6 +157,7 @@ export const DocumentPreviewModal = ({ open, target, onClose, canDownloadFiles =
                   source,
                   docId: _id,
                   datasetName: source === DOCUMENT_SOURCE.RAGFLOW ? dataset : undefined,
+                  sessionId: source === DOCUMENT_SOURCE.PATENT ? sessionId : undefined,
                   filename,
                 })
             : undefined,
@@ -207,7 +210,7 @@ export const DocumentPreviewModal = ({ open, target, onClose, canDownloadFiles =
     return () => {
       cancelled = true;
     };
-  }, [open, target?.source, target?.docId, target?.datasetName, target?.dataset, target?.filename, target?.title, canDownloadFiles]);
+  }, [open, target?.source, target?.docId, target?.datasetName, target?.dataset, target?.sessionId, target?.filename, target?.title, canDownloadFiles]);
 
   useEffect(() => {
     if (!open) return;
@@ -237,6 +240,7 @@ export const DocumentPreviewModal = ({ open, target, onClose, canDownloadFiles =
         source: target.source,
         docId: target.docId,
         datasetName: target.source === DOCUMENT_SOURCE.RAGFLOW ? target.datasetName || target.dataset : undefined,
+        sessionId: target.source === DOCUMENT_SOURCE.PATENT ? target.sessionId : undefined,
         render: 'html',
       });
       if (data?.type !== 'html' || !data?.content) throw new Error(data?.message || '此文件类型不支持原样预览(HTML)');
