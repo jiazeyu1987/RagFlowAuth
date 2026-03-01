@@ -3,7 +3,7 @@ from __future__ import annotations
 import mimetypes
 import uuid
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Protocol
 
 from backend.app.core.config import settings
@@ -65,6 +65,29 @@ class KnowledgeIngestionManager:
             return "image/jpeg"
         return mime_type
 
+    @staticmethod
+    def _normalize_relative_upload_path(upload_filename: str) -> tuple[str, Path]:
+        raw = str(upload_filename or "").replace("\\", "/").strip()
+        if not raw:
+            raise KnowledgeIngestionError("invalid_filename", status_code=400)
+
+        pure = PurePosixPath(raw)
+        parts = []
+        for part in pure.parts:
+            token = str(part or "").strip()
+            if not token or token == ".":
+                continue
+            if token == "..":
+                raise KnowledgeIngestionError("invalid_filename", status_code=400)
+            if ":" in token:
+                raise KnowledgeIngestionError("invalid_filename", status_code=400)
+            parts.append(token)
+
+        if not parts:
+            raise KnowledgeIngestionError("invalid_filename", status_code=400)
+
+        return "/".join(parts), Path(*parts)
+
     async def stage_upload_knowledge(self, *, kb_ref: str, upload_file, ctx):
         from backend.app.core.permission_resolver import assert_can_upload, assert_kb_allowed
 
@@ -78,24 +101,26 @@ class KnowledgeIngestionManager:
         if len(content) > settings.MAX_FILE_SIZE:
             raise KnowledgeIngestionError("file_too_large", status_code=400)
 
-        file_ext = Path(upload_file.filename).suffix.lower()
+        display_name, relative_path = self._normalize_relative_upload_path(upload_file.filename)
+        file_ext = Path(display_name).suffix.lower()
         if file_ext not in settings.ALLOWED_EXTENSIONS:
             raise KnowledgeIngestionError("unsupported_file_type", status_code=400)
 
         uploads_dir = resolve_repo_path(settings.UPLOAD_DIR)
         uploads_dir.mkdir(parents=True, exist_ok=True)
 
-        unique_filename = f"{uuid.uuid4()}_{upload_file.filename}"
-        file_path = uploads_dir / unique_filename
+        staged_root = uploads_dir / str(uuid.uuid4())
+        file_path = staged_root / relative_path
         try:
+            file_path.parent.mkdir(parents=True, exist_ok=True)
             file_path.write_bytes(content)
         except Exception as e:
             raise KnowledgeIngestionError(f"write_file_failed:{e}", status_code=500) from e
 
-        mime_type = self._detect_mime(upload_file.filename, getattr(upload_file, "content_type", None))
+        mime_type = self._detect_mime(display_name, getattr(upload_file, "content_type", None))
 
         doc = deps.kb_store.create_document(
-            filename=upload_file.filename,
+            filename=display_name,
             file_path=str(file_path),
             file_size=len(content),
             mime_type=mime_type,

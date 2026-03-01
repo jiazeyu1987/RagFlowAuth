@@ -20,6 +20,10 @@ const formatBytes = (bytes) => {
   return `${mb.toFixed(2)} MB`;
 };
 
+const getDisplayPath = (file) => String(file?.webkitRelativePath || file?.name || '');
+
+const getFileUniqueKey = (file) => `${getDisplayPath(file)}__${file?.size || 0}__${file?.lastModified || 0}`;
+
 const KnowledgeUpload = () => {
   const navigate = useNavigate();
   const [selectedFiles, setSelectedFiles] = useState([]);
@@ -80,8 +84,8 @@ const KnowledgeUpload = () => {
     setSelectedFiles((prev) => {
       const existing = prev || [];
       const map = new Map();
-      for (const f of existing) map.set(`${f.name}__${f.size}__${f.lastModified}`, f);
-      for (const f of valid) map.set(`${f.name}__${f.size}__${f.lastModified}`, f);
+      for (const f of existing) map.set(getFileUniqueKey(f), f);
+      for (const f of valid) map.set(getFileUniqueKey(f), f);
       return Array.from(map.values());
     });
 
@@ -100,6 +104,11 @@ const KnowledgeUpload = () => {
   const handleFileSelect = (e) => {
     addFiles(e.target.files);
     // allow selecting same file again later
+    e.target.value = '';
+  };
+
+  const handleFolderSelect = (e) => {
+    addFiles(e.target.files);
     e.target.value = '';
   };
 
@@ -124,7 +133,7 @@ const KnowledgeUpload = () => {
   };
 
   const removeFile = (key) => {
-    setSelectedFiles((prev) => (prev || []).filter((f) => `${f.name}__${f.size}__${f.lastModified}` !== key));
+    setSelectedFiles((prev) => (prev || []).filter((f) => getFileUniqueKey(f) !== key));
   };
 
   const handleUpload = async (e) => {
@@ -252,6 +261,42 @@ const KnowledgeUpload = () => {
             <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', color: '#374151' }}>
               选择文件
             </label>
+            <div style={{ display: 'flex', gap: '10px', marginBottom: '12px', flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                disabled={uploading}
+                onClick={() => !uploading && document.getElementById('fileInput')?.click()}
+                style={{
+                  padding: '10px 14px',
+                  backgroundColor: uploading ? '#9ca3af' : '#2563eb',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '6px',
+                  cursor: uploading ? 'not-allowed' : 'pointer',
+                  fontSize: '0.9rem',
+                  fontWeight: 500,
+                }}
+              >
+                选择文件
+              </button>
+              <button
+                type="button"
+                disabled={uploading}
+                onClick={() => !uploading && document.getElementById('folderInput')?.click()}
+                style={{
+                  padding: '10px 14px',
+                  backgroundColor: uploading ? '#9ca3af' : '#0f766e',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '6px',
+                  cursor: uploading ? 'not-allowed' : 'pointer',
+                  fontSize: '0.9rem',
+                  fontWeight: 500,
+                }}
+              >
+                选择文件夹
+              </button>
+            </div>
             <div
               data-testid="upload-file-dropzone"
               style={{
@@ -277,11 +322,22 @@ const KnowledgeUpload = () => {
                 id="fileInput"
                 data-testid="upload-file-input"
               />
+              <input
+                type="file"
+                onChange={handleFolderSelect}
+                accept=".txt,.pdf,.docx,.md,.xlsx,.xls,.csv,.png,.jpg,.jpeg"
+                multiple
+                webkitdirectory=""
+                directory=""
+                style={{ display: 'none' }}
+                id="folderInput"
+                data-testid="upload-folder-input"
+              />
               <div style={{ fontSize: '2rem', marginBottom: '12px' }}>文件</div>
               <div style={{ color: '#6b7280', marginBottom: '8px' }}>
                 {selectedFiles && selectedFiles.length > 0
                   ? `已选择 ${selectedFiles.length} 个文件`
-                  : '拖动文件到此处，或点击选择文件（支持多选）'}
+                  : '拖动文件到此处，或点击选择文件/文件夹（支持子文件夹）'}
               </div>
               {uploadProgress && (
                 <div style={{ fontSize: '0.9rem', color: '#6b7280' }} data-testid="upload-progress">
@@ -318,7 +374,8 @@ const KnowledgeUpload = () => {
                   overflow: 'hidden',
                 }}>
                   {selectedFiles.map((f) => {
-                    const key = `${f.name}__${f.size}__${f.lastModified}`;
+                    const key = getFileUniqueKey(f);
+                    const displayPath = getDisplayPath(f);
                     return (
                       <div
                         key={key}
@@ -336,6 +393,9 @@ const KnowledgeUpload = () => {
                         <div style={{ minWidth: 0 }}>
                           <div style={{ fontSize: '0.95rem', color: '#111827', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                             {f.name}
+                          </div>
+                          <div style={{ fontSize: '0.82rem', color: '#6b7280', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {displayPath}
                           </div>
                           <div style={{ fontSize: '0.85rem', color: '#6b7280' }}>{formatBytes(f.size)}</div>
                         </div>
@@ -365,7 +425,7 @@ const KnowledgeUpload = () => {
             )}
 
             <div style={{ marginTop: '8px', fontSize: '0.85rem', color: '#6b7280' }}>
-              支持的文件类型：.txt, .pdf, .docx, .md, .xlsx, .xls, .csv, .png, .jpg, .jpeg（最大 16MB）
+              支持的文件类型：.txt, .pdf, .docx, .md, .xlsx, .xls, .csv, .png, .jpg, .jpeg（最大 16MB，支持选择文件夹并递归读取子文件夹）
             </div>
           </div>
 

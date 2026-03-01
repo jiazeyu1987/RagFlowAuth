@@ -17,18 +17,60 @@ const formatMs = (ms) => {
   }
 };
 
+const ACTION_LABELS = {
+  auth_login: '\u767b\u5f55',
+  auth_logout: '\u9000\u51fa\u767b\u5f55',
+  document_preview: '\u67e5\u770b/\u9884\u89c8\u6587\u6863',
+  document_upload: '\u4e0a\u4f20\u6587\u6863',
+  document_download: '\u4e0b\u8f7d\u6587\u6863',
+  document_delete: '\u5220\u9664\u6587\u6863',
+  patent_kb_add: '\u4e13\u5229\u6dfb\u52a0\u5230\u672c\u5730\u4e13\u5229',
+  patent_kb_add_all: '\u4e13\u5229\u6279\u91cf\u6dfb\u52a0\u5230\u672c\u5730\u4e13\u5229',
+  patent_item_delete: '\u5220\u9664\u4e13\u5229\u6761\u76ee',
+  patent_session_delete: '\u5220\u9664\u4e13\u5229\u4f1a\u8bdd',
+  paper_kb_add: '\u8bba\u6587\u6dfb\u52a0\u5230\u672c\u5730\u8bba\u6587',
+  paper_kb_add_all: '\u8bba\u6587\u6279\u91cf\u6dfb\u52a0\u5230\u672c\u5730\u8bba\u6587',
+  paper_item_delete: '\u5220\u9664\u8bba\u6587\u6761\u76ee',
+  paper_session_delete: '\u5220\u9664\u8bba\u6587\u4f1a\u8bdd',
+  datasets_create: '\u65b0\u5efa\u77e5\u8bc6\u5e93',
+  datasets_update: '\u4fee\u6539\u77e5\u8bc6\u5e93',
+  datasets_delete: '\u5220\u9664\u77e5\u8bc6\u5e93',
+  overwrite: '\u8986\u76d6\u5165\u5e93',
+};
+
+const SOURCE_LABELS = {
+  auth: '\u8ba4\u8bc1',
+  knowledge: '\u672c\u5730\u77e5\u8bc6\u5e93',
+  ragflow: 'RAGFlow',
+  patent_download: '\u4e13\u5229\u4e0b\u8f7d',
+  paper_download: '\u8bba\u6587\u4e0b\u8f7d',
+  patent: '\u4e13\u5229',
+  paper: '\u8bba\u6587',
+};
+
+const actionLabel = (value) => ACTION_LABELS[String(value || '').trim()] || String(value || '');
+const sourceLabel = (value) => SOURCE_LABELS[String(value || '').trim()] || String(value || '');
+
 const ACTION_OPTIONS = [
-  { value: '', label: '全部' },
-  { value: 'auth_login', label: '登录' },
-  { value: 'auth_logout', label: '登出' },
-  { value: 'document_preview', label: '查看/预览' },
-  { value: 'document_upload', label: '上传' },
-  { value: 'document_download', label: '下载' },
-  { value: 'document_delete', label: '删除' },
-  { value: 'patent_kb_add', label: '专利添加本地专利' },
-  { value: 'patent_kb_add_all', label: '专利批量添加本地专利' },
-  { value: 'patent_item_delete', label: '专利条目删除' },
-  { value: 'patent_session_delete', label: '专利会话删除' },
+  { value: '', label: '\u5168\u90e8' },
+  { value: 'auth_login', label: '\u767b\u5f55' },
+  { value: 'auth_logout', label: '\u9000\u51fa\u767b\u5f55' },
+  { value: 'document_preview', label: '\u67e5\u770b/\u9884\u89c8\u6587\u6863' },
+  { value: 'document_upload', label: '\u4e0a\u4f20\u6587\u6863' },
+  { value: 'document_download', label: '\u4e0b\u8f7d\u6587\u6863' },
+  { value: 'document_delete', label: '\u5220\u9664\u6587\u6863' },
+  { value: 'patent_kb_add', label: '\u4e13\u5229\u6dfb\u52a0\u5230\u672c\u5730\u4e13\u5229' },
+  { value: 'patent_kb_add_all', label: '\u4e13\u5229\u6279\u91cf\u6dfb\u52a0\u5230\u672c\u5730\u4e13\u5229' },
+  { value: 'patent_item_delete', label: '\u5220\u9664\u4e13\u5229\u6761\u76ee' },
+  { value: 'patent_session_delete', label: '\u5220\u9664\u4e13\u5229\u4f1a\u8bdd' },
+  { value: 'paper_kb_add', label: '\u8bba\u6587\u6dfb\u52a0\u5230\u672c\u5730\u8bba\u6587' },
+  { value: 'paper_kb_add_all', label: '\u8bba\u6587\u6279\u91cf\u6dfb\u52a0\u5230\u672c\u5730\u8bba\u6587' },
+  { value: 'paper_item_delete', label: '\u5220\u9664\u8bba\u6587\u6761\u76ee' },
+  { value: 'paper_session_delete', label: '\u5220\u9664\u8bba\u6587\u4f1a\u8bdd' },
+  { value: 'datasets_create', label: '\u65b0\u5efa\u77e5\u8bc6\u5e93' },
+  { value: 'datasets_update', label: '\u4fee\u6539\u77e5\u8bc6\u5e93' },
+  { value: 'datasets_delete', label: '\u5220\u9664\u77e5\u8bc6\u5e93' },
+  { value: 'overwrite', label: '\u8986\u76d6\u5165\u5e93' },
 ];
 
 const tableStyle = {
@@ -346,11 +388,11 @@ const AuditLogs = () => {
             {!loading && rows.map((r) => (
               <tr key={r.id}>
                 <td style={tdStyle}>{formatMs(r.created_at_ms)}</td>
-                <td style={tdStyle}>{r.action}</td>
+                <td style={tdStyle}>{actionLabel(r.action)}</td>
                 <td style={tdStyle}>{r.username || r.actor}</td>
                 <td style={tdStyle}>{r.company_name || (r.company_id != null ? String(r.company_id) : '')}</td>
                 <td style={tdStyle}>{r.department_name || (r.department_id != null ? String(r.department_id) : '')}</td>
-                <td style={tdStyle}>{r.source || ''}</td>
+                <td style={tdStyle}>{sourceLabel(r.source)}</td>
                 <td style={tdStyle}>{r.kb_name || r.kb_id || ''}</td>
                 <td style={tdStyle}>
                   <div style={{ fontWeight: 600 }}>{r.filename || ''}</div>

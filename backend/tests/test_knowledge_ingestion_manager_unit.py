@@ -1,6 +1,7 @@
 import tempfile
 import unittest
 from dataclasses import dataclass
+from pathlib import Path
 from types import SimpleNamespace
 
 from backend.app.core.config import settings
@@ -91,6 +92,20 @@ class TestKnowledgeIngestionManagerUnit(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(KnowledgeIngestionError) as cm:
             await self.manager.stage_upload_knowledge(kb_ref="kb1", upload_file=upload, ctx=self.ctx)
         self.assertEqual(cm.exception.code, "unsupported_file_type")
+
+    async def test_stage_upload_supports_nested_relative_path(self):
+        upload = _UploadFile(filename="folder/sub/123.txt", content=b"abc", content_type=None)
+        doc = await self.manager.stage_upload_knowledge(kb_ref="kb1", upload_file=upload, ctx=self.ctx)
+        self.assertEqual(doc.filename, "folder/sub/123.txt")
+        self.assertTrue(Path(doc.file_path).exists())
+        self.assertEqual(Path(doc.file_path).read_bytes(), b"abc")
+        self.assertTrue(str(doc.file_path).endswith(str(Path("folder") / "sub" / "123.txt")))
+
+    async def test_stage_upload_rejects_parent_traversal_path(self):
+        upload = _UploadFile(filename="../evil.txt", content=b"abc", content_type=None)
+        with self.assertRaises(KnowledgeIngestionError) as cm:
+            await self.manager.stage_upload_knowledge(kb_ref="kb1", upload_file=upload, ctx=self.ctx)
+        self.assertEqual(cm.exception.code, "invalid_filename")
 
 
 if __name__ == "__main__":
