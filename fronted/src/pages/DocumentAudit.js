@@ -1,9 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { useAuth } from '../hooks/useAuth';
 import authClient from '../api/authClient';
 
 const DocumentAudit = ({ embedded = false }) => {
-  const { isAdmin, accessibleKbs } = useAuth();
   const [documents, setDocuments] = useState([]);
   const [deletions, setDeletions] = useState([]);
   const [downloads, setDownloads] = useState([]);
@@ -28,10 +26,10 @@ const DocumentAudit = ({ embedded = false }) => {
           usersData = [];
         }
 
-        // 再获取文档列表
+        // 再获取文档列表（记录页需要更大窗口，避免默认100条导致已审核记录被截断）
         let docsData;
         try {
-          docsData = await authClient.listDocuments({});
+          docsData = await authClient.listDocuments({ limit: 2000 });
         } catch (docErr) {
           docsData = { documents: [] };
         }
@@ -39,7 +37,7 @@ const DocumentAudit = ({ embedded = false }) => {
         // 获取删除记录列表
         let deletionsData;
         try {
-          deletionsData = await authClient.listDeletions({});
+          deletionsData = await authClient.listDeletions({ limit: 2000 });
         } catch (delErr) {
           deletionsData = { deletions: [] };
         }
@@ -47,7 +45,7 @@ const DocumentAudit = ({ embedded = false }) => {
         // 获取下载记录列表
         let downloadsData;
         try {
-          downloadsData = await authClient.listDownloads({});
+          downloadsData = await authClient.listDownloads({ limit: 2000 });
         } catch (downErr) {
           downloadsData = { downloads: [] };
         }
@@ -62,7 +60,14 @@ const DocumentAudit = ({ embedded = false }) => {
         const downList = downloadsData.downloads || [];
 
         setUsers(usersList);
-        setDocuments(docsList);
+        // 记录页优先按审核时间倒序（未审核则按上传时间）
+        const sortedDocs = [...docsList].sort((a, b) => {
+          const ta = Number(a.reviewed_at_ms || a.uploaded_at_ms || 0);
+          const tb = Number(b.reviewed_at_ms || b.uploaded_at_ms || 0);
+          return tb - ta;
+        });
+
+        setDocuments(sortedDocs);
         setDeletions(delList);
         setDownloads(downList);
       } catch (err) {
@@ -105,42 +110,27 @@ const DocumentAudit = ({ embedded = false }) => {
   // 筛选文档（基于权限）
   const filteredDocuments = useMemo(() => {
     return documents.filter(doc => {
-      // 权限过滤：非管理员只能看到有权限的知识库
-      if (!isAdmin() && accessibleKbs.length > 0 && !accessibleKbs.includes(doc.kb_id)) {
-        return false;
-      }
-
       if (filterKb && doc.kb_id !== filterKb) return false;
       if (filterStatus && doc.status !== filterStatus) return false;
       return true;
     });
-  }, [documents, filterKb, filterStatus, isAdmin, accessibleKbs]);
+  }, [documents, filterKb, filterStatus]);
 
   // 筛选删除记录（基于权限）
   const filteredDeletions = useMemo(() => {
     return deletions.filter(del => {
-      // 权限过滤：非管理员只能看到有权限的知识库
-      if (!isAdmin() && accessibleKbs.length > 0 && !accessibleKbs.includes(del.kb_id)) {
-        return false;
-      }
-
       if (filterKb && del.kb_id !== filterKb) return false;
       return true;
     });
-  }, [deletions, filterKb, isAdmin, accessibleKbs]);
+  }, [deletions, filterKb]);
 
   // 筛选下载记录（基于权限）
   const filteredDownloads = useMemo(() => {
     return downloads.filter(down => {
-      // 权限过滤：非管理员只能看到有权限的知识库
-      if (!isAdmin() && accessibleKbs.length > 0 && !accessibleKbs.includes(down.kb_id)) {
-        return false;
-      }
-
       if (filterKb && down.kb_id !== filterKb) return false;
       return true;
     });
-  }, [downloads, filterKb, isAdmin, accessibleKbs]);
+  }, [downloads, filterKb]);
 
   // 获取所有知识库列表（用于筛选器）- 基于权限过滤
   const knowledgeBases = useMemo(() => {
@@ -150,13 +140,8 @@ const DocumentAudit = ({ embedded = false }) => {
       ...downloads.map(d => d.kb_id)
     ]));
 
-    // 非管理员只显示有权限的知识库
-    if (!isAdmin() && accessibleKbs.length > 0) {
-      return allKbs.filter(kb => accessibleKbs.includes(kb));
-    }
-
     return allKbs;
-  }, [documents, deletions, downloads, isAdmin, accessibleKbs]);
+  }, [documents, deletions, downloads]);
 
   // 时间格式化
   const formatTime = (timestamp_ms) => {

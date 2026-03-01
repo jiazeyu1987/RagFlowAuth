@@ -31,19 +31,19 @@ const Layout = ({ children }) => {
   };
 
   const navigation = [
-    { name: '智能对话', path: '/chat', icon: 'C' },
-    { name: '全库搜索', path: '/agents', icon: 'S' },
-    { name: '知识配置', path: '/kbs', icon: 'K' },
-    { name: '文档浏览', path: '/browser', icon: 'B' },
-    { name: '文档审核', path: '/documents', icon: 'R', show: canReview },
-    { name: '文档上传', path: '/upload', icon: 'U', show: canUpload },
-    { name: '修改密码', path: '/change-password', icon: 'P' },
-    { name: '实用工具', path: '/tools', icon: 'T' },
-    { name: '用户管理', path: '/users', icon: 'M', allowedRoles: ['admin'] },
-    { name: '组织管理', path: '/org-directory', icon: 'O', allowedRoles: ['admin'] },
-    { name: '权限分组', path: '/permission-groups', icon: 'G', allowedRoles: ['admin'] },
-    { name: '数据安全', path: '/data-security', icon: 'D', allowedRoles: ['admin'] },
-    { name: '日志审计', path: '/logs', icon: 'L', allowedRoles: ['admin'] },
+    { name: '智能对话', path: '/chat', icon: '💬' },
+    { name: '全库搜索', path: '/agents', icon: '🔎' },
+    { name: '知识配置', path: '/kbs', icon: '📚' },
+    { name: '文档浏览', path: '/browser', icon: '📄' },
+    { name: '文档审核', path: '/documents', icon: '✅', show: canReview },
+    { name: '文档上传', path: '/upload', icon: '⤴️', show: canUpload },
+    { name: '修改密码', path: '/change-password', icon: '🔑' },
+    { name: '实用工具', path: '/tools', icon: '🧰' },
+    { name: '用户管理', path: '/users', icon: '👤', allowedRoles: ['admin'] },
+    { name: '组织管理', path: '/org-directory', icon: '🏢', allowedRoles: ['admin'] },
+    { name: '权限分组', path: '/permission-groups', icon: '🛡️', allowedRoles: ['admin'] },
+    { name: '数据安全', path: '/data-security', icon: '🔒', allowedRoles: ['admin'] },
+    { name: '日志审计', path: '/logs', icon: '🧾', allowedRoles: ['admin'] },
   ];
 
   const pageTitleOverrides = {
