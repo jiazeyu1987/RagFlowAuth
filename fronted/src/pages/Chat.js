@@ -11,6 +11,8 @@ import documentClient, { DOCUMENT_SOURCE } from '../shared/documents/documentCli
 import { useAuth } from '../hooks/useAuth';
 import { DocumentPreviewModal } from '../shared/documents/preview/DocumentPreviewModal';
 
+const DEFAULT_SESSION_NAMES = ['新会话', '新对话', 'new chat'];
+
 const Chat = () => {
   const { canDownload } = useAuth();
   const canDownloadFiles = typeof canDownload === 'function' ? !!canDownload() : false;
@@ -43,6 +45,23 @@ const Chat = () => {
   const closePreview = useCallback(() => {
     setPreviewOpen(false);
     setPreviewTarget(null);
+  }, []);
+
+  const normalizeSessionName = useCallback((value) => String(value || '').trim().toLowerCase(), []);
+
+  const isAutoSessionName = useCallback(
+    (sessionName) => {
+      const normalized = normalizeSessionName(sessionName);
+      if (!normalized) return true;
+      return DEFAULT_SESSION_NAMES.includes(normalized);
+    },
+    [normalizeSessionName]
+  );
+
+  const buildSessionNameFromQuestion = useCallback((question) => {
+    const oneLine = String(question || '').replace(/\s+/g, ' ').trim();
+    if (!oneLine) return '';
+    return oneLine.slice(0, 40);
   }, []);
 
   useEscapeClose(deleteConfirm.show, closeDeleteConfirm);
@@ -380,9 +399,7 @@ const Chat = () => {
   const createSession = async () => {
     if (!selectedChatId) return;
     try {
-      const selectedChat = chats.find((c) => c.id === selectedChatId);
-      const chatName = String(selectedChat?.name || '').trim();
-      const sessionName = chatName || '新会话';
+      const sessionName = '新对话';
 
       const session = await chatApi.createChatSession(selectedChatId, sessionName);
       setSessions((prev) => [session, ...prev]);
@@ -467,16 +484,47 @@ const Chat = () => {
     [normalizeSource, canDownloadFiles]
   );
 
+  const autoRenameSessionByFirstQuestion = useCallback(
+    async (question) => {
+      if (!selectedChatId || !selectedSessionId) return;
+      const target = sessions.find((s) => s.id === selectedSessionId);
+      if (!target) return;
+      if (!isAutoSessionName(target.name)) return;
+
+      const newName = buildSessionNameFromQuestion(question);
+      if (!newName) return;
+
+      try {
+        await chatApi.renameChatSession(selectedChatId, selectedSessionId, newName);
+        setSessions((prev) => prev.map((s) => (s.id === selectedSessionId ? { ...s, name: newName } : s)));
+      } catch {
+        // ignore rename failures; keep chat flow uninterrupted
+      }
+    },
+    [
+      buildSessionNameFromQuestion,
+      isAutoSessionName,
+      selectedChatId,
+      selectedSessionId,
+      sessions,
+    ]
+  );
+
   const sendMessage = async () => {
     if (!inputMessage.trim() || !selectedChatId || !selectedSessionId) return;
     const question = inputMessage.trim();
     const userMessage = { role: 'user', content: question };
+    const isFirstUserMessage = !(messages || []).some((m) => m?.role === 'user');
 
     setMessages((prev) => [...prev, userMessage, { role: 'assistant', content: '', sources: [] }]);
     setInputMessage('');
     setError(null);
 
     try {
+      if (isFirstUserMessage) {
+        await autoRenameSessionByFirstQuestion(question);
+      }
+
       const response = await httpClient.request(`/api/chats/${selectedChatId}/completions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
