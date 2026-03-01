@@ -1,11 +1,140 @@
 from __future__ import annotations
 
+import inspect
+import json
 from typing import Optional, List
+
+import requests
 
 from ...ragflow_config import DEFAULT_RAGFLOW_BASE_URL
 
 
 class RagflowDocumentsMixin:
+    def _dataset_id_from_obj(self, dataset) -> str | None:
+        dataset_id = getattr(dataset, "id", None)
+        if not dataset_id and isinstance(dataset, dict):
+            dataset_id = dataset.get("id")
+        return dataset_id if isinstance(dataset_id, str) and dataset_id else None
+
+    def _coerce_document_item(self, doc) -> dict | None:
+        if hasattr(doc, "name"):
+            return {
+                "id": getattr(doc, "id", ""),
+                "name": doc.name,
+                "status": getattr(doc, "status", "unknown"),
+            }
+        if isinstance(doc, dict):
+            return {
+                "id": doc.get("id", ""),
+                "name": doc.get("name", ""),
+                "status": doc.get("status", "unknown"),
+            }
+        return None
+
+    def _extract_document_batch_from_payload(self, payload: dict | None) -> list[dict]:
+        if not isinstance(payload, dict):
+            return []
+        if payload.get("code") not in (0, None):
+            self.logger.error("RAGFlow list_documents failed: %s", payload.get("message"))
+            return []
+
+        data = payload.get("data")
+        candidates = []
+        if isinstance(data, list):
+            candidates = data
+        elif isinstance(data, dict):
+            for key in ("docs", "documents", "items", "list"):
+                value = data.get(key)
+                if isinstance(value, list):
+                    candidates = value
+                    break
+
+        result: list[dict] = []
+        for item in candidates:
+            row = self._coerce_document_item(item)
+            if row is not None:
+                result.append(row)
+        return result
+
+    def _list_documents_via_http(self, dataset_id: str, *, page_size: int) -> list[dict]:
+        documents: list[dict] = []
+        page = 1
+        while True:
+            payload = self._http.get_json(
+                f"/api/v1/datasets/{dataset_id}/documents",
+                params={"page": page, "page_size": page_size},
+            )
+            batch = self._extract_document_batch_from_payload(payload)
+            if not batch:
+                break
+            documents.extend(batch)
+            if len(batch) < page_size:
+                break
+            page += 1
+        return documents
+
+    def _list_documents_via_sdk(self, dataset, *, page_size: int) -> list[dict]:
+        list_documents = getattr(dataset, "list_documents", None)
+        if not callable(list_documents):
+            return []
+
+        supports_page = True
+        try:
+            sig = inspect.signature(list_documents)
+            supports_page = "page" in sig.parameters and "page_size" in sig.parameters
+        except Exception:
+            supports_page = True
+
+        if not supports_page:
+            raise TypeError("DataSet.list_documents() missing page/page_size parameters")
+
+        documents: list[dict] = []
+        page = 1
+        while True:
+            batch = list_documents(page=page, page_size=page_size)
+            if not isinstance(batch, list) or not batch:
+                break
+            for item in batch:
+                row = self._coerce_document_item(item)
+                if row is not None:
+                    documents.append(row)
+            if len(batch) < page_size:
+                break
+            page += 1
+        return documents
+
+    def _find_document_metadata_via_http(self, dataset_id: str, document_id: str) -> dict | None:
+        payload = self._http.get_json(
+            f"/api/v1/datasets/{dataset_id}/documents",
+            params={"id": document_id, "page": 1, "page_size": 1},
+        )
+        batch = self._extract_document_batch_from_payload(payload)
+        return batch[0] if batch else None
+
+    def _download_document_via_http(self, dataset_id: str, document_id: str) -> bytes | None:
+        url = f"{self._http.config.base_url.rstrip('/')}/api/v1/datasets/{dataset_id}/documents/{document_id}"
+        try:
+            resp = requests.get(url, headers=self._http.headers(), timeout=float(self.config.get("timeout", 10) or 10))
+        except Exception as exc:
+            self.logger.error("RAGFlow download document failed: %s", exc)
+            return None
+
+        if resp.status_code != 200:
+            self.logger.error("RAGFlow download document failed: HTTP %s", resp.status_code)
+            return None
+
+        try:
+            payload = resp.json()
+        except json.JSONDecodeError:
+            return resp.content
+        except Exception:
+            return resp.content
+
+        if isinstance(payload, dict) and set(payload.keys()) == {"code", "message"}:
+            self.logger.error("RAGFlow download document failed: %s", payload.get("message"))
+            return None
+        return resp.content
+
     def list_documents(self, dataset_name: str = "展厅") -> List[dict]:
         reload_cfg = getattr(self, "_reload_config_if_changed", None)
         if callable(reload_cfg):
@@ -21,28 +150,21 @@ class RagflowDocumentsMixin:
                 self.logger.warning(f"Dataset '{dataset_name}' not found")
                 return []
 
-            documents = dataset.list_documents()
-            result = []
-
-            for doc in documents:
-                if hasattr(doc, "name"):
-                    result.append(
-                        {
-                            "id": getattr(doc, "id", ""),
-                            "name": doc.name,
-                            "status": getattr(doc, "status", "unknown"),
-                        }
-                    )
-                elif isinstance(doc, dict):
-                    result.append(
-                        {
-                            "id": doc.get("id", ""),
-                            "name": doc.get("name", ""),
-                            "status": doc.get("status", "unknown"),
-                        }
-                    )
-
-            return result
+            page_size = 200
+            try:
+                return self._list_documents_via_sdk(dataset, page_size=page_size)
+            except TypeError as exc:
+                if "page" not in str(exc) and "page_size" not in str(exc):
+                    raise
+                dataset_id = self._dataset_id_from_obj(dataset)
+                if not dataset_id:
+                    self.logger.error("Failed to list documents via HTTP: missing dataset_id for '%s'", dataset_name)
+                    return []
+                self.logger.warning(
+                    "SDK list_documents does not support pagination args; falling back to HTTP API for dataset '%s'",
+                    dataset_name,
+                )
+                return self._list_documents_via_http(dataset_id, page_size=page_size)
         except Exception as e:
             self.logger.error(f"Failed to list documents: {e}")
             return []
@@ -263,7 +385,7 @@ class RagflowDocumentsMixin:
             self.logger.info(f"delete_documents returned: {result}")
 
             self.logger.info("Verifying deletion...")
-            verify_docs = dataset.list_documents()
+            verify_docs = self.list_documents(dataset_name)
             still_exists = any(
                 (getattr(d, "id", None) or (d.get("id") if isinstance(d, dict) else None)) == document_id
                 for d in verify_docs
@@ -293,11 +415,7 @@ class RagflowDocumentsMixin:
 
         try:
             dataset_name = self._normalize_dataset_name_for_ops(dataset_name)
-            dataset = self._find_dataset_by_name(dataset_name)
-            if not dataset:
-                return None
-
-            documents = dataset.list_documents()
+            documents = self.list_documents(dataset_name)
             for doc in documents:
                 doc_id = getattr(doc, "id", None) or (doc.get("id") if isinstance(doc, dict) else None)
                 if doc_id == document_id:
@@ -317,11 +435,7 @@ class RagflowDocumentsMixin:
 
         try:
             dataset_name = self._normalize_dataset_name_for_ops(dataset_name)
-            dataset = self._find_dataset_by_name(dataset_name)
-            if not dataset:
-                return None
-
-            documents = dataset.list_documents()
+            documents = self.list_documents(dataset_name)
             for doc in documents:
                 doc_id = getattr(doc, "id", None) or (doc.get("id") if isinstance(doc, dict) else None)
                 if doc_id == document_id:
@@ -358,23 +472,19 @@ class RagflowDocumentsMixin:
                 self.logger.warning(f"Dataset '{dataset_name}' not found")
                 return None, None
 
-            documents = dataset.list_documents()
-            target_doc = None
-            filename = None
+            dataset_id = self._dataset_id_from_obj(dataset)
+            if not dataset_id:
+                self.logger.error(f"Dataset '{dataset_name}' missing id")
+                return None, None
 
-            for doc in documents:
-                doc_id = getattr(doc, "id", None) or (doc.get("id") if isinstance(doc, dict) else None)
-                if doc_id == document_id:
-                    target_doc = doc
-                    filename = getattr(doc, "name", None) or (doc.get("name") if isinstance(doc, dict) else None)
-                    break
-
-            if not target_doc:
+            doc_meta = self._find_document_metadata_via_http(dataset_id, document_id)
+            if not doc_meta:
                 self.logger.warning(f"Document {document_id} not found in dataset '{dataset_name}'")
                 return None, None
 
+            filename = doc_meta.get("name") or f"document_{document_id}"
             self.logger.info(f"Downloading document '{filename}' ({document_id}) from RAGFlow")
-            file_content = target_doc.download()
+            file_content = self._download_document_via_http(dataset_id, document_id)
 
             if file_content:
                 self.logger.info(f"Successfully downloaded {len(file_content)} bytes")

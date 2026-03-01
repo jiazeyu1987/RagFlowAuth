@@ -1,20 +1,20 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends
 from typing import Optional
+
+from fastapi import APIRouter, Depends
+from pydantic import BaseModel
 
 from backend.app.core.auth import get_deps
 from backend.app.core.authz import AdminOnly
 from backend.app.dependencies import AppDependencies
-from backend.models.user import UserCreate, UserUpdate, UserResponse
-from pydantic import BaseModel
+from backend.app.modules.users.repo import UsersRepo
+from backend.app.modules.users.service import UsersService
+from backend.models.user import UserCreate, UserResponse, UserUpdate
 
 
 class ResetPasswordRequest(BaseModel):
     new_password: str
-
-from backend.app.modules.users.repo import UsersRepo
-from backend.app.modules.users.service import UsersService
 
 
 router = APIRouter()

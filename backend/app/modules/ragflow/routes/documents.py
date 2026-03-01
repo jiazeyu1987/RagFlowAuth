@@ -25,7 +25,7 @@ async def list_ragflow_documents(
 ):
     deps = ctx.deps
     snapshot = ctx.snapshot
-    assert_kb_allowed(snapshot, dataset_name)
+    assert_kb_allowed(snapshot, resolve_kb_ref(deps, dataset_name).variants)
     documents = deps.ragflow_service.list_documents(dataset_name)
     return {"documents": documents, "dataset": dataset_name}
 
@@ -38,7 +38,7 @@ async def get_document_status(
 ):
     deps = ctx.deps
     snapshot = ctx.snapshot
-    assert_kb_allowed(snapshot, dataset_name)
+    assert_kb_allowed(snapshot, resolve_kb_ref(deps, dataset_name).variants)
     status = deps.ragflow_service.get_document_status(doc_id, dataset_name)
     if status is None:
         raise HTTPException(status_code=404, detail="文档不存在")
@@ -53,7 +53,7 @@ async def get_document_detail(
 ):
     deps = ctx.deps
     snapshot = ctx.snapshot
-    assert_kb_allowed(snapshot, dataset_name)
+    assert_kb_allowed(snapshot, resolve_kb_ref(deps, dataset_name).variants)
     detail = deps.ragflow_service.get_document_detail(doc_id, dataset_name)
     if detail is None:
         raise HTTPException(status_code=404, detail="文档不存在")

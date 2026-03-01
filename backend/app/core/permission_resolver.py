@@ -231,12 +231,16 @@ def assert_can_delete(snapshot: PermissionSnapshot) -> None:
         raise HTTPException(status_code=403, detail="no_delete_permission")
 
 
-def assert_kb_allowed(snapshot: PermissionSnapshot, kb_name: str) -> None:
+def assert_kb_allowed(snapshot: PermissionSnapshot, kb_name: str | Iterable[str]) -> None:
     if snapshot.kb_scope == ResourceScope.ALL:
         return
     if snapshot.kb_scope == ResourceScope.NONE:
         raise HTTPException(status_code=403, detail="kb_not_allowed")
-    if kb_name not in snapshot.kb_names:
+    if isinstance(kb_name, str):
+        candidates = {kb_name}
+    else:
+        candidates = {str(item).strip() for item in kb_name if str(item).strip()}
+    if not candidates.intersection(snapshot.kb_names):
         raise HTTPException(status_code=403, detail="kb_not_allowed")
 
 

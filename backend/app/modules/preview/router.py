@@ -5,6 +5,7 @@ import logging
 from fastapi import APIRouter, HTTPException
 
 from backend.app.core.authz import AuthContextDep
+from backend.app.core.kb_refs import resolve_kb_ref
 from backend.app.core.permission_resolver import assert_kb_allowed
 from backend.services.documents.document_manager import DocumentManager
 from backend.services.documents.models import DocumentRef
@@ -39,7 +40,7 @@ async def preview_gateway(
 
     src = (source or "").strip().lower()
     if src == "ragflow":
-        assert_kb_allowed(snapshot, dataset)
+        assert_kb_allowed(snapshot, resolve_kb_ref(deps, dataset).variants)
         mgr = DocumentManager(deps)
         payload = mgr.preview_payload(DocumentRef(source="ragflow", doc_id=doc_id, dataset_name=dataset), render=render)
         audit = getattr(deps, "audit_log_store", None)

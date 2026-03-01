@@ -1,0 +1,97 @@
+import tempfile
+import unittest
+from dataclasses import dataclass
+from types import SimpleNamespace
+
+from backend.app.core.config import settings
+from backend.app.core.permission_resolver import PermissionSnapshot, ResourceScope
+from backend.services.knowledge_ingestion import KnowledgeIngestionError, KnowledgeIngestionManager
+
+
+class _UploadFile:
+    def __init__(self, filename: str, content: bytes, content_type: str | None = None):
+        self.filename = filename
+        self._content = content
+        self.content_type = content_type
+
+    async def read(self) -> bytes:
+        return self._content
+
+
+class _KbStore:
+    def create_document(self, **kwargs):
+        return SimpleNamespace(
+            doc_id="d1",
+            filename=kwargs["filename"],
+            file_path=kwargs["file_path"],
+            file_size=kwargs["file_size"],
+            mime_type=kwargs["mime_type"],
+            uploaded_by=kwargs["uploaded_by"],
+            status=kwargs["status"],
+            kb_id=kwargs["kb_id"],
+            kb_dataset_id=kwargs["kb_dataset_id"],
+            kb_name=kwargs["kb_name"],
+        )
+
+
+class _RagflowService:
+    def normalize_dataset_id(self, kb_ref: str):  # noqa: ARG002
+        return None
+
+    def resolve_dataset_name(self, kb_ref: str):  # noqa: ARG002
+        return None
+
+
+@dataclass
+class _Ctx:
+    payload: object
+    snapshot: PermissionSnapshot
+
+
+class TestKnowledgeIngestionManagerUnit(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):
+        self._tmp = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
+        self._upload_dir_old = settings.UPLOAD_DIR
+        settings.UPLOAD_DIR = self._tmp.name
+        self.deps = SimpleNamespace(
+            kb_store=_KbStore(),
+            ragflow_service=_RagflowService(),
+            audit_log_store=None,
+            user_store=None,
+            org_directory_store=None,
+        )
+        self.ctx = _Ctx(
+            payload=SimpleNamespace(sub="u1"),
+            snapshot=PermissionSnapshot(
+                is_admin=True,
+                can_upload=True,
+                can_review=True,
+                can_download=True,
+                can_delete=True,
+                kb_scope=ResourceScope.ALL,
+                kb_names=frozenset(),
+                chat_scope=ResourceScope.NONE,
+                chat_ids=frozenset(),
+            ),
+        )
+        self.manager = KnowledgeIngestionManager(self.deps)
+
+    async def asyncTearDown(self):
+        settings.UPLOAD_DIR = self._upload_dir_old
+        self._tmp.cleanup()
+
+    async def test_stage_upload_success_with_image_mime(self):
+        upload = _UploadFile(filename="x.png", content=b"abc", content_type=None)
+        doc = await self.manager.stage_upload_knowledge(kb_ref="kb1", upload_file=upload, ctx=self.ctx)
+        self.assertEqual(doc.mime_type, "image/png")
+        self.assertEqual(doc.status, "pending")
+
+    async def test_stage_upload_rejects_unsupported_extension(self):
+        upload = _UploadFile(filename="x.exe", content=b"abc", content_type=None)
+        with self.assertRaises(KnowledgeIngestionError) as cm:
+            await self.manager.stage_upload_knowledge(kb_ref="kb1", upload_file=upload, ctx=self.ctx)
+        self.assertEqual(cm.exception.code, "unsupported_file_type")
+
+
+if __name__ == "__main__":
+    unittest.main()

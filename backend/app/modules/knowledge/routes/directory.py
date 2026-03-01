@@ -25,61 +25,35 @@ class DatasetDirectoryAssignRequest(BaseModel):
     node_id: str | None = None
 
 
-def _trim_tree_for_non_admin(tree: dict[str, Any]) -> dict[str, Any]:
-    nodes = [node for node in (tree.get("nodes") or []) if isinstance(node, dict)]
-    datasets = [ds for ds in (tree.get("datasets") or []) if isinstance(ds, dict)]
-    node_by_id = {str(node.get("id")): node for node in nodes if isinstance(node.get("id"), str)}
-
-    keep_node_ids: set[str] = set()
-    for ds in datasets:
-        node_id = ds.get("node_id")
-        cur = str(node_id) if isinstance(node_id, str) and node_id else None
-        guard: set[str] = set()
-        while cur and cur not in guard:
-            guard.add(cur)
-            keep_node_ids.add(cur)
-            node = node_by_id.get(cur)
-            if not node:
-                break
-            parent_id = node.get("parent_id")
-            cur = str(parent_id) if isinstance(parent_id, str) and parent_id else None
-
-    return {
-        "nodes": [node for node in nodes if str(node.get("id") or "") in keep_node_ids],
-        "datasets": datasets,
-        "bindings": {
-            str(ds.get("id")): ds.get("node_id")
-            for ds in datasets
-            if isinstance(ds.get("id"), str) and ds.get("id")
-        },
-    }
+def _tree_manager(deps) -> Any:
+    return getattr(deps, "knowledge_tree_manager", None) or getattr(deps, "knowledge_directory_manager")
 
 
 @router.get("/directories")
 async def list_knowledge_directories(ctx: AuthContextDep):
     deps = ctx.deps
+    manager = _tree_manager(deps)
     if ctx.snapshot.is_admin:
         datasets = deps.ragflow_service.list_all_datasets() if hasattr(deps.ragflow_service, "list_all_datasets") else deps.ragflow_service.list_datasets()
-        tree = deps.knowledge_directory_manager.snapshot(datasets or [], prune_unknown=True)
+        tree = manager.snapshot(datasets or [], prune_unknown=True)
         return tree
     datasets = list_accessible_datasets(deps, ctx.snapshot)
-    tree = deps.knowledge_directory_manager.snapshot(datasets or [], prune_unknown=False)
-    return _trim_tree_for_non_admin(tree)
+    tree = manager.snapshot(datasets or [], prune_unknown=False)
+    trim_fn = getattr(manager, "trim_tree_for_non_admin", None)
+    return trim_fn(tree) if callable(trim_fn) else tree
 
 
 @router.post("/directories")
 async def create_knowledge_directory(payload: DirectoryCreateRequest, ctx: AuthContextDep):
     if not ctx.snapshot.is_admin:
         raise HTTPException(status_code=403, detail="admin_required")
+    manager = _tree_manager(ctx.deps)
     try:
-        node = ctx.deps.knowledge_directory_store.create_node(
-            payload.name,
-            payload.parent_id,
-            created_by=ctx.payload.sub,
-        )
-        return {"node": {"id": node["node_id"], "name": node["name"], "parent_id": node.get("parent_id")}}
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        node = manager.create_node(name=payload.name, parent_id=payload.parent_id, created_by=ctx.payload.sub)
+        return {"node": node}
+    except Exception as exc:
+        status = int(getattr(exc, "status_code", 400) or 400)
+        raise HTTPException(status_code=status, detail=str(exc)) from exc
 
 
 @router.put("/directories/{node_id}")
@@ -94,29 +68,26 @@ async def update_knowledge_directory(node_id: str, payload: DirectoryUpdateReque
         updates["name"] = payload.name
     if "parent_id" in fields_set:
         updates["parent_id"] = payload.parent_id
+    manager = _tree_manager(ctx.deps)
     try:
-        node = ctx.deps.knowledge_directory_store.update_node(
-            node_id,
-            **updates,
-        )
-        return {"node": {"id": node["node_id"], "name": node["name"], "parent_id": node.get("parent_id")}}
-    except ValueError as exc:
-        code = str(exc)
-        status = 404 if code == "node_not_found" else 400
-        raise HTTPException(status_code=status, detail=code) from exc
+        node = manager.update_node(node_id=node_id, payload=updates)
+        return {"node": node}
+    except Exception as exc:
+        status = int(getattr(exc, "status_code", 400) or 400)
+        raise HTTPException(status_code=status, detail=str(exc)) from exc
 
 
 @router.delete("/directories/{node_id}")
 async def delete_knowledge_directory(node_id: str, ctx: AuthContextDep):
     if not ctx.snapshot.is_admin:
         raise HTTPException(status_code=403, detail="admin_required")
+    manager = _tree_manager(ctx.deps)
     try:
-        ok = ctx.deps.knowledge_directory_store.delete_node(node_id)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    if not ok:
-        raise HTTPException(status_code=404, detail="node_not_found")
-    return {"ok": True}
+        ok = manager.delete_node(node_id)
+        return {"ok": bool(ok)}
+    except Exception as exc:
+        status = int(getattr(exc, "status_code", 400) or 400)
+        raise HTTPException(status_code=status, detail=str(exc)) from exc
 
 
 @router.put("/directories/datasets/{dataset_ref}/node")
@@ -143,10 +114,10 @@ async def assign_dataset_directory(dataset_ref: str, payload: DatasetDirectoryAs
         dataset_id = dataset_ref if isinstance(dataset_ref, str) and dataset_ref else None
     if not dataset_id:
         raise HTTPException(status_code=400, detail="invalid_dataset_ref")
+    manager = _tree_manager(ctx.deps)
     try:
-        ctx.deps.knowledge_directory_store.assign_dataset(dataset_id, payload.node_id)
+        manager.assign_dataset(dataset_id=dataset_id, node_id=payload.node_id)
         return {"ok": True, "dataset_id": dataset_id, "node_id": payload.node_id}
-    except ValueError as exc:
-        code = str(exc)
-        status = 404 if code in {"node_not_found"} else 400
-        raise HTTPException(status_code=status, detail=code) from exc
+    except Exception as exc:
+        status = int(getattr(exc, "status_code", 400) or 400)
+        raise HTTPException(status_code=status, detail=str(exc)) from exc

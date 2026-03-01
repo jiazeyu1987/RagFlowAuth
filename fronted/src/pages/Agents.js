@@ -10,12 +10,15 @@ import { ensureTablePreviewStyles } from '../shared/preview/tablePreviewStyles';
 import { useEscapeClose } from '../shared/hooks/useEscapeClose';
 import { DocumentPreviewModal } from '../shared/documents/preview/DocumentPreviewModal';
 
+const SEARCH_HISTORY_LIMIT = 10;
+
 const Agents = () => {
-  const { canDownload } = useAuth();
+  const { user, canDownload } = useAuth();
   const canDownloadFiles = typeof canDownload === 'function' ? !!canDownload() : false;
   const [datasets, setDatasets] = useState([]);
   const [selectedDatasetIds, setSelectedDatasetIds] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [searchHistory, setSearchHistory] = useState([]);
   const [searchResults, setSearchResults] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -68,6 +71,65 @@ const Agents = () => {
 
   useEscapeClose(previewOpen, closePreviewModal);
 
+  const searchHistoryStorageKey = useMemo(
+    () => `ragflowauth_agents_search_history_v1:${user?.user_id || user?.username || 'anon'}`,
+    [user?.user_id, user?.username]
+  );
+
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(searchHistoryStorageKey);
+      const parsed = JSON.parse(raw || '[]');
+      if (Array.isArray(parsed)) {
+        setSearchHistory(
+          parsed
+            .filter((item) => typeof item === 'string')
+            .map((item) => item.trim())
+            .filter(Boolean)
+            .slice(0, SEARCH_HISTORY_LIMIT)
+        );
+      } else {
+        setSearchHistory([]);
+      }
+    } catch {
+      setSearchHistory([]);
+    }
+  }, [searchHistoryStorageKey]);
+
+  const persistSearchHistory = useCallback(
+    (items) => {
+      setSearchHistory(items);
+      try {
+        window.localStorage.setItem(searchHistoryStorageKey, JSON.stringify(items));
+      } catch {
+      }
+    },
+    [searchHistoryStorageKey]
+  );
+
+  const pushSearchHistory = useCallback(
+    (query) => {
+      const value = String(query || '').trim();
+      if (!value) return;
+      const next = [value, ...searchHistory.filter((item) => item !== value)].slice(0, SEARCH_HISTORY_LIMIT);
+      persistSearchHistory(next);
+    },
+    [persistSearchHistory, searchHistory]
+  );
+
+  const clearSearchHistory = useCallback(() => {
+    persistSearchHistory([]);
+  }, [persistSearchHistory]);
+
+  const removeSearchHistoryItem = useCallback(
+    (query) => {
+      const value = String(query || '').trim();
+      if (!value) return;
+      persistSearchHistory(searchHistory.filter((item) => item !== value));
+    },
+    [persistSearchHistory, searchHistory]
+  );
+
   // Load available datasets on mount
   useEffect(() => {
     fetchDatasets();
@@ -90,8 +152,10 @@ const Agents = () => {
     }
   };
 
-  const handleSearch = async () => {
-    if (!searchQuery.trim()) {
+  const handleSearch = useCallback(async (queryOverride = null, pageOverride = null) => {
+    const query = String(queryOverride ?? searchQuery ?? '').trim();
+    const nextPage = Number.isInteger(pageOverride) && pageOverride > 0 ? pageOverride : page;
+    if (!query) {
       setError('请输入搜索关键词');
       return;
     }
@@ -106,30 +170,34 @@ const Agents = () => {
 
     try {
       const result = await agentsApi.searchChunks({
-        question: searchQuery,
+        question: query,
         dataset_ids: selectedDatasetIds,
-        page,
+        page: nextPage,
         page_size: pageSize,
         similarity_threshold: similarityThreshold,
         top_k: topK,
         keyword: false, // Always use semantic search for better results
         highlight
       });
+      if (query !== searchQuery) {
+        setSearchQuery(query);
+      }
+      pushSearchHistory(query);
 
       // Debug: Check if chunks contain the search query
       if (result.chunks && result.chunks.length > 0) {
         console.log('=== SEARCH RESULT DEBUG ===');
         console.log('[DEBUG] Semantic search returned chunks:', result.chunks.length);
         console.log('[DEBUG] User checked "keyword matching":', keyword);
-        console.log('[DEBUG] Search query:', searchQuery);
+        console.log('[DEBUG] Search query:', query);
         console.log('[DEBUG] Checking which chunks contain the search query...');
 
         let chunksWithKeyword = 0;
         result.chunks.forEach((chunk, index) => {
           const content = chunk.content || '';
-          const containsQuery = content.toLowerCase().includes(searchQuery.toLowerCase());
+          const containsQuery = content.toLowerCase().includes(query.toLowerCase());
           if (containsQuery) chunksWithKeyword++;
-          console.log(`[DEBUG] Chunk ${index}: contains "${searchQuery}" = ${containsQuery}`);
+          console.log(`[DEBUG] Chunk ${index}: contains "${query}" = ${containsQuery}`);
 
           if (index < 3) { // Show preview for first 3 chunks
             console.log(`[DEBUG] Chunk ${index} preview:`, content.substring(0, 80));
@@ -142,7 +210,7 @@ const Agents = () => {
         if (keyword) {
           const filteredChunks = result.chunks.filter(chunk => {
             const content = chunk.content || '';
-            return content.toLowerCase().includes(searchQuery.toLowerCase());
+            return content.toLowerCase().includes(query.toLowerCase());
           });
 
           console.log(`[DEBUG] Frontend filter: removed ${result.chunks.length - filteredChunks.length} chunks without keyword`);
@@ -169,13 +237,24 @@ const Agents = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [highlight, keyword, page, pageSize, pushSearchHistory, searchQuery, selectedDatasetIds, similarityThreshold, topK]);
 
   const handleKeyPress = (e) => {
     if (e.key === 'Enter') {
       handleSearch();
     }
   };
+
+  const handleHistorySearch = useCallback(
+    (query) => {
+      const value = String(query || '').trim();
+      if (!value || loading) return;
+      setPage(1);
+      setSearchQuery(value);
+      handleSearch(value, 1);
+    },
+    [handleSearch, loading]
+  );
 
   const toggleDataset = (datasetId) => {
     setSelectedDatasetIds(prev =>
@@ -523,6 +602,78 @@ const Agents = () => {
                 boxSizing: 'border-box'
               }}
             />
+          </div>
+
+          <div style={{ marginBottom: '12px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', marginBottom: '8px' }}>
+              <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#4b5563' }}>最近搜索</span>
+              <button
+                type="button"
+                onClick={clearSearchHistory}
+                disabled={searchHistory.length === 0}
+                style={{
+                  border: 'none',
+                  background: 'transparent',
+                  color: searchHistory.length === 0 ? '#9ca3af' : '#2563eb',
+                  cursor: searchHistory.length === 0 ? 'not-allowed' : 'pointer',
+                  fontSize: '0.8rem',
+                  padding: 0
+                }}
+              >
+                清空
+              </button>
+            </div>
+            {searchHistory.length > 0 ? (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                {searchHistory.map((item) => (
+                  <div
+                    key={item}
+                    style={{
+                      borderRadius: '999px',
+                      border: '1px solid #bfdbfe',
+                      background: '#eff6ff',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      overflow: 'hidden'
+                    }}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => handleHistorySearch(item)}
+                      style={{
+                        padding: '6px 10px',
+                        border: 'none',
+                        background: 'transparent',
+                        color: '#1d4ed8',
+                        fontSize: '0.8rem',
+                        cursor: 'pointer'
+                      }}
+                      title={`搜索: ${item}`}
+                    >
+                      {item}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => removeSearchHistoryItem(item)}
+                      style={{
+                        border: 'none',
+                        borderLeft: '1px solid #bfdbfe',
+                        background: 'transparent',
+                        color: '#6b7280',
+                        fontSize: '0.8rem',
+                        cursor: 'pointer',
+                        padding: '6px 8px'
+                      }}
+                      title={`删除历史: ${item}`}
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div style={{ fontSize: '0.8rem', color: '#9ca3af' }}>暂无搜索历史</div>
+            )}
           </div>
 
           {/* Search options */}

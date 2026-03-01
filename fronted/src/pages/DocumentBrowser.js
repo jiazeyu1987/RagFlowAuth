@@ -61,6 +61,7 @@ const DocumentBrowser = () => {
   const [datasetFilterKeyword, setDatasetFilterKeyword] = useState('');
   const [recentDatasetKeywords, setRecentDatasetKeywords] = useState([]);
   const [documents, setDocuments] = useState({});
+  const [documentErrors, setDocumentErrors] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [expandedDatasets, setExpandedDatasets] = useState(new Set());
@@ -134,6 +135,7 @@ const DocumentBrowser = () => {
   // 当用户切换时，清空之前的文档数据
   useEffect(() => {
     setDocuments({});
+    setDocumentErrors({});
     setExpandedDatasets(new Set());
     setSelectedDocs({});
   }, [user?.user_id]);
@@ -178,6 +180,11 @@ const DocumentBrowser = () => {
 
   const fetchDocumentsForDataset = async (datasetName) => {
     try {
+      setDocumentErrors((prev) => {
+        const next = { ...prev };
+        delete next[datasetName];
+        return next;
+      });
       const data = await authClient.listRagflowDocuments(datasetName);
       setDocuments(prev => ({
         ...prev,
@@ -185,6 +192,10 @@ const DocumentBrowser = () => {
       }));
     } catch (err) {
       console.error(`Failed to fetch documents for ${datasetName}:`, err);
+      setDocumentErrors(prev => ({
+        ...prev,
+        [datasetName]: err?.message || '\u52a0\u8f7d\u6587\u6863\u5931\u8d25'
+      }));
       setDocuments(prev => ({
         ...prev,
         [datasetName]: []
@@ -664,8 +675,9 @@ const DocumentBrowser = () => {
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           {visibleDatasets.map((dataset) => {
             const datasetDocs = documents[dataset.name] || [];
+            const datasetError = documentErrors[dataset.name] || '';
             const isExpanded = expandedDatasets.has(dataset.name);
-            const loadingDocs = !documents[dataset.name];
+            const loadingDocs = !Object.prototype.hasOwnProperty.call(documents, dataset.name) && !datasetError;
 
             return (
               <div
@@ -731,9 +743,27 @@ const DocumentBrowser = () => {
                       <div style={{ textAlign: 'center', padding: '32px', color: '#6b7280' }}>
                         加载文档中...
                       </div>
+                    ) : datasetError ? (
+                      <div style={{ textAlign: 'center', padding: '32px', color: '#dc2626' }}>
+                        <div style={{ marginBottom: '10px' }}>Load failed: {datasetError}</div>
+                        <button
+                          onClick={() => fetchDocumentsForDataset(dataset.name)}
+                          style={{
+                            padding: '8px 14px',
+                            backgroundColor: '#2563eb',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '6px',
+                            cursor: 'pointer',
+                            fontSize: '0.9rem',
+                          }}
+                        >
+                          Retry
+                        </button>
+                      </div>
                     ) : datasetDocs.length === 0 ? (
                       <div style={{ textAlign: 'center', padding: '32px', color: '#6b7280' }}>
-                        该知识库暂无文档
+                        No documents in this knowledge base
                       </div>
                     ) : (
                       <table style={{ width: '100%', borderCollapse: 'collapse' }}>

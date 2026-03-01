@@ -7,11 +7,11 @@ from dataclasses import dataclass
 from fastapi import HTTPException
 from fastapi.responses import FileResponse, Response
 
+from backend.app.core.kb_refs import resolve_kb_ref
 from backend.app.core.permission_resolver import (
     assert_can_delete,
     assert_can_download,
     assert_can_review,
-    assert_can_upload,
     assert_kb_allowed,
 )
 from backend.services.documents.errors import DocumentNotFound, DocumentSourceError
@@ -64,14 +64,14 @@ class DocumentManager:
     def download_ragflow_response(self, *, doc_id: str, dataset: str, filename: str | None, ctx):
         snapshot = ctx.snapshot
         assert_can_download(snapshot)
-        assert_kb_allowed(snapshot, dataset)
+        assert_kb_allowed(snapshot, resolve_kb_ref(self.deps, dataset).variants)
 
         try:
             doc_bytes = self._ragflow.get_bytes(DocumentRef(source="ragflow", doc_id=doc_id, dataset_name=dataset))
         except DocumentNotFound as e:
             raise HTTPException(status_code=404, detail=str(e))
         except DocumentSourceError as e:
-            raise HTTPException(status_code=500, detail=f"下载失败: {str(e)}")
+            raise HTTPException(status_code=500, detail=f"濞戞挸顑堝ù鍥ㄥ緞鏉堫偉袝: {str(e)}")
 
         final_filename = filename or doc_bytes.filename or f"document_{doc_id}"
 
@@ -116,11 +116,11 @@ class DocumentManager:
 
         doc = deps.kb_store.get_document(doc_id)
         if not doc:
-            raise HTTPException(status_code=404, detail="文档不存在")
+            raise HTTPException(status_code=404, detail="document_not_found")
 
         assert_kb_allowed(snapshot, doc.kb_id)
         if not os.path.exists(doc.file_path):
-            raise HTTPException(status_code=404, detail="文件不存在")
+            raise HTTPException(status_code=404, detail="file_not_found")
 
         deps.download_log_store.log_download(
             doc_id=doc.doc_id,
@@ -152,85 +152,15 @@ class DocumentManager:
     # -------------------- Upload (knowledge local staging) --------------------
 
     async def stage_upload_knowledge(self, *, kb_ref: str, upload_file, ctx):
-        """
-        Save an uploaded file into local storage and create a pending kb_store record.
-        """
-        import mimetypes
-        import uuid
-        from pathlib import Path
+        from backend.services.knowledge_ingestion import KnowledgeIngestionError, KnowledgeIngestionManager
 
-        from backend.app.core.config import settings
-        from backend.app.core.kb_refs import resolve_kb_ref
-        from backend.app.core.paths import resolve_repo_path
-
-        deps = self.deps
-        snapshot = ctx.snapshot
-        kb_info = resolve_kb_ref(deps, kb_ref)
-        assert_can_upload(snapshot)
-        assert_kb_allowed(snapshot, kb_ref)
-
-        content = await upload_file.read()
-        if len(content) > settings.MAX_FILE_SIZE:
-            raise HTTPException(status_code=400, detail="文件大小超过限制")
-
-        file_ext = Path(upload_file.filename).suffix.lower()
-        if file_ext not in settings.ALLOWED_EXTENSIONS:
-            raise HTTPException(status_code=400, detail="不支持的文件类型")
-
-        uploads_dir = resolve_repo_path(settings.UPLOAD_DIR)
-        uploads_dir.mkdir(parents=True, exist_ok=True)
-
-        unique_filename = f"{uuid.uuid4()}_{upload_file.filename}"
-        file_path = uploads_dir / unique_filename
-        file_path.write_bytes(content)
-
-        guessed_mime, _ = mimetypes.guess_type(upload_file.filename)
-        mime_type = (upload_file.content_type or guessed_mime or "application/octet-stream").strip()
-        if file_ext in {".txt", ".ini", ".log"}:
-            mime_type = "text/plain; charset=utf-8"
-        elif file_ext in {".md", ".markdown"}:
-            mime_type = "text/markdown; charset=utf-8"
-        elif file_ext in {".csv"}:
-            mime_type = "text/csv; charset=utf-8"
-        elif file_ext in {".xlsx"}:
-            mime_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        elif file_ext in {".xls"}:
-            mime_type = "application/vnd.ms-excel"
-        elif file_ext in {".png"}:
-            mime_type = "image/png"
-        elif file_ext in {".jpg", ".jpeg"}:
-            mime_type = "image/jpeg"
-
-        doc = deps.kb_store.create_document(
-            filename=upload_file.filename,
-            file_path=str(file_path),
-            file_size=len(content),
-            mime_type=mime_type,
-            uploaded_by=ctx.payload.sub,
-            kb_id=(kb_info.dataset_id or kb_ref),
-            kb_dataset_id=kb_info.dataset_id,
-            kb_name=(kb_info.name or kb_ref),
-            status="pending",
-        )
-        audit = getattr(deps, "audit_log_store", None)
-        if audit:
-            try:
-                audit.log_event(
-                    action="document_upload",
-                    actor=ctx.payload.sub,
-                    source="knowledge",
-                    doc_id=doc.doc_id,
-                    filename=doc.filename,
-                    kb_id=(doc.kb_name or doc.kb_id),
-                    kb_dataset_id=getattr(doc, "kb_dataset_id", None),
-                    kb_name=getattr(doc, "kb_name", None) or (doc.kb_name or doc.kb_id),
-                    meta={"file_size": getattr(doc, "file_size", None), "status": getattr(doc, "status", None)},
-                    **actor_fields_from_ctx(deps, ctx),
-                )
-            except Exception:
-                pass
-        return doc
-
+        ingestion_manager = getattr(self.deps, "knowledge_ingestion_manager", None)
+        if ingestion_manager is None:
+            ingestion_manager = KnowledgeIngestionManager(deps=self.deps)
+        try:
+            return await ingestion_manager.stage_upload_knowledge(kb_ref=kb_ref, upload_file=upload_file, ctx=ctx)
+        except KnowledgeIngestionError as e:
+            raise HTTPException(status_code=e.status_code, detail=e.code) from e
     # -------------------- Delete --------------------
 
     def delete_knowledge_document(self, *, doc_id: str, ctx) -> DeleteResult:
@@ -240,7 +170,7 @@ class DocumentManager:
 
         doc = deps.kb_store.get_document(doc_id)
         if not doc:
-            raise HTTPException(status_code=404, detail="文档不存在")
+            raise HTTPException(status_code=404, detail="document_not_found")
         assert_kb_allowed(snapshot, doc.kb_id)
 
         ragflow_ok = None
@@ -253,7 +183,7 @@ class DocumentManager:
                 ragflow_ok = 0
                 ragflow_err = str(e)
             if ragflow_ok == 0 and not ragflow_err:
-                ragflow_err = "RAGFlow 删除失败"
+                ragflow_err = "ragflow_delete_failed"
 
         deps.deletion_log_store.log_deletion(
             doc_id=doc.doc_id,
@@ -288,24 +218,22 @@ class DocumentManager:
                 pass
 
         if ragflow_ok == 0:
-            raise HTTPException(status_code=500, detail=f"无法从 RAGFlow 删除该文件：{ragflow_err}")
+            raise HTTPException(status_code=500, detail=f"ragflow_delete_failed:{ragflow_err}")
 
         if os.path.exists(doc.file_path):
             os.remove(doc.file_path)
         deps.kb_store.delete_document(doc_id)
 
-        return DeleteResult(ok=True, message="文档已删除", ragflow_deleted=(ragflow_ok == 1 if ragflow_ok is not None else None))
+        return DeleteResult(ok=True, message="document_deleted", ragflow_deleted=(ragflow_ok == 1 if ragflow_ok is not None else None))
 
     def delete_ragflow_document(self, *, doc_id: str, dataset_name: str, ctx) -> DeleteResult:
         snapshot = ctx.snapshot
         assert_can_delete(snapshot)
-        assert_kb_allowed(snapshot, dataset_name)
+        assert_kb_allowed(snapshot, resolve_kb_ref(self.deps, dataset_name).variants)
 
         kb_info = None
         local_doc = None
         try:
-            from backend.app.core.kb_refs import resolve_kb_ref
-
             kb_info = resolve_kb_ref(self.deps, dataset_name)
             local_doc = self.deps.kb_store.get_document_by_ragflow_id(doc_id, dataset_name, kb_refs=list(kb_info.variants))
         except Exception:
@@ -314,7 +242,7 @@ class DocumentManager:
 
         success = self._ragflow.delete(DocumentRef(source="ragflow", doc_id=doc_id, dataset_name=dataset_name))
         if not success:
-            raise HTTPException(status_code=404, detail="文档不存在或删除失败")
+            raise HTTPException(status_code=404, detail="document_not_found_or_delete_failed")
 
         audit = getattr(self.deps, "audit_log_store", None)
         if audit:
@@ -350,7 +278,7 @@ class DocumentManager:
                 os.remove(local_doc.file_path)
             self.deps.kb_store.delete_document(local_doc.doc_id)
 
-        return DeleteResult(ok=True, message="文档已删除", ragflow_deleted=True)
+        return DeleteResult(ok=True, message="document_deleted", ragflow_deleted=True)
 
     # -------------------- Review preview policy --------------------
 

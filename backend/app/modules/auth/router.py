@@ -15,6 +15,7 @@ from backend.core.security import auth
 from backend.app.dependencies import AppDependencies
 from backend.models.auth import ChangePasswordRequest, LoginRequest, TokenResponse
 from backend.services.audit_helpers import actor_fields_from_user
+from backend.services.auth_session import AuthSessionError
 from backend.services.user_store import hash_password
 from backend.services.users import validate_password_requirements
 
@@ -94,8 +95,30 @@ async def login(
 
     scopes: list[str] = []
     auth_session_store = getattr(deps, "auth_session_store", None)
+    auth_session_manager = getattr(deps, "auth_session_manager", None)
 
-    if auth_session_store is not None:
+    if auth_session_manager is not None:
+        max_sessions = int(getattr(user, "max_login_sessions", 3) or 3)
+        try:
+            sid = auth_session_manager.issue_session_id_for_login(
+                user_id=user.user_id,
+                max_sessions=max_sessions,
+                reserve_slots=1,
+            )
+        except AuthSessionError as e:
+            raise HTTPException(status_code=e.status_code, detail=e.code) from e
+        refresh_token = auth.create_refresh_token(uid=user.user_id, data={"sid": sid})
+        refresh_request_token = RequestToken(token=refresh_token, type="refresh", location="headers")
+        refresh_payload = auth.verify_token(refresh_request_token, verify_type=True)
+
+        access_token = auth.create_access_token(uid=user.user_id, scopes=scopes, data={"sid": sid})
+        auth_session_manager.bind_refresh_session(
+            session_id=sid,
+            user_id=user.user_id,
+            refresh_jti=_payload_jti(refresh_payload) or None,
+            expires_at=_payload_exp(refresh_payload),
+        )
+    elif auth_session_store is not None:
         max_sessions = int(getattr(user, "max_login_sessions", 3) or 3)
         auth_session_store.enforce_user_session_limit(
             user_id=user.user_id,
@@ -103,14 +126,11 @@ async def login(
             reserve_slots=1,
             reason="session_limit_exceeded",
         )
-
         sid = str(uuid.uuid4())
         refresh_token = auth.create_refresh_token(uid=user.user_id, data={"sid": sid})
         refresh_request_token = RequestToken(token=refresh_token, type="refresh", location="headers")
         refresh_payload = auth.verify_token(refresh_request_token, verify_type=True)
-
         access_token = auth.create_access_token(uid=user.user_id, scopes=scopes, data={"sid": sid})
-
         auth_session_store.create_session(
             session_id=sid,
             user_id=user.user_id,
@@ -169,7 +189,20 @@ async def refresh_token(
 
     sid = _payload_sid(payload)
     auth_session_store = getattr(deps, "auth_session_store", None)
-    if auth_session_store is not None:
+    auth_session_manager = getattr(deps, "auth_session_manager", None)
+    if auth_session_manager is not None:
+        if not sid:
+            raise HTTPException(status_code=401, detail="missing_session_id")
+        try:
+            auth_session_manager.validate_refresh_session(
+                session_id=sid,
+                user_id=user.user_id,
+                idle_timeout_minutes=getattr(user, "idle_timeout_minutes", 120),
+                refresh_jti=_payload_jti(payload) or None,
+            )
+        except AuthSessionError as e:
+            raise HTTPException(status_code=e.status_code, detail=f"session_invalid:{e.code}") from e
+    elif auth_session_store is not None:
         if not sid:
             raise HTTPException(status_code=401, detail="missing_session_id")
         ok, reason = auth_session_store.validate_session(
@@ -208,7 +241,13 @@ async def logout(request: Request, response: Response, deps: AppDependencies = D
             sid = ""
 
     auth_session_store = getattr(deps, "auth_session_store", None)
-    if auth_session_store is not None and sid:
+    auth_session_manager = getattr(deps, "auth_session_manager", None)
+    if auth_session_manager is not None and sid:
+        try:
+            auth_session_manager.revoke_session(session_id=sid, reason="logout")
+        except Exception:
+            pass
+    elif auth_session_store is not None and sid:
         try:
             auth_session_store.revoke_session(session_id=sid, reason="logout")
         except Exception:

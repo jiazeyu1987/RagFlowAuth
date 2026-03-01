@@ -52,10 +52,7 @@ def create_router() -> APIRouter:
         service: PermissionGroupsService = Depends(get_service),
     ):
         payload = data.model_dump()
-        try:
-            group_id = service.create_group(payload)
-        except ValueError as e:
-            raise HTTPException(status_code=400, detail=str(e)) from e
+        group_id = service.create_group(payload)
         if not group_id:
             raise HTTPException(status_code=400, detail="Failed to create permission group")
         return {"ok": True, "data": {"group_id": group_id}}
@@ -71,10 +68,7 @@ def create_router() -> APIRouter:
         fields_set = set(getattr(data, "model_fields_set", set()) or set())
         if "folder_id" in fields_set and "folder_id" not in payload:
             payload["folder_id"] = None
-        try:
-            success = service.update_group(group_id, payload)
-        except ValueError as e:
-            raise HTTPException(status_code=400, detail=str(e)) from e
+        success = service.update_group(group_id, payload)
         if not success:
             raise HTTPException(status_code=400, detail="Failed to update permission group")
         return {"ok": True}
@@ -143,11 +137,8 @@ def create_router() -> APIRouter:
         actor: AdminOnly,
         service: PermissionGroupsService = Depends(get_service),
     ):
-        try:
-            folder = service.create_group_folder(name=data.name, parent_id=data.parent_id, created_by=actor.sub)
-            return {"ok": True, "data": folder}
-        except ValueError as e:
-            raise HTTPException(status_code=400, detail=str(e)) from e
+        folder = service.create_group_folder(name=data.name, parent_id=data.parent_id, created_by=actor.sub)
+        return {"ok": True, "data": folder}
 
     @router.put("/permission-groups/folders/{folder_id}")
     async def update_group_folder(
@@ -164,13 +155,8 @@ def create_router() -> APIRouter:
             payload["name"] = data.name
         if "parent_id" in fields_set:
             payload["parent_id"] = data.parent_id
-        try:
-            folder = service.update_group_folder(folder_id, payload)
-            return {"ok": True, "data": folder}
-        except ValueError as e:
-            code = str(e)
-            status = 404 if code == "folder_not_found" else 400
-            raise HTTPException(status_code=status, detail=code) from e
+        folder = service.update_group_folder(folder_id, payload)
+        return {"ok": True, "data": folder}
 
     @router.delete("/permission-groups/folders/{folder_id}")
     async def delete_group_folder(
@@ -178,12 +164,7 @@ def create_router() -> APIRouter:
         _: AdminOnly,
         service: PermissionGroupsService = Depends(get_service),
     ):
-        try:
-            ok = service.delete_group_folder(folder_id)
-        except ValueError as e:
-            code = str(e)
-            status = 404 if code == "folder_not_found" else 400
-            raise HTTPException(status_code=status, detail=code) from e
+        ok = service.delete_group_folder(folder_id)
         if not ok:
             raise HTTPException(status_code=404, detail="folder_not_found")
         return {"ok": True}

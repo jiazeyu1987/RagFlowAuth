@@ -8,6 +8,7 @@ from backend.app.core.permission_resolver import (
 )
 from backend.models.document import DocumentResponse
 from backend.services.documents.document_manager import DocumentManager
+from backend.services.knowledge_ingestion import KnowledgeIngestionError
 
 
 router = APIRouter()
@@ -37,8 +38,15 @@ async def upload_document(
     assert_kb_allowed(snapshot, kb_ref)
 
     logger.info(f"[UPLOAD] User {user.username} uploading to kb_id={kb_ref}")
-    mgr = DocumentManager(deps)
-    doc = await mgr.stage_upload_knowledge(kb_ref=kb_ref, upload_file=file, ctx=ctx)
+    ingestion_manager = getattr(deps, "knowledge_ingestion_manager", None)
+    if ingestion_manager is not None:
+        try:
+            doc = await ingestion_manager.stage_upload_knowledge(kb_ref=kb_ref, upload_file=file, ctx=ctx)
+        except KnowledgeIngestionError as e:
+            raise HTTPException(status_code=e.status_code, detail=e.code) from e
+    else:
+        mgr = DocumentManager(deps)
+        doc = await mgr.stage_upload_knowledge(kb_ref=kb_ref, upload_file=file, ctx=ctx)
 
     logger.info(
         "[UPLOAD] Created local doc record: doc_id=%s filename=%s kb_id=%s status=%s uploaded_by=%s",

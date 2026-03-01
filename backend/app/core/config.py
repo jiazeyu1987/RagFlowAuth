@@ -1,3 +1,4 @@
+from pydantic import field_validator
 from pydantic_settings import BaseSettings
 
 
@@ -44,6 +45,18 @@ class Settings(BaseSettings):
 
     # CORS
     CORS_ORIGINS: list[str] = ["*"]
+
+    @field_validator("DEBUG", mode="before")
+    @classmethod
+    def _coerce_debug_bool(cls, value):
+        if isinstance(value, bool):
+            return value
+        text = str(value or "").strip().lower()
+        if text in {"1", "true", "yes", "on", "debug", "development", "dev"}:
+            return True
+        if text in {"0", "false", "no", "off", "release", "production", "prod"}:
+            return False
+        return value
 
     class Config:
         env_file = ".env"

@@ -30,8 +30,24 @@ async def list_audit_events(
     - auth_login/auth_logout
     - document_preview/document_upload/document_download/document_delete
     """
-    store = ctx.deps.audit_log_store
-    total, rows = store.list_events(
+    manager = getattr(ctx.deps, "audit_log_manager", None)
+    if manager is None:
+        manager = ctx.deps.audit_log_store
+    if hasattr(manager, "list_events") and manager is not ctx.deps.audit_log_store:
+        return manager.list_events(
+            action=action,
+            actor=actor,
+            actor_username=username,
+            company_id=company_id,
+            department_id=department_id,
+            source=source,
+            kb_ref=kb_ref,
+            from_ms=from_ms,
+            to_ms=to_ms,
+            offset=offset,
+            limit=limit,
+        )
+    total, rows = ctx.deps.audit_log_store.list_events(
         action=action,
         actor=actor,
         actor_username=username,

@@ -7,92 +7,16 @@ from fastapi import HTTPException
 from backend.models.user import UserCreate, UserUpdate, UserResponse
 
 from backend.app.modules.users.repo import UsersRepo
-from backend.core.roles import VALID_ROLES
+from backend.services.users.manager import UserManagementError, UserManagementManager
 
 
 class UsersService:
     def __init__(self, repo: UsersRepo):
-        self._repo = repo
+        self._manager = UserManagementManager(repo)
 
     @staticmethod
-    def _normalize_login_policy(
-        *,
-        max_login_sessions: int | None,
-        idle_timeout_minutes: int | None,
-        for_create: bool,
-    ) -> tuple[int | None, int | None]:
-        max_value = max_login_sessions
-        idle_value = idle_timeout_minutes
-
-        if for_create and max_value is None:
-            max_value = 3
-        if for_create and idle_value is None:
-            idle_value = 120
-
-        if max_value is not None:
-            try:
-                max_value = int(max_value)
-            except Exception as e:
-                raise HTTPException(status_code=400, detail="invalid_max_login_sessions") from e
-            if max_value < 1 or max_value > 1000:
-                raise HTTPException(status_code=400, detail="max_login_sessions_out_of_range")
-
-        if idle_value is not None:
-            try:
-                idle_value = int(idle_value)
-            except Exception as e:
-                raise HTTPException(status_code=400, detail="invalid_idle_timeout_minutes") from e
-            if idle_value < 1 or idle_value > 43_200:
-                raise HTTPException(status_code=400, detail="idle_timeout_minutes_out_of_range")
-
-        return max_value, idle_value
-
-    def _build_permission_groups(self, group_ids: list[int] | None) -> list[dict]:
-        result: list[dict] = []
-        for gid in group_ids or []:
-            pg = self._repo.get_permission_group(gid)
-            if pg:
-                result.append({"group_id": gid, "group_name": pg.get("group_name", "")})
-        return result
-
-    def _to_response(self, user, session_summary: dict[str, int | None] | None = None) -> UserResponse:
-        group = self._repo.get_permission_group(user.group_id) if user.group_id else None
-        company = self._repo.get_company(user.company_id) if getattr(user, "company_id", None) else None
-        department = self._repo.get_department(user.department_id) if getattr(user, "department_id", None) else None
-        active_count = 0
-        active_last = None
-        if session_summary:
-            try:
-                active_count = int(session_summary.get("active_session_count") or 0)
-            except Exception:
-                active_count = 0
-            active_last = session_summary.get("active_session_last_activity_at_ms")
-            if active_last is not None:
-                try:
-                    active_last = int(active_last)
-                except Exception:
-                    active_last = None
-        return UserResponse(
-            user_id=user.user_id,
-            username=user.username,
-            email=user.email,
-            company_id=getattr(user, "company_id", None),
-            company_name=company.name if company else None,
-            department_id=getattr(user, "department_id", None),
-            department_name=department.name if department else None,
-            group_id=user.group_id,
-            group_name=group["group_name"] if group else None,
-            group_ids=user.group_ids,
-            permission_groups=self._build_permission_groups(user.group_ids),
-            role=user.role,
-            status=user.status,
-            max_login_sessions=int(getattr(user, "max_login_sessions", 3) or 3),
-            idle_timeout_minutes=int(getattr(user, "idle_timeout_minutes", 120) or 120),
-            active_session_count=active_count,
-            active_session_last_activity_at_ms=active_last,
-            created_at_ms=user.created_at_ms,
-            last_login_at_ms=user.last_login_at_ms,
-        )
+    def _raise(err: UserManagementError) -> None:
+        raise HTTPException(status_code=err.status_code, detail=err.code) from err
 
     def list_users(
         self,
@@ -107,149 +31,47 @@ class UsersService:
         created_to_ms: Optional[int],
         limit: int,
     ) -> list[UserResponse]:
-        users = self._repo.list_users(
-            q=q,
-            role=role,
-            status=status,
-            group_id=group_id,
-            company_id=company_id,
-            department_id=department_id,
-            created_from_ms=created_from_ms,
-            created_to_ms=created_to_ms,
-            limit=limit,
-        )
-        idle_by_user = {
-            u.user_id: int(getattr(u, "idle_timeout_minutes", 120) or 120)
-            for u in users
-            if getattr(u, "user_id", None)
-        }
-        summaries = self._repo.get_login_session_summaries(idle_by_user)
-        return [self._to_response(u, summaries.get(u.user_id)) for u in users]
+        try:
+            return self._manager.list_users(
+                q=q,
+                role=role,
+                group_id=group_id,
+                company_id=company_id,
+                department_id=department_id,
+                status=status,
+                created_from_ms=created_from_ms,
+                created_to_ms=created_to_ms,
+                limit=limit,
+            )
+        except UserManagementError as e:
+            self._raise(e)
 
     def create_user(self, *, user_data: UserCreate, created_by: str) -> UserResponse:
-        role = user_data.role or "viewer"
-        if role not in VALID_ROLES:
-            raise HTTPException(status_code=400, detail=f"Invalid role: {role}")
-
-        if user_data.company_id is not None and not self._repo.get_company(user_data.company_id):
-            raise HTTPException(status_code=400, detail="company_not_found")
-        if user_data.department_id is not None and not self._repo.get_department(user_data.department_id):
-            raise HTTPException(status_code=400, detail="department_not_found")
-
-        max_login_sessions, idle_timeout_minutes = self._normalize_login_policy(
-            max_login_sessions=user_data.max_login_sessions,
-            idle_timeout_minutes=user_data.idle_timeout_minutes,
-            for_create=True,
-        )
-
-        group_ids = user_data.group_ids
-        if not group_ids:
-            group_id = user_data.group_id
-            if not group_id:
-                default_group = self._repo.get_group_by_name("viewer")
-                if default_group:
-                    group_id = default_group["group_id"]
-                else:
-                    raise HTTPException(status_code=400, detail="default_permission_group_not_found")
-            group_ids = [group_id] if group_id else []
-
-        for gid in group_ids:
-            if not self._repo.get_permission_group(gid):
-                raise HTTPException(status_code=400, detail=f"permission_group_not_found:{gid}")
-
-        user = self._repo.create_user(
-            username=user_data.username,
-            password=user_data.password,
-            email=user_data.email,
-            company_id=user_data.company_id,
-            department_id=user_data.department_id,
-            # Role is a user label; business permissions come from permission groups.
-            role=role,
-            group_id=None,
-            status=user_data.status,
-            max_login_sessions=max_login_sessions,
-            idle_timeout_minutes=idle_timeout_minutes,
-            created_by=created_by,
-        )
-
-        if group_ids:
-            self._repo.set_user_permission_groups(user.user_id, group_ids)
-
-        user = self._repo.get_user(user.user_id)
-        return self._to_response(user)
+        try:
+            return self._manager.create_user(user_data=user_data, created_by=created_by)
+        except UserManagementError as e:
+            self._raise(e)
 
     def get_user(self, user_id: str) -> UserResponse:
-        user = self._repo.get_user(user_id)
-        if not user:
-            raise HTTPException(status_code=404, detail="user_not_found")
-        summary = self._repo.get_login_session_summary(
-            user.user_id,
-            int(getattr(user, "idle_timeout_minutes", 120) or 120),
-        )
-        return self._to_response(user, summary)
+        try:
+            return self._manager.get_user(user_id)
+        except UserManagementError as e:
+            self._raise(e)
 
     def update_user(self, *, user_id: str, user_data: UserUpdate) -> UserResponse:
-        role = user_data.role
-        if role is not None and role not in VALID_ROLES:
-            raise HTTPException(status_code=400, detail=f"Invalid role: {role}")
-
-        if user_data.company_id is not None and not self._repo.get_company(user_data.company_id):
-            raise HTTPException(status_code=400, detail="company_not_found")
-        if user_data.department_id is not None and not self._repo.get_department(user_data.department_id):
-            raise HTTPException(status_code=400, detail="department_not_found")
-
-        max_login_sessions, idle_timeout_minutes = self._normalize_login_policy(
-            max_login_sessions=user_data.max_login_sessions,
-            idle_timeout_minutes=user_data.idle_timeout_minutes,
-            for_create=False,
-        )
-
-        group_ids = user_data.group_ids
-
-        if group_ids is not None:
-            for gid in group_ids:
-                if not self._repo.get_permission_group(gid):
-                    raise HTTPException(status_code=400, detail=f"permission_group_not_found:{gid}")
-
-        elif user_data.group_id is not None:
-            group = self._repo.get_permission_group(user_data.group_id)
-            if not group:
-                raise HTTPException(status_code=400, detail="permission_group_not_found")
-            group_ids = [user_data.group_id]
-
-        user = self._repo.update_user(
-            user_id=user_id,
-            email=user_data.email,
-            company_id=user_data.company_id,
-            department_id=user_data.department_id,
-            role=role,
-            group_id=None,
-            status=user_data.status,
-            max_login_sessions=max_login_sessions,
-            idle_timeout_minutes=idle_timeout_minutes,
-        )
-        if not user:
-            raise HTTPException(status_code=404, detail="user_not_found")
-
-        if group_ids is not None:
-            self._repo.set_user_permission_groups(user.user_id, group_ids)
-
-        if max_login_sessions is not None:
-            self._repo.enforce_login_session_limit(user.user_id, max_login_sessions)
-
-        user = self._repo.get_user(user.user_id)
-        summary = self._repo.get_login_session_summary(
-            user.user_id,
-            int(getattr(user, "idle_timeout_minutes", 120) or 120),
-        )
-        return self._to_response(user, summary)
+        try:
+            return self._manager.update_user(user_id=user_id, user_data=user_data)
+        except UserManagementError as e:
+            self._raise(e)
 
     def delete_user(self, user_id: str) -> None:
-        if not self._repo.delete_user(user_id):
-            raise HTTPException(status_code=404, detail="user_not_found")
+        try:
+            self._manager.delete_user(user_id)
+        except UserManagementError as e:
+            self._raise(e)
 
     def reset_password(self, user_id: str, new_password: str) -> None:
-        user = self._repo.get_user(user_id)
-        if not user:
-            raise HTTPException(status_code=404, detail="user_not_found")
-        self._repo.update_password(user_id, new_password)
+        try:
+            self._manager.reset_password(user_id, new_password)
+        except UserManagementError as e:
+            self._raise(e)

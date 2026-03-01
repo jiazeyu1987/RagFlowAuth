@@ -8,6 +8,7 @@ from fastapi import Depends, HTTPException, Request
 
 from backend.core.security import auth
 from backend.app.dependencies import AppDependencies
+from backend.services.auth_session import AuthSessionError
 
 
 def get_deps(request: Request) -> AppDependencies:
@@ -54,7 +55,8 @@ async def get_current_payload(request: Request) -> TokenPayload:
 
     user_store = getattr(deps, "user_store", None)
     session_store = getattr(deps, "auth_session_store", None)
-    if not user_store or not session_store:
+    session_manager = getattr(deps, "auth_session_manager", None)
+    if not user_store or (not session_store and not session_manager):
         return payload
 
     user = user_store.get_by_user_id(payload.sub)
@@ -65,15 +67,25 @@ async def get_current_payload(request: Request) -> TokenPayload:
     if not sid:
         raise HTTPException(status_code=401, detail="missing_session_id")
 
-    ok, reason = session_store.validate_session(
-        session_id=sid,
-        user_id=user.user_id,
-        idle_timeout_minutes=getattr(user, "idle_timeout_minutes", 120),
-        touch=True,
-        mark_refresh=False,
-    )
-    if not ok:
-        raise HTTPException(status_code=401, detail=f"session_invalid:{reason}")
+    if session_manager is not None:
+        try:
+            session_manager.validate_access_session(
+                session_id=sid,
+                user_id=user.user_id,
+                idle_timeout_minutes=getattr(user, "idle_timeout_minutes", 120),
+            )
+        except AuthSessionError as e:
+            raise HTTPException(status_code=e.status_code, detail=f"session_invalid:{e.code}") from e
+    else:
+        ok, reason = session_store.validate_session(
+            session_id=sid,
+            user_id=user.user_id,
+            idle_timeout_minutes=getattr(user, "idle_timeout_minutes", 120),
+            touch=True,
+            mark_refresh=False,
+        )
+        if not ok:
+            raise HTTPException(status_code=401, detail=f"session_invalid:{reason}")
 
     return payload
 
