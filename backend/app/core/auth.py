@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Annotated
 
 from authx import TokenPayload
+from authx.schema import RequestToken
 from fastapi import Depends, HTTPException, Request
 
 from backend.core.security import auth
@@ -24,22 +25,57 @@ async def get_current_payload(request: Request) -> TokenPayload:
 
     Always returns 401 (not 422) when token is missing/invalid.
     """
-    token: str | None = None
+    request_token: RequestToken | None = None
     try:
-        token = await auth.get_access_token_from_request(request)
+        request_token = await auth.get_access_token_from_request(request)
     except Exception:
         # Fall back to explicit header parsing.
         auth_header = request.headers.get("Authorization") or ""
         if auth_header.startswith("Bearer "):
             token = auth_header.split(" ", 1)[1].strip() or None
+            if token:
+                try:
+                    request_token = RequestToken(token=token, type="access", location="headers")
+                except Exception:
+                    request_token = None
 
-    if not token:
+    if not request_token:
         raise HTTPException(status_code=401, detail="Missing access token")
 
     try:
-        return auth.verify_token(token, verify_type=True)
+        payload = auth.verify_token(request_token, verify_type=True)
     except Exception:
         raise HTTPException(status_code=401, detail="Invalid access token")
+
+    deps = getattr(getattr(request, "app", None), "state", None)
+    deps = getattr(deps, "deps", None)
+    if deps is None:
+        return payload
+
+    user_store = getattr(deps, "user_store", None)
+    session_store = getattr(deps, "auth_session_store", None)
+    if not user_store or not session_store:
+        return payload
+
+    user = user_store.get_by_user_id(payload.sub)
+    if not user:
+        raise HTTPException(status_code=401, detail="User not found")
+
+    sid = str(getattr(payload, "sid", "") or "").strip()
+    if not sid:
+        raise HTTPException(status_code=401, detail="missing_session_id")
+
+    ok, reason = session_store.validate_session(
+        session_id=sid,
+        user_id=user.user_id,
+        idle_timeout_minutes=getattr(user, "idle_timeout_minutes", 120),
+        touch=True,
+        mark_refresh=False,
+    )
+    if not ok:
+        raise HTTPException(status_code=401, detail=f"session_invalid:{reason}")
+
+    return payload
 
 
 AuthRequired = Annotated[TokenPayload, Depends(get_current_payload)]

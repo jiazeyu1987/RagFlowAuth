@@ -28,6 +28,8 @@ const UserManagement = () => {
     company_id: '',
     department_id: '',
     group_ids: [],
+    max_login_sessions: 3,
+    idle_timeout_minutes: 120,
   });
 
   // 用户筛选
@@ -46,6 +48,16 @@ const UserManagement = () => {
   const [resetPasswordConfirm, setResetPasswordConfirm] = useState('');
   const [resetPasswordSubmitting, setResetPasswordSubmitting] = useState(false);
   const [resetPasswordError, setResetPasswordError] = useState(null);
+
+  // 登录策略编辑（管理员）
+  const [showPolicyModal, setShowPolicyModal] = useState(false);
+  const [policyUser, setPolicyUser] = useState(null);
+  const [policySubmitting, setPolicySubmitting] = useState(false);
+  const [policyError, setPolicyError] = useState(null);
+  const [policyForm, setPolicyForm] = useState({
+    max_login_sessions: 3,
+    idle_timeout_minutes: 120,
+  });
 
   // 公司/部门下拉数据
   const [companies, setCompanies] = useState([]);
@@ -161,10 +173,21 @@ const UserManagement = () => {
         ...newUser,
         company_id: newUser.company_id ? Number(newUser.company_id) : null,
         department_id: newUser.department_id ? Number(newUser.department_id) : null,
+        max_login_sessions: Number(newUser.max_login_sessions),
+        idle_timeout_minutes: Number(newUser.idle_timeout_minutes),
       };
       await usersApi.create(payload);
       setShowCreateModal(false);
-      setNewUser({ username: '', password: '', email: '', company_id: '', department_id: '', group_ids: [] });
+      setNewUser({
+        username: '',
+        password: '',
+        email: '',
+        company_id: '',
+        department_id: '',
+        group_ids: [],
+        max_login_sessions: 3,
+        idle_timeout_minutes: 120,
+      });
       fetchUsers();
     } catch (err) {
       setError(err.message);
@@ -219,6 +242,58 @@ const UserManagement = () => {
       setResetPasswordError(err.message || '修改密码失败');
     } finally {
       setResetPasswordSubmitting(false);
+    }
+  };
+
+  const handleOpenPolicyModal = (user) => {
+    setPolicyUser(user);
+    setPolicyError(null);
+    setPolicyForm({
+      max_login_sessions: Number(user.max_login_sessions || 3),
+      idle_timeout_minutes: Number(user.idle_timeout_minutes || 120),
+    });
+    setShowPolicyModal(true);
+  };
+
+  const handleClosePolicyModal = () => {
+    setShowPolicyModal(false);
+    setPolicyUser(null);
+    setPolicySubmitting(false);
+    setPolicyError(null);
+    setPolicyForm({
+      max_login_sessions: 3,
+      idle_timeout_minutes: 120,
+    });
+  };
+
+  const handleSavePolicy = async () => {
+    if (!policyUser) return;
+    setPolicyError(null);
+
+    const maxSessions = Number(policyForm.max_login_sessions);
+    const idleMinutes = Number(policyForm.idle_timeout_minutes);
+
+    if (!Number.isInteger(maxSessions) || maxSessions < 1 || maxSessions > 1000) {
+      setPolicyError('可登录个数需为 1-1000 的整数');
+      return;
+    }
+    if (!Number.isInteger(idleMinutes) || idleMinutes < 1 || idleMinutes > 43200) {
+      setPolicyError('闲置超时需为 1-43200 分钟的整数');
+      return;
+    }
+
+    try {
+      setPolicySubmitting(true);
+      await usersApi.update(policyUser.user_id, {
+        max_login_sessions: maxSessions,
+        idle_timeout_minutes: idleMinutes,
+      });
+      handleClosePolicyModal();
+      fetchUsers();
+    } catch (err) {
+      setPolicyError(err.message || '保存登录策略失败');
+    } finally {
+      setPolicySubmitting(false);
     }
   };
 
@@ -422,6 +497,7 @@ const UserManagement = () => {
               <th style={{ padding: '12px 16px', textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>公司</th>
               <th style={{ padding: '12px 16px', textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>部门</th>
               <th style={{ padding: '12px 16px', textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>状态</th>
+              <th style={{ padding: '12px 16px', textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>登录策略</th>
               <th style={{ padding: '12px 16px', textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>权限组</th>
               <th style={{ padding: '12px 16px', textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>创建时间</th>
               <th style={{ padding: '12px 16px', textAlign: 'right', borderBottom: '1px solid #e5e7eb' }}>操作</th>
@@ -440,6 +516,16 @@ const UserManagement = () => {
                   }}>
                     {user.status === 'active' ? '激活' : '停用'}
                   </span>
+                </td>
+                <td style={{ padding: '12px 16px', color: '#4b5563', fontSize: '0.9rem' }}>
+                  <div>最多登录: {Number(user.max_login_sessions || 3)}</div>
+                  <div>闲置超时: {Number(user.idle_timeout_minutes || 120)} 分钟</div>
+                  <div>当前在线: {Number(user.active_session_count || 0)}</div>
+                  <div>
+                    最近活跃: {user.active_session_last_activity_at_ms
+                      ? new Date(user.active_session_last_activity_at_ms).toLocaleString('zh-CN')
+                      : '-'}
+                  </div>
                 </td>
                 <td style={{ padding: '12px 16px' }}>
                   {user.permission_groups && user.permission_groups.length > 0 ? (
@@ -468,6 +554,24 @@ const UserManagement = () => {
                   {new Date(user.created_at_ms).toLocaleString('zh-CN')}
                 </td>
                 <td style={{ padding: '12px 16px', textAlign: 'right' }}>
+                  {canManageUsers && (
+                    <button
+                      onClick={() => handleOpenPolicyModal(user)}
+                      data-testid={`users-edit-policy-${user.user_id}`}
+                      style={{
+                        padding: '6px 12px',
+                        backgroundColor: '#0ea5e9',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '4px',
+                        cursor: 'pointer',
+                        fontSize: '0.9rem',
+                        marginRight: '8px',
+                      }}
+                    >
+                      登录策略
+                    </button>
+                  )}
                   {canManageUsers && (
                     <button
                     onClick={() => handleAssignGroup(user)}
@@ -639,6 +743,123 @@ const UserManagement = () => {
         </div>
       )}
 
+      {/* 登录策略模态框（管理员） */}
+      {showPolicyModal && policyUser && (
+        <div data-testid="users-policy-modal" style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.5)',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          zIndex: 1000,
+        }}>
+          <div style={{
+            backgroundColor: 'white',
+            padding: '32px',
+            borderRadius: '8px',
+            width: '100%',
+            maxWidth: '500px',
+          }}>
+            <h3 style={{ margin: '0 0 24px 0' }}>
+              登录策略 - {policyUser.username}
+            </h3>
+
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: 'block', marginBottom: 8, fontWeight: '500' }}>
+                最大登录会话数 (1-1000)
+              </label>
+              <input
+                type="number"
+                min={1}
+                max={1000}
+                value={policyForm.max_login_sessions}
+                onChange={(e) => setPolicyForm({
+                  ...policyForm,
+                  max_login_sessions: e.target.value,
+                })}
+                data-testid="users-policy-max-login-sessions"
+                style={{
+                  width: '100%',
+                  padding: '10px 12px',
+                  border: '1px solid #d1d5db',
+                  borderRadius: '4px',
+                }}
+              />
+            </div>
+
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: 'block', marginBottom: 8, fontWeight: '500' }}>
+                闲置超时 (分钟, 1-43200)
+              </label>
+              <input
+                type="number"
+                min={1}
+                max={43200}
+                value={policyForm.idle_timeout_minutes}
+                onChange={(e) => setPolicyForm({
+                  ...policyForm,
+                  idle_timeout_minutes: e.target.value,
+                })}
+                data-testid="users-policy-idle-timeout"
+                style={{
+                  width: '100%',
+                  padding: '10px 12px',
+                  border: '1px solid #d1d5db',
+                  borderRadius: '4px',
+                }}
+              />
+            </div>
+
+            {policyError && (
+              <div style={{ marginBottom: 16, color: '#ef4444' }} data-testid="users-policy-error">
+                {policyError}
+              </div>
+            )}
+
+            <div style={{ display: 'flex', gap: '12px' }}>
+              <button
+                type="button"
+                onClick={handleClosePolicyModal}
+                disabled={policySubmitting}
+                data-testid="users-policy-cancel"
+                style={{
+                  flex: 1,
+                  padding: '10px',
+                  backgroundColor: '#6b7280',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: policySubmitting ? 'not-allowed' : 'pointer',
+                }}
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                onClick={handleSavePolicy}
+                disabled={policySubmitting}
+                data-testid="users-policy-save"
+                style={{
+                  flex: 1,
+                  padding: '10px',
+                  backgroundColor: policySubmitting ? '#7dd3fc' : '#0ea5e9',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: policySubmitting ? 'not-allowed' : 'pointer',
+                }}
+              >
+                {policySubmitting ? '提交中...' : '保存'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {canManageUsers && showCreateModal && (
         <div style={{
           position: 'fixed',
@@ -770,6 +991,50 @@ const UserManagement = () => {
                 </select>
               </div>
 
+              <div style={{ marginBottom: '16px' }}>
+                <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500' }}>
+                  可登录个数
+                </label>
+                <input
+                  type="number"
+                  min={1}
+                  max={1000}
+                  required
+                  value={newUser.max_login_sessions}
+                  onChange={(e) => setNewUser({ ...newUser, max_login_sessions: e.target.value })}
+                  data-testid="users-create-max-login-sessions"
+                  style={{
+                    width: '100%',
+                    padding: '8px',
+                    border: '1px solid #d1d5db',
+                    borderRadius: '4px',
+                    boxSizing: 'border-box',
+                  }}
+                />
+              </div>
+
+              <div style={{ marginBottom: '16px' }}>
+                <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500' }}>
+                  闲置超时(分钟)
+                </label>
+                <input
+                  type="number"
+                  min={1}
+                  max={43200}
+                  required
+                  value={newUser.idle_timeout_minutes}
+                  onChange={(e) => setNewUser({ ...newUser, idle_timeout_minutes: e.target.value })}
+                  data-testid="users-create-idle-timeout"
+                  style={{
+                    width: '100%',
+                    padding: '8px',
+                    border: '1px solid #d1d5db',
+                    borderRadius: '4px',
+                    boxSizing: 'border-box',
+                  }}
+                />
+              </div>
+
               <div style={{ marginBottom: '24px' }}>
                 <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500' }}>
                   权限组 (可多选)
@@ -850,7 +1115,16 @@ const UserManagement = () => {
                   type="button"
                   onClick={() => {
                     setShowCreateModal(false);
-                    setNewUser({ username: '', password: '', email: '', company_id: '', department_id: '', group_ids: [] });
+                    setNewUser({
+                      username: '',
+                      password: '',
+                      email: '',
+                      company_id: '',
+                      department_id: '',
+                      group_ids: [],
+                      max_login_sessions: 3,
+                      idle_timeout_minutes: 120,
+                    });
                   }}
                   data-testid="users-create-cancel"
                   style={{

@@ -44,11 +44,17 @@ from .permission_groups import (
     ensure_user_permission_groups_table,
     seed_default_permission_groups,
 )
+from .auth_sessions import ensure_auth_login_sessions_table
 from .permission_group_folders import (
     ensure_permission_group_folders_table,
     ensure_permission_groups_folder_column,
 )
-from .users import ensure_org_columns_on_users, ensure_users_group_id_column, ensure_users_table
+from .users import (
+    ensure_org_columns_on_users,
+    ensure_user_login_policy_columns,
+    ensure_users_group_id_column,
+    ensure_users_table,
+)
 
 
 def ensure_schema(db_path: str | Path) -> None:
@@ -64,6 +70,8 @@ def ensure_schema(db_path: str | Path) -> None:
     try:
         # Core tables
         ensure_users_table(conn)
+        ensure_user_login_policy_columns(conn)
+        ensure_auth_login_sessions_table(conn)
         ensure_kb_documents_table(conn)
         ensure_chat_sessions_table(conn)
         ensure_chat_message_sources_table(conn)

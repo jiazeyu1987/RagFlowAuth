@@ -28,6 +28,8 @@ def ensure_users_table(conn: sqlite3.Connection) -> None:
             group_id INTEGER,
             company_id INTEGER,
             department_id INTEGER,
+            max_login_sessions INTEGER NOT NULL DEFAULT 3,
+            idle_timeout_minutes INTEGER NOT NULL DEFAULT 120,
             status TEXT NOT NULL DEFAULT 'active',
             created_at_ms INTEGER NOT NULL,
             last_login_at_ms INTEGER,
@@ -50,3 +52,9 @@ def ensure_org_columns_on_users(conn: sqlite3.Connection) -> None:
     conn.execute("CREATE INDEX IF NOT EXISTS idx_users_company_id ON users(company_id)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_users_department_id ON users(department_id)")
 
+
+def ensure_user_login_policy_columns(conn: sqlite3.Connection) -> None:
+    if not table_exists(conn, "users"):
+        return
+    add_column_if_missing(conn, "users", "max_login_sessions INTEGER NOT NULL DEFAULT 3")
+    add_column_if_missing(conn, "users", "idle_timeout_minutes INTEGER NOT NULL DEFAULT 120")

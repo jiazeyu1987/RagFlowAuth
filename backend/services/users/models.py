@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional, List
+from typing import List, Optional
 
 
 @dataclass
@@ -11,10 +11,15 @@ class User:
     password_hash: str
     email: Optional[str] = None
     role: str = "viewer"
-    group_id: Optional[int] = None  # 权限组ID（已废弃，保留用于向后兼容）
+    # Deprecated: single group id, kept for compatibility.
+    group_id: Optional[int] = None
     company_id: Optional[int] = None
     department_id: Optional[int] = None
-    group_ids: List[int] | None = None  # 新字段：权限组ID列表
+    # Per-account login policy.
+    max_login_sessions: int = 3
+    idle_timeout_minutes: int = 120
+    # Source of truth permission groups.
+    group_ids: List[int] | None = None
     status: str = "active"
     created_at_ms: int = 0
     last_login_at_ms: Optional[int] = None
@@ -23,4 +28,3 @@ class User:
     def __post_init__(self):
         if self.group_ids is None:
             self.group_ids = []
-

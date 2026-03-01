@@ -27,6 +27,7 @@ class UserStore:
             cursor.execute(
                 """
                 SELECT user_id, username, password_hash, email, role, group_id, company_id, department_id, status,
+                       max_login_sessions, idle_timeout_minutes,
                        created_at_ms, last_login_at_ms, created_by
                 FROM users WHERE username = ?
                 """,
@@ -44,9 +45,11 @@ class UserStore:
                     company_id=row[6],
                     department_id=row[7],
                     status=row[8],
-                    created_at_ms=row[9],
-                    last_login_at_ms=row[10],
-                    created_by=row[11],
+                    max_login_sessions=int(row[9] or 3),
+                    idle_timeout_minutes=int(row[10] or 120),
+                    created_at_ms=row[11],
+                    last_login_at_ms=row[12],
+                    created_by=row[13],
                 )
                 user.group_ids = self._get_user_group_ids(user.user_id, conn)
                 user.group_id = user.group_ids[0] if user.group_ids else None
@@ -62,6 +65,7 @@ class UserStore:
             cursor.execute(
                 """
                 SELECT user_id, username, password_hash, email, role, group_id, company_id, department_id, status,
+                       max_login_sessions, idle_timeout_minutes,
                        created_at_ms, last_login_at_ms, created_by
                 FROM users WHERE user_id = ?
                 """,
@@ -79,9 +83,11 @@ class UserStore:
                     company_id=row[6],
                     department_id=row[7],
                     status=row[8],
-                    created_at_ms=row[9],
-                    last_login_at_ms=row[10],
-                    created_by=row[11],
+                    max_login_sessions=int(row[9] or 3),
+                    idle_timeout_minutes=int(row[10] or 120),
+                    created_at_ms=row[11],
+                    last_login_at_ms=row[12],
+                    created_by=row[13],
                 )
                 user.group_ids = self._get_user_group_ids(user.user_id, conn)
                 user.group_id = user.group_ids[0] if user.group_ids else None
@@ -119,6 +125,8 @@ class UserStore:
         role: str = "viewer",
         group_id: Optional[int] = None,
         status: str = "active",
+        max_login_sessions: int = 3,
+        idle_timeout_minutes: int = 120,
         created_by: Optional[str] = None,
     ) -> User:
         # Deprecated: users.group_id is no longer the source of truth (use user_permission_groups).
@@ -134,9 +142,10 @@ class UserStore:
             cursor.execute(
                 """
                 INSERT INTO users (
-                    user_id, username, password_hash, email, role, group_id, company_id, department_id, status,
+                    user_id, username, password_hash, email, role, group_id, company_id, department_id,
+                    max_login_sessions, idle_timeout_minutes, status,
                     created_at_ms, created_by
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     user_id,
@@ -147,6 +156,8 @@ class UserStore:
                     group_id,
                     company_id,
                     department_id,
+                    int(max_login_sessions),
+                    int(idle_timeout_minutes),
                     status,
                     now_ms,
                     created_by,
@@ -162,6 +173,8 @@ class UserStore:
                 group_id=group_id,
                 company_id=company_id,
                 department_id=department_id,
+                max_login_sessions=int(max_login_sessions),
+                idle_timeout_minutes=int(idle_timeout_minutes),
                 status=status,
                 created_at_ms=now_ms,
                 created_by=created_by,
@@ -180,6 +193,8 @@ class UserStore:
         role: Optional[str] = None,
         group_id: Optional[int] = None,
         status: Optional[str] = None,
+        max_login_sessions: Optional[int] = None,
+        idle_timeout_minutes: Optional[int] = None,
     ) -> Optional[User]:
         updates = []
         params = []
@@ -196,6 +211,12 @@ class UserStore:
         if role is not None:
             updates.append("role = ?")
             params.append(role)
+        if max_login_sessions is not None:
+            updates.append("max_login_sessions = ?")
+            params.append(int(max_login_sessions))
+        if idle_timeout_minutes is not None:
+            updates.append("idle_timeout_minutes = ?")
+            params.append(int(idle_timeout_minutes))
         # Deprecated: users.group_id is no longer updated (use user_permission_groups).
         if status is not None:
             updates.append("status = ?")
@@ -253,6 +274,7 @@ class UserStore:
         try:
             base_query = """
                 SELECT user_id, username, password_hash, email, role, group_id, company_id, department_id, status,
+                       max_login_sessions, idle_timeout_minutes,
                        created_at_ms, last_login_at_ms, created_by
                 FROM users
                 WHERE 1=1
@@ -312,9 +334,11 @@ class UserStore:
                     company_id=row[6],
                     department_id=row[7],
                     status=row[8],
-                    created_at_ms=row[9],
-                    last_login_at_ms=row[10],
-                    created_by=row[11],
+                    max_login_sessions=int(row[9] or 3),
+                    idle_timeout_minutes=int(row[10] or 120),
+                    created_at_ms=row[11],
+                    last_login_at_ms=row[12],
+                    created_by=row[13],
                 )
                 user.group_ids = self._get_user_group_ids(user.user_id, conn)
                 user.group_id = user.group_ids[0] if user.group_ids else None
@@ -387,4 +411,3 @@ class UserStore:
             return True
         finally:
             conn.close()
-

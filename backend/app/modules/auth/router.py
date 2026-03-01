@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import logging
+import uuid
+from datetime import datetime
 
+from authx.schema import RequestToken
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 
 from backend.app.core.auth import get_deps
@@ -10,13 +13,67 @@ from backend.app.core.permdbg import permdbg
 from backend.app.core.permission_resolver import ResourceScope
 from backend.core.security import auth
 from backend.app.dependencies import AppDependencies
-from backend.models.auth import LoginRequest, TokenResponse, ChangePasswordRequest
+from backend.models.auth import ChangePasswordRequest, LoginRequest, TokenResponse
+from backend.services.audit_helpers import actor_fields_from_user
 from backend.services.user_store import hash_password
 from backend.services.users import validate_password_requirements
-from backend.services.audit_helpers import actor_fields_from_user
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+
+def _header_bearer_token(request: Request) -> str | None:
+    auth_header = request.headers.get("Authorization") or ""
+    if not auth_header.startswith("Bearer "):
+        return None
+    token = auth_header.split(" ", 1)[1].strip()
+    return token or None
+
+
+async def _resolve_request_token(request: Request, *, token_type: str) -> RequestToken | None:
+    try:
+        if token_type == "access":
+            maybe_token = await auth.get_access_token_from_request(request)
+        else:
+            maybe_token = await auth.get_refresh_token_from_request(request)
+        if maybe_token:
+            return maybe_token
+    except Exception:
+        pass
+
+    fallback = _header_bearer_token(request)
+    if not fallback:
+        return None
+    try:
+        return RequestToken(token=fallback, type=token_type, location="headers")
+    except Exception:
+        return None
+
+
+def _payload_value(payload, key: str):
+    if hasattr(payload, key):
+        return getattr(payload, key)
+    try:
+        return payload.model_dump().get(key)  # type: ignore[attr-defined]
+    except Exception:
+        return None
+
+
+def _payload_sid(payload) -> str:
+    sid = _payload_value(payload, "sid")
+    return str(sid or "").strip()
+
+
+def _payload_jti(payload) -> str:
+    jti = _payload_value(payload, "jti")
+    return str(jti or "").strip()
+
+
+def _payload_exp(payload):
+    exp = _payload_value(payload, "exp")
+    if isinstance(exp, datetime):
+        return exp
+    return exp
 
 
 @router.post("/login", response_model=TokenResponse)
@@ -27,18 +84,43 @@ async def login(
 ):
     user = deps.user_store.get_by_username(credentials.username)
     if not user:
-        raise HTTPException(status_code=401, detail="用户名或密码错误")
+        raise HTTPException(status_code=401, detail="invalid_username_or_password")
 
     if hash_password(credentials.password) != user.password_hash:
-        raise HTTPException(status_code=401, detail="用户名或密码错误")
+        raise HTTPException(status_code=401, detail="invalid_username_or_password")
 
     if user.status != "active":
-        raise HTTPException(status_code=403, detail="账户已被禁用")
+        raise HTTPException(status_code=403, detail="account_inactive")
 
     scopes: list[str] = []
+    auth_session_store = getattr(deps, "auth_session_store", None)
 
-    access_token = auth.create_access_token(uid=user.user_id, scopes=scopes)
-    refresh_token = auth.create_refresh_token(uid=user.user_id)
+    if auth_session_store is not None:
+        max_sessions = int(getattr(user, "max_login_sessions", 3) or 3)
+        auth_session_store.enforce_user_session_limit(
+            user_id=user.user_id,
+            max_sessions=max_sessions,
+            reserve_slots=1,
+            reason="session_limit_exceeded",
+        )
+
+        sid = str(uuid.uuid4())
+        refresh_token = auth.create_refresh_token(uid=user.user_id, data={"sid": sid})
+        refresh_request_token = RequestToken(token=refresh_token, type="refresh", location="headers")
+        refresh_payload = auth.verify_token(refresh_request_token, verify_type=True)
+
+        access_token = auth.create_access_token(uid=user.user_id, scopes=scopes, data={"sid": sid})
+
+        auth_session_store.create_session(
+            session_id=sid,
+            user_id=user.user_id,
+            refresh_jti=_payload_jti(refresh_payload) or None,
+            expires_at=_payload_exp(refresh_payload),
+        )
+    else:
+        access_token = auth.create_access_token(uid=user.user_id, scopes=scopes)
+        refresh_token = auth.create_refresh_token(uid=user.user_id)
+
     auth.set_access_cookies(access_token, response)
     auth.set_refresh_cookies(refresh_token, response)
 
@@ -65,51 +147,72 @@ async def login(
 
 
 @router.post("/refresh")
-async def refresh_token(request: Request):
+async def refresh_token(
+    request: Request,
+    deps: AppDependencies = Depends(get_deps),
+):
+    request_token = await _resolve_request_token(request, token_type="refresh")
+    if not request_token:
+        raise HTTPException(status_code=401, detail="missing_refresh_token")
+
     try:
-        refresh_token_value: str | None = None
-        try:
-            refresh_token_value = await auth.get_refresh_token_from_request(request)
-        except Exception:
-            refresh_token_value = None
-
-        # Frontend sends refresh token via Authorization header.
-        if not refresh_token_value:
-            auth_header = request.headers.get("Authorization") or ""
-            if auth_header.startswith("Bearer "):
-                refresh_token_value = auth_header.split(" ", 1)[1].strip() or None
-
-        if not refresh_token_value:
-            raise HTTPException(status_code=401, detail="缺少刷新令牌")
-
-        payload = auth.verify_token(refresh_token_value, verify_type=True)
-
-        deps = request.app.state.deps
-        user = deps.user_store.get_by_user_id(payload.sub)
-        if not user:
-            raise HTTPException(status_code=401, detail="用户不存在")
-
-        if user.status != "active":
-            raise HTTPException(status_code=403, detail="账户已被禁用")
-
-        scopes: list[str] = []
-        access_token = auth.create_access_token(uid=payload.sub, scopes=scopes)
-        return {"access_token": access_token, "token_type": "bearer"}
-    except HTTPException:
-        raise
+        payload = auth.verify_token(request_token, verify_type=True)
     except Exception as e:
-        raise HTTPException(status_code=401, detail=f"刷新令牌无效: {str(e)}")
+        raise HTTPException(status_code=401, detail=f"invalid_refresh_token:{e}") from e
+
+    user = deps.user_store.get_by_user_id(payload.sub)
+    if not user:
+        raise HTTPException(status_code=401, detail="user_not_found")
+
+    if user.status != "active":
+        raise HTTPException(status_code=403, detail="account_inactive")
+
+    sid = _payload_sid(payload)
+    auth_session_store = getattr(deps, "auth_session_store", None)
+    if auth_session_store is not None:
+        if not sid:
+            raise HTTPException(status_code=401, detail="missing_session_id")
+        ok, reason = auth_session_store.validate_session(
+            session_id=sid,
+            user_id=user.user_id,
+            idle_timeout_minutes=getattr(user, "idle_timeout_minutes", 120),
+            refresh_jti=_payload_jti(payload) or None,
+            mark_refresh=True,
+            touch=True,
+        )
+        if not ok:
+            raise HTTPException(status_code=401, detail=f"session_invalid:{reason}")
+
+    scopes: list[str] = []
+    access_token = auth.create_access_token(
+        uid=payload.sub,
+        scopes=scopes,
+        data=({"sid": sid} if sid else None),
+    )
+    return {"access_token": access_token, "token_type": "bearer"}
 
 
 @router.post("/logout")
 async def logout(request: Request, response: Response, deps: AppDependencies = Depends(get_deps)):
     actor = None
-    try:
-        token = await auth.get_access_token_from_request(request)
-        payload = auth.verify_token(token, verify_type=True)
-        actor = payload.sub
-    except Exception:
-        actor = None
+    sid = ""
+
+    token = await _resolve_request_token(request, token_type="access")
+    if token:
+        try:
+            payload = auth.verify_token(token, verify_type=True)
+            actor = payload.sub
+            sid = _payload_sid(payload)
+        except Exception:
+            actor = None
+            sid = ""
+
+    auth_session_store = getattr(deps, "auth_session_store", None)
+    if auth_session_store is not None and sid:
+        try:
+            auth_session_store.revoke_session(session_id=sid, reason="logout")
+        except Exception:
+            pass
 
     audit = getattr(deps, "audit_log_store", None)
     if audit and actor:
@@ -124,7 +227,7 @@ async def logout(request: Request, response: Response, deps: AppDependencies = D
         except Exception:
             pass
     auth.unset_cookies(response)
-    return {"message": "登出成功"}
+    return {"message": "logout_ok"}
 
 
 @router.get("/me")
@@ -208,6 +311,8 @@ async def get_current_user(
         "permission_groups": permission_groups_list,
         "scopes": [],
         "permissions": permissions,
+        "max_login_sessions": int(getattr(user, "max_login_sessions", 3) or 3),
+        "idle_timeout_minutes": int(getattr(user, "idle_timeout_minutes", 120) or 120),
         # Legacy field: dataset names (for display).
         "accessible_kbs": sorted(accessible_kb_names_set),
         # New field: dataset ids (for API operations / stage-3 migration).

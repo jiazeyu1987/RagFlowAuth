@@ -52,6 +52,42 @@ class UsersRepo:
     def set_user_permission_groups(self, user_id: str, group_ids: list[int]) -> None:
         self._deps.user_store.set_user_permission_groups(user_id, group_ids)
 
+    def enforce_login_session_limit(self, user_id: str, max_sessions: int) -> list[str]:
+        store = getattr(self._deps, "auth_session_store", None)
+        if not store:
+            return []
+        return store.enforce_user_session_limit(
+            user_id=user_id,
+            max_sessions=max_sessions,
+            reserve_slots=0,
+            reason="policy_limit_updated",
+        )
+
+    def get_login_session_summary(
+        self,
+        user_id: str,
+        idle_timeout_minutes: int | None,
+    ) -> dict[str, int | None]:
+        store = getattr(self._deps, "auth_session_store", None)
+        if not store:
+            return {
+                "active_session_count": 0,
+                "active_session_last_activity_at_ms": None,
+            }
+        return store.get_active_session_summary(
+            user_id=user_id,
+            idle_timeout_minutes=idle_timeout_minutes,
+        )
+
+    def get_login_session_summaries(
+        self,
+        idle_timeout_by_user: dict[str, int | None],
+    ) -> dict[str, dict[str, int | None]]:
+        store = getattr(self._deps, "auth_session_store", None)
+        if not store:
+            return {}
+        return store.get_active_session_summaries(idle_timeout_by_user=idle_timeout_by_user)
+
     def get_permission_group(self, group_id: int) -> dict[str, Any] | None:
         return self._deps.permission_group_store.get_group(group_id)
 

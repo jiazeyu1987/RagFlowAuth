@@ -1,33 +1,37 @@
-from pydantic import BaseModel
-from typing import Optional, List
+from typing import List, Optional
+
+from pydantic import BaseModel, Field
 
 
 class UserCreate(BaseModel):
-    """User creation model"""
     username: str
     password: str
     email: Optional[str] = None
     company_id: Optional[int] = None
     department_id: Optional[int] = None
-    role: Optional[str] = None  # RBAC role (admin/reviewer/operator/viewer/guest); defaults to viewer
-    group_id: Optional[int] = None  # 向后兼容
-    group_ids: Optional[List[int]] = None  # 新字段：支持多个权限组
+    role: Optional[str] = None
+    # Deprecated: single group id, kept for compatibility.
+    group_id: Optional[int] = None
+    group_ids: Optional[List[int]] = None
     status: str = "active"
+    # Per-account login policy.
+    max_login_sessions: int = 3
+    idle_timeout_minutes: int = 120
 
 
 class UserUpdate(BaseModel):
-    """User update model"""
     email: Optional[str] = None
     company_id: Optional[int] = None
     department_id: Optional[int] = None
-    role: Optional[str] = None  # RBAC role (admin/reviewer/operator/viewer/guest)
-    group_id: Optional[int] = None  # 向后兼容
-    group_ids: Optional[List[int]] = None  # 新字段：支持多个权限组
+    role: Optional[str] = None
+    group_id: Optional[int] = None
+    group_ids: Optional[List[int]] = None
     status: Optional[str] = None
+    max_login_sessions: Optional[int] = None
+    idle_timeout_minutes: Optional[int] = None
 
 
 class UserResponse(BaseModel):
-    """User response model"""
     user_id: str
     username: str
     email: Optional[str] = None
@@ -35,11 +39,15 @@ class UserResponse(BaseModel):
     company_name: Optional[str] = None
     department_id: Optional[int] = None
     department_name: Optional[str] = None
-    group_id: Optional[int] = None  # 权限组ID（已废弃，保留用于向后兼容）
-    group_ids: List[int] = []  # 新字段：权限组ID列表
-    group_name: Optional[str] = None  # 权限组名称（已废弃）
-    permission_groups: List[dict] = []  # 新字段：权限组详情
-    role: str  # 保留role字段用于向后兼容
+    group_id: Optional[int] = None
+    group_ids: List[int] = Field(default_factory=list)
+    group_name: Optional[str] = None
+    permission_groups: List[dict] = Field(default_factory=list)
+    role: str
     status: str
+    max_login_sessions: int
+    idle_timeout_minutes: int
+    active_session_count: int = 0
+    active_session_last_activity_at_ms: Optional[int] = None
     created_at_ms: int
     last_login_at_ms: Optional[int] = None
