@@ -14,6 +14,31 @@ from backend.services.knowledge_ingestion import KnowledgeIngestionError
 router = APIRouter()
 
 
+def _get_allowed_extensions_payload(ctx: AuthContextDep) -> dict:
+    settings_obj = ctx.deps.upload_settings_store.get()
+    return {
+        "allowed_extensions": settings_obj.allowed_extensions,
+        "updated_at_ms": settings_obj.updated_at_ms,
+    }
+
+
+@router.get("/settings/allowed-extensions")
+async def get_allowed_extensions(ctx: AuthContextDep):
+    return _get_allowed_extensions_payload(ctx)
+
+
+@router.put("/settings/allowed-extensions")
+async def update_allowed_extensions(ctx: AuthContextDep, body: dict):
+    if not ctx.snapshot.is_admin:
+        raise HTTPException(status_code=403, detail="admin_required")
+    extensions = body.get("allowed_extensions")
+    try:
+        ctx.deps.upload_settings_store.update_allowed_extensions(extensions)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    return _get_allowed_extensions_payload(ctx)
+
+
 @router.post("/upload", response_model=DocumentResponse, status_code=201)
 async def upload_document(
     request: Request,

@@ -1,9 +1,11 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { knowledgeApi } from '../features/knowledge/api';
+import { useAuth } from '../hooks/useAuth';
 
 const MAX_FILE_SIZE_BYTES = 16 * 1024 * 1024;
-const ACCEPTED_EXTENSIONS = ['.txt', '.pdf', '.docx', '.md', '.xlsx', '.xls', '.csv', '.png', '.jpg', '.jpeg'];
+const DEFAULT_ACCEPTED_EXTENSIONS = ['.txt', '.pdf', '.docx', '.md', '.xlsx', '.xls', '.csv', '.png', '.jpg', '.jpeg'];
+const DEFAULT_KB_NAME = '展厅';
 
 const getFileExtensionLower = (name = '') => {
   const idx = name.lastIndexOf('.');
@@ -21,20 +23,52 @@ const formatBytes = (bytes) => {
 };
 
 const getDisplayPath = (file) => String(file?.webkitRelativePath || file?.name || '');
-
 const getFileUniqueKey = (file) => `${getDisplayPath(file)}__${file?.size || 0}__${file?.lastModified || 0}`;
+
+const normalizeExtension = (value = '') => {
+  let next = String(value || '').trim().toLowerCase();
+  if (!next) return '';
+  if (!next.startsWith('.')) next = `.${next}`;
+  return next;
+};
+
+const panelStyle = {
+  backgroundColor: 'white',
+  padding: '32px',
+  borderRadius: '8px',
+  boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
+  maxWidth: '720px',
+};
 
 const KnowledgeUpload = () => {
   const navigate = useNavigate();
+  const auth = useAuth();
+  const canManageExtensions = auth.isAdmin();
+
   const [selectedFiles, setSelectedFiles] = useState([]);
-  const [kbId, setKbId] = useState('展厅');
+  const [kbId, setKbId] = useState(DEFAULT_KB_NAME);
   const [datasets, setDatasets] = useState([]);
   const [loadingDatasets, setLoadingDatasets] = useState(true);
   const [uploading, setUploading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(null); // {current, total, filename}
+  const [uploadProgress, setUploadProgress] = useState(null);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
   const [dragActive, setDragActive] = useState(false);
+
+  const [allowedExtensions, setAllowedExtensions] = useState(DEFAULT_ACCEPTED_EXTENSIONS);
+  const [loadingExtensions, setLoadingExtensions] = useState(true);
+  const [savingExtensions, setSavingExtensions] = useState(false);
+  const [extensionDraft, setExtensionDraft] = useState('');
+  const [extensionsMessage, setExtensionsMessage] = useState(null);
+
+  const acceptAttr = useMemo(() => {
+    const values = Array.isArray(allowedExtensions) && allowedExtensions.length > 0
+      ? allowedExtensions
+      : DEFAULT_ACCEPTED_EXTENSIONS;
+    return values.join(',');
+  }, [allowedExtensions]);
+
+  const extensionSet = useMemo(() => new Set(allowedExtensions), [allowedExtensions]);
 
   useEffect(() => {
     const fetchDatasets = async () => {
@@ -43,22 +77,39 @@ const KnowledgeUpload = () => {
         const data = await knowledgeApi.listRagflowDatasets();
         const list = data.datasets || [];
         setDatasets(list);
-
         if (list.length > 0) {
-          setKbId(list[0].name || list[0].id);
+          setKbId((current) => current || list[0].name || list[0].id || DEFAULT_KB_NAME);
           setError(null);
         } else {
+          setKbId(DEFAULT_KB_NAME);
           setError('您没有被分配任何知识库权限，请联系管理员');
         }
       } catch (err) {
-        setError(err.message || '无法加载知识库列表，请检查网络连接');
         setDatasets([]);
+        setError(err.message || '无法加载知识库列表，请检查网络连接');
       } finally {
         setLoadingDatasets(false);
       }
     };
 
+    const fetchAllowedExtensions = async () => {
+      try {
+        setLoadingExtensions(true);
+        const payload = await knowledgeApi.getAllowedUploadExtensions();
+        const items = Array.isArray(payload?.allowed_extensions) && payload.allowed_extensions.length > 0
+          ? payload.allowed_extensions.map(normalizeExtension).filter(Boolean)
+          : DEFAULT_ACCEPTED_EXTENSIONS;
+        setAllowedExtensions(Array.from(new Set(items)).sort());
+      } catch (err) {
+        setAllowedExtensions(DEFAULT_ACCEPTED_EXTENSIONS);
+        setExtensionsMessage({ type: 'error', text: err.message || '无法加载可上传文件后缀，已回退到默认配置' });
+      } finally {
+        setLoadingExtensions(false);
+      }
+    };
+
     fetchDatasets();
+    fetchAllowedExtensions();
   }, []);
 
   const addFiles = (filesLike) => {
@@ -67,78 +118,40 @@ const KnowledgeUpload = () => {
 
     const valid = [];
     const rejected = [];
-
-    for (const f of incoming) {
-      const ext = getFileExtensionLower(f.name);
-      if (!ACCEPTED_EXTENSIONS.includes(ext)) {
-        rejected.push({ file: f, reason: 'unsupported' });
+    for (const file of incoming) {
+      const ext = getFileExtensionLower(file.name);
+      if (!extensionSet.has(ext)) {
+        rejected.push({ file, reason: 'unsupported' });
         continue;
       }
-      if (f.size > MAX_FILE_SIZE_BYTES) {
-        rejected.push({ file: f, reason: 'too_large' });
+      if (file.size > MAX_FILE_SIZE_BYTES) {
+        rejected.push({ file, reason: 'too_large' });
         continue;
       }
-      valid.push(f);
+      valid.push(file);
     }
 
     setSelectedFiles((prev) => {
-      const existing = prev || [];
-      const map = new Map();
-      for (const f of existing) map.set(getFileUniqueKey(f), f);
-      for (const f of valid) map.set(getFileUniqueKey(f), f);
+      const map = new Map((prev || []).map((file) => [getFileUniqueKey(file), file]));
+      for (const file of valid) map.set(getFileUniqueKey(file), file);
       return Array.from(map.values());
     });
 
     if (rejected.length > 0) {
-      const tooLarge = rejected.filter((r) => r.reason === 'too_large').length;
-      const unsupported = rejected.filter((r) => r.reason === 'unsupported').length;
+      const tooLarge = rejected.filter((item) => item.reason === 'too_large').length;
+      const unsupported = rejected.filter((item) => item.reason === 'unsupported').length;
       const parts = [];
       if (tooLarge) parts.push(`${tooLarge} 个文件超过 16MB`);
-      if (unsupported) parts.push(`${unsupported} 个文件类型不支持`);
-      setError(`部分文件未添加：${parts.join('，')}`);
+      if (unsupported) parts.push(`${unsupported} 个文件后缀不在允许列表中`);
+      setError(`部分文件未加入上传队列：${parts.join('，')}`);
     } else {
       setError(null);
     }
   };
 
-  const handleFileSelect = (e) => {
-    addFiles(e.target.files);
-    // allow selecting same file again later
-    e.target.value = '';
-  };
-
-  const handleFolderSelect = (e) => {
-    addFiles(e.target.files);
-    e.target.value = '';
-  };
-
-  const handleDrop = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setDragActive(false);
-    if (uploading) return;
-    addFiles(e.dataTransfer?.files);
-  };
-
-  const handleDragOver = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (!uploading) setDragActive(true);
-  };
-
-  const handleDragLeave = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setDragActive(false);
-  };
-
-  const removeFile = (key) => {
-    setSelectedFiles((prev) => (prev || []).filter((f) => getFileUniqueKey(f) !== key));
-  };
-
-  const handleUpload = async (e) => {
-    e.preventDefault();
-    if (!selectedFiles || selectedFiles.length === 0) {
+  const handleUpload = async (event) => {
+    event.preventDefault();
+    if (selectedFiles.length === 0) {
       setError('请选择文件');
       return;
     }
@@ -150,33 +163,107 @@ const KnowledgeUpload = () => {
 
     try {
       const results = [];
-      for (let i = 0; i < selectedFiles.length; i++) {
-        const file = selectedFiles[i];
-        setUploadProgress({ current: i + 1, total: selectedFiles.length, filename: file.name });
+      for (let index = 0; index < selectedFiles.length; index += 1) {
+        const file = selectedFiles[index];
+        setUploadProgress({ current: index + 1, total: selectedFiles.length, filename: getDisplayPath(file) });
         try {
           const result = await knowledgeApi.uploadDocument(file, kbId);
-          results.push({ ok: true, filename: result?.filename || file.name });
+          results.push({ ok: true, filename: result?.filename || getDisplayPath(file) });
         } catch (err) {
-          results.push({ ok: false, filename: file.name, error: err?.message || '上传失败' });
+          results.push({ ok: false, filename: getDisplayPath(file), error: err?.message || '上传失败' });
         }
       }
 
-      const okCount = results.filter((r) => r.ok).length;
+      const okCount = results.filter((item) => item.ok).length;
       const failCount = results.length - okCount;
-
       if (failCount === 0) {
-        setSuccess(`已上传 ${okCount} 个文件，等待审核`);
+        setSuccess(`上传完成：成功 ${okCount} 个，等待审核`);
         setSelectedFiles([]);
         setTimeout(() => navigate('/documents'), 1200);
       } else {
-        const firstFail = results.find((r) => !r.ok);
-        setError(`上传完成：成功 ${okCount} 个，失败 ${failCount} 个。${firstFail?.filename ? `（例如：${firstFail.filename}：${firstFail.error}）` : ''}`);
+        const firstFail = results.find((item) => !item.ok);
+        setError(
+          `上传完成：成功 ${okCount} 个，失败 ${failCount} 个${firstFail ? `。（例如：${firstFail.filename}：${firstFail.error}）` : ''}`
+        );
       }
     } catch (err) {
       setError(err.message || '上传失败');
     } finally {
       setUploading(false);
       setUploadProgress(null);
+    }
+  };
+
+  const handleFileSelect = (event) => {
+    addFiles(event.target.files);
+    event.target.value = '';
+  };
+
+  const handleFolderSelect = (event) => {
+    addFiles(event.target.files);
+    event.target.value = '';
+  };
+
+  const handleDrop = (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setDragActive(false);
+    if (!uploading) addFiles(event.dataTransfer?.files);
+  };
+
+  const handleDragOver = (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (!uploading) setDragActive(true);
+  };
+
+  const handleDragLeave = (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setDragActive(false);
+  };
+
+  const removeFile = (key) => {
+    setSelectedFiles((prev) => prev.filter((file) => getFileUniqueKey(file) !== key));
+  };
+
+  const handleAddExtension = () => {
+    const normalized = normalizeExtension(extensionDraft);
+    if (!normalized) {
+      setExtensionsMessage({ type: 'error', text: '请输入有效的文件后缀，例如 .pdf' });
+      return;
+    }
+    if (/\s/.test(normalized) || normalized.length < 2) {
+      setExtensionsMessage({ type: 'error', text: '文件后缀格式不正确' });
+      return;
+    }
+    setAllowedExtensions((prev) => Array.from(new Set([...prev, normalized])).sort());
+    setExtensionDraft('');
+    setExtensionsMessage(null);
+  };
+
+  const handleDeleteExtension = (extension) => {
+    setAllowedExtensions((prev) => prev.filter((item) => item !== extension));
+    setExtensionsMessage(null);
+  };
+
+  const handleSaveExtensions = async () => {
+    if (!canManageExtensions) return;
+    if (allowedExtensions.length === 0) {
+      setExtensionsMessage({ type: 'error', text: '至少保留一个允许上传的后缀' });
+      return;
+    }
+    setSavingExtensions(true);
+    setExtensionsMessage(null);
+    try {
+      const payload = await knowledgeApi.updateAllowedUploadExtensions(allowedExtensions);
+      const next = Array.isArray(payload?.allowed_extensions) ? payload.allowed_extensions.map(normalizeExtension).filter(Boolean) : allowedExtensions;
+      setAllowedExtensions(Array.from(new Set(next)).sort());
+      setExtensionsMessage({ type: 'success', text: '文件后缀配置已保存，后续上传立即生效' });
+    } catch (err) {
+      setExtensionsMessage({ type: 'error', text: err.message || '保存文件后缀配置失败' });
+    } finally {
+      setSavingExtensions(false);
     }
   };
 
@@ -214,15 +301,7 @@ const KnowledgeUpload = () => {
         </div>
       )}
 
-      <div
-        style={{
-          backgroundColor: 'white',
-          padding: '32px',
-          borderRadius: '8px',
-          boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
-          maxWidth: '600px',
-        }}
-      >
+      <div style={panelStyle}>
         <form onSubmit={handleUpload}>
           <div style={{ marginBottom: '24px' }}>
             <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', color: '#374151' }}>
@@ -230,7 +309,7 @@ const KnowledgeUpload = () => {
             </label>
             <select
               value={kbId}
-              onChange={(e) => setKbId(e.target.value)}
+              onChange={(event) => setKbId(event.target.value)}
               disabled={loadingDatasets}
               data-testid="upload-kb-select"
               style={{
@@ -246,15 +325,138 @@ const KnowledgeUpload = () => {
               {loadingDatasets ? (
                 <option>加载知识库中...</option>
               ) : datasets.length > 0 ? (
-                datasets.map((ds) => (
-                  <option key={ds.id} value={ds.name || ds.id}>
-                    {ds.name || ds.id}
+                datasets.map((dataset) => (
+                  <option key={dataset.id} value={dataset.name || dataset.id}>
+                    {dataset.name || dataset.id}
                   </option>
                 ))
               ) : (
-                <option value="展厅">展厅</option>
+                <option value={DEFAULT_KB_NAME}>{DEFAULT_KB_NAME}</option>
               )}
             </select>
+          </div>
+
+          <div style={{ marginBottom: '24px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, alignItems: 'center', flexWrap: 'wrap', marginBottom: 8 }}>
+              <label style={{ fontWeight: '500', color: '#374151' }}>允许上传的文件后缀</label>
+              <div style={{ fontSize: '0.85rem', color: '#6b7280' }}>
+                {loadingExtensions ? '正在加载配置...' : `当前配置：${acceptAttr}`}
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
+              {allowedExtensions.map((extension) => (
+                <span
+                  key={extension}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    padding: '6px 10px',
+                    borderRadius: 999,
+                    backgroundColor: '#eff6ff',
+                    color: '#1d4ed8',
+                    fontSize: '0.9rem',
+                  }}
+                >
+                  {extension}
+                  {canManageExtensions && (
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteExtension(extension)}
+                      style={{
+                        border: 'none',
+                        background: 'transparent',
+                        color: '#1d4ed8',
+                        cursor: 'pointer',
+                        fontWeight: 700,
+                        padding: 0,
+                        lineHeight: 1,
+                      }}
+                      aria-label={`删除 ${extension}`}
+                    >
+                      ×
+                    </button>
+                  )}
+                </span>
+              ))}
+            </div>
+
+            {canManageExtensions && (
+              <div style={{ border: '1px solid #e5e7eb', borderRadius: 8, padding: 16, backgroundColor: '#f9fafb', marginBottom: 12 }}>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                  <input
+                    type="text"
+                    value={extensionDraft}
+                    onChange={(event) => setExtensionDraft(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter') {
+                        event.preventDefault();
+                        handleAddExtension();
+                      }
+                    }}
+                    placeholder="输入后缀，例如 .dwg 或 dwg"
+                    style={{
+                      flex: '1 1 260px',
+                      minWidth: 220,
+                      padding: '10px 12px',
+                      border: '1px solid #d1d5db',
+                      borderRadius: 6,
+                      fontSize: '0.95rem',
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={handleAddExtension}
+                    style={{
+                      padding: '10px 14px',
+                      backgroundColor: '#2563eb',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: 6,
+                      cursor: 'pointer',
+                      fontWeight: 500,
+                    }}
+                  >
+                    添加后缀
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSaveExtensions}
+                    disabled={savingExtensions}
+                    style={{
+                      padding: '10px 14px',
+                      backgroundColor: savingExtensions ? '#9ca3af' : '#059669',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: 6,
+                      cursor: savingExtensions ? 'not-allowed' : 'pointer',
+                      fontWeight: 500,
+                    }}
+                  >
+                    {savingExtensions ? '保存中...' : '保存配置'}
+                  </button>
+                </div>
+                <div style={{ marginTop: 10, fontSize: '0.85rem', color: '#6b7280' }}>
+                  admin 可在这里新增、删除并保存允许上传的文件后缀。修改后会影响后续上传校验。
+                </div>
+              </div>
+            )}
+
+            {extensionsMessage && (
+              <div
+                style={{
+                  marginBottom: 12,
+                  padding: '10px 12px',
+                  borderRadius: 6,
+                  backgroundColor: extensionsMessage.type === 'success' ? '#d1fae5' : '#fee2e2',
+                  color: extensionsMessage.type === 'success' ? '#065f46' : '#991b1b',
+                  fontSize: '0.9rem',
+                }}
+              >
+                {extensionsMessage.text}
+              </div>
+            )}
           </div>
 
           <div style={{ marginBottom: '24px' }}>
@@ -297,6 +499,7 @@ const KnowledgeUpload = () => {
                 选择文件夹
               </button>
             </div>
+
             <div
               data-testid="upload-file-dropzone"
               style={{
@@ -316,7 +519,7 @@ const KnowledgeUpload = () => {
               <input
                 type="file"
                 onChange={handleFileSelect}
-                accept=".txt,.pdf,.docx,.md,.xlsx,.xls,.csv,.png,.jpg,.jpeg"
+                accept={acceptAttr}
                 multiple
                 style={{ display: 'none' }}
                 id="fileInput"
@@ -325,7 +528,7 @@ const KnowledgeUpload = () => {
               <input
                 type="file"
                 onChange={handleFolderSelect}
-                accept=".txt,.pdf,.docx,.md,.xlsx,.xls,.csv,.png,.jpg,.jpeg"
+                accept={acceptAttr}
                 multiple
                 webkitdirectory=""
                 directory=""
@@ -335,7 +538,7 @@ const KnowledgeUpload = () => {
               />
               <div style={{ fontSize: '2rem', marginBottom: '12px' }}>文件</div>
               <div style={{ color: '#6b7280', marginBottom: '8px' }}>
-                {selectedFiles && selectedFiles.length > 0
+                {selectedFiles.length > 0
                   ? `已选择 ${selectedFiles.length} 个文件`
                   : '拖动文件到此处，或点击选择文件/文件夹（支持子文件夹）'}
               </div>
@@ -346,7 +549,7 @@ const KnowledgeUpload = () => {
               )}
             </div>
 
-            {selectedFiles && selectedFiles.length > 0 && (
+            {selectedFiles.length > 0 && (
               <div style={{ marginTop: 12 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                   <div style={{ fontSize: '0.9rem', color: '#374151', fontWeight: 500 }}>已选择文件</div>
@@ -368,14 +571,10 @@ const KnowledgeUpload = () => {
                     清空
                   </button>
                 </div>
-                <div style={{
-                  border: '1px solid #e5e7eb',
-                  borderRadius: 8,
-                  overflow: 'hidden',
-                }}>
-                  {selectedFiles.map((f) => {
-                    const key = getFileUniqueKey(f);
-                    const displayPath = getDisplayPath(f);
+                <div style={{ border: '1px solid #e5e7eb', borderRadius: 8, overflow: 'hidden' }}>
+                  {selectedFiles.map((file) => {
+                    const key = getFileUniqueKey(file);
+                    const displayPath = getDisplayPath(file);
                     return (
                       <div
                         key={key}
@@ -392,12 +591,12 @@ const KnowledgeUpload = () => {
                       >
                         <div style={{ minWidth: 0 }}>
                           <div style={{ fontSize: '0.95rem', color: '#111827', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            {f.name}
+                            {file.name}
                           </div>
                           <div style={{ fontSize: '0.82rem', color: '#6b7280', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                             {displayPath}
                           </div>
-                          <div style={{ fontSize: '0.85rem', color: '#6b7280' }}>{formatBytes(f.size)}</div>
+                          <div style={{ fontSize: '0.85rem', color: '#6b7280' }}>{formatBytes(file.size)}</div>
                         </div>
                         <button
                           type="button"
@@ -425,27 +624,27 @@ const KnowledgeUpload = () => {
             )}
 
             <div style={{ marginTop: '8px', fontSize: '0.85rem', color: '#6b7280' }}>
-              支持的文件类型：.txt, .pdf, .docx, .md, .xlsx, .xls, .csv, .png, .jpg, .jpeg（最大 16MB，支持选择文件夹并递归读取子文件夹）
+              支持的文件后缀：{acceptAttr}（单文件最大 16MB，支持选择文件夹并递归读取子文件夹）
             </div>
           </div>
 
           <button
             type="submit"
-            disabled={!selectedFiles || selectedFiles.length === 0 || uploading}
+            disabled={selectedFiles.length === 0 || uploading}
             data-testid="upload-submit"
             style={{
               width: '100%',
               padding: '12px',
-              backgroundColor: !selectedFiles || selectedFiles.length === 0 || uploading ? '#9ca3af' : '#3b82f6',
+              backgroundColor: selectedFiles.length === 0 || uploading ? '#9ca3af' : '#3b82f6',
               color: 'white',
               border: 'none',
               borderRadius: '4px',
               fontSize: '1rem',
               fontWeight: '500',
-              cursor: !selectedFiles || selectedFiles.length === 0 || uploading ? 'not-allowed' : 'pointer',
+              cursor: selectedFiles.length === 0 || uploading ? 'not-allowed' : 'pointer',
             }}
           >
-            {uploading ? '上传中...' : `上传文档${selectedFiles && selectedFiles.length > 0 ? `（${selectedFiles.length}）` : ''}`}
+            {uploading ? '上传中...' : `上传文档${selectedFiles.length > 0 ? `（${selectedFiles.length}）` : ''}`}
           </button>
         </form>
 

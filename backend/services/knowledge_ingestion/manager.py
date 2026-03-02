@@ -103,7 +103,15 @@ class KnowledgeIngestionManager:
 
         display_name, relative_path = self._normalize_relative_upload_path(upload_file.filename)
         file_ext = Path(display_name).suffix.lower()
-        if file_ext not in settings.ALLOWED_EXTENSIONS:
+        upload_settings_store = getattr(deps, "upload_settings_store", None)
+        allowed_extensions = set(settings.ALLOWED_EXTENSIONS)
+        if upload_settings_store is not None:
+            try:
+                allowed_extensions = set(upload_settings_store.get().allowed_extensions)
+            except Exception:
+                allowed_extensions = set(settings.ALLOWED_EXTENSIONS)
+
+        if file_ext not in allowed_extensions:
             raise KnowledgeIngestionError("unsupported_file_type", status_code=400)
 
         uploads_dir = resolve_repo_path(settings.UPLOAD_DIR)

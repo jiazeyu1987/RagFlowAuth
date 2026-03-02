@@ -21,6 +21,7 @@ from backend.services.ragflow_service import RagflowService
 from backend.services.org_directory_store import OrgDirectoryStore
 from backend.services.user_store import UserStore
 from backend.services.search_config_store import SearchConfigStore
+from backend.services.upload_settings_store import UploadSettingsStore
 from backend.services.audit import AuditLogManager
 from backend.services.auth_session import AuthSessionManager
 from backend.services.knowledge_ingestion import KnowledgeIngestionManager
@@ -45,6 +46,7 @@ class AppDependencies:
     org_directory_store: OrgDirectoryStore
     data_security_store: DataSecurityStore
     search_config_store: SearchConfigStore
+    upload_settings_store: UploadSettingsStore
     patent_download_store: PatentDownloadStore
     paper_download_store: PaperDownloadStore
     knowledge_directory_store: KnowledgeDirectoryStore
@@ -93,6 +95,7 @@ def create_dependencies(db_path: str | None = None) -> AppDependencies:
         org_directory_store=OrgDirectoryStore(db_path=str(db_path)),
         data_security_store=data_security_store,
         search_config_store=search_config_store,
+        upload_settings_store=UploadSettingsStore(db_path=str(db_path)),
         patent_download_store=PatentDownloadStore(db_path=str(db_path)),
         paper_download_store=PaperDownloadStore(db_path=str(db_path)),
         knowledge_directory_store=knowledge_directory_store,

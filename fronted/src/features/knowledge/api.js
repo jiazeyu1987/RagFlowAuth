@@ -161,7 +161,16 @@ export const knowledgeApi = {
     const path = query ? `/api/knowledge/documents?${query}` : '/api/knowledge/documents';
     return httpClient.requestJson(authBackendUrl(path), { method: 'GET' });
   },
+  getAllowedUploadExtensions() {
+    return httpClient.requestJson(authBackendUrl('/api/knowledge/settings/allowed-extensions'), { method: 'GET' });
+  },
 
+  updateAllowedUploadExtensions(allowedExtensions) {
+    return httpClient.requestJson(authBackendUrl('/api/knowledge/settings/allowed-extensions'), {
+      method: 'PUT',
+      body: JSON.stringify({ allowed_extensions: allowedExtensions || [] }),
+    });
+  },
   uploadDocument(file, kbId = '展厅') {
     return documentClient.uploadKnowledge(file, kbId);
   },
@@ -178,3 +187,4 @@ export const knowledgeApi = {
     return documentClient.batchDownloadKnowledgeToBrowser(docIds);
   },
 };
+
