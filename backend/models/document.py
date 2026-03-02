@@ -23,6 +23,21 @@ class DocumentReviewRequest(BaseModel):
     review_notes: Optional[str] = None
 
 
+class BatchDocumentReviewRequest(BaseModel):
+    """Batch document review request model"""
+    doc_ids: List[str]
+    review_notes: Optional[str] = None
+
+
+class BatchDocumentReviewResponse(BaseModel):
+    """Batch document review response model"""
+    total: int
+    success_count: int
+    failed_count: int
+    succeeded_doc_ids: List[str]
+    failed_items: List[dict]
+
+
 class StatsResponse(BaseModel):
     """Statistics response model"""
     total_documents: int

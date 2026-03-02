@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { permissionGroupsApi } from '../features/permissionGroups/api';
 
 const ROOT = '';
+const HIDDEN_CHAT_NAMES = new Set(['\u5927\u6a21\u578b', '\u5c0f\u6a21\u578b', '\u95ee\u9898\u6bd4\u5bf9']);
 
 const emptyForm = {
   group_name: '',
@@ -319,10 +320,15 @@ export default function PermissionGroupManagement() {
       ]);
       const folderData = folderRes?.data || { folders: [], group_bindings: {}, root_group_count: 0 };
       const normalizedGroups = normalizeGroups(groupsRes?.data || [], folderData.group_bindings || {});
+      const visibleChats = (chatsRes?.data || []).filter((chat) => {
+        const rawName = String(chat?.name || '').trim();
+        const normalized = rawName.replace(/^\[|\]$/g, '').trim();
+        return !HIDDEN_CHAT_NAMES.has(rawName) && !HIDDEN_CHAT_NAMES.has(normalized);
+      });
       setGroups(normalizedGroups);
       setGroupFolders(folderData.folders || []);
       setKnowledgeTree(knowledgeRes?.data || { nodes: [], datasets: [] });
-      setChatAgents(chatsRes?.data || []);
+      setChatAgents(visibleChats);
       return normalizedGroups;
     } catch (e) {
       setError(e?.message || '加载失败');

@@ -17,9 +17,13 @@ const DocumentReview = ({ embedded = false }) => {
   const [selectedDocIds, setSelectedDocIds] = useState(new Set());
   const [downloadLoading, setDownloadLoading] = useState(null);
   const [batchDownloadLoading, setBatchDownloadLoading] = useState(false);
+  const [batchReviewLoading, setBatchReviewLoading] = useState(null);
+  const [batchReviewSummary, setBatchReviewSummary] = useState(null);
+  const [batchSummaryExpanded, setBatchSummaryExpanded] = useState(false);
+  const [batchSummaryCopied, setBatchSummaryCopied] = useState(false);
 
   const [datasets, setDatasets] = useState([]);
-  const [selectedDataset, setSelectedDataset] = useState(null); // null=未加载；''=全部；其它=知识库
+  const [selectedDataset, setSelectedDataset] = useState(null); // null=鏈姞杞斤紱''=鍏ㄩ儴锛涘叾瀹?鐭ヨ瘑搴?
   const [loadingDatasets, setLoadingDatasets] = useState(true);
   const [overwritePrompt, setOverwritePrompt] = useState(null); // { newDocId, oldDoc, normalized }
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -75,25 +79,25 @@ const DocumentReview = ({ embedded = false }) => {
 
   const openDiff = async (oldDocId, oldFilename, newDocId, newFilename) => {
     setError(null);
-    setDiffTitle(`对比：${oldFilename}  vs  ${newFilename}`);
+    setDiffTitle(`???${oldFilename} vs ${newFilename}`);
     setDiffOpen(true);
     setDiffLoading(true);
     setDiffOldText('');
     setDiffNewText('');
     try {
       if (!isTextComparable(oldFilename) || !isTextComparable(newFilename)) {
-        throw new Error('对比功能仅支持：md/txt/ini/log');
+        throw new Error('????????md/txt/ini/log');
       }
       const [oldText, newText] = await Promise.all([fetchLocalPreviewText(oldDocId), fetchLocalPreviewText(newDocId)]);
       const maxLines = 2500;
       if (countLines(oldText) > maxLines || countLines(newText) > maxLines) {
-        throw new Error('文件太大，无法在页面里对比；请下载后用工具对比。');
+        throw new Error('????????????????????????');
       }
       setDiffOldText(oldText);
       setDiffNewText(newText);
     } catch (e) {
       setDiffOpen(false);
-      setError(e.message || '对比失败');
+      setError(e.message || '????');
     } finally {
       setDiffLoading(false);
     }
@@ -108,21 +112,21 @@ const DocumentReview = ({ embedded = false }) => {
       try {
         setLoadingDatasets(true);
 
-        // 获取知识库列表（后端已经根据权限组过滤过了）
+        // 鑾峰彇鐭ヨ瘑搴撳垪琛紙鍚庣宸茬粡鏍规嵁鏉冮檺缁勮繃婊よ繃浜嗭級
         const data = await knowledgeApi.listRagflowDatasets();
         const datasets = data.datasets || [];
 
         setDatasets(datasets);
 
         if (datasets.length > 0) {
-          // 默认显示“全部”
+          // 榛樿鏄剧ず鈥滃叏閮ㄢ€?
           setSelectedDataset('');
         } else {
-          setError('您没有被分配任何知识库权限，请联系管理员');
+          setError('鎮ㄦ病鏈夎鍒嗛厤浠讳綍鐭ヨ瘑搴撴潈闄愶紝璇疯仈绯荤鐞嗗憳');
         }
       } catch (err) {
         console.error('Failed to load datasets:', err);
-        setError('无法加载知识库列表，请检查网络连接');
+        setError('?????????????????');
         setDatasets([]);
       } finally {
         setLoadingDatasets(false);
@@ -171,7 +175,7 @@ const DocumentReview = ({ embedded = false }) => {
         return;
       }
 
-      if (!window.confirm('确定要审核通过该文档吗？')) return;
+      if (!window.confirm('????????????')) return;
       await reviewApi.approve(docId);
       fetchRagflowDocuments();
     } catch (err) {
@@ -185,7 +189,7 @@ const DocumentReview = ({ embedded = false }) => {
     if (!overwritePrompt) return;
     const { newDocId, oldDoc } = overwritePrompt;
     const ok = window.confirm(
-      `检测到可能重复文件。\n\n旧文件：${oldDoc.filename}\n新文件：${activeDocMap.get(newDocId)?.filename || ''}\n\n是否用“新文件”覆盖旧文件？（会先删除旧文件，再上传新文件）`
+      `??????????\n\n????${oldDoc.filename}\n????${activeDocMap.get(newDocId)?.filename || ''}\n\n??????????????????????????????`
     );
     if (!ok) return;
 
@@ -205,12 +209,12 @@ const DocumentReview = ({ embedded = false }) => {
   const handleOverwriteKeepOld = async () => {
     if (!overwritePrompt) return;
     const { newDocId, oldDoc } = overwritePrompt;
-    const ok = window.confirm(`将驳回新文件并保留旧文件：${oldDoc.filename}\n确定吗？`);
+    const ok = window.confirm(`?????????????${oldDoc.filename}\n????`);
     if (!ok) return;
     setActionLoading(newDocId);
     setError(null);
     try {
-      await reviewApi.reject(newDocId, '检测到重复文件，选择保留旧文件');
+      await reviewApi.reject(newDocId, '???????????????');
       setOverwritePrompt(null);
       fetchRagflowDocuments();
     } catch (err) {
@@ -221,7 +225,7 @@ const DocumentReview = ({ embedded = false }) => {
   };
 
   const handleReject = async (docId) => {
-    const notes = window.prompt('请输入驳回原因（可选）');
+    const notes = window.prompt('???????????');
     if (notes === null) return;
 
     setActionLoading(docId);
@@ -240,7 +244,7 @@ const DocumentReview = ({ embedded = false }) => {
     console.log('[DocumentReview] User role:', user?.role);
     console.log('[DocumentReview] isAdmin():', isAdmin());
 
-    if (!window.confirm('确定要删除该文档吗？此操作不可恢复。')) return;
+    if (!window.confirm('??????????????????')) return;
 
     setActionLoading(docId);
     try {
@@ -287,7 +291,7 @@ const DocumentReview = ({ embedded = false }) => {
 
   const handleBatchDownload = async () => {
     if (selectedDocIds.size === 0) {
-      setError('请先选择要下载的文档');
+      setError('璇峰厛閫夋嫨瑕佷笅杞界殑鏂囨。');
       return;
     }
 
@@ -299,6 +303,161 @@ const DocumentReview = ({ embedded = false }) => {
       setError(err.message);
     } finally {
       setBatchDownloadLoading(false);
+    }
+  };
+
+  const handleBatchApproveAll = async () => {
+    if (documents.length === 0) {
+      setError('当前没有待审核文档。');
+      return;
+    }
+    if (!window.confirm(`确定要一键通过当前列表中的 ${documents.length} 个待审核文档吗？`)) return;
+
+    setBatchReviewLoading('approve');
+    setBatchReviewSummary(null);
+    setBatchSummaryExpanded(false);
+    setBatchSummaryCopied(false);
+    setError(null);
+    try {
+      const conflictChecks = await Promise.all(
+        documents.map(async (doc) => {
+          try {
+            const conflict = await reviewApi.getConflict(doc.doc_id);
+            return { doc, conflict };
+          } catch (err) {
+            return { doc, conflictError: err.message || '冲突检查失败' };
+          }
+        }),
+      );
+
+      const conflicted = conflictChecks.filter((item) => item.conflict?.conflict && item.conflict?.existing);
+      const conflictCheckFailed = conflictChecks.filter((item) => item.conflictError);
+      const approvableDocs = conflictChecks
+        .filter((item) => !item.conflictError && !(item.conflict?.conflict && item.conflict?.existing))
+        .map((item) => item.doc);
+
+      if (approvableDocs.length === 0) {
+        const firstConflict = conflicted[0]?.doc?.filename || conflictCheckFailed[0]?.doc?.filename || '';
+        setBatchReviewSummary({
+          mode: 'approve',
+          successCount: 0,
+          failedCount: 0,
+          conflicted: conflicted.map((item) => ({
+            docId: item.doc.doc_id,
+            filename: item.doc.filename,
+            detail: item.conflict?.existing?.filename ? `与已通过文档重复：${item.conflict.existing.filename}` : '检测到命名冲突',
+          })),
+          checkFailed: conflictCheckFailed.map((item) => ({
+            docId: item.doc.doc_id,
+            filename: item.doc.filename,
+            detail: item.conflictError,
+          })),
+          failedItems: [],
+        });
+        setError(
+          `批量审批未执行：冲突 ${conflicted.length}，检查失败 ${conflictCheckFailed.length}${firstConflict ? `。首个文档：${firstConflict}` : ''}`,
+        );
+        return;
+      }
+
+      const result = await reviewApi.approveBatch(approvableDocs.map((doc) => doc.doc_id));
+      setBatchReviewSummary({
+        mode: 'approve',
+        successCount: result.success_count,
+        failedCount: result.failed_count,
+        conflicted: conflicted.map((item) => ({
+          docId: item.doc.doc_id,
+          filename: item.doc.filename,
+          detail: item.conflict?.existing?.filename ? `与已通过文档重复：${item.conflict.existing.filename}` : '检测到命名冲突',
+        })),
+        checkFailed: conflictCheckFailed.map((item) => ({
+          docId: item.doc.doc_id,
+          filename: item.doc.filename,
+          detail: item.conflictError,
+        })),
+        failedItems: result.failed_items || [],
+      });
+      await fetchRagflowDocuments();
+      setSelectedDocIds(new Set());
+      if (result.failed_count > 0 || conflicted.length > 0 || conflictCheckFailed.length > 0) {
+        const firstFailure = result.failed_items?.[0];
+        const firstConflict = conflicted[0]?.doc?.filename || conflictCheckFailed[0]?.doc?.filename || '';
+        setError(
+          `批量审批完成：成功 ${result.success_count}，失败 ${result.failed_count}，冲突跳过 ${conflicted.length}，检查失败 ${conflictCheckFailed.length}${firstFailure ? `。首个失败：${firstFailure.doc_id} - ${firstFailure.detail}` : firstConflict ? `。首个跳过：${firstConflict}` : ''}`,
+        );
+      }
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBatchReviewLoading(null);
+    }
+  };
+
+  const handleBatchRejectAll = async () => {
+    if (documents.length === 0) {
+      setError('当前没有待审核文档。');
+      return;
+    }
+    const notes = window.prompt('请输入批量驳回原因（可选）');
+    if (notes === null) return;
+    if (!window.confirm(`确定要一键驳回当前列表中的 ${documents.length} 个待审核文档吗？`)) return;
+
+    setBatchReviewLoading('reject');
+    setBatchReviewSummary(null);
+    setBatchSummaryExpanded(false);
+    setBatchSummaryCopied(false);
+    setError(null);
+    try {
+      const result = await reviewApi.rejectBatch(documents.map((doc) => doc.doc_id), notes);
+      setBatchReviewSummary({
+        mode: 'reject',
+        successCount: result.success_count,
+        failedCount: result.failed_count,
+        conflicted: [],
+        checkFailed: [],
+        failedItems: result.failed_items || [],
+      });
+      await fetchRagflowDocuments();
+      setSelectedDocIds(new Set());
+      if (result.failed_count > 0) {
+        const firstFailure = result.failed_items?.[0];
+        setError(`批量驳回完成：成功 ${result.success_count}，失败 ${result.failed_count}${firstFailure ? `。首个失败：${firstFailure.doc_id} - ${firstFailure.detail}` : ''}`);
+      }
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBatchReviewLoading(null);
+    }
+  };
+
+  const buildBatchSummaryText = () => {
+    if (!batchReviewSummary) return '';
+    const lines = [
+      batchReviewSummary.mode === 'approve' ? '批量审批明细' : '批量驳回明细',
+      `成功 ${batchReviewSummary.successCount}，失败 ${batchReviewSummary.failedCount}，冲突跳过 ${batchReviewSummary.conflicted.length}，检查失败 ${batchReviewSummary.checkFailed.length}`,
+    ];
+    if (batchReviewSummary.failedItems.length > 0) {
+      lines.push('失败项');
+      batchReviewSummary.failedItems.forEach((item) => lines.push(`${item.doc_id}: ${item.detail}`));
+    }
+    if (batchReviewSummary.conflicted.length > 0) {
+      lines.push('冲突跳过');
+      batchReviewSummary.conflicted.forEach((item) => lines.push(`${item.filename}: ${item.detail}`));
+    }
+    if (batchReviewSummary.checkFailed.length > 0) {
+      lines.push('检查失败');
+      batchReviewSummary.checkFailed.forEach((item) => lines.push(`${item.filename}: ${item.detail}`));
+    }
+    return lines.join('\n');
+  };
+
+  const handleCopyBatchSummary = async () => {
+    try {
+      await navigator.clipboard.writeText(buildBatchSummaryText());
+      setBatchSummaryCopied(true);
+      window.setTimeout(() => setBatchSummaryCopied(false), 1500);
+    } catch (err) {
+      setError(err.message || '复制失败');
     }
   };
 
@@ -329,22 +488,22 @@ const DocumentReview = ({ embedded = false }) => {
             onClick={(e) => e.stopPropagation()}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: '10px', alignItems: 'center' }}>
-              <div style={{ fontWeight: 700, fontSize: '1.05rem' }}>检测到可能重复文件</div>
+              <div style={{ fontWeight: 700, fontSize: '1.05rem' }}>妫€娴嬪埌鍙兘閲嶅鏂囦欢</div>
               <button
                 type="button"
                 onClick={() => setOverwritePrompt(null)} data-testid="docs-overwrite-close"
                 style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontSize: '1.2rem' }}
               >
-                ×
+                脳
               </button>
             </div>
 
             <div style={{ marginTop: '12px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
               <div style={{ border: '1px solid #e5e7eb', borderRadius: '10px', padding: '12px' }}>
-                <div style={{ fontWeight: 700, marginBottom: '6px', color: '#b91c1c' }}>旧文件（已通过）</div>
+                <div style={{ fontWeight: 700, marginBottom: '6px', color: '#b91c1c' }}>????????</div>
                 <div style={{ color: '#111827' }}>{overwritePrompt.oldDoc.filename}</div>
                 <div style={{ color: '#6b7280', fontSize: '0.9rem', marginTop: '6px' }}>
-                  上传时间：{overwritePrompt.oldDoc.uploaded_at_ms ? new Date(overwritePrompt.oldDoc.uploaded_at_ms).toLocaleString('zh-CN') : ''}
+                  ?????{overwritePrompt.oldDoc.uploaded_at_ms ? new Date(overwritePrompt.oldDoc.uploaded_at_ms).toLocaleString('zh-CN') : ''}
                 </div>
                 <div style={{ marginTop: '10px' }}>
                   <button
@@ -360,7 +519,7 @@ const DocumentReview = ({ embedded = false }) => {
                       marginRight: '8px',
                     }}
                   >
-                    在线查看旧文件
+                    ???????
                   </button>
                   <button
                     type="button"
@@ -374,16 +533,16 @@ const DocumentReview = ({ embedded = false }) => {
                       cursor: 'pointer',
                     }}
                   >
-                    下载旧文件
+                    ?????
                   </button>
                 </div>
               </div>
 
               <div style={{ border: '1px solid #e5e7eb', borderRadius: '10px', padding: '12px' }}>
-                <div style={{ fontWeight: 700, marginBottom: '6px', color: '#1d4ed8' }}>新文件（待审核）</div>
+                <div style={{ fontWeight: 700, marginBottom: '6px', color: '#1d4ed8' }}>????????</div>
                 <div style={{ color: '#111827' }}>{activeDocMap.get(overwritePrompt.newDocId)?.filename || ''}</div>
                 <div style={{ color: '#6b7280', fontSize: '0.9rem', marginTop: '6px' }}>
-                  归一化名称：{overwritePrompt.normalized || ''}
+                  ??????{overwritePrompt.normalized || ''}
                 </div>
                 <div style={{ marginTop: '10px' }}>
                   <button
@@ -399,7 +558,7 @@ const DocumentReview = ({ embedded = false }) => {
                       marginRight: '8px',
                     }}
                   >
-                    在线查看新文件
+                    ???????
                   </button>
                   <button
                     type="button"
@@ -414,7 +573,7 @@ const DocumentReview = ({ embedded = false }) => {
                       marginRight: '8px',
                     }}
                   >
-                    下载新文件
+                    ?????
                   </button>
                 </div>
               </div>
@@ -439,7 +598,7 @@ const DocumentReview = ({ embedded = false }) => {
                   cursor: 'pointer',
                 }}
               >
-                对比差异
+                瀵规瘮宸紓
               </button>
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
               <button
@@ -453,7 +612,7 @@ const DocumentReview = ({ embedded = false }) => {
                   cursor: 'pointer',
                 }}
               >
-                保留旧文件（驳回新文件）
+                淇濈暀鏃ф枃浠讹紙椹冲洖鏂版枃浠讹級
               </button>
               <button
                 type="button"
@@ -467,7 +626,7 @@ const DocumentReview = ({ embedded = false }) => {
                   cursor: 'pointer',
                 }}
               >
-                使用新文件覆盖
+                ???????
               </button>
               </div>
             </div>
@@ -503,27 +662,27 @@ const DocumentReview = ({ embedded = false }) => {
             onClick={(e) => e.stopPropagation()}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: '10px', alignItems: 'center' }}>
-              <div style={{ fontWeight: 700, fontSize: '1.05rem' }}>{diffTitle || '对比差异'}</div>
+              <div style={{ fontWeight: 700, fontSize: '1.05rem' }}>{diffTitle || '瀵规瘮宸紓'}</div>
               <button
                 type="button"
                 onClick={() => setDiffOpen(false)}
                 style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontSize: '1.2rem' }}
               >
-                ×
+                脳
               </button>
             </div>
 
             <div style={{ marginTop: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <label style={{ display: 'flex', gap: '8px', alignItems: 'center', color: '#374151' }}>
                 <input type="checkbox" checked={diffOnly} onChange={(e) => setDiffOnly(e.target.checked)} />
-                只看差异
+                鍙湅宸紓
               </label>
-              <div style={{ color: '#6b7280', fontSize: '0.9rem' }}>绿色=新增，红色=删除，灰色=未变化</div>
+              <div style={{ color: '#6b7280', fontSize: '0.9rem' }}>??=?????=?????=???</div>
             </div>
 
             <div style={{ marginTop: '10px', flex: 1, overflow: 'auto', border: '1px solid #e5e7eb', borderRadius: '10px' }}>
               {diffLoading ? (
-                <div style={{ padding: '24px', color: '#6b7280' }}>正在生成对比…</div>
+                <div style={{ padding: '24px', color: '#6b7280' }}>??????...</div>
               ) : (
                 <div style={{ padding: '12px' }}>
                   <ReactDiffViewer
@@ -533,8 +692,8 @@ const DocumentReview = ({ embedded = false }) => {
                     showDiffOnly={diffOnly}
                     disableWordDiff={false}
                     compareMethod="diffLines"
-                    leftTitle="旧文件"
-                    rightTitle="新文件"
+                    leftTitle="???"
+                    rightTitle="???"
                     styles={{
                       variables: {
                         light: {
@@ -562,7 +721,7 @@ const DocumentReview = ({ embedded = false }) => {
 
       <div style={{ marginBottom: '24px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-          {embedded ? <div /> : <h2 style={{ margin: 0 }}>文档管理</h2>}
+          {embedded ? <div /> : <h2 style={{ margin: 0 }}>????</h2>}
           <div style={{ display: 'flex', gap: '8px' }}>
             <button
               onClick={handleSelectAll}
@@ -579,21 +738,55 @@ const DocumentReview = ({ embedded = false }) => {
             >
               {selectedDocIds.size === documents.length ? '取消全选' : '全选'}
             </button>
+            {isReviewer() && (
+              <>
+                <button
+                  onClick={handleBatchApproveAll}
+                  disabled={documents.length === 0 || !!batchReviewLoading}
+                  style={{
+                    padding: '8px 16px',
+                    backgroundColor: documents.length > 0 && !batchReviewLoading ? '#10b981' : '#9ca3af',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '4px',
+                    cursor: documents.length > 0 && !batchReviewLoading ? 'pointer' : 'not-allowed',
+                    fontSize: '0.9rem',
+                  }}
+                >
+                  {batchReviewLoading === 'approve' ? '???...' : `?????? (${documents.length})`}
+                </button>
+                <button
+                  onClick={handleBatchRejectAll}
+                  disabled={documents.length === 0 || !!batchReviewLoading}
+                  style={{
+                    padding: '8px 16px',
+                    backgroundColor: documents.length > 0 && !batchReviewLoading ? '#ef4444' : '#9ca3af',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '4px',
+                    cursor: documents.length > 0 && !batchReviewLoading ? 'pointer' : 'not-allowed',
+                    fontSize: '0.9rem',
+                  }}
+                >
+                  {batchReviewLoading === 'reject' ? '???...' : `?????? (${documents.length})`}
+                </button>
+              </>
+            )}
             {canDownload() && (
               <button
                 onClick={handleBatchDownload}
-                disabled={selectedDocIds.size === 0 || batchDownloadLoading}
+                disabled={selectedDocIds.size === 0 || batchDownloadLoading || !!batchReviewLoading}
                 style={{
                   padding: '8px 16px',
-                  backgroundColor: selectedDocIds.size > 0 && !batchDownloadLoading ? '#10b981' : '#9ca3af',
+                  backgroundColor: selectedDocIds.size > 0 && !batchDownloadLoading && !batchReviewLoading ? '#10b981' : '#9ca3af',
                   color: 'white',
                   border: 'none',
                   borderRadius: '4px',
-                  cursor: selectedDocIds.size > 0 && !batchDownloadLoading ? 'pointer' : 'not-allowed',
+                  cursor: selectedDocIds.size > 0 && !batchDownloadLoading && !batchReviewLoading ? 'pointer' : 'not-allowed',
                   fontSize: '0.9rem',
                 }}
               >
-                {batchDownloadLoading ? '下载中...' : `下载选中 (${selectedDocIds.size})`}
+                {batchDownloadLoading ? '???...' : `???? (${selectedDocIds.size})`}
               </button>
             )}
           </div>
@@ -614,11 +807,11 @@ const DocumentReview = ({ embedded = false }) => {
               cursor: 'pointer',
             }}
           >
-            {loadingDatasets ? (
-              <option>加载中...</option>
+              <option>???...</option>
+              <option>鍔犺浇涓?..</option>
             ) : (
               <>
-                <option value="">全部</option>
+                <option value="">鍏ㄩ儴</option>
                 {datasets.map((ds) => (
                   <option key={ds.id} value={ds.name}>
                     {ds.name}
@@ -639,6 +832,110 @@ const DocumentReview = ({ embedded = false }) => {
           marginBottom: '20px',
         }}>
           {error}
+        </div>
+      )}
+
+      {batchReviewSummary && (
+        <div
+          style={{
+            backgroundColor: '#f8fafc',
+            border: '1px solid #dbeafe',
+            color: '#1e3a8a',
+            padding: '12px 16px',
+            borderRadius: '6px',
+            marginBottom: '20px',
+          }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', alignItems: 'center', marginBottom: '8px' }}>
+            <div style={{ fontWeight: 600 }}>
+              {batchReviewSummary.mode === 'approve' ? '??????' : '??????'}
+            </div>
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              <button
+                type="button"
+                onClick={() => setBatchSummaryExpanded((prev) => !prev)}
+                style={{
+                  padding: '4px 10px',
+                  borderRadius: '6px',
+                  border: '1px solid #93c5fd',
+                  background: 'white',
+                  color: '#1d4ed8',
+                  cursor: 'pointer',
+                  fontSize: '0.85rem',
+                }}
+              >
+                {batchSummaryExpanded ? '\u6536\u8d77' : '\u5c55\u5f00\u5168\u90e8'}
+              </button>
+              <button
+                type="button"
+                onClick={handleCopyBatchSummary}
+                style={{
+                  padding: '4px 10px',
+                  borderRadius: '6px',
+                  border: '1px solid #93c5fd',
+                  background: 'white',
+                  color: '#1d4ed8',
+                  cursor: 'pointer',
+                  fontSize: '0.85rem',
+                }}
+              >
+                {batchSummaryCopied ? '\u5df2\u590d\u5236' : '\u590d\u5236\u660e\u7ec6'}
+              </button>
+            </div>
+          </div>
+          <div style={{ fontSize: '0.95rem', marginBottom: '8px' }}>
+            {`?? ${batchReviewSummary.successCount}??? ${batchReviewSummary.failedCount}????? ${batchReviewSummary.conflicted.length}????? ${batchReviewSummary.checkFailed.length}`}
+          </div>
+          {batchReviewSummary.failedItems.length > 0 && (
+            <div style={{ marginBottom: '8px' }}>
+              <div style={{ fontWeight: 600, color: '#991b1b' }}>???</div>
+              {batchReviewSummary.failedItems.slice(0, batchSummaryExpanded ? batchReviewSummary.failedItems.length : 10).map((item) => (
+                <div key={`failed-${item.doc_id}`} style={{ fontSize: '0.9rem', color: '#374151' }}>
+                  {`${item.doc_id}: ${item.detail}`}
+                </div>
+              ))}
+            </div>
+          )}
+          {batchReviewSummary.conflicted.length > 0 && (
+            <div style={{ marginBottom: '8px' }}>
+              <div style={{ fontWeight: 600, color: '#92400e' }}>????</div>
+              {batchReviewSummary.conflicted.slice(0, batchSummaryExpanded ? batchReviewSummary.conflicted.length : 10).map((item) => (
+                <div
+                  key={`conflict-${item.docId}`}
+                  style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.9rem', color: '#374151', marginBottom: '4px' }}
+                >
+                  <span style={{ flex: 1 }}>{`${item.filename}: ${item.detail}`}</span>
+                  {item.existing && (
+                    <button
+                      type="button"
+                      onClick={() => setOverwritePrompt({ newDocId: item.docId, oldDoc: item.existing, normalized: item.normalized || '' })}
+                      style={{
+                        padding: '4px 10px',
+                        borderRadius: '6px',
+                        border: '1px solid #d97706',
+                        background: '#fff7ed',
+                        color: '#9a3412',
+                        cursor: 'pointer',
+                        fontSize: '0.85rem',
+                      }}
+                    >
+                      {'\u5904\u7406'}
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+          {batchReviewSummary.checkFailed.length > 0 && (
+            <div>
+              <div style={{ fontWeight: 600, color: '#7c2d12' }}>????</div>
+              {batchReviewSummary.checkFailed.slice(0, batchSummaryExpanded ? batchReviewSummary.checkFailed.length : 10).map((item) => (
+                <div key={`check-${item.docId}`} style={{ fontSize: '0.9rem', color: '#374151' }}>
+                  {`${item.filename}: ${item.detail}`}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -663,12 +960,12 @@ const DocumentReview = ({ embedded = false }) => {
                     style={{ cursor: documents.length === 0 ? 'not-allowed' : 'pointer' }}
                   />
                 </th>
-                <th style={{ padding: '12px 16px', textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>文档名称</th>
-                <th style={{ padding: '12px 16px', textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>状态</th>
-                <th style={{ padding: '12px 16px', textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>知识库</th>
-                <th style={{ padding: '12px 16px', textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>上传者</th>
-                <th style={{ padding: '12px 16px', textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>上传时间</th>
-                <th style={{ padding: '12px 16px', textAlign: 'right', borderBottom: '1px solid #e5e7eb' }}>操作</th>
+                <th style={{ padding: '12px 16px', textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>鏂囨。鍚嶇О</th>
+                <th style={{ padding: '12px 16px', textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>??</th>
+                <th style={{ padding: '12px 16px', textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>???</th>
+                <th style={{ padding: '12px 16px', textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>???</th>
+                <th style={{ padding: '12px 16px', textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>涓婁紶鏃堕棿</th>
+                <th style={{ padding: '12px 16px', textAlign: 'right', borderBottom: '1px solid #e5e7eb' }}>鎿嶄綔</th>
               </tr>
             </thead>
             <tbody>
@@ -692,7 +989,7 @@ const DocumentReview = ({ embedded = false }) => {
                       color: 'white',
                       fontSize: '0.85rem',
                     }}>
-                      {doc.status === 'pending' ? '待审核' : doc.status === 'approved' ? '已通过' : doc.status === 'rejected' ? '已驳回' : doc.status}
+                      {doc.status === 'pending' ? '???' : doc.status === 'approved' ? '???' : doc.status === 'rejected' ? '???' : doc.status}
                     </span>
                   </td>
                   <td style={{ padding: '12px 16px', color: '#6b7280' }}>
@@ -720,7 +1017,7 @@ const DocumentReview = ({ embedded = false }) => {
                           marginRight: '8px',
                         }}
                       >
-                        查看
+                        鏌ョ湅
                       </button>
                     )}
                     {canDownload() && (
@@ -738,7 +1035,7 @@ const DocumentReview = ({ embedded = false }) => {
                           marginRight: '8px',
                         }}
                       >
-                        {downloadLoading === doc.doc_id ? '下载中...' : '下载'}
+                        {downloadLoading === doc.doc_id ? '???...' : '??'}
                       </button>
                     )}
                     {doc.status === 'pending' && isReviewer() ? (
@@ -758,7 +1055,7 @@ const DocumentReview = ({ embedded = false }) => {
                             marginRight: '8px',
                           }}
                         >
-                          {actionLoading === doc.doc_id ? '处理中...' : '通过'}
+                          {actionLoading === doc.doc_id ? '???...' : '??'}
                         </button>
                         <button
                           onClick={() => handleReject(doc.doc_id)}
@@ -775,12 +1072,12 @@ const DocumentReview = ({ embedded = false }) => {
                             marginRight: '8px',
                           }}
                         >
-                          驳回
+                          椹冲洖
                         </button>
                       </>
-                    ) : doc.status !== 'pending' ? (
+                          ??
                       <span style={{ color: '#9ca3af', fontSize: '0.85rem', marginRight: '8px' }}>
-                        {doc.status === 'approved' ? '已通过' : '已驳回'}
+                        {doc.status === 'approved' ? '???' : '???'}
                       </span>
                     ) : null}
                     {isAdmin() && (
@@ -798,7 +1095,7 @@ const DocumentReview = ({ embedded = false }) => {
                           fontSize: '0.9rem',
                         }}
                       >
-                        删除
+                        鍒犻櫎
                       </button>
                     )}
                   </td>
@@ -809,7 +1106,7 @@ const DocumentReview = ({ embedded = false }) => {
 
           {documents.length === 0 && (
             <div data-testid="docs-empty" style={{ padding: '48px', textAlign: 'center', color: '#6b7280' }}>
-              {selectedDataset ? `该知识库暂无待审核文档` : '请选择知识库'}
+              {selectedDataset ? '???????????' : '??????'}
             </div>
           )}
         </div>
@@ -819,3 +1116,4 @@ const DocumentReview = ({ embedded = false }) => {
 };
 
 export default DocumentReview;
+

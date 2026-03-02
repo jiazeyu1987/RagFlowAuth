@@ -1,39 +1,19 @@
-from fastapi import APIRouter, HTTPException
+﻿from fastapi import APIRouter, HTTPException
 
 from backend.app.core.authz import AuthContextDep
 from backend.app.core.permission_resolver import assert_can_review, assert_kb_allowed
-from backend.models.document import DocumentResponse, DocumentReviewRequest
+from backend.models.document import (
+    BatchDocumentReviewRequest,
+    BatchDocumentReviewResponse,
+    DocumentResponse,
+    DocumentReviewRequest,
+)
 
 
 router = APIRouter()
 
 
-@router.post("/documents/{doc_id}/reject", response_model=DocumentResponse)
-async def reject_document(
-    doc_id: str,
-    ctx: AuthContextDep,
-    review_data: DocumentReviewRequest = None,
-):
-    deps = ctx.deps
-    snapshot = ctx.snapshot
-    assert_can_review(snapshot)
-
-    doc = deps.kb_store.get_document(doc_id)
-    if not doc:
-        raise HTTPException(status_code=404, detail="文档不存在")
-
-    assert_kb_allowed(snapshot, doc.kb_id)
-
-    if doc.status != "pending":
-        raise HTTPException(status_code=400, detail="文档不是待审核状态")
-
-    updated_doc = deps.kb_store.update_document_status(
-        doc_id=doc_id,
-        status="rejected",
-        reviewed_by=ctx.payload.sub,
-        review_notes=review_data.review_notes if review_data else None,
-    )
-
+def _to_document_response(updated_doc) -> DocumentResponse:
     return DocumentResponse(
         doc_id=updated_doc.doc_id,
         filename=updated_doc.filename,
@@ -49,3 +29,54 @@ async def reject_document(
         kb_id=updated_doc.kb_id,
     )
 
+
+async def _reject_document_impl(doc_id: str, ctx: AuthContextDep, review_data: DocumentReviewRequest | None = None) -> DocumentResponse:
+    deps = ctx.deps
+    snapshot = ctx.snapshot
+    assert_can_review(snapshot)
+
+    doc = deps.kb_store.get_document(doc_id)
+    if not doc:
+        raise HTTPException(status_code=404, detail='文档不存在')
+
+    assert_kb_allowed(snapshot, doc.kb_id)
+
+    if doc.status != 'pending':
+        raise HTTPException(status_code=400, detail='文档不是待审核状态')
+
+    updated_doc = deps.kb_store.update_document_status(
+        doc_id=doc_id,
+        status='rejected',
+        reviewed_by=ctx.payload.sub,
+        review_notes=review_data.review_notes if review_data else None,
+    )
+    return _to_document_response(updated_doc)
+
+
+@router.post('/documents/batch/reject', response_model=BatchDocumentReviewResponse)
+async def reject_documents_batch(body: BatchDocumentReviewRequest, ctx: AuthContextDep):
+    review_data = DocumentReviewRequest(review_notes=body.review_notes)
+    succeeded_doc_ids = []
+    failed_items = []
+
+    for doc_id in body.doc_ids:
+        try:
+            await _reject_document_impl(doc_id, ctx, review_data)
+            succeeded_doc_ids.append(doc_id)
+        except HTTPException as exc:
+            failed_items.append({'doc_id': doc_id, 'detail': exc.detail, 'status_code': exc.status_code})
+        except Exception as exc:  # pragma: no cover
+            failed_items.append({'doc_id': doc_id, 'detail': str(exc), 'status_code': 500})
+
+    return BatchDocumentReviewResponse(
+        total=len(body.doc_ids),
+        success_count=len(succeeded_doc_ids),
+        failed_count=len(failed_items),
+        succeeded_doc_ids=succeeded_doc_ids,
+        failed_items=failed_items,
+    )
+
+
+@router.post('/documents/{doc_id}/reject', response_model=DocumentResponse)
+async def reject_document(doc_id: str, ctx: AuthContextDep, review_data: DocumentReviewRequest | None = None):
+    return await _reject_document_impl(doc_id, ctx, review_data)

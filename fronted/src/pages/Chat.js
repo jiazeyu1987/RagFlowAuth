@@ -12,6 +12,7 @@ import { useAuth } from '../hooks/useAuth';
 import { DocumentPreviewModal } from '../shared/documents/preview/DocumentPreviewModal';
 
 const DEFAULT_SESSION_NAMES = ['新会话', '新对话', 'new chat'];
+const HIDDEN_CHAT_NAMES = new Set(['\u5927\u6a21\u578b', '\u5c0f\u6a21\u578b', '\u95ee\u9898\u6bd4\u5bf9']);
 
 const Chat = () => {
   const { canDownload } = useAuth();
@@ -350,7 +351,11 @@ const Chat = () => {
     try {
       setLoading(true);
       const data = await chatApi.listMyChats();
-      const list = data.chats || [];
+      const list = (data.chats || []).filter((chat) => {
+        const rawName = String(chat?.name || '').trim();
+        const normalized = rawName.replace(/^\[|\]$/g, '').trim();
+        return !HIDDEN_CHAT_NAMES.has(rawName) && !HIDDEN_CHAT_NAMES.has(normalized);
+      });
       setChats(list);
       if (list.length > 0) {
         setSelectedChatId(list[0].id);

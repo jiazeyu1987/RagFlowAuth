@@ -13,6 +13,13 @@ export const reviewApi = {
     });
   },
 
+  approveBatch(docIds, reviewNotes = null) {
+    return httpClient.requestJson(authBackendUrl('/api/knowledge/documents/batch/approve'), {
+      method: 'POST',
+      body: JSON.stringify({ doc_ids: docIds, review_notes: reviewNotes }),
+    });
+  },
+
   approveOverwrite(docId, replaceDocId, reviewNotes = null) {
     return httpClient.requestJson(authBackendUrl(`/api/knowledge/documents/${docId}/approve-overwrite`), {
       method: 'POST',
@@ -24,6 +31,13 @@ export const reviewApi = {
     return httpClient.requestJson(authBackendUrl(`/api/knowledge/documents/${docId}/reject`), {
       method: 'POST',
       body: JSON.stringify({ review_notes: reviewNotes }),
+    });
+  },
+
+  rejectBatch(docIds, reviewNotes = null) {
+    return httpClient.requestJson(authBackendUrl('/api/knowledge/documents/batch/reject'), {
+      method: 'POST',
+      body: JSON.stringify({ doc_ids: docIds, review_notes: reviewNotes }),
     });
   },
 };

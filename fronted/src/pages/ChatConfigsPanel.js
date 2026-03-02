@@ -2,6 +2,8 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { knowledgeApi } from '../features/knowledge/api';
 
+const HIDDEN_CHAT_NAMES = new Set(['\u5927\u6a21\u578b', '\u5c0f\u6a21\u578b', '\u95ee\u9898\u6bd4\u5bf9']);
+
 function prettyJson(obj) {
   return JSON.stringify(obj ?? {}, null, 2);
 }
@@ -142,7 +144,12 @@ export function ChatConfigsPanel() {
     setChatLoading(true);
     try {
       const res = await knowledgeApi.listRagflowChats({ page_size: 1000 });
-      setChatList(normalizeChatListResponse(res));
+      const visibleChats = normalizeChatListResponse(res).filter((chat) => {
+        const rawName = String(chat?.name || '').trim();
+        const normalized = rawName.replace(/^\[|\]$/g, '').trim();
+        return !HIDDEN_CHAT_NAMES.has(rawName) && !HIDDEN_CHAT_NAMES.has(normalized);
+      });
+      setChatList(visibleChats);
     } catch (e) {
       setChatList([]);
       setChatError(e?.message || '加载对话失败');
