@@ -145,7 +145,7 @@ class TestDownloadPipelineManagerUnit(unittest.TestCase):
         def _build_reused_row(source_key, source_index, candidate, reused):  # noqa: ARG001
             return {"status": "downloaded_cached", "source": candidate.source}
 
-        def _build_item_row(source_key, source_index, candidate, session_dir):  # noqa: ARG001
+        def _build_item_row(*, source_key, source_index, candidate, session_dir):  # noqa: ARG001
             return {
                 "source": candidate.source,
                 "status": "downloaded" if candidate.pdf_url else "failed",

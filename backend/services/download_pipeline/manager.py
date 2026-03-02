@@ -144,7 +144,12 @@ class DownloadPipelineManager:
                             row = build_reused_row(source_key, source_index, candidate, reused)
                             source_stats[source_key]["reused"] += 1
                         else:
-                            row = build_item_row(source_key, source_index, candidate, session_dir)
+                            row = build_item_row(
+                                source_key=source_key,
+                                source_index=source_index,
+                                candidate=candidate,
+                                session_dir=session_dir,
+                            )
 
                         if owner._is_downloaded_status(row.get("status")):
                             source_stats[source_key]["downloaded"] += 1

@@ -104,9 +104,26 @@ class UserStore:
         cursor = conn.cursor()
         try:
             placeholders = ",".join("?" for _ in ids)
-            cursor.execute(f"SELECT user_id, username FROM users WHERE user_id IN ({placeholders})", ids)
+            cursor.execute(
+                f"""
+                SELECT user_id, username
+                FROM users
+                WHERE user_id IN ({placeholders}) OR username IN ({placeholders})
+                """,
+                ids + ids,
+            )
             rows = cursor.fetchall()
-            return {str(r[0]): str(r[1]) for r in rows if r and len(r) >= 2}
+            result: dict[str, str] = {}
+            for row in rows:
+                if not row or len(row) < 2:
+                    continue
+                user_id = str(row[0] or "")
+                username = str(row[1] or "")
+                if user_id:
+                    result[user_id] = username
+                if username:
+                    result[username] = username
+            return result
         finally:
             conn.close()
 

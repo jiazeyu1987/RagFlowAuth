@@ -116,9 +116,24 @@ class GooglePatentsSource:
         return f'"{q}"'
 
     def _extract_candidates_from_payload(self, payload: dict, *, limit: int) -> list[PatentCandidate]:
-        clusters = payload.get("results", {}).get("cluster", [])
+        if not isinstance(payload, dict):
+            raise PatentSourceError("google_query_invalid_payload: root_not_object")
+
+        results = payload.get("results")
+        if results is None:
+            top_keys = ",".join(sorted(str(k) for k in payload.keys())[:12])
+            raise PatentSourceError(f"google_query_unexpected_payload: missing_results keys={top_keys}")
+        if not isinstance(results, dict):
+            raise PatentSourceError(f"google_query_unexpected_payload: results_type={type(results).__name__}")
+
+        clusters = results.get("cluster", [])
+        if clusters is None:
+            total_pages = results.get("total_num_pages")
+            if total_pages in (0, "0", "", None):
+                return []
+            raise PatentSourceError("google_query_unexpected_payload: cluster_missing")
         if not isinstance(clusters, list):
-            return []
+            raise PatentSourceError(f"google_query_unexpected_payload: cluster_type={type(clusters).__name__}")
 
         rows: list[PatentCandidate] = []
         for cluster in clusters:

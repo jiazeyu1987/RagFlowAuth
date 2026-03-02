@@ -67,6 +67,13 @@ async def list_deletions(
 
     deleted_by = None if snapshot.is_admin else ctx.payload.sub
     deletions = deps.deletion_log_store.list_deletions(kb_refs=kb_refs, deleted_by=deleted_by, limit=limit)
+    user_ids = {d.deleted_by for d in deletions if d.deleted_by}
+    user_ids.update({d.original_uploader for d in deletions if d.original_uploader})
+    user_ids.update({d.original_reviewer for d in deletions if d.original_reviewer})
+    try:
+        usernames = deps.user_store.get_usernames_by_ids(user_ids)
+    except Exception:
+        usernames = {}
 
     return {
         "deletions": [
@@ -76,9 +83,12 @@ async def list_deletions(
                 "filename": d.filename,
                 "kb_id": (d.kb_name or d.kb_id),
                 "deleted_by": d.deleted_by,
+                "deleted_by_name": usernames.get(d.deleted_by) if d.deleted_by else None,
                 "deleted_at_ms": d.deleted_at_ms,
                 "original_uploader": d.original_uploader,
+                "original_uploader_name": usernames.get(d.original_uploader) if d.original_uploader else None,
                 "original_reviewer": d.original_reviewer,
+                "original_reviewer_name": usernames.get(d.original_reviewer) if d.original_reviewer else None,
                 "ragflow_doc_id": d.ragflow_doc_id,
             }
             for d in deletions

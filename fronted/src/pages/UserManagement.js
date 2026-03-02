@@ -507,7 +507,6 @@ const UserManagement = () => {
             {filteredUsers.map((user) => (
               <tr key={user.user_id} data-testid={`users-row-${user.user_id}`} style={{ borderBottom: '1px solid #e5e7eb' }}>
                 <td style={{ padding: '12px 16px' }}>{user.username}</td>
-                <td style={{ padding: '12px 16px', color: '#6b7280' }}>{user.email || '-'}</td>
                 <td style={{ padding: '12px 16px', color: '#6b7280' }}>{user.company_name || '-'}</td>
                 <td style={{ padding: '12px 16px', color: '#6b7280' }}>{user.department_name || '-'}</td>
                 <td style={{ padding: '12px 16px' }}>
