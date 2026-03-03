@@ -20,6 +20,7 @@ import Tools from './pages/Tools';
 import PatentDownload from './pages/PatentDownload';
 import PaperDownload from './pages/PaperDownload';
 import KnowledgeBases from './pages/KnowledgeBases';
+import NasBrowser from './pages/NasBrowser';
 
 function App() {
   return (
@@ -133,6 +134,16 @@ function App() {
               <PermissionGuard>
                 <Layout>
                   <PaperDownload />
+                </Layout>
+              </PermissionGuard>
+            }
+          />
+          <Route
+            path="/tools/nas-browser"
+            element={
+              <PermissionGuard allowedRoles={['admin']}>
+                <Layout>
+                  <NasBrowser />
                 </Layout>
               </PermissionGuard>
             }

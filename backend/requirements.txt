@@ -12,3 +12,6 @@ pydantic-settings>=2.1.0
 
 # RAGFlow Integration
 ragflow-sdk>=0.12.0
+
+# NAS browsing
+smbprotocol>=1.13.0

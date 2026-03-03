@@ -511,6 +511,9 @@ class RagflowAuthTool:
         self.create_backup_files_tab()  # 新增：备份文件管理
         self.create_replica_backups_tab()
         self.create_logs_tab()
+        self.nas_tab = None
+        self.nas_tab_controller = None
+        self.refresh_admin_tabs()
 
         # 底部状态栏
         self.status_bar = ttk.Label(self.root, text="就绪", relief=tk.SUNKEN)
@@ -1498,6 +1501,28 @@ done
 
         build_logs_tab(self)
 
+    def create_nas_tab(self):
+        """NAS 云盘页签 UI（仅管理员可见）。"""
+        from tool.maintenance.ui.nas_tab import build_nas_tab
+
+        build_nas_tab(self)
+
+    def _is_admin_tab_user(self) -> bool:
+        username = (self.user_var.get() if hasattr(self, "user_var") else self.config.user or "").strip().lower()
+        return username in {"root", "admin"}
+
+    def refresh_admin_tabs(self) -> None:
+        if self._is_admin_tab_user():
+            if self.nas_tab is None:
+                self.create_nas_tab()
+        elif self.nas_tab is not None:
+            try:
+                self.notebook.forget(self.nas_tab)
+            finally:
+                self.nas_tab.destroy()
+                self.nas_tab = None
+                self.nas_tab_controller = None
+
     def create_backup_files_tab(self):
         """备份文件页签 UI（拆分到独立模块）。"""
         from tool.maintenance.ui.backup_files_tab import build_backup_files_tab
@@ -2122,6 +2147,7 @@ done
                     text=f"Web 管理界面 - RagflowAuth 后台管理\n"
                          f"访问 https://{self.config.ip}:9090/ 进行后台管理"
                 )
+            self.refresh_admin_tabs()
         else:
             messagebox.showerror("错误", f"未知的环境: {env_name}")
 
@@ -2137,6 +2163,7 @@ done
         self.config.user = self.user_var.get()
         self.config.environment = self.env_var.get()
         self.config.save_config()
+        self.refresh_admin_tabs()
         self.status_bar.config(text="配置已保存")
         msg = f"[INFO] 配置已保存: {self.config.environment} ({self.config.user}@{self.config.ip})"
         print(msg)

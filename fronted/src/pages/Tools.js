@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../hooks/useAuth';
 
 const PAGE_SIZE = 12;
 
@@ -71,10 +72,17 @@ const ToolCard = ({ id, name, description, onClick, disabled, background }) => (
 
 const Tools = () => {
   const navigate = useNavigate();
+  const { isAdmin } = useAuth();
   const [page, setPage] = useState(1);
 
   const tools = useMemo(() => {
     const list = [
+      ...(isAdmin() ? [{
+        id: 'nas_browser',
+        name: 'NAS云盘',
+        description: '浏览 NAS 共享中的文件夹和文件，仅管理员可见。',
+        route: '/tools/nas-browser',
+      }] : []),
       {
         id: 'paper_download',
         name: '论文下载分析',
@@ -109,9 +117,8 @@ const Tools = () => {
         href: '',
       });
     }
-
     return list;
-  }, []);
+  }, [isAdmin]);
 
   const pageCount = Math.max(1, Math.ceil(tools.length / PAGE_SIZE));
   const safePage = Math.min(Math.max(1, page), pageCount);
