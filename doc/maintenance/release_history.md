@@ -220,3 +220,43 @@
   - env_path: 
   - docker-compose.yml sha256: 
   - .env sha256:
+- 2026-03-01 17:59:14 | LOCAL->TEST | server=172.30.30.58 | version=20260301_175727
+  - server: 172.30.30.58
+  - backend_image: ragflowauth-backend:20260301_175727
+  - frontend_image: ragflowauth-frontend:20260301_175727
+  - compose_path: 
+  - env_path: 
+  - docker-compose.yml sha256: 
+  - .env sha256:
+- 2026-03-01 18:08:16 | TEST->PROD(IMAGE) | server=172.30.30.57 | version=20260301_180538
+  - server: 172.30.30.57
+  - backend_image: ragflowauth-backend:20260301_175727
+  - frontend_image: ragflowauth-frontend:20260301_175727
+  - compose_path: 
+  - env_path: 
+  - docker-compose.yml sha256: 
+  - .env sha256:
+- 2026-03-01 19:12:46 | LOCAL->TEST | server=172.30.30.58 | version=20260301_191137
+  - server: 172.30.30.58
+  - backend_image: ragflowauth-backend:20260301_191137
+  - frontend_image: ragflowauth-frontend:20260301_191137
+  - compose_path: 
+  - env_path: 
+  - docker-compose.yml sha256: 
+  - .env sha256:
+- 2026-03-01 19:26:07 | LOCAL->TEST | server=172.30.30.58 | version=20260301_192428
+  - server: 172.30.30.58
+  - backend_image: ragflowauth-backend:20260301_192428
+  - frontend_image: ragflowauth-frontend:20260301_192428
+  - compose_path: 
+  - env_path: 
+  - docker-compose.yml sha256: 
+  - .env sha256:
+- 2026-03-01 19:31:35 | TEST->PROD(IMAGE) | server=172.30.30.57 | version=20260301_192848
+  - server: 172.30.30.57
+  - backend_image: ragflowauth-backend:20260301_192428
+  - frontend_image: ragflowauth-frontend:20260301_192428
+  - compose_path: 
+  - env_path: 
+  - docker-compose.yml sha256: 
+  - .env sha256:
