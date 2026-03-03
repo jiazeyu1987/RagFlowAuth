@@ -1,5 +1,17 @@
 import React from 'react';
 
+const wrapFilename = (filename, chunkSize = 20) => {
+  const text = String(filename || '');
+  if (text.length <= chunkSize) {
+    return text;
+  }
+  const chunks = [];
+  for (let index = 0; index < text.length; index += chunkSize) {
+    chunks.push(text.slice(index, index + chunkSize));
+  }
+  return chunks.join('\n');
+};
+
 export function DocumentReviewTable({
   actionLoading,
   canDownload,
@@ -88,7 +100,17 @@ export function DocumentReviewTable({
                     style={{ cursor: 'pointer' }}
                   />
                 </td>
-                <td style={{ padding: '12px 16px' }}>{doc.filename}</td>
+                <td
+                  style={{
+                    padding: '12px 16px',
+                    whiteSpace: 'pre-wrap',
+                    wordBreak: 'break-all',
+                    maxWidth: '320px',
+                    lineHeight: 1.5,
+                  }}
+                >
+                  {wrapFilename(doc.filename, 20)}
+                </td>
                 <td style={{ padding: '12px 16px' }}>
                   <span
                     style={{
