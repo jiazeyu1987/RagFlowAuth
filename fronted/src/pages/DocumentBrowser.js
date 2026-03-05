@@ -7,6 +7,21 @@ import documentClient, { DOCUMENT_SOURCE } from '../shared/documents/documentCli
 import { DocumentPreviewModal } from '../shared/documents/preview/DocumentPreviewModal';
 
 const ROOT = '';
+const PREVIEW_SUPPORTED_EXTENSIONS = new Set([
+  '.txt', '.md', '.csv', '.json', '.xml', '.log', '.svg', '.html', '.css', '.js',
+  '.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp',
+  '.pdf', '.doc', '.docx', '.xlsx',
+]);
+
+const getExtLower = (name = '') => {
+  const s = String(name || '').trim().toLowerCase();
+  const idx = s.lastIndexOf('.');
+  if (idx < 0) return '';
+  return s.slice(idx);
+};
+
+const canPreviewFilename = (name = '') => PREVIEW_SUPPORTED_EXTENSIONS.has(getExtLower(name));
+
 const TEXT = {
   title: '\u6587\u6863\u6d4f\u89c8',
   desc: '\u6587\u6863\u6d4f\u89c8\u7684\u77e5\u8bc6\u5e93\u76ee\u5f55\u5c42\u7ea7\u4e0e\u77e5\u8bc6\u914d\u7f6e\u4fdd\u6301\u4e00\u81f4\u3002',
@@ -45,6 +60,7 @@ const TEXT = {
   retry: 'Retry',
   docName: '\u6587\u6863\u540d\u79f0',
   view: '\u67e5\u770b',
+  viewUnsupported: '\u5f53\u524d\u6587\u4ef6\u540e\u7f00\u4e0d\u652f\u6301\u5728\u7ebf\u9884\u89c8',
   viewing: '\u9884\u89c8\u4e2d',
   download: '\u4e0b\u8f7d',
   downloading: '\u4e0b\u8f7d\u4e2d',
@@ -289,7 +305,15 @@ function DatasetPanel({
                     <td style={{ padding: '12px 8px', fontWeight: 500, color: '#111827' }}>{doc.name}</td>
                     <td style={{ padding: '12px 8px', textAlign: 'right' }}>
                       <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-                        <button onClick={() => handleView(doc.id, dataset.name)} data-testid={`browser-doc-view-${dataset.id}-${doc.id}`} disabled={actionLoading[`${doc.id}-view`]} style={actionButtonStyle('view', actionLoading[`${doc.id}-view`])}>{actionLoading[`${doc.id}-view`] ? TEXT.viewing : `\u67e5\u770b`}</button>
+                        <button
+                          onClick={() => handleView(doc.id, dataset.name)}
+                          data-testid={`browser-doc-view-${dataset.id}-${doc.id}`}
+                          disabled={actionLoading[`${doc.id}-view`] || !canPreviewFilename(doc.name)}
+                          title={!canPreviewFilename(doc.name) ? TEXT.viewUnsupported : ''}
+                          style={actionButtonStyle('view', actionLoading[`${doc.id}-view`] || !canPreviewFilename(doc.name))}
+                        >
+                          {actionLoading[`${doc.id}-view`] ? TEXT.viewing : `\u67e5\u770b`}
+                        </button>
                         {canDownload() ? <button onClick={() => handleDownload(doc.id, dataset.name)} data-testid={`browser-doc-download-${dataset.id}-${doc.id}`} disabled={actionLoading[`${doc.id}-download`]} style={actionButtonStyle('download', actionLoading[`${doc.id}-download`])}>{actionLoading[`${doc.id}-download`] ? TEXT.downloading : `\u4e0b\u8f7d`}</button> : null}
                         {canUpload() ? <button onClick={() => handleCopy(doc.id, dataset.name)} data-testid={`browser-doc-copy-${dataset.id}-${doc.id}`} disabled={actionLoading[`${doc.id}-copy`]} style={actionButtonStyle('copy', actionLoading[`${doc.id}-copy`])}>{TEXT.copyTo}</button> : null}
                         {canUpload() && canDelete() ? <button onClick={() => handleMove(doc.id, dataset.name)} data-testid={`browser-doc-move-${dataset.id}-${doc.id}`} disabled={actionLoading[`${doc.id}-move`]} style={actionButtonStyle('move', actionLoading[`${doc.id}-move`])}>{TEXT.moveTo}</button> : null}
