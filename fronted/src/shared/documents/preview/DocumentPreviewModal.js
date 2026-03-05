@@ -108,6 +108,9 @@ export const DocumentPreviewModal = ({ open, target, onClose, canDownloadFiles =
   const [payload, setPayload] = useState(null);
   const [effectiveName, setEffectiveName] = useState('');
   const [objectUrl, setObjectUrl] = useState('');
+  const [pdfPageImages, setPdfPageImages] = useState([]);
+  const [pdfRendering, setPdfRendering] = useState(false);
+  const [pdfRenderingMessage, setPdfRenderingMessage] = useState('');
   const lastUrlRef = useRef('');
 
   const close = useCallback(() => {
@@ -132,6 +135,9 @@ export const DocumentPreviewModal = ({ open, target, onClose, canDownloadFiles =
       setLoading(true);
       setError('');
       setPayload(null);
+      setPdfPageImages([]);
+      setPdfRendering(false);
+      setPdfRenderingMessage('');
 
       try {
         const source = target.source;
@@ -187,10 +193,46 @@ export const DocumentPreviewModal = ({ open, target, onClose, canDownloadFiles =
         }
 
         if (data?.type === 'pdf' && data?.content) {
-          const blob = new Blob([base64ToBytes(data.content)], { type: 'application/pdf' });
-          const url = window.URL.createObjectURL(blob);
-          lastUrlRef.current = url;
-          setObjectUrl(url);
+          if (canDownloadFiles) {
+            const blob = new Blob([base64ToBytes(data.content)], { type: 'application/pdf' });
+            const url = window.URL.createObjectURL(blob);
+            lastUrlRef.current = url;
+            setObjectUrl(url);
+          } else {
+            setPdfRendering(true);
+            setPdfRenderingMessage('PDF 预览加载中...');
+            try {
+              const pdfBytes = base64ToBytes(data.content);
+              const pdfjsLib = await import('pdfjs-dist/webpack.mjs');
+              const loadingTask = pdfjsLib.getDocument({ data: pdfBytes });
+              const pdf = await loadingTask.promise;
+              const total = Number(pdf.numPages) || 0;
+              const pages = [];
+
+              for (let i = 1; i <= total; i++) {
+                if (cancelled) return;
+                setPdfRenderingMessage(`PDF 预览加载中 (${i}/${total})...`);
+                const page = await pdf.getPage(i);
+                const viewport = page.getViewport({ scale: 1.4 });
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d', { alpha: false });
+                if (!ctx) continue;
+                canvas.width = Math.ceil(viewport.width);
+                canvas.height = Math.ceil(viewport.height);
+                await page.render({ canvasContext: ctx, viewport }).promise;
+                pages.push(canvas.toDataURL('image/png'));
+              }
+
+              if (!cancelled) setPdfPageImages(pages);
+            } catch (pdfError) {
+              if (!cancelled) setError(pdfError?.message || 'PDF 预览失败');
+            } finally {
+              if (!cancelled) {
+                setPdfRendering(false);
+                setPdfRenderingMessage('');
+              }
+            }
+          }
         } else if (data?.type === 'html' && data?.content) {
           const blob = new Blob([base64ToBytes(data.content)], { type: 'text/html; charset=utf-8' });
           const url = window.URL.createObjectURL(blob);
@@ -257,6 +299,9 @@ export const DocumentPreviewModal = ({ open, target, onClose, canDownloadFiles =
       const name = String(data?.filename || effectiveName || '');
       setEffectiveName(name);
       setPayload(data);
+      setPdfPageImages([]);
+      setPdfRendering(false);
+      setPdfRenderingMessage('');
 
       if (lastUrlRef.current) {
         try {
@@ -448,6 +493,31 @@ export const DocumentPreviewModal = ({ open, target, onClose, canDownloadFiles =
 
               if (p.type === 'pdf' && objectUrl) {
                 return <iframe title="pdf-preview" src={objectUrl} style={{ width: '100%', height: '78vh', border: '1px solid #e5e7eb', borderRadius: '10px' }} />;
+              }
+
+              if (p.type === 'pdf' && !canDownloadFiles) {
+                if (pdfRendering) return <div style={{ color: '#6b7280' }}>{pdfRenderingMessage || 'PDF 预览加载中...'}</div>;
+                if (pdfPageImages.length > 0) {
+                  return (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                      <div style={{ color: '#6b7280', fontSize: '0.88rem' }}>仅预览，不可下载/打印</div>
+                      {pdfPageImages.map((imgSrc, index) => (
+                        <img
+                          key={`pdf-page-${index + 1}`}
+                          alt={`pdf-page-${index + 1}`}
+                          src={imgSrc}
+                          style={{
+                            width: '100%',
+                            border: '1px solid #e5e7eb',
+                            borderRadius: '8px',
+                            backgroundColor: '#ffffff',
+                          }}
+                        />
+                      ))}
+                    </div>
+                  );
+                }
+                return <div style={{ color: '#6b7280' }}>PDF 预览不可用</div>;
               }
 
               if (p.type === 'image' && objectUrl) {
