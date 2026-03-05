@@ -26,14 +26,6 @@ logger = logging.getLogger(__name__)
 SUPPORTED_EXTENSIONS = {".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx"}
 
 
-def _assert_preview_capability(ctx: AuthContextDep) -> None:
-    snapshot = ctx.snapshot
-    if snapshot.is_admin:
-        return
-    if not (snapshot.can_review or snapshot.can_download):
-        raise HTTPException(status_code=403, detail="no_preview_permission")
-
-
 def _build_public_api_base(request: Request) -> str:
     configured = str(getattr(settings, "ONLYOFFICE_PUBLIC_API_BASE_URL", "") or "").strip()
     if configured:
@@ -91,7 +83,6 @@ async def build_editor_config(body: dict, request: Request, ctx: AuthContextDep)
         raise HTTPException(status_code=400, detail="onlyoffice_source_not_supported")
 
     deps = ctx.deps
-    _assert_preview_capability(ctx)
 
     if source == "ragflow":
         if not dataset:
