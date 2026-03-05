@@ -3,13 +3,13 @@ import tokenStore from '../shared/auth/tokenStore';
 import { httpClient } from '../shared/http/httpClient';
 
 /**
- * AuthClient - FastAPI + AuthX 适配版本
+ * AuthClient - FastAPI + AuthX 閫傞厤鐗堟湰
  *
- * 主要变更：
- * 1. 支持 access_token 和 refresh_token
- * 2. 自动刷新令牌机制
- * 3. 移除 verifyPermission（后端自动检查）
- * 4. 适配新的登录响应格式
+ * 涓昏鍙樻洿锛?
+ * 1. 鏀寔 access_token 鍜?refresh_token
+ * 2. 鑷姩鍒锋柊浠ょ墝鏈哄埗
+ * 3. 绉婚櫎 verifyPermission锛堝悗绔嚜鍔ㄦ鏌ワ級
+ * 4. 閫傞厤鏂扮殑鐧诲綍鍝嶅簲鏍煎紡
  */
 class AuthClient {
   constructor() {
@@ -51,7 +51,7 @@ class AuthClient {
   }
 
   /**
-   * 自动刷新访问令牌
+   * 鑷姩鍒锋柊璁块棶浠ょ墝
    */
   async refreshAccessToken() {
     try {
@@ -67,7 +67,7 @@ class AuthClient {
   }
 
   /**
-   * 带自动刷新的 fetch 封装
+   * 甯﹁嚜鍔ㄥ埛鏂扮殑 fetch 灏佽
    */
   async fetchWithAuth(url, options = {}) {
     const response = await httpClient.request(url, options);
@@ -78,10 +78,9 @@ class AuthClient {
   }
 
   /**
-   * 登录
-   * 响应格式：{ access_token, refresh_token, token_type, scopes }
-   * 注意：后端已不再使用 scopes 做业务授权，scopes 仅为兼容字段（通常为空数组）。
-   */
+   * 鐧诲綍
+   * 鍝嶅簲鏍煎紡锛歿 access_token, refresh_token, token_type, scopes }
+   * 娉ㄦ剰锛氬悗绔凡涓嶅啀浣跨敤 scopes 鍋氫笟鍔℃巿鏉冿紝scopes 浠呬负鍏煎瀛楁锛堥€氬父涓虹┖鏁扮粍锛夈€?   */
   async login(username, password) {
     const data = await httpClient.requestJson(authBackendUrl('/api/auth/login'), {
       method: 'POST',
@@ -95,17 +94,17 @@ class AuthClient {
       skipRefresh: true,
     });
 
-    // 存储两种令牌
+    // 瀛樺偍涓ょ浠ょ墝
     this.setAuth(data.access_token, data.refresh_token, user);
 
     return {
       ...data,
-      user  // 为了兼容旧代码
+      user  // 涓轰簡鍏煎鏃т唬鐮?
     };
   }
 
   /**
-   * 登出
+   * 鐧诲嚭
    */
   async logout() {
     try {
@@ -121,7 +120,7 @@ class AuthClient {
   }
 
   /**
-   * 获取当前用户信息
+   * 鑾峰彇褰撳墠鐢ㄦ埛淇℃伅
    */
   async getCurrentUser() {
     const response = await this.fetchWithAuth(authBackendUrl('/api/auth/me'), {
@@ -136,9 +135,9 @@ class AuthClient {
   }
 
   /**
-   * 权限检查（简化版）
-   * 新后端不再需要调用 verify 端点
-   * 这里仅用于前端 UI 显示控制
+   * 鏉冮檺妫€鏌ワ紙绠€鍖栫増锛?
+   * 鏂板悗绔笉鍐嶉渶瑕佽皟鐢?verify 绔偣
+   * 杩欓噷浠呯敤浜庡墠绔?UI 鏄剧ず鎺у埗
    */
   can(role, resource, action) {
     // Deprecated: UI permission checks live in useAuth.can().
@@ -146,7 +145,7 @@ class AuthClient {
   }
 
   /**
-   * 以下方法使用 fetchWithAuth 自动处理令牌刷新
+   * 浠ヤ笅鏂规硶浣跨敤 fetchWithAuth 鑷姩澶勭悊浠ょ墝鍒锋柊
    */
 
   async listUsers(params = {}) {
@@ -263,7 +262,7 @@ class AuthClient {
     return response.json();
   }
 
-  async uploadDocument(file, kbId = '展厅') {
+  async uploadDocument(file, kbId = '灞曞巺') {
     console.log('[authClient] Step 6 - uploadDocument called');
     console.log('[authClient] Step 7 - Parameters:', {
       fileName: file.name,
@@ -507,7 +506,7 @@ class AuthClient {
     return response.json();
   }
 
-  async listRagflowDocuments(datasetName = '展厅') {
+  async listRagflowDocuments(datasetName = '灞曞巺') {
     const response = await this.fetchWithAuth(
       authBackendUrl(`/api/ragflow/documents?dataset_name=${encodeURIComponent(datasetName)}`),
       { method: 'GET' }
@@ -520,7 +519,7 @@ class AuthClient {
     return response.json();
   }
 
-  async downloadDocument(docId, datasetName = '展厅') {
+  async downloadDocument(docId, datasetName = '灞曞巺') {
     const response = await this.fetchWithAuth(
       authBackendUrl(`/api/documents/ragflow/${docId}/download?dataset=${encodeURIComponent(datasetName)}`),
       { method: 'GET' }
@@ -533,7 +532,7 @@ class AuthClient {
     return response.blob();
   }
 
-  async downloadRagflowDocument(docId, dataset = '展厅', docName = null) {
+  async downloadRagflowDocument(docId, dataset = '灞曞巺', docName = null) {
     const params = new URLSearchParams({ dataset });
     if (docName) {
       params.append('filename', docName);
@@ -578,7 +577,7 @@ class AuthClient {
     return { success: true, filename };
   }
 
-  async previewDocument(docId, dataset = '展厅') {
+  async previewDocument(docId, dataset = '灞曞巺') {
     const params = new URLSearchParams({ dataset });
 
     const response = await this.fetchWithAuth(
@@ -608,13 +607,13 @@ class AuthClient {
     return await response.json();
   }
 
-  async previewRagflowDocument(docId, dataset = '展厅', docName = null) {
+  async previewRagflowDocument(docId, dataset = '灞曞巺', docName = null) {
     const blob = await this.previewRagflowDocumentBlob(docId, dataset, docName);
     const url = window.URL.createObjectURL(blob);
     return url;
   }
 
-  async previewRagflowDocumentBlob(docId, dataset = '展厅', docName = null) {
+  async previewRagflowDocumentBlob(docId, dataset = '灞曞巺', docName = null) {
     const params = new URLSearchParams({ dataset });
     if (docName) {
       params.append('filename', docName);
@@ -693,7 +692,7 @@ class AuthClient {
     return { success: true, filename };
   }
 
-  async deleteRagflowDocument(docId, datasetName = '展厅') {
+  async deleteRagflowDocument(docId, datasetName = '灞曞巺') {
     const response = await this.fetchWithAuth(
       authBackendUrl(`/api/documents/ragflow/${docId}?dataset_name=${encodeURIComponent(datasetName)}`),
       { method: 'DELETE' }
@@ -706,15 +705,58 @@ class AuthClient {
     return response.json();
   }
 
+  async transferRagflowDocument(docId, sourceDatasetName, targetDatasetName, operation = 'copy') {
+    const response = await this.fetchWithAuth(
+      authBackendUrl(`/api/ragflow/documents/${encodeURIComponent(docId)}/transfer`),
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          source_dataset_name: sourceDatasetName,
+          target_dataset_name: targetDatasetName,
+          operation,
+        }),
+      }
+    );
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      const detail = typeof error?.detail === 'string' ? error.detail : (error?.detail?.code || '');
+      throw new Error(detail || 'Failed to transfer document');
+    }
+
+    return response.json();
+  }
+
+  async transferRagflowDocumentsBatch(items, operation = 'copy') {
+    const response = await this.fetchWithAuth(
+      authBackendUrl('/api/ragflow/documents/transfer/batch'),
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          operation,
+          items: Array.isArray(items) ? items : [],
+        }),
+      }
+    );
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      const detail = typeof error?.detail === 'string' ? error.detail : (error?.detail?.code || '');
+      throw new Error(detail || 'Failed to batch transfer documents');
+    }
+
+    return response.json();
+  }
+
   // Alias for backwards compatibility
   async listRagflowDatasets() {
     return this.listDatasets();
   }
 
-  // ==================== 知识库权限相关 API ====================
+  // ==================== 鐭ヨ瘑搴撴潈闄愮浉鍏?API ====================
 
   /**
-   * 获取用户的知识库权限列表（管理员）
+   * 鑾峰彇鐢ㄦ埛鐨勭煡璇嗗簱鏉冮檺鍒楄〃锛堢鐞嗗憳锛?
    */
   async getUserKnowledgeBases(userId) {
     const response = await this.fetchWithAuth(
@@ -731,7 +773,7 @@ class AuthClient {
   }
 
   /**
-   * 授予用户知识库权限
+   * 鎺堜簣鐢ㄦ埛鐭ヨ瘑搴撴潈闄?
    */
   async grantKnowledgeBaseAccess(userId, kbId) {
     const response = await this.fetchWithAuth(
@@ -748,7 +790,7 @@ class AuthClient {
   }
 
   /**
-   * 撤销用户知识库权限
+   * 鎾ら攢鐢ㄦ埛鐭ヨ瘑搴撴潈闄?
    */
   async revokeKnowledgeBaseAccess(userId, kbId) {
     const response = await this.fetchWithAuth(
@@ -765,7 +807,7 @@ class AuthClient {
   }
 
   /**
-   * 批量授权多个用户多个知识库
+   * 鎵归噺鎺堟潈澶氫釜鐢ㄦ埛澶氫釜鐭ヨ瘑搴?
    */
   async batchGrantKnowledgeBases(userIds, kbIds) {
     const response = await this.fetchWithAuth(
@@ -785,7 +827,7 @@ class AuthClient {
   }
 
   /**
-   * 获取当前用户可访问的知识库列表
+   * 鑾峰彇褰撳墠鐢ㄦ埛鍙闂殑鐭ヨ瘑搴撳垪琛?
    */
   async getMyKnowledgeBases() {
     const response = await this.fetchWithAuth(
@@ -801,10 +843,10 @@ class AuthClient {
     return response.json();  // { kb_ids: [...] }
   }
 
-  // ==================== Chat 相关 API ====================
+  // ==================== Chat 鐩稿叧 API ====================
 
   /**
-   * 获取用户有权限的聊天助手列表
+   * 鑾峰彇鐢ㄦ埛鏈夋潈闄愮殑鑱婂ぉ鍔╂墜鍒楄〃
    */
   async listMyChats() {
     const response = await this.fetchWithAuth(
@@ -821,7 +863,7 @@ class AuthClient {
   }
 
   /**
-   * 获取聊天助手详情
+   * 鑾峰彇鑱婂ぉ鍔╂墜璇︽儏
    */
   async getChat(chatId) {
     const response = await this.fetchWithAuth(
@@ -838,7 +880,7 @@ class AuthClient {
   }
 
   /**
-   * 创建聊天会话
+   * 鍒涘缓鑱婂ぉ浼氳瘽
    */
   async createChatSession(chatId, name = '新会话') {
     const response = await this.fetchWithAuth(
@@ -858,7 +900,7 @@ class AuthClient {
   }
 
   /**
-   * 列出聊天助手的所有会话
+   * 鍒楀嚭鑱婂ぉ鍔╂墜鐨勬墍鏈変細璇?
    */
   async listChatSessions(chatId) {
     const response = await this.fetchWithAuth(
@@ -875,7 +917,7 @@ class AuthClient {
   }
 
   /**
-   * 删除聊天会话
+   * 鍒犻櫎鑱婂ぉ浼氳瘽
    */
   async deleteChatSessions(chatId, sessionIds = null) {
     const response = await this.fetchWithAuth(
@@ -894,10 +936,10 @@ class AuthClient {
     return response.json();
   }
 
-  // ==================== 聊天助手权限相关 API ====================
+  // ==================== 鑱婂ぉ鍔╂墜鏉冮檺鐩稿叧 API ====================
 
   /**
-   * 获取用户的聊天助手权限列表（管理员）
+   * 鑾峰彇鐢ㄦ埛鐨勮亰澶╁姪鎵嬫潈闄愬垪琛紙绠＄悊鍛橈級
    */
   async getUserChats(userId) {
     const response = await this.fetchWithAuth(
@@ -914,7 +956,7 @@ class AuthClient {
   }
 
   /**
-   * 授予用户聊天助手权限
+   * 鎺堜簣鐢ㄦ埛鑱婂ぉ鍔╂墜鏉冮檺
    */
   async grantChatAccess(userId, chatId) {
     const response = await this.fetchWithAuth(
@@ -931,7 +973,7 @@ class AuthClient {
   }
 
   /**
-   * 撤销用户聊天助手权限
+   * 鎾ら攢鐢ㄦ埛鑱婂ぉ鍔╂墜鏉冮檺
    */
   async revokeChatAccess(userId, chatId) {
     const response = await this.fetchWithAuth(
@@ -948,7 +990,7 @@ class AuthClient {
   }
 
   /**
-   * 批量授权多个用户多个聊天助手
+   * 鎵归噺鎺堟潈澶氫釜鐢ㄦ埛澶氫釜鑱婂ぉ鍔╂墜
    */
   async batchGrantChats(userIds, chatIds) {
     const response = await this.fetchWithAuth(
@@ -968,7 +1010,7 @@ class AuthClient {
   }
 
   /**
-   * 获取当前用户可访问的聊天助手列表
+   * 鑾峰彇褰撳墠鐢ㄦ埛鍙闂殑鑱婂ぉ鍔╂墜鍒楄〃
    */
   async getMyChats() {
     const response = await this.fetchWithAuth(
@@ -984,10 +1026,10 @@ class AuthClient {
     return response.json();  // { chat_ids: [...] }
   }
 
-  // ==================== Agent/搜索体相关 API ====================
+  // ==================== Agent/鎼滅储浣撶浉鍏?API ====================
 
   /**
-   * 列出所有搜索体
+   * 鍒楀嚭鎵€鏈夋悳绱綋
    */
   async listAgents(params = {}) {
     const queryParams = new URLSearchParams(params).toString();
@@ -1005,7 +1047,7 @@ class AuthClient {
   }
 
   /**
-   * 获取单个搜索体详情
+   * 鑾峰彇鍗曚釜鎼滅储浣撹鎯?
    */
   async getAgent(agentId) {
     const response = await this.fetchWithAuth(
@@ -1022,7 +1064,7 @@ class AuthClient {
   }
 
   /**
-   * 与搜索体对话（返回 EventSource 用于流式响应）
+   * 涓庢悳绱綋瀵硅瘽锛堣繑鍥?EventSource 鐢ㄤ簬娴佸紡鍝嶅簲锛?
    */
   createAgentCompletionStream(agentId, question, sessionId = null) {
     const token = localStorage.getItem('access_token');
@@ -1043,19 +1085,19 @@ class AuthClient {
     });
   }
 
-  // ==================== 知识库检索相关 API ====================
+  // ==================== 鐭ヨ瘑搴撴绱㈢浉鍏?API ====================
 
   /**
-   * 在知识库中检索文本块
-   * @param {Object} searchParams - 搜索参数
-   * @param {string} searchParams.question - 查询问题或关键词
-   * @param {string[]} searchParams.dataset_ids - 知识库ID列表（可选，默认使用所有可用知识库）
-   * @param {number} searchParams.page - 页码，默认1
-   * @param {number} searchParams.page_size - 每页数量，默认30
-   * @param {number} searchParams.similarity_threshold - 相似度阈值（0-1），默认0.2
-   * @param {number} searchParams.top_k - 向量计算参与的chunk数量，默认30
-   * @param {boolean} searchParams.keyword - 是否启用关键词匹配，默认false
-   * @param {boolean} searchParams.highlight - 是否高亮匹配词，默认false
+   * 鍦ㄧ煡璇嗗簱涓绱㈡枃鏈潡
+   * @param {Object} searchParams - 鎼滅储鍙傛暟
+   * @param {string} searchParams.question - 鏌ヨ闂鎴栧叧閿瘝
+   * @param {string[]} searchParams.dataset_ids - 鐭ヨ瘑搴揑D鍒楄〃锛堝彲閫夛紝榛樿浣跨敤鎵€鏈夊彲鐢ㄧ煡璇嗗簱锛?
+   * @param {number} searchParams.page - 椤电爜锛岄粯璁?
+   * @param {number} searchParams.page_size - 姣忛〉鏁伴噺锛岄粯璁?0
+   * @param {number} searchParams.similarity_threshold - 鐩镐技搴﹂槇鍊硷紙0-1锛夛紝榛樿0.2
+   * @param {number} searchParams.top_k - 鍚戦噺璁＄畻鍙備笌鐨刢hunk鏁伴噺锛岄粯璁?0
+   * @param {boolean} searchParams.keyword - 鏄惁鍚敤鍏抽敭璇嶅尮閰嶏紝榛樿false
+   * @param {boolean} searchParams.highlight - 鏄惁楂樹寒鍖归厤璇嶏紝榛樿false
    */
   async searchChunks(searchParams) {
     const response = await this.fetchWithAuth(
@@ -1075,7 +1117,7 @@ class AuthClient {
   }
 
   /**
-   * 获取当前用户可用的知识库列表
+   * 鑾峰彇褰撳墠鐢ㄦ埛鍙敤鐨勭煡璇嗗簱鍒楄〃
    */
   async getAvailableDatasets() {
     const response = await this.fetchWithAuth(
@@ -1159,3 +1201,4 @@ class AuthClient {
 
 const authClient = new AuthClient();
 export default authClient;
+

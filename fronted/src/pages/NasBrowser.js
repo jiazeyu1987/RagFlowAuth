@@ -77,14 +77,60 @@ const pathSegments = (path) => {
   );
 };
 
-const buildImportSummary = (result, noun) =>
-  [
+const normalizeSkippedEntries = (items) => {
+  if (!Array.isArray(items)) return [];
+  return items
+    .map((item) => {
+      if (typeof item === 'string') return { path: item, reason: 'skipped', detail: '' };
+      if (!item || typeof item !== 'object') return null;
+      return {
+        path: String(item.path || ''),
+        reason: String(item.reason || 'skipped'),
+        detail: String(item.detail || ''),
+      };
+    })
+    .filter((item) => item && item.path);
+};
+
+const normalizeFailedEntries = (items) => {
+  if (!Array.isArray(items)) return [];
+  return items
+    .map((item) => {
+      if (typeof item === 'string') return { path: item, reason: 'failed', detail: '' };
+      if (!item || typeof item !== 'object') return null;
+      return {
+        path: String(item.path || ''),
+        reason: String(item.reason || 'failed'),
+        detail: String(item.detail || ''),
+      };
+    })
+    .filter((item) => item && item.path);
+};
+
+const formatImportReason = (reason, detail = '') => {
+  const code = String(reason || '').trim().toLowerCase();
+  if (code === 'unsupported_extension') return `不支持的文件格式${detail ? ` (${detail})` : ''}`;
+  if (code === 'ingestion_failed') return detail ? `入库失败 (${detail})` : '入库失败';
+  if (detail) return `${reason}: ${detail}`;
+  return reason || '-';
+};
+
+const buildImportSummary = (result, noun) => {
+  const skippedEntries = normalizeSkippedEntries(result?.skipped);
+  const failedEntries = normalizeFailedEntries(result?.failed);
+  const detailLines = [];
+  skippedEntries.slice(0, 3).forEach((item) => detailLines.push(`跳过: ${item.path} | ${formatImportReason(item.reason, item.detail)}`));
+  failedEntries.slice(0, 3).forEach((item) => detailLines.push(`失败: ${item.path} | ${formatImportReason(item.reason, item.detail)}`));
+  return [
     `${noun}上传完成`,
     '',
     `已导入: ${result.imported_count ?? 0}`,
     `跳过: ${result.skipped_count ?? 0}`,
     `失败: ${result.failed_count ?? 0}`,
-  ].join('\n');
+    detailLines.length ? '' : null,
+    ...detailLines,
+  ].filter(Boolean).join('\n');
+};
 
 const readStoredFolderImportTaskId = () => {
   try {
@@ -127,6 +173,14 @@ export default function NasBrowser() {
   const [folderImportProgress, setFolderImportProgress] = useState(null);
 
   const breadcrumbs = useMemo(() => pathSegments(currentPath), [currentPath]);
+  const skippedDetails = useMemo(
+    () => normalizeSkippedEntries(folderImportProgress?.skipped),
+    [folderImportProgress?.skipped],
+  );
+  const failedDetails = useMemo(
+    () => normalizeFailedEntries(folderImportProgress?.failed),
+    [folderImportProgress?.failed],
+  );
 
   const stopPolling = useCallback(() => {
     if (pollTimerRef.current) {
@@ -148,7 +202,7 @@ export default function NasBrowser() {
       setParentPath(data.parent_path ?? null);
       setItems(Array.isArray(data.items) ? data.items : []);
     } catch (err) {
-      setError(err.message || '加载 NAS 目录失败');
+      setError(err.message || '鍔犺浇 NAS 鐩綍澶辫触');
     } finally {
       setLoading(false);
     }
@@ -238,7 +292,7 @@ export default function NasBrowser() {
 
   const handleImport = async () => {
     if (!importTarget || !selectedKb) {
-      setError('请选择要上传到的知识库');
+      setError('璇烽€夋嫨瑕佷笂浼犲埌鐨勭煡璇嗗簱');
       return;
     }
 
@@ -289,17 +343,17 @@ export default function NasBrowser() {
     <div style={PAGE_STYLE}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px' }}>
         <div>
-          <h2 style={{ margin: 0, fontSize: '1.4rem', color: '#111827' }}>NAS 云盘</h2>
+          <h2 style={{ margin: 0, fontSize: '1.4rem', color: '#111827' }}>NAS 浜戠洏</h2>
           <div style={{ marginTop: '6px', color: '#6b7280', fontSize: '0.95rem' }}>
-            NAS: `172.30.30.4` / 共享目录: `it共享`
+            NAS: `172.30.30.4` / 鍏变韩鐩綍: `it鍏变韩`
           </div>
         </div>
         <div style={{ display: 'flex', gap: '8px' }}>
           <button type="button" onClick={() => navigate('/tools')} style={BUTTON_STYLES.neutral}>
-            返回实用工具
+            杩斿洖瀹炵敤宸ュ叿
           </button>
           <button type="button" onClick={() => loadPath(currentPath)} style={BUTTON_STYLES.primary}>
-            刷新
+            鍒锋柊
           </button>
         </div>
       </div>
@@ -338,7 +392,7 @@ export default function NasBrowser() {
               cursor: parentPath === null ? 'not-allowed' : 'pointer',
             }}
           >
-            上一级
+            涓婁竴绾?
           </button>
         </div>
       </div>
@@ -348,8 +402,8 @@ export default function NasBrowser() {
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', alignItems: 'center' }}>
             <div>
               <div style={{ fontSize: '1rem', fontWeight: 800, color: '#111827' }}>文件夹上传进度</div>
-              <div style={{ marginTop: '4px', color: '#475569' }}>路径: {folderImportProgress.folder_path}</div>
-              <div style={{ marginTop: '4px', color: '#475569' }}>知识库: {folderImportProgress.kb_ref}</div>
+              <div style={{ marginTop: '4px', color: '#475569' }}>璺緞: {folderImportProgress.folder_path}</div>
+              <div style={{ marginTop: '4px', color: '#475569' }}>鐭ヨ瘑搴? {folderImportProgress.kb_ref}</div>
             </div>
             <button
               type="button"
@@ -363,14 +417,14 @@ export default function NasBrowser() {
                     : 'pointer',
               }}
             >
-              关闭
+              鍏抽棴
             </button>
           </div>
           <div style={{ marginTop: '14px', color: '#111827', fontWeight: 700 }}>
-            待上传文件数: {folderImportProgress.total_files}
+            寰呬笂浼犳枃浠舵暟: {folderImportProgress.total_files}
           </div>
           <div style={{ marginTop: '8px', color: '#475569' }}>
-            当前进度: {folderImportProgress.processed_files} / {folderImportProgress.total_files} ({folderImportProgress.progress_percent}%)
+            褰撳墠杩涘害: {folderImportProgress.processed_files} / {folderImportProgress.total_files} ({folderImportProgress.progress_percent}%)
           </div>
           <div style={{ marginTop: '10px', height: '10px', background: '#e5e7eb', borderRadius: '999px', overflow: 'hidden' }}>
             <div
@@ -383,16 +437,46 @@ export default function NasBrowser() {
             />
           </div>
           <div style={{ marginTop: '10px', display: 'flex', gap: '16px', flexWrap: 'wrap', color: '#475569' }}>
-            <span>已导入: {folderImportProgress.imported_count}</span>
-            <span>跳过: {folderImportProgress.skipped_count}</span>
-            <span>失败: {folderImportProgress.failed_count}</span>
-            <span>状态: {folderImportProgress.status}</span>
+            <span>宸插鍏? {folderImportProgress.imported_count}</span>
+            <span>璺宠繃: {folderImportProgress.skipped_count}</span>
+            <span>澶辫触: {folderImportProgress.failed_count}</span>
+            <span>鐘舵€? {folderImportProgress.status}</span>
           </div>
           {folderImportProgress.current_file && (
-            <div style={{ marginTop: '10px', color: '#1f2937' }}>当前文件: {folderImportProgress.current_file}</div>
+            <div style={{ marginTop: '10px', color: '#1f2937' }}>褰撳墠鏂囦欢: {folderImportProgress.current_file}</div>
           )}
           {folderImportProgress.error && (
-            <div style={{ marginTop: '10px', color: '#b91c1c' }}>错误: {folderImportProgress.error}</div>
+            <div style={{ marginTop: '10px', color: '#b91c1c' }}>閿欒: {folderImportProgress.error}</div>
+          )}
+          {(skippedDetails.length > 0 || failedDetails.length > 0) && (
+            <div style={{ marginTop: '14px', borderTop: '1px solid #e5e7eb', paddingTop: '12px' }}>
+              {skippedDetails.length > 0 && (
+                <div style={{ marginBottom: '12px' }}>
+                  <div style={{ fontWeight: 700, color: '#92400e' }}>跳过明细（最多显示 50 条）</div>
+                  <div style={{ marginTop: '6px', maxHeight: '180px', overflowY: 'auto', border: '1px solid #fcd34d', borderRadius: '8px', background: '#fffbeb' }}>
+                    {skippedDetails.map((item, index) => (
+                      <div key={`skipped_${item.path}_${index}`} style={{ padding: '8px 10px', borderBottom: index === skippedDetails.length - 1 ? 'none' : '1px solid #fde68a', color: '#78350f', fontSize: '13px' }}>
+                        <div>路径: {item.path}</div>
+                        <div>原因: {formatImportReason(item.reason, item.detail)}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {failedDetails.length > 0 && (
+                <div>
+                  <div style={{ fontWeight: 700, color: '#991b1b' }}>失败明细（最多显示 50 条）</div>
+                  <div style={{ marginTop: '6px', maxHeight: '220px', overflowY: 'auto', border: '1px solid #fca5a5', borderRadius: '8px', background: '#fef2f2' }}>
+                    {failedDetails.map((item, index) => (
+                      <div key={`failed_${item.path}_${index}`} style={{ padding: '8px 10px', borderBottom: index === failedDetails.length - 1 ? 'none' : '1px solid #fecaca', color: '#7f1d1d', fontSize: '13px' }}>
+                        <div>路径: {item.path}</div>
+                        <div>原因: {formatImportReason(item.reason, item.detail)}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
           )}
         </div>
       )}
@@ -414,18 +498,18 @@ export default function NasBrowser() {
 
       <div style={{ ...CARD_STYLE, marginTop: '16px', overflow: 'hidden' }}>
         {loading ? (
-          <div style={{ padding: '32px', color: '#6b7280' }}>正在加载 NAS 内容...</div>
+          <div style={{ padding: '32px', color: '#6b7280' }}>姝ｅ湪鍔犺浇 NAS 鍐呭...</div>
         ) : items.length === 0 ? (
-          <div style={{ padding: '32px', color: '#6b7280' }}>当前目录为空</div>
+          <div style={{ padding: '32px', color: '#6b7280' }}>褰撳墠鐩綍涓虹┖</div>
         ) : (
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead style={{ background: '#f8fafc' }}>
               <tr>
-                <th style={{ padding: '14px 16px', textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>名称</th>
-                <th style={{ padding: '14px 16px', textAlign: 'left', borderBottom: '1px solid #e5e7eb', width: '120px' }}>类型</th>
-                <th style={{ padding: '14px 16px', textAlign: 'right', borderBottom: '1px solid #e5e7eb', width: '140px' }}>大小</th>
-                <th style={{ padding: '14px 16px', textAlign: 'left', borderBottom: '1px solid #e5e7eb', width: '220px' }}>修改时间</th>
-                <th style={{ padding: '14px 16px', textAlign: 'right', borderBottom: '1px solid #e5e7eb', width: '280px' }}>操作</th>
+                <th style={{ padding: '14px 16px', textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>鍚嶇О</th>
+                <th style={{ padding: '14px 16px', textAlign: 'left', borderBottom: '1px solid #e5e7eb', width: '120px' }}>绫诲瀷</th>
+                <th style={{ padding: '14px 16px', textAlign: 'right', borderBottom: '1px solid #e5e7eb', width: '140px' }}>澶у皬</th>
+                <th style={{ padding: '14px 16px', textAlign: 'left', borderBottom: '1px solid #e5e7eb', width: '220px' }}>淇敼鏃堕棿</th>
+                <th style={{ padding: '14px 16px', textAlign: 'right', borderBottom: '1px solid #e5e7eb', width: '280px' }}>鎿嶄綔</th>
               </tr>
             </thead>
             <tbody>
@@ -438,10 +522,10 @@ export default function NasBrowser() {
                         onClick={() => loadPath(item.path)}
                         style={{ border: 'none', background: 'transparent', padding: 0, cursor: 'pointer', color: '#1d4ed8', fontWeight: 700 }}
                       >
-                        {`📁 ${item.name}`}
+                        {`馃搧 ${item.name}`}
                       </button>
                     ) : (
-                      <span style={{ color: '#111827' }}>{`📄 ${item.name}`}</span>
+                      <span style={{ color: '#111827' }}>{`馃搫 ${item.name}`}</span>
                     )}
                   </td>
                   <td style={{ padding: '14px 16px', color: '#475569' }}>{item.is_dir ? '文件夹' : '文件'}</td>
@@ -485,13 +569,13 @@ export default function NasBrowser() {
               {importTarget.is_dir ? '上传文件夹至知识库' : '上传文件至知识库'}
             </div>
             <div style={{ marginTop: '10px', color: '#475569', lineHeight: 1.6 }}>
-              名称: {importTarget.name}
+              鍚嶇О: {importTarget.name}
               <br />
-              路径: {importTarget.path}
+              璺緞: {importTarget.path}
               <br />
               {importTarget.is_dir
-                ? '会先统计支持格式的文件数量，然后递归上传当前文件夹及其所有子文件夹中的文件。'
-                : '只上传当前文件，且仅支持知识库允许的文件格式。'}
+                ? '会先统计支持格式的文件数量，然后递归上传当前文件夹及其子目录中的文件。'
+                : '仅上传当前文件，并且只支持知识库允许的文件格式。'}
             </div>
             <div style={{ marginTop: '16px' }}>
               <label style={{ display: 'block', marginBottom: '8px', fontWeight: 700, color: '#111827' }}>选择知识库</label>
@@ -531,7 +615,7 @@ export default function NasBrowser() {
                   cursor: importLoading || !selectedKb ? 'not-allowed' : 'pointer',
                 }}
               >
-                {importLoading ? '处理中...' : '开始上传'}
+                {importLoading ? '处理中..' : '开始上传'}
               </button>
             </div>
           </div>

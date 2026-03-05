@@ -45,7 +45,7 @@ class NasFolderImportTask:
     current_file: str = ""
     error: str = ""
     imported: list[dict[str, Any]] = field(default_factory=list)
-    skipped: list[str] = field(default_factory=list)
+    skipped: list[dict[str, Any]] = field(default_factory=list)
     failed: list[dict[str, Any]] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
@@ -173,7 +173,7 @@ class NasBrowserService:
             "items": items,
         }
 
-    def _collect_folder_files_sync(self, relative_path: str, deps) -> tuple[list[dict[str, str]], list[str]]:
+    def _collect_folder_files_sync(self, relative_path: str, deps) -> tuple[list[dict[str, str]], list[dict[str, Any]]]:
         smbclient = self._get_smbclient()
         normalized = self._normalize_relative_path(relative_path)
         try:
@@ -184,11 +184,17 @@ class NasBrowserService:
 
         allowed_extensions = self._allowed_extensions(deps)
         supported_files: list[dict[str, str]] = []
-        skipped_files: list[str] = []
+        skipped_files: list[dict[str, Any]] = []
         for item in all_files:
             ext = PurePosixPath(item["path"]).suffix.lower()
             if ext not in allowed_extensions:
-                skipped_files.append(item["path"])
+                skipped_files.append(
+                    {
+                        "path": item["path"],
+                        "reason": "unsupported_extension",
+                        "detail": f"unsupported extension: {ext or '<none>'}",
+                    }
+                )
                 continue
             supported_files.append(item)
         return supported_files, skipped_files
@@ -261,7 +267,7 @@ class NasBrowserService:
             ctx=ctx,
         )
         imported = [outcome["payload"]] if outcome["status"] == "imported" else []
-        skipped = [normalized] if outcome["status"] == "skipped" else []
+        skipped = [outcome["payload"]] if outcome["status"] == "skipped" else []
         failed = [outcome["payload"]] if outcome["status"] == "failed" else []
         return {
             "file_path": normalized,
@@ -321,7 +327,7 @@ class NasBrowserService:
             elif outcome["status"] == "skipped":
                 task.skipped_count += 1
                 if len(task.skipped) < 50:
-                    task.skipped.append(str(outcome["payload"]))
+                    task.skipped.append(outcome["payload"])
             else:
                 task.failed_count += 1
                 if len(task.failed) < 50:
@@ -363,7 +369,14 @@ class NasBrowserService:
 
         ext = PurePosixPath(source_path).suffix.lower()
         if ext not in self._allowed_extensions(deps):
-            return {"status": "skipped", "payload": source_path}
+            return {
+                "status": "skipped",
+                "payload": {
+                    "path": source_path,
+                    "reason": "unsupported_extension",
+                    "detail": f"unsupported extension: {ext or '<none>'}",
+                },
+            }
 
         try:
             content = await asyncio.to_thread(self._read_file_bytes_sync, source_path)
@@ -371,6 +384,13 @@ class NasBrowserService:
             upload_file = self._create_upload_file(target_filename, content)
             doc = await ingestion_manager.stage_upload_knowledge(kb_ref=kb_ref, upload_file=upload_file, ctx=ctx)
         except Exception as exc:
-            return {"status": "failed", "payload": {"path": source_path, "detail": str(exc)}}
+            return {
+                "status": "failed",
+                "payload": {
+                    "path": source_path,
+                    "reason": "ingestion_failed",
+                    "detail": str(exc),
+                },
+            }
 
         return {"status": "imported", "payload": {"doc_id": doc.doc_id, "filename": doc.filename}}

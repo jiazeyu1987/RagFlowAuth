@@ -189,6 +189,7 @@ export default function KnowledgeBases() {
   const [createName, setCreateName] = useState('');
   const [createFromId, setCreateFromId] = useState('');
   const [createPayload, setCreatePayload] = useState({});
+  const [createDirId, setCreateDirId] = useState(ROOT);
   const [createError, setCreateError] = useState('');
 
   const indexes = useMemo(() => buildIndexes(directoryTree), [directoryTree]);
@@ -432,10 +433,12 @@ export default function KnowledgeBases() {
   }
 
   function openCreateKb() {
+    const preferredDirId = selectedItem?.kind === 'dir' ? selectedItem.id : currentDirId;
     setCreateOpen(true);
     setCreateName('');
     setCreateFromId(String(kbList[0]?.id || ''));
     setCreatePayload({});
+    setCreateDirId(preferredDirId || ROOT);
     setCreateError('');
   }
 
@@ -460,7 +463,7 @@ export default function KnowledgeBases() {
       if (!name) throw new Error('请输入知识库名称');
       const created = await knowledgeApi.createRagflowDataset({ name, ...pickAllowed(createPayload, DATASET_CREATE_ALLOWED_KEYS) });
       if (!created?.id) throw new Error('创建成功但未返回知识库信息');
-      await knowledgeApi.assignDatasetDirectory(created.id, currentDirId || null);
+      await knowledgeApi.assignDatasetDirectory(created.id, createDirId || null);
       setCreateOpen(false);
       await refreshAll();
       await loadKbDetail(created.id);
@@ -662,6 +665,12 @@ export default function KnowledgeBases() {
                   disabled={!kbList.length}
                 >
                   {kbList.map((ds) => <option key={String(ds?.id || '')} value={String(ds?.id || '')}>{String(ds?.name || ds?.id || '')}</option>)}
+                </select>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '110px 1fr', alignItems: 'center', gap: 10, marginTop: 10 }}>
+                <label>鎸傝浇鐩綍</label>
+                <select value={createDirId} onChange={(e) => setCreateDirId(e.target.value)} style={{ padding: '9px 10px', border: '1px solid #d1d5db', borderRadius: 8 }}>
+                  {dirOptions.map((o) => <option key={o.id || '__root__'} value={o.id}>{o.label}</option>)}
                 </select>
               </div>
               {createError && <div style={{ color: '#b91c1c', marginTop: 10 }}>{createError}</div>}

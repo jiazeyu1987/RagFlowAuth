@@ -25,6 +25,18 @@ const TEXT = {
   collapseAll: '\u6298\u53e0\u5168\u90e8',
   refresh: '\u5237\u65b0',
   batch: '\u6279\u91cf\u4e0b\u8f7d',
+  batchCopy: '\u6279\u91cf\u590d\u5236\u5230',
+  batchMove: '\u6279\u91cf\u79fb\u52a8\u5230',
+  confirm: '\u786e\u8ba4',
+  cancel: '\u53d6\u6d88',
+  targetKb: '\u76ee\u6807\u77e5\u8bc6\u5e93',
+  transferTitleCopy: '\u590d\u5236\u6587\u6863',
+  transferTitleMove: '\u79fb\u52a8\u6587\u6863',
+  transferInProgress: '\u6279\u91cf\u5904\u7406\u8fdb\u5ea6',
+  transferCurrent: '\u5f53\u524d',
+  transferSuccess: '\u6210\u529f',
+  transferFailed: '\u5931\u8d25',
+  transferDone: '\u5df2\u5b8c\u6210',
   packing: '\u6253\u5305\u4e2d',
   clearSelection: '\u6e05\u9664\u9009\u62e9',
   loading: '\u52a0\u8f7d\u4e2d...',
@@ -37,6 +49,8 @@ const TEXT = {
   download: '\u4e0b\u8f7d',
   downloading: '\u4e0b\u8f7d\u4e2d',
   delete: '\u5220\u9664',
+  copyTo: '\u590d\u5236\u5230',
+  moveTo: '\u79fb\u52a8\u5230',
   deleteConfirm: '\u786e\u5b9a\u8981\u5220\u9664\u8be5\u6587\u6863\u5417\uff1f\u6b64\u64cd\u4f5c\u4e0d\u53ef\u6062\u590d\u3002',
   needOne: '\u8bf7\u81f3\u5c11\u9009\u62e9\u4e00\u4e2a\u6587\u6863',
   noPermission: '\u60a8\u6ca1\u6709\u88ab\u5206\u914d\u4efb\u4f55\u77e5\u8bc6\u5e93\u6743\u9650\uff0c\u8bf7\u8054\u7cfb\u7ba1\u7406\u5458',
@@ -44,6 +58,10 @@ const TEXT = {
   loadDocFail: '\u52a0\u8f7d\u6587\u6863\u5931\u8d25',
   downloadFail: '\u4e0b\u8f7d\u5931\u8d25',
   deleteFail: '\u5220\u9664\u5931\u8d25',
+  copyFail: '\u590d\u5236\u5931\u8d25',
+  moveFail: '\u79fb\u52a8\u5931\u8d25',
+  selectTargetKb: '\u8bf7\u8f93\u5165\u76ee\u6807\u77e5\u8bc6\u5e93\u540d\u79f0',
+  noTargetKb: '\u6ca1\u6709\u53ef\u9009\u7684\u76ee\u6807\u77e5\u8bc6\u5e93',
   batchFail: '\u6279\u91cf\u4e0b\u8f7d\u5931\u8d25',
   cannotFindKb: '\u65e0\u6cd5\u627e\u5230\u77e5\u8bc6\u5e93',
   cannotFindDocPrefix: '\u65e0\u6cd5\u5728\u77e5\u8bc6\u5e93',
@@ -55,6 +73,8 @@ function actionButtonStyle(kind, disabled) {
   const palette = {
     view: { background: '#eef2ff', color: '#4338ca', border: '#c7d2fe' },
     download: { background: '#eff6ff', color: '#1d4ed8', border: '#bfdbfe' },
+    copy: { background: '#ecfeff', color: '#0e7490', border: '#a5f3fc' },
+    move: { background: '#fefce8', color: '#a16207', border: '#fde68a' },
     delete: { background: '#fef2f2', color: '#dc2626', border: '#fecaca' },
   };
   const tone = palette[kind] || palette.view;
@@ -214,8 +234,11 @@ function DatasetPanel({
   handleView,
   handleDownload,
   handleDelete,
+  handleCopy,
+  handleMove,
   actionLoading,
   canDownload,
+  canUpload,
   canDelete,
 }) {
   const datasetDocs = documents[dataset.name] || [];
@@ -254,7 +277,7 @@ function DatasetPanel({
                     <input type="checkbox" checked={isAllSelectedInDataset(dataset.name)} onChange={() => handleSelectAllInDataset(dataset.name)} data-testid={`browser-dataset-selectall-${dataset.id}`} />
                   </th>
                   <th style={{ textAlign: 'left', padding: '12px 8px', color: '#6b7280' }}>{TEXT.docName}</th>
-                  <th style={{ textAlign: 'right', padding: '12px 8px', color: '#6b7280', width: 260 }}>{'\u64cd\u4f5c'}</th>
+                  <th style={{ textAlign: 'right', padding: '12px 8px', color: '#6b7280', width: 420 }}>{'\u64cd\u4f5c'}</th>
                 </tr>
               </thead>
               <tbody>
@@ -268,6 +291,8 @@ function DatasetPanel({
                       <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
                         <button onClick={() => handleView(doc.id, dataset.name)} data-testid={`browser-doc-view-${dataset.id}-${doc.id}`} disabled={actionLoading[`${doc.id}-view`]} style={actionButtonStyle('view', actionLoading[`${doc.id}-view`])}>{actionLoading[`${doc.id}-view`] ? TEXT.viewing : `\u67e5\u770b`}</button>
                         {canDownload() ? <button onClick={() => handleDownload(doc.id, dataset.name)} data-testid={`browser-doc-download-${dataset.id}-${doc.id}`} disabled={actionLoading[`${doc.id}-download`]} style={actionButtonStyle('download', actionLoading[`${doc.id}-download`])}>{actionLoading[`${doc.id}-download`] ? TEXT.downloading : `\u4e0b\u8f7d`}</button> : null}
+                        {canUpload() ? <button onClick={() => handleCopy(doc.id, dataset.name)} data-testid={`browser-doc-copy-${dataset.id}-${doc.id}`} disabled={actionLoading[`${doc.id}-copy`]} style={actionButtonStyle('copy', actionLoading[`${doc.id}-copy`])}>{TEXT.copyTo}</button> : null}
+                        {canUpload() && canDelete() ? <button onClick={() => handleMove(doc.id, dataset.name)} data-testid={`browser-doc-move-${dataset.id}-${doc.id}`} disabled={actionLoading[`${doc.id}-move`]} style={actionButtonStyle('move', actionLoading[`${doc.id}-move`])}>{TEXT.moveTo}</button> : null}
                         {canDelete() ? <button onClick={() => handleDelete(doc.id, dataset.name)} data-testid={`browser-doc-delete-${dataset.id}-${doc.id}`} disabled={actionLoading[`${doc.id}-delete`]} style={actionButtonStyle('delete', actionLoading[`${doc.id}-delete`])}>{`\u5220\u9664`}</button> : null}
                       </div>
                     </td>
@@ -299,6 +324,9 @@ export default function DocumentBrowser() {
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewTarget, setPreviewTarget] = useState(null);
   const [canDeleteDocs, setCanDeleteDocs] = useState(false);
+  const [canUploadDocs, setCanUploadDocs] = useState(false);
+  const [transferDialog, setTransferDialog] = useState(null);
+  const [batchTransferProgress, setBatchTransferProgress] = useState(null);
   const [currentFolderId, setCurrentFolderId] = useState(ROOT);
   const [expandedFolderIds, setExpandedFolderIds] = useState([]);
   const viewRef = useRef(null);
@@ -334,6 +362,10 @@ export default function DocumentBrowser() {
     const list = visibleDatasets.filter((d) => (d.node_id || ROOT) === currentFolderId);
     return list.sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'zh-Hans-CN'));
   }, [visibleDatasets, currentFolderId]);
+  const transferTargetOptions = useMemo(() => {
+    const names = datasetsWithFolders.map((x) => String(x?.name || '').trim()).filter(Boolean);
+    return Array.from(new Set(names)).sort((a, b) => a.localeCompare(b, 'zh-Hans-CN'));
+  }, [datasetsWithFolders]);
 
   useEffect(() => {
     const storageKey = `ragflowauth_recent_dataset_keywords_v1:${user?.user_id || 'anon'}`;
@@ -357,6 +389,7 @@ export default function DocumentBrowser() {
 
   useEffect(() => {
     setCanDeleteDocs(can('ragflow_documents', 'delete'));
+    setCanUploadDocs(can('ragflow_documents', 'upload'));
   }, [can, user?.user_id]);
 
   useEffect(() => {
@@ -496,6 +529,21 @@ export default function DocumentBrowser() {
     }
   };
 
+  const openSingleTransferDialog = (docId, sourceDatasetName, operation) => {
+    const candidates = transferTargetOptions.filter((name) => name !== sourceDatasetName);
+    if (!candidates.length) {
+      setError(TEXT.noTargetKb);
+      return;
+    }
+    setTransferDialog({
+      scope: 'single',
+      operation,
+      docId,
+      sourceDatasetName,
+      targetDatasetName: candidates[0],
+    });
+  };
+
   const handleSelectDoc = (docId, datasetName) => {
     setSelectedDocs((prev) => {
       const list = prev[datasetName] || [];
@@ -517,6 +565,7 @@ export default function DocumentBrowser() {
   const selectedCount = Object.values(selectedDocs).reduce((sum, list) => sum + list.length, 0);
   const totalDocs = visibleDatasets.reduce((sum, d) => sum + ((documents[d.name] || []).length), 0);
   const canDelete = () => canDeleteDocs;
+  const canUpload = () => canUploadDocs;
   const clearAllSelections = () => setSelectedDocs({});
 
   const handleBatchDownload = async () => {
@@ -540,6 +589,109 @@ export default function DocumentBrowser() {
     } finally {
       setActionLoading((prev) => ({ ...prev, 'batch-download': false }));
     }
+  };
+
+  const collectSelectedTransferItems = (targetDatasetName) => {
+    const items = [];
+    Object.entries(selectedDocs).forEach(([sourceDatasetName, docIds]) => {
+      docIds.forEach((docId) => {
+        if (!docId || !sourceDatasetName || sourceDatasetName === targetDatasetName) return;
+        items.push({
+          doc_id: docId,
+          source_dataset_name: sourceDatasetName,
+          target_dataset_name: targetDatasetName,
+        });
+      });
+    });
+    return items;
+  };
+
+  const openBatchTransferDialog = (operation) => {
+    if (!transferTargetOptions.length) {
+      setError(TEXT.noTargetKb);
+      return;
+    }
+    setTransferDialog({
+      scope: 'batch',
+      operation,
+      docId: '',
+      sourceDatasetName: '',
+      targetDatasetName: transferTargetOptions[0],
+    });
+  };
+
+  const executeSingleTransfer = async ({ docId, sourceDatasetName, targetDatasetName, operation }) => {
+    try {
+      setActionLoading((prev) => ({ ...prev, [`${docId}-${operation}`]: true }));
+      await authClient.transferRagflowDocument(docId, sourceDatasetName, targetDatasetName, operation);
+      await Promise.all([fetchDocumentsForDataset(sourceDatasetName), fetchDocumentsForDataset(targetDatasetName)]);
+      if (operation === 'move') {
+        setSelectedDocs((prev) => {
+          const list = prev[sourceDatasetName] || [];
+          if (!list.includes(docId)) return prev;
+          return { ...prev, [sourceDatasetName]: list.filter((id) => id !== docId) };
+        });
+      }
+    } catch (err) {
+      setError(err?.message || (operation === 'move' ? TEXT.moveFail : TEXT.copyFail));
+    } finally {
+      setActionLoading((prev) => ({ ...prev, [`${docId}-${operation}`]: false }));
+    }
+  };
+
+  const executeBatchTransfer = async ({ targetDatasetName, operation }) => {
+    const items = collectSelectedTransferItems(targetDatasetName);
+    if (!items.length) {
+      setError(TEXT.needOne);
+      return;
+    }
+    const loadingKey = operation === 'move' ? 'batch-move' : 'batch-copy';
+    const progress = { operation, total: items.length, processed: 0, success: 0, failed: 0, current: '', done: false };
+    setBatchTransferProgress(progress);
+    setActionLoading((prev) => ({ ...prev, [loadingKey]: true }));
+    const failedItems = [];
+    const affected = new Set([targetDatasetName]);
+    for (const item of items) {
+      progress.current = `${item.source_dataset_name} / ${item.doc_id}`;
+      setBatchTransferProgress({ ...progress });
+      try {
+        await authClient.transferRagflowDocument(item.doc_id, item.source_dataset_name, item.target_dataset_name, operation);
+        progress.success += 1;
+      } catch (err) {
+        progress.failed += 1;
+        failedItems.push({
+          source_dataset_name: item.source_dataset_name,
+          doc_id: item.doc_id,
+          detail: err?.message || 'transfer_failed',
+        });
+      } finally {
+        progress.processed += 1;
+        affected.add(item.source_dataset_name);
+        setBatchTransferProgress({ ...progress });
+      }
+    }
+    await Promise.all(Array.from(affected).map((datasetName) => fetchDocumentsForDataset(datasetName)));
+    if (operation === 'move') clearAllSelections();
+    setActionLoading((prev) => ({ ...prev, [loadingKey]: false }));
+    setBatchTransferProgress((prev) => (prev ? { ...prev, current: '', done: true } : null));
+    if (failedItems.length > 0) {
+      const firstFailed = failedItems[0];
+      window.alert(`完成 ${progress.success}/${progress.total}，失败 ${failedItems.length}\n示例: ${firstFailed.source_dataset_name}/${firstFailed.doc_id}: ${firstFailed.detail}`);
+    }
+  };
+
+  const handleTransferConfirm = async () => {
+    if (!transferDialog?.targetDatasetName) {
+      setError(TEXT.selectTargetKb);
+      return;
+    }
+    const payload = { ...transferDialog };
+    setTransferDialog(null);
+    if (payload.scope === 'single') {
+      await executeSingleTransfer(payload);
+      return;
+    }
+    await executeBatchTransfer(payload);
   };
 
   const commitKeyword = (value) => {
@@ -570,7 +722,9 @@ export default function DocumentBrowser() {
         <button onClick={collapseAll} data-testid="browser-collapse-all" style={toolbarButtonStyle('neutral')}>{TEXT.collapseAll}</button>
         <button onClick={refreshAll} data-testid="browser-refresh-all" style={toolbarButtonStyle('success')}>{TEXT.refresh}</button>
         {selectedCount > 0 && canDownload() ? <button onClick={handleBatchDownload} data-testid="browser-batch-download" style={toolbarButtonStyle('accent', actionLoading['batch-download'])}>{actionLoading['batch-download'] ? TEXT.packing : `${TEXT.batch} (${selectedCount})`}</button> : null}
-        {selectedCount > 0 && canDownload() ? <button onClick={clearAllSelections} data-testid="browser-clear-selection" style={toolbarButtonStyle('danger')}>{TEXT.clearSelection}</button> : null}
+        {selectedCount > 0 && canUpload() ? <button onClick={() => openBatchTransferDialog('copy')} data-testid="browser-batch-copy" style={toolbarButtonStyle('primary', actionLoading['batch-copy'])}>{actionLoading['batch-copy'] ? TEXT.loading : `${TEXT.batchCopy} (${selectedCount})`}</button> : null}
+        {selectedCount > 0 && canUpload() && canDelete() ? <button onClick={() => openBatchTransferDialog('move')} data-testid="browser-batch-move" style={toolbarButtonStyle('neutral', actionLoading['batch-move'])}>{actionLoading['batch-move'] ? TEXT.loading : `${TEXT.batchMove} (${selectedCount})`}</button> : null}
+        {selectedCount > 0 && (canDownload() || canUpload()) ? <button onClick={clearAllSelections} data-testid="browser-clear-selection" style={toolbarButtonStyle('danger')}>{TEXT.clearSelection}</button> : null}
       </div>
 
       <div style={{ background: '#f9fafb', padding: 16, borderRadius: 8, marginBottom: 16 }}>
@@ -598,6 +752,28 @@ export default function DocumentBrowser() {
       </div>
 
       {error ? <div style={{ background: '#fee2e2', color: '#991b1b', padding: '12px 16px', borderRadius: 4, marginBottom: 20 }} data-testid="browser-error">{error}</div> : null}
+      {batchTransferProgress ? (
+        <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, padding: 14, marginBottom: 16 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+            <strong>{TEXT.transferInProgress}</strong>
+            {batchTransferProgress.done ? (
+              <button type="button" onClick={() => setBatchTransferProgress(null)} style={toolbarButtonStyle('neutral')}>
+                {TEXT.cancel}
+              </button>
+            ) : null}
+          </div>
+          <div style={{ color: '#4b5563', fontSize: '0.9rem' }}>
+            {TEXT.transferCurrent}: {batchTransferProgress.current || '-'}
+          </div>
+          <div style={{ marginTop: 6, color: '#4b5563', fontSize: '0.9rem' }}>
+            {batchTransferProgress.processed}/{batchTransferProgress.total} | {TEXT.transferSuccess}: {batchTransferProgress.success} | {TEXT.transferFailed}: {batchTransferProgress.failed}
+          </div>
+          <div style={{ marginTop: 8, height: 8, background: '#e5e7eb', borderRadius: 999, overflow: 'hidden' }}>
+            <div style={{ width: `${Math.round((batchTransferProgress.processed / Math.max(batchTransferProgress.total, 1)) * 100)}%`, height: '100%', background: '#2563eb', transition: 'width 0.2s' }} />
+          </div>
+          {batchTransferProgress.done ? <div style={{ marginTop: 8, color: '#166534', fontSize: '0.9rem' }}>{TEXT.transferDone}</div> : null}
+        </div>
+      ) : null}
 
       {!datasetsWithFolders.length ? <div style={{ background: '#fff', padding: 48, borderRadius: 8, textAlign: 'center', color: '#6b7280' }}>{TEXT.noKb}</div> : null}
       {datasetsWithFolders.length && !visibleDatasets.length ? <div style={{ background: '#fff', padding: 48, borderRadius: 8, textAlign: 'center', color: '#6b7280', border: '1px solid #e5e7eb' }}><div style={{ fontWeight: 700, color: '#374151', marginBottom: 6 }}>{TEXT.noMatch}</div><div>{TEXT.noMatchDesc}</div></div> : null}
@@ -648,8 +824,11 @@ export default function DocumentBrowser() {
                     handleView={handleView}
                     handleDownload={handleDownload}
                     handleDelete={handleDelete}
+                    handleCopy={(docId, datasetName) => openSingleTransferDialog(docId, datasetName, 'copy')}
+                    handleMove={(docId, datasetName) => openSingleTransferDialog(docId, datasetName, 'move')}
                     actionLoading={actionLoading}
                     canDownload={canDownload}
+                    canUpload={canUpload}
                     canDelete={canDelete}
                   />
                 ))}
@@ -662,6 +841,37 @@ export default function DocumentBrowser() {
       ) : null}
 
       <DocumentPreviewModal open={previewOpen} target={previewTarget} onClose={() => { setPreviewOpen(false); setPreviewTarget(null); }} canDownloadFiles={typeof canDownload === 'function' ? !!canDownload() : false} />
+      {transferDialog ? (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.45)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ width: 'min(520px, 94vw)', background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12 }}>
+            <div style={{ padding: '12px 14px', borderBottom: '1px solid #e5e7eb', fontWeight: 800 }}>
+              {transferDialog.operation === 'move' ? TEXT.transferTitleMove : TEXT.transferTitleCopy}
+            </div>
+            <div style={{ padding: 14 }}>
+              <div style={{ marginBottom: 10, color: '#4b5563', fontSize: '0.9rem' }}>
+                {transferDialog.scope === 'single' ? `${transferDialog.sourceDatasetName} / ${transferDialog.docId}` : `${selectedCount} docs`}
+              </div>
+              <label style={{ display: 'block', marginBottom: 6 }}>{TEXT.targetKb}</label>
+              <select
+                value={transferDialog.targetDatasetName}
+                onChange={(e) => setTransferDialog((prev) => ({ ...prev, targetDatasetName: e.target.value }))}
+                style={{ width: '100%', border: '1px solid #d1d5db', borderRadius: 8, padding: '8px 10px' }}
+              >
+                {(transferDialog.scope === 'single'
+                  ? transferTargetOptions.filter((name) => name !== transferDialog.sourceDatasetName)
+                  : transferTargetOptions
+                ).map((name) => (
+                  <option key={name} value={name}>{name}</option>
+                ))}
+              </select>
+            </div>
+            <div style={{ padding: '12px 14px', borderTop: '1px solid #e5e7eb', display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+              <button type="button" onClick={() => setTransferDialog(null)} style={toolbarButtonStyle('neutral')}>{TEXT.cancel}</button>
+              <button type="button" onClick={handleTransferConfirm} style={toolbarButtonStyle('primary')}>{TEXT.confirm}</button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
