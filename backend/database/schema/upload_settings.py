@@ -37,6 +37,8 @@ def ensure_upload_settings_table(conn: sqlite3.Connection) -> None:
                     ".md",
                     ".xlsx",
                     ".xls",
+                    ".ppt",
+                    ".pptx",
                     ".csv",
                     ".png",
                     ".jpg",

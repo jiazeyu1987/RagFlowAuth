@@ -6,6 +6,14 @@ import { loadDocumentPreview } from '../../preview/ragflowPreviewManager';
 import documentClient, { DOCUMENT_SOURCE } from '../documentClient';
 
 const isCsvFilename = (name) => String(name || '').toLowerCase().endsWith('.csv');
+const ONLYOFFICE_EXTENSIONS = new Set(['.xls', '.ppt', '.pptx']);
+
+const getFileExtensionLower = (name) => {
+  const s = String(name || '').trim().toLowerCase();
+  const idx = s.lastIndexOf('.');
+  if (idx < 0) return '';
+  return s.slice(idx);
+};
 
 const base64ToBytes = (base64) => {
   const bin = atob(String(base64 || ''));
@@ -102,12 +110,86 @@ const rowsToHtmlTable = (rows) => {
   return `<table><tbody>${body}</tbody></table>`;
 };
 
+const OnlyOfficeViewer = ({ serverUrl, config }) => {
+  const containerId = useMemo(
+    () => `onlyoffice-doc-editor-${Math.random().toString(36).slice(2)}`,
+    []
+  );
+  const editorRef = useRef(null);
+  const [viewerError, setViewerError] = useState('');
+
+  useEffect(() => {
+    if (!serverUrl || !config) return undefined;
+
+    let disposed = false;
+    const normalized = String(serverUrl || '').replace(/\/+$/, '');
+    const scriptSrc = `${normalized}/web-apps/apps/api/documents/api.js`;
+    const scriptId = `onlyoffice-docsapi-${normalized.replace(/[^a-zA-Z0-9]/g, '_')}`;
+    let scriptEl = document.getElementById(scriptId);
+
+    const initEditor = () => {
+      if (disposed) return;
+      if (!window.DocsAPI || typeof window.DocsAPI.DocEditor !== 'function') {
+        setViewerError('ONLYOFFICE DocsAPI 未就绪');
+        return;
+      }
+      try {
+        if (editorRef.current && typeof editorRef.current.destroyEditor === 'function') {
+          editorRef.current.destroyEditor();
+        }
+        editorRef.current = new window.DocsAPI.DocEditor(containerId, config);
+        setViewerError('');
+      } catch (e) {
+        setViewerError(e?.message || 'ONLYOFFICE 初始化失败');
+      }
+    };
+
+    const handleLoad = () => initEditor();
+    const handleError = () => setViewerError('加载 ONLYOFFICE 脚本失败');
+
+    if (scriptEl) {
+      scriptEl.addEventListener('load', handleLoad);
+      scriptEl.addEventListener('error', handleError);
+      if (window.DocsAPI && typeof window.DocsAPI.DocEditor === 'function') initEditor();
+    } else {
+      scriptEl = document.createElement('script');
+      scriptEl.id = scriptId;
+      scriptEl.src = scriptSrc;
+      scriptEl.async = true;
+      scriptEl.onload = handleLoad;
+      scriptEl.onerror = handleError;
+      document.body.appendChild(scriptEl);
+    }
+
+    return () => {
+      disposed = true;
+      if (scriptEl) {
+        scriptEl.removeEventListener('load', handleLoad);
+        scriptEl.removeEventListener('error', handleError);
+      }
+      if (editorRef.current && typeof editorRef.current.destroyEditor === 'function') {
+        try {
+          editorRef.current.destroyEditor();
+        } catch {
+          // ignore
+        }
+      }
+      editorRef.current = null;
+    };
+  }, [serverUrl, config, containerId]);
+
+  if (viewerError) return <div style={{ color: '#991b1b' }}>{viewerError}</div>;
+  return <div id={containerId} style={{ width: '100%', height: '78vh', border: '1px solid #e5e7eb', borderRadius: '10px' }} />;
+};
+
 export const DocumentPreviewModal = ({ open, target, onClose, canDownloadFiles = false }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [payload, setPayload] = useState(null);
   const [effectiveName, setEffectiveName] = useState('');
   const [objectUrl, setObjectUrl] = useState('');
+  const [onlyOfficeServerUrl, setOnlyOfficeServerUrl] = useState('');
+  const [onlyOfficeConfig, setOnlyOfficeConfig] = useState(null);
   const [pdfPageImages, setPdfPageImages] = useState([]);
   const [pdfRendering, setPdfRendering] = useState(false);
   const [pdfRenderingMessage, setPdfRenderingMessage] = useState('');
@@ -117,6 +199,8 @@ export const DocumentPreviewModal = ({ open, target, onClose, canDownloadFiles =
     setPayload(null);
     setError('');
     setEffectiveName('');
+    setOnlyOfficeServerUrl('');
+    setOnlyOfficeConfig(null);
     onClose?.();
   }, [onClose]);
 
@@ -135,6 +219,8 @@ export const DocumentPreviewModal = ({ open, target, onClose, canDownloadFiles =
       setLoading(true);
       setError('');
       setPayload(null);
+      setOnlyOfficeServerUrl('');
+      setOnlyOfficeConfig(null);
       setPdfPageImages([]);
       setPdfRendering(false);
       setPdfRenderingMessage('');
@@ -145,6 +231,29 @@ export const DocumentPreviewModal = ({ open, target, onClose, canDownloadFiles =
         const datasetName = target.datasetName || target.dataset;
         const sessionId = target.sessionId;
         const title = target.filename || target.title || `document_${docId}`;
+        const ext = getFileExtensionLower(title);
+
+        if (
+          (source === DOCUMENT_SOURCE.RAGFLOW || source === DOCUMENT_SOURCE.KNOWLEDGE) &&
+          ONLYOFFICE_EXTENSIONS.has(ext)
+        ) {
+          const onlyOffice = await documentClient.onlyofficeEditorConfig({
+            source,
+            docId,
+            datasetName: source === DOCUMENT_SOURCE.RAGFLOW ? datasetName : undefined,
+            sessionId:
+              source === DOCUMENT_SOURCE.PATENT || source === DOCUMENT_SOURCE.PAPER
+                ? sessionId
+                : undefined,
+            filename: title,
+          });
+          if (cancelled) return;
+          setEffectiveName(String(onlyOffice?.filename || title || ''));
+          setOnlyOfficeServerUrl(String(onlyOffice?.server_url || ''));
+          setOnlyOfficeConfig(onlyOffice?.config || null);
+          setPayload({ type: 'onlyoffice' });
+          return;
+        }
 
         const data = await loadDocumentPreview({
           docId,
@@ -299,6 +408,8 @@ export const DocumentPreviewModal = ({ open, target, onClose, canDownloadFiles =
       const name = String(data?.filename || effectiveName || '');
       setEffectiveName(name);
       setPayload(data);
+      setOnlyOfficeServerUrl('');
+      setOnlyOfficeConfig(null);
       setPdfPageImages([]);
       setPdfRendering(false);
       setPdfRenderingMessage('');
@@ -489,6 +600,10 @@ export const DocumentPreviewModal = ({ open, target, onClose, canDownloadFiles =
 
               if (p.type === 'html' && objectUrl) {
                 return <iframe title="html-preview" src={objectUrl} style={{ width: '100%', height: '78vh', border: '1px solid #e5e7eb', borderRadius: '10px' }} />;
+              }
+
+              if (p.type === 'onlyoffice' && onlyOfficeServerUrl && onlyOfficeConfig) {
+                return <OnlyOfficeViewer serverUrl={onlyOfficeServerUrl} config={onlyOfficeConfig} />;
               }
 
               if (p.type === 'pdf' && objectUrl) {

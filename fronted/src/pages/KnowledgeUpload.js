@@ -4,7 +4,7 @@ import { knowledgeApi } from '../features/knowledge/api';
 import { useAuth } from '../hooks/useAuth';
 
 const MAX_FILE_SIZE_BYTES = 16 * 1024 * 1024;
-const DEFAULT_ACCEPTED_EXTENSIONS = ['.txt', '.pdf', '.docx', '.md', '.xlsx', '.xls', '.csv', '.png', '.jpg', '.jpeg'];
+const DEFAULT_ACCEPTED_EXTENSIONS = ['.txt', '.pdf', '.docx', '.md', '.xlsx', '.xls', '.ppt', '.pptx', '.csv', '.png', '.jpg', '.jpeg'];
 const DEFAULT_KB_NAME = '展厅';
 
 const getFileExtensionLower = (name = '') => {

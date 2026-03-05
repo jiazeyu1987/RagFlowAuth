@@ -9,6 +9,7 @@ authx>=1.2.0
 # Configuration
 pydantic>=2.5.0
 pydantic-settings>=2.1.0
+PyJWT>=2.8.0
 
 # RAGFlow Integration
 ragflow-sdk>=0.12.0

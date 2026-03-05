@@ -95,6 +95,7 @@ def create_app() -> FastAPI:
         knowledge,
         me,
         nas,
+        onlyoffice,
         org_directory,
         paper_download,
         patent_download,
@@ -119,6 +120,7 @@ def create_app() -> FastAPI:
     app.include_router(search_configs.router, prefix="/api", tags=["Search Configs"])
     app.include_router(me.router, prefix="/api", tags=["Me"])
     app.include_router(nas.router, prefix="/api", tags=["NAS"])
+    app.include_router(onlyoffice.router, prefix="/api", tags=["ONLYOFFICE"])
     app.include_router(data_security.router, prefix="/api", tags=["Data Security"])
     app.include_router(permission_groups.create_router(), prefix="/api", tags=["Permission Groups"])
     app.include_router(org_directory.router, prefix="/api", tags=["Org Directory"])

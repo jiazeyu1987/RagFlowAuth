@@ -290,6 +290,23 @@ class DocumentClient {
       includeContentType: false,
     });
   }
+
+  async onlyofficeEditorConfig(ref) {
+    const source = String(ref?.source || '').toLowerCase();
+    const docId = String(ref?.docId || '').trim();
+    if (!docId) throw new Error('missing_doc_id');
+    if (!source) throw new Error('missing_source');
+    return httpClient.requestJson('/api/onlyoffice/editor-config', {
+      method: 'POST',
+      body: JSON.stringify({
+        source,
+        doc_id: docId,
+        dataset: ref?.datasetName || ref?.dataset || '',
+        session_id: ref?.sessionId || '',
+        filename: ref?.filename || ref?.title || '',
+      }),
+    });
+  }
 }
 
 const documentClient = new DocumentClient();

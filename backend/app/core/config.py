@@ -28,8 +28,6 @@ class Settings(BaseSettings):
     UPLOAD_DIR: str = "data/uploads"
     PATENT_DOWNLOAD_DIR: str = "data/patent_downloads"
     MAX_FILE_SIZE: int = 16 * 1024 * 1024  # 16MB
-    # Note: we intentionally do NOT accept legacy Office formats like .doc/.ppt/.pptx
-    # to reduce preview/convert dependency complexity and user-facing failures.
     ALLOWED_EXTENSIONS: set = {
         ".txt",
         ".pdf",
@@ -37,11 +35,21 @@ class Settings(BaseSettings):
         ".md",
         ".xlsx",
         ".xls",
+        ".ppt",
+        ".pptx",
         ".csv",
         ".png",
         ".jpg",
         ".jpeg",
     }
+
+    # ONLYOFFICE integration
+    ONLYOFFICE_ENABLED: bool = False
+    ONLYOFFICE_SERVER_URL: str = ""
+    ONLYOFFICE_JWT_SECRET: str = ""
+    ONLYOFFICE_PUBLIC_API_BASE_URL: str = ""
+    ONLYOFFICE_FILE_TOKEN_TTL_SECONDS: int = 300
+    ONLYOFFICE_FILE_TOKEN_SECRET: str = ""
 
     # CORS
     CORS_ORIGINS: list[str] = ["*"]

@@ -10,7 +10,7 @@ const ROOT = '';
 const PREVIEW_SUPPORTED_EXTENSIONS = new Set([
   '.txt', '.md', '.csv', '.json', '.xml', '.log', '.svg', '.html', '.css', '.js',
   '.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp',
-  '.pdf', '.doc', '.docx', '.xlsx',
+  '.pdf', '.doc', '.docx', '.xlsx', '.xls', '.ppt', '.pptx',
 ]);
 
 const getExtLower = (name = '') => {
