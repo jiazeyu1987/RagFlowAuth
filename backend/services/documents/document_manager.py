@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import os
 import urllib.parse
+import logging
+import time
 from dataclasses import dataclass
 
 from fastapi import HTTPException
@@ -19,6 +21,9 @@ from backend.services.documents.models import DeleteResult, DocumentRef
 from backend.services.documents.sources.knowledge_source import KnowledgeDocumentSource
 from backend.services.documents.sources.ragflow_source import RagflowDocumentSource
 from backend.services.audit_helpers import actor_fields_from_ctx
+from backend.app.core.request_id import get_request_id
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -45,19 +50,41 @@ class DocumentManager:
         Return a unified preview JSON payload.
         This is used by the unified preview gateway and can be reused by other modules.
         """
+        t0 = time.perf_counter()
+        request_id = get_request_id() or "-"
+        fetch_t0 = time.perf_counter()
         if ref.source == "ragflow":
             doc_bytes = self._ragflow.get_bytes(ref)
         else:
             doc_bytes = self._knowledge.get_bytes(ref)
+        source_fetch_ms = (time.perf_counter() - fetch_t0) * 1000
 
         from backend.services.unified_preview import build_preview_payload
 
-        return build_preview_payload(
+        transform_t0 = time.perf_counter()
+        payload = build_preview_payload(
             doc_bytes.content,
             preview_filename or doc_bytes.filename,
             doc_id=ref.doc_id,
             render=render,
         )
+        transform_ms = (time.perf_counter() - transform_t0) * 1000
+        elapsed_ms = (time.perf_counter() - t0) * 1000
+        logger.info(
+            "preview_payload_done request_id=%s source=%s doc_id=%s dataset=%s filename=%s size_bytes=%s render=%s type=%s source_fetch_ms=%.2f transform_ms=%.2f elapsed_ms=%.2f",
+            request_id,
+            ref.source,
+            ref.doc_id,
+            getattr(ref, "dataset_name", None),
+            preview_filename or doc_bytes.filename,
+            len(doc_bytes.content or b""),
+            render,
+            payload.get("type"),
+            source_fetch_ms,
+            transform_ms,
+            elapsed_ms,
+        )
+        return payload
 
     # -------------------- Download --------------------
 

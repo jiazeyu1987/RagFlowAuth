@@ -80,3 +80,12 @@ class UploadSettingsStore:
         finally:
             conn.close()
         return self.get()
+
+    def add_allowed_extension_if_missing(self, extension: str) -> UploadSettings:
+        normalized = self._normalize_extensions([extension])
+        ext = normalized[0]
+        current = self.get()
+        if ext in current.allowed_extensions:
+            return current
+        next_values = sorted(set(current.allowed_extensions) | {ext})
+        return self.update_allowed_extensions(next_values)

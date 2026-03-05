@@ -1,15 +1,16 @@
 from __future__ import annotations
 
 import logging
+import time
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 
 from backend.app.core.authz import AuthContextDep
 from backend.app.core.kb_refs import resolve_kb_ref
 from backend.app.core.permission_resolver import assert_kb_allowed
+from backend.services.audit_helpers import actor_fields_from_ctx
 from backend.services.documents.document_manager import DocumentManager
 from backend.services.documents.models import DocumentRef
-from backend.services.audit_helpers import actor_fields_from_ctx
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -19,72 +20,94 @@ logger = logging.getLogger(__name__)
 async def preview_gateway(
     source: str,
     doc_id: str,
+    request: Request,
     ctx: AuthContextDep,
     dataset: str = "展厅",
     render: str = "default",
 ):
     """
     Unified preview gateway for both "ragflow" and "knowledge" document sources.
-
-    Returns a unified JSON contract:
-      - text/image/pdf/html/excel/unsupported
-
-    Query params:
-      - dataset: ragflow dataset name (ragflow only)
-      - render: "default" | "html"
-        - For Excel: default returns `{type:'excel', sheets:{...}}` (fast, no download permission needed)
-        - render=html returns `{type:'html', content: base64_html}` for "original preview"
     """
     deps = ctx.deps
     snapshot = ctx.snapshot
-
     src = (source or "").strip().lower()
-    if src == "ragflow":
-        assert_kb_allowed(snapshot, resolve_kb_ref(deps, dataset).variants)
-        mgr = DocumentManager(deps)
-        payload = mgr.preview_payload(DocumentRef(source="ragflow", doc_id=doc_id, dataset_name=dataset), render=render)
-        audit = getattr(deps, "audit_log_store", None)
-        if audit:
-            try:
-                audit.log_event(
-                    action="document_preview",
-                    actor=ctx.payload.sub,
-                    source="ragflow",
-                    doc_id=doc_id,
-                    filename=str(payload.get("filename") or ""),
-                    kb_id=dataset,
-                    kb_name=dataset,
-                    meta={"render": render, "type": payload.get("type")},
-                    **actor_fields_from_ctx(deps, ctx),
-                )
-            except Exception:
-                pass
-        return payload
+    request_id = getattr(getattr(request, "state", None), "request_id", "") or "-"
+    t0 = time.perf_counter()
 
-    if src == "knowledge":
-        mgr = DocumentManager(deps)
-        doc = deps.kb_store.get_document(doc_id)
-        if not doc:
-            raise HTTPException(status_code=404, detail="文档不存在")
-        assert_kb_allowed(snapshot, doc.kb_id)
-        payload = mgr.preview_payload(DocumentRef(source="knowledge", doc_id=doc_id), render=render)
-        audit = getattr(deps, "audit_log_store", None)
-        if audit:
-            try:
-                audit.log_event(
-                    action="document_preview",
-                    actor=ctx.payload.sub,
-                    source="knowledge",
-                    doc_id=doc_id,
-                    filename=str(payload.get("filename") or getattr(doc, "filename", "") or ""),
-                    kb_id=(getattr(doc, "kb_name", None) or getattr(doc, "kb_id", None) or ""),
-                    kb_dataset_id=getattr(doc, "kb_dataset_id", None),
-                    kb_name=getattr(doc, "kb_name", None) or getattr(doc, "kb_id", None),
-                    meta={"render": render, "type": payload.get("type")},
-                    **actor_fields_from_ctx(deps, ctx),
-                )
-            except Exception:
-                pass
-        return payload
+    try:
+        if src == "ragflow":
+            assert_kb_allowed(snapshot, resolve_kb_ref(deps, dataset).variants)
+            mgr = DocumentManager(deps)
+            payload = mgr.preview_payload(
+                DocumentRef(source="ragflow", doc_id=doc_id, dataset_name=dataset),
+                render=render,
+            )
+            audit = getattr(deps, "audit_log_store", None)
+            if audit:
+                try:
+                    audit.log_event(
+                        action="document_preview",
+                        actor=ctx.payload.sub,
+                        source="ragflow",
+                        doc_id=doc_id,
+                        filename=str(payload.get("filename") or ""),
+                        kb_id=dataset,
+                        kb_name=dataset,
+                        meta={"render": render, "type": payload.get("type")},
+                        **actor_fields_from_ctx(deps, ctx),
+                    )
+                except Exception:
+                    pass
+            return payload
 
-    raise HTTPException(status_code=400, detail="invalid_source")
+        if src == "knowledge":
+            mgr = DocumentManager(deps)
+            doc = deps.kb_store.get_document(doc_id)
+            if not doc:
+                raise HTTPException(status_code=404, detail="document_not_found")
+            assert_kb_allowed(snapshot, doc.kb_id)
+            payload = mgr.preview_payload(DocumentRef(source="knowledge", doc_id=doc_id), render=render)
+            audit = getattr(deps, "audit_log_store", None)
+            if audit:
+                try:
+                    audit.log_event(
+                        action="document_preview",
+                        actor=ctx.payload.sub,
+                        source="knowledge",
+                        doc_id=doc_id,
+                        filename=str(payload.get("filename") or getattr(doc, "filename", "") or ""),
+                        kb_id=(getattr(doc, "kb_name", None) or getattr(doc, "kb_id", None) or ""),
+                        kb_dataset_id=getattr(doc, "kb_dataset_id", None),
+                        kb_name=getattr(doc, "kb_name", None) or getattr(doc, "kb_id", None),
+                        meta={"render": render, "type": payload.get("type")},
+                        **actor_fields_from_ctx(deps, ctx),
+                    )
+                except Exception:
+                    pass
+            return payload
+
+        raise HTTPException(status_code=400, detail="invalid_source")
+    except Exception as e:
+        elapsed_ms = (time.perf_counter() - t0) * 1000
+        logger.exception(
+            "preview_gateway_failed request_id=%s source=%s doc_id=%s dataset=%s render=%s elapsed_ms=%.2f err=%s",
+            request_id,
+            src,
+            doc_id,
+            dataset,
+            render,
+            elapsed_ms,
+            e,
+        )
+        raise
+    finally:
+        elapsed_ms = (time.perf_counter() - t0) * 1000
+        logger.info(
+            "preview_gateway_done request_id=%s source=%s doc_id=%s dataset=%s render=%s elapsed_ms=%.2f",
+            request_id,
+            src,
+            doc_id,
+            dataset,
+            render,
+            elapsed_ms,
+        )

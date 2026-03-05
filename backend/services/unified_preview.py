@@ -3,8 +3,13 @@ from __future__ import annotations
 import base64
 import html
 import io
+import logging
+import time
 from pathlib import Path
 
+from backend.app.core.request_id import get_request_id
+
+logger = logging.getLogger(__name__)
 
 def _xlsx_bytes_to_sheets_html(file_content: bytes, *, max_rows: int = 200, max_cols: int = 60) -> dict[str, str]:
     """
@@ -13,6 +18,8 @@ def _xlsx_bytes_to_sheets_html(file_content: bytes, *, max_rows: int = 200, max_
     This is intentionally "lossy": shapes/flowcharts and rich formatting are not preserved.
     For those cases callers can request `render=html` to get an "original preview" HTML.
     """
+    t0 = time.perf_counter()
+    request_id = get_request_id() or "-"
     import openpyxl
 
     wb = openpyxl.load_workbook(io.BytesIO(file_content), read_only=True, data_only=True)
@@ -34,6 +41,13 @@ def _xlsx_bytes_to_sheets_html(file_content: bytes, *, max_rows: int = 200, max_
         title = str(ws.title or f"Sheet{len(sheets) + 1}")
         sheets[title] = table_html
 
+    logger.info(
+        "xlsx_to_sheets_done request_id=%s size_bytes=%s sheet_count=%s elapsed_ms=%.2f",
+        request_id,
+        len(file_content or b""),
+        len(sheets),
+        (time.perf_counter() - t0) * 1000,
+    )
     return sheets
 
 
@@ -65,6 +79,8 @@ def build_preview_payload(file_content: bytes, filename: str | None, doc_id: str
       - excel: {type:'excel', filename, sheets:{sheetName: html}}
       - unsupported: {type:'unsupported', filename, message}
     """
+    t0 = time.perf_counter()
+    request_id = get_request_id() or "-"
     filename = filename or (f"document_{doc_id}" if doc_id else "document")
     file_ext = Path(filename).suffix.lower()
 
@@ -79,16 +95,22 @@ def build_preview_payload(file_content: bytes, filename: str | None, doc_id: str
                 text_content = file_content.decode("gbk")
             except Exception:
                 return {"type": "unsupported", "filename": filename, "message": "无法解码文本文件"}
-        return {"type": "text", "filename": filename, "content": text_content}
+        payload = {"type": "text", "filename": filename, "content": text_content}
+        logger.info("build_preview_payload_done request_id=%s ext=%s type=%s size_bytes=%s elapsed_ms=%.2f", request_id, file_ext, payload["type"], len(file_content or b""), (time.perf_counter() - t0) * 1000)
+        return payload
 
     if file_ext in image_extensions:
         base64_image = base64.b64encode(file_content).decode("utf-8")
         image_type = file_ext[1:]
-        return {"type": "image", "filename": filename, "content": base64_image, "image_type": image_type}
+        payload = {"type": "image", "filename": filename, "content": base64_image, "image_type": image_type}
+        logger.info("build_preview_payload_done request_id=%s ext=%s type=%s size_bytes=%s elapsed_ms=%.2f", request_id, file_ext, payload["type"], len(file_content or b""), (time.perf_counter() - t0) * 1000)
+        return payload
 
     if file_ext == ".pdf":
         base64_pdf = base64.b64encode(file_content).decode("utf-8")
-        return {"type": "pdf", "filename": filename, "content": base64_pdf}
+        payload = {"type": "pdf", "filename": filename, "content": base64_pdf}
+        logger.info("build_preview_payload_done request_id=%s ext=%s type=%s size_bytes=%s elapsed_ms=%.2f", request_id, file_ext, payload["type"], len(file_content or b""), (time.perf_counter() - t0) * 1000)
+        return payload
 
     if file_ext in {".doc", ".docx"}:
         try:
@@ -99,7 +121,9 @@ def build_preview_payload(file_content: bytes, filename: str | None, doc_id: str
             )
             base64_html = base64.b64encode(html_bytes).decode("utf-8")
             out_name = f"{Path(filename).stem}.html" if filename else f"document_{doc_id}.html"
-            return {"type": "html", "filename": out_name, "source_filename": filename, "content": base64_html}
+            payload = {"type": "html", "filename": out_name, "source_filename": filename, "content": base64_html}
+            logger.info("build_preview_payload_done request_id=%s ext=%s type=%s size_bytes=%s elapsed_ms=%.2f", request_id, file_ext, payload["type"], len(file_content or b""), (time.perf_counter() - t0) * 1000)
+            return payload
         except Exception as e:
             label = "DOCX" if file_ext == ".docx" else "DOC"
             if file_ext == ".docx" and "soffice not found" in str(e).lower():
@@ -109,7 +133,9 @@ def build_preview_payload(file_content: bytes, filename: str | None, doc_id: str
                     html_bytes = convert_docx_bytes_to_html_bytes_fallback(file_content)
                     base64_html = base64.b64encode(html_bytes).decode("utf-8")
                     out_name = f"{Path(filename).stem}.html" if filename else f"document_{doc_id}.html"
-                    return {"type": "html", "filename": out_name, "source_filename": filename, "content": base64_html}
+                    payload = {"type": "html", "filename": out_name, "source_filename": filename, "content": base64_html}
+                    logger.info("build_preview_payload_done request_id=%s ext=%s type=%s size_bytes=%s elapsed_ms=%.2f", request_id, file_ext, payload["type"], len(file_content or b""), (time.perf_counter() - t0) * 1000)
+                    return payload
                 except Exception as e2:
                     return {"type": "unsupported", "filename": filename, "message": f"DOCX preview unavailable: {str(e2)}"}
             return {"type": "unsupported", "filename": filename, "message": f"{label} preview unavailable: {str(e)}"}
@@ -121,10 +147,14 @@ def build_preview_payload(file_content: bytes, filename: str | None, doc_id: str
             if file_ext == ".xlsx":
                 try:
                     sheets = _xlsx_bytes_to_sheets_html(file_content)
-                    return {"type": "excel", "filename": filename, "sheets": sheets}
+                    payload = {"type": "excel", "filename": filename, "sheets": sheets}
+                    logger.info("build_preview_payload_done request_id=%s ext=%s type=%s size_bytes=%s elapsed_ms=%.2f", request_id, file_ext, payload["type"], len(file_content or b""), (time.perf_counter() - t0) * 1000)
+                    return payload
                 except Exception as e:
                     return {"type": "unsupported", "filename": filename, "message": f"Excel 预览失败：{str(e)}"}
-            return {"type": "unsupported", "filename": filename, "message": "暂不支持 .xls 在线预览（请下载查看）"}
+            payload = {"type": "unsupported", "filename": filename, "message": "暂不支持 .xls 在线预览（请下载查看）"}
+            logger.info("build_preview_payload_done request_id=%s ext=%s type=%s size_bytes=%s elapsed_ms=%.2f", request_id, file_ext, payload["type"], len(file_content or b""), (time.perf_counter() - t0) * 1000)
+            return payload
 
         # render=html
         try:
@@ -133,7 +163,9 @@ def build_preview_payload(file_content: bytes, filename: str | None, doc_id: str
             html_bytes = convert_office_bytes_to_html_bytes(file_content, filename=filename or "input.xlsx")
             base64_html = base64.b64encode(html_bytes).decode("utf-8")
             out_name = f"{Path(filename).stem}.html" if filename else f"document_{doc_id}.html"
-            return {"type": "html", "filename": out_name, "source_filename": filename, "content": base64_html}
+            payload = {"type": "html", "filename": out_name, "source_filename": filename, "content": base64_html}
+            logger.info("build_preview_payload_done request_id=%s ext=%s type=%s size_bytes=%s elapsed_ms=%.2f", request_id, file_ext, payload["type"], len(file_content or b""), (time.perf_counter() - t0) * 1000)
+            return payload
         except Exception:
             if file_ext == ".xlsx":
                 try:
@@ -141,10 +173,13 @@ def build_preview_payload(file_content: bytes, filename: str | None, doc_id: str
                     html_bytes = _sheets_html_to_single_html(sheets)
                     base64_html = base64.b64encode(html_bytes).decode("utf-8")
                     out_name = f"{Path(filename).stem}.html" if filename else f"document_{doc_id}.html"
-                    return {"type": "html", "filename": out_name, "source_filename": filename, "content": base64_html}
+                    payload = {"type": "html", "filename": out_name, "source_filename": filename, "content": base64_html}
+                    logger.info("build_preview_payload_done request_id=%s ext=%s type=%s size_bytes=%s elapsed_ms=%.2f", request_id, file_ext, payload["type"], len(file_content or b""), (time.perf_counter() - t0) * 1000)
+                    return payload
                 except Exception as e2:
                     return {"type": "unsupported", "filename": filename, "message": f"Excel 原样预览(HTML)失败：{str(e2)}"}
             return {"type": "unsupported", "filename": filename, "message": "暂不支持 .xls 原样预览(HTML)（请下载查看）"}
 
-    return {"type": "unsupported", "filename": filename, "message": f"不支持的文件类型: {file_ext}（请下载后查看）"}
-
+    payload = {"type": "unsupported", "filename": filename, "message": f"不支持的文件类型: {file_ext}（请下载后查看）"}
+    logger.info("build_preview_payload_done request_id=%s ext=%s type=%s size_bytes=%s elapsed_ms=%.2f", request_id, file_ext, payload["type"], len(file_content or b""), (time.perf_counter() - t0) * 1000)
+    return payload

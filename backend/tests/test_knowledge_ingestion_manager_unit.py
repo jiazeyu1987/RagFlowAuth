@@ -49,6 +49,23 @@ class _Ctx:
     snapshot: PermissionSnapshot
 
 
+class _UploadSettingsStore:
+    def __init__(self, values):
+        self._values = list(values)
+
+    def get(self):
+        return SimpleNamespace(allowed_extensions=list(self._values), updated_at_ms=0)
+
+    def add_allowed_extension_if_missing(self, extension: str):
+        ext = str(extension or "").strip().lower()
+        if not ext.startswith("."):
+            ext = f".{ext}"
+        if ext not in self._values:
+            self._values.append(ext)
+        self._values = sorted(set(self._values))
+        return self.get()
+
+
 class TestKnowledgeIngestionManagerUnit(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         self._tmp = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
@@ -60,6 +77,7 @@ class TestKnowledgeIngestionManagerUnit(unittest.IsolatedAsyncioTestCase):
             audit_log_store=None,
             user_store=None,
             org_directory_store=None,
+            upload_settings_store=None,
         )
         self.ctx = _Ctx(
             payload=SimpleNamespace(sub="u1"),
@@ -106,6 +124,21 @@ class TestKnowledgeIngestionManagerUnit(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(KnowledgeIngestionError) as cm:
             await self.manager.stage_upload_knowledge(kb_ref="kb1", upload_file=upload, ctx=self.ctx)
         self.assertEqual(cm.exception.code, "invalid_filename")
+
+    async def test_stage_upload_auto_adds_missing_extension_without_admin_step(self):
+        old_allowed = set(settings.ALLOWED_EXTENSIONS)
+        try:
+            # Simulate a suffix unknown to backend static baseline and DB list.
+            settings.ALLOWED_EXTENSIONS = {x for x in old_allowed if x != ".xyz"}
+            self.deps.upload_settings_store = _UploadSettingsStore(
+                [x for x in old_allowed if x != ".xyz"]
+            )
+            upload = _UploadFile(filename="sample.xyz", content=b"abc", content_type=None)
+            doc = await self.manager.stage_upload_knowledge(kb_ref="kb1", upload_file=upload, ctx=self.ctx)
+            self.assertEqual(doc.filename, "sample.xyz")
+            self.assertIn(".xyz", self.deps.upload_settings_store.get().allowed_extensions)
+        finally:
+            settings.ALLOWED_EXTENSIONS = old_allowed
 
 
 if __name__ == "__main__":

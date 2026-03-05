@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import mimetypes
 import uuid
 from dataclasses import dataclass
@@ -10,6 +11,8 @@ from backend.app.core.config import settings
 from backend.app.core.kb_refs import resolve_kb_ref
 from backend.app.core.paths import resolve_repo_path
 from backend.services.audit_helpers import actor_fields_from_ctx
+
+logger = logging.getLogger(__name__)
 
 
 class KnowledgeIngestionKbPort(Protocol):
@@ -110,6 +113,20 @@ class KnowledgeIngestionManager:
                 allowed_extensions = set(upload_settings_store.get().allowed_extensions)
             except Exception:
                 allowed_extensions = set(settings.ALLOWED_EXTENSIONS)
+
+        # Auto-heal: append missing suffix to DB settings automatically so
+        # frontend changes do not require separate backend admin intervention.
+        if file_ext not in allowed_extensions and upload_settings_store is not None:
+            try:
+                refreshed = upload_settings_store.add_allowed_extension_if_missing(file_ext)
+                allowed_extensions = set(refreshed.allowed_extensions)
+                logger.info(
+                    "upload_settings_auto_extended ext=%s total=%s",
+                    file_ext,
+                    len(allowed_extensions),
+                )
+            except Exception as e:
+                logger.warning("upload_settings_auto_extend_failed ext=%s err=%s", file_ext, e)
 
         if file_ext not in allowed_extensions:
             raise KnowledgeIngestionError("unsupported_file_type", status_code=400)

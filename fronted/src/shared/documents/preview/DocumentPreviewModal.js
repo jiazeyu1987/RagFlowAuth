@@ -6,7 +6,7 @@ import { loadDocumentPreview } from '../../preview/ragflowPreviewManager';
 import documentClient, { DOCUMENT_SOURCE } from '../documentClient';
 
 const isCsvFilename = (name) => String(name || '').toLowerCase().endsWith('.csv');
-const ONLYOFFICE_EXTENSIONS = new Set(['.xls', '.ppt', '.pptx']);
+const ONLYOFFICE_EXTENSIONS = new Set(['.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx']);
 
 const getFileExtensionLower = (name) => {
   const s = String(name || '').trim().toLowerCase();
@@ -20,6 +20,13 @@ const base64ToBytes = (base64) => {
   const bytes = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
   return bytes;
+};
+
+const nowMs = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
+
+const previewTrace = (step, meta = {}) => {
+  // eslint-disable-next-line no-console
+  console.info('[PreviewTrace][Modal]', step, meta);
 };
 
 const escapeHtml = (s) =>
@@ -110,18 +117,22 @@ const rowsToHtmlTable = (rows) => {
   return `<table><tbody>${body}</tbody></table>`;
 };
 
-const OnlyOfficeViewer = ({ serverUrl, config }) => {
+const OnlyOfficeViewer = ({ serverUrl, config, traceContext }) => {
   const containerId = useMemo(
     () => `onlyoffice-doc-editor-${Math.random().toString(36).slice(2)}`,
     []
   );
   const editorRef = useRef(null);
   const [viewerError, setViewerError] = useState('');
+  const traceSource = traceContext?.source;
+  const traceDocId = traceContext?.docId;
+  const traceFilename = traceContext?.filename;
 
   useEffect(() => {
     if (!serverUrl || !config) return undefined;
 
     let disposed = false;
+    const t0 = nowMs();
     const normalized = String(serverUrl || '').replace(/\/+$/, '');
     const scriptSrc = `${normalized}/web-apps/apps/api/documents/api.js`;
     const scriptId = `onlyoffice-docsapi-${normalized.replace(/[^a-zA-Z0-9]/g, '_')}`;
@@ -131,6 +142,7 @@ const OnlyOfficeViewer = ({ serverUrl, config }) => {
       if (disposed) return;
       if (!window.DocsAPI || typeof window.DocsAPI.DocEditor !== 'function') {
         setViewerError('ONLYOFFICE DocsAPI 未就绪');
+        previewTrace('onlyoffice:init:not-ready', { source: traceSource, docId: traceDocId, filename: traceFilename, scriptSrc, elapsedMs: Math.round(nowMs() - t0) });
         return;
       }
       try {
@@ -139,13 +151,18 @@ const OnlyOfficeViewer = ({ serverUrl, config }) => {
         }
         editorRef.current = new window.DocsAPI.DocEditor(containerId, config);
         setViewerError('');
+        previewTrace('onlyoffice:init:done', { source: traceSource, docId: traceDocId, filename: traceFilename, elapsedMs: Math.round(nowMs() - t0) });
       } catch (e) {
         setViewerError(e?.message || 'ONLYOFFICE 初始化失败');
+        previewTrace('onlyoffice:init:failed', { source: traceSource, docId: traceDocId, filename: traceFilename, error: e?.message || String(e), elapsedMs: Math.round(nowMs() - t0) });
       }
     };
 
     const handleLoad = () => initEditor();
-    const handleError = () => setViewerError('加载 ONLYOFFICE 脚本失败');
+    const handleError = () => {
+      setViewerError('加载 ONLYOFFICE 脚本失败');
+      previewTrace('onlyoffice:script:error', { source: traceSource, docId: traceDocId, filename: traceFilename, scriptSrc, elapsedMs: Math.round(nowMs() - t0) });
+    };
 
     if (scriptEl) {
       scriptEl.addEventListener('load', handleLoad);
@@ -159,6 +176,7 @@ const OnlyOfficeViewer = ({ serverUrl, config }) => {
       scriptEl.onload = handleLoad;
       scriptEl.onerror = handleError;
       document.body.appendChild(scriptEl);
+      previewTrace('onlyoffice:script:append', { source: traceSource, docId: traceDocId, filename: traceFilename, scriptSrc });
     }
 
     return () => {
@@ -176,7 +194,7 @@ const OnlyOfficeViewer = ({ serverUrl, config }) => {
       }
       editorRef.current = null;
     };
-  }, [serverUrl, config, containerId]);
+  }, [serverUrl, config, containerId, traceSource, traceDocId, traceFilename]);
 
   if (viewerError) return <div style={{ color: '#991b1b' }}>{viewerError}</div>;
   return <div id={containerId} style={{ width: '100%', height: '78vh', border: '1px solid #e5e7eb', borderRadius: '10px' }} />;
@@ -215,7 +233,15 @@ export const DocumentPreviewModal = ({ open, target, onClose, canDownloadFiles =
     if (!target?.docId || !target?.source) return;
 
     let cancelled = false;
+    const t0 = nowMs();
+    const traceContext = {
+      source: target?.source,
+      docId: target?.docId,
+      dataset: target?.datasetName || target?.dataset,
+      title: target?.filename || target?.title,
+    };
     const run = async () => {
+      previewTrace('open:start', traceContext);
       setLoading(true);
       setError('');
       setPayload(null);
@@ -232,11 +258,14 @@ export const DocumentPreviewModal = ({ open, target, onClose, canDownloadFiles =
         const sessionId = target.sessionId;
         const title = target.filename || target.title || `document_${docId}`;
         const ext = getFileExtensionLower(title);
+        previewTrace('route:detect', { ...traceContext, ext, canDownloadFiles });
 
         if (
           (source === DOCUMENT_SOURCE.RAGFLOW || source === DOCUMENT_SOURCE.KNOWLEDGE) &&
           ONLYOFFICE_EXTENSIONS.has(ext)
         ) {
+          const onlyOfficeStart = nowMs();
+          previewTrace('onlyoffice:editor-config:start', traceContext);
           const onlyOffice = await documentClient.onlyofficeEditorConfig({
             source,
             docId,
@@ -248,6 +277,11 @@ export const DocumentPreviewModal = ({ open, target, onClose, canDownloadFiles =
             filename: title,
           });
           if (cancelled) return;
+          previewTrace('onlyoffice:editor-config:done', {
+            ...traceContext,
+            elapsedMs: Math.round(nowMs() - onlyOfficeStart),
+            serverUrl: onlyOffice?.server_url,
+          });
           setEffectiveName(String(onlyOffice?.filename || title || ''));
           setOnlyOfficeServerUrl(String(onlyOffice?.server_url || ''));
           setOnlyOfficeConfig(onlyOffice?.config || null);
@@ -255,6 +289,7 @@ export const DocumentPreviewModal = ({ open, target, onClose, canDownloadFiles =
           return;
         }
 
+        previewTrace('manager:load:start', traceContext);
         const data = await loadDocumentPreview({
           docId,
           dataset: datasetName,
@@ -285,6 +320,11 @@ export const DocumentPreviewModal = ({ open, target, onClose, canDownloadFiles =
         });
 
         if (cancelled) return;
+        previewTrace('manager:load:done', {
+          ...traceContext,
+          type: data?.type,
+          elapsedMs: Math.round(nowMs() - t0),
+        });
 
         const name = String(data?.filename || title || '');
         setEffectiveName(name);
@@ -308,6 +348,7 @@ export const DocumentPreviewModal = ({ open, target, onClose, canDownloadFiles =
             lastUrlRef.current = url;
             setObjectUrl(url);
           } else {
+            const pdfStart = nowMs();
             setPdfRendering(true);
             setPdfRenderingMessage('PDF 预览加载中...');
             try {
@@ -321,6 +362,7 @@ export const DocumentPreviewModal = ({ open, target, onClose, canDownloadFiles =
               for (let i = 1; i <= total; i++) {
                 if (cancelled) return;
                 setPdfRenderingMessage(`PDF 预览加载中 (${i}/${total})...`);
+                previewTrace('pdf:render:page:start', { ...traceContext, page: i, total });
                 const page = await pdf.getPage(i);
                 const viewport = page.getViewport({ scale: 1.4 });
                 const canvas = document.createElement('canvas');
@@ -330,11 +372,14 @@ export const DocumentPreviewModal = ({ open, target, onClose, canDownloadFiles =
                 canvas.height = Math.ceil(viewport.height);
                 await page.render({ canvasContext: ctx, viewport }).promise;
                 pages.push(canvas.toDataURL('image/png'));
+                previewTrace('pdf:render:page:done', { ...traceContext, page: i, total });
               }
 
               if (!cancelled) setPdfPageImages(pages);
+              previewTrace('pdf:render:done', { ...traceContext, pages: pages.length, elapsedMs: Math.round(nowMs() - pdfStart) });
             } catch (pdfError) {
               if (!cancelled) setError(pdfError?.message || 'PDF 预览失败');
+              previewTrace('pdf:render:failed', { ...traceContext, error: pdfError?.message || String(pdfError) });
             } finally {
               if (!cancelled) {
                 setPdfRendering(false);
@@ -358,8 +403,12 @@ export const DocumentPreviewModal = ({ open, target, onClose, canDownloadFiles =
       } catch (e) {
         if (cancelled) return;
         setError(e?.message || '预览失败');
+        previewTrace('open:failed', { ...traceContext, elapsedMs: Math.round(nowMs() - t0), error: e?.message || String(e) });
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+          previewTrace('open:done', { ...traceContext, elapsedMs: Math.round(nowMs() - t0) });
+        }
       }
     };
 
@@ -603,7 +652,13 @@ export const DocumentPreviewModal = ({ open, target, onClose, canDownloadFiles =
               }
 
               if (p.type === 'onlyoffice' && onlyOfficeServerUrl && onlyOfficeConfig) {
-                return <OnlyOfficeViewer serverUrl={onlyOfficeServerUrl} config={onlyOfficeConfig} />;
+                return (
+                  <OnlyOfficeViewer
+                    serverUrl={onlyOfficeServerUrl}
+                    config={onlyOfficeConfig}
+                    traceContext={{ source: target?.source, docId: target?.docId, filename: effectiveName }}
+                  />
+                );
               }
 
               if (p.type === 'pdf' && objectUrl) {

@@ -25,6 +25,19 @@ const parseMaybeJson = async (resp) => {
   }
 };
 
+const requestJsonWithResponse = async (path, options = {}) => {
+  const response = await httpClient.request(path, options);
+  const data = await parseMaybeJson(response);
+  if (!response.ok) {
+    const message = data?.detail || data?.message || data?.error || `Request failed (${response.status})`;
+    const error = new Error(message);
+    error.status = response.status;
+    error.data = data;
+    throw error;
+  }
+  return { data, response };
+};
+
 const parseContentDispositionFilename = (contentDisposition, fallbackName) => {
   let filename = fallbackName;
   const cd = String(contentDisposition || '');
@@ -53,6 +66,7 @@ const parseContentDispositionFilename = (contentDisposition, fallbackName) => {
  */
 class DocumentClient {
   async preview(ref) {
+    const t0 = (typeof performance !== 'undefined' ? performance.now() : Date.now());
     const source = String(ref?.source || '').toLowerCase();
     const docId = ref?.docId;
     const render = ref?.render;
@@ -61,41 +75,58 @@ class DocumentClient {
     if (source === DOCUMENT_SOURCE.RAGFLOW) {
       const datasetName = ref?.datasetName || ref?.dataset || '';
       if (!datasetName) throw new Error('missing_dataset');
-      return httpClient.requestJson(
+      const { data, response } = await requestJsonWithResponse(
         `/api/preview/documents/ragflow/${encodeURIComponent(docId)}/preview${buildQuery({ dataset: datasetName, render })}`,
         { method: 'GET' }
       );
+      const requestId = response?.headers?.get?.('X-Request-ID') || '';
+      // eslint-disable-next-line no-console
+      console.info('[PreviewTrace][Client] preview:ragflow', { docId, datasetName, render, elapsedMs: Math.round((typeof performance !== 'undefined' ? performance.now() : Date.now()) - t0), type: data?.type, requestId });
+      return data;
     }
 
     if (source === DOCUMENT_SOURCE.KNOWLEDGE) {
-      return httpClient.requestJson(
+      const { data, response } = await requestJsonWithResponse(
         `/api/preview/documents/knowledge/${encodeURIComponent(docId)}/preview${buildQuery({ render })}`,
         { method: 'GET' }
       );
+      const requestId = response?.headers?.get?.('X-Request-ID') || '';
+      // eslint-disable-next-line no-console
+      console.info('[PreviewTrace][Client] preview:knowledge', { docId, render, elapsedMs: Math.round((typeof performance !== 'undefined' ? performance.now() : Date.now()) - t0), type: data?.type, requestId });
+      return data;
     }
 
     if (source === DOCUMENT_SOURCE.PATENT) {
       const sessionId = String(ref?.sessionId || '').trim();
       if (!sessionId) throw new Error('missing_session_id');
-      return httpClient.requestJson(
+      const { data, response } = await requestJsonWithResponse(
         `/api/patent-download/sessions/${encodeURIComponent(sessionId)}/items/${encodeURIComponent(docId)}/preview${buildQuery({ render })}`,
         { method: 'GET' }
       );
+      const requestId = response?.headers?.get?.('X-Request-ID') || '';
+      // eslint-disable-next-line no-console
+      console.info('[PreviewTrace][Client] preview:patent', { docId, sessionId, render, elapsedMs: Math.round((typeof performance !== 'undefined' ? performance.now() : Date.now()) - t0), type: data?.type, requestId });
+      return data;
     }
 
     if (source === DOCUMENT_SOURCE.PAPER) {
       const sessionId = String(ref?.sessionId || '').trim();
       if (!sessionId) throw new Error('missing_session_id');
-      return httpClient.requestJson(
+      const { data, response } = await requestJsonWithResponse(
         `/api/paper-download/sessions/${encodeURIComponent(sessionId)}/items/${encodeURIComponent(docId)}/preview${buildQuery({ render })}`,
         { method: 'GET' }
       );
+      const requestId = response?.headers?.get?.('X-Request-ID') || '';
+      // eslint-disable-next-line no-console
+      console.info('[PreviewTrace][Client] preview:paper', { docId, sessionId, render, elapsedMs: Math.round((typeof performance !== 'undefined' ? performance.now() : Date.now()) - t0), type: data?.type, requestId });
+      return data;
     }
 
     throw new Error('invalid_source');
   }
 
   async _downloadResponse(ref) {
+    const t0 = (typeof performance !== 'undefined' ? performance.now() : Date.now());
     const source = String(ref?.source || '').toLowerCase();
     const docId = ref?.docId;
     if (!docId) throw new Error('missing_doc_id');
@@ -109,7 +140,12 @@ class DocumentClient {
         filename,
       })}`;
       const resp = await httpClient.request(path, { method: 'GET' });
-      if (resp.ok) return resp;
+      if (resp.ok) {
+        const requestId = resp?.headers?.get?.('X-Request-ID') || '';
+        // eslint-disable-next-line no-console
+        console.info('[PreviewTrace][Client] download:ragflow', { docId, datasetName, elapsedMs: Math.round((typeof performance !== 'undefined' ? performance.now() : Date.now()) - t0), requestId });
+        return resp;
+      }
 
       const data = await parseMaybeJson(resp);
       const message = data?.detail || data?.message || `download_failed (${resp.status})`;
@@ -121,7 +157,12 @@ class DocumentClient {
 
     if (source === DOCUMENT_SOURCE.KNOWLEDGE) {
       const resp = await httpClient.request(`/api/documents/knowledge/${encodeURIComponent(docId)}/download`, { method: 'GET' });
-      if (resp.ok) return resp;
+      if (resp.ok) {
+        const requestId = resp?.headers?.get?.('X-Request-ID') || '';
+        // eslint-disable-next-line no-console
+        console.info('[PreviewTrace][Client] download:knowledge', { docId, elapsedMs: Math.round((typeof performance !== 'undefined' ? performance.now() : Date.now()) - t0), requestId });
+        return resp;
+      }
 
       const data = await parseMaybeJson(resp);
       const message = data?.detail || data?.message || `download_failed (${resp.status})`;
@@ -138,7 +179,12 @@ class DocumentClient {
         `/api/patent-download/sessions/${encodeURIComponent(sessionId)}/items/${encodeURIComponent(docId)}/download`,
         { method: 'GET' }
       );
-      if (resp.ok) return resp;
+      if (resp.ok) {
+        const requestId = resp?.headers?.get?.('X-Request-ID') || '';
+        // eslint-disable-next-line no-console
+        console.info('[PreviewTrace][Client] download:patent', { docId, sessionId, elapsedMs: Math.round((typeof performance !== 'undefined' ? performance.now() : Date.now()) - t0), requestId });
+        return resp;
+      }
 
       const data = await parseMaybeJson(resp);
       const message = data?.detail || data?.message || `download_failed (${resp.status})`;
@@ -155,7 +201,12 @@ class DocumentClient {
         `/api/paper-download/sessions/${encodeURIComponent(sessionId)}/items/${encodeURIComponent(docId)}/download`,
         { method: 'GET' }
       );
-      if (resp.ok) return resp;
+      if (resp.ok) {
+        const requestId = resp?.headers?.get?.('X-Request-ID') || '';
+        // eslint-disable-next-line no-console
+        console.info('[PreviewTrace][Client] download:paper', { docId, sessionId, elapsedMs: Math.round((typeof performance !== 'undefined' ? performance.now() : Date.now()) - t0), requestId });
+        return resp;
+      }
 
       const data = await parseMaybeJson(resp);
       const message = data?.detail || data?.message || `download_failed (${resp.status})`;
@@ -292,11 +343,12 @@ class DocumentClient {
   }
 
   async onlyofficeEditorConfig(ref) {
+    const t0 = (typeof performance !== 'undefined' ? performance.now() : Date.now());
     const source = String(ref?.source || '').toLowerCase();
     const docId = String(ref?.docId || '').trim();
     if (!docId) throw new Error('missing_doc_id');
     if (!source) throw new Error('missing_source');
-    return httpClient.requestJson('/api/onlyoffice/editor-config', {
+    const { data, response } = await requestJsonWithResponse('/api/onlyoffice/editor-config', {
       method: 'POST',
       body: JSON.stringify({
         source,
@@ -306,6 +358,10 @@ class DocumentClient {
         filename: ref?.filename || ref?.title || '',
       }),
     });
+    const requestId = response?.headers?.get?.('X-Request-ID') || '';
+    // eslint-disable-next-line no-console
+    console.info('[PreviewTrace][Client] onlyoffice:editor-config', { source, docId, elapsedMs: Math.round((typeof performance !== 'undefined' ? performance.now() : Date.now()) - t0), serverUrl: data?.server_url, requestId });
+    return data;
   }
 }
 

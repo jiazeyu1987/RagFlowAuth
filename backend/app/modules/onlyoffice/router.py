@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import hashlib
+import logging
 import mimetypes
+import time
 from pathlib import Path
 from typing import Any
 from urllib.parse import quote
@@ -19,8 +21,9 @@ from backend.services.documents.sources.ragflow_source import RagflowDocumentSou
 from backend.services.onlyoffice_security import create_file_access_token, parse_file_access_token
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
-SUPPORTED_EXTENSIONS = {".xls", ".xlsx", ".ppt", ".pptx"}
+SUPPORTED_EXTENSIONS = {".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx"}
 
 
 def _assert_preview_capability(ctx: AuthContextDep) -> None:
@@ -61,17 +64,26 @@ def _encode_onlyoffice_token(payload: dict[str, Any]) -> str:
 
 @router.post("/onlyoffice/editor-config")
 async def build_editor_config(body: dict, request: Request, ctx: AuthContextDep):
+    t0 = time.perf_counter()
+    request_id = getattr(getattr(request, "state", None), "request_id", "") or "-"
+    source = str(body.get("source") or "").strip().lower()
+    doc_id = str(body.get("doc_id") or "").strip()
+    dataset = str(body.get("dataset") or "").strip()
+    filename = str(body.get("filename") or "").strip()
+    logger.info(
+        "onlyoffice_editor_config_start request_id=%s source=%s doc_id=%s dataset=%s filename=%s",
+        request_id,
+        source,
+        doc_id,
+        dataset,
+        filename,
+    )
     if not bool(getattr(settings, "ONLYOFFICE_ENABLED", False)):
         raise HTTPException(status_code=400, detail="onlyoffice_not_enabled")
 
     server_url = str(getattr(settings, "ONLYOFFICE_SERVER_URL", "") or "").strip().rstrip("/")
     if not server_url:
         raise HTTPException(status_code=400, detail="onlyoffice_server_url_missing")
-
-    source = str(body.get("source") or "").strip().lower()
-    doc_id = str(body.get("doc_id") or "").strip()
-    dataset = str(body.get("dataset") or "").strip()
-    filename = str(body.get("filename") or "").strip()
 
     if not source or not doc_id:
         raise HTTPException(status_code=400, detail="missing_source_or_doc_id")
@@ -144,15 +156,24 @@ async def build_editor_config(body: dict, request: Request, ctx: AuthContextDep)
     if signed:
         config["token"] = signed
 
-    return {
-        "server_url": server_url,
-        "filename": filename,
-        "config": config,
-    }
+    elapsed_ms = (time.perf_counter() - t0) * 1000
+    logger.info(
+        "onlyoffice_editor_config_done request_id=%s source=%s doc_id=%s dataset=%s ext=%s elapsed_ms=%.2f",
+        request_id,
+        source,
+        doc_id,
+        dataset,
+        ext,
+        elapsed_ms,
+    )
+    return {"server_url": server_url, "filename": filename, "config": config}
 
 
 @router.get("/onlyoffice/file")
 async def serve_file_by_token(token: str, request: Request):
+    t0 = time.perf_counter()
+    request_id = getattr(getattr(request, "state", None), "request_id", "") or "-"
+    logger.info("onlyoffice_file_start request_id=%s", request_id)
     try:
         claims = parse_file_access_token(token)
     except Exception as e:
@@ -184,6 +205,17 @@ async def serve_file_by_token(token: str, request: Request):
 
     media_type = mimetypes.guess_type(filename)[0] or "application/octet-stream"
     quoted = quote(filename)
+    elapsed_ms = (time.perf_counter() - t0) * 1000
+    logger.info(
+        "onlyoffice_file_served request_id=%s source=%s doc_id=%s dataset=%s filename=%s size_bytes=%s elapsed_ms=%.2f",
+        request_id,
+        source,
+        doc_id,
+        dataset,
+        filename,
+        len(content),
+        elapsed_ms,
+    )
     return Response(
         content=content,
         media_type=media_type,

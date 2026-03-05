@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import inspect
 import json
+import time
 from typing import Optional, List
 
 import requests
 
 from ...ragflow_config import DEFAULT_RAGFLOW_BASE_URL
+from backend.app.core.request_id import get_request_id
 
 
 class RagflowDocumentsMixin:
@@ -104,14 +106,26 @@ class RagflowDocumentsMixin:
         return documents
 
     def _find_document_metadata_via_http(self, dataset_id: str, document_id: str) -> dict | None:
+        t0 = time.perf_counter()
+        request_id = get_request_id() or "-"
         payload = self._http.get_json(
             f"/api/v1/datasets/{dataset_id}/documents",
             params={"id": document_id, "page": 1, "page_size": 1},
         )
         batch = self._extract_document_batch_from_payload(payload)
+        self.logger.info(
+            "ragflow_meta_lookup_done request_id=%s dataset_id=%s document_id=%s found=%s elapsed_ms=%.2f",
+            request_id,
+            dataset_id,
+            document_id,
+            bool(batch),
+            (time.perf_counter() - t0) * 1000,
+        )
         return batch[0] if batch else None
 
     def _download_document_via_http(self, dataset_id: str, document_id: str) -> bytes | None:
+        t0 = time.perf_counter()
+        request_id = get_request_id() or "-"
         url = f"{self._http.config.base_url.rstrip('/')}/api/v1/datasets/{dataset_id}/documents/{document_id}"
         try:
             resp = requests.get(url, headers=self._http.headers(), timeout=float(self.config.get("timeout", 10) or 10))
@@ -120,19 +134,50 @@ class RagflowDocumentsMixin:
             return None
 
         if resp.status_code != 200:
-            self.logger.error("RAGFlow download document failed: HTTP %s", resp.status_code)
+            self.logger.error(
+                "RAGFlow download document failed: HTTP %s request_id=%s dataset_id=%s document_id=%s elapsed_ms=%.2f",
+                resp.status_code,
+                request_id,
+                dataset_id,
+                document_id,
+                (time.perf_counter() - t0) * 1000,
+            )
             return None
 
         try:
             payload = resp.json()
         except json.JSONDecodeError:
+            self.logger.info(
+                "ragflow_file_download_done request_id=%s dataset_id=%s document_id=%s size_bytes=%s elapsed_ms=%.2f",
+                request_id,
+                dataset_id,
+                document_id,
+                len(resp.content or b""),
+                (time.perf_counter() - t0) * 1000,
+            )
             return resp.content
         except Exception:
+            self.logger.info(
+                "ragflow_file_download_done request_id=%s dataset_id=%s document_id=%s size_bytes=%s elapsed_ms=%.2f",
+                request_id,
+                dataset_id,
+                document_id,
+                len(resp.content or b""),
+                (time.perf_counter() - t0) * 1000,
+            )
             return resp.content
 
         if isinstance(payload, dict) and set(payload.keys()) == {"code", "message"}:
             self.logger.error("RAGFlow download document failed: %s", payload.get("message"))
             return None
+        self.logger.info(
+            "ragflow_file_download_done request_id=%s dataset_id=%s document_id=%s size_bytes=%s elapsed_ms=%.2f",
+            request_id,
+            dataset_id,
+            document_id,
+            len(resp.content or b""),
+            (time.perf_counter() - t0) * 1000,
+        )
         return resp.content
 
     def list_documents(self, dataset_name: str = "展厅") -> List[dict]:
@@ -465,6 +510,8 @@ class RagflowDocumentsMixin:
         if not self.client:
             raise ValueError("RAGFlow client not initialized")
 
+        t0 = time.perf_counter()
+        request_id = get_request_id() or "-"
         try:
             dataset_name = self._normalize_dataset_name_for_ops(dataset_name)
             dataset = self._find_dataset_by_name(dataset_name)
@@ -488,6 +535,15 @@ class RagflowDocumentsMixin:
 
             if file_content:
                 self.logger.info(f"Successfully downloaded {len(file_content)} bytes")
+                self.logger.info(
+                    "ragflow_download_document_done request_id=%s dataset=%s dataset_id=%s document_id=%s size_bytes=%s elapsed_ms=%.2f",
+                    request_id,
+                    dataset_name,
+                    dataset_id,
+                    document_id,
+                    len(file_content),
+                    (time.perf_counter() - t0) * 1000,
+                )
                 return file_content, filename
             else:
                 self.logger.error(f"Download returned empty content for document {document_id}")
