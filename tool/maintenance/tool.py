@@ -81,6 +81,9 @@ from tool.maintenance.features.stop_services import stop_ragflow_and_ragflowauth
 from tool.maintenance.features.kill_backup_job import (
     kill_running_backup_job as feature_kill_running_backup_job,
 )
+from tool.maintenance.features.onlyoffice_deploy import (
+    deploy_onlyoffice_from_local as feature_deploy_onlyoffice_from_local,
+)
 from tool.maintenance.core.ragflow_base_url_guard import (
     LOCAL_RAGFLOW_CONFIG_PATH,
     ensure_local_base_url,
@@ -507,6 +510,7 @@ class RagflowAuthTool:
         self.create_web_links_tab()
         self.create_restore_tab()
         self.create_release_tab()
+        self.create_onlyoffice_tab()
         self.create_smoke_tab()
         self.create_backup_files_tab()  # 新增：备份文件管理
         self.create_replica_backups_tab()
@@ -577,11 +581,80 @@ class RagflowAuthTool:
 
         build_release_tab(self)
 
+    def create_onlyoffice_tab(self):
+        """ONLYOFFICE 发布页签 UI（按钮回调在 tool.py 里）。"""
+        from tool.maintenance.ui.onlyoffice_tab import build_onlyoffice_tab
+
+        build_onlyoffice_tab(self)
+
     def create_smoke_tab(self):
         """冒烟测试页签 UI（拆分到独立模块）。"""
         from tool.maintenance.ui.smoke_tab import build_smoke_tab
 
         build_smoke_tab(self)
+
+    def deploy_onlyoffice_to_test(self):
+        self._deploy_onlyoffice_to_server(server_ip=TEST_SERVER_IP, display_name="测试")
+
+    def deploy_onlyoffice_to_prod(self):
+        self._deploy_onlyoffice_to_server(server_ip=PROD_SERVER_IP, display_name="正式")
+
+    def _deploy_onlyoffice_to_server(self, *, server_ip: str, display_name: str) -> None:
+        if not messagebox.askyesno(
+            "确认部署 ONLYOFFICE",
+            f"确认要把本机 ONLYOFFICE 发布到{display_name}服务器 {server_ip} 吗？\n\n"
+            "注意：这会重建目标服务器的 onlyoffice 容器和 ragflowauth-backend 容器。",
+        ):
+            return
+
+        if hasattr(self, "onlyoffice_log_text"):
+            try:
+                self.onlyoffice_log_text.delete("1.0", tk.END)
+            except Exception:
+                pass
+        if hasattr(self, "status_bar"):
+            self.status_bar.config(text=f"ONLYOFFICE 发布中... {display_name} {server_ip}")
+
+        log_to_file(f"[OnlyOfficeDeploy] Start local->{display_name} ({server_ip})", "INFO")
+
+        def worker():
+            def ui_log(line: str) -> None:
+                if not hasattr(self, "onlyoffice_log_text"):
+                    return
+
+                def _append() -> None:
+                    try:
+                        self.onlyoffice_log_text.insert(tk.END, line + "\n")
+                        self.onlyoffice_log_text.see(tk.END)
+                    except Exception:
+                        pass
+
+                try:
+                    self.root.after(0, _append)
+                except Exception:
+                    pass
+
+            try:
+                result = feature_deploy_onlyoffice_from_local(server_ip=server_ip, ui_log=ui_log)
+                level = "INFO" if result.ok else "ERROR"
+                for line in (result.log or "").splitlines():
+                    log_to_file(f"[OnlyOfficeDeploy] {line}", level)
+
+                if result.ok:
+                    ui_log("[DONE] ONLYOFFICE 发布成功")
+                    if hasattr(self, "status_bar"):
+                        self.root.after(0, lambda: self.status_bar.config(text=f"ONLYOFFICE 发布成功：{display_name} {server_ip}"))
+                else:
+                    ui_log("[DONE] ONLYOFFICE 发布失败（请查看上方日志）")
+                    if hasattr(self, "status_bar"):
+                        self.root.after(0, lambda: self.status_bar.config(text=f"ONLYOFFICE 发布失败：{display_name} {server_ip}"))
+            except Exception as e:
+                log_to_file(f"[OnlyOfficeDeploy] exception: {e}", "ERROR")
+                ui_log(f"[ERROR] {e}")
+                if hasattr(self, "status_bar"):
+                    self.root.after(0, lambda: self.status_bar.config(text=f"ONLYOFFICE 发布失败：{display_name} {server_ip}"))
+
+        self.task_runner.run(name=f"deploy_onlyoffice_{server_ip}", fn=worker)
 
     def run_smoke_test(self, server_ip: str):
         """
