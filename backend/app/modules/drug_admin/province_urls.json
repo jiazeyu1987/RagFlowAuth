@@ -1,0 +1,146 @@
+{
+  "validated_on": "2026-03-06",
+  "source": "http://www.cpi.ac.cn/jigou/local（含国家药监局、港澳台官方药监机构补充）",
+  "provinces": [
+    {
+      "name": "国家药品监督管理局",
+      "urls": ["https://www.nmpa.gov.cn"]
+    },
+    {
+      "name": "北京市",
+      "urls": ["https://yjj.beijing.gov.cn"]
+    },
+    {
+      "name": "天津市",
+      "urls": ["https://scjg.tj.gov.cn"]
+    },
+    {
+      "name": "河北省",
+      "urls": ["https://yjj.hebei.gov.cn"]
+    },
+    {
+      "name": "山西省",
+      "urls": ["https://yjj.shanxi.gov.cn"]
+    },
+    {
+      "name": "内蒙古自治区",
+      "urls": ["http://mpa.nmg.gov.cn", "https://mpa.nmg.gov.cn"]
+    },
+    {
+      "name": "辽宁省",
+      "urls": ["https://ypjg.ln.gov.cn"]
+    },
+    {
+      "name": "吉林省",
+      "urls": ["https://mpa.jl.gov.cn"]
+    },
+    {
+      "name": "黑龙江省",
+      "urls": ["https://mpa.hlj.gov.cn"]
+    },
+    {
+      "name": "上海市",
+      "urls": ["https://yjj.sh.gov.cn"]
+    },
+    {
+      "name": "江苏省",
+      "urls": ["https://da.jiangsu.gov.cn"]
+    },
+    {
+      "name": "浙江省",
+      "urls": ["https://mpa.zj.gov.cn"]
+    },
+    {
+      "name": "安徽省",
+      "urls": ["https://mpa.ah.gov.cn"]
+    },
+    {
+      "name": "福建省",
+      "urls": ["https://yjj.scjgj.fujian.gov.cn", "https://yjj.fujian.gov.cn"]
+    },
+    {
+      "name": "江西省",
+      "urls": ["https://mpa.jiangxi.gov.cn"]
+    },
+    {
+      "name": "山东省",
+      "urls": ["http://mpa.shandong.gov.cn", "https://mpa.shandong.gov.cn"]
+    },
+    {
+      "name": "河南省",
+      "urls": ["https://yjj.henan.gov.cn"]
+    },
+    {
+      "name": "湖北省",
+      "urls": ["https://mpa.hubei.gov.cn"]
+    },
+    {
+      "name": "湖南省",
+      "urls": ["https://mpa.hunan.gov.cn", "http://mpa.hunan.gov.cn"]
+    },
+    {
+      "name": "广东省",
+      "urls": ["https://mpa.gd.gov.cn"]
+    },
+    {
+      "name": "广西壮族自治区",
+      "urls": ["https://yjj.gxzf.gov.cn"]
+    },
+    {
+      "name": "海南省",
+      "urls": ["https://amr.hainan.gov.cn"]
+    },
+    {
+      "name": "重庆市",
+      "urls": ["https://yaojianju.cq.gov.cn"]
+    },
+    {
+      "name": "四川省",
+      "urls": ["https://yjj.sc.gov.cn"]
+    },
+    {
+      "name": "贵州省",
+      "urls": ["https://yjj.guizhou.gov.cn"]
+    },
+    {
+      "name": "云南省",
+      "urls": ["https://mpa.yn.gov.cn"]
+    },
+    {
+      "name": "西藏自治区",
+      "urls": ["https://mpa.xizang.gov.cn"]
+    },
+    {
+      "name": "陕西省",
+      "urls": ["https://mpa.shaanxi.gov.cn"]
+    },
+    {
+      "name": "甘肃省",
+      "urls": ["https://yjj.gansu.gov.cn", "http://yjj.gansu.gov.cn"]
+    },
+    {
+      "name": "青海省",
+      "urls": ["https://ypjgj.qinghai.gov.cn"]
+    },
+    {
+      "name": "宁夏回族自治区",
+      "urls": ["http://nxyjj.nx.gov.cn", "https://nxyjj.nx.gov.cn"]
+    },
+    {
+      "name": "新疆维吾尔自治区",
+      "urls": ["https://mpa.xinjiang.gov.cn"]
+    },
+    {
+      "name": "香港特别行政区",
+      "urls": ["https://www.drugoffice.gov.hk"]
+    },
+    {
+      "name": "澳门特别行政区",
+      "urls": ["https://www.isaf.gov.mo", "https://www.ssm.gov.mo"]
+    },
+    {
+      "name": "台湾省",
+      "urls": ["https://www.fda.gov.tw"]
+    }
+  ]
+}

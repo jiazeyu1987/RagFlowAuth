@@ -50,6 +50,8 @@ const Layout = ({ children }) => {
     '/tools/patent-download': '专利下载',
     '/tools/paper-download': '论文下载',
     '/tools/nas-browser': 'NAS云盘',
+    '/tools/drug-admin': '药监局',
+    '/tools/nmpa': 'NMPA',
   };
 
   const currentTitle = pageTitleOverrides[location.pathname]

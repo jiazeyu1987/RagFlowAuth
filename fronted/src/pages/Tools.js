@@ -104,8 +104,20 @@ const Tools = () => {
       {
         id: 'shanghai_tax',
         name: '上海电子税务局',
-        description: '打开上海电子税务局登录页（新窗口）',
+        description: '打开上海电子税务局登录页面（新窗口）',
         href: 'https://tpass.shanghai.chinatax.gov.cn:8443/#/login?response_type=code&client_id=d3f156f230415796834bed5e954ed4de&redirect_uri=https%3A%2F%2Fdppt.shanghai.chinatax.gov.cn%3A8443%2Fszzhzz%2FOauth2HandleServlet%3FcdPath%3DL2RlZGV1Y3Rpb24tdHlwZS1jaGVja2VkLWJ1c2luZXNzP3J1dWlkPTE3Njg1Mzg4ODUyMDUmb2F1dGgyc3RhdGU9N2Q4YTRlZDMzOWQyNGVhMWI3OTNlNzRjNDc5OWZlYzk%3D&state=1039c7dafc8d4ac69dcd1fac61121679&ruuid=1770379445455',
+      },
+      {
+        id: 'drug_admin',
+        name: '药监局',
+        description: '各省和国家药监局官网',
+        route: '/tools/drug-admin',
+      },
+      {
+        id: 'nmpa',
+        name: 'NMPA',
+        description: '国家药监局器审中心',
+        route: '/tools/nmpa',
       },
     ];
 

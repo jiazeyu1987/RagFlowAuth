@@ -91,6 +91,7 @@ def create_app() -> FastAPI:
         chat,
         data_security,
         diagnostics,
+        drug_admin,
         documents,
         knowledge,
         me,
@@ -126,6 +127,7 @@ def create_app() -> FastAPI:
     app.include_router(org_directory.router, prefix="/api", tags=["Org Directory"])
     app.include_router(patent_download.router, prefix="/api", tags=["Patent Download"])
     app.include_router(paper_download.router, prefix="/api", tags=["Paper Download"])
+    app.include_router(drug_admin.router, prefix="/api", tags=["Drug Admin"])
     app.include_router(diagnostics.router, prefix="/api", tags=["Diagnostics"])
 
     @app.get("/health")
