@@ -14,6 +14,33 @@ const parseMaybeJson = async (response) => {
 };
 
 let refreshPromise = null;
+let authRedirecting = false;
+
+const shouldAutoRedirectToLogin = (url, options = {}) => {
+  if (options.skipAuth) return false;
+  if (options.skipSessionRedirect) return false;
+  if (url.endsWith('/api/auth/login')) return false;
+  return true;
+};
+
+const redirectToLogin = () => {
+  if (typeof window === 'undefined') return;
+  const currentPath = String(window.location?.pathname || '');
+  if (currentPath === '/login') return;
+  if (authRedirecting) return;
+  authRedirecting = true;
+  try {
+    window.location.assign('/login');
+  } catch {
+    window.location.href = '/login';
+  }
+};
+
+const handleUnauthorizedTerminal = (url, options = {}) => {
+  if (!shouldAutoRedirectToLogin(url, options)) return;
+  tokenStore.clearAuth();
+  redirectToLogin();
+};
 
 const refreshAccessToken = async () => {
   if (refreshPromise) return refreshPromise;
@@ -76,20 +103,34 @@ const request = async (pathOrUrl, options = {}) => {
 
   if (response.status !== 401) return response;
 
-  if (options.skipRefresh) return response;
-  if (url.endsWith('/api/auth/refresh')) return response;
+  if (options.skipRefresh) {
+    handleUnauthorizedTerminal(url, options);
+    return response;
+  }
+  if (url.endsWith('/api/auth/refresh')) {
+    handleUnauthorizedTerminal(url, options);
+    return response;
+  }
 
   const refreshToken = tokenStore.getRefreshToken();
-  if (!refreshToken) return response;
+  if (!refreshToken) {
+    handleUnauthorizedTerminal(url, options);
+    return response;
+  }
 
   try {
     await refreshAccessToken();
   } catch {
+    handleUnauthorizedTerminal(url, options);
     return response;
   }
 
   const retryHeaders = withAuthHeaders(options.headers, includeContentType, options.body, options.skipAuth);
-  return fetch(url, { ...options, headers: retryHeaders });
+  const retryResponse = await fetch(url, { ...options, headers: retryHeaders });
+  if (retryResponse.status === 401) {
+    handleUnauthorizedTerminal(url, options);
+  }
+  return retryResponse;
 };
 
 const requestJson = async (pathOrUrl, options = {}) => {

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, createContext, useContext } from 'react';
+import { useState, useEffect, useCallback, createContext, useContext, useRef } from 'react';
 import authClient from '../api/authClient';
 import { STORAGE_KEYS } from '../constants/storageKeys';
 import tokenStore from '../shared/auth/tokenStore';
@@ -36,6 +36,9 @@ export const AuthProvider = ({ children }) => {
     can_download: false,
     can_delete: false
   });
+  const idleRedirectingRef = useRef(false);
+  const currentUserId = user?.user_id;
+  const currentIdleTimeoutMinutes = user?.idle_timeout_minutes;
 
   const invalidateAuth = useCallback(() => {
     authClient.clearAuth();
@@ -119,6 +122,45 @@ export const AuthProvider = ({ children }) => {
 
     checkAuth();
   }, [invalidateAuth]);
+
+  useEffect(() => {
+    if (!currentUserId) {
+      idleRedirectingRef.current = false;
+      return;
+    }
+    if (typeof window === 'undefined') return;
+
+    const rawMinutes = Number(currentIdleTimeoutMinutes);
+    const idleMinutes = Number.isFinite(rawMinutes) && rawMinutes > 0 ? rawMinutes : 120;
+    const idleMs = Math.max(1000, Math.floor(idleMinutes * 60 * 1000));
+    let lastActivityAt = Date.now();
+
+    const markActivity = () => {
+      lastActivityAt = Date.now();
+    };
+
+    const events = ['pointerdown', 'keydown', 'mousemove', 'touchstart', 'scroll', 'wheel'];
+    for (const name of events) {
+      window.addEventListener(name, markActivity, { passive: true });
+    }
+
+    const timer = window.setInterval(() => {
+      if (Date.now() - lastActivityAt < idleMs) return;
+      if (idleRedirectingRef.current) return;
+      idleRedirectingRef.current = true;
+      invalidateAuth();
+      if (String(window.location?.pathname || '') !== '/login') {
+        window.location.assign('/login');
+      }
+    }, 1000);
+
+    return () => {
+      window.clearInterval(timer);
+      for (const name of events) {
+        window.removeEventListener(name, markActivity);
+      }
+    };
+  }, [currentUserId, currentIdleTimeoutMinutes, invalidateAuth]);
 
   // 加载用户的知识库权限
   useEffect(() => {
