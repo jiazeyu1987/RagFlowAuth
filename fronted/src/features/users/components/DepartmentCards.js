@@ -66,7 +66,10 @@ export default function DepartmentCards({ filteredUsers, groupedUsers, filters, 
             </div>
 
             <div style={{ fontSize: '0.9rem', color: '#4b5563', marginBottom: '10px', minHeight: '40px' }}>
-              {group.users.slice(0, 6).map((user) => user.username).join('、')}
+              {group.users
+                .slice(0, 6)
+                .map((user) => String(user?.email || '').trim() || user.username)
+                .join('、')}
               {group.users.length > 6 ? ` 等 ${group.users.length} 人` : ''}
             </div>
 

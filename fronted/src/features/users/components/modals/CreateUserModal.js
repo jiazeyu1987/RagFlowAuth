@@ -76,9 +76,9 @@ export default function CreateUserModal({
           </div>
 
           <div style={{ marginBottom: '16px' }}>
-            <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500' }}>{'邮箱'}</label>
+            <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500' }}>{'姓名'}</label>
             <input
-              type="email"
+              type="text"
               value={newUser.email}
               onChange={(e) => onFieldChange('email', e.target.value)}
               data-testid="users-create-email"

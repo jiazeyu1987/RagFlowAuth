@@ -45,7 +45,9 @@ export const filterUsers = (allUsers, filters) => {
   }
 
   return users.filter((u) => {
-    if (q && !String(u?.username || '').includes(q)) return false;
+    const username = String(u?.username || '');
+    const displayName = String(u?.email || '');
+    if (q && !username.includes(q) && !displayName.includes(q)) return false;
     if (companyId != null && u?.company_id !== companyId) return false;
     if (departmentId != null && u?.department_id !== departmentId) return false;
     if (status && u?.status !== status) return false;

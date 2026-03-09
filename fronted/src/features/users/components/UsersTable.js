@@ -22,7 +22,7 @@ export default function UsersTable({
       <table style={{ width: '100%', borderCollapse: 'collapse' }}>
         <thead style={{ backgroundColor: '#f9fafb' }}>
           <tr>
-            <th style={{ padding: '12px 16px', textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>{'用户名'}</th>
+            <th style={{ padding: '12px 16px', textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>{'姓名 / 账号'}</th>
             <th style={{ padding: '12px 16px', textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>{'公司'}</th>
             <th style={{ padding: '12px 16px', textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>{'部门'}</th>
             <th style={{ padding: '12px 16px', textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>{'状态'}</th>
@@ -35,9 +35,13 @@ export default function UsersTable({
         <tbody>
           {filteredUsers.map((user) => {
             const isProtectedAdmin = String(user?.username || '').toLowerCase() === 'admin';
+            const displayName = String(user?.email || '').trim();
             return (
               <tr key={user.user_id} data-testid={`users-row-${user.user_id}`} style={{ borderBottom: '1px solid #e5e7eb' }}>
-              <td style={{ padding: '12px 16px' }}>{user.username}</td>
+              <td style={{ padding: '12px 16px' }}>
+                <div style={{ color: '#111827', fontWeight: 500 }}>{displayName || user.username}</div>
+                {displayName ? <div style={{ color: '#6b7280', fontSize: '0.85rem' }}>{`账号: ${user.username}`}</div> : null}
+              </td>
               <td style={{ padding: '12px 16px', color: '#6b7280' }}>{user.company_name || '-'}</td>
               <td style={{ padding: '12px 16px', color: '#6b7280' }}>{user.department_name || '-'}</td>
               <td style={{ padding: '12px 16px' }}>
