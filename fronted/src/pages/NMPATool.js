@@ -33,7 +33,7 @@ export default function NMPATool() {
   const navigate = useNavigate();
 
   return (
-    <div style={{ width: '100%', boxSizing: 'border-box' }}>
+    <div style={{ width: '100%', boxSizing: 'border-box' }} data-testid="nmpa-tool-page">
       <div style={{ ...CARD, padding: '16px', marginBottom: '14px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
           <div style={{ fontSize: '1.1rem', fontWeight: 900, color: '#111827' }}>NMPA</div>
@@ -52,6 +52,7 @@ export default function NMPATool() {
             type="button"
             onClick={() => openUrl('https://www.cmde.org.cn/index.html')}
             style={PRIMARY_BUTTON}
+            data-testid="nmpa-home-btn"
           >
             主页
           </button>
@@ -59,6 +60,7 @@ export default function NMPATool() {
             type="button"
             onClick={() => openUrl('https://www.cmde.org.cn/flfg/zdyz/flmlbzh/flmlylqx/index.html')}
             style={BUTTON}
+            data-testid="nmpa-catalog-btn"
           >
             分类目录
           </button>

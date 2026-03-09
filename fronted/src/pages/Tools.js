@@ -157,6 +157,7 @@ const Tools = () => {
             type="button"
             onClick={() => setPage((p) => Math.max(1, p - 1))}
             disabled={safePage <= 1}
+            data-testid="tools-prev-page"
             style={{
               padding: '8px 12px',
               borderRadius: '10px',
@@ -167,13 +168,14 @@ const Tools = () => {
           >
             上一页
           </button>
-          <div style={{ color: '#6b7280', fontSize: '0.9rem' }}>
+          <div style={{ color: '#6b7280', fontSize: '0.9rem' }} data-testid="tools-page-indicator">
             第 <span style={{ color: '#111827', fontWeight: 700 }}>{safePage}</span> / {pageCount} 页
           </div>
           <button
             type="button"
             onClick={() => setPage((p) => Math.min(pageCount, p + 1))}
             disabled={safePage >= pageCount}
+            data-testid="tools-next-page"
             style={{
               padding: '8px 12px',
               borderRadius: '10px',

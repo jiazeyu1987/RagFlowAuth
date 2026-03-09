@@ -3,157 +3,20 @@ import { useNavigate } from 'react-router-dom';
 import authClient from '../api/authClient';
 import { knowledgeApi } from '../features/knowledge/api';
 import { useAuth } from '../hooks/useAuth';
-
-const ACTIVE_FOLDER_IMPORT_KEY = 'nas_active_folder_import_task';
-
-const PAGE_STYLE = {
-  padding: '20px',
-  width: '100%',
-  boxSizing: 'border-box',
-};
-
-const CARD_STYLE = {
-  background: '#fff',
-  border: '1px solid #e5e7eb',
-  borderRadius: '16px',
-};
-
-const BUTTON_STYLES = {
-  neutral: {
-    padding: '8px 12px',
-    borderRadius: '10px',
-    border: '1px solid #e5e7eb',
-    background: '#fff',
-    color: '#111827',
-    cursor: 'pointer',
-    fontWeight: 700,
-  },
-  primary: {
-    padding: '8px 12px',
-    borderRadius: '10px',
-    border: '1px solid #dbeafe',
-    background: '#eff6ff',
-    color: '#1d4ed8',
-    cursor: 'pointer',
-    fontWeight: 700,
-  },
-  success: {
-    padding: '8px 12px',
-    borderRadius: '10px',
-    border: '1px solid #bbf7d0',
-    background: '#f0fdf4',
-    color: '#15803d',
-    cursor: 'pointer',
-    fontWeight: 700,
-  },
-};
-
-const formatFileSize = (size) => {
-  const value = Number(size || 0);
-  if (!Number.isFinite(value) || value <= 0) return '-';
-  if (value < 1024) return `${value} B`;
-  if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
-  if (value < 1024 * 1024 * 1024) return `${(value / 1024 / 1024).toFixed(1)} MB`;
-  return `${(value / 1024 / 1024 / 1024).toFixed(1)} GB`;
-};
-
-const formatTime = (value) => {
-  if (!value) return '-';
-  const date = new Date(Number(value) * 1000);
-  if (Number.isNaN(date.getTime())) return '-';
-  return date.toLocaleString('zh-CN');
-};
-
-const pathSegments = (path) => {
-  const parts = String(path || '')
-    .split('/')
-    .map((part) => part.trim())
-    .filter(Boolean);
-  return [{ label: '根目录', path: '' }].concat(
-    parts.map((part, index) => ({
-      label: part,
-      path: parts.slice(0, index + 1).join('/'),
-    })),
-  );
-};
-
-const normalizeSkippedEntries = (items) => {
-  if (!Array.isArray(items)) return [];
-  return items
-    .map((item) => {
-      if (typeof item === 'string') return { path: item, reason: 'skipped', detail: '' };
-      if (!item || typeof item !== 'object') return null;
-      return {
-        path: String(item.path || ''),
-        reason: String(item.reason || 'skipped'),
-        detail: String(item.detail || ''),
-      };
-    })
-    .filter((item) => item && item.path);
-};
-
-const normalizeFailedEntries = (items) => {
-  if (!Array.isArray(items)) return [];
-  return items
-    .map((item) => {
-      if (typeof item === 'string') return { path: item, reason: 'failed', detail: '' };
-      if (!item || typeof item !== 'object') return null;
-      return {
-        path: String(item.path || ''),
-        reason: String(item.reason || 'failed'),
-        detail: String(item.detail || ''),
-      };
-    })
-    .filter((item) => item && item.path);
-};
-
-const formatImportReason = (reason, detail = '') => {
-  const code = String(reason || '').trim().toLowerCase();
-  if (code === 'unsupported_extension') return `不支持的文件格式${detail ? ` (${detail})` : ''}`;
-  if (code === 'ingestion_failed') return detail ? `入库失败 (${detail})` : '入库失败';
-  if (detail) return `${reason}: ${detail}`;
-  return reason || '-';
-};
-
-const buildImportSummary = (result, noun) => {
-  const skippedEntries = normalizeSkippedEntries(result?.skipped);
-  const failedEntries = normalizeFailedEntries(result?.failed);
-  const detailLines = [];
-  skippedEntries.slice(0, 3).forEach((item) => detailLines.push(`跳过: ${item.path} | ${formatImportReason(item.reason, item.detail)}`));
-  failedEntries.slice(0, 3).forEach((item) => detailLines.push(`失败: ${item.path} | ${formatImportReason(item.reason, item.detail)}`));
-  return [
-    `${noun}上传完成`,
-    '',
-    `已导入: ${result.imported_count ?? 0}`,
-    `跳过: ${result.skipped_count ?? 0}`,
-    `失败: ${result.failed_count ?? 0}`,
-    detailLines.length ? '' : null,
-    ...detailLines,
-  ].filter(Boolean).join('\n');
-};
-
-const readStoredFolderImportTaskId = () => {
-  try {
-    const raw = window.localStorage.getItem(ACTIVE_FOLDER_IMPORT_KEY);
-    if (!raw) return '';
-    const parsed = JSON.parse(raw);
-    return typeof parsed?.taskId === 'string' ? parsed.taskId : '';
-  } catch {
-    return '';
-  }
-};
-
-const writeStoredFolderImportTaskId = (taskId) => {
-  try {
-    if (!taskId) {
-      window.localStorage.removeItem(ACTIVE_FOLDER_IMPORT_KEY);
-      return;
-    }
-    window.localStorage.setItem(ACTIVE_FOLDER_IMPORT_KEY, JSON.stringify({ taskId }));
-  } catch {
-    // ignore storage failures
-  }
-};
+import {
+  buildImportSummary,
+  BUTTON_STYLES,
+  CARD_STYLE,
+  formatFileSize,
+  formatImportReason,
+  formatTime,
+  normalizeFailedEntries,
+  normalizeSkippedEntries,
+  PAGE_STYLE,
+  pathSegments,
+  readStoredFolderImportTaskId,
+  writeStoredFolderImportTaskId,
+} from '../features/knowledge/nasBrowser/utils';
 
 export default function NasBrowser() {
   const navigate = useNavigate();
@@ -340,7 +203,7 @@ export default function NasBrowser() {
   }
 
   return (
-    <div style={PAGE_STYLE}>
+    <div style={PAGE_STYLE} data-testid="nas-browser-page">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px' }}>
         <div>
           <h2 style={{ margin: 0, fontSize: '1.4rem', color: '#111827' }}>NAS 浜戠洏</h2>
@@ -535,6 +398,7 @@ export default function NasBrowser() {
                     <button
                       type="button"
                       onClick={() => openImportDialog(item)}
+                      data-testid={`nas-import-btn-${String(item.path || item.name || 'item').replace(/[^a-zA-Z0-9_-]/g, '_')}`}
                       style={item.is_dir ? BUTTON_STYLES.primary : BUTTON_STYLES.success}
                     >
                       {item.is_dir ? '上传文件夹至知识库' : '上传文件至知识库'}
@@ -562,6 +426,7 @@ export default function NasBrowser() {
           onClick={closeImportDialog}
         >
           <div
+            data-testid="nas-import-dialog"
             style={{ width: 'min(520px, 100%)', background: '#fff', borderRadius: '16px', padding: '20px', border: '1px solid #e5e7eb' }}
             onClick={(e) => e.stopPropagation()}
           >
@@ -580,6 +445,7 @@ export default function NasBrowser() {
             <div style={{ marginTop: '16px' }}>
               <label style={{ display: 'block', marginBottom: '8px', fontWeight: 700, color: '#111827' }}>选择知识库</label>
               <select
+                data-testid="nas-import-kb-select"
                 value={selectedKb}
                 onChange={(e) => setSelectedKb(e.target.value)}
                 style={{ width: '100%', padding: '10px 12px', borderRadius: '10px', border: '1px solid #d1d5db', background: '#fff' }}
@@ -596,6 +462,7 @@ export default function NasBrowser() {
                 type="button"
                 onClick={closeImportDialog}
                 disabled={importLoading}
+                data-testid="nas-import-cancel"
                 style={{
                   ...BUTTON_STYLES.neutral,
                   cursor: importLoading ? 'not-allowed' : 'pointer',
@@ -607,6 +474,7 @@ export default function NasBrowser() {
                 type="button"
                 onClick={handleImport}
                 disabled={importLoading || !selectedKb}
+                data-testid="nas-import-confirm"
                 style={{
                   ...BUTTON_STYLES.primary,
                   border: 'none',

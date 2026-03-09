@@ -1,165 +1,23 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import CreateKnowledgeBaseDialog from '../features/knowledge/knowledgeBases/components/CreateKnowledgeBaseDialog';
+import DirectoryTreeView from '../features/knowledge/knowledgeBases/components/DirectoryTreeView';
+import {
+  DATASET_CREATE_ALLOWED_KEYS,
+  DATASET_UPDATE_ALLOWED_KEYS,
+  ROOT,
+} from '../features/knowledge/knowledgeBases/constants';
+import {
+  buildDatasetsByNode,
+  buildIndexes,
+  datasetEmpty,
+  fmtTime,
+  normalizeListResponse,
+  pathNodes,
+  pickAllowed,
+} from '../features/knowledge/knowledgeBases/utils';
 import { useAuth } from '../hooks/useAuth';
 import { knowledgeApi } from '../features/knowledge/api';
 import { ChatConfigsPanel } from './ChatConfigsPanel';
-
-const ROOT = '';
-const DATASET_CREATE_ALLOWED_KEYS = ['description', 'chunk_method', 'embedding_model', 'avatar'];
-const DATASET_UPDATE_ALLOWED_KEYS = ['name', ...DATASET_CREATE_ALLOWED_KEYS, 'pagerank'];
-
-function pickAllowed(obj, keys) {
-  if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return {};
-  const out = {};
-  keys.forEach((k) => {
-    if (Object.prototype.hasOwnProperty.call(obj, k)) out[k] = obj[k];
-  });
-  return out;
-}
-
-function normalizeListResponse(res) {
-  if (!res) return [];
-  if (Array.isArray(res.datasets)) return res.datasets;
-  if (res.data && Array.isArray(res.data.datasets)) return res.data.datasets;
-  if (Array.isArray(res.data)) return res.data;
-  return [];
-}
-
-function fmtTime(ms) {
-  const v = Number(ms || 0);
-  if (!v) return '-';
-  const d = new Date(v);
-  return Number.isNaN(d.getTime()) ? '-' : d.toLocaleString('zh-CN', { hour12: false });
-}
-
-function buildIndexes(tree) {
-  const nodes = (tree?.nodes || []).filter((n) => n && n.id);
-  const byId = new Map();
-  const childrenByParent = new Map();
-  nodes.forEach((n) => {
-    byId.set(n.id, n);
-    const parent = n.parent_id || ROOT;
-    if (!childrenByParent.has(parent)) childrenByParent.set(parent, []);
-    childrenByParent.get(parent).push(n);
-  });
-  for (const arr of childrenByParent.values()) {
-    arr.sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'zh-Hans-CN'));
-  }
-  return { byId, childrenByParent };
-}
-
-function buildDatasetsByNode(tree) {
-  const out = new Map();
-  (tree?.datasets || []).forEach((d) => {
-    if (!d?.id) return;
-    const nodeId = d.node_id || ROOT;
-    if (!out.has(nodeId)) out.set(nodeId, []);
-    out.get(nodeId).push(d);
-  });
-  for (const arr of out.values()) {
-    arr.sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'zh-Hans-CN'));
-  }
-  return out;
-}
-
-function pathNodes(nodeId, byId) {
-  if (!nodeId) return [];
-  const out = [];
-  const guard = new Set();
-  let cur = nodeId;
-  while (cur && !guard.has(cur)) {
-    guard.add(cur);
-    const node = byId.get(cur);
-    if (!node) break;
-    out.push(node);
-    cur = node.parent_id || ROOT;
-  }
-  return out.reverse();
-}
-
-function TreeView({
-  indexes,
-  currentDirId,
-  selectedNodeId,
-  expanded,
-  onToggle,
-  onOpen,
-  dropTargetNodeId,
-  onDragOverNode,
-  onDropNode,
-  onDragLeaveNode,
-}) {
-  const renderNode = (node, depth) => {
-    const id = node.id;
-    const children = indexes.childrenByParent.get(id) || [];
-    const hasChildren = children.length > 0;
-    const isExpanded = expanded.includes(id);
-    return (
-      <div key={id}>
-        <div
-          style={{
-            marginLeft: depth * 16,
-            borderRadius: 6,
-            background:
-              dropTargetNodeId === id
-                ? '#dcfce7'
-                : currentDirId === id
-                  ? '#dbeafe'
-                  : selectedNodeId === id
-                    ? '#eff6ff'
-                    : 'transparent',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 6,
-            padding: '3px 6px',
-          }}
-          onDragOver={(e) => onDragOverNode(e, id)}
-          onDrop={(e) => onDropNode(e, id)}
-          onDragLeave={(e) => onDragLeaveNode(e, id)}
-        >
-          <button
-            type="button"
-            onClick={() => hasChildren && onToggle(id)}
-            style={{ width: 14, border: 'none', background: 'transparent', cursor: hasChildren ? 'pointer' : 'default', color: '#6b7280', padding: 0 }}
-          >
-            {hasChildren ? (isExpanded ? '▾' : '▸') : ''}
-          </button>
-          <button
-            type="button"
-            onClick={() => onOpen(id)}
-            style={{ border: 'none', background: 'transparent', padding: 0, textAlign: 'left', cursor: 'pointer', width: '100%' }}
-            title={node.path || node.name}
-          >
-            📁 {node.name || '(未命名目录)'}
-          </button>
-        </div>
-        {isExpanded && children.map((c) => renderNode(c, depth + 1))}
-      </div>
-    );
-  };
-
-  const roots = indexes.childrenByParent.get(ROOT) || [];
-  return (
-    <div>
-      <div
-        style={{
-          borderRadius: 6,
-          background: dropTargetNodeId === ROOT ? '#dcfce7' : currentDirId === ROOT ? '#dbeafe' : 'transparent',
-          padding: '3px 6px',
-          marginBottom: 6,
-        }}
-        onDragOver={(e) => onDragOverNode(e, ROOT)}
-        onDrop={(e) => onDropNode(e, ROOT)}
-        onDragLeave={(e) => onDragLeaveNode(e, ROOT)}
-      >
-        <button type="button" onClick={() => onOpen(ROOT)} style={{ border: 'none', background: 'transparent', padding: 0, cursor: 'pointer', width: '100%', textAlign: 'left' }}>
-          🖥️ 根目录
-        </button>
-      </div>
-      {roots.map((n) => renderNode(n, 0))}
-      {!roots.length && <div style={{ color: '#6b7280', fontSize: 13 }}>暂无目录</div>}
-    </div>
-  );
-}
 
 export default function KnowledgeBases() {
   const { user } = useAuth();
@@ -229,10 +87,6 @@ export default function KnowledgeBases() {
     if (!kw) return rows;
     return rows.filter((r) => String(r.name || '').toLowerCase().includes(kw) || String(r.id || '').toLowerCase().includes(kw));
   }, [rows, keyword]);
-
-  function datasetEmpty(ds) {
-    return Number(ds?.document_count || 0) <= 0 && Number(ds?.chunk_count || 0) <= 0;
-  }
 
   function ensureExpanded(nodeId) {
     if (!nodeId) return;
@@ -488,8 +342,8 @@ export default function KnowledgeBases() {
   return (
     <div style={{ padding: 14 }}>
       <div style={{ marginBottom: 10, display: 'flex', gap: 8 }}>
-        <button onClick={() => setSubtab('kbs')} style={subtabBtn(subtab === 'kbs')}>知识配置</button>
-        <button onClick={() => setSubtab('chats')} style={subtabBtn(subtab === 'chats')}>对话配置</button>
+        <button data-testid="kbs-subtab-kbs" onClick={() => setSubtab('kbs')} style={subtabBtn(subtab === 'kbs')}>知识配置</button>
+        <button data-testid="kbs-subtab-chats" onClick={() => setSubtab('chats')} style={subtabBtn(subtab === 'chats')}>对话配置</button>
       </div>
 
       {subtab === 'kbs' ? (
@@ -498,7 +352,7 @@ export default function KnowledgeBases() {
             <div style={{ padding: '10px 12px', borderBottom: '1px solid #e5e7eb', fontWeight: 800 }}>目录树</div>
             <div style={{ padding: 12, maxHeight: 720, overflowY: 'auto' }}>
               {treeError && <div style={{ color: '#b91c1c', marginBottom: 8 }}>{treeError}</div>}
-              <TreeView
+              <DirectoryTreeView
                 indexes={indexes}
                 currentDirId={currentDirId}
                 selectedNodeId={selectedNodeId}
@@ -519,14 +373,14 @@ export default function KnowledgeBases() {
           <section style={{ border: '1px solid #e5e7eb', borderRadius: 12, background: '#fff' }}>
             <div style={{ padding: '10px 12px', borderBottom: '1px solid #e5e7eb' }}>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
-                <button onClick={refreshAll} style={{ border: '1px solid #d1d5db', borderRadius: 8, background: '#fff', cursor: 'pointer', padding: '6px 9px' }}>刷新</button>
-                <button onClick={() => openDir(indexes.byId.get(currentDirId)?.parent_id || ROOT)} disabled={currentDirId === ROOT} style={{ border: '1px solid #d1d5db', borderRadius: 8, background: currentDirId === ROOT ? '#f3f4f6' : '#fff', cursor: currentDirId === ROOT ? 'not-allowed' : 'pointer', padding: '6px 9px' }}>返回上级</button>
+                <button data-testid="kbs-refresh-all" onClick={refreshAll} style={{ border: '1px solid #d1d5db', borderRadius: 8, background: '#fff', cursor: 'pointer', padding: '6px 9px' }}>刷新</button>
+                <button data-testid="kbs-go-parent" onClick={() => openDir(indexes.byId.get(currentDirId)?.parent_id || ROOT)} disabled={currentDirId === ROOT} style={{ border: '1px solid #d1d5db', borderRadius: 8, background: currentDirId === ROOT ? '#f3f4f6' : '#fff', cursor: currentDirId === ROOT ? 'not-allowed' : 'pointer', padding: '6px 9px' }}>返回上级</button>
                 {isAdmin && (
                   <>
-                    <button onClick={createDirectory} style={{ border: '1px solid #2563eb', borderRadius: 8, background: '#2563eb', color: '#fff', cursor: 'pointer', padding: '6px 9px' }}>新建目录</button>
-                    <button onClick={renameDirectory} disabled={!selectedNodeId || selectedNodeId === ROOT} style={{ border: '1px solid #f59e0b', borderRadius: 8, background: !selectedNodeId || selectedNodeId === ROOT ? '#fde68a' : '#f59e0b', color: '#fff', cursor: !selectedNodeId || selectedNodeId === ROOT ? 'not-allowed' : 'pointer', padding: '6px 9px' }}>重命名目录</button>
-                    <button onClick={deleteDirectory} disabled={!selectedNodeId || selectedNodeId === ROOT} style={{ border: '1px solid #ef4444', borderRadius: 8, background: !selectedNodeId || selectedNodeId === ROOT ? '#fecaca' : '#ef4444', color: '#fff', cursor: !selectedNodeId || selectedNodeId === ROOT ? 'not-allowed' : 'pointer', padding: '6px 9px' }}>删除目录</button>
-                    <button onClick={openCreateKb} style={{ border: '1px solid #059669', borderRadius: 8, background: '#10b981', color: '#fff', cursor: 'pointer', padding: '6px 9px' }}>新建知识库</button>
+                    <button data-testid="kbs-create-dir" onClick={createDirectory} style={{ border: '1px solid #2563eb', borderRadius: 8, background: '#2563eb', color: '#fff', cursor: 'pointer', padding: '6px 9px' }}>新建目录</button>
+                    <button data-testid="kbs-rename-dir" onClick={renameDirectory} disabled={!selectedNodeId || selectedNodeId === ROOT} style={{ border: '1px solid #f59e0b', borderRadius: 8, background: !selectedNodeId || selectedNodeId === ROOT ? '#fde68a' : '#f59e0b', color: '#fff', cursor: !selectedNodeId || selectedNodeId === ROOT ? 'not-allowed' : 'pointer', padding: '6px 9px' }}>重命名目录</button>
+                    <button data-testid="kbs-delete-dir" onClick={deleteDirectory} disabled={!selectedNodeId || selectedNodeId === ROOT} style={{ border: '1px solid #ef4444', borderRadius: 8, background: !selectedNodeId || selectedNodeId === ROOT ? '#fecaca' : '#ef4444', color: '#fff', cursor: !selectedNodeId || selectedNodeId === ROOT ? 'not-allowed' : 'pointer', padding: '6px 9px' }}>删除目录</button>
+                    <button data-testid="kbs-create-kb" onClick={openCreateKb} style={{ border: '1px solid #059669', borderRadius: 8, background: '#10b981', color: '#fff', cursor: 'pointer', padding: '6px 9px' }}>新建知识库</button>
                   </>
                 )}
               </div>
@@ -561,9 +415,11 @@ export default function KnowledgeBases() {
                 <tbody>
                   {filteredRows.map((r) => {
                     const selected = selectedItem?.kind === r.kind && selectedItem?.id === r.id;
+                    const safeRowId = String(r.id || '').replace(/[^a-zA-Z0-9_-]/g, '_');
                     return (
                       <tr
                         key={`${r.kind}_${r.id}`}
+                        data-testid={`kbs-row-${r.kind}-${safeRowId}`}
                         draggable={r.kind === 'dataset'}
                         onDragStart={(e) => {
                           if (r.kind !== 'dataset') return;
@@ -635,53 +491,25 @@ export default function KnowledgeBases() {
         <ChatConfigsPanel />
       )}
 
-      {createOpen && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          onMouseDown={(e) => e.target === e.currentTarget && setCreateOpen(false)}
-          style={{ position: 'fixed', inset: 0, background: 'rgba(17,24,39,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}
-        >
-          <div style={{ width: 'min(680px, 95vw)', background: '#fff', borderRadius: 12, border: '1px solid #e5e7eb', overflow: 'hidden' }}>
-            <div style={{ padding: '12px 14px', borderBottom: '1px solid #e5e7eb', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div style={{ fontWeight: 800 }}>新建知识库</div>
-              <button onClick={() => setCreateOpen(false)} style={{ border: '1px solid #d1d5db', borderRadius: 8, background: '#fff', cursor: 'pointer', padding: '6px 10px' }}>关闭</button>
-            </div>
-            <div style={{ padding: 14 }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '110px 1fr', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-                <label>名称</label>
-                <input value={createName} onChange={(e) => setCreateName(e.target.value)} style={{ padding: '9px 10px', border: '1px solid #d1d5db', borderRadius: 8 }} />
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '110px 1fr', alignItems: 'center', gap: 10 }}>
-                <label>复制配置</label>
-                <select
-                  value={createFromId}
-                  onChange={(e) => {
-                    const v = e.target.value;
-                    setCreateFromId(v);
-                    syncCreateFromCopy(v);
-                  }}
-                  style={{ padding: '9px 10px', border: '1px solid #d1d5db', borderRadius: 8 }}
-                  disabled={!kbList.length}
-                >
-                  {kbList.map((ds) => <option key={String(ds?.id || '')} value={String(ds?.id || '')}>{String(ds?.name || ds?.id || '')}</option>)}
-                </select>
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '110px 1fr', alignItems: 'center', gap: 10, marginTop: 10 }}>
-                <label>鎸傝浇鐩綍</label>
-                <select value={createDirId} onChange={(e) => setCreateDirId(e.target.value)} style={{ padding: '9px 10px', border: '1px solid #d1d5db', borderRadius: 8 }}>
-                  {dirOptions.map((o) => <option key={o.id || '__root__'} value={o.id}>{o.label}</option>)}
-                </select>
-              </div>
-              {createError && <div style={{ color: '#b91c1c', marginTop: 10 }}>{createError}</div>}
-            </div>
-            <div style={{ padding: '12px 14px', borderTop: '1px solid #e5e7eb', display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-              <button onClick={() => setCreateOpen(false)} style={{ border: '1px solid #d1d5db', borderRadius: 8, background: '#fff', cursor: 'pointer', padding: '8px 12px' }}>取消</button>
-              <button onClick={createKb} disabled={!isAdmin || kbBusy} style={{ border: '1px solid #2563eb', borderRadius: 8, background: kbBusy ? '#93c5fd' : '#2563eb', color: '#fff', cursor: kbBusy ? 'not-allowed' : 'pointer', padding: '8px 12px' }}>创建</button>
-            </div>
-          </div>
-        </div>
-      )}
+      <CreateKnowledgeBaseDialog
+        open={createOpen}
+        onClose={() => setCreateOpen(false)}
+        createName={createName}
+        onCreateNameChange={setCreateName}
+        createFromId={createFromId}
+        onCreateFromIdChange={(value) => {
+          setCreateFromId(value);
+          syncCreateFromCopy(value);
+        }}
+        kbList={kbList}
+        createDirId={createDirId}
+        onCreateDirIdChange={setCreateDirId}
+        dirOptions={dirOptions}
+        createError={createError}
+        onCreate={createKb}
+        isAdmin={isAdmin}
+        kbBusy={kbBusy}
+      />
     </div>
   );
 }

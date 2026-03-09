@@ -179,7 +179,7 @@ const DataSecurity = () => {
   if (loading) return <div style={{ padding: '12px' }}>加载中…</div>;
 
   return (
-    <div style={{ maxWidth: '980px' }}>
+    <div style={{ maxWidth: '980px' }} data-testid="data-security-test-page">
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', alignItems: 'center' }}>
         <h2 style={{ margin: 0 }}>数据安全</h2>
         <div style={{ display: 'flex', gap: '10px' }}>

@@ -39,6 +39,7 @@ adminTest('upload rejects files larger than 16MB (mock) @regression @upload', as
     await page.getByTestId('upload-file-input').setInputFiles(filePath);
 
     await expect(page.getByTestId('upload-error')).toBeVisible();
+    await expect(page.getByTestId('upload-error')).toContainText('文件过大');
     await expect(page.getByTestId('upload-error')).toContainText('16MB');
   } finally {
     try {

@@ -28,6 +28,24 @@ class DownloadExecutionManager:
     def _ns_stopped(cls, namespace: str) -> set[str]:
         return cls._stop_requested_sessions.setdefault(namespace, set())
 
+    @classmethod
+    def _get_active_job(cls, *, namespace: str, session_id: str) -> threading.Thread | None:
+        jobs = cls._ns_jobs(namespace)
+        job = jobs.get(session_id)
+        if job is not None and not job.is_alive():
+            # A newly registered thread may not be started yet; treat it as active.
+            if job.ident is None:
+                return job
+            jobs.pop(session_id, None)
+            return None
+        return job
+
+    @classmethod
+    def _register_job_locked(cls, *, namespace: str, session_id: str, job: threading.Thread) -> None:
+        cls._ns_jobs(namespace)[session_id] = job
+        cls._ns_cancelled(namespace).discard(session_id)
+        cls._ns_stopped(namespace).discard(session_id)
+
     def normalize_source_configs(
         self,
         *,
@@ -81,14 +99,16 @@ class DownloadExecutionManager:
 
     def register_job(self, *, session_id: str, job: threading.Thread) -> None:
         with self._registry_lock:
-            self._ns_jobs(self.namespace)[session_id] = job
-            self._ns_cancelled(self.namespace).discard(session_id)
-            self._ns_stopped(self.namespace).discard(session_id)
+            self._register_job_locked(namespace=self.namespace, session_id=session_id, job=job)
+
+    def get_job(self, *, session_id: str) -> threading.Thread | None:
+        with self._registry_lock:
+            return self._get_active_job(namespace=self.namespace, session_id=session_id)
 
     def cancel_job(self, *, session_id: str) -> threading.Thread | None:
         with self._registry_lock:
             self._ns_cancelled(self.namespace).add(session_id)
-            return self._ns_jobs(self.namespace).get(session_id)
+            return self._get_active_job(namespace=self.namespace, session_id=session_id)
 
     def is_cancelled(self, *, session_id: str) -> bool:
         with self._registry_lock:
@@ -97,7 +117,7 @@ class DownloadExecutionManager:
     def request_stop(self, *, session_id: str) -> threading.Thread | None:
         with self._registry_lock:
             self._ns_stopped(self.namespace).add(session_id)
-            return self._ns_jobs(self.namespace).get(session_id)
+            return self._get_active_job(namespace=self.namespace, session_id=session_id)
 
     def is_stop_requested(self, *, session_id: str) -> bool:
         with self._registry_lock:
@@ -117,12 +137,26 @@ class DownloadExecutionManager:
         kwargs: dict[str, Any],
         name_prefix: str,
     ) -> threading.Thread:
-        worker = threading.Thread(
-            target=target,
-            kwargs=kwargs,
-            daemon=True,
-            name=f"{name_prefix}-{str(session_id)[:8]}",
-        )
-        self.register_job(session_id=session_id, job=worker)
-        worker.start()
+        def _run() -> None:
+            try:
+                target(**kwargs)
+            finally:
+                self.finish_job(session_id=session_id)
+
+        with self._registry_lock:
+            existing = self._get_active_job(namespace=self.namespace, session_id=session_id)
+            if existing is not None:
+                return existing
+            worker = threading.Thread(
+                target=_run,
+                daemon=True,
+                name=f"{name_prefix}-{str(session_id)[:8]}",
+            )
+            self._register_job_locked(namespace=self.namespace, session_id=session_id, job=worker)
+
+        try:
+            worker.start()
+        except Exception:
+            self.finish_job(session_id=session_id)
+            raise
         return worker

@@ -182,6 +182,62 @@ class TestRagflowChatUpdateRetryUnit(unittest.TestCase):
             self.assertEqual(body.get("parsed_file_id"), "")
 
 
+class TestRagflowChatDeleteCompatUnit(unittest.TestCase):
+    def test_delete_chat_falls_back_when_batch_delete_is_method_not_allowed(self):
+        class _Http:
+            def __init__(self):
+                self.calls = []
+
+            def set_config(self, _cfg):  # noqa: ARG002
+                return None
+
+            def delete_json(self, path, body=None, params=None):  # noqa: ARG002
+                self.calls.append((path, body, params))
+                if path == "/api/v1/chats":
+                    return {"code": 405, "message": "methodnotallowed"}
+                if path == "/api/v1/chats/c9":
+                    return {"code": 0, "data": True}
+                return {"code": 500, "message": "unexpected_path"}
+
+        with tempfile.TemporaryDirectory() as td:
+            cfg_path = Path(td) / "ragflow_config.json"
+            cfg_path.write_text('{"base_url":"http://127.0.0.1:9380","api_key":"k","timeout":10}', encoding="utf-8")
+            http = _Http()
+            conn = RagflowConnection(
+                config_path=cfg_path,
+                config={"base_url": "http://127.0.0.1:9380", "api_key": "k", "timeout": 10},
+                http=http,
+            )
+            svc = RagflowChatService(connection=conn)
+            ok = svc.delete_chat("c9")
+            self.assertTrue(ok)
+            self.assertEqual(http.calls[0][0], "/api/v1/chats")
+            self.assertEqual(http.calls[1][0], "/api/v1/chats/c9")
+
+    def test_delete_agent_raises_not_found_for_404_error(self):
+        class _Http:
+            def set_config(self, _cfg):  # noqa: ARG002
+                return None
+
+            def delete_json(self, path, body=None, params=None):  # noqa: ARG002
+                if path == "/api/v1/agents/missing":
+                    return {"code": 404, "message": "notfound"}
+                return None
+
+        with tempfile.TemporaryDirectory() as td:
+            cfg_path = Path(td) / "ragflow_config.json"
+            cfg_path.write_text('{"base_url":"http://127.0.0.1:9380","api_key":"k","timeout":10}', encoding="utf-8")
+            conn = RagflowConnection(
+                config_path=cfg_path,
+                config={"base_url": "http://127.0.0.1:9380", "api_key": "k", "timeout": 10},
+                http=_Http(),
+            )
+            svc = RagflowChatService(connection=conn)
+            with self.assertRaises(ValueError) as ex:
+                svc.delete_agent("missing")
+            self.assertEqual(str(ex.exception), "agent_not_found")
+
+
 class _FakeHttpMerge:
     def __init__(self):
         self.put_calls = []

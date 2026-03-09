@@ -1,44 +1,22 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { knowledgeApi } from '../features/knowledge/api';
+import SelectedFilesList from '../features/knowledge/upload/components/SelectedFilesList';
+import UploadDropzone from '../features/knowledge/upload/components/UploadDropzone';
+import UploadExtensionsPanel from '../features/knowledge/upload/components/UploadExtensionsPanel';
+import {
+  DEFAULT_ACCEPTED_EXTENSIONS,
+  DEFAULT_KB_NAME,
+  MAX_FILE_SIZE_BYTES,
+  uploadPanelStyle,
+} from '../features/knowledge/upload/constants';
+import {
+  getDisplayPath,
+  getFileExtensionLower,
+  getFileUniqueKey,
+  normalizeExtension,
+} from '../features/knowledge/upload/utils';
 import { useAuth } from '../hooks/useAuth';
-
-const MAX_FILE_SIZE_BYTES = 16 * 1024 * 1024;
-const DEFAULT_ACCEPTED_EXTENSIONS = ['.txt', '.pdf', '.docx', '.md', '.xlsx', '.xls', '.ppt', '.pptx', '.csv', '.png', '.jpg', '.jpeg'];
-const DEFAULT_KB_NAME = '展厅';
-
-const getFileExtensionLower = (name = '') => {
-  const idx = name.lastIndexOf('.');
-  if (idx < 0) return '';
-  return name.slice(idx).toLowerCase();
-};
-
-const formatBytes = (bytes) => {
-  if (!Number.isFinite(bytes)) return '-';
-  if (bytes < 1024) return `${bytes} B`;
-  const kb = bytes / 1024;
-  if (kb < 1024) return `${kb.toFixed(2)} KB`;
-  const mb = kb / 1024;
-  return `${mb.toFixed(2)} MB`;
-};
-
-const getDisplayPath = (file) => String(file?.webkitRelativePath || file?.name || '');
-const getFileUniqueKey = (file) => `${getDisplayPath(file)}__${file?.size || 0}__${file?.lastModified || 0}`;
-
-const normalizeExtension = (value = '') => {
-  let next = String(value || '').trim().toLowerCase();
-  if (!next) return '';
-  if (!next.startsWith('.')) next = `.${next}`;
-  return next;
-};
-
-const panelStyle = {
-  backgroundColor: 'white',
-  padding: '32px',
-  borderRadius: '8px',
-  boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
-  maxWidth: '720px',
-};
 
 const KnowledgeUpload = () => {
   const navigate = useNavigate();
@@ -69,6 +47,7 @@ const KnowledgeUpload = () => {
   }, [allowedExtensions]);
 
   const extensionSet = useMemo(() => new Set(allowedExtensions), [allowedExtensions]);
+  const maxFileSizeMB = Math.floor(MAX_FILE_SIZE_BYTES / (1024 * 1024));
 
   useEffect(() => {
     const fetchDatasets = async () => {
@@ -141,7 +120,7 @@ const KnowledgeUpload = () => {
       const tooLarge = rejected.filter((item) => item.reason === 'too_large').length;
       const unsupported = rejected.filter((item) => item.reason === 'unsupported').length;
       const parts = [];
-      if (tooLarge) parts.push(`${tooLarge} 个文件超过 16MB`);
+      if (tooLarge) parts.push(`${tooLarge} 个文件过大（超过 ${maxFileSizeMB}MB）`);
       if (unsupported) parts.push(`${unsupported} 个文件后缀不在允许列表中`);
       setError(`部分文件未加入上传队列：${parts.join('，')}`);
     } else {
@@ -301,7 +280,7 @@ const KnowledgeUpload = () => {
         </div>
       )}
 
-      <div style={panelStyle}>
+      <div style={uploadPanelStyle}>
         <form onSubmit={handleUpload}>
           <div style={{ marginBottom: '24px' }}>
             <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', color: '#374151' }}>
@@ -336,296 +315,42 @@ const KnowledgeUpload = () => {
             </select>
           </div>
 
-          <div style={{ marginBottom: '24px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, alignItems: 'center', flexWrap: 'wrap', marginBottom: 8 }}>
-              <label style={{ fontWeight: '500', color: '#374151' }}>允许上传的文件后缀</label>
-              <div style={{ fontSize: '0.85rem', color: '#6b7280' }}>
-                {loadingExtensions ? '正在加载配置...' : `当前配置：${acceptAttr}`}
-              </div>
-            </div>
+          <UploadExtensionsPanel
+            loadingExtensions={loadingExtensions}
+            acceptAttr={acceptAttr}
+            allowedExtensions={allowedExtensions}
+            canManageExtensions={canManageExtensions}
+            extensionDraft={extensionDraft}
+            onExtensionDraftChange={setExtensionDraft}
+            onAddExtension={handleAddExtension}
+            onDeleteExtension={handleDeleteExtension}
+            onSaveExtensions={handleSaveExtensions}
+            savingExtensions={savingExtensions}
+            extensionsMessage={extensionsMessage}
+          />
 
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
-              {allowedExtensions.map((extension) => (
-                <span
-                  key={extension}
-                  style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: 8,
-                    padding: '6px 10px',
-                    borderRadius: 999,
-                    backgroundColor: '#eff6ff',
-                    color: '#1d4ed8',
-                    fontSize: '0.9rem',
-                  }}
-                >
-                  {extension}
-                  {canManageExtensions && (
-                    <button
-                      type="button"
-                      onClick={() => handleDeleteExtension(extension)}
-                      style={{
-                        border: 'none',
-                        background: 'transparent',
-                        color: '#1d4ed8',
-                        cursor: 'pointer',
-                        fontWeight: 700,
-                        padding: 0,
-                        lineHeight: 1,
-                      }}
-                      aria-label={`删除 ${extension}`}
-                    >
-                      ×
-                    </button>
-                  )}
-                </span>
-              ))}
-            </div>
+          <UploadDropzone
+            uploading={uploading}
+            dragActive={dragActive}
+            selectedFilesLength={selectedFiles.length}
+            uploadProgress={uploadProgress}
+            acceptAttr={acceptAttr}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+            onFileSelect={handleFileSelect}
+            onFolderSelect={handleFolderSelect}
+          />
 
-            {canManageExtensions && (
-              <div style={{ border: '1px solid #e5e7eb', borderRadius: 8, padding: 16, backgroundColor: '#f9fafb', marginBottom: 12 }}>
-                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-                  <input
-                    type="text"
-                    value={extensionDraft}
-                    onChange={(event) => setExtensionDraft(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter') {
-                        event.preventDefault();
-                        handleAddExtension();
-                      }
-                    }}
-                    placeholder="输入后缀，例如 .dwg 或 dwg"
-                    style={{
-                      flex: '1 1 260px',
-                      minWidth: 220,
-                      padding: '10px 12px',
-                      border: '1px solid #d1d5db',
-                      borderRadius: 6,
-                      fontSize: '0.95rem',
-                    }}
-                  />
-                  <button
-                    type="button"
-                    onClick={handleAddExtension}
-                    style={{
-                      padding: '10px 14px',
-                      backgroundColor: '#2563eb',
-                      color: 'white',
-                      border: 'none',
-                      borderRadius: 6,
-                      cursor: 'pointer',
-                      fontWeight: 500,
-                    }}
-                  >
-                    添加后缀
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleSaveExtensions}
-                    disabled={savingExtensions}
-                    style={{
-                      padding: '10px 14px',
-                      backgroundColor: savingExtensions ? '#9ca3af' : '#059669',
-                      color: 'white',
-                      border: 'none',
-                      borderRadius: 6,
-                      cursor: savingExtensions ? 'not-allowed' : 'pointer',
-                      fontWeight: 500,
-                    }}
-                  >
-                    {savingExtensions ? '保存中...' : '保存配置'}
-                  </button>
-                </div>
-                <div style={{ marginTop: 10, fontSize: '0.85rem', color: '#6b7280' }}>
-                  admin 可在这里新增、删除并保存允许上传的文件后缀。修改后会影响后续上传校验。
-                </div>
-              </div>
-            )}
+          <SelectedFilesList
+            selectedFiles={selectedFiles}
+            uploading={uploading}
+            onClear={() => setSelectedFiles([])}
+            onRemove={removeFile}
+          />
 
-            {extensionsMessage && (
-              <div
-                style={{
-                  marginBottom: 12,
-                  padding: '10px 12px',
-                  borderRadius: 6,
-                  backgroundColor: extensionsMessage.type === 'success' ? '#d1fae5' : '#fee2e2',
-                  color: extensionsMessage.type === 'success' ? '#065f46' : '#991b1b',
-                  fontSize: '0.9rem',
-                }}
-              >
-                {extensionsMessage.text}
-              </div>
-            )}
-          </div>
-
-          <div style={{ marginBottom: '24px' }}>
-            <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', color: '#374151' }}>
-              选择文件
-            </label>
-            <div style={{ display: 'flex', gap: '10px', marginBottom: '12px', flexWrap: 'wrap' }}>
-              <button
-                type="button"
-                disabled={uploading}
-                onClick={() => !uploading && document.getElementById('fileInput')?.click()}
-                style={{
-                  padding: '10px 14px',
-                  backgroundColor: uploading ? '#9ca3af' : '#2563eb',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '6px',
-                  cursor: uploading ? 'not-allowed' : 'pointer',
-                  fontSize: '0.9rem',
-                  fontWeight: 500,
-                }}
-              >
-                选择文件
-              </button>
-              <button
-                type="button"
-                disabled={uploading}
-                onClick={() => !uploading && document.getElementById('folderInput')?.click()}
-                style={{
-                  padding: '10px 14px',
-                  backgroundColor: uploading ? '#9ca3af' : '#0f766e',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '6px',
-                  cursor: uploading ? 'not-allowed' : 'pointer',
-                  fontSize: '0.9rem',
-                  fontWeight: 500,
-                }}
-              >
-                选择文件夹
-              </button>
-            </div>
-
-            <div
-              data-testid="upload-file-dropzone"
-              style={{
-                border: `2px dashed ${dragActive ? '#3b82f6' : '#d1d5db'}`,
-                borderRadius: '4px',
-                padding: '40px',
-                textAlign: 'center',
-                cursor: 'pointer',
-                transition: 'border-color 0.2s',
-                backgroundColor: dragActive ? '#eff6ff' : 'transparent',
-              }}
-              onDragOver={handleDragOver}
-              onDragLeave={handleDragLeave}
-              onDrop={handleDrop}
-              onClick={() => !uploading && document.getElementById('fileInput')?.click()}
-            >
-              <input
-                type="file"
-                onChange={handleFileSelect}
-                accept={acceptAttr}
-                multiple
-                style={{ display: 'none' }}
-                id="fileInput"
-                data-testid="upload-file-input"
-              />
-              <input
-                type="file"
-                onChange={handleFolderSelect}
-                accept={acceptAttr}
-                multiple
-                webkitdirectory=""
-                directory=""
-                style={{ display: 'none' }}
-                id="folderInput"
-                data-testid="upload-folder-input"
-              />
-              <div style={{ fontSize: '2rem', marginBottom: '12px' }}>文件</div>
-              <div style={{ color: '#6b7280', marginBottom: '8px' }}>
-                {selectedFiles.length > 0
-                  ? `已选择 ${selectedFiles.length} 个文件`
-                  : '拖动文件到此处，或点击选择文件/文件夹（支持子文件夹）'}
-              </div>
-              {uploadProgress && (
-                <div style={{ fontSize: '0.9rem', color: '#6b7280' }} data-testid="upload-progress">
-                  正在上传 {uploadProgress.current}/{uploadProgress.total}：{uploadProgress.filename}
-                </div>
-              )}
-            </div>
-
-            {selectedFiles.length > 0 && (
-              <div style={{ marginTop: 12 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                  <div style={{ fontSize: '0.9rem', color: '#374151', fontWeight: 500 }}>已选择文件</div>
-                  <button
-                    type="button"
-                    disabled={uploading}
-                    onClick={() => setSelectedFiles([])}
-                    data-testid="upload-files-clear"
-                    style={{
-                      padding: '6px 10px',
-                      backgroundColor: '#6b7280',
-                      color: 'white',
-                      border: 'none',
-                      borderRadius: 6,
-                      cursor: uploading ? 'not-allowed' : 'pointer',
-                      fontSize: '0.85rem',
-                    }}
-                  >
-                    清空
-                  </button>
-                </div>
-                <div style={{ border: '1px solid #e5e7eb', borderRadius: 8, overflow: 'hidden' }}>
-                  {selectedFiles.map((file) => {
-                    const key = getFileUniqueKey(file);
-                    const displayPath = getDisplayPath(file);
-                    return (
-                      <div
-                        key={key}
-                        data-testid={`upload-file-item-${key}`}
-                        style={{
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                          alignItems: 'center',
-                          padding: '10px 12px',
-                          borderBottom: '1px solid #f3f4f6',
-                          backgroundColor: 'white',
-                          gap: 12,
-                        }}
-                      >
-                        <div style={{ minWidth: 0 }}>
-                          <div style={{ fontSize: '0.95rem', color: '#111827', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            {file.name}
-                          </div>
-                          <div style={{ fontSize: '0.82rem', color: '#6b7280', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            {displayPath}
-                          </div>
-                          <div style={{ fontSize: '0.85rem', color: '#6b7280' }}>{formatBytes(file.size)}</div>
-                        </div>
-                        <button
-                          type="button"
-                          disabled={uploading}
-                          onClick={() => removeFile(key)}
-                          data-testid={`upload-file-remove-${key}`}
-                          style={{
-                            padding: '6px 10px',
-                            backgroundColor: '#ef4444',
-                            color: 'white',
-                            border: 'none',
-                            borderRadius: 6,
-                            cursor: uploading ? 'not-allowed' : 'pointer',
-                            fontSize: '0.85rem',
-                            flexShrink: 0,
-                          }}
-                        >
-                          移除
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            <div style={{ marginTop: '8px', fontSize: '0.85rem', color: '#6b7280' }}>
-              支持的文件后缀：{acceptAttr}（单文件最大 16MB，支持选择文件夹并递归读取子文件夹）
-            </div>
+          <div style={{ marginTop: '8px', fontSize: '0.85rem', color: '#6b7280' }}>
+            Supported extensions: {acceptAttr} (max 16MB per file; folder upload is recursive).
           </div>
 
           <button

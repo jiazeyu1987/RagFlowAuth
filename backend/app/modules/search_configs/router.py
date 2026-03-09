@@ -4,13 +4,23 @@ import logging
 from typing import Any
 
 from fastapi import APIRouter, Body, HTTPException
+from pydantic import BaseModel, ValidationError
 
 from backend.app.core.authz import AuthContextDep
+from backend.app.core.pydantic_compat import model_dump, model_validate
 from backend.app.core.permission_resolver import ResourceScope, normalize_accessible_chat_ids
 
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+
+class SearchConfigBody(BaseModel):
+    name: Any = None
+    config: Any = None
+
+    class Config:
+        extra = "allow"
 
 
 def _assert_admin(ctx: AuthContextDep) -> None:
@@ -82,12 +92,20 @@ async def get_search_config(config_id: str, ctx: AuthContextDep):
 @router.post("/search/configs")
 async def create_search_config(
     ctx: AuthContextDep,
-    body: dict[str, Any] = Body(...),
+    body: object = Body(...),
 ):
     _assert_admin(ctx)
 
+    if not isinstance(body, dict):
+        raise HTTPException(status_code=400, detail="invalid_body")
+    try:
+        parsed = model_validate(SearchConfigBody, body)
+    except ValidationError:
+        raise HTTPException(status_code=400, detail="invalid_body")
+
+    data = model_dump(parsed, include_none=True)
     name = body.get("name")
-    config = body.get("config")
+    config = data.get("config")
     if not isinstance(name, str) or not name.strip():
         raise HTTPException(status_code=400, detail="missing_name")
     if not isinstance(config, dict):
@@ -126,12 +144,20 @@ async def create_search_config(
 async def update_search_config(
     config_id: str,
     ctx: AuthContextDep,
-    updates: dict[str, Any] = Body(...),
+    updates: object = Body(...),
 ):
     _assert_admin(ctx)
 
+    if not isinstance(updates, dict):
+        raise HTTPException(status_code=400, detail="invalid_updates")
+    try:
+        parsed = model_validate(SearchConfigBody, updates)
+    except ValidationError:
+        raise HTTPException(status_code=400, detail="invalid_updates")
+
+    data = model_dump(parsed, include_none=True)
     name = updates.get("name")
-    config = updates.get("config")
+    config = data.get("config")
     if not isinstance(name, str) or not name.strip():
         raise HTTPException(status_code=400, detail="missing_name")
     if not isinstance(config, dict):

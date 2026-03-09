@@ -26,11 +26,10 @@ const PRIMARY_BUTTON = {
   color: '#1d4ed8',
 };
 
-const rowStatus = (row) => (
+const rowStatus = (row) =>
   row?.ok
-    ? { text: '可访问', color: '#065f46', bg: '#d1fae5', border: '#a7f3d0' }
-    : { text: '失败', color: '#991b1b', bg: '#fee2e2', border: '#fecaca' }
-);
+    ? { text: 'ok', color: '#065f46', bg: '#d1fae5', border: '#a7f3d0' }
+    : { text: 'failed', color: '#991b1b', bg: '#fee2e2', border: '#fecaca' };
 
 export default function DrugAdminNavigator() {
   const navigate = useNavigate();
@@ -53,6 +52,7 @@ export default function DrugAdminNavigator() {
 
   useEffect(() => {
     let alive = true;
+
     const run = async () => {
       setLoading(true);
       setError('');
@@ -66,11 +66,12 @@ export default function DrugAdminNavigator() {
         setSelectedProvince((prev) => (prev ? prev : String(list[0]?.name || '')));
       } catch (e) {
         if (!alive) return;
-        setError(e?.message || '加载药监局列表失败');
+        setError(e?.message || 'Failed to load province list');
       } finally {
         if (alive) setLoading(false);
       }
     };
+
     run();
     return () => {
       alive = false;
@@ -81,18 +82,18 @@ export default function DrugAdminNavigator() {
     if (!selectedProvince) return;
     setActionLoading(true);
     setError('');
-    setInfo(`正在校验 ${selectedProvince} 官网链接...`);
+    setInfo(`Checking ${selectedProvince}...`);
     try {
       const result = await drugAdminManager.resolveProvince(selectedProvince);
       setLastResolve(result);
       if (result?.ok && result?.url) {
         window.open(result.url, '_blank', 'noopener,noreferrer');
-        setInfo(`${selectedProvince} 官网可访问（HTTP ${result?.code || '-'}），已在新窗口打开。`);
+        setInfo(`${selectedProvince} is reachable (HTTP ${result?.code || '-'})`);
       } else {
-        setInfo(`${selectedProvince} 官网当前不可访问，请稍后重试。`);
+        setInfo(`${selectedProvince} is not reachable now`);
       }
     } catch (e) {
-      setError(e?.message || '校验官网失败');
+      setError(e?.message || 'Resolve request failed');
     } finally {
       setActionLoading(false);
     }
@@ -101,32 +102,32 @@ export default function DrugAdminNavigator() {
   const verifyAll = async () => {
     setVerifying(true);
     setError('');
-    setInfo('正在校验全部药监局官网，请稍候...');
+    setInfo('Verifying all province sites...');
     try {
       const result = await drugAdminManager.verifyAll();
       setVerifyResult(result);
-      setInfo(`校验完成：共 ${result?.total || 0} 个，成功 ${result?.success || 0}，失败 ${result?.failed || 0}。`);
+      setInfo(`Verify done: total ${result?.total || 0}, success ${result?.success || 0}, failed ${result?.failed || 0}`);
     } catch (e) {
-      setError(e?.message || '批量校验失败');
+      setError(e?.message || 'Batch verify failed');
     } finally {
       setVerifying(false);
     }
   };
 
   return (
-    <div style={{ width: '100%', boxSizing: 'border-box' }}>
+    <div style={{ width: '100%', boxSizing: 'border-box' }} data-testid="drug-admin-page">
       <div style={{ ...CARD, padding: '16px', marginBottom: '14px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
-          <div style={{ fontSize: '1.1rem', fontWeight: 900, color: '#111827' }}>药监局官网导航</div>
+          <div style={{ fontSize: '1.1rem', fontWeight: 900, color: '#111827' }}>Drug Admin Navigator</div>
           <button type="button" onClick={() => navigate('/tools')} style={BUTTON}>
-            返回实用工具
+            Back To Tools
           </button>
         </div>
         <div style={{ marginTop: '8px', color: '#6b7280', fontSize: '0.9rem', lineHeight: 1.6 }}>
-          各省与国家药监局官网入口。先由后端校验可达性，再打开可访问链接。
+          Official provincial and national drug administration links.
           {(validatedOn || source) && (
             <div style={{ marginTop: '4px' }}>
-              数据校验日期：{validatedOn || '-'}；来源：{source || '-'}
+              Validated on: {validatedOn || '-'}; source: {source || '-'}
             </div>
           )}
         </div>
@@ -134,11 +135,13 @@ export default function DrugAdminNavigator() {
 
       <div style={{ ...CARD, padding: '16px' }}>
         {loading ? (
-          <div style={{ color: '#6b7280' }}>加载中...</div>
+          <div style={{ color: '#6b7280' }}>Loading...</div>
         ) : (
           <>
             <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
-              <label htmlFor="drug-admin-province" style={{ color: '#374151', fontWeight: 700 }}>选择地区</label>
+              <label htmlFor="drug-admin-province" style={{ color: '#374151', fontWeight: 700 }}>
+                Province
+              </label>
               <select
                 id="drug-admin-province"
                 value={selectedProvince}
@@ -153,14 +156,28 @@ export default function DrugAdminNavigator() {
                 }}
               >
                 {provinces.map((item) => (
-                  <option key={item.name} value={item.name}>{item.name}</option>
+                  <option key={item.name} value={item.name}>
+                    {item.name}
+                  </option>
                 ))}
               </select>
-              <button type="button" onClick={openSelected} disabled={actionLoading || verifying || !selectedProvince} style={PRIMARY_BUTTON}>
-                {actionLoading ? '校验中...' : '药监局官网'}
+              <button
+                type="button"
+                onClick={openSelected}
+                disabled={actionLoading || verifying || !selectedProvince}
+                style={PRIMARY_BUTTON}
+                data-testid="drug-admin-open-selected"
+              >
+                {actionLoading ? 'Resolving...' : 'Open Province Site'}
               </button>
-              <button type="button" onClick={verifyAll} disabled={actionLoading || verifying || !provinces.length} style={BUTTON}>
-                {verifying ? '校验中...' : '校验全部官网'}
+              <button
+                type="button"
+                onClick={verifyAll}
+                disabled={actionLoading || verifying || !provinces.length}
+                style={BUTTON}
+                data-testid="drug-admin-verify-all"
+              >
+                {verifying ? 'Verifying...' : 'Verify All'}
               </button>
             </div>
 
@@ -173,10 +190,12 @@ export default function DrugAdminNavigator() {
 
             {lastResolve && !lastResolve.ok && Array.isArray(lastResolve.errors) && lastResolve.errors.length > 0 && (
               <div style={{ marginTop: '12px', background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: '10px', padding: '10px' }}>
-                <div style={{ color: '#9a3412', fontWeight: 700, marginBottom: '6px' }}>最近一次失败原因</div>
+                <div style={{ color: '#9a3412', fontWeight: 700, marginBottom: '6px' }}>Latest resolve errors</div>
                 <ul style={{ margin: 0, paddingLeft: '18px', color: '#9a3412' }}>
                   {lastResolve.errors.slice(0, 6).map((line, idx) => (
-                    <li key={`${idx}-${line}`} style={{ marginBottom: '4px' }}>{line}</li>
+                    <li key={`${idx}-${line}`} style={{ marginBottom: '4px' }}>
+                      {line}
+                    </li>
                   ))}
                 </ul>
               </div>
@@ -185,16 +204,16 @@ export default function DrugAdminNavigator() {
             {verifyResult && (
               <div style={{ marginTop: '14px' }}>
                 <div style={{ marginBottom: '8px', color: '#374151', fontWeight: 700 }}>
-                  批量校验结果：总计 {verifyResult.total || 0}，成功 {verifyResult.success || 0}，失败 {verifyResult.failed || 0}
+                  Verify result: total {verifyResult.total || 0}, success {verifyResult.success || 0}, failed {verifyResult.failed || 0}
                 </div>
                 {!!failedRows.length && (
                   <div style={{ border: '1px solid #e5e7eb', borderRadius: '10px', overflow: 'hidden' }}>
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.92rem' }}>
                       <thead>
                         <tr style={{ background: '#f9fafb' }}>
-                          <th style={{ textAlign: 'left', padding: '10px', borderBottom: '1px solid #e5e7eb' }}>地区</th>
-                          <th style={{ textAlign: 'left', padding: '10px', borderBottom: '1px solid #e5e7eb' }}>状态</th>
-                          <th style={{ textAlign: 'left', padding: '10px', borderBottom: '1px solid #e5e7eb' }}>失败原因（首条）</th>
+                          <th style={{ textAlign: 'left', padding: '10px', borderBottom: '1px solid #e5e7eb' }}>Province</th>
+                          <th style={{ textAlign: 'left', padding: '10px', borderBottom: '1px solid #e5e7eb' }}>Status</th>
+                          <th style={{ textAlign: 'left', padding: '10px', borderBottom: '1px solid #e5e7eb' }}>First Error</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -204,11 +223,23 @@ export default function DrugAdminNavigator() {
                             <tr key={row.province}>
                               <td style={{ padding: '10px', borderBottom: '1px solid #f3f4f6', color: '#111827' }}>{row.province}</td>
                               <td style={{ padding: '10px', borderBottom: '1px solid #f3f4f6' }}>
-                                <span style={{ padding: '2px 8px', borderRadius: '999px', fontWeight: 700, fontSize: '0.82rem', color: chip.color, background: chip.bg, border: `1px solid ${chip.border}` }}>
+                                <span
+                                  style={{
+                                    padding: '2px 8px',
+                                    borderRadius: '999px',
+                                    fontWeight: 700,
+                                    fontSize: '0.82rem',
+                                    color: chip.color,
+                                    background: chip.bg,
+                                    border: `1px solid ${chip.border}`,
+                                  }}
+                                >
                                   {chip.text}
                                 </span>
                               </td>
-                              <td style={{ padding: '10px', borderBottom: '1px solid #f3f4f6', color: '#6b7280' }}>{(row.errors && row.errors[0]) || '-'}</td>
+                              <td style={{ padding: '10px', borderBottom: '1px solid #f3f4f6', color: '#6b7280' }}>
+                                {(row.errors && row.errors[0]) || '-'}
+                              </td>
                             </tr>
                           );
                         })}
@@ -224,4 +255,3 @@ export default function DrugAdminNavigator() {
     </div>
   );
 }
-

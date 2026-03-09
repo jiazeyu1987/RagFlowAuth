@@ -6,6 +6,8 @@ from typing import Optional, Protocol
 from backend.core.roles import VALID_ROLES
 from backend.models.user import UserCreate, UserResponse, UserUpdate
 
+VALID_USER_STATUSES = {"active", "inactive"}
+
 
 class UsersPort(Protocol):
     def list_users(
@@ -89,6 +91,18 @@ class UserManagementManager:
                 raise UserManagementError("idle_timeout_minutes_out_of_range")
 
         return max_value, idle_value
+
+    @staticmethod
+    def _normalize_user_status(status: str | None, *, for_create: bool) -> str | None:
+        if status is None:
+            return "active" if for_create else None
+
+        normalized = str(status or "").strip().lower()
+        if not normalized:
+            return "active" if for_create else None
+        if normalized not in VALID_USER_STATUSES:
+            raise UserManagementError("invalid_user_status")
+        return normalized
 
     def _build_permission_groups(self, group_ids: list[int] | None) -> list[dict]:
         result: list[dict] = []
@@ -175,6 +189,7 @@ class UserManagementManager:
         role = user_data.role or "viewer"
         if role not in VALID_ROLES:
             raise UserManagementError(f"Invalid role: {role}")
+        status = self._normalize_user_status(user_data.status, for_create=True)
 
         if user_data.company_id is not None and not self._port.get_company(user_data.company_id):
             raise UserManagementError("company_not_found")
@@ -210,7 +225,7 @@ class UserManagementManager:
             department_id=user_data.department_id,
             role=role,
             group_id=None,
-            status=user_data.status,
+            status=status,
             max_login_sessions=max_login_sessions,
             idle_timeout_minutes=idle_timeout_minutes,
             created_by=created_by,
@@ -236,6 +251,7 @@ class UserManagementManager:
         role = user_data.role
         if role is not None and role not in VALID_ROLES:
             raise UserManagementError(f"Invalid role: {role}")
+        status = self._normalize_user_status(user_data.status, for_create=False)
 
         if user_data.company_id is not None and not self._port.get_company(user_data.company_id):
             raise UserManagementError("company_not_found")
@@ -266,7 +282,7 @@ class UserManagementManager:
             department_id=user_data.department_id,
             role=role,
             group_id=None,
-            status=user_data.status,
+            status=status,
             max_login_sessions=max_login_sessions,
             idle_timeout_minutes=idle_timeout_minutes,
         )

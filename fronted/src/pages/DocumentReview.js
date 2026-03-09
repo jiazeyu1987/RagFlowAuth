@@ -117,7 +117,7 @@ const DocumentReview = ({ embedded = false }) => {
   };
 
   return (
-    <div>
+    <div data-testid="document-review-page">
       <DocumentReviewOverwriteModal
         activeDocMap={activeDocMap}
         handleOverwriteKeepOld={handleOverwriteKeepOld}

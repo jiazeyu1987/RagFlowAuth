@@ -224,6 +224,42 @@ class TestDownloadPipelineManagerUnit(unittest.TestCase):
         self.assertEqual(owner.finished, ["s2"])
         self.assertEqual(store.runtime_updates[-1]["status"], "stopped")
 
+    def test_run_job_marks_stopped_when_cancelled(self):
+        store = _Store()
+        owner = _Owner(
+            store=store,
+            providers={"google_patents": _Provider([_Candidate("google_patents", "Google", "p1", "alpha", "abs", "n1", "", "", "", "", "pdf1")])},
+        )
+        owner.cancelled = True
+
+        mgr = DownloadPipelineManager()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            mgr.run_job(
+                owner=owner,
+                session_id="s3",
+                actor="u1",
+                query="q1",
+                keywords=["alpha"],
+                use_and=True,
+                source_queries={"google_patents": "q1"},
+                source_errors_seed={},
+                auto_analyze=False,
+                enabled_sources=["google_patents"],
+                source_cfg={"google_patents": {"enabled": True, "limit": 10}},
+                candidate_type=_Candidate,
+                source_error_type=RuntimeError,
+                session_dir=Path(temp_dir),
+                source_default_limit=10,
+                candidate_matches=lambda *args, **kwargs: True,
+                build_reused_row=lambda *args, **kwargs: {"source": "google_patents", "status": "downloaded_cached"},
+                build_item_row=lambda *args, **kwargs: {"source": "google_patents", "status": "downloaded", "error": None},
+                maybe_auto_analyze=lambda *args, **kwargs: (False, None, None),
+                analysis_failure_text=lambda exc: f"auto_analyze_failed: {exc}",
+            )
+
+        self.assertEqual(owner.finished, ["s3"])
+        self.assertEqual(store.runtime_updates[-1]["status"], "stopped")
+
 
 if __name__ == "__main__":
     unittest.main()

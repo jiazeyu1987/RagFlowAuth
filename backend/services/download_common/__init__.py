@@ -30,4 +30,18 @@ __all__ = [
     "translate_query_for_uspto",
     "translator_script_path",
     "DownloadManagerDelegationMixin",
+    "BaseDownloadManager",
+    "BaseDownloadStore",
 ]
+
+
+def __getattr__(name: str):
+    if name == "BaseDownloadManager":
+        from .base_download_manager import BaseDownloadManager
+
+        return BaseDownloadManager
+    if name == "BaseDownloadStore":
+        from .base_download_store import BaseDownloadStore
+
+        return BaseDownloadStore
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

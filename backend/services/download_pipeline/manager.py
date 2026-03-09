@@ -66,6 +66,7 @@ class DownloadPipelineManager:
         try:
             for source_key in enabled_sources:
                 if owner._is_cancelled(session_id):
+                    _mark_stopped()
                     return
                 if owner._is_stop_requested(session_id):
                     _mark_stopped()
@@ -109,6 +110,7 @@ class DownloadPipelineManager:
 
             while True:
                 if owner._is_cancelled(session_id):
+                    _mark_stopped()
                     return
                 if owner._is_stop_requested(session_id):
                     _mark_stopped()
@@ -121,6 +123,7 @@ class DownloadPipelineManager:
                         continue
                     while queue:
                         if owner._is_cancelled(session_id):
+                            _mark_stopped()
                             return
                         if owner._is_stop_requested(session_id):
                             _mark_stopped()

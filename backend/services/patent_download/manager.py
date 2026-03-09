@@ -10,13 +10,8 @@ from typing import Any
 from fastapi import HTTPException
 
 from backend.app.core.config import settings
-from backend.services.audit import AuditLogManager
-from backend.services.download_execution import DownloadExecutionManager
-from backend.services.download_history import DownloadHistoryManager
-from backend.services.download_kb_lifecycle import DownloadKbLifecycleManager
-from backend.services.download_pipeline import DownloadPipelineManager
-from backend.services.download_common import DownloadManagerDelegationMixin, utils as download_common_utils
-from backend.services.llm_analysis import LLMAnalysisManager
+from backend.services.download_common import utils as download_common_utils
+from backend.services.download_common.base_download_manager import BaseDownloadManager
 from backend.services.patent_download.store import PatentDownloadStore, item_to_dict, session_to_dict
 
 from .sources import PatentCandidate, PatentSourceError, PatentSourceFactory
@@ -26,7 +21,7 @@ LOCAL_PATENTS_KB_REF = "[本地专利]"
 LOCAL_PAPERS_KB_REF = LOCAL_PATENTS_KB_REF
 
 
-class PatentDownloadManager(DownloadManagerDelegationMixin):
+class PatentDownloadManager(BaseDownloadManager):
     _DM_KIND = "patent"
     _DM_SOURCE_NAME = "patent_download"
     _DM_DEFAULT_LOCAL_KB_REF = LOCAL_PATENTS_KB_REF
@@ -41,30 +36,25 @@ class PatentDownloadManager(DownloadManagerDelegationMixin):
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
         "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0 Safari/537.36"
     )
+
     def __init__(self, deps: Any):
-        self.deps = deps
-        self.store: PatentDownloadStore = getattr(deps, "patent_download_store", None) or PatentDownloadStore()
-        self._item_to_dict = item_to_dict
-        self._session_to_dict = session_to_dict
-        self._audit_manager = getattr(deps, "audit_log_manager", None) or AuditLogManager(store=getattr(deps, "audit_log_store", None))
-        self._execution_manager = DownloadExecutionManager(namespace="patent_download")
-        self._pipeline_manager = DownloadPipelineManager()
-        self._history_manager = DownloadHistoryManager(owner=self)
-        self._kb_lifecycle_manager = DownloadKbLifecycleManager(owner=self)
-        self._llm_manager = LLMAnalysisManager(
-            chat_service=getattr(deps, "ragflow_chat_service", None),
-            forced_id_env="PATENT_ANALYSIS_CHAT_ID",
-            forced_name_env="PATENT_ANALYSIS_CHAT_NAME",
-            session_prefix="patent-auto-analyze",
+        self._initialize_common_manager(
+            deps=deps,
+            store_attr_name="patent_download_store",
+            store_factory=PatentDownloadStore,
+            item_to_dict=item_to_dict,
+            session_to_dict=session_to_dict,
+            namespace="patent_download",
+            llm_forced_id_env="PATENT_ANALYSIS_CHAT_ID",
+            llm_forced_name_env="PATENT_ANALYSIS_CHAT_NAME",
+            llm_session_prefix="patent-auto-analyze",
+            source_factory=PatentSourceFactory,
         )
-        self._source_factory = PatentSourceFactory()
-        self._source_registry = self._source_factory.create_registry()
-        self._sources = self._source_registry.build_mapping()
 
     def _normalize_source_configs(self, source_configs: dict[str, Any] | None) -> dict[str, dict[str, Any]]:
-        return self._execution_manager.normalize_source_configs(
+        return self._normalize_source_configs_common(
             source_configs=source_configs,
-            source_keys=("uspto", "google_patents"),
+            source_keys=self._SOURCE_ORDER,
             default_limit=10,
             max_limit=1000,
         )
@@ -81,37 +71,18 @@ class PatentDownloadManager(DownloadManagerDelegationMixin):
 
     @staticmethod
     def _item_key(candidate: PatentCandidate) -> str:
-        return (
-            str(candidate.patent_id or "").strip()
-            or str(candidate.publication_number or "").strip()
-            or str(candidate.title or "").strip()
-        )
+        return BaseDownloadManager._item_key_common(candidate)
 
     @classmethod
     def _candidate_match_text(cls, candidate: PatentCandidate) -> str:
-        parts = [
-            candidate.title,
-            candidate.abstract_text,
-            candidate.assignee,
-            candidate.inventor,
-            candidate.publication_number,
-            candidate.patent_id,
-        ]
-        return " ".join(cls._normalize_match_text(x) for x in parts if str(x or "").strip())
+        return cls._candidate_match_text_common(candidate)
 
     @classmethod
     def _candidate_matches_keywords(cls, *, candidate: PatentCandidate, keywords: list[str], use_and: bool) -> bool:
-        needles = [cls._normalize_match_text(k) for k in (keywords or []) if cls._normalize_match_text(k)]
-        if not needles:
-            return True
-        haystack = cls._candidate_match_text(candidate)
-        if not haystack:
-            return False
-        hits = [needle in haystack for needle in needles]
-        return all(hits) if bool(use_and) else any(hits)
+        return cls._candidate_matches_keywords_common(candidate=candidate, keywords=keywords, use_and=use_and)
 
     def _build_source_stats(self, enabled: list[str], cfg: dict[str, dict[str, Any]]) -> dict[str, dict[str, Any]]:
-        return self._execution_manager.build_source_stats(
+        return self._build_source_stats_common(
             enabled_sources=enabled,
             source_cfg=cfg,
             default_limit=10,
@@ -198,54 +169,12 @@ class PatentDownloadManager(DownloadManagerDelegationMixin):
         return analysis_text, str(txt_path)
 
     def _build_item_row(self, *, source_key: str, source_index: int, candidate: PatentCandidate, session_dir: Path) -> dict[str, Any]:
-        safe_title = self._strip_html(candidate.title)
-        safe_abstract = self._strip_html(candidate.abstract_text)
-        preferred_name = str(candidate.publication_number or "").strip() or safe_title or f"{source_key}_{source_index}"
-        filename = self._safe_filename(preferred_name, fallback=f"{source_key}_{source_index}")
-        source_dir = session_dir / source_key
-        source_dir.mkdir(parents=True, exist_ok=True)
-        local_path = source_dir / filename
-
-        status = "downloaded"
-        error = None
-        file_size: int | None = None
-        mime_type = self._MIME_TYPE_DEFAULT
-        if not candidate.pdf_url:
-            status = "failed"
-            error = "missing_pdf_url"
-        else:
-            try:
-                content = self._download_pdf_bytes(candidate.pdf_url)
-                local_path.write_bytes(content)
-                file_size = len(content)
-            except Exception as e:
-                status = "failed"
-                error = f"download_failed: {e}"
-                if local_path.exists():
-                    try:
-                        local_path.unlink()
-                    except Exception:
-                        pass
-
-        return {
-            "source": candidate.source,
-            "source_label": candidate.source_label,
-            "patent_id": candidate.patent_id,
-            "title": safe_title,
-            "abstract_text": safe_abstract,
-            "publication_number": candidate.publication_number,
-            "publication_date": candidate.publication_date,
-            "inventor": candidate.inventor,
-            "assignee": candidate.assignee,
-            "detail_url": candidate.detail_url,
-            "pdf_url": candidate.pdf_url,
-            "file_path": str(local_path) if status == "downloaded" else None,
-            "filename": filename,
-            "file_size": file_size,
-            "mime_type": mime_type if status == "downloaded" else None,
-            "status": status,
-            "error": error,
-        }
+        return self._build_item_row_common(
+            source_key=source_key,
+            source_index=source_index,
+            candidate=candidate,
+            session_dir=session_dir,
+        )
 
     def _candidate_matches_for_pipeline(
         self,
@@ -265,30 +194,12 @@ class PatentDownloadManager(DownloadManagerDelegationMixin):
         candidate: PatentCandidate,
         reused: Any,
     ) -> dict[str, Any]:
-        return {
-            "source": candidate.source,
-            "source_label": candidate.source_label,
-            "patent_id": candidate.patent_id,
-            "title": self._strip_html(candidate.title),
-            "abstract_text": self._strip_html(candidate.abstract_text),
-            "publication_number": candidate.publication_number,
-            "publication_date": candidate.publication_date,
-            "inventor": candidate.inventor,
-            "assignee": candidate.assignee,
-            "detail_url": candidate.detail_url,
-            "pdf_url": candidate.pdf_url,
-            "file_path": reused.file_path,
-            "filename": reused.filename or self._safe_filename(
-                str(candidate.publication_number or candidate.title or f"{source_key}_{source_index}"),
-                fallback=f"{source_key}_{source_index}",
-            ),
-            "file_size": reused.file_size,
-            "mime_type": reused.mime_type or self._MIME_TYPE_DEFAULT,
-            "status": "downloaded_cached",
-            "error": None,
-            "analysis_text": reused.analysis_text,
-            "analysis_file_path": reused.analysis_file_path,
-        }
+        return self._build_reused_row_common(
+            source_key=source_key,
+            source_index=source_index,
+            candidate=candidate,
+            reused=reused,
+        )
 
     def _maybe_auto_analyze_item(self, actor: str, item: Any, auto_analyze: bool) -> tuple[bool, str | None, str | None]:
         if not bool(auto_analyze):
@@ -394,23 +305,33 @@ class PatentDownloadManager(DownloadManagerDelegationMixin):
             source_stats=source_stats,
         )
 
-        self._execution_manager.start_job(
-            session_id=session_id,
-            target=self._run_download_job,
-            kwargs={
-                "session_id": session_id,
-                "actor": actor,
-                "query": query,
-                "keywords": keywords,
-                "use_and": bool(use_and),
-                "source_queries": source_queries,
-                "source_errors_seed": source_errors_seed,
-                "auto_analyze": bool(auto_analyze),
-                "enabled_sources": enabled_sources,
-                "source_cfg": normalized_sources,
-            },
-            name_prefix="patent-download",
-        )
+        try:
+            self._execution_manager.start_job(
+                session_id=session_id,
+                target=self._run_download_job,
+                kwargs={
+                    "session_id": session_id,
+                    "actor": actor,
+                    "query": query,
+                    "keywords": keywords,
+                    "use_and": bool(use_and),
+                    "source_queries": source_queries,
+                    "source_errors_seed": source_errors_seed,
+                    "auto_analyze": bool(auto_analyze),
+                    "enabled_sources": enabled_sources,
+                    "source_cfg": normalized_sources,
+                },
+                name_prefix="patent-download",
+            )
+        except Exception as e:
+            self.store.update_session_runtime(
+                session_id=session_id,
+                status="failed",
+                error=f"start_job_failed: {e}",
+                source_errors=source_errors_seed,
+                source_stats=source_stats,
+            )
+            raise HTTPException(status_code=500, detail="download_start_failed")
 
         session_data = self._session_to_dict(session)
         return {

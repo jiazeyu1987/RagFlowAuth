@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { dataSecurityApi } from '../features/dataSecurity/api';
 import { cronToSchedule, formatSchedule } from '../features/dataSecurity/scheduleUtils';
 
@@ -32,6 +33,7 @@ const Card = ({ title, children }) => (
 );
 
 const DataSecurity = () => {
+  const location = useLocation();
   const [loading, setLoading] = useState(true);
   const [running, setRunning] = useState(false);
   const [error, setError] = useState(null);
@@ -40,6 +42,10 @@ const DataSecurity = () => {
   const [activeJob, setActiveJob] = useState(null);
   const [savingRetention, setSavingRetention] = useState(false);
   const pollTimer = useRef(null);
+  const showAdvanced = useMemo(
+    () => new URLSearchParams(location.search).get('advanced') === '1',
+    [location.search]
+  );
 
   const saveRetention = async () => {
     if (!settings) return;
@@ -157,7 +163,7 @@ const DataSecurity = () => {
   if (loading) return <div style={{ padding: '12px' }}>加载中…</div>;
 
   return (
-    <div style={{ maxWidth: '980px' }}>
+    <div style={{ maxWidth: '980px' }} data-testid="data-security-page">
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', alignItems: 'center' }}>
         <h2 style={{ margin: 0 }}>数据安全</h2>
         <div style={{ display: 'flex', gap: '10px' }}>
@@ -253,7 +259,7 @@ const DataSecurity = () => {
         </div>
       </Card>
 
-      {false && (
+      {showAdvanced && (
       <Card title="备份设置">
         <div style={{ display: 'grid', gap: '12px' }}>
           <label style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>

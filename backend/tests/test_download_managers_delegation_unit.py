@@ -1,6 +1,9 @@
+import json
 import unittest
 from dataclasses import dataclass
 from types import SimpleNamespace
+
+from fastapi import HTTPException
 
 from backend.services.paper_download.manager import PaperDownloadManager
 from backend.services.paper_download.models import PaperDownloadSession
@@ -87,6 +90,31 @@ class _FakePaperStore:
         return [_CommonItem(item_id=1, status="downloaded", added_doc_id="doc-1")]
 
 
+class _CreateSessionStore:
+    def __init__(self, session_cls):
+        self._session_cls = session_cls
+        self.runtime_updates = []
+
+    def create_session(self, **kwargs):
+        return self._session_cls(
+            session_id=str(kwargs.get("session_id") or ""),
+            created_by=str(kwargs.get("created_by") or ""),
+            created_at_ms=int(kwargs.get("created_at_ms") or 0),
+            keyword_text=str(kwargs.get("keyword_text") or ""),
+            keywords_json=json.dumps(kwargs.get("keywords") or [], ensure_ascii=False),
+            use_and=bool(kwargs.get("use_and")),
+            sources_json=json.dumps(kwargs.get("sources") or {}, ensure_ascii=False),
+            status=str(kwargs.get("status") or "running"),
+            error=kwargs.get("error"),
+            source_errors_json=json.dumps(kwargs.get("source_errors") or {}, ensure_ascii=False),
+            source_stats_json=json.dumps(kwargs.get("source_stats") or {}, ensure_ascii=False),
+        )
+
+    def update_session_runtime(self, **kwargs):
+        self.runtime_updates.append(kwargs)
+        return None
+
+
 class TestDownloadManagersDelegationUnit(unittest.TestCase):
     def test_patent_manager_delegates_llm_pipeline_and_audit(self):
         deps = SimpleNamespace(
@@ -161,6 +189,60 @@ class TestDownloadManagersDelegationUnit(unittest.TestCase):
         self.assertEqual(result["success"], 0)
         self.assertEqual(result["items"][0]["already_added"], True)
         self.assertEqual(deps.audit_log_manager.calls[0]["action"], "paper_kb_add_all")
+
+    def test_paper_create_session_marks_failed_when_start_job_fails(self):
+        store = _CreateSessionStore(PaperDownloadSession)
+        deps = SimpleNamespace(
+            paper_download_store=store,
+            ragflow_chat_service=None,
+            audit_log_store=None,
+            audit_log_manager=_FakeAuditManager(),
+        )
+        mgr = PaperDownloadManager(deps)
+        def _raise_start_job(**kwargs):  # noqa: ARG001
+            raise RuntimeError("thread_start_failed")
+        mgr._execution_manager.start_job = _raise_start_job
+
+        with self.assertRaises(HTTPException) as ex:
+            mgr.create_session_and_download(
+                ctx=SimpleNamespace(payload=SimpleNamespace(sub="u1")),
+                keyword_text="alpha",
+                use_and=True,
+                auto_analyze=False,
+                source_configs={"arxiv": {"enabled": True, "limit": 5}},
+            )
+
+        self.assertEqual(ex.exception.status_code, 500)
+        self.assertEqual(ex.exception.detail, "download_start_failed")
+        self.assertEqual(store.runtime_updates[-1]["status"], "failed")
+        self.assertTrue(str(store.runtime_updates[-1]["error"]).startswith("start_job_failed:"))
+
+    def test_patent_create_session_marks_failed_when_start_job_fails(self):
+        store = _CreateSessionStore(PatentDownloadSession)
+        deps = SimpleNamespace(
+            patent_download_store=store,
+            ragflow_chat_service=None,
+            audit_log_store=None,
+            audit_log_manager=_FakeAuditManager(),
+        )
+        mgr = PatentDownloadManager(deps)
+        def _raise_start_job(**kwargs):  # noqa: ARG001
+            raise RuntimeError("thread_start_failed")
+        mgr._execution_manager.start_job = _raise_start_job
+
+        with self.assertRaises(HTTPException) as ex:
+            mgr.create_session_and_download(
+                ctx=SimpleNamespace(payload=SimpleNamespace(sub="u1")),
+                keyword_text="alpha",
+                use_and=True,
+                auto_analyze=False,
+                source_configs={"google_patents": {"enabled": True, "limit": 5}},
+            )
+
+        self.assertEqual(ex.exception.status_code, 500)
+        self.assertEqual(ex.exception.detail, "download_start_failed")
+        self.assertEqual(store.runtime_updates[-1]["status"], "failed")
+        self.assertTrue(str(store.runtime_updates[-1]["error"]).startswith("start_job_failed:"))
 
 
 if __name__ == "__main__":

@@ -16,6 +16,14 @@ export const useAuth = () => {
 // 应用版本号，每次更新权限相关代码时递增
 const APP_VERSION = '6';  // 强制清除所有缓存
 
+const mapLoginErrorMessage = (message) => {
+  const code = String(message || '').trim();
+  if (code === 'account_inactive' || code === 'account_disabled') {
+    return '该账户已被禁用，请联系管理员';
+  }
+  return code || '登录失败';
+};
+
 export const AuthProvider = ({ children }) => {
   // 使用新的令牌名称
   const [user, setUser] = useState(null);  // 初始为null，等待checkAuth完成
@@ -144,8 +152,9 @@ export const AuthProvider = ({ children }) => {
       }
       return { success: true };
     } catch (err) {
-      setError(err.message);
-      return { success: false, error: err.message };
+      const message = mapLoginErrorMessage(err?.message);
+      setError(message);
+      return { success: false, error: message };
     }
   };
 
