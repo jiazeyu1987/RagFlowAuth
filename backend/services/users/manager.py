@@ -248,10 +248,17 @@ class UserManagementManager:
         return self._to_response(user, summary)
 
     def update_user(self, *, user_id: str, user_data: UserUpdate) -> UserResponse:
+        current_user = self._port.get_user(user_id)
+        if not current_user:
+            raise UserManagementError("user_not_found", status_code=404)
+
         role = user_data.role
         if role is not None and role not in VALID_ROLES:
             raise UserManagementError(f"Invalid role: {role}")
         status = self._normalize_user_status(user_data.status, for_create=False)
+        is_builtin_admin = str(getattr(current_user, "username", "") or "").strip().lower() == "admin"
+        if is_builtin_admin and status is not None and status != "active":
+            raise UserManagementError("admin_user_cannot_be_disabled")
 
         if user_data.company_id is not None and not self._port.get_company(user_data.company_id):
             raise UserManagementError("company_not_found")

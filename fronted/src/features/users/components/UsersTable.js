@@ -33,8 +33,10 @@ export default function UsersTable({
           </tr>
         </thead>
         <tbody>
-          {filteredUsers.map((user) => (
-            <tr key={user.user_id} data-testid={`users-row-${user.user_id}`} style={{ borderBottom: '1px solid #e5e7eb' }}>
+          {filteredUsers.map((user) => {
+            const isProtectedAdmin = String(user?.username || '').toLowerCase() === 'admin';
+            return (
+              <tr key={user.user_id} data-testid={`users-row-${user.user_id}`} style={{ borderBottom: '1px solid #e5e7eb' }}>
               <td style={{ padding: '12px 16px' }}>{user.username}</td>
               <td style={{ padding: '12px 16px', color: '#6b7280' }}>{user.company_name || '-'}</td>
               <td style={{ padding: '12px 16px', color: '#6b7280' }}>{user.department_name || '-'}</td>
@@ -83,7 +85,7 @@ export default function UsersTable({
                 {new Date(user.created_at_ms).toLocaleString('zh-CN')}
               </td>
               <td style={{ padding: '12px 16px', textAlign: 'right' }}>
-                {canManageUsers && (
+                {canManageUsers && !isProtectedAdmin && (
                   <button
                     onClick={() => onOpenPolicyModal(user)}
                     data-testid={`users-edit-policy-${user.user_id}`}
@@ -101,7 +103,7 @@ export default function UsersTable({
                     {'登录策略'}
                   </button>
                 )}
-                {canManageUsers && (
+                {canManageUsers && !isProtectedAdmin && (
                   <button
                     onClick={() => onAssignGroup(user)}
                     data-testid={`users-edit-groups-${user.user_id}`}
@@ -137,7 +139,7 @@ export default function UsersTable({
                     {'修改密码'}
                   </button>
                 )}
-                {canManageUsers && (
+                {canManageUsers && !isProtectedAdmin && (
                   <button
                     onClick={() => onToggleUserStatus(user)}
                     data-testid={`users-toggle-status-${user.user_id}`}
@@ -159,7 +161,7 @@ export default function UsersTable({
                       : (user.status === 'active' ? '禁用' : '解禁')}
                   </button>
                 )}
-                {canManageUsers && user.username !== 'admin' && (
+                {canManageUsers && !isProtectedAdmin && (
                   <button
                     onClick={() => onDeleteUser(user.user_id)}
                     data-testid={`users-delete-${user.user_id}`}
@@ -177,8 +179,9 @@ export default function UsersTable({
                   </button>
                 )}
               </td>
-            </tr>
-          ))}
+              </tr>
+            );
+          })}
         </tbody>
       </table>
 

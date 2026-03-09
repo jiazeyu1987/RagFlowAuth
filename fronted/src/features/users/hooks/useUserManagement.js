@@ -152,6 +152,7 @@ export const useUserManagement = () => {
   const handleToggleUserStatus = useCallback(
     async (user) => {
       if (!user?.user_id) return;
+      if (String(user?.username || '').toLowerCase() === 'admin') return;
       const nextStatus = user.status === 'active' ? 'inactive' : 'active';
       try {
         setStatusUpdatingUserId(user.user_id);
