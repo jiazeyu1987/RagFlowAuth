@@ -28,6 +28,7 @@ export const DocumentPreviewModal = ({ open, target, onClose, canDownloadFiles =
   const [pdfPageImages, setPdfPageImages] = useState([]);
   const [pdfRendering, setPdfRendering] = useState(false);
   const [pdfRenderingMessage, setPdfRenderingMessage] = useState('');
+  const [isMaximized, setIsMaximized] = useState(false);
   const lastUrlRef = useRef('');
 
   const close = useCallback(() => {
@@ -36,6 +37,7 @@ export const DocumentPreviewModal = ({ open, target, onClose, canDownloadFiles =
     setEffectiveName('');
     setOnlyOfficeServerUrl('');
     setOnlyOfficeConfig(null);
+    setIsMaximized(false);
     onClose?.();
   }, [onClose]);
 
@@ -67,6 +69,7 @@ export const DocumentPreviewModal = ({ open, target, onClose, canDownloadFiles =
       setPdfPageImages([]);
       setPdfRendering(false);
       setPdfRenderingMessage('');
+      setIsMaximized(false);
 
       try {
         const source = target.source;
@@ -317,17 +320,17 @@ export const DocumentPreviewModal = ({ open, target, onClose, canDownloadFiles =
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        padding: '16px',
+        padding: isMaximized ? 0 : '16px',
       }}
     >
       <div
         onClick={(e) => e.stopPropagation()}
         style={{
           backgroundColor: 'white',
-          borderRadius: '10px',
-          width: '95vw',
-          maxWidth: '1200px',
-          height: '90vh',
+          borderRadius: isMaximized ? 0 : '10px',
+          width: isMaximized ? '100vw' : '95vw',
+          maxWidth: isMaximized ? '100vw' : '1200px',
+          height: isMaximized ? '100vh' : '90vh',
           display: 'flex',
           flexDirection: 'column',
           boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)',
@@ -346,26 +349,46 @@ export const DocumentPreviewModal = ({ open, target, onClose, canDownloadFiles =
           <div style={{ fontWeight: 700, fontSize: '1.05rem', color: '#111827', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {effectiveName || target?.filename || target?.title || '文档预览'}
           </div>
-          <button
-            type="button"
-            onClick={close}
-            data-testid="document-preview-close"
-            style={{
-              background: 'transparent',
-              border: 'none',
-              fontSize: '1.4rem',
-              cursor: 'pointer',
-              color: '#6b7280',
-              width: '36px',
-              height: '36px',
-              borderRadius: '8px',
-            }}
-            onMouseEnter={(e) => (e.currentTarget.style.color = '#111827')}
-            onMouseLeave={(e) => (e.currentTarget.style.color = '#6b7280')}
-            aria-label="close"
-          >
-            ×
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            {payload?.type === 'onlyoffice' ? (
+              <button
+                type="button"
+                onClick={() => setIsMaximized((v) => !v)}
+                data-testid="document-preview-toggle-maximize"
+                style={{
+                  border: '1px solid #d1d5db',
+                  borderRadius: '8px',
+                  background: '#ffffff',
+                  color: '#374151',
+                  fontSize: '0.86rem',
+                  padding: '6px 10px',
+                  cursor: 'pointer',
+                }}
+              >
+                {isMaximized ? '窗口化' : '最大化'}
+              </button>
+            ) : null}
+            <button
+              type="button"
+              onClick={close}
+              data-testid="document-preview-close"
+              style={{
+                background: 'transparent',
+                border: 'none',
+                fontSize: '1.4rem',
+                cursor: 'pointer',
+                color: '#6b7280',
+                width: '36px',
+                height: '36px',
+                borderRadius: '8px',
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.color = '#111827')}
+              onMouseLeave={(e) => (e.currentTarget.style.color = '#6b7280')}
+              aria-label="close"
+            >
+              ×
+            </button>
+          </div>
         </div>
 
         <div style={{ flex: 1, overflow: 'auto', padding: '18px' }}>
