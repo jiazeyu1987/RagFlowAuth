@@ -51,6 +51,34 @@ export const policyNasApiMethods = {
     return response.json();
   },
 
+  async cancelNasFolderImport(taskId) {
+    const response = await this.fetchWithAuth(
+      authBackendUrl(`/api/nas/import-folder/${encodeURIComponent(taskId)}/cancel`),
+      { method: 'POST' }
+    );
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(error.detail || 'Failed to cancel NAS folder import');
+    }
+
+    return response.json();
+  },
+
+  async retryNasFolderImport(taskId) {
+    const response = await this.fetchWithAuth(
+      authBackendUrl(`/api/nas/import-folder/${encodeURIComponent(taskId)}/retry`),
+      { method: 'POST' }
+    );
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(error.detail || 'Failed to retry NAS folder import');
+    }
+
+    return response.json();
+  },
+
   async importNasFile(path, kbRef) {
     const response = await this.fetchWithAuth(
       authBackendUrl('/api/nas/import-file'),

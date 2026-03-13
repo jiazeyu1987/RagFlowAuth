@@ -18,6 +18,16 @@ import {
   writeStoredFolderImportTaskId,
 } from '../features/knowledge/nasBrowser/utils';
 
+const ACTIVE_TASK_STATUSES = new Set(['pending', 'running', 'canceling']);
+const TASK_STATUS_LABELS = {
+  pending: '排队中',
+  running: '执行中',
+  completed: '已完成',
+  failed: '失败',
+  canceling: '取消中',
+  canceled: '已取消',
+};
+
 export default function NasBrowser() {
   const navigate = useNavigate();
   const { isAdmin } = useAuth();
@@ -34,6 +44,7 @@ export default function NasBrowser() {
   const [selectedKb, setSelectedKb] = useState('');
   const [importLoading, setImportLoading] = useState(false);
   const [folderImportProgress, setFolderImportProgress] = useState(null);
+  const [taskActionLoading, setTaskActionLoading] = useState(false);
 
   const breadcrumbs = useMemo(() => pathSegments(currentPath), [currentPath]);
   const skippedDetails = useMemo(
@@ -81,6 +92,7 @@ export default function NasBrowser() {
         if (status.status === 'completed') {
           stopPolling();
           setImportLoading(false);
+          setTaskActionLoading(false);
           clearStoredTask();
           if (!options.silentOnComplete) {
             window.alert(buildImportSummary(status, '文件夹'));
@@ -88,11 +100,14 @@ export default function NasBrowser() {
           return;
         }
 
-        if (status.status === 'failed') {
+        if (status.status === 'failed' || status.status === 'canceled') {
           stopPolling();
           setImportLoading(false);
+          setTaskActionLoading(false);
           clearStoredTask();
-          setError(status.error || '文件夹上传失败');
+          if (status.status === 'failed') {
+            setError(status.error || '文件夹上传失败');
+          }
           return;
         }
 
@@ -102,6 +117,7 @@ export default function NasBrowser() {
       } catch (err) {
         stopPolling();
         setImportLoading(false);
+        setTaskActionLoading(false);
         clearStoredTask();
         setFolderImportProgress(null);
         setError(err.message || '获取文件夹上传进度失败');
@@ -190,13 +206,64 @@ export default function NasBrowser() {
     }
   };
 
+  const handleCancelFolderImport = async () => {
+    const taskId = folderImportProgress?.task_id;
+    if (!taskId) return;
+    setTaskActionLoading(true);
+    setError('');
+    try {
+      const status = await authClient.cancelNasFolderImport(taskId);
+      setFolderImportProgress(status);
+      if (status.status === 'canceled') {
+        stopPolling();
+        setImportLoading(false);
+        clearStoredTask();
+      }
+    } catch (err) {
+      setError(err.message || '取消文件夹上传任务失败');
+    } finally {
+      setTaskActionLoading(false);
+    }
+  };
+
+  const handleRetryFolderImport = async () => {
+    const taskId = folderImportProgress?.task_id;
+    if (!taskId) return;
+    setTaskActionLoading(true);
+    setImportLoading(true);
+    setError('');
+    try {
+      const status = await authClient.retryNasFolderImport(taskId);
+      setFolderImportProgress(status);
+      writeStoredFolderImportTaskId(taskId);
+      stopPolling();
+      await pollFolderImportStatus(taskId);
+      setTaskActionLoading(false);
+    } catch (err) {
+      setImportLoading(false);
+      setTaskActionLoading(false);
+      setError(err.message || '重试文件夹上传任务失败');
+    }
+  };
+
   const closeProgressPanel = () => {
-    if (folderImportProgress?.status === 'running' || folderImportProgress?.status === 'pending') {
+    if (ACTIVE_TASK_STATUSES.has(folderImportProgress?.status)) {
       return;
     }
     clearStoredTask();
     setFolderImportProgress(null);
   };
+
+  const folderTaskStatus = folderImportProgress?.status || '';
+  const isFolderTaskActive = ACTIVE_TASK_STATUSES.has(folderTaskStatus);
+  const canCancelFolderTask = Boolean(folderImportProgress?.can_cancel && folderImportProgress?.task_id && !taskActionLoading);
+  const canRetryFolderTask = Boolean(
+    folderImportProgress?.can_retry && folderImportProgress?.task_id && !isFolderTaskActive && !taskActionLoading
+  );
+  const progressBarColor = {
+    failed: '#dc2626',
+    canceled: '#f59e0b',
+  }[folderTaskStatus] || '#2563eb';
 
   if (!isAdmin()) {
     return <div style={{ color: '#991b1b' }}>仅管理员可访问 NAS 云盘。</div>;
@@ -268,20 +335,45 @@ export default function NasBrowser() {
               <div style={{ marginTop: '4px', color: '#475569' }}>路径: {folderImportProgress.folder_path}</div>
               <div style={{ marginTop: '4px', color: '#475569' }}>知识库: {folderImportProgress.kb_ref}</div>
             </div>
-            <button
-              type="button"
-              onClick={closeProgressPanel}
-              disabled={folderImportProgress.status === 'running' || folderImportProgress.status === 'pending'}
-              style={{
-                ...BUTTON_STYLES.neutral,
-                cursor:
-                  folderImportProgress.status === 'running' || folderImportProgress.status === 'pending'
-                    ? 'not-allowed'
-                    : 'pointer',
-              }}
-            >
-              关闭
-            </button>
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+              <button
+                type="button"
+                onClick={handleCancelFolderImport}
+                disabled={!canCancelFolderTask}
+                style={{
+                  ...BUTTON_STYLES.neutral,
+                  borderColor: canCancelFolderTask ? '#fca5a5' : '#e5e7eb',
+                  color: canCancelFolderTask ? '#b91c1c' : '#9ca3af',
+                  cursor: canCancelFolderTask ? 'pointer' : 'not-allowed',
+                }}
+              >
+                {taskActionLoading && canCancelFolderTask ? '取消中...' : '取消任务'}
+              </button>
+              <button
+                type="button"
+                onClick={handleRetryFolderImport}
+                disabled={!canRetryFolderTask}
+                style={{
+                  ...BUTTON_STYLES.neutral,
+                  borderColor: canRetryFolderTask ? '#c7d2fe' : '#e5e7eb',
+                  color: canRetryFolderTask ? '#3730a3' : '#9ca3af',
+                  cursor: canRetryFolderTask ? 'pointer' : 'not-allowed',
+                }}
+              >
+                {taskActionLoading && canRetryFolderTask ? '重试中...' : '重试失败文件'}
+              </button>
+              <button
+                type="button"
+                onClick={closeProgressPanel}
+                disabled={isFolderTaskActive}
+                style={{
+                  ...BUTTON_STYLES.neutral,
+                  cursor: isFolderTaskActive ? 'not-allowed' : 'pointer',
+                }}
+              >
+                关闭
+              </button>
+            </div>
           </div>
           <div style={{ marginTop: '14px', color: '#111827', fontWeight: 700 }}>
             待上传文件数: {folderImportProgress.total_files}
@@ -294,7 +386,7 @@ export default function NasBrowser() {
               style={{
                 width: `${folderImportProgress.progress_percent}%`,
                 height: '100%',
-                background: folderImportProgress.status === 'failed' ? '#dc2626' : '#2563eb',
+                background: progressBarColor,
                 transition: 'width 0.3s ease',
               }}
             />
@@ -303,7 +395,8 @@ export default function NasBrowser() {
             <span>已导入: {folderImportProgress.imported_count}</span>
             <span>跳过: {folderImportProgress.skipped_count}</span>
             <span>失败: {folderImportProgress.failed_count}</span>
-            <span>状态: {folderImportProgress.status}</span>
+            <span>状态: {TASK_STATUS_LABELS[folderImportProgress.status] || folderImportProgress.status}</span>
+            <span>重试次数: {folderImportProgress.retry_count || 0}</span>
           </div>
           {folderImportProgress.current_file && (
             <div style={{ marginTop: '10px', color: '#1f2937' }}>当前文件: {folderImportProgress.current_file}</div>

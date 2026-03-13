@@ -22,6 +22,7 @@ from backend.services.org_directory_store import OrgDirectoryStore
 from backend.services.user_store import UserStore
 from backend.services.search_config_store import SearchConfigStore
 from backend.services.upload_settings_store import UploadSettingsStore
+from backend.services.nas_task_store import NasTaskStore
 from backend.services.audit import AuditLogManager
 from backend.services.auth_session import AuthSessionManager
 from backend.services.knowledge_ingestion import KnowledgeIngestionManager
@@ -55,6 +56,7 @@ class AppDependencies:
     knowledge_ingestion_manager: KnowledgeIngestionManager | None
     permission_group_folder_store: PermissionGroupFolderStore
     permission_group_folder_manager: PermissionGroupFolderManager
+    nas_task_store: NasTaskStore
 
 
 def create_dependencies(db_path: str | None = None) -> AppDependencies:
@@ -74,6 +76,7 @@ def create_dependencies(db_path: str | None = None) -> AppDependencies:
     knowledge_directory_manager = knowledge_tree_manager
     permission_group_folder_store = PermissionGroupFolderStore(db_path=str(db_path))
     permission_group_folder_manager = PermissionGroupFolderManager(store=permission_group_folder_store)
+    nas_task_store = NasTaskStore(db_path=str(db_path))
 
     audit_log_store = AuditLogStore(db_path=str(db_path))
     audit_log_manager = AuditLogManager(store=audit_log_store)
@@ -104,6 +107,7 @@ def create_dependencies(db_path: str | None = None) -> AppDependencies:
         knowledge_ingestion_manager=None,
         permission_group_folder_store=permission_group_folder_store,
         permission_group_folder_manager=permission_group_folder_manager,
+        nas_task_store=nas_task_store,
     )
     deps.knowledge_ingestion_manager = KnowledgeIngestionManager(deps=deps)
     return deps
