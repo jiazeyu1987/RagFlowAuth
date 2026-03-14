@@ -90,16 +90,30 @@ class AuthSessionManager:
         max_sessions: int | None,
         reserve_slots: int = 1,
     ) -> str:
+        sid, _revoked = self.issue_session_for_login(
+            user_id=user_id,
+            max_sessions=max_sessions,
+            reserve_slots=reserve_slots,
+        )
+        return sid
+
+    def issue_session_for_login(
+        self,
+        *,
+        user_id: str,
+        max_sessions: int | None,
+        reserve_slots: int = 1,
+    ) -> tuple[str, list[str]]:
         uid = str(user_id or "").strip()
         if not uid:
             raise AuthSessionError("missing_user_id", status_code=400)
-        self._port.enforce_user_session_limit(
+        revoked_ids = self._port.enforce_user_session_limit(
             user_id=uid,
             max_sessions=self._normalize_max_sessions(max_sessions),
             reserve_slots=max(0, int(reserve_slots)),
             reason="session_limit_exceeded",
         )
-        return str(uuid.uuid4())
+        return str(uuid.uuid4()), list(revoked_ids or [])
 
     def bind_refresh_session(
         self,

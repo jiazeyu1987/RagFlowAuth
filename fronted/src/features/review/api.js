@@ -6,6 +6,11 @@ export const reviewApi = {
     return httpClient.requestJson(authBackendUrl(`/api/knowledge/documents/${docId}/conflict`), { method: 'GET' });
   },
 
+  listConflicts(limit = 100) {
+    const safeLimit = Math.max(1, Math.min(Number(limit) || 100, 500));
+    return httpClient.requestJson(authBackendUrl(`/api/knowledge/documents/conflicts?limit=${safeLimit}`), { method: 'GET' });
+  },
+
   approve(docId, reviewNotes = null) {
     return httpClient.requestJson(authBackendUrl(`/api/knowledge/documents/${docId}/approve`), {
       method: 'POST',
@@ -20,10 +25,33 @@ export const reviewApi = {
     });
   },
 
-  approveOverwrite(docId, replaceDocId, reviewNotes = null) {
+  approveOverwrite(docId, replaceDocId, overwriteReason, reviewNotes = null) {
     return httpClient.requestJson(authBackendUrl(`/api/knowledge/documents/${docId}/approve-overwrite`), {
       method: 'POST',
-      body: JSON.stringify({ replace_doc_id: replaceDocId, review_notes: reviewNotes }),
+      body: JSON.stringify({
+        replace_doc_id: replaceDocId,
+        overwrite_reason: overwriteReason,
+        review_notes: reviewNotes,
+      }),
+    });
+  },
+
+  resolveConflictRename(docId, newFilename, reason = null) {
+    return httpClient.requestJson(authBackendUrl(`/api/knowledge/documents/${docId}/resolve-conflict-rename`), {
+      method: 'POST',
+      body: JSON.stringify({
+        new_filename: newFilename,
+        resolution_reason: reason,
+      }),
+    });
+  },
+
+  resolveConflictSkip(docId, reason = null) {
+    return httpClient.requestJson(authBackendUrl(`/api/knowledge/documents/${docId}/resolve-conflict-skip`), {
+      method: 'POST',
+      body: JSON.stringify({
+        resolution_reason: reason,
+      }),
     });
   },
 

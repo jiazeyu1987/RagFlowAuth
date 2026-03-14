@@ -5,9 +5,27 @@ from backend.app.core.authz import AuthContextDep
 from backend.app.core.filename_normalize import normalize_filename_for_conflict
 from backend.app.core.permission_resolver import assert_can_review, assert_kb_allowed
 from backend.models.document import DocumentResponse
+from backend.services.audit_helpers import actor_fields_from_ctx
 
 
 router = APIRouter()
+
+
+def _to_document_response(updated_doc) -> DocumentResponse:
+    return DocumentResponse(
+        doc_id=updated_doc.doc_id,
+        filename=updated_doc.filename,
+        file_size=updated_doc.file_size,
+        mime_type=updated_doc.mime_type,
+        uploaded_by=updated_doc.uploaded_by,
+        status=updated_doc.status,
+        uploaded_at_ms=updated_doc.uploaded_at_ms,
+        reviewed_by=updated_doc.reviewed_by,
+        reviewed_at_ms=updated_doc.reviewed_at_ms,
+        review_notes=updated_doc.review_notes,
+        ragflow_doc_id=updated_doc.ragflow_doc_id,
+        kb_id=updated_doc.kb_id,
+    )
 
 
 @router.post("/documents/{doc_id}/approve-overwrite", response_model=DocumentResponse)
@@ -21,8 +39,11 @@ async def approve_document_overwrite(doc_id: str, ctx: AuthContextDep, body: dic
 
     replace_doc_id = (body or {}).get("replace_doc_id")
     review_notes = (body or {}).get("review_notes")
+    overwrite_reason = str((body or {}).get("overwrite_reason") or "").strip()
     if not replace_doc_id:
         raise HTTPException(status_code=400, detail="缺少 replace_doc_id")
+    if not overwrite_reason:
+        raise HTTPException(status_code=400, detail="overwrite_reason_required")
 
     new_doc = deps.kb_store.get_document(doc_id)
     if not new_doc:
@@ -139,22 +160,34 @@ async def approve_document_overwrite(doc_id: str, ctx: AuthContextDep, body: dic
         doc_id=new_doc.doc_id,
         status="approved",
         reviewed_by=ctx.payload.sub,
-        review_notes=review_notes,
+        review_notes=(str(review_notes).strip() if review_notes else overwrite_reason),
         ragflow_doc_id=ragflow_doc_id,
     )
+    if not updated_doc:
+        raise HTTPException(status_code=500, detail="approve_overwrite_update_failed")
 
-    return DocumentResponse(
-        doc_id=updated_doc.doc_id,
-        filename=updated_doc.filename,
-        file_size=updated_doc.file_size,
-        mime_type=updated_doc.mime_type,
-        uploaded_by=updated_doc.uploaded_by,
-        status=updated_doc.status,
-        uploaded_at_ms=updated_doc.uploaded_at_ms,
-        reviewed_by=updated_doc.reviewed_by,
-        reviewed_at_ms=updated_doc.reviewed_at_ms,
-        review_notes=updated_doc.review_notes,
-        ragflow_doc_id=updated_doc.ragflow_doc_id,
-        kb_id=updated_doc.kb_id,
-    )
+    audit = getattr(deps, "audit_log_store", None)
+    if audit is not None:
+        try:
+            audit.log_event(
+                action="document_conflict_resolved",
+                actor=ctx.payload.sub,
+                source="knowledge",
+                doc_id=updated_doc.doc_id,
+                filename=updated_doc.filename,
+                kb_id=(updated_doc.kb_name or updated_doc.kb_id),
+                kb_dataset_id=getattr(updated_doc, "kb_dataset_id", None),
+                kb_name=getattr(updated_doc, "kb_name", None) or (updated_doc.kb_name or updated_doc.kb_id),
+                meta={
+                    "resolution": "overwrite",
+                    "overwrite_reason": overwrite_reason,
+                    "replace_doc_id": str(replace_doc_id),
+                    "replaced_doc_filename": old_doc.filename,
+                    "new_doc_id": updated_doc.doc_id,
+                },
+                **actor_fields_from_ctx(deps, ctx),
+            )
+        except Exception:
+            pass
 
+    return _to_document_response(updated_doc)

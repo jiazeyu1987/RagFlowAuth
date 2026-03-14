@@ -295,6 +295,24 @@ class BaseDownloadStore(Generic[SessionT, ItemT]):
         finally:
             conn.close()
 
+    def list_sessions(self, *, limit: int = 500) -> list[SessionT]:
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute(
+                f"""
+                SELECT {self._session_fields_sql()}
+                FROM {self.SESSION_TABLE}
+                ORDER BY created_at_ms DESC
+                LIMIT ?
+                """,
+                (max(1, int(limit)),),
+            )
+            rows = cursor.fetchall()
+            return [self._to_session(row) for row in rows]
+        finally:
+            conn.close()
+
     def list_items(self, *, session_id: str) -> list[ItemT]:
         conn = self._get_connection()
         cursor = conn.cursor()

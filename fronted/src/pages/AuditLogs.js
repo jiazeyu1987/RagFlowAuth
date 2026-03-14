@@ -20,6 +20,7 @@ const formatMs = (ms) => {
 const ACTION_LABELS = {
   auth_login: '\u767b\u5f55',
   auth_logout: '\u9000\u51fa\u767b\u5f55',
+  auth_session_kick: '\u4f1a\u8bdd\u8e22\u51fa',
   document_preview: '\u67e5\u770b/\u9884\u89c8\u6587\u6863',
   document_upload: '\u4e0a\u4f20\u6587\u6863',
   document_download: '\u4e0b\u8f7d\u6587\u6863',
@@ -55,6 +56,7 @@ const ACTION_OPTIONS = [
   { value: '', label: '\u5168\u90e8' },
   { value: 'auth_login', label: '\u767b\u5f55' },
   { value: 'auth_logout', label: '\u9000\u51fa\u767b\u5f55' },
+  { value: 'auth_session_kick', label: '\u4f1a\u8bdd\u8e22\u51fa' },
   { value: 'document_preview', label: '\u67e5\u770b/\u9884\u89c8\u6587\u6863' },
   { value: 'document_upload', label: '\u4e0a\u4f20\u6587\u6863' },
   { value: 'document_download', label: '\u4e0b\u8f7d\u6587\u6863' },

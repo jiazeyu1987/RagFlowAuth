@@ -19,10 +19,43 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     from backend.app.dependencies import create_dependencies
+    from backend.app.modules.data_security.runner import recover_startup_jobs
     from backend.services.data_security_scheduler_v2 import init_scheduler_v2, stop_scheduler_v2
+    from backend.services.egress_gateway import install_egress_gateway, uninstall_egress_gateway
+    from backend.services.nas_browser_service import NasBrowserService
+    from backend.services.paper_download.manager import PaperDownloadManager
+    from backend.services.patent_download.manager import PatentDownloadManager
 
     app.state.deps = create_dependencies()
     logger.info("Dependencies initialized")
+    install_egress_gateway()
+    logger.info("Egress gateway installed")
+
+    try:
+        deps = app.state.deps
+        nas_service = NasBrowserService(task_store=deps.nas_task_store)
+        recovery = await nas_service.recover_startup_tasks(deps=deps)
+        logger.info("NAS task recovery completed: %s", recovery)
+    except Exception as e:
+        logger.error("NAS task recovery failed: %s", e, exc_info=True)
+
+    try:
+        backup_recovery = recover_startup_jobs(limit=20)
+        logger.info("Backup job recovery completed: %s", backup_recovery)
+    except Exception as e:
+        logger.error("Backup job recovery failed: %s", e, exc_info=True)
+
+    try:
+        deps = app.state.deps
+        paper_recovery = PaperDownloadManager(deps).recover_startup_sessions(limit=500)
+        patent_recovery = PatentDownloadManager(deps).recover_startup_sessions(limit=500)
+        logger.info(
+            "Download session recovery completed: paper=%s patent=%s",
+            paper_recovery,
+            patent_recovery,
+        )
+    except Exception as e:
+        logger.error("Download session recovery failed: %s", e, exc_info=True)
 
     # Help diagnose "stale code" / wrong interpreter issues on Windows.
     try:
@@ -59,6 +92,11 @@ async def lifespan(app: FastAPI):
         logger.info("Backup scheduler V2 stopped")
     except Exception as e:
         logger.error(f"Error stopping scheduler V2: {e}", exc_info=True)
+    try:
+        uninstall_egress_gateway()
+        logger.info("Egress gateway uninstalled")
+    except Exception as e:
+        logger.error("Error uninstalling egress gateway: %s", e, exc_info=True)
 
     logger.info("Shutting down...")
 
@@ -98,6 +136,7 @@ def create_app() -> FastAPI:
         nas,
         onlyoffice,
         org_directory,
+        paper_plag,
         paper_download,
         patent_download,
         permission_groups,
@@ -105,6 +144,7 @@ def create_app() -> FastAPI:
         ragflow,
         review,
         search_configs,
+        tasks,
         users,
     )
 
@@ -119,6 +159,7 @@ def create_app() -> FastAPI:
     app.include_router(chat.router, prefix="/api", tags=["Chat"])
     app.include_router(agents.router, prefix="/api", tags=["Agents"])
     app.include_router(search_configs.router, prefix="/api", tags=["Search Configs"])
+    app.include_router(tasks.router, prefix="/api", tags=["Tasks"])
     app.include_router(me.router, prefix="/api", tags=["Me"])
     app.include_router(nas.router, prefix="/api", tags=["NAS"])
     app.include_router(onlyoffice.router, prefix="/api", tags=["ONLYOFFICE"])
@@ -127,6 +168,7 @@ def create_app() -> FastAPI:
     app.include_router(org_directory.router, prefix="/api", tags=["Org Directory"])
     app.include_router(patent_download.router, prefix="/api", tags=["Patent Download"])
     app.include_router(paper_download.router, prefix="/api", tags=["Paper Download"])
+    app.include_router(paper_plag.router, prefix="/api", tags=["Paper Plagiarism"])
     app.include_router(drug_admin.router, prefix="/api", tags=["Drug Admin"])
     app.include_router(diagnostics.router, prefix="/api", tags=["Diagnostics"])
 

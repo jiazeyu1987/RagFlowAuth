@@ -1,0 +1,69 @@
+{
+  "bench_name": "SEC-DLP-BENCH-001",
+  "generated_at": "2026-03-14 03:41:20",
+  "db_path": "C:\\Users\\BJB110\\AppData\\Local\\Temp\\ragflowauth_egress_dlp_bench_7e154e4d1be14e309c2d95a7c0ce87f4\\auth.db",
+  "thresholds": {
+    "false_allow_rate_max": 0.1,
+    "false_block_rate_max": 0.1
+  },
+  "metrics": {
+    "case_total": 4,
+    "expected_block_total": 2,
+    "expected_allow_total": 2,
+    "false_allow_count": 0,
+    "false_block_count": 0,
+    "false_allow_rate": 0.0,
+    "false_block_rate": 0.0
+  },
+  "verdict": "PASS",
+  "cases": [
+    {
+      "case_id": "high_sensitive_should_block",
+      "expected": "block",
+      "actual": "block",
+      "pass": true,
+      "blocked_reason": "egress_blocked_high_sensitive_payload",
+      "payload_level": "high",
+      "target_model": "qwen-plus",
+      "masked": true,
+      "hit_rule_count": 1,
+      "notes": "high-sensitive keyword hit"
+    },
+    {
+      "case_id": "non_whitelist_model_should_block",
+      "expected": "block",
+      "actual": "block",
+      "pass": true,
+      "blocked_reason": "egress_blocked_model_not_allowed:gpt-4",
+      "payload_level": "none",
+      "target_model": "gpt-4",
+      "masked": false,
+      "hit_rule_count": 0,
+      "notes": "model outside domestic allowlist"
+    },
+    {
+      "case_id": "whitelist_model_should_allow",
+      "expected": "allow",
+      "actual": "allow",
+      "pass": true,
+      "blocked_reason": null,
+      "payload_level": "none",
+      "target_model": "qwen-plus",
+      "masked": false,
+      "hit_rule_count": 0,
+      "notes": "domestic allowlist hit"
+    },
+    {
+      "case_id": "masked_but_allow",
+      "expected": "allow",
+      "actual": "allow",
+      "pass": true,
+      "blocked_reason": null,
+      "payload_level": "medium",
+      "target_model": "qwen-plus",
+      "masked": true,
+      "hit_rule_count": 1,
+      "notes": "medium-sensitive should be masked but not blocked"
+    }
+  ]
+}

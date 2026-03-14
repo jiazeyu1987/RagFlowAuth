@@ -1,4 +1,4 @@
-// @ts-check
+﻿// @ts-check
 const { expect } = require('@playwright/test');
 const { adminTest } = require('../helpers/auth');
 
@@ -50,24 +50,24 @@ adminTest('chat config keeps multi-kb selection on save/copy @regression @kbs', 
   });
 
   await page.goto('/kbs');
-  await page.getByRole('button', { name: /对话配置/ }).click();
+  await page.getByTestId('kbs-subtab-chats').click();
 
-  await page.getByText('ID: chat_123').click();
-  const hallCheckbox = page.locator('label', { hasText: 'kb-hall' }).locator('input[type="checkbox"]');
-  const researchCheckbox = page.locator('label', { hasText: 'kb-research' }).locator('input[type="checkbox"]');
-  const otherCheckbox = page.locator('label', { hasText: 'kb-other' }).locator('input[type="checkbox"]');
+  await page.getByTestId('chat-config-item-chat_123').click();
+  const hallCheckbox = page.getByTestId('chat-config-kb-check-ds_hall');
+  const researchCheckbox = page.getByTestId('chat-config-kb-check-ds_research');
+  const otherCheckbox = page.getByTestId('chat-config-kb-check-ds_other');
   await expect(hallCheckbox).toBeChecked();
   await expect(researchCheckbox).toBeChecked();
   await expect(otherCheckbox).not.toBeChecked();
 
   await otherCheckbox.check();
-  await page.getByRole('button', { name: /保存/ }).first().click();
+  await page.getByTestId('chat-config-save').click();
   expect(updateBody).toBeTruthy();
   expect((updateBody.dataset_ids || []).sort()).toEqual(['ds_hall', 'ds_other', 'ds_research'].sort());
 
-  await page.getByRole('button', { name: /新建/ }).first().click();
-  await page.getByPlaceholder(/输入新对话名称/).fill('chat-234');
-  await page.getByRole('button', { name: /创建/ }).click();
+  await page.getByTestId('chat-config-new').click();
+  await page.getByTestId('chat-config-create-name').fill('chat-234');
+  await page.getByTestId('chat-config-create-confirm').click();
   expect(createBody).toBeTruthy();
   expect(createBody.name).toBe('chat-234');
   expect((createBody.dataset_ids || []).sort()).toEqual(['ds_hall', 'ds_other', 'ds_research'].sort());

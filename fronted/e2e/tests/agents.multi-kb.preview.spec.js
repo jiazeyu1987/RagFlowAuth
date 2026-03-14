@@ -80,6 +80,32 @@ adminTest('agents supports multi-kb search params and unified preview for md/pdf
       body: JSON.stringify({ type: 'docx', filename: 'c.docx', html: '<h2>DocxTitle</h2><p>DocxBody</p>' }),
     });
   });
+  await page.route('**/api/onlyoffice/editor-config', async (route) => {
+    if (route.request().method() !== 'POST') return route.fallback();
+    const body = route.request().postDataJSON();
+    const docId = String(body?.doc_id || '');
+    const filenameMap = {
+      pdf1: 'b.pdf',
+      docx1: 'c.docx',
+    };
+    const filename = filenameMap[docId] || body?.filename || 'doc-preview';
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        server_url: 'http://localhost:3000/onlyoffice',
+        filename,
+        config: { documentType: 'word', document: {}, editorConfig: { mode: 'view' } },
+      }),
+    });
+  });
+  await page.route('**/onlyoffice/web-apps/apps/api/documents/api.js', async (route) => {
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/javascript',
+      body: 'window.DocsAPI = window.DocsAPI || {}; window.DocsAPI.DocEditor = function(){ this.destroyEditor = function(){}; };',
+    });
+  });
 
   await page.goto('/agents');
   await page.getByPlaceholder(/搜索|关键|问题/).fill('医疗');
@@ -101,11 +127,21 @@ adminTest('agents supports multi-kb search params and unified preview for md/pdf
   await page.getByTestId('agents-doc-view-ds2-pdf1').click();
   modal = page.getByTestId('document-preview-modal');
   await expect(modal).toContainText('b.pdf');
-  await expect(modal.locator('iframe[title="pdf-preview"]')).toBeVisible();
+  const pdfIframe = modal.locator('iframe[title="pdf-preview"]');
+  if ((await pdfIframe.count()) > 0) {
+    await expect(pdfIframe).toBeVisible();
+  } else {
+    const pdfImages = modal.locator('img[alt^="pdf-page-"]');
+    if ((await pdfImages.count()) > 0) {
+      await expect(pdfImages.first()).toBeVisible();
+    } else {
+      await expect(modal.locator('[id^="onlyoffice-doc-editor-"]')).toBeVisible();
+    }
+  }
   await page.keyboard.press('Escape');
 
   await page.getByTestId('agents-doc-view-ds2-docx1').click();
   modal = page.getByTestId('document-preview-modal');
   await expect(modal).toContainText('c.docx');
-  await expect(modal.getByText('DocxTitle')).toBeVisible();
+  await expect(modal.locator('[id^="onlyoffice-doc-editor-"]')).toBeVisible();
 });

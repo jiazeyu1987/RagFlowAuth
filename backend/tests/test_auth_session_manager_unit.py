@@ -1,17 +1,17 @@
 import os
-import tempfile
 import unittest
 
 from backend.database.schema.ensure import ensure_schema
 from backend.services.auth_session import AuthSessionError, AuthSessionManager
 from backend.services.auth_session_store import AuthSessionStore
 from backend.services.users.store import UserStore
+from backend.tests._util_tempdir import cleanup_dir, make_temp_dir
 
 
 class TestAuthSessionManagerUnit(unittest.TestCase):
     def setUp(self):
-        self._tmp = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
-        self.db_path = os.path.join(self._tmp.name, "auth.db")
+        self._tmp = make_temp_dir(prefix="ragflowauth_auth_session")
+        self.db_path = os.path.join(str(self._tmp), "auth.db")
         ensure_schema(self.db_path)
         self.user_store = UserStore(self.db_path)
         self.session_store = AuthSessionStore(self.db_path)
@@ -19,7 +19,7 @@ class TestAuthSessionManagerUnit(unittest.TestCase):
         self.user = self.user_store.create_user(username="u1", password="Pass1234")
 
     def tearDown(self):
-        self._tmp.cleanup()
+        cleanup_dir(self._tmp)
 
     def test_issue_and_bind_and_validate_refresh_session(self):
         sid = self.manager.issue_session_id_for_login(
@@ -72,6 +72,24 @@ class TestAuthSessionManagerUnit(unittest.TestCase):
                 touch=False,
             )
         self.assertEqual(cm.exception.code, "idle_timeout")
+
+    def test_issue_session_for_login_returns_revoked_ids(self):
+        self.session_store.create_session(
+            session_id="old_sid",
+            user_id=self.user.user_id,
+            refresh_jti="r_old",
+            expires_at=9_999_999_999,
+            now_ms=1000,
+        )
+
+        sid, revoked_ids = self.manager.issue_session_for_login(
+            user_id=self.user.user_id,
+            max_sessions=1,
+            reserve_slots=1,
+        )
+
+        self.assertTrue(isinstance(sid, str) and sid)
+        self.assertEqual(revoked_ids, ["old_sid"])
 
 
 if __name__ == "__main__":

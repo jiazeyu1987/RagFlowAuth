@@ -76,9 +76,21 @@ adminTest('permission groups can select knowledge bases and chats @regression @a
   });
 
   await mockJson(page, '**/api/permission-groups/resources/knowledge-bases', { ok: true, data: kbList });
+  await mockJson(page, '**/api/permission-groups/resources/knowledge-tree', {
+    ok: true,
+    data: {
+      nodes: [],
+      datasets: kbList,
+    },
+  });
+  await mockJson(page, '**/api/permission-groups/resources/group-folders', {
+    ok: true,
+    data: { folders: [], group_bindings: {}, root_group_count: groups.length },
+  });
   await mockJson(page, '**/api/permission-groups/resources/chats', { ok: true, data: chatList });
 
   await page.goto('/permission-groups');
+  await expect(page.getByTestId('pg-edit-1')).toBeVisible();
 
   // Edit existing: should preselect current resources.
   await page.getByTestId('pg-edit-1').click();

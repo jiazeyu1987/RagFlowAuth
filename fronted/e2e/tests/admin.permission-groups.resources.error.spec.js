@@ -27,11 +27,22 @@ adminTest('permission groups handles resources API failures gracefully @regressi
   await page.route('**/api/permission-groups/resources/knowledge-bases', async (route) => {
     await route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ detail: 'kb service down' }) });
   });
+  await page.route('**/api/permission-groups/resources/knowledge-tree', async (route) => {
+    await route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ detail: 'kb tree service down' }) });
+  });
+  await page.route('**/api/permission-groups/resources/group-folders', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ ok: true, data: { folders: [], group_bindings: {}, root_group_count: groups.length } }),
+    });
+  });
   await page.route('**/api/permission-groups/resources/chats', async (route) => {
     await route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ detail: 'chat service down' }) });
   });
 
   await page.goto('/permission-groups');
+  await expect(page.getByTestId('pg-edit-1')).toBeVisible();
 
   await page.getByTestId('pg-create-open').click();
   await expect(page.getByTestId('pg-modal')).toBeVisible();
@@ -39,4 +50,3 @@ adminTest('permission groups handles resources API failures gracefully @regressi
   await expect(page.getByTestId('pg-form-chat-empty')).toBeVisible();
   await page.getByTestId('pg-form-cancel').click();
 });
-

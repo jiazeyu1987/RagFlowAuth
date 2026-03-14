@@ -13,6 +13,7 @@ def ensure_nas_import_tasks_table(conn: sqlite3.Connection) -> None:
                 task_id TEXT PRIMARY KEY,
                 folder_path TEXT NOT NULL,
                 kb_ref TEXT NOT NULL,
+                created_by_user_id TEXT NOT NULL DEFAULT '',
                 total_files INTEGER NOT NULL DEFAULT 0,
                 processed_files INTEGER NOT NULL DEFAULT 0,
                 imported_count INTEGER NOT NULL DEFAULT 0,
@@ -25,6 +26,7 @@ def ensure_nas_import_tasks_table(conn: sqlite3.Connection) -> None:
                 skipped_json TEXT NOT NULL DEFAULT '[]',
                 failed_json TEXT NOT NULL DEFAULT '[]',
                 pending_files_json TEXT NOT NULL DEFAULT '[]',
+                priority INTEGER NOT NULL DEFAULT 100,
                 retry_count INTEGER NOT NULL DEFAULT 0,
                 cancel_requested_at_ms INTEGER,
                 created_at_ms INTEGER NOT NULL,
@@ -33,7 +35,9 @@ def ensure_nas_import_tasks_table(conn: sqlite3.Connection) -> None:
             """
         )
     else:
+        add_column_if_missing(conn, "nas_import_tasks", "created_by_user_id TEXT NOT NULL DEFAULT ''")
         add_column_if_missing(conn, "nas_import_tasks", "pending_files_json TEXT NOT NULL DEFAULT '[]'")
+        add_column_if_missing(conn, "nas_import_tasks", "priority INTEGER NOT NULL DEFAULT 100")
         add_column_if_missing(conn, "nas_import_tasks", "retry_count INTEGER NOT NULL DEFAULT 0")
         add_column_if_missing(conn, "nas_import_tasks", "cancel_requested_at_ms INTEGER")
 
@@ -42,4 +46,7 @@ def ensure_nas_import_tasks_table(conn: sqlite3.Connection) -> None:
     )
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_nas_import_tasks_status_updated ON nas_import_tasks(status, updated_at_ms DESC)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_nas_import_tasks_owner_status ON nas_import_tasks(created_by_user_id, status)"
     )

@@ -1,11 +1,21 @@
 import React from 'react';
 
-export function FolderSelectionList({ title, items, selected, onToggle, emptyText }) {
+export function FolderSelectionList({
+  title,
+  items,
+  selected,
+  onToggle,
+  emptyText,
+  itemTestIdPrefix = '',
+  emptyTestId = '',
+}) {
   return (
     <div style={{ marginBottom: 12 }}>
       <div style={{ fontWeight: 700, marginBottom: 8 }}>{title}</div>
       {!items.length ? (
-        <div style={{ color: '#6b7280', fontSize: 13 }}>{emptyText}</div>
+        <div data-testid={emptyTestId || undefined} style={{ color: '#6b7280', fontSize: 13 }}>
+          {emptyText}
+        </div>
       ) : (
         <div
           style={{
@@ -31,6 +41,11 @@ export function FolderSelectionList({ title, items, selected, onToggle, emptyTex
                 type="checkbox"
                 checked={selected.includes(item.id)}
                 onChange={() => onToggle(item.id)}
+                data-testid={
+                  itemTestIdPrefix
+                    ? `${itemTestIdPrefix}${String(item.id).replace(/[^a-zA-Z0-9_-]/g, '_')}`
+                    : undefined
+                }
               />
               <span>{item.name}</span>
             </label>
@@ -41,12 +56,20 @@ export function FolderSelectionList({ title, items, selected, onToggle, emptyTex
   );
 }
 
-export function ChatSelection({ chatAgents, selected, onToggle }) {
+export function ChatSelection({
+  chatAgents,
+  selected,
+  onToggle,
+  itemTestIdPrefix = '',
+  emptyTestId = '',
+}) {
   return (
     <div style={{ marginBottom: 12 }}>
       <div style={{ fontWeight: 700, marginBottom: 8 }}>Chat Access</div>
       {!chatAgents.length ? (
-        <div style={{ color: '#6b7280', fontSize: 13 }}>No chats</div>
+        <div data-testid={emptyTestId || undefined} style={{ color: '#6b7280', fontSize: 13 }}>
+          No chats
+        </div>
       ) : (
         <div
           style={{
@@ -72,6 +95,11 @@ export function ChatSelection({ chatAgents, selected, onToggle }) {
                 type="checkbox"
                 checked={selected.includes(chat.id)}
                 onChange={() => onToggle(chat.id)}
+                data-testid={
+                  itemTestIdPrefix
+                    ? `${itemTestIdPrefix}${String(chat.id).replace(/[^a-zA-Z0-9_-]/g, '_')}`
+                    : undefined
+                }
               />
               <span>
                 {chat.name} ({chat.type || 'chat'})

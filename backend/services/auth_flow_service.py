@@ -87,15 +87,24 @@ def login(
     scopes: list[str] = []
     auth_session_store = getattr(deps, "auth_session_store", None)
     auth_session_manager = getattr(deps, "auth_session_manager", None)
+    kicked_session_ids: list[str] = []
 
     if auth_session_manager is not None:
         max_sessions = int(getattr(user, "max_login_sessions", 3) or 3)
         try:
-            sid = auth_session_manager.issue_session_id_for_login(
-                user_id=user.user_id,
-                max_sessions=max_sessions,
-                reserve_slots=1,
-            )
+            issue_with_detail = getattr(auth_session_manager, "issue_session_for_login", None)
+            if callable(issue_with_detail):
+                sid, kicked_session_ids = issue_with_detail(
+                    user_id=user.user_id,
+                    max_sessions=max_sessions,
+                    reserve_slots=1,
+                )
+            else:
+                sid = auth_session_manager.issue_session_id_for_login(
+                    user_id=user.user_id,
+                    max_sessions=max_sessions,
+                    reserve_slots=1,
+                )
         except AuthSessionError as e:
             raise HTTPException(status_code=e.status_code, detail=e.code) from e
         refresh_token = auth.create_refresh_token(uid=user.user_id, data={"sid": sid})
@@ -111,12 +120,12 @@ def login(
         )
     elif auth_session_store is not None:
         max_sessions = int(getattr(user, "max_login_sessions", 3) or 3)
-        auth_session_store.enforce_user_session_limit(
+        kicked_session_ids = auth_session_store.enforce_user_session_limit(
             user_id=user.user_id,
             max_sessions=max_sessions,
             reserve_slots=1,
             reason="session_limit_exceeded",
-        )
+        ) or []
         sid = str(uuid.uuid4())
         refresh_token = auth.create_refresh_token(uid=user.user_id, data={"sid": sid})
         refresh_request_token = RequestToken(token=refresh_token, type="refresh", location="headers")
@@ -139,6 +148,18 @@ def login(
     audit = getattr(deps, "audit_log_store", None)
     if audit:
         try:
+            if kicked_session_ids:
+                audit.log_event(
+                    action="auth_session_kick",
+                    actor=user.user_id,
+                    source="auth",
+                    meta={
+                        "reason": "session_limit_exceeded",
+                        "kicked_count": len(kicked_session_ids),
+                        "kicked_session_ids": kicked_session_ids[:20],
+                    },
+                    **actor_fields_from_user(deps, user),
+                )
             audit.log_event(
                 action="auth_login",
                 actor=user.user_id,

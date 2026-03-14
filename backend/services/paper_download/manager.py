@@ -12,6 +12,7 @@ from backend.app.core.config import settings
 from backend.services.download_common import utils as download_common_utils
 from backend.services.download_common.base_download_manager import BaseDownloadManager
 from backend.services.paper_download.store import PaperDownloadStore, item_to_dict, session_to_dict
+from backend.services.unified_task_quota_service import UnifiedTaskQuotaService
 
 from .sources import PaperCandidate, PaperSourceError, PaperSourceFactory
 
@@ -278,6 +279,18 @@ class PaperDownloadManager(BaseDownloadManager):
         if not enabled_sources:
             raise HTTPException(status_code=400, detail="source_required")
 
+        actor = str(ctx.payload.sub)
+        quota_service = UnifiedTaskQuotaService()
+        quota_deps = getattr(ctx, "deps", None) or self.deps
+        try:
+            quota_service.assert_can_start(
+                deps=quota_deps,
+                actor_user_id=actor,
+                task_kind=UnifiedTaskQuotaService.PAPER_KIND,
+            )
+        except RuntimeError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+
         query = self._build_query(keywords, use_and)
         quoted_query = self._build_quoted_query(keywords, use_and)
         source_queries: dict[str, str] = {key: (quoted_query or query) for key in enabled_sources}
@@ -288,7 +301,6 @@ class PaperDownloadManager(BaseDownloadManager):
             source_stats[key]["query"] = str(source_queries.get(key) or "")
 
         session_id = str(uuid.uuid4())
-        actor = str(ctx.payload.sub)
         session = self.store.create_session(
             session_id=session_id,
             created_by=actor,

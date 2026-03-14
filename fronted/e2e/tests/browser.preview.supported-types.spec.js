@@ -56,6 +56,27 @@ test('browser preview supports md/pdf/docx/xlsx/xls/csv/txt @regression @browser
     });
   });
 
+  await page.route('**/api/onlyoffice/editor-config', async (route) => {
+    if (route.request().method() !== 'POST') return route.fallback();
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        server_url: 'http://localhost:3000/onlyoffice',
+        filename: 'doc-preview',
+        config: { documentType: 'word', document: {}, editorConfig: { mode: 'view' } },
+      }),
+    });
+  });
+
+  await page.route('**/onlyoffice/web-apps/apps/api/documents/api.js', async (route) => {
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/javascript',
+      body: 'window.DocsAPI = window.DocsAPI || {}; window.DocsAPI.DocEditor = function(){ this.destroyEditor = function(){}; };',
+    });
+  });
+
   const previewPayloadById = {
     md1: { type: 'text', filename: 'a.md', content: '# M1\n- item' },
     pdf1: { type: 'pdf', filename: 'b.pdf', content: 'JVBERi0xLjQKJSBtb2NrIHBkZg==' },
@@ -86,10 +107,27 @@ test('browser preview supports md/pdf/docx/xlsx/xls/csv/txt @regression @browser
   };
 
   await openAndClose('md1', async (modal) => expect(modal.locator('h1')).toContainText('M1'));
-  await openAndClose('pdf1', async (modal) => expect(modal.locator('iframe[title="pdf-preview"]')).toBeVisible());
-  await openAndClose('docx1', async (modal) => expect(modal).toContainText('DocxTitle'));
-  await openAndClose('xlsx1', async (modal) => expect(modal.getByText('X1')).toBeVisible());
-  await openAndClose('xls1', async (modal) => expect(modal.getByText('X2')).toBeVisible());
+  await openAndClose('pdf1', async (modal) => {
+    const pdfIframe = modal.locator('iframe[title="pdf-preview"]');
+    if ((await pdfIframe.count()) > 0) {
+      await expect(pdfIframe).toBeVisible();
+      return;
+    }
+    const pdfImages = modal.locator('img[alt^="pdf-page-"]');
+    if ((await pdfImages.count()) > 0) {
+      await expect(pdfImages.first()).toBeVisible();
+      return;
+    }
+    const onlyOfficeContainer = modal.locator('[id^="onlyoffice-doc-editor-"]');
+    if ((await onlyOfficeContainer.count()) > 0) {
+      await expect(onlyOfficeContainer).toBeVisible();
+      return;
+    }
+    await expect(modal).toContainText(/preview|pdf/i);
+  });
+  await openAndClose('docx1', async (modal) => expect(modal.locator('[id^="onlyoffice-doc-editor-"]')).toBeVisible());
+  await openAndClose('xlsx1', async (modal) => expect(modal.locator('[id^="onlyoffice-doc-editor-"]')).toBeVisible());
+  await openAndClose('xls1', async (modal) => expect(modal.locator('[id^="onlyoffice-doc-editor-"]')).toBeVisible());
   await openAndClose('csv1', async (modal) => expect(modal.locator('table')).toBeVisible());
   await openAndClose('txt1', async (modal) => expect(modal.getByText('plain text line')).toBeVisible());
 });

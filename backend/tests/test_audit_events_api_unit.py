@@ -1,4 +1,5 @@
 import os
+import time
 import unittest
 
 from authx import TokenPayload
@@ -8,6 +9,7 @@ from fastapi.testclient import TestClient
 from backend.app.core import auth as auth_module
 from backend.app.modules.audit.router import router as audit_router
 from backend.database.schema.ensure import ensure_schema
+from backend.database.sqlite import connect_sqlite
 from backend.services.audit_log_store import AuditLogStore
 from backend.tests._util_tempdir import cleanup_dir, make_temp_dir
 
@@ -81,13 +83,28 @@ class TestAuditEventsApiUnit(unittest.TestCase):
                 kb_id="展厅",
             )
 
+            now_ms = int(time.time() * 1000)
+            conn = connect_sqlite(db_path)
+            try:
+                conn.execute(
+                    """
+                    INSERT INTO users (
+                        user_id, username, password_hash, role, status, created_at_ms
+                    ) VALUES (?, ?, ?, ?, ?, ?)
+                    """,
+                    ("u1", "alice", "x", "admin", "active", now_ms),
+                )
+                conn.commit()
+            finally:
+                conn.close()
+
             app = FastAPI()
             app.state.deps = _Deps(_User(role="admin"), store)
             app.include_router(audit_router, prefix="/api")
             app.dependency_overrides[auth_module.get_current_payload] = _override_get_current_payload
 
             with TestClient(app) as client:
-                resp = client.get("/api/audit/events?limit=50&action=document_preview&username=alice&company_id=1")
+                resp = client.get("/api/audit/events?limit=50&action=document_preview&username=alice&company_id=1&role=admin")
 
             self.assertEqual(resp.status_code, 200)
             data = resp.json()
@@ -98,4 +115,3 @@ class TestAuditEventsApiUnit(unittest.TestCase):
             self.assertEqual(data["items"][0]["filename"], "a.md")
         finally:
             cleanup_dir(td)
-

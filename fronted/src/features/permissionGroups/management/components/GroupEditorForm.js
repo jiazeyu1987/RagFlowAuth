@@ -19,7 +19,7 @@ export default function GroupEditorForm({
   if (loading) return <div style={{ color: '#6b7280' }}>Loading...</div>;
 
   return (
-    <form onSubmit={onSaveForm}>
+    <form onSubmit={onSaveForm} data-testid="pg-modal">
       <div
         style={{
           display: 'grid',
@@ -31,6 +31,7 @@ export default function GroupEditorForm({
       >
         <label>Group Name</label>
         <input
+          data-testid="pg-form-group-name"
           value={formData.group_name}
           onChange={(event) =>
             onSetFormData((previous) => ({
@@ -59,6 +60,7 @@ export default function GroupEditorForm({
       >
         <label>Description</label>
         <textarea
+          data-testid="pg-form-description"
           value={formData.description}
           onChange={(event) =>
             onSetFormData((previous) => ({
@@ -81,6 +83,7 @@ export default function GroupEditorForm({
         selected={formData.accessible_kb_nodes || []}
         onToggle={onToggleNodeAuth}
         emptyText="No knowledge folders"
+        itemTestIdPrefix="pg-form-kb-node-"
       />
       <FolderSelectionList
         title="Knowledge Base Access"
@@ -88,11 +91,15 @@ export default function GroupEditorForm({
         selected={formData.accessible_kbs || []}
         onToggle={onToggleKbAuth}
         emptyText="No knowledge bases"
+        itemTestIdPrefix="pg-form-kb-"
+        emptyTestId="pg-form-kb-empty"
       />
       <ChatSelection
         chatAgents={chatAgents || []}
         selected={formData.accessible_chats || []}
         onToggle={onToggleChatAuth}
+        itemTestIdPrefix="pg-form-chat-"
+        emptyTestId="pg-form-chat-empty"
       />
 
       <div style={{ marginBottom: 12 }}>
@@ -101,6 +108,7 @@ export default function GroupEditorForm({
           <label>
             <input
               type="checkbox"
+              data-testid="pg-form-can-upload"
               checked={formData.can_upload}
               onChange={(event) =>
                 onSetFormData((previous) => ({
@@ -114,6 +122,7 @@ export default function GroupEditorForm({
           <label>
             <input
               type="checkbox"
+              data-testid="pg-form-can-review"
               checked={formData.can_review}
               onChange={(event) =>
                 onSetFormData((previous) => ({
@@ -127,6 +136,7 @@ export default function GroupEditorForm({
           <label>
             <input
               type="checkbox"
+              data-testid="pg-form-can-download"
               checked={formData.can_download}
               onChange={(event) =>
                 onSetFormData((previous) => ({
@@ -140,6 +150,7 @@ export default function GroupEditorForm({
           <label>
             <input
               type="checkbox"
+              data-testid="pg-form-can-delete"
               checked={formData.can_delete}
               onChange={(event) =>
                 onSetFormData((previous) => ({
@@ -156,6 +167,7 @@ export default function GroupEditorForm({
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
         <button
           type="button"
+          data-testid="pg-form-cancel"
           onClick={onCancelEdit}
           style={{
             border: '1px solid #d1d5db',
@@ -169,6 +181,7 @@ export default function GroupEditorForm({
         </button>
         <button
           type="submit"
+          data-testid="pg-form-submit"
           disabled={saving}
           style={{
             border: '1px solid #2563eb',

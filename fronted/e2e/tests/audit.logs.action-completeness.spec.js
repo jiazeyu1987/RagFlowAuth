@@ -36,17 +36,17 @@ adminTest('audit logs page renders key actions @regression @audit', async ({ pag
   await page.goto('/logs');
   await expect(page.getByTestId('audit-total')).toHaveText('9');
   const table = page.getByTestId('audit-table');
-  for (const action of [
-    'auth_login',
-    'auth_logout',
-    'document_preview',
-    'document_upload',
-    'document_download',
-    'document_delete',
+  for (const actionText of [
+    '登录',
+    '退出登录',
+    '查看/预览文档',
+    '上传文档',
+    '下载文档',
+    '删除文档',
     'document_approve',
     'document_reject',
     'password_change',
   ]) {
-    await expect(table).toContainText(action);
+    await expect(table).toContainText(actionText);
   }
 });

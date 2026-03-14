@@ -12,6 +12,7 @@ from fastapi import HTTPException
 from backend.app.core.config import settings
 from backend.services.download_common import utils as download_common_utils
 from backend.services.download_common.base_download_manager import BaseDownloadManager
+from backend.services.unified_task_quota_service import UnifiedTaskQuotaService
 from backend.services.patent_download.store import PatentDownloadStore, item_to_dict, session_to_dict
 
 from .sources import PatentCandidate, PatentSourceError, PatentSourceFactory
@@ -273,6 +274,18 @@ class PatentDownloadManager(BaseDownloadManager):
         if not enabled_sources:
             raise HTTPException(status_code=400, detail="source_required")
 
+        actor = str(ctx.payload.sub)
+        quota_service = UnifiedTaskQuotaService()
+        quota_deps = getattr(ctx, "deps", None) or self.deps
+        try:
+            quota_service.assert_can_start(
+                deps=quota_deps,
+                actor_user_id=actor,
+                task_kind=UnifiedTaskQuotaService.PATENT_KIND,
+            )
+        except RuntimeError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+
         query = self._build_query(keywords, use_and)
         source_queries: dict[str, str] = {key: query for key in enabled_sources}
         source_errors_seed: dict[str, str] = {}
@@ -291,7 +304,6 @@ class PatentDownloadManager(BaseDownloadManager):
             source_stats[key]["query"] = str(source_queries.get(key) or "")
 
         session_id = str(uuid.uuid4())
-        actor = str(ctx.payload.sub)
         session = self.store.create_session(
             session_id=session_id,
             created_by=actor,

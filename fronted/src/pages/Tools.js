@@ -82,12 +82,23 @@ const Tools = () => {
         name: 'NAS云盘',
         description: '浏览 NAS 共享中的文件夹和文件，仅管理员可见。',
         route: '/tools/nas-browser',
+      }, {
+        id: 'collection_workbench',
+        name: 'Collection Workbench',
+        description: 'Collection orchestration with task controls, failure classes, batch ingest and trace logs.',
+        route: '/tools/collection-workbench',
       }] : []),
       {
         id: 'paper_download',
         name: '论文下载分析',
         description: '进入论文下载页面：配置关键词、下载源和上限，下载并添加到 [本地论文]。',
         route: '/tools/paper-download',
+      },
+      {
+        id: 'paper_workspace',
+        name: '论文工作台',
+        description: '编辑论文、保存版本、提交查重、查看相似片段并导出报告。',
+        route: '/tools/paper-workspace',
       },
       {
         id: 'patent_download',

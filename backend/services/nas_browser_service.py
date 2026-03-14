@@ -1,13 +1,24 @@
 from __future__ import annotations
 
 import asyncio
+import heapq
+import itertools
+import logging
 import uuid
 from pathlib import PurePosixPath
+from types import SimpleNamespace
 from typing import Any
+
+from authx import TokenPayload
 
 from backend.app.core.authz import AuthContext
 from backend.app.core.config import settings
+from backend.app.core.permission_resolver import PermissionSnapshot, ResourceScope, resolve_permissions
 from backend.services.nas_task_store import NasTaskStore
+from backend.services.unified_task_quota_service import UnifiedTaskQuotaService
+
+
+logger = logging.getLogger(__name__)
 
 
 NAS_SERVER_IP = "172.30.30.4"
@@ -16,9 +27,30 @@ NAS_USERNAME = "ceshi"
 NAS_PASSWORD = "Kdlyx123"
 
 _TASK_LOCK = asyncio.Lock()
-_IMPORT_SEMAPHORE = asyncio.Semaphore(2)
-_ACTIVE_TASKS: set[str] = set()
-_ACTIVE_STATUSES = {"pending", "running", "canceling"}
+
+
+def _normalize_quota_limit(value: Any, fallback: int) -> int:
+    try:
+        normalized = int(value)
+    except Exception:
+        normalized = fallback
+    return max(0, normalized)
+
+
+_MAX_CONCURRENT_IMPORTS = _normalize_quota_limit(getattr(settings, "TASK_GLOBAL_CONCURRENCY_LIMIT", 2), 2)
+_MAX_CONCURRENT_IMPORTS_PER_USER = _normalize_quota_limit(getattr(settings, "TASK_USER_CONCURRENCY_LIMIT", 1), 1)
+_MAX_CONCURRENT_NAS_IMPORTS = _normalize_quota_limit(
+    getattr(settings, "TASK_NAS_CONCURRENCY_LIMIT", _MAX_CONCURRENT_IMPORTS),
+    _MAX_CONCURRENT_IMPORTS,
+)
+_RUNNING_TASKS: set[str] = set()
+_RUNNING_TASK_META: dict[str, dict[str, str]] = {}
+# Backward-compatible alias used by a few tests.
+_ACTIVE_TASKS = _RUNNING_TASKS
+_QUEUED_TASK_IDS: set[str] = set()
+_QUEUED_TASK_HEAP: list[tuple[int, int, str, Any, AuthContext, str]] = []
+_QUEUE_SEQUENCE = itertools.count()
+_ACTIVE_STATUSES = {"pending", "running", "canceling", "pausing"}
 
 
 class NasBrowserService:
@@ -226,7 +258,34 @@ class NasBrowserService:
         return NasBrowserService._normalize_path_list(paths)
 
     @staticmethod
-    def _task_payload(task_dict: dict[str, Any]) -> dict[str, Any]:
+    def _normalize_priority(value: Any) -> int:
+        try:
+            normalized = int(value)
+        except Exception:
+            normalized = 100
+        # Lower number means higher priority.
+        return max(1, min(normalized, 1000))
+
+    @staticmethod
+    def _task_owner_id_from_task(task: Any) -> str:
+        owner = str(getattr(task, "created_by_user_id", "") or "").strip()
+        return owner or "__system__"
+
+    @staticmethod
+    def _task_owner_id_from_dict(task_dict: dict[str, Any]) -> str:
+        owner = str(task_dict.get("created_by_user_id") or "").strip()
+        return owner or "__system__"
+
+    @staticmethod
+    def _quota_limits() -> dict[str, int]:
+        return {
+            "global": _normalize_quota_limit(_MAX_CONCURRENT_IMPORTS, 2),
+            "per_user": _normalize_quota_limit(_MAX_CONCURRENT_IMPORTS_PER_USER, 1),
+            "task_kind": _normalize_quota_limit(_MAX_CONCURRENT_NAS_IMPORTS, 2),
+        }
+
+    @staticmethod
+    def _task_payload_base(task_dict: dict[str, Any]) -> dict[str, Any]:
         total_files = int(task_dict.get("total_files") or 0)
         processed_files = int(task_dict.get("processed_files") or 0)
         pending_files = task_dict.pop("pending_files", []) or []
@@ -234,16 +293,212 @@ class NasBrowserService:
         task_dict["progress_percent"] = 100 if total_files == 0 else int((processed_files / total_files) * 100)
         task_dict["remaining_files"] = max(total_files - processed_files, 0)
         task_dict["pending_files_count"] = len(pending_files)
-        task_dict["can_cancel"] = status in ("pending", "running", "canceling")
+        task_dict["task_priority"] = NasBrowserService._normalize_priority(task_dict.get("priority"))
+        task_dict["can_cancel"] = status in ("pending", "running", "canceling", "paused", "pausing")
+        task_dict["can_pause"] = status in ("pending", "running", "pausing")
+        task_dict["can_resume"] = status in ("paused", "pausing")
         task_dict["can_retry"] = status in ("failed", "canceled") or (
             status == "completed" and int(task_dict.get("failed_count") or 0) > 0
         )
+        task_dict["owner_user_id"] = NasBrowserService._task_owner_id_from_dict(task_dict)
         return task_dict
+
+    async def _queue_snapshot(self) -> list[str]:
+        async with _TASK_LOCK:
+            pending = sorted(
+                (priority, sequence, task_id)
+                for priority, sequence, task_id, _deps, _ctx, _owner_user_id in _QUEUED_TASK_HEAP
+                if task_id in _QUEUED_TASK_IDS
+            )
+        queue: list[str] = []
+        seen: set[str] = set()
+        for _priority, _sequence, task_id in pending:
+            if task_id in seen:
+                continue
+            seen.add(task_id)
+            queue.append(task_id)
+        return queue
+
+    async def _queue_position(self, task_id: str) -> int | None:
+        if not task_id:
+            return None
+        queue = await self._queue_snapshot()
+        try:
+            return queue.index(task_id) + 1
+        except ValueError:
+            return None
+
+    async def _is_task_running(self, task_id: str) -> bool:
+        async with _TASK_LOCK:
+            return task_id in _RUNNING_TASKS
+
+    async def _drop_task_from_queue(self, task_id: str) -> None:
+        async with _TASK_LOCK:
+            _QUEUED_TASK_IDS.discard(task_id)
+
+    @staticmethod
+    def _running_owner_count_locked(owner_user_id: str) -> int:
+        return sum(1 for meta in _RUNNING_TASK_META.values() if meta.get("owner_user_id") == owner_user_id)
+
+    @staticmethod
+    def _running_kind_count_locked(task_kind: str) -> int:
+        return sum(1 for meta in _RUNNING_TASK_META.values() if meta.get("task_kind") == task_kind)
+
+    async def _quota_block_reason(self, owner_user_id: str) -> str | None:
+        limits = self._quota_limits()
+        async with _TASK_LOCK:
+            running_total = len(_RUNNING_TASKS)
+            running_owner = self._running_owner_count_locked(owner_user_id)
+            running_kind = self._running_kind_count_locked("nas_import")
+
+        if limits["global"] <= 0 or running_total >= limits["global"]:
+            return "global_limit"
+        if limits["task_kind"] <= 0 or running_kind >= limits["task_kind"]:
+            return "task_kind_limit"
+        if limits["per_user"] <= 0 or running_owner >= limits["per_user"]:
+            return "user_limit"
+        return None
+
+    async def _task_payload(self, task_dict: dict[str, Any]) -> dict[str, Any]:
+        payload = self._task_payload_base(task_dict)
+        status = str(payload.get("status") or "")
+        task_id = str(payload.get("task_id") or "")
+        owner_user_id = self._task_owner_id_from_dict(payload)
+        limits = self._quota_limits()
+        queue_position = await self._queue_position(task_id) if status == "pending" else None
+        payload["queue_position"] = queue_position
+        payload["is_queued"] = queue_position is not None
+        payload["max_concurrency"] = limits["global"]
+        payload["task_kind"] = "nas_import"
+        payload["quota"] = {
+            "global_limit": limits["global"],
+            "task_kind_limit": limits["task_kind"],
+            "per_user_limit": limits["per_user"],
+        }
+        payload["quota_blocked_reason"] = (
+            await self._quota_block_reason(owner_user_id) if status == "pending" and queue_position else None
+        )
+        return payload
+
+    @staticmethod
+    def _system_recovery_snapshot() -> PermissionSnapshot:
+        return PermissionSnapshot(
+            is_admin=True,
+            can_upload=True,
+            can_review=True,
+            can_download=True,
+            can_delete=True,
+            kb_scope=ResourceScope.ALL,
+            kb_names=frozenset(),
+            chat_scope=ResourceScope.ALL,
+            chat_ids=frozenset(),
+        )
+
+    def _build_recovery_ctx(self, *, deps, owner_user_id: str) -> AuthContext:
+        actor = str(owner_user_id or "").strip() or "system_recovery"
+        user_store = getattr(deps, "user_store", None)
+        user = user_store.get_by_user_id(actor) if user_store is not None else None
+        if user is not None:
+            snapshot = resolve_permissions(deps, user)
+            return AuthContext(
+                deps=deps,
+                payload=TokenPayload(sub=actor),
+                user=user,
+                snapshot=snapshot,
+            )
+        return AuthContext(
+            deps=deps,
+            payload=TokenPayload(sub=actor),
+            user=SimpleNamespace(user_id=actor, role="admin"),
+            snapshot=self._system_recovery_snapshot(),
+        )
+
+    async def recover_startup_tasks(self, *, deps, limit: int = 500) -> dict[str, int]:
+        store = self._store(deps)
+        async with _TASK_LOCK:
+            _RUNNING_TASKS.clear()
+            _RUNNING_TASK_META.clear()
+            _QUEUED_TASK_IDS.clear()
+            _QUEUED_TASK_HEAP.clear()
+
+        active_tasks = await asyncio.to_thread(
+            store.list_tasks_by_statuses,
+            list(_ACTIVE_STATUSES),
+            limit=limit,
+        )
+        summary = {
+            "scanned": len(active_tasks),
+            "requeued": 0,
+            "canceled": 0,
+            "paused": 0,
+            "completed": 0,
+        }
+
+        for task in active_tasks:
+            pending_files = self._normalize_path_list(list(task.pending_files or []))
+            if pending_files != list(task.pending_files or []):
+                task = await asyncio.to_thread(store.update_task, task.task_id, pending_files=pending_files) or task
+
+            if task.cancel_requested_at_ms is not None or task.status == "canceling":
+                await asyncio.to_thread(
+                    store.update_task,
+                    task.task_id,
+                    status="canceled",
+                    current_file="",
+                    error="",
+                )
+                await self._drop_task_from_queue(task.task_id)
+                summary["canceled"] += 1
+                continue
+
+            if task.status == "pausing":
+                await asyncio.to_thread(store.update_task, task.task_id, status="paused", current_file="")
+                await self._drop_task_from_queue(task.task_id)
+                summary["paused"] += 1
+                continue
+
+            if task.status == "running":
+                task = await asyncio.to_thread(
+                    store.update_task,
+                    task.task_id,
+                    status="pending",
+                    current_file="",
+                    error="",
+                ) or task
+
+            if not pending_files:
+                if task.status in ("pending", "running"):
+                    await asyncio.to_thread(store.update_task, task.task_id, status="completed", current_file="", error="")
+                    summary["completed"] += 1
+                continue
+
+            recovery_ctx = self._build_recovery_ctx(
+                deps=deps,
+                owner_user_id=self._task_owner_id_from_task(task),
+            )
+            self._schedule_folder_import_task(
+                task_id=task.task_id,
+                deps=deps,
+                ctx=recovery_ctx,
+            )
+            summary["requeued"] += 1
+
+        if summary["scanned"] > 0:
+            logger.info("nas_task_recovery summary=%s", summary)
+        return summary
 
     async def list_directory(self, relative_path: str) -> dict[str, Any]:
         return await asyncio.to_thread(self._list_directory_sync, relative_path)
 
-    async def start_folder_import_task(self, *, relative_path: str, kb_ref: str, deps, ctx: AuthContext) -> dict[str, Any]:
+    async def start_folder_import_task(
+        self,
+        *,
+        relative_path: str,
+        kb_ref: str,
+        deps,
+        ctx: AuthContext,
+        priority: int | None = None,
+    ) -> dict[str, Any]:
         normalized = self._normalize_relative_path(relative_path)
         if not normalized:
             raise RuntimeError("请选择具体文件夹后再上传至知识库")
@@ -251,23 +506,35 @@ class NasBrowserService:
         supported_files, skipped_files = await asyncio.to_thread(self._collect_folder_files_sync, normalized, deps)
         task_id = uuid.uuid4().hex
         store = self._store(deps)
+        task_priority = self._normalize_priority(priority)
         pending_files = self._normalize_path_list([item.get("path") or "" for item in supported_files])
+        actor_user_id = str(getattr(getattr(ctx, "payload", None), "sub", "") or "")
+
+        if pending_files:
+            UnifiedTaskQuotaService().assert_can_start(
+                deps=deps,
+                actor_user_id=actor_user_id,
+                task_kind=UnifiedTaskQuotaService.NAS_KIND,
+            )
+
         task = await asyncio.to_thread(
             store.create_task,
             task_id=task_id,
             folder_path=normalized,
             kb_ref=kb_ref,
+            created_by_user_id=actor_user_id,
             total_files=len(pending_files),
             skipped_count=len(skipped_files),
             skipped=skipped_files[:50],
             pending_files=pending_files,
+            priority=task_priority,
             status="completed" if not pending_files else "pending",
         )
 
         if pending_files:
             self._schedule_folder_import_task(task_id=task_id, deps=deps, ctx=self._clone_ctx(ctx))
 
-        return self._task_payload(task.as_dict())
+        return await self._task_payload(task.as_dict())
 
     async def get_folder_import_task(self, task_id: str, deps=None, ctx: AuthContext | None = None) -> dict[str, Any]:
         if deps is None and self.task_store is None:
@@ -276,9 +543,9 @@ class NasBrowserService:
         task = await asyncio.to_thread(store.get_task, task_id)
         if task is None:
             raise RuntimeError("NAS 上传任务不存在")
-        if ctx is not None and task.status in _ACTIVE_STATUSES and task.pending_files:
+        if ctx is not None and task.status in ("pending", "running") and task.pending_files:
             self._schedule_folder_import_task(task_id=task_id, deps=deps, ctx=self._clone_ctx(ctx))
-        return self._task_payload(task.as_dict())
+        return await self._task_payload(task.as_dict())
 
     async def cancel_folder_import_task(self, task_id: str, *, deps) -> dict[str, Any]:
         store = self._store(deps)
@@ -287,7 +554,7 @@ class NasBrowserService:
             raise RuntimeError("NAS 上传任务不存在")
         if task.status == "canceling":
             async with _TASK_LOCK:
-                running = task_id in _ACTIVE_TASKS
+                running = task_id in _RUNNING_TASKS
             if not running:
                 task = await asyncio.to_thread(
                     store.update_task,
@@ -296,7 +563,32 @@ class NasBrowserService:
                     current_file="",
                     error="",
                 )
-        return self._task_payload(task.as_dict())
+        if task.status == "canceled":
+            await self._drop_task_from_queue(task_id)
+        return await self._task_payload(task.as_dict())
+
+    async def pause_folder_import_task(self, task_id: str, *, deps) -> dict[str, Any]:
+        store = self._store(deps)
+        task = await asyncio.to_thread(store.request_pause_task, task_id)
+        if task is None:
+            raise RuntimeError("NAS 上传任务不存在")
+        if task.status == "pausing":
+            async with _TASK_LOCK:
+                running = task_id in _RUNNING_TASKS
+            if not running:
+                task = await asyncio.to_thread(store.update_task, task_id, status="paused", current_file="")
+        if task.status == "paused":
+            await self._drop_task_from_queue(task_id)
+        return await self._task_payload(task.as_dict())
+
+    async def resume_folder_import_task(self, task_id: str, *, deps, ctx: AuthContext) -> dict[str, Any]:
+        store = self._store(deps)
+        task = await asyncio.to_thread(store.request_resume_task, task_id)
+        if task is None:
+            raise RuntimeError("NAS 上传任务不存在")
+        if task.status == "pending" and task.pending_files:
+            self._schedule_folder_import_task(task_id=task_id, deps=deps, ctx=self._clone_ctx(ctx))
+        return await self._task_payload(task.as_dict())
 
     async def retry_folder_import_task(self, task_id: str, *, deps, ctx: AuthContext) -> dict[str, Any]:
         store = self._store(deps)
@@ -333,7 +625,7 @@ class NasBrowserService:
             )
 
         self._schedule_folder_import_task(task_id=task_id, deps=deps, ctx=self._clone_ctx(ctx))
-        return self._task_payload(reset_task.as_dict())
+        return await self._task_payload(reset_task.as_dict())
 
     async def import_file_to_kb(self, *, relative_path: str, kb_ref: str, deps, ctx) -> dict[str, Any]:
         normalized = self._normalize_relative_path(relative_path)
@@ -362,18 +654,72 @@ class NasBrowserService:
         }
 
     def _schedule_folder_import_task(self, *, task_id: str, deps, ctx: AuthContext) -> None:
-        async def _runner() -> None:
+        async def _enqueue() -> None:
+            store = self._store(deps)
+            task = await asyncio.to_thread(store.get_task, task_id)
+            if task is None or not task.pending_files:
+                return
+            priority = self._normalize_priority(task.priority)
+            owner_user_id = self._task_owner_id_from_task(task)
             async with _TASK_LOCK:
-                if task_id in _ACTIVE_TASKS:
+                if task_id in _RUNNING_TASKS:
                     return
-                _ACTIVE_TASKS.add(task_id)
-            try:
-                await self._run_folder_import_task(task_id=task_id, deps=deps, ctx=ctx)
-            finally:
-                async with _TASK_LOCK:
-                    _ACTIVE_TASKS.discard(task_id)
+                _QUEUED_TASK_IDS.add(task_id)
+                heapq.heappush(
+                    _QUEUED_TASK_HEAP,
+                    (priority, next(_QUEUE_SEQUENCE), task_id, deps, self._clone_ctx(ctx), owner_user_id),
+                )
+            await self._drain_task_queue()
 
-        asyncio.create_task(_runner())
+        asyncio.create_task(_enqueue())
+
+    async def _drain_task_queue(self) -> None:
+        limits = self._quota_limits()
+        while True:
+            deferred_items: list[tuple[int, int, str, Any, AuthContext, str]] = []
+            async with _TASK_LOCK:
+                running_total = len(_RUNNING_TASKS)
+                running_kind = self._running_kind_count_locked("nas_import")
+                if limits["global"] <= 0 or running_total >= limits["global"]:
+                    return
+                if limits["task_kind"] <= 0 or running_kind >= limits["task_kind"]:
+                    return
+
+                next_item: tuple[str, Any, AuthContext] | None = None
+                while _QUEUED_TASK_HEAP:
+                    priority, sequence, task_id, deps, ctx, owner_user_id = heapq.heappop(_QUEUED_TASK_HEAP)
+                    if task_id not in _QUEUED_TASK_IDS:
+                        continue
+                    if task_id in _RUNNING_TASKS:
+                        _QUEUED_TASK_IDS.discard(task_id)
+                        continue
+                    if limits["per_user"] <= 0 or self._running_owner_count_locked(owner_user_id) >= limits["per_user"]:
+                        deferred_items.append((priority, sequence, task_id, deps, ctx, owner_user_id))
+                        continue
+                    _QUEUED_TASK_IDS.discard(task_id)
+                    _RUNNING_TASKS.add(task_id)
+                    _RUNNING_TASK_META[task_id] = {
+                        "owner_user_id": owner_user_id,
+                        "task_kind": "nas_import",
+                    }
+                    next_item = (task_id, deps, ctx)
+                    break
+
+                for item in deferred_items:
+                    heapq.heappush(_QUEUED_TASK_HEAP, item)
+
+            if next_item is None:
+                return
+            asyncio.create_task(self._run_queued_task(task_id=next_item[0], deps=next_item[1], ctx=next_item[2]))
+
+    async def _run_queued_task(self, *, task_id: str, deps, ctx: AuthContext) -> None:
+        try:
+            await self._run_folder_import_task(task_id=task_id, deps=deps, ctx=ctx)
+        finally:
+            async with _TASK_LOCK:
+                _RUNNING_TASKS.discard(task_id)
+                _RUNNING_TASK_META.pop(task_id, None)
+            await self._drain_task_queue()
 
     async def _is_cancel_requested(self, task_id: str, deps) -> bool:
         store = self._store(deps)
@@ -383,6 +729,13 @@ class NasBrowserService:
         if task.status == "canceled":
             return True
         return task.cancel_requested_at_ms is not None or task.status == "canceling"
+
+    async def _is_pause_requested(self, task_id: str, deps) -> bool:
+        store = self._store(deps)
+        task = await asyncio.to_thread(store.get_task, task_id)
+        if task is None:
+            return False
+        return task.status in ("paused", "pausing")
 
     async def _take_next_pending_file(self, task_id: str, deps) -> str | None:
         store = self._store(deps)
@@ -402,56 +755,62 @@ class NasBrowserService:
 
     async def _run_folder_import_task(self, *, task_id: str, deps, ctx: AuthContext) -> None:
         store = self._store(deps)
+        task = await asyncio.to_thread(store.get_task, task_id)
+        if task is None:
+            return
 
-        async with _IMPORT_SEMAPHORE:
-            task = await asyncio.to_thread(store.get_task, task_id)
-            if task is None:
-                return
+        if await self._is_cancel_requested(task_id, deps):
+            await asyncio.to_thread(store.update_task, task_id, status="canceled", current_file="", error="")
+            return
 
-            if await self._is_cancel_requested(task_id, deps):
-                await asyncio.to_thread(store.update_task, task_id, status="canceled", current_file="", error="")
-                return
+        if task.status in ("paused", "pausing"):
+            await asyncio.to_thread(store.update_task, task_id, status="paused", current_file="")
+            return
 
-            if not task.pending_files:
-                await asyncio.to_thread(store.update_task, task_id, status="completed", current_file="", error="")
-                return
+        if not task.pending_files:
+            await asyncio.to_thread(store.update_task, task_id, status="completed", current_file="", error="")
+            return
 
-            folder_path = task.folder_path
-            kb_ref = task.kb_ref
-            folder_name = PurePosixPath(folder_path).name or folder_path
-            await asyncio.to_thread(store.update_task, task_id, status="running", current_file="", error="")
+        folder_path = task.folder_path
+        kb_ref = task.kb_ref
+        folder_name = PurePosixPath(folder_path).name or folder_path
+        await asyncio.to_thread(store.update_task, task_id, status="running", current_file="", error="")
 
-            try:
-                while True:
-                    if await self._is_cancel_requested(task_id, deps):
-                        await asyncio.to_thread(store.update_task, task_id, status="canceled", current_file="", error="")
-                        return
-
-                    source_path = await self._take_next_pending_file(task_id, deps)
-                    if not source_path:
-                        break
-
-                    target_filename = self._build_folder_target_filename(source_path, folder_path, folder_name)
-                    await asyncio.to_thread(store.update_task, task_id, current_file=source_path)
-                    outcome = await self._import_single_file(
-                        source_path=source_path,
-                        target_filename=target_filename,
-                        kb_ref=kb_ref,
-                        deps=deps,
-                        ctx=ctx,
-                    )
-                    await self._apply_outcome(task_id, outcome, source_path, deps)
-                    await asyncio.sleep(0)
-
-                final_task = await asyncio.to_thread(store.get_task, task_id)
-                if final_task is None:
-                    return
-                if final_task.cancel_requested_at_ms is not None or final_task.status == "canceling":
+        try:
+            while True:
+                if await self._is_cancel_requested(task_id, deps):
                     await asyncio.to_thread(store.update_task, task_id, status="canceled", current_file="", error="")
                     return
-                await asyncio.to_thread(store.update_task, task_id, status="completed", current_file="", error="")
-            except Exception as exc:
-                await asyncio.to_thread(store.update_task, task_id, status="failed", error=str(exc), current_file="")
+
+                if await self._is_pause_requested(task_id, deps):
+                    await asyncio.to_thread(store.update_task, task_id, status="paused", current_file="", error="")
+                    return
+
+                source_path = await self._take_next_pending_file(task_id, deps)
+                if not source_path:
+                    break
+
+                target_filename = self._build_folder_target_filename(source_path, folder_path, folder_name)
+                await asyncio.to_thread(store.update_task, task_id, current_file=source_path)
+                outcome = await self._import_single_file(
+                    source_path=source_path,
+                    target_filename=target_filename,
+                    kb_ref=kb_ref,
+                    deps=deps,
+                    ctx=ctx,
+                )
+                await self._apply_outcome(task_id, outcome, source_path, deps)
+                await asyncio.sleep(0)
+
+            final_task = await asyncio.to_thread(store.get_task, task_id)
+            if final_task is None:
+                return
+            if final_task.cancel_requested_at_ms is not None or final_task.status == "canceling":
+                await asyncio.to_thread(store.update_task, task_id, status="canceled", current_file="", error="")
+                return
+            await asyncio.to_thread(store.update_task, task_id, status="completed", current_file="", error="")
+        except Exception as exc:
+            await asyncio.to_thread(store.update_task, task_id, status="failed", error=str(exc), current_file="")
 
     async def _apply_outcome(self, task_id: str, outcome: dict[str, Any], source_path: str, deps) -> None:
         store = self._store(deps)

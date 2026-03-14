@@ -9,6 +9,7 @@ from backend.app.core.permission_resolver import (
 from backend.models.document import DocumentResponse
 from backend.services.documents.document_manager import DocumentManager
 from backend.services.knowledge_ingestion import KnowledgeIngestionError
+from backend.services.unified_task_quota_service import UnifiedTaskQuotaService
 
 
 router = APIRouter()
@@ -61,6 +62,14 @@ async def upload_document(
     kb_info = resolve_kb_ref(deps, kb_ref)
     assert_can_upload(snapshot)
     assert_kb_allowed(snapshot, kb_ref)
+    try:
+        UnifiedTaskQuotaService().assert_can_start(
+            deps=deps,
+            actor_user_id=str(getattr(ctx.payload, "sub", "") or ""),
+            task_kind=UnifiedTaskQuotaService.UPLOAD_KIND,
+        )
+    except RuntimeError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
     logger.info(f"[UPLOAD] User {user.username} uploading to kb_id={kb_ref}")
     ingestion_manager = getattr(deps, "knowledge_ingestion_manager", None)

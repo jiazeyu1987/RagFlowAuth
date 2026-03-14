@@ -10,7 +10,7 @@ adminTest('review detects conflict and can keep old (reject new) (mock) @regress
   const newDoc = { doc_id: 'new_1', filename: 'same.txt', status: 'pending', kb_id: kbId, uploaded_at_ms: now };
 
   let pending = [newDoc];
-  let rejectBody = null;
+  let skipBody = null;
 
   await page.route('**/api/datasets', async (route) => {
     if (route.request().method() !== 'GET') return route.fallback();
@@ -37,9 +37,9 @@ adminTest('review detects conflict and can keep old (reject new) (mock) @regress
     });
   });
 
-  await page.route('**/api/knowledge/documents/new_1/reject', async (route) => {
+  await page.route('**/api/knowledge/documents/new_1/resolve-conflict-skip', async (route) => {
     if (route.request().method() !== 'POST') return route.fallback();
-    rejectBody = route.request().postDataJSON();
+    skipBody = route.request().postDataJSON();
     pending = [];
     return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true }) });
   });
@@ -50,14 +50,20 @@ adminTest('review detects conflict and can keep old (reject new) (mock) @regress
   await page.getByTestId('docs-approve-new_1').click();
   await expect(page.getByTestId('docs-overwrite-modal')).toBeVisible();
 
-  page.once('dialog', async (dialog) => {
-    if (dialog.type() === 'confirm') await dialog.accept();
-    else await dialog.dismiss();
+  page.on('dialog', async (dialog) => {
+    if (dialog.type() === 'confirm') {
+      await dialog.accept();
+      return;
+    }
+    if (dialog.type() === 'prompt') {
+      await dialog.accept('e2e keep-old reason');
+      return;
+    }
+    await dialog.dismiss();
   });
   await page.getByTestId('docs-overwrite-keep-old').click();
 
-  expect(rejectBody).toBeTruthy();
+  expect(skipBody).toBeTruthy();
   await expect(page.getByTestId('docs-overwrite-modal')).toHaveCount(0);
   await expect(page.getByText('same.txt', { exact: true })).toHaveCount(0);
 });
-

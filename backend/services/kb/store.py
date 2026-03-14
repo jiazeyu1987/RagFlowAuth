@@ -227,6 +227,63 @@ class KbStore:
         finally:
             conn.close()
 
+    def update_document_file_info(
+        self,
+        *,
+        doc_id: str,
+        filename: Optional[str] = None,
+        file_path: Optional[str] = None,
+    ) -> Optional[KbDocument]:
+        current = self.get_document(doc_id)
+        if current is None:
+            return None
+        next_filename = str(filename if filename is not None else current.filename)
+        next_file_path = str(file_path if file_path is not None else current.file_path)
+
+        logger.debug(
+            "[KbStore] update_document_file_info doc_id=%s filename=%s file_path=%s",
+            doc_id,
+            next_filename,
+            next_file_path,
+        )
+
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute(
+                """
+                UPDATE kb_documents
+                SET filename = ?, file_path = ?
+                WHERE doc_id = ?
+                """,
+                (next_filename, next_file_path, doc_id),
+            )
+            conn.commit()
+            return self.get_document(doc_id)
+        finally:
+            conn.close()
+
+    def requeue_document_for_retry(self, doc_id: str) -> Optional[KbDocument]:
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute(
+                """
+                UPDATE kb_documents
+                SET status = 'pending',
+                    reviewed_by = NULL,
+                    reviewed_at_ms = NULL,
+                    review_notes = NULL,
+                    ragflow_doc_id = NULL
+                WHERE doc_id = ?
+                """,
+                (doc_id,),
+            )
+            conn.commit()
+            return self.get_document(doc_id)
+        finally:
+            conn.close()
+
     def delete_document(self, doc_id: str) -> bool:
         conn = self._get_connection()
         cursor = conn.cursor()
@@ -272,4 +329,3 @@ class KbStore:
             return cursor.fetchone()[0]
         finally:
             conn.close()
-

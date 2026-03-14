@@ -1,0 +1,41 @@
+{
+  "generated_at": "2026-03-13 16:41:02",
+  "db_path": "C:\\Users\\BJB110\\AppData\\Local\\Temp\\ragflowauth_schema_rollback_0cdfb94e67574c818bf9f577e9257172\\auth.db",
+  "target_tables": [
+    "unified_task_events",
+    "unified_task_jobs",
+    "unified_tasks",
+    "paper_plag_hits",
+    "paper_plag_reports",
+    "paper_versions",
+    "egress_decision_audits"
+  ],
+  "before_rollback": {
+    "unified_task_events": true,
+    "unified_task_jobs": true,
+    "unified_tasks": true,
+    "paper_plag_hits": true,
+    "paper_plag_reports": true,
+    "paper_versions": true,
+    "egress_decision_audits": true
+  },
+  "after_rollback": {
+    "unified_task_events": false,
+    "unified_task_jobs": false,
+    "unified_tasks": false,
+    "paper_plag_hits": false,
+    "paper_plag_reports": false,
+    "paper_versions": false,
+    "egress_decision_audits": false
+  },
+  "after_recover": {
+    "unified_task_events": true,
+    "unified_task_jobs": true,
+    "unified_tasks": true,
+    "paper_plag_hits": true,
+    "paper_plag_reports": true,
+    "paper_versions": true,
+    "egress_decision_audits": true
+  },
+  "verdict": "PASS"
+}

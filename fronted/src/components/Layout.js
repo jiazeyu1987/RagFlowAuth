@@ -15,7 +15,6 @@ const Layout = ({ children }) => {
       .filter(Boolean);
     const unique = Array.from(new Set(groups));
     if (unique.length > 0) return unique.join(' / ');
-    // Admin accounts often have no explicit permission group assignment.
     return user?.role || '';
   })();
 
@@ -33,24 +32,26 @@ const Layout = ({ children }) => {
   const navigation = [
     { name: '智能对话', path: '/chat', icon: '💬' },
     { name: '全库搜索', path: '/agents', icon: '🔎' },
-    { name: '知识配置', path: '/kbs', icon: '📚' },
-    { name: '文档浏览', path: '/browser', icon: '📄' },
+    { name: '知识配置', path: '/kbs', icon: '📎' },
+    { name: '文档浏览', path: '/browser', icon: '📁' },
     { name: '文档审核', path: '/documents', icon: '✅', show: canReview },
-    { name: '文档上传', path: '/upload', icon: '⤴️', show: canUpload },
-    { name: '修改密码', path: '/change-password', icon: '🔑' },
+    { name: '文档上传', path: '/upload', icon: '⬆️', show: canUpload },
+    { name: '修改密码', path: '/change-password', icon: '🔐' },
     { name: '实用工具', path: '/tools', icon: '🧰' },
-    { name: '用户管理', path: '/users', icon: '👤', allowedRoles: ['admin'] },
-    { name: '组织管理', path: '/org-directory', icon: '🏢', allowedRoles: ['admin'] },
+    { name: '用户管理', path: '/users', icon: '👥', allowedRoles: ['admin'] },
+    { name: '组织管理', path: '/org-directory', icon: '🗂️', allowedRoles: ['admin'] },
     { name: '权限分组', path: '/permission-groups', icon: '🛡️', allowedRoles: ['admin'] },
     { name: '数据安全', path: '/data-security', icon: '🔒', allowedRoles: ['admin'] },
-    { name: '日志审计', path: '/logs', icon: '🧾', allowedRoles: ['admin'] },
+    { name: '日志审计', path: '/logs', icon: '📒', allowedRoles: ['admin'] },
   ];
 
   const pageTitleOverrides = {
-    '/tools/patent-download': '专利下载',
-    '/tools/paper-download': '论文下载',
-    '/tools/nas-browser': 'NAS云盘',
-    '/tools/drug-admin': '药监局',
+    '/tools/patent-download': 'Patent Download',
+    '/tools/paper-download': 'Paper Download',
+    '/tools/paper-workspace': 'Paper Workspace',
+    '/tools/collection-workbench': 'Collection Workbench',
+    '/tools/nas-browser': 'NAS Browser',
+    '/tools/drug-admin': 'Drug Admin',
     '/tools/nmpa': 'NMPA',
   };
 
@@ -204,5 +205,3 @@ const Layout = ({ children }) => {
 };
 
 export default Layout;
-
-

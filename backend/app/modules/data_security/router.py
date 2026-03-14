@@ -1,13 +1,17 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, HTTPException
 
-from backend.app.core.authz import AdminOnly
+from backend.app.core.authz import AdminOnly, AuthContextDep
 from backend.app.modules.data_security.runner import start_job_if_idle
+from backend.services.egress_decision_audit_store import EgressDecisionAuditStore
+from backend.services.egress_mode_runtime import clear_egress_policy_cache
 from backend.services.data_security_store import DataSecurityStore
+from backend.services.egress_policy_store import EgressPolicyStore
+from backend.services.system_feature_flag_store import SystemFeatureFlagStore
 
 router = APIRouter()
 
@@ -30,6 +34,20 @@ def _backup_pack_stats(s) -> dict[str, Any]:
         return {"backup_target_path": str(p), "backup_pack_count": int(count)}
     except Exception:
         return {"backup_target_path": str(p), "backup_pack_count": 0}
+
+
+def _resolve_feature_flag_store(deps) -> SystemFeatureFlagStore:
+    existing = getattr(deps, "feature_flag_store", None)
+    if existing is not None:
+        return existing
+    kb_store = getattr(deps, "kb_store", None)
+    db_path = str(getattr(kb_store, "db_path", "") or "")
+    store = SystemFeatureFlagStore(db_path=db_path or None)
+    try:
+        setattr(deps, "feature_flag_store", store)
+    except Exception:
+        pass
+    return store
 
 
 @router.get("/admin/data-security/settings")
@@ -95,9 +113,9 @@ async def update_settings(_: AdminOnly, body: dict[str, Any]) -> dict[str, Any]:
 
 
 @router.post("/admin/data-security/backup/run")
-async def run_backup(_: AdminOnly) -> dict[str, Any]:
+async def run_backup(admin: AdminOnly) -> dict[str, Any]:
     try:
-        job_id = start_job_if_idle(reason="手动")
+        job_id = start_job_if_idle(reason="手动", actor_user_id=str(getattr(admin, "sub", "") or ""))
         return {"job_id": job_id}
     except RuntimeError as e:
         raise HTTPException(status_code=409, detail=str(e))
@@ -121,10 +139,10 @@ async def get_job(_: AdminOnly, job_id: int) -> dict[str, Any]:
 
 
 @router.post("/admin/data-security/backup/run-full")
-async def run_full_backup(_: AdminOnly) -> dict[str, Any]:
+async def run_full_backup(admin: AdminOnly) -> dict[str, Any]:
     """Run a full backup including Docker images, containers, and networks"""
     try:
-        job_id = start_job_if_idle(reason="手动全量备份", full_backup=True)
+        job_id = start_job_if_idle(reason="手动全量备份", full_backup=True, actor_user_id=str(getattr(admin, "sub", "") or ""))
         return {"job_id": job_id}
     except RuntimeError as e:
         raise HTTPException(status_code=409, detail=str(e))
@@ -145,3 +163,79 @@ async def cancel_backup_job(_: AdminOnly, job_id: int, body: dict[str, Any] | No
     except KeyError:
         raise HTTPException(status_code=404, detail="job_not_found")
     return job.as_dict()
+
+
+@router.get("/admin/security/egress/config")
+async def get_egress_policy_config(_: AdminOnly) -> dict[str, Any]:
+    store = EgressPolicyStore()
+    settings_obj = store.get()
+    return settings_obj.as_dict()
+
+
+@router.put("/admin/security/egress/config")
+async def update_egress_policy_config(admin: AdminOnly, body: dict[str, Any] | None = None) -> dict[str, Any]:
+    store = EgressPolicyStore()
+    try:
+        settings_obj = store.update(body or {}, actor_user_id=str(getattr(admin, "sub", "") or ""))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    clear_egress_policy_cache()
+    return settings_obj.as_dict()
+
+
+@router.get("/admin/security/egress/audits")
+async def list_egress_decision_audits(
+    _: AdminOnly,
+    limit: int = 100,
+    decision: str | None = None,
+    actor_user_id: str | None = None,
+    target_host: str | None = None,
+    since_ms: int | None = None,
+    until_ms: int | None = None,
+) -> dict[str, Any]:
+    store = EgressDecisionAuditStore()
+    safe_limit = max(1, min(int(limit or 100), 500))
+    records = store.list_decisions(
+        limit=safe_limit,
+        decision=decision,
+        actor_user_id=actor_user_id,
+        target_host=target_host,
+        since_ms=since_ms,
+        until_ms=until_ms,
+    )
+    return {
+        "limit": safe_limit,
+        "total": len(records),
+        "items": [item.as_dict() for item in records],
+    }
+
+
+@router.get("/security/feature-flags")
+async def get_feature_flags(ctx: AuthContextDep) -> dict[str, Any]:
+    store = _resolve_feature_flag_store(ctx.deps)
+    return store.list_flags()
+
+
+@router.get("/admin/security/feature-flags")
+async def get_admin_feature_flags(_: AdminOnly) -> dict[str, Any]:
+    return SystemFeatureFlagStore().list_flags()
+
+
+@router.put("/admin/security/feature-flags")
+async def update_feature_flags(admin: AdminOnly, body: dict[str, Any] | None = None) -> dict[str, Any]:
+    store = SystemFeatureFlagStore()
+    try:
+        payload = store.update_flags(body or {}, actor_user_id=str(getattr(admin, "sub", "") or ""))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    clear_egress_policy_cache()
+    return payload
+
+
+@router.post("/admin/security/feature-flags/rollback-disable")
+async def rollback_disable_feature_flags(admin: AdminOnly) -> dict[str, Any]:
+    store = SystemFeatureFlagStore()
+    payload = store.rollback_disable_all(actor_user_id=str(getattr(admin, "sub", "") or ""))
+    clear_egress_policy_cache()
+    return payload
+

@@ -51,9 +51,16 @@ adminTest('review detects conflict and can approve-overwrite (mock) @regression 
   await page.getByTestId('docs-approve-new_1').click();
   await expect(page.getByTestId('docs-overwrite-modal')).toBeVisible();
 
-  page.once('dialog', async (dialog) => {
-    if (dialog.type() === 'confirm') await dialog.accept();
-    else await dialog.dismiss();
+  page.on('dialog', async (dialog) => {
+    if (dialog.type() === 'confirm') {
+      await dialog.accept();
+      return;
+    }
+    if (dialog.type() === 'prompt') {
+      await dialog.accept('e2e overwrite reason');
+      return;
+    }
+    await dialog.dismiss();
   });
   await page.getByTestId('docs-overwrite-use-new').click();
 
@@ -63,4 +70,3 @@ adminTest('review detects conflict and can approve-overwrite (mock) @regression 
   await expect(page.getByTestId('docs-overwrite-modal')).toHaveCount(0);
   await expect(page.getByText('same.txt', { exact: true })).toHaveCount(0);
 });
-

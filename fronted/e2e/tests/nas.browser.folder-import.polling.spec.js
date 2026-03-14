@@ -57,7 +57,7 @@ adminTest('nas browser folder import polling: reaches completed state @regressio
     });
   });
 
-  await page.route('**/api/nas/import-folder/task_folder_1', async (route) => {
+  await page.route('**/api/tasks/task_folder_1**', async (route) => {
     if (route.request().method() !== 'GET') return route.fallback();
     statusPollCount += 1;
 
@@ -121,7 +121,7 @@ adminTest('nas browser folder import polling: reaches completed state @regressio
 
   await expect.poll(() => statusPollCount, { timeout: 20_000 }).toBeGreaterThan(1);
   await expect(page.getByText('folderA').first()).toBeVisible();
-  await expect(page.getByText('completed')).toBeVisible();
+  await expect(page.getByText(/completed|已完成/i)).toBeVisible();
 
   await expect
     .poll(

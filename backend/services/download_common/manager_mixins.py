@@ -490,3 +490,37 @@ class DownloadManagerDelegationMixin:
 
     def content_disposition(self, filename: str) -> str:
         return self._content_disposition(filename)
+
+    def recover_startup_sessions(self, *, limit: int = 500) -> dict[str, int]:
+        """
+        Recover persisted download sessions after service restart.
+
+        Current strategy prioritizes safe convergence:
+        - `stopping` -> `stopped`
+        - `running` / `pending` -> `failed` (interrupted by restart)
+        """
+        sessions = self.store.list_sessions(limit=max(1, min(int(limit), 5000)))
+        summary = {
+            "scanned": 0,
+            "stopped": 0,
+            "failed": 0,
+        }
+        for session in sessions:
+            status = str(getattr(session, "status", "") or "").strip().lower()
+            if status not in ("running", "pending", "stopping"):
+                continue
+            summary["scanned"] += 1
+            session_id = str(getattr(session, "session_id", "") or "").strip()
+            if not session_id:
+                continue
+            if status == "stopping":
+                self.store.update_session_runtime(session_id=session_id, status="stopped")
+                summary["stopped"] += 1
+                continue
+            self.store.update_session_runtime(
+                session_id=session_id,
+                status="failed",
+                error="session_interrupted_by_restart",
+            )
+            summary["failed"] += 1
+        return summary

@@ -61,6 +61,7 @@ const DocumentReview = ({ embedded = false }) => {
     handleDelete,
     handleDownload,
     handleOverwriteKeepOld,
+    handleOverwriteRename,
     handleOverwriteUseNew,
     handleReject,
     handleSelectAll,
@@ -121,6 +122,7 @@ const DocumentReview = ({ embedded = false }) => {
       <DocumentReviewOverwriteModal
         activeDocMap={activeDocMap}
         handleOverwriteKeepOld={handleOverwriteKeepOld}
+        handleOverwriteRename={handleOverwriteRename}
         handleOverwriteUseNew={handleOverwriteUseNew}
         openDiff={openDiff}
         openLocalPreview={openLocalPreview}

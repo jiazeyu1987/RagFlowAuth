@@ -158,6 +158,7 @@ export default function PermissionGroupManagement() {
           </button>
           <button
             onClick={startCreateGroup}
+            data-testid="pg-create-open"
             style={{
               border: '1px solid #10b981',
               borderRadius: 8,

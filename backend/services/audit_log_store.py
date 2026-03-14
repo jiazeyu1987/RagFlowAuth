@@ -136,6 +136,7 @@ class AuditLogStore:
         *,
         action: str | None = None,
         actor: str | None = None,
+        actor_role: str | None = None,
         actor_username: str | None = None,
         company_id: int | None = None,
         department_id: int | None = None,
@@ -162,6 +163,9 @@ class AuditLogStore:
             if actor:
                 where += " AND actor = ?"
                 params.append(actor)
+            if actor_role:
+                where += " AND EXISTS (SELECT 1 FROM users u WHERE u.user_id = audit_events.actor AND u.role = ?)"
+                params.append(str(actor_role))
             if actor_username:
                 where += " AND actor_username = ?"
                 params.append(actor_username)

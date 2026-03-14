@@ -156,11 +156,15 @@ export default function usePermissionGroupManagement() {
     setLoading(true);
     setError('');
     try {
-      const [groupsRes, folderRes, knowledgeRes, chatsRes] = await Promise.all([
-        permissionGroupsApi.list(),
-        permissionGroupsApi.listGroupFolders(),
-        permissionGroupsApi.listKnowledgeTree(),
-        permissionGroupsApi.listChats(),
+      const groupsRes = await permissionGroupsApi.list();
+      const [folderRes, knowledgeRes, chatsRes] = await Promise.all([
+        permissionGroupsApi
+          .listGroupFolders()
+          .catch(() => ({ data: { folders: [], group_bindings: {}, root_group_count: 0 } })),
+        permissionGroupsApi
+          .listKnowledgeTree()
+          .catch(() => ({ data: { nodes: [], datasets: [] } })),
+        permissionGroupsApi.listChats().catch(() => ({ data: [] })),
       ]);
       const folderData = folderRes?.data || {
         folders: [],

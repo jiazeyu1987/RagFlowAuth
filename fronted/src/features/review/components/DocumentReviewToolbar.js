@@ -24,6 +24,7 @@ export function DocumentReviewToolbar({
         <div style={{ display: 'flex', gap: '8px' }}>
           <button
             onClick={handleSelectAll}
+            data-testid="docs-select-all"
             disabled={documents.length === 0}
             style={{
               padding: '8px 16px',
@@ -74,6 +75,7 @@ export function DocumentReviewToolbar({
           {canDownload && (
             <button
               onClick={handleBatchDownload}
+              data-testid="docs-batch-download"
               disabled={selectedDocIds.size === 0 || batchDownloadLoading || !!batchReviewLoading}
               style={{
                 padding: '8px 16px',

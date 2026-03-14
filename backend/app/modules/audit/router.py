@@ -13,6 +13,7 @@ async def list_audit_events(
     _: AdminOnly,
     action: str | None = None,
     actor: str | None = None,
+    role: str | None = None,
     username: str | None = None,
     company_id: int | None = None,
     department_id: int | None = None,
@@ -37,6 +38,7 @@ async def list_audit_events(
         return manager.list_events(
             action=action,
             actor=actor,
+            actor_role=role,
             actor_username=username,
             company_id=company_id,
             department_id=department_id,
@@ -50,6 +52,7 @@ async def list_audit_events(
     total, rows = ctx.deps.audit_log_store.list_events(
         action=action,
         actor=actor,
+        actor_role=role,
         actor_username=username,
         company_id=company_id,
         department_id=department_id,

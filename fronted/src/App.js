@@ -22,6 +22,8 @@ const AuditLogs = lazy(() => import('./pages/AuditLogs'));
 const Tools = lazy(() => import('./pages/Tools'));
 const PatentDownload = lazy(() => import('./pages/PatentDownload'));
 const PaperDownload = lazy(() => import('./pages/PaperDownload'));
+const PaperWorkspace = lazy(() => import('./pages/PaperWorkspace'));
+const CollectionWorkbench = lazy(() => import('./pages/CollectionWorkbench'));
 const KnowledgeBases = lazy(() => import('./pages/KnowledgeBases'));
 const NasBrowser = lazy(() => import('./pages/NasBrowser'));
 const DrugAdminNavigator = lazy(() => import('./pages/DrugAdminNavigator'));
@@ -179,6 +181,26 @@ function App() {
                 <PermissionGuard>
                   <Layout>
                     <PaperDownload />
+                  </Layout>
+                </PermissionGuard>
+              }
+            />
+            <Route
+              path="/tools/paper-workspace"
+              element={
+                <PermissionGuard>
+                  <Layout>
+                    <PaperWorkspace />
+                  </Layout>
+                </PermissionGuard>
+              }
+            />
+            <Route
+              path="/tools/collection-workbench"
+              element={
+                <PermissionGuard allowedRoles={['admin']}>
+                  <Layout>
+                    <CollectionWorkbench />
                   </Layout>
                 </PermissionGuard>
               }

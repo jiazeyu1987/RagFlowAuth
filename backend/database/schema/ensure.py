@@ -33,6 +33,13 @@ from .kb_documents import ensure_kb_documents_table
 from .patent_downloads import ensure_patent_download_tables
 from .paper_downloads import ensure_paper_download_tables
 from .nas_tasks import ensure_nas_import_tasks_table
+from .unified_tasks import ensure_unified_task_tables
+from .research_security_extensions import (
+    ensure_egress_decision_audits_table,
+    ensure_egress_policy_settings_table,
+    ensure_paper_plag_tables,
+    ensure_system_feature_flags_table,
+)
 from .org_directory import (
     ensure_companies_table,
     ensure_departments_table,
@@ -83,6 +90,11 @@ def ensure_schema(db_path: str | Path) -> None:
         ensure_patent_download_tables(conn)
         ensure_paper_download_tables(conn)
         ensure_nas_import_tasks_table(conn)
+        ensure_unified_task_tables(conn)
+        ensure_paper_plag_tables(conn)
+        ensure_egress_decision_audits_table(conn)
+        ensure_egress_policy_settings_table(conn)
+        ensure_system_feature_flags_table(conn)
 
         # Permission groups (authorization model)
         ensure_permission_groups_table(conn)

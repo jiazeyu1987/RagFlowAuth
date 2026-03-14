@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any, Optional
 
 from backend.app.dependencies import AppDependencies
+from backend.services.audit_helpers import actor_fields_from_user
 
 
 class UsersRepo:
@@ -56,12 +57,31 @@ class UsersRepo:
         store = getattr(self._deps, "auth_session_store", None)
         if not store:
             return []
-        return store.enforce_user_session_limit(
+        revoked_ids = store.enforce_user_session_limit(
             user_id=user_id,
             max_sessions=max_sessions,
             reserve_slots=0,
             reason="policy_limit_updated",
         )
+        if revoked_ids:
+            audit = getattr(self._deps, "audit_log_store", None)
+            if audit:
+                try:
+                    actor_user = self._deps.user_store.get_by_user_id(user_id)
+                    audit.log_event(
+                        action="auth_session_kick",
+                        actor=user_id,
+                        source="auth",
+                        meta={
+                            "reason": "policy_limit_updated",
+                            "kicked_count": len(revoked_ids),
+                            "kicked_session_ids": list(revoked_ids)[:20],
+                        },
+                        **(actor_fields_from_user(self._deps, actor_user) if actor_user else {}),
+                    )
+                except Exception:
+                    pass
+        return list(revoked_ids or [])
 
     def get_login_session_summary(
         self,

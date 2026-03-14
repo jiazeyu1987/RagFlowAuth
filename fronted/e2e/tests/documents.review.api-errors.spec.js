@@ -93,7 +93,7 @@ adminTest('documents empty pending list shows empty state (mock) @regression @do
 });
 
 adminTest('documents approve 403 shows error and keeps row (mock) @regression @documents', async ({ page }) => {
-  const filename = `e2e_pending_${Date.now()}.txt`;
+  const filename = 'e2e_pending_short.txt';
   const docs = [{ doc_id: 'd1', filename, status: 'pending', kb_id: 'kb1', uploaded_at_ms: Date.now() }];
 
   await page.route('**/api/datasets', async (route) => {
@@ -127,11 +127,11 @@ adminTest('documents approve 403 shows error and keeps row (mock) @regression @d
   });
 
   await page.goto('/documents');
-  await expect(page.locator('tr', { hasText: filename })).toBeVisible();
+  await expect(page.getByTestId('docs-approve-d1')).toBeVisible();
 
   page.once('dialog', async (dialog) => dialog.accept());
   await page.getByTestId('docs-approve-d1').click();
 
   await expectErrorVisible(page, 'forbidden');
-  await expect(page.locator('tr', { hasText: filename })).toBeVisible();
+  await expect(page.getByTestId('docs-approve-d1')).toBeVisible();
 });

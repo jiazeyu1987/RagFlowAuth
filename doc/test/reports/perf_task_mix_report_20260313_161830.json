@@ -1,0 +1,39 @@
+{
+  "generated_at": "2026-03-13 16:18:30",
+  "config": {
+    "duration_s": 6.0,
+    "read_concurrency": 16,
+    "write_qps": 20.0,
+    "nas_tasks": 80,
+    "backup_tasks": 40,
+    "seed": 20260313,
+    "max_p95_degradation_pct": 20.0
+  },
+  "baseline": {
+    "requests": 6900,
+    "errors": 0,
+    "error_rate": 0.0,
+    "avg_ms": 13.959,
+    "p50_ms": 2.31,
+    "p90_ms": 43.697,
+    "p95_ms": 60.625,
+    "p99_ms": 108.355,
+    "max_ms": 232.67,
+    "rps": 1134.432
+  },
+  "mixed": {
+    "requests": 5587,
+    "errors": 0,
+    "error_rate": 0.0,
+    "avg_ms": 17.244,
+    "p50_ms": 2.382,
+    "p90_ms": 60.471,
+    "p95_ms": 78.415,
+    "p99_ms": 126.632,
+    "max_ms": 267.425,
+    "rps": 918.746
+  },
+  "p95_degradation_pct": 29.344249,
+  "threshold_pct": 20.0,
+  "verdict": "FAIL"
+}

@@ -3,6 +3,67 @@ const { expect } = require('@playwright/test');
 const { adminTest } = require('../helpers/auth');
 
 adminTest('tools navigation: key cards route to target pages @regression @tools', async ({ page }) => {
+  await page.route('**/api/security/feature-flags', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        paper_plag_enabled: true,
+        egress_policy_enabled: true,
+        research_ui_layout_enabled: true,
+      }),
+    });
+  });
+
+  await page.route('**/api/tasks/metrics**', async (route) => {
+    const requestUrl = new URL(route.request().url());
+    if (requestUrl.searchParams.get('kind') !== 'collection') return route.fallback();
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        task_kind: 'collection',
+        total_tasks: 1,
+        failed_tasks: 0,
+        backlog_tasks: 1,
+        failure_rate: 0,
+        status_counts: { running: 1, completed: 0, failed: 0 },
+      }),
+    });
+  });
+
+  await page.route('**/api/tasks**', async (route) => {
+    const requestUrl = new URL(route.request().url());
+    if (requestUrl.pathname !== '/api/tasks') return route.fallback();
+    if (requestUrl.searchParams.get('kind') !== 'collection') return route.fallback();
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        task_kind: 'collection',
+        total_tasks: 1,
+        status_filter: [],
+        tasks: [
+          {
+            task_id: 'paper_nav_1',
+            task_kind: 'paper_download',
+            status: 'running',
+            progress_percent: 20,
+            total_items: 10,
+            downloaded_items: 2,
+            failed_items: 0,
+            can_cancel: true,
+            can_pause: false,
+            can_resume: false,
+            can_retry: false,
+            created_at_ms: 1700000000000,
+            updated_at_ms: 1700000001000,
+          },
+        ],
+      }),
+    });
+  });
+
   await page.route('**/api/nas/files**', async (route) => {
     if (route.request().method() !== 'GET') return route.fallback();
     await route.fulfill({
@@ -51,6 +112,7 @@ adminTest('tools navigation: key cards route to target pages @regression @tools'
   await expect(page.getByTestId('tool-card-paper_download')).toBeVisible();
   await expect(page.getByTestId('tool-card-patent_download')).toBeVisible();
   await expect(page.getByTestId('tool-card-nas_browser')).toBeVisible();
+  await expect(page.getByTestId('tool-card-collection_workbench')).toBeVisible();
   await expect(page.getByTestId('tool-card-drug_admin')).toBeVisible();
   await expect(page.getByTestId('tool-card-nmpa')).toBeVisible();
 
@@ -67,6 +129,11 @@ adminTest('tools navigation: key cards route to target pages @regression @tools'
   await page.getByTestId('tool-card-nas_browser').click();
   await expect(page).toHaveURL(/\/tools\/nas-browser$/);
   await expect(page.getByTestId('nas-browser-page')).toBeVisible();
+
+  await page.goto('/tools');
+  await page.getByTestId('tool-card-collection_workbench').click();
+  await expect(page).toHaveURL(/\/tools\/collection-workbench$/);
+  await expect(page.getByTestId('collection-workbench-page')).toBeVisible();
 
   await page.goto('/tools');
   await page.getByTestId('tool-card-drug_admin').click();

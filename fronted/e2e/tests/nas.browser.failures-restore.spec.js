@@ -41,7 +41,7 @@ adminTest('nas folder import failed status shows error @regression @tools @nas',
     });
   });
 
-  await page.route('**/api/nas/import-folder/task_fail_1', async (route) => {
+  await page.route('**/api/tasks/task_fail_1**', async (route) => {
     if (route.request().method() !== 'GET') return route.fallback();
     await route.fulfill({
       status: 200,
@@ -66,7 +66,7 @@ adminTest('nas folder import failed status shows error @regression @tools @nas',
 
   await page.getByTestId('nas-import-btn-folder_fail').click();
   await Promise.all([
-    page.waitForResponse((resp) => new URL(resp.url()).pathname === '/api/nas/import-folder/task_fail_1' && resp.request().method() === 'GET'),
+    page.waitForResponse((resp) => new URL(resp.url()).pathname === '/api/tasks/task_fail_1' && resp.request().method() === 'GET'),
     page.getByTestId('nas-import-confirm').click(),
   ]);
 
@@ -125,7 +125,7 @@ adminTest('nas restore running task from localStorage and clear after completed 
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ current_path: '', parent_path: null, items: [] }) });
   });
 
-  await page.route('**/api/nas/import-folder/task_restore_1', async (route) => {
+  await page.route('**/api/tasks/task_restore_1**', async (route) => {
     if (route.request().method() !== 'GET') return route.fallback();
     pollCount += 1;
 

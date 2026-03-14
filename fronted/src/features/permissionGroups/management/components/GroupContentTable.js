@@ -66,6 +66,7 @@ export default function GroupContentTable({
                   <>
                     <button
                       type="button"
+                      data-testid={`pg-edit-${String(row.id)}`}
                       onClick={(event) => {
                         event.stopPropagation();
                         const group = groups.find((item) => item.group_id === row.id);
@@ -86,6 +87,7 @@ export default function GroupContentTable({
                     </button>
                     <button
                       type="button"
+                      data-testid={`pg-delete-${String(row.id)}`}
                       onClick={(event) => {
                         event.stopPropagation();
                         const group = groups.find((item) => item.group_id === row.id);

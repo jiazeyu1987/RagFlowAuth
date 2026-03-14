@@ -9,10 +9,12 @@ from pydantic import BaseModel, ValidationError
 from backend.app.core.authz import AuthContextDep
 from backend.app.core.pydantic_compat import model_dump, model_validate
 from backend.app.core.permission_resolver import ResourceScope, normalize_accessible_chat_ids
+from backend.services.permission_decision_service import PermissionDecisionError, PermissionDecisionService
 
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+permission_decider = PermissionDecisionService()
 
 
 class SearchConfigBody(BaseModel):
@@ -24,19 +26,17 @@ class SearchConfigBody(BaseModel):
 
 
 def _assert_admin(ctx: AuthContextDep) -> None:
-    if not ctx.snapshot.is_admin:
-        raise HTTPException(status_code=403, detail="admin_required")
+    try:
+        permission_decider.ensure_admin(ctx.snapshot)
+    except PermissionDecisionError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.reason) from exc
 
 
 def _assert_agent_access(ctx: AuthContextDep, agent_id: str) -> None:
-    snapshot = ctx.snapshot
-    if snapshot.chat_scope == ResourceScope.ALL:
-        return
-    if snapshot.chat_scope == ResourceScope.NONE:
-        raise HTTPException(status_code=403, detail="no_chat_permission")
-    allowed_raw_ids = normalize_accessible_chat_ids(snapshot.chat_ids)
-    if agent_id not in allowed_raw_ids:
-        raise HTTPException(status_code=403, detail="no_chat_permission")
+    try:
+        permission_decider.ensure_chat_access(ctx.snapshot, agent_id)
+    except PermissionDecisionError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.reason) from exc
 
 
 @router.get("/search/configs")

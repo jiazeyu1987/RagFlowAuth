@@ -46,10 +46,10 @@ test('permission groups create -> edit -> delete (real backend) @integration', a
     await expect(page.getByTestId('pg-form-can-review')).toBeChecked();
     await page.getByTestId('pg-form-cancel').click();
 
-    await page.getByTestId(`pg-delete-${groupId}`).click();
+    page.once('dialog', (dialog) => dialog.accept());
     await Promise.all([
       page.waitForResponse((r) => r.url().includes(`/api/permission-groups/${groupId}`) && r.request().method() === 'DELETE'),
-      page.getByTestId('pg-delete-confirm').click(),
+      page.getByTestId(`pg-delete-${groupId}`).click(),
     ]);
 
     await expect(page.getByText(groupName)).toHaveCount(0);

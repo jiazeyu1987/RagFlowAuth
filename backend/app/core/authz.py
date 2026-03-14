@@ -8,8 +8,12 @@ from fastapi import Depends, HTTPException
 import sqlite3
 
 from backend.app.core.auth import get_current_payload, get_deps
-from backend.app.core.permission_resolver import PermissionSnapshot, resolve_permissions
+from backend.app.core.permission_resolver import PermissionSnapshot
 from backend.app.dependencies import AppDependencies
+from backend.services.permission_decision_service import PermissionDecisionError, PermissionDecisionService
+
+
+permission_decider = PermissionDecisionService()
 
 
 @dataclass(frozen=True)
@@ -32,7 +36,7 @@ def get_auth_context(
     if not user:
         # Treat missing user for an authenticated token as unauthorized.
         raise HTTPException(status_code=401, detail="用户不存在")
-    snapshot = resolve_permissions(deps, user)
+    snapshot = permission_decider.resolve_snapshot(deps, user)
     return AuthContext(deps=deps, payload=payload, user=user, snapshot=snapshot)
 
 
@@ -42,8 +46,10 @@ AuthContextDep = Annotated[AuthContext, Depends(get_auth_context)]
 def admin_only(
     ctx: AuthContextDep,
 ) -> TokenPayload:
-    if not ctx.snapshot.is_admin:
-        raise HTTPException(status_code=403, detail="admin_required")
+    try:
+        permission_decider.ensure_admin(ctx.snapshot)
+    except PermissionDecisionError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.reason) from exc
     return ctx.payload
 
 

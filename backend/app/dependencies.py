@@ -15,6 +15,7 @@ from backend.services.permission_group_store import PermissionGroupStore
 from backend.services.permission_group_folder_store import PermissionGroupFolderManager, PermissionGroupFolderStore
 from backend.services.patent_download.store import PatentDownloadStore
 from backend.services.paper_download.store import PaperDownloadStore
+from backend.services.paper_plag_store import PaperPlagStore
 from backend.services.ragflow_connection import create_ragflow_connection
 from backend.services.ragflow_chat_service import RagflowChatService
 from backend.services.ragflow_service import RagflowService
@@ -50,6 +51,7 @@ class AppDependencies:
     upload_settings_store: UploadSettingsStore
     patent_download_store: PatentDownloadStore
     paper_download_store: PaperDownloadStore
+    paper_plag_store: PaperPlagStore
     knowledge_directory_store: KnowledgeDirectoryStore
     knowledge_directory_manager: KnowledgeTreeManager
     knowledge_tree_manager: KnowledgeTreeManager
@@ -101,6 +103,7 @@ def create_dependencies(db_path: str | None = None) -> AppDependencies:
         upload_settings_store=UploadSettingsStore(db_path=str(db_path)),
         patent_download_store=PatentDownloadStore(db_path=str(db_path)),
         paper_download_store=PaperDownloadStore(db_path=str(db_path)),
+        paper_plag_store=PaperPlagStore(db_path=str(db_path)),
         knowledge_directory_store=knowledge_directory_store,
         knowledge_directory_manager=knowledge_directory_manager,
         knowledge_tree_manager=knowledge_tree_manager,

@@ -58,10 +58,18 @@ export function useDocumentReviewActions({
     );
     if (!ok) return;
 
+    const overwriteReason = window.prompt('请输入覆盖原因');
+    if (overwriteReason === null) return;
+    const normalizedReason = String(overwriteReason || '').trim();
+    if (!normalizedReason) {
+      setError('覆盖原因不能为空');
+      return;
+    }
+
     setActionLoading(newDocId);
     setError(null);
     try {
-      await reviewApi.approveOverwrite(newDocId, oldDoc.doc_id);
+      await reviewApi.approveOverwrite(newDocId, oldDoc.doc_id, normalizedReason);
       setOverwritePrompt(null);
       await refreshDocuments();
     } catch (err) {
@@ -74,13 +82,16 @@ export function useDocumentReviewActions({
   const handleOverwriteKeepOld = useCallback(async () => {
     if (!overwritePrompt) return;
     const { newDocId, oldDoc } = overwritePrompt;
-    const ok = window.confirm(`确定保留旧文档 ${oldDoc.filename} 并驳回新文档吗？`);
+    const ok = window.confirm(`确定保留旧文档 ${oldDoc.filename} 并跳过新文档吗？`);
     if (!ok) return;
+
+    const skipReason = window.prompt('请输入跳过原因（可选）');
+    if (skipReason === null) return;
 
     setActionLoading(newDocId);
     setError(null);
     try {
-      await reviewApi.reject(newDocId, '存在重名旧文档，保留旧版本');
+      await reviewApi.resolveConflictSkip(newDocId, String(skipReason || '').trim() || null);
       setOverwritePrompt(null);
       await refreshDocuments();
     } catch (err) {
@@ -89,6 +100,34 @@ export function useDocumentReviewActions({
       setActionLoading(null);
     }
   }, [overwritePrompt, refreshDocuments, setError]);
+
+  const handleOverwriteRename = useCallback(async () => {
+    if (!overwritePrompt) return;
+    const { newDocId } = overwritePrompt;
+    const currentFilename = String(activeDocMap.get(newDocId)?.filename || '').trim();
+    const renamed = window.prompt('请输入新的文件名', currentFilename);
+    if (renamed === null) return;
+    const normalizedFilename = String(renamed || '').trim();
+    if (!normalizedFilename) {
+      setError('文件名不能为空');
+      return;
+    }
+
+    const renameReason = window.prompt('请输入重命名原因（可选）');
+    if (renameReason === null) return;
+
+    setActionLoading(newDocId);
+    setError(null);
+    try {
+      await reviewApi.resolveConflictRename(newDocId, normalizedFilename, String(renameReason || '').trim() || null);
+      setOverwritePrompt(null);
+      await refreshDocuments();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setActionLoading(null);
+    }
+  }, [activeDocMap, overwritePrompt, refreshDocuments, setError]);
 
   const handleReject = useCallback(async (docId) => {
     const notes = window.prompt('请输入驳回原因');
@@ -270,6 +309,7 @@ export function useDocumentReviewActions({
     handleDelete,
     handleDownload,
     handleOverwriteKeepOld,
+    handleOverwriteRename,
     handleOverwriteUseNew,
     handleReject,
     handleSelectAll,

@@ -1,4 +1,4 @@
-// @ts-check
+﻿// @ts-check
 const { expect } = require('@playwright/test');
 const { adminTest } = require('../helpers/auth');
 
@@ -47,7 +47,7 @@ adminTest('documents conflict diff rejects unsupported types (mock) @regression 
   await page.getByTestId('docs-approve-new_1').click();
   await expect(page.getByTestId('docs-overwrite-modal')).toBeVisible();
 
-  await page.getByRole('button', { name: '对比差异' }).click();
-  await expectErrorVisible(page, '对比功能仅支持');
+  await page.getByTestId('docs-overwrite-diff').click();
+  await expectErrorVisible(page, /md\/txt\/ini\/log/);
 });
 

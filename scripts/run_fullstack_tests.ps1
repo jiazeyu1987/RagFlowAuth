@@ -6,6 +6,10 @@ param(
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+# In PowerShell 7+, keep native-command stderr as stream output instead of terminating errors.
+if ($PSVersionTable.PSVersion.Major -ge 7) {
+  $PSNativeCommandUseErrorActionPreference = $false
+}
 
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $timestamp = Get-Date -Format 'yyyyMMdd_HHmmss'
@@ -30,16 +34,17 @@ function Invoke-TestCommand {
   Push-Location $WorkDir
   try {
     $global:LASTEXITCODE = 0
-    $rawLines = & ([scriptblock]::Create($Command)) 2>&1
-    $cmdOk = $?
-    if ($cmdOk) {
-      $exitCode = [int]$global:LASTEXITCODE
-    } else {
-      if ($null -ne $global:LASTEXITCODE -and [int]$global:LASTEXITCODE -ne 0) {
+    $previousErrorActionPreference = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+      $rawLines = & ([scriptblock]::Create($Command)) 2>&1
+      if ($null -ne $global:LASTEXITCODE) {
         $exitCode = [int]$global:LASTEXITCODE
       } else {
-        $exitCode = 1
+        $exitCode = if ($?) { 0 } else { 1 }
       }
+    } finally {
+      $ErrorActionPreference = $previousErrorActionPreference
     }
   } catch {
     $rawLines = @($_.Exception.Message)

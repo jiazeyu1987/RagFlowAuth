@@ -20,5 +20,15 @@ export const dataSecurityApi = {
   listJobs: async (limit = 30) =>
     httpClient.requestJson(`/api/admin/data-security/backup/jobs?limit=${encodeURIComponent(limit)}`),
   getJob: async (jobId) => httpClient.requestJson(`/api/admin/data-security/backup/jobs/${jobId}`),
+  getFeatureFlags: async () => httpClient.requestJson('/api/admin/security/feature-flags'),
+  updateFeatureFlags: async (payload) =>
+    httpClient.requestJson('/api/admin/security/feature-flags', {
+      method: 'PUT',
+      body: JSON.stringify(payload || {}),
+    }),
+  rollbackDisableFeatureFlags: async () =>
+    httpClient.requestJson('/api/admin/security/feature-flags/rollback-disable', {
+      method: 'POST',
+      body: JSON.stringify({}),
+    }),
 };
-

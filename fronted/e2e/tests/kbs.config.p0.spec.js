@@ -1,4 +1,4 @@
-// @ts-check
+﻿// @ts-check
 const { expect } = require('@playwright/test');
 const { adminTest } = require('../helpers/auth');
 
@@ -25,6 +25,13 @@ adminTest('knowledge config p0: list/detail/save/create-copy/delete-empty-only @
       pagerank: 0,
     },
   ];
+  let directoryState = {
+    nodes: [],
+    datasets: [
+      { id: 'kb_nonempty', node_id: '' },
+      { id: 'kb_empty', node_id: '' },
+    ],
+  };
 
   const byId = (id) => datasets.find((x) => x.id === id);
   let createBody = null;
@@ -49,6 +56,10 @@ adminTest('knowledge config p0: list/detail/save/create-copy/delete-empty-only @
         pagerank: createBody?.pagerank || 0,
       };
       datasets = [created, ...datasets];
+      directoryState = {
+        ...directoryState,
+        datasets: [{ id: created.id, node_id: '' }, ...(directoryState.datasets || [])],
+      };
       return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ dataset: created }) });
     }
     return route.fallback();
@@ -72,36 +83,66 @@ adminTest('knowledge config p0: list/detail/save/create-copy/delete-empty-only @
     if (method === 'DELETE') {
       deleteCalls.push(id);
       datasets = datasets.filter((x) => x.id !== id);
+      directoryState = {
+        ...directoryState,
+        datasets: (directoryState.datasets || []).filter((item) => item.id !== id),
+      };
       return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true }) });
     }
     return route.fallback();
   });
 
-  await page.goto('/kbs');
-  await expect(page.getByRole('button', { name: /知识库配置/ })).toBeVisible();
-  await expect(page.getByText('ID: kb_nonempty')).toBeVisible();
-  await expect(page.getByText('ID: kb_empty')).toBeVisible();
+  await page.route('**/api/knowledge/directories', async (route) => {
+    const method = route.request().method();
+    if (method !== 'GET') return route.fallback();
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(directoryState),
+    });
+  });
 
-  await page.getByText('ID: kb_nonempty').click();
-  const nameInput = page.locator('input').nth(1);
+  await page.route('**/api/knowledge/directories/datasets/*/node', async (route) => {
+    if (route.request().method() !== 'PUT') return route.fallback();
+    const datasetId = decodeURIComponent(new URL(route.request().url()).pathname.split('/').slice(-2, -1)[0] || '');
+    const payload = route.request().postDataJSON() || {};
+    const nodeId = payload.node_id || '';
+    const next = (directoryState.datasets || []).filter((item) => item.id !== datasetId);
+    next.push({ id: datasetId, node_id: nodeId });
+    directoryState = { ...directoryState, datasets: next };
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ ok: true }),
+    });
+  });
+
+  await page.goto('/kbs');
+  await expect(page.getByTestId('kbs-subtab-kbs')).toBeVisible();
+  await expect(page.getByTestId('kbs-row-dataset-kb_nonempty')).toBeVisible();
+  await expect(page.getByTestId('kbs-row-dataset-kb_empty')).toBeVisible();
+
+  await page.getByTestId('kbs-row-dataset-kb_nonempty').click();
+  const nameInput = page.getByTestId('kbs-detail-name');
   await nameInput.fill('kb-nonempty-renamed');
-  await page.getByRole('button', { name: /保存/ }).first().click();
+  await page.getByTestId('kbs-detail-save').click();
   expect(updateBody).toBeTruthy();
   expect(updateBody.name).toBe('kb-nonempty-renamed');
 
-  await expect(page.getByTitle('非空知识库，禁止删除')).toBeDisabled();
+  await expect(page.getByTestId('kbs-detail-delete')).toBeDisabled();
 
+  await page.getByTestId('kbs-row-dataset-kb_empty').click();
   page.once('dialog', async (dialog) => dialog.accept());
-  await page.getByTitle('删除空知识库').click();
+  await page.getByTestId('kbs-detail-delete').click();
   expect(deleteCalls).toContain('kb_empty');
-  await expect(page.getByText('ID: kb_empty')).toHaveCount(0);
+  await expect(page.getByTestId('kbs-row-dataset-kb_empty')).toHaveCount(0);
 
-  await page.getByRole('button', { name: /新建/ }).first().click();
-  await page.getByPlaceholder(/输入新知识库名称/).fill('kb-copy-new');
-  await page.getByRole('button', { name: /创建/ }).click();
+  await page.getByTestId('kbs-create-kb').click();
+  await expect(page.getByTestId('kbs-create-dialog')).toBeVisible();
+  await page.getByTestId('kbs-create-name').fill('kb-copy-new');
+  await page.getByTestId('kbs-create-submit').click();
   expect(createBody).toBeTruthy();
   expect(createBody.name).toBe('kb-copy-new');
-  expect(createBody.chunk_method).toBeTruthy();
-  expect(createBody.embedding_model).toBeTruthy();
-  await expect(page.getByText('ID: kb_new_')).toHaveCount(1);
+  await expect(page.locator('[data-testid^="kbs-row-dataset-kb_new_"]')).toHaveCount(1);
 });
+

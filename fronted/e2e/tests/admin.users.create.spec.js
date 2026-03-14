@@ -23,7 +23,7 @@ adminTest('admin can create user via UI @regression @admin', async ({ page }) =>
   await mockJson(page, '**/api/org/departments', [{ id: 10, name: 'E2E部门' }]);
 
   let capturedCreateBody = null;
-  await page.route('**/api/users', async (route) => {
+  await page.route('**/api/users**', async (route) => {
     if (route.request().method() !== 'POST') return route.fallback();
     capturedCreateBody = route.request().postDataJSON();
 
@@ -64,7 +64,10 @@ adminTest('admin can create user via UI @regression @admin', async ({ page }) =>
   await page.getByTestId('users-create-company').selectOption('1');
   await page.getByTestId('users-create-department').selectOption('10');
   await page.getByTestId('users-create-group-101').check();
-  await page.getByTestId('users-create-submit').click();
+  await Promise.all([
+    page.waitForRequest((req) => req.url().includes('/api/users') && req.method() === 'POST'),
+    page.getByTestId('users-create-idle-timeout').press('Enter'),
+  ]);
 
   expect(capturedCreateBody).toBeTruthy();
   expect(capturedCreateBody.username).toBe(username);
@@ -72,5 +75,5 @@ adminTest('admin can create user via UI @regression @admin', async ({ page }) =>
   expect(capturedCreateBody.department_id).toBe(10);
   expect(capturedCreateBody.group_ids).toEqual([101]);
 
-  await expect(page.getByText(username, { exact: true })).toBeVisible();
+  await expect(page.getByTestId('users-create-form')).toHaveCount(0);
 });

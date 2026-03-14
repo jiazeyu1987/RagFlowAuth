@@ -66,9 +66,15 @@ adminTest('admin can CRUD permission groups via UI @regression @admin', async ({
   });
 
   await mockJson(page, '**/api/permission-groups/resources/knowledge-bases', { ok: true, data: [] });
+  await mockJson(page, '**/api/permission-groups/resources/knowledge-tree', { ok: true, data: { nodes: [], datasets: [] } });
+  await mockJson(page, '**/api/permission-groups/resources/group-folders', {
+    ok: true,
+    data: { folders: [], group_bindings: {}, root_group_count: groups.length },
+  });
   await mockJson(page, '**/api/permission-groups/resources/chats', { ok: true, data: [] });
 
   await page.goto('/permission-groups');
+  await expect(page.getByTestId('pg-edit-1')).toBeVisible();
 
   await page.getByTestId('pg-create-open').click();
   await page.getByTestId('pg-form-group-name').fill('e2e_group');
@@ -79,17 +85,16 @@ adminTest('admin can CRUD permission groups via UI @regression @admin', async ({
   await page.getByTestId('pg-form-can-delete').check();
   await page.getByTestId('pg-form-submit').click();
 
-  await expect(page.getByText('e2e_group', { exact: true })).toBeVisible();
-
   const createdGroupId = groups.find((g) => g.group_name === 'e2e_group')?.group_id;
   expect(createdGroupId).toBeTruthy();
+  await expect(page.getByTestId(`pg-edit-${createdGroupId}`)).toBeVisible();
 
   await page.getByTestId(`pg-edit-${createdGroupId}`).click();
   await page.getByTestId('pg-form-description').fill('updated by e2e');
   await page.getByTestId('pg-form-submit').click();
 
+  page.once('dialog', (dialog) => dialog.accept());
   await page.getByTestId(`pg-delete-${createdGroupId}`).click();
-  await page.getByTestId('pg-delete-confirm').click();
 
-  await expect(page.getByText('e2e_group', { exact: true })).toHaveCount(0);
+  await expect(page.getByTestId(`pg-edit-${createdGroupId}`)).toHaveCount(0);
 });

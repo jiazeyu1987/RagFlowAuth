@@ -5,10 +5,16 @@ import json
 import logging
 import os
 import time
+from urllib.parse import urlparse
 from dataclasses import dataclass
 from typing import Any, Iterator
 
 import requests
+
+from backend.app.core.request_id import get_request_id
+from .egress_decision_audit_store import EgressDecisionAuditStore
+from .egress_mode_runtime import EgressModeRuntime
+from .egress_policy_engine import EgressPolicyDecision, EgressPolicyEngine
 
 
 @dataclass(frozen=True)
@@ -22,6 +28,9 @@ class RagflowHttpClient:
     def __init__(self, config: RagflowHttpClientConfig, *, logger: logging.Logger | None = None):
         self._config = config
         self._logger = logger or logging.getLogger(__name__)
+        self._egress_runtime: EgressModeRuntime | None = None
+        self._egress_policy_engine: EgressPolicyEngine | None = None
+        self._egress_audit_store: EgressDecisionAuditStore | None = None
 
     @property
     def config(self) -> RagflowHttpClientConfig:
@@ -61,8 +70,127 @@ class RagflowHttpClient:
                 pass
         return connect_timeout, read_timeout
 
+    def _runtime_guard(self) -> EgressModeRuntime:
+        if self._egress_runtime is None:
+            self._egress_runtime = EgressModeRuntime()
+        return self._egress_runtime
+
+    def _policy_engine_guard(self) -> EgressPolicyEngine:
+        if self._egress_policy_engine is None:
+            self._egress_policy_engine = EgressPolicyEngine()
+        return self._egress_policy_engine
+
+    def _audit_store_guard(self) -> EgressDecisionAuditStore:
+        if self._egress_audit_store is None:
+            self._egress_audit_store = EgressDecisionAuditStore()
+        return self._egress_audit_store
+
+    @staticmethod
+    def _extract_host(url: str) -> str:
+        try:
+            parsed = urlparse(str(url or ""))
+            return str(parsed.hostname or "").strip().lower()
+        except Exception:
+            return ""
+
+    def _audit_decision(
+        self,
+        *,
+        decision: str,
+        policy_mode: str,
+        reason: str | None,
+        target_host: str | None,
+        target_model: str | None = None,
+        payload_level: str | None = None,
+        hit_rules: list[dict[str, Any]] | None = None,
+        request_meta: dict[str, Any] | None = None,
+    ) -> None:
+        try:
+            self._audit_store_guard().log_decision(
+                request_id=get_request_id(),
+                actor_user_id="",
+                policy_mode=policy_mode,
+                decision=decision,
+                hit_rules=hit_rules or [],
+                reason=reason,
+                target_host=target_host,
+                target_model=target_model,
+                payload_level=payload_level,
+                request_meta=request_meta or {},
+            )
+        except Exception:
+            # Audit must not block primary request flow.
+            return
+
+    def _apply_outbound_policy(
+        self,
+        body: dict[str, Any] | None,
+        *,
+        operation: str,
+    ) -> tuple[dict[str, Any], EgressPolicyDecision | None]:
+        candidate = body or {}
+        if not isinstance(candidate, dict):
+            return (body if body is not None else {}), None
+        try:
+            decision = self._policy_engine_guard().evaluate_payload(candidate)
+        except Exception as exc:
+            self._logger.warning("RAGFlow %s egress policy processing failed; fallback to original payload: %s", operation, exc)
+            return candidate, None
+        if decision.masked:
+            self._logger.info(
+                "RAGFlow %s payload desensitized: level=%s hit_rule_count=%s",
+                operation,
+                decision.payload_level,
+                len(decision.hit_rules),
+            )
+        if not decision.allowed:
+            reason = str(decision.blocked_reason or "egress_blocked_by_policy")
+            self._logger.warning("RAGFlow %s blocked by egress policy engine: %s", operation, reason)
+            return candidate, decision
+        if isinstance(decision.sanitized_payload, dict):
+            return decision.sanitized_payload, decision
+        return candidate, decision
+
+    def _is_egress_blocked(self, *, url: str, operation: str) -> tuple[bool, str, str, str]:
+        try:
+            decision = self._runtime_guard().evaluate_target(
+                url,
+                source=f"ragflow_http_client:{operation}",
+            )
+        except Exception:
+            # Keep compatibility if runtime policy layer is unavailable.
+            return False, "", "unknown", self._extract_host(url)
+        if decision.allowed:
+            return False, "", decision.mode, decision.host
+        reason = str(decision.reason or "egress_blocked_by_mode")
+        self._logger.warning(
+            "RAGFlow %s blocked by egress policy: mode=%s host=%s reason=%s",
+            operation,
+            decision.mode,
+            decision.host,
+            reason,
+        )
+        return True, reason, decision.mode, decision.host
+
     def get_json(self, path: str, *, params: dict[str, Any] | None = None) -> dict[str, Any] | None:
         url = f"{self._config.base_url.rstrip('/')}{path}"
+        blocked, reason, mode, host = self._is_egress_blocked(url=url, operation="GET")
+        if blocked:
+            self._audit_decision(
+                decision="block",
+                policy_mode=mode,
+                reason=reason,
+                target_host=host,
+                request_meta={"operation": "GET", "path": path},
+            )
+            return None
+        self._audit_decision(
+            decision="allow",
+            policy_mode=mode,
+            reason=None,
+            target_host=host,
+            request_meta={"operation": "GET", "path": path},
+        )
         try:
             resp = requests.get(url, headers=self._headers(), params=params, timeout=self._timeout(None))
         except Exception as exc:
@@ -85,12 +213,45 @@ class RagflowHttpClient:
         self, path: str, *, body: dict[str, Any] | None = None, params: dict[str, Any] | None = None
     ) -> dict[str, Any] | None:
         url = f"{self._config.base_url.rstrip('/')}{path}"
+        blocked, reason, mode, host = self._is_egress_blocked(url=url, operation="POST")
+        if blocked:
+            self._audit_decision(
+                decision="block",
+                policy_mode=mode,
+                reason=reason,
+                target_host=host,
+                request_meta={"operation": "POST", "path": path},
+            )
+            return None
+        sanitized_body, policy_decision = self._apply_outbound_policy(body, operation="POST")
+        if policy_decision is not None and not policy_decision.allowed:
+            self._audit_decision(
+                decision="block",
+                policy_mode=str(policy_decision.policy_mode or mode),
+                reason=policy_decision.blocked_reason,
+                target_host=host,
+                target_model=policy_decision.target_model,
+                payload_level=policy_decision.payload_level,
+                hit_rules=policy_decision.hit_rules,
+                request_meta={"operation": "POST", "path": path},
+            )
+            return None
+        self._audit_decision(
+            decision="allow",
+            policy_mode=str((policy_decision.policy_mode if policy_decision else mode) or mode),
+            reason=None,
+            target_host=host,
+            target_model=(policy_decision.target_model if policy_decision else None),
+            payload_level=(policy_decision.payload_level if policy_decision else None),
+            hit_rules=(policy_decision.hit_rules if policy_decision else None),
+            request_meta={"operation": "POST", "path": path},
+        )
         try:
             resp = requests.post(
                 url,
                 headers=self._headers(),
                 params=params,
-                json=body or {},
+                json=sanitized_body,
                 timeout=self._timeout(None),
             )
         except Exception as exc:
@@ -125,12 +286,45 @@ class RagflowHttpClient:
         return a structured error object containing raw response text when available.
         """
         url = f"{self._config.base_url.rstrip('/')}{path}"
+        blocked, reason, mode, host = self._is_egress_blocked(url=url, operation="POST")
+        if blocked:
+            self._audit_decision(
+                decision="block",
+                policy_mode=mode,
+                reason=reason,
+                target_host=host,
+                request_meta={"operation": "POST", "path": path},
+            )
+            return {"code": 403, "message": reason}
+        sanitized_body, policy_decision = self._apply_outbound_policy(body, operation="POST")
+        if policy_decision is not None and not policy_decision.allowed:
+            self._audit_decision(
+                decision="block",
+                policy_mode=str(policy_decision.policy_mode or mode),
+                reason=policy_decision.blocked_reason,
+                target_host=host,
+                target_model=policy_decision.target_model,
+                payload_level=policy_decision.payload_level,
+                hit_rules=policy_decision.hit_rules,
+                request_meta={"operation": "POST", "path": path},
+            )
+            return {"code": 403, "message": str(policy_decision.blocked_reason or "egress_blocked_by_policy")}
+        self._audit_decision(
+            decision="allow",
+            policy_mode=str((policy_decision.policy_mode if policy_decision else mode) or mode),
+            reason=None,
+            target_host=host,
+            target_model=(policy_decision.target_model if policy_decision else None),
+            payload_level=(policy_decision.payload_level if policy_decision else None),
+            hit_rules=(policy_decision.hit_rules if policy_decision else None),
+            request_meta={"operation": "POST", "path": path},
+        )
         try:
             resp = requests.post(
                 url,
                 headers=self._headers(),
                 params=params,
-                json=body or {},
+                json=sanitized_body,
                 timeout=self._timeout(None),
             )
         except Exception as exc:
@@ -172,12 +366,45 @@ class RagflowHttpClient:
         self, path: str, *, body: dict[str, Any] | None = None, params: dict[str, Any] | None = None
     ) -> dict[str, Any] | None:
         url = f"{self._config.base_url.rstrip('/')}{path}"
+        blocked, reason, mode, host = self._is_egress_blocked(url=url, operation="PUT")
+        if blocked:
+            self._audit_decision(
+                decision="block",
+                policy_mode=mode,
+                reason=reason,
+                target_host=host,
+                request_meta={"operation": "PUT", "path": path},
+            )
+            return None
+        sanitized_body, policy_decision = self._apply_outbound_policy(body, operation="PUT")
+        if policy_decision is not None and not policy_decision.allowed:
+            self._audit_decision(
+                decision="block",
+                policy_mode=str(policy_decision.policy_mode or mode),
+                reason=policy_decision.blocked_reason,
+                target_host=host,
+                target_model=policy_decision.target_model,
+                payload_level=policy_decision.payload_level,
+                hit_rules=policy_decision.hit_rules,
+                request_meta={"operation": "PUT", "path": path},
+            )
+            return None
+        self._audit_decision(
+            decision="allow",
+            policy_mode=str((policy_decision.policy_mode if policy_decision else mode) or mode),
+            reason=None,
+            target_host=host,
+            target_model=(policy_decision.target_model if policy_decision else None),
+            payload_level=(policy_decision.payload_level if policy_decision else None),
+            hit_rules=(policy_decision.hit_rules if policy_decision else None),
+            request_meta={"operation": "PUT", "path": path},
+        )
         try:
             resp = requests.put(
                 url,
                 headers=self._headers(),
                 params=params,
-                json=body or {},
+                json=sanitized_body,
                 timeout=self._timeout(None),
             )
         except Exception as exc:
@@ -208,6 +435,23 @@ class RagflowHttpClient:
         self, path: str, *, body: dict[str, Any] | None = None, params: dict[str, Any] | None = None
     ) -> dict[str, Any] | None:
         url = f"{self._config.base_url.rstrip('/')}{path}"
+        blocked, reason, mode, host = self._is_egress_blocked(url=url, operation="DELETE")
+        if blocked:
+            self._audit_decision(
+                decision="block",
+                policy_mode=mode,
+                reason=reason,
+                target_host=host,
+                request_meta={"operation": "DELETE", "path": path},
+            )
+            return None
+        self._audit_decision(
+            decision="allow",
+            policy_mode=mode,
+            reason=None,
+            target_host=host,
+            request_meta={"operation": "DELETE", "path": path},
+        )
         try:
             kwargs: dict[str, Any] = {
                 "headers": self._headers(),
@@ -251,6 +495,41 @@ class RagflowHttpClient:
         - `data: {...json...}`
         """
         url = f"{self._config.base_url.rstrip('/')}{path}"
+        blocked, reason, mode, host = self._is_egress_blocked(url=url, operation="SSE_POST")
+        if blocked:
+            self._audit_decision(
+                decision="block",
+                policy_mode=mode,
+                reason=reason,
+                target_host=host,
+                request_meta={"operation": "SSE_POST", "path": path},
+            )
+            yield {"code": 403, "message": reason}
+            return
+        sanitized_body, policy_decision = self._apply_outbound_policy(body, operation="SSE_POST")
+        if policy_decision is not None and not policy_decision.allowed:
+            self._audit_decision(
+                decision="block",
+                policy_mode=str(policy_decision.policy_mode or mode),
+                reason=policy_decision.blocked_reason,
+                target_host=host,
+                target_model=policy_decision.target_model,
+                payload_level=policy_decision.payload_level,
+                hit_rules=policy_decision.hit_rules,
+                request_meta={"operation": "SSE_POST", "path": path},
+            )
+            yield {"code": 403, "message": str(policy_decision.blocked_reason or "egress_blocked_by_policy")}
+            return
+        self._audit_decision(
+            decision="allow",
+            policy_mode=str((policy_decision.policy_mode if policy_decision else mode) or mode),
+            reason=None,
+            target_host=host,
+            target_model=(policy_decision.target_model if policy_decision else None),
+            payload_level=(policy_decision.payload_level if policy_decision else None),
+            hit_rules=(policy_decision.hit_rules if policy_decision else None),
+            request_meta={"operation": "SSE_POST", "path": path},
+        )
         trace = str(trace_id or "-").strip() or "-"
         debug_sse = str(os.getenv("RAGFLOWAUTH_DEBUG_SSE", "0")).strip() == "1"
         stream_started_at = time.perf_counter()
@@ -286,7 +565,7 @@ class RagflowHttpClient:
                 url,
                 headers=self._headers(),
                 params=params,
-                json=body or {},
+                json=sanitized_body,
                 stream=True,
                 timeout=(connect_timeout, read_timeout),
             )

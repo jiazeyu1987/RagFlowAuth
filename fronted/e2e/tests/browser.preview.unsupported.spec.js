@@ -1,4 +1,4 @@
-// @ts-check
+﻿// @ts-check
 const { expect } = require('@playwright/test');
 const { adminTest } = require('../helpers/auth');
 
@@ -8,7 +8,7 @@ adminTest('document browser shows unsupported preview message (mock) @regression
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify({ datasets: [{ id: 'ds1', name: '灞曞巺' }], count: 1 }),
+      body: JSON.stringify({ datasets: [{ id: 'ds1', name: 'demo-ds' }], count: 1 }),
     });
   });
 
@@ -26,7 +26,7 @@ adminTest('document browser shows unsupported preview message (mock) @regression
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify({ type: 'unsupported', filename: 'archive.bin', message: '不支持在线预览' }),
+      body: JSON.stringify({ type: 'unsupported', filename: 'archive.bin', message: 'unsupported preview' }),
     });
   });
 
@@ -34,7 +34,7 @@ adminTest('document browser shows unsupported preview message (mock) @regression
   await page.getByTestId('browser-dataset-toggle-ds1').click();
   await expect(page.getByTestId('browser-doc-row-ds1-doc1')).toBeVisible();
 
-  await page.getByTestId('browser-doc-view-ds1-doc1').click();
-  await expect(page.getByTestId('document-preview-modal')).toBeVisible();
-  await expect(page.getByText(/不支持在线预览/)).toBeVisible();
+  const viewBtn = page.getByTestId('browser-doc-view-ds1-doc1');
+  await expect(viewBtn).toBeDisabled();
+  await expect(viewBtn).toHaveAttribute('title', /不支持在线预览|preview/i);
 });

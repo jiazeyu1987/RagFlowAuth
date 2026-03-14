@@ -4,6 +4,7 @@ import documentClient, { DOCUMENT_SOURCE } from '../../../shared/documents/docum
 export function DocumentReviewOverwriteModal({
   activeDocMap,
   handleOverwriteKeepOld,
+  handleOverwriteRename,
   handleOverwriteUseNew,
   openDiff,
   openLocalPreview,
@@ -31,7 +32,7 @@ export function DocumentReviewOverwriteModal({
     >
       <div
         style={{
-          width: 'min(820px, 100%)',
+          width: 'min(860px, 100%)',
           background: 'white',
           borderRadius: '12px',
           border: '1px solid #e5e7eb',
@@ -137,6 +138,7 @@ export function DocumentReviewOverwriteModal({
         <div style={{ marginTop: '14px', display: 'flex', justifyContent: 'space-between', gap: '10px', alignItems: 'center' }}>
           <button
             type="button"
+            data-testid="docs-overwrite-diff"
             onClick={() =>
               openDiff(
                 overwritePrompt.oldDoc.doc_id,
@@ -168,7 +170,22 @@ export function DocumentReviewOverwriteModal({
                 cursor: 'pointer',
               }}
             >
-              保留旧文档并驳回新文档
+              保留旧文档并跳过新文档
+            </button>
+            <button
+              type="button"
+              onClick={handleOverwriteRename}
+              data-testid="docs-overwrite-rename"
+              style={{
+                padding: '10px 12px',
+                borderRadius: '8px',
+                border: '1px solid #d1d5db',
+                background: '#eff6ff',
+                color: '#1d4ed8',
+                cursor: 'pointer',
+              }}
+            >
+              重命名后通过
             </button>
             <button
               type="button"

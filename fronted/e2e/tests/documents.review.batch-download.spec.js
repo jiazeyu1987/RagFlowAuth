@@ -1,4 +1,4 @@
-// @ts-check
+﻿// @ts-check
 const { expect } = require('@playwright/test');
 const { adminTest } = require('../helpers/auth');
 
@@ -38,8 +38,8 @@ adminTest('documents supports select-all and batch download (mock) @regression @
   await page.goto('/documents');
   await expect(page.locator('tr', { hasText: 'a.txt' })).toBeVisible();
 
-  await page.getByRole('button', { name: /全选|取消全选/ }).click();
-  await page.getByRole('button', { name: /下载选中/ }).click();
+  await page.getByTestId('docs-select-all').click();
+  await page.getByTestId('docs-batch-download').click();
 
   expect(capturedBody).toBeTruthy();
   expect(Array.isArray(capturedBody.doc_ids)).toBe(true);

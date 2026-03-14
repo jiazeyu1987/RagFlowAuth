@@ -33,8 +33,21 @@ export const permissionGroupsApi = {
       authBackendUrl('/api/permission-groups/resources/knowledge-tree'),
       { method: 'GET' }
     );
-    if (!response.ok) throw new Error(await parseError(response, 'Failed to load knowledge tree'));
-    return response.json();
+    if (response.ok) {
+      return response.json();
+    }
+
+    // Backward compatibility for environments that only expose knowledge-bases.
+    const fallback = await authClient.fetchWithAuth(
+      authBackendUrl('/api/permission-groups/resources/knowledge-bases'),
+      { method: 'GET' }
+    );
+    if (!fallback.ok) {
+      throw new Error(await parseError(response, 'Failed to load knowledge tree'));
+    }
+    const data = await fallback.json();
+    const datasets = Array.isArray(data?.data) ? data.data : [];
+    return { ok: true, data: { nodes: [], datasets } };
   },
 
   async listGroupFolders() {

@@ -3,6 +3,7 @@ import time
 import unittest
 
 from backend.database.schema.ensure import ensure_schema
+from backend.database.sqlite import connect_sqlite
 from backend.services.audit_log_store import AuditLogStore
 from backend.tests._util_tempdir import cleanup_dir, make_temp_dir
 
@@ -62,6 +63,28 @@ class TestAuditLogStoreUnit(unittest.TestCase):
             total4, rows4 = store.list_events(from_ms=t0, to_ms=t1)
             self.assertGreaterEqual(total4, 1)
             self.assertTrue(all(r.created_at_ms >= t0 for r in rows4))
+
+            now_ms = int(time.time() * 1000)
+            conn = connect_sqlite(db_path)
+            try:
+                conn.execute(
+                    """
+                    INSERT INTO users (
+                        user_id, username, password_hash, role, status, created_at_ms
+                    ) VALUES (?, ?, ?, ?, ?, ?)
+                    """,
+                    ("u1", "alice", "x", "admin", "active", now_ms),
+                )
+                conn.commit()
+            finally:
+                conn.close()
+
+            total5, rows5 = store.list_events(actor_role="admin")
+            self.assertEqual(total5, 2)
+            self.assertEqual(len(rows5), 2)
+
+            total6, rows6 = store.list_events(actor_role="viewer")
+            self.assertEqual(total6, 0)
+            self.assertEqual(len(rows6), 0)
         finally:
             cleanup_dir(td)
-

@@ -9,13 +9,15 @@ from pydantic import BaseModel, Field, ValidationError
 from backend.app.core.authz import AuthContextDep
 from backend.app.core.datasets import list_accessible_datasets
 from backend.app.core.permdbg import permdbg
-from backend.app.core.permission_resolver import allowed_dataset_ids, assert_kb_allowed
+from backend.app.core.permission_resolver import allowed_dataset_ids
 from backend.app.core.pydantic_compat import model_dump, model_validate
 from backend.services.audit_helpers import actor_fields_from_ctx
+from backend.services.permission_decision_service import PermissionDecisionError, PermissionDecisionService
 
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+permission_decider = PermissionDecisionService()
 
 
 class SearchRequest(BaseModel):
@@ -41,6 +43,24 @@ class DatasetUpdateBody(BaseModel):
 
     class Config:
         extra = "allow"
+
+
+def _raise_permission_http_error(exc: PermissionDecisionError) -> None:
+    raise HTTPException(status_code=exc.status_code, detail=exc.reason) from exc
+
+
+def _ensure_admin(ctx: AuthContextDep) -> None:
+    try:
+        permission_decider.ensure_admin(ctx.snapshot)
+    except PermissionDecisionError as exc:
+        _raise_permission_http_error(exc)
+
+
+def _ensure_kb_access(ctx: AuthContextDep, kb_ref: str | list[str] | tuple[str, ...]) -> None:
+    try:
+        permission_decider.ensure_kb_access(ctx.snapshot, kb_ref)
+    except PermissionDecisionError as exc:
+        _raise_permission_http_error(exc)
 
 
 @router.post("/search")
@@ -130,9 +150,8 @@ async def get_dataset_detail(
     ctx: AuthContextDep,
 ):
     deps = ctx.deps
-    snapshot = ctx.snapshot
 
-    assert_kb_allowed(snapshot, dataset_ref)
+    _ensure_kb_access(ctx, dataset_ref)
 
     detail = None
     try:
@@ -154,12 +173,10 @@ async def update_dataset_detail(
     updates: object = Body(...),
 ):
     deps = ctx.deps
-    snapshot = ctx.snapshot
 
-    if not snapshot.is_admin:
-        raise HTTPException(status_code=403, detail="admin_required")
+    _ensure_admin(ctx)
 
-    assert_kb_allowed(snapshot, dataset_ref)
+    _ensure_kb_access(ctx, dataset_ref)
 
     if not isinstance(updates, dict):
         raise HTTPException(status_code=400, detail="invalid_updates")
@@ -207,10 +224,8 @@ async def create_dataset(
     body: object = Body(...),
 ):
     deps = ctx.deps
-    snapshot = ctx.snapshot
 
-    if not snapshot.is_admin:
-        raise HTTPException(status_code=403, detail="admin_required")
+    _ensure_admin(ctx)
 
     if not isinstance(body, dict):
         raise HTTPException(status_code=400, detail="invalid_body")
@@ -263,12 +278,10 @@ async def delete_dataset(
     ctx: AuthContextDep,
 ):
     deps = ctx.deps
-    snapshot = ctx.snapshot
 
-    if not snapshot.is_admin:
-        raise HTTPException(status_code=403, detail="admin_required")
+    _ensure_admin(ctx)
 
-    assert_kb_allowed(snapshot, dataset_ref)
+    _ensure_kb_access(ctx, dataset_ref)
 
     try:
         deps.ragflow_service.delete_dataset_if_empty(dataset_ref)

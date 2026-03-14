@@ -14,6 +14,7 @@ class NasImportTask:
     task_id: str
     folder_path: str
     kb_ref: str
+    created_by_user_id: str
     total_files: int
     processed_files: int
     imported_count: int
@@ -26,6 +27,7 @@ class NasImportTask:
     skipped: list[dict[str, Any]]
     failed: list[dict[str, Any]]
     pending_files: list[str]
+    priority: int
     retry_count: int
     cancel_requested_at_ms: int | None
     created_at_ms: int
@@ -36,6 +38,7 @@ class NasImportTask:
             "task_id": self.task_id,
             "folder_path": self.folder_path,
             "kb_ref": self.kb_ref,
+            "created_by_user_id": self.created_by_user_id,
             "total_files": self.total_files,
             "processed_files": self.processed_files,
             "imported_count": self.imported_count,
@@ -48,6 +51,7 @@ class NasImportTask:
             "skipped": self.skipped,
             "failed": self.failed,
             "pending_files": self.pending_files,
+            "priority": self.priority,
             "retry_count": self.retry_count,
             "cancel_requested_at_ms": self.cancel_requested_at_ms,
             "created_at_ms": self.created_at_ms,
@@ -118,6 +122,7 @@ class NasTaskStore:
             task_id=str(row["task_id"]),
             folder_path=str(row["folder_path"] or ""),
             kb_ref=str(row["kb_ref"] or ""),
+            created_by_user_id=str(row["created_by_user_id"] or ""),
             total_files=int(row["total_files"] or 0),
             processed_files=int(row["processed_files"] or 0),
             imported_count=int(row["imported_count"] or 0),
@@ -130,6 +135,7 @@ class NasTaskStore:
             skipped=cls._decode_json(row["skipped_json"]),
             failed=cls._decode_json(row["failed_json"]),
             pending_files=cls._decode_path_list(row["pending_files_json"]),
+            priority=int(row["priority"] or 100),
             retry_count=int(row["retry_count"] or 0),
             cancel_requested_at_ms=(
                 int(row["cancel_requested_at_ms"]) if row["cancel_requested_at_ms"] is not None else None
@@ -144,6 +150,7 @@ class NasTaskStore:
         task_id: str,
         folder_path: str,
         kb_ref: str,
+        created_by_user_id: str = "",
         total_files: int,
         processed_files: int = 0,
         imported_count: int = 0,
@@ -156,6 +163,7 @@ class NasTaskStore:
         skipped: list[dict[str, Any]] | None = None,
         failed: list[dict[str, Any]] | None = None,
         pending_files: list[str] | None = None,
+        priority: int = 100,
         retry_count: int = 0,
         cancel_requested_at_ms: int | None = None,
     ) -> NasImportTask:
@@ -165,17 +173,19 @@ class NasTaskStore:
             conn.execute(
                 """
                 INSERT INTO nas_import_tasks (
-                    task_id, folder_path, kb_ref, total_files, processed_files,
+                    task_id, folder_path, kb_ref, created_by_user_id, total_files, processed_files,
                     imported_count, skipped_count, failed_count, status,
                     current_file, error, imported_json, skipped_json, failed_json, pending_files_json,
+                    priority,
                     retry_count, cancel_requested_at_ms,
                     created_at_ms, updated_at_ms
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     task_id,
                     folder_path,
                     kb_ref,
+                    str(created_by_user_id or ""),
                     int(total_files),
                     int(processed_files),
                     int(imported_count),
@@ -188,6 +198,7 @@ class NasTaskStore:
                     self._encode_json(skipped or []),
                     self._encode_json(failed or []),
                     self._encode_path_list(pending_files or []),
+                    int(priority),
                     int(retry_count),
                     cancel_requested_at_ms,
                     now_ms,
@@ -198,6 +209,55 @@ class NasTaskStore:
         finally:
             conn.close()
         return self.get_task(task_id)
+
+    def list_tasks_by_statuses(self, statuses: list[str], *, limit: int = 200) -> list[NasImportTask]:
+        normalized = [str(item or "").strip() for item in statuses if str(item or "").strip()]
+        if not normalized:
+            return []
+        placeholders = ", ".join(["?"] * len(normalized))
+        conn = self._conn()
+        try:
+            rows = conn.execute(
+                f"""
+                SELECT * FROM nas_import_tasks
+                WHERE status IN ({placeholders})
+                ORDER BY updated_at_ms ASC
+                LIMIT ?
+                """,
+                (*normalized, int(limit)),
+            ).fetchall()
+        finally:
+            conn.close()
+        return [self._from_row(row) for row in rows or []]
+
+    def list_tasks(self, *, limit: int = 200, statuses: list[str] | None = None) -> list[NasImportTask]:
+        safe_limit = int(max(1, min(2000, int(limit))))
+        normalized_statuses = [str(item or "").strip() for item in (statuses or []) if str(item or "").strip()]
+        conn = self._conn()
+        try:
+            if normalized_statuses:
+                placeholders = ", ".join(["?"] * len(normalized_statuses))
+                rows = conn.execute(
+                    f"""
+                    SELECT * FROM nas_import_tasks
+                    WHERE status IN ({placeholders})
+                    ORDER BY updated_at_ms DESC
+                    LIMIT ?
+                    """,
+                    (*normalized_statuses, safe_limit),
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    """
+                    SELECT * FROM nas_import_tasks
+                    ORDER BY updated_at_ms DESC
+                    LIMIT ?
+                    """,
+                    (safe_limit,),
+                ).fetchall()
+        finally:
+            conn.close()
+        return [self._from_row(row) for row in rows or []]
 
     def get_task(self, task_id: str) -> NasImportTask | None:
         conn = self._conn()
@@ -211,6 +271,41 @@ class NasTaskStore:
             return self._from_row(row)
         finally:
             conn.close()
+
+    def summary_metrics(self) -> dict[str, Any]:
+        conn = self._conn()
+        try:
+            row = conn.execute(
+                """
+                SELECT
+                    COUNT(*) AS total_tasks,
+                    SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) AS failed_tasks,
+                    SUM(CASE WHEN status IN ('pending', 'running', 'canceling', 'pausing') THEN 1 ELSE 0 END) AS backlog_tasks,
+                    AVG(
+                        CASE WHEN status IN ('completed', 'failed', 'canceled')
+                        THEN (updated_at_ms - created_at_ms)
+                        ELSE NULL END
+                    ) AS avg_duration_ms
+                FROM nas_import_tasks
+                """
+            ).fetchone()
+            status_rows = conn.execute(
+                "SELECT status, COUNT(*) AS count FROM nas_import_tasks GROUP BY status"
+            ).fetchall()
+        finally:
+            conn.close()
+
+        status_counts: dict[str, int] = {}
+        for item in status_rows or []:
+            status_counts[str(item["status"] or "unknown")] = int(item["count"] or 0)
+
+        return {
+            "total_tasks": int((row["total_tasks"] if row is not None else 0) or 0),
+            "failed_tasks": int((row["failed_tasks"] if row is not None else 0) or 0),
+            "backlog_tasks": int((row["backlog_tasks"] if row is not None else 0) or 0),
+            "avg_duration_ms": int(float((row["avg_duration_ms"] if row is not None else 0) or 0)),
+            "status_counts": status_counts,
+        }
 
     def update_task(self, task_id: str, **updates) -> NasImportTask | None:
         if not updates:
@@ -249,9 +344,9 @@ class NasTaskStore:
         if task.status in ("completed", "failed", "canceled"):
             return task
         now_ms = int(time.time() * 1000)
-        if task.status == "pending":
+        if task.status in ("pending", "paused"):
             status = "canceled"
-        elif task.status in ("running", "canceling"):
+        elif task.status in ("running", "canceling", "pausing"):
             status = "canceling"
         else:
             status = task.status
@@ -259,3 +354,25 @@ class NasTaskStore:
 
     def clear_cancel_request(self, task_id: str) -> NasImportTask | None:
         return self.update_task(task_id, cancel_requested_at_ms=None)
+
+    def request_pause_task(self, task_id: str) -> NasImportTask | None:
+        task = self.get_task(task_id)
+        if task is None:
+            return None
+        if task.status in ("completed", "failed", "canceled"):
+            return task
+        if task.status == "pending":
+            return self.update_task(task_id, status="paused")
+        if task.status in ("running", "pausing"):
+            return self.update_task(task_id, status="pausing")
+        return task
+
+    def request_resume_task(self, task_id: str) -> NasImportTask | None:
+        task = self.get_task(task_id)
+        if task is None:
+            return None
+        if task.status == "paused":
+            return self.update_task(task_id, status="pending")
+        if task.status == "pausing":
+            return self.update_task(task_id, status="running")
+        return task
