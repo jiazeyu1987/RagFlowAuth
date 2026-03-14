@@ -5,7 +5,7 @@ export const DEFAULT_PATENT_SOURCES = {
 
 export const PATENT_LAST_CONFIG_KEY = 'patent_download_last_config_v1';
 
-export const PATENT_LOCAL_KB_REF = '[鏈湴涓撳埄]';
+export const PATENT_LOCAL_KB_REF = '[本地专利]';
 
 export const PATENT_SOURCE_LABEL_MAP = {
   uspto: 'USPTO',
@@ -21,8 +21,8 @@ export const PATENT_BOX_STYLE = {
 };
 
 const reasonLabelMap = {
-  missing_pdf_url: 'missing PDF URL',
-  download_failed: 'download failed',
+  missing_pdf_url: '缺少 PDF 链接',
+  download_failed: '下载失败',
 };
 
 export function humanizeSourceError(msg) {
@@ -31,18 +31,18 @@ export function humanizeSourceError(msg) {
   const lower = text.toLowerCase();
 
   if (lower.includes('method chat not supported yet')) {
-    return 'Auto analysis failed: current LLM endpoint does not support chat.';
+    return '自动分析失败：当前 LLM 端点不支持 chat。';
   }
-  if (text === 'no_results') return 'No results from this source';
-  if (text === 'source_not_implemented') return 'Source is not implemented';
+  if (text === 'no_results') return '该来源无结果';
+  if (text === 'source_not_implemented') return '该来源尚未实现';
   if (text.startsWith('auto_analyze_failed:')) {
-    return `Auto analysis failed: ${text.slice('auto_analyze_failed:'.length).trim()}`;
+    return `自动分析失败：${text.slice('auto_analyze_failed:'.length).trim()}`;
   }
   if (text.startsWith('download_failed:')) {
-    return `Download failed: ${text.slice('download_failed:'.length).trim()}`;
+    return `下载失败：${text.slice('download_failed:'.length).trim()}`;
   }
   if (text.startsWith('source_failed:')) {
-    return `Source failed: ${text.slice('source_failed:'.length).trim()}`;
+    return `来源失败：${text.slice('source_failed:'.length).trim()}`;
   }
   return text;
 }
@@ -71,7 +71,7 @@ export function humanizeAnalysisErrorText(value) {
   const text = String(value || '').trim();
   if (!text) return '';
   if (text.toLowerCase().includes('method chat not supported yet')) {
-    return 'Auto analysis failed: current LLM endpoint does not support chat.';
+    return '自动分析失败：当前 LLM 端点不支持 chat。';
   }
   return text;
 }
@@ -96,7 +96,7 @@ export function buildPatentFrontendLogs({
 
     if (skippedKeyword > 0 || skippedDuplicate > 0 || skippedStopped > 0) {
       lines.push(
-        `${sourceLabelMap[key] || key}: skipped - keyword ${skippedKeyword}, duplicate ${skippedDuplicate}, stopped ${skippedStopped}`
+        `${sourceLabelMap[key] || key}：跳过统计 - 关键词 ${skippedKeyword}，重复 ${skippedDuplicate}，停止 ${skippedStopped}`
       );
     }
 
@@ -107,7 +107,7 @@ export function buildPatentFrontendLogs({
     Object.entries(failedReasons).forEach(([reason, count]) => {
       const n = Number(count || 0);
       if (n <= 0) return;
-      lines.push(`${sourceLabelMap[key] || key}: failure reason - ${reasonLabelMap[reason] || reason} ${n}`);
+      lines.push(`${sourceLabelMap[key] || key}：失败原因 - ${reasonLabelMap[reason] || reason} ${n}`);
     });
   });
 

@@ -67,7 +67,7 @@ export default function Dashboard() {
           }
         }
       } catch (e) {
-        if (!cancelled) setStatsError(e?.message || 'Failed to load stats');
+        if (!cancelled) setStatsError(e?.message || '加载统计数据失败');
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -83,7 +83,7 @@ export default function Dashboard() {
       [
         {
           key: 'pending',
-          title: 'Pending',
+          title: '待处理',
           value: stats.pending,
           color: '#f59e0b',
           show: capabilities.canReviewKb,
@@ -91,7 +91,7 @@ export default function Dashboard() {
         },
         {
           key: 'approved',
-          title: 'Approved',
+          title: '已通过',
           value: stats.approved,
           color: '#10b981',
           show: capabilities.canViewKb,
@@ -99,7 +99,7 @@ export default function Dashboard() {
         },
         {
           key: 'rejected',
-          title: 'Rejected',
+          title: '已驳回',
           value: stats.rejected,
           color: '#ef4444',
           show: capabilities.canViewKb,
@@ -107,7 +107,7 @@ export default function Dashboard() {
         },
         {
           key: 'total',
-          title: 'Total',
+          title: '总数',
           value: stats.total,
           color: '#3b82f6',
           show: capabilities.canViewKb,
@@ -118,15 +118,15 @@ export default function Dashboard() {
   );
 
   if (loading) {
-    return <div data-testid="dashboard-loading">Loading...</div>;
+    return <div data-testid="dashboard-loading">加载中...</div>;
   }
 
   return (
     <div data-testid="dashboard-page">
       <div style={{ marginBottom: '14px' }}>
-        <h2 style={{ margin: 0, color: '#111827' }}>Dashboard</h2>
+        <h2 style={{ margin: 0, color: '#111827' }}>仪表盘</h2>
         <div style={{ marginTop: '6px', color: '#6b7280' }}>
-          User: {user?.username || '-'} | Role: {user?.role || '-'}
+          用户：{user?.username || '-'} | 角色：{user?.role || '-'}
         </div>
       </div>
 
@@ -157,26 +157,26 @@ export default function Dashboard() {
         </div>
       ) : (
         <div style={{ ...CARD_STYLE, color: '#6b7280' }} data-testid="dashboard-empty">
-          No dashboard cards available for current role.
+          当前角色暂无可展示的卡片。
         </div>
       )}
 
       <div style={{ ...CARD_STYLE, marginTop: '14px' }}>
-        <div style={{ marginBottom: '10px', fontWeight: 900, color: '#111827' }}>Quick Actions</div>
+        <div style={{ marginBottom: '10px', fontWeight: 900, color: '#111827' }}>快捷操作</div>
         <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
           {capabilities.canBrowse ? (
             <button type="button" data-testid="dashboard-quick-browser" onClick={() => navigate('/browser')} style={quickButtonStyle('#2563eb')}>
-              Browse Documents
+              浏览文档
             </button>
           ) : null}
           {capabilities.canUploadKb ? (
             <button type="button" data-testid="dashboard-quick-upload" onClick={() => navigate('/upload')} style={quickButtonStyle('#059669')}>
-              Upload
+              上传文档
             </button>
           ) : null}
           {capabilities.canViewKb ? (
             <button type="button" data-testid="dashboard-quick-documents" onClick={() => navigate('/documents')} style={quickButtonStyle('#7c3aed')}>
-              Documents
+              文档列表
             </button>
           ) : null}
         </div>
@@ -184,3 +184,4 @@ export default function Dashboard() {
     </div>
   );
 }
+

@@ -15,7 +15,7 @@ export const permissionGroupsApi = {
     const response = await authClient.fetchWithAuth(authBackendUrl('/api/permission-groups'), {
       method: 'GET',
     });
-    if (!response.ok) throw new Error(await parseError(response, 'Failed to load permission groups'));
+    if (!response.ok) throw new Error(await parseError(response, '加载权限分组失败'));
     return response.json();
   },
 
@@ -24,7 +24,7 @@ export const permissionGroupsApi = {
       authBackendUrl('/api/permission-groups/resources/knowledge-bases'),
       { method: 'GET' }
     );
-    if (!response.ok) throw new Error(await parseError(response, 'Failed to load knowledge bases'));
+    if (!response.ok) throw new Error(await parseError(response, '加载知识库失败'));
     return response.json();
   },
 
@@ -43,7 +43,7 @@ export const permissionGroupsApi = {
       { method: 'GET' }
     );
     if (!fallback.ok) {
-      throw new Error(await parseError(response, 'Failed to load knowledge tree'));
+      throw new Error(await parseError(response, '加载知识树失败'));
     }
     const data = await fallback.json();
     const datasets = Array.isArray(data?.data) ? data.data : [];
@@ -55,7 +55,7 @@ export const permissionGroupsApi = {
       authBackendUrl('/api/permission-groups/resources/group-folders'),
       { method: 'GET' }
     );
-    if (!response.ok) throw new Error(await parseError(response, 'Failed to load permission group folders'));
+    if (!response.ok) throw new Error(await parseError(response, '加载权限分组文件夹失败'));
     return response.json();
   },
 
@@ -63,7 +63,7 @@ export const permissionGroupsApi = {
     const response = await authClient.fetchWithAuth(authBackendUrl('/api/permission-groups/resources/chats'), {
       method: 'GET',
     });
-    if (!response.ok) throw new Error(await parseError(response, 'Failed to load chats'));
+    if (!response.ok) throw new Error(await parseError(response, '加载对话列表失败'));
     return response.json();
   },
 
@@ -72,7 +72,7 @@ export const permissionGroupsApi = {
       method: 'POST',
       body: JSON.stringify(payload),
     });
-    if (!response.ok) throw new Error(await parseError(response, 'Failed to create permission group'));
+    if (!response.ok) throw new Error(await parseError(response, '创建权限分组失败'));
     return response.json();
   },
 
@@ -81,7 +81,7 @@ export const permissionGroupsApi = {
       method: 'PUT',
       body: JSON.stringify(payload),
     });
-    if (!response.ok) throw new Error(await parseError(response, 'Failed to update permission group'));
+    if (!response.ok) throw new Error(await parseError(response, '更新权限分组失败'));
     return response.json();
   },
 
@@ -89,7 +89,7 @@ export const permissionGroupsApi = {
     const response = await authClient.fetchWithAuth(authBackendUrl(`/api/permission-groups/${groupId}`), {
       method: 'DELETE',
     });
-    if (!response.ok) throw new Error(await parseError(response, 'Failed to delete permission group'));
+    if (!response.ok) throw new Error(await parseError(response, '删除权限分组失败'));
     return response.json();
   },
 
@@ -98,7 +98,7 @@ export const permissionGroupsApi = {
       method: 'POST',
       body: JSON.stringify(payload || {}),
     });
-    if (!response.ok) throw new Error(await parseError(response, 'Failed to create folder'));
+    if (!response.ok) throw new Error(await parseError(response, '创建文件夹失败'));
     return response.json();
   },
 
@@ -107,7 +107,7 @@ export const permissionGroupsApi = {
       method: 'PUT',
       body: JSON.stringify(payload || {}),
     });
-    if (!response.ok) throw new Error(await parseError(response, 'Failed to update folder'));
+    if (!response.ok) throw new Error(await parseError(response, '更新文件夹失败'));
     return response.json();
   },
 
@@ -115,7 +115,7 @@ export const permissionGroupsApi = {
     const response = await authClient.fetchWithAuth(authBackendUrl(`/api/permission-groups/folders/${encodeURIComponent(folderId)}`), {
       method: 'DELETE',
     });
-    if (!response.ok) throw new Error(await parseError(response, 'Failed to delete folder'));
+    if (!response.ok) throw new Error(await parseError(response, '删除文件夹失败'));
     return response.json();
   },
 };

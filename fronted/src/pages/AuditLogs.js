@@ -265,7 +265,7 @@ const AuditLogs = () => {
             <input
               value={filters.username}
               onChange={(e) => setFilters((s) => ({ ...s, username: e.target.value }))}
-              placeholder="username 精确匹配"
+              placeholder="账号精确匹配"
               style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: 6 }}
               data-testid="audit-filter-username"
             />
@@ -296,7 +296,7 @@ const AuditLogs = () => {
 
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 10 }}>
           <div style={{ color: '#6b7280', fontSize: '0.9rem' }}>
-            总条数: <span data-testid="audit-total" style={{ fontWeight: 700, color: '#111827' }}>{result.total}</span>
+            总条数： <span data-testid="audit-total" style={{ fontWeight: 700, color: '#111827' }}>{result.total}</span>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
             <button
@@ -352,7 +352,7 @@ const AuditLogs = () => {
         </div>
       </div>
 
-      {error && <div style={{ color: '#ef4444', marginBottom: 12 }}>Error: {error}</div>}
+      {error && <div style={{ color: '#ef4444', marginBottom: 12 }}>错误：{error}</div>}
 
       <div
         style={{
@@ -379,7 +379,7 @@ const AuditLogs = () => {
           <tbody>
             {loading && (
               <tr>
-                <td style={tdStyle} colSpan={8}>Loading...</td>
+                <td style={tdStyle} colSpan={8}>加载中...</td>
               </tr>
             )}
             {!loading && rows.length === 0 && (
@@ -410,3 +410,5 @@ const AuditLogs = () => {
 };
 
 export default AuditLogs;
+
+

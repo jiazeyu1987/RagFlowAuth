@@ -196,7 +196,7 @@ export default function useDocumentBrowserPage() {
         const target = documents[datasetName].find((doc) => doc.id === documentId);
         if (target) viewRef.current?.(documentId, datasetName);
         else {
-          setError(`${TEXT.cannotFindDocPrefix} "${datasetName}" found no doc: ${documentName}`);
+          setError(`${TEXT.cannotFindDocPrefix} "${datasetName}" 中未找到文档：${documentName}`);
         }
       }
     }, 300);
@@ -536,7 +536,7 @@ export default function useDocumentBrowserPage() {
       if (failedItems.length > 0) {
         const firstFailed = failedItems[0];
         window.alert(
-          `Done ${progress.success}/${progress.total}, failed ${failedItems.length}\nSample: ${firstFailed.source_dataset_name}/${firstFailed.doc_id}: ${firstFailed.detail}`
+          `处理完成 ${progress.success}/${progress.total}，失败 ${failedItems.length}\n示例：${firstFailed.source_dataset_name}/${firstFailed.doc_id}：${firstFailed.detail}`
         );
       }
     },

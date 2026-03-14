@@ -16,7 +16,7 @@ export default function GroupEditorForm({
   onSaveForm,
   onCancelEdit,
 }) {
-  if (loading) return <div style={{ color: '#6b7280' }}>Loading...</div>;
+  if (loading) return <div style={{ color: '#6b7280' }}>加载中...</div>;
 
   return (
     <form onSubmit={onSaveForm} data-testid="pg-modal">
@@ -29,7 +29,7 @@ export default function GroupEditorForm({
           marginBottom: 10,
         }}
       >
-        <label>Group Name</label>
+        <label>权限组名称</label>
         <input
           data-testid="pg-form-group-name"
           value={formData.group_name}
@@ -58,7 +58,7 @@ export default function GroupEditorForm({
           marginBottom: 10,
         }}
       >
-        <label>Description</label>
+        <label>说明</label>
         <textarea
           data-testid="pg-form-description"
           value={formData.description}
@@ -78,19 +78,19 @@ export default function GroupEditorForm({
       </div>
 
       <FolderSelectionList
-        title="Knowledge Folder Access"
+        title="知识目录访问权限"
         items={knowledgeNodeItems}
         selected={formData.accessible_kb_nodes || []}
         onToggle={onToggleNodeAuth}
-        emptyText="No knowledge folders"
+        emptyText="暂无知识目录"
         itemTestIdPrefix="pg-form-kb-node-"
       />
       <FolderSelectionList
-        title="Knowledge Base Access"
+        title="知识库访问权限"
         items={knowledgeDatasetItems}
         selected={formData.accessible_kbs || []}
         onToggle={onToggleKbAuth}
-        emptyText="No knowledge bases"
+        emptyText="暂无知识库"
         itemTestIdPrefix="pg-form-kb-"
         emptyTestId="pg-form-kb-empty"
       />
@@ -103,7 +103,7 @@ export default function GroupEditorForm({
       />
 
       <div style={{ marginBottom: 12 }}>
-        <div style={{ fontWeight: 700, marginBottom: 8 }}>Operation Permissions</div>
+        <div style={{ fontWeight: 700, marginBottom: 8 }}>操作权限</div>
         <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
           <label>
             <input
@@ -117,7 +117,7 @@ export default function GroupEditorForm({
                 }))
               }
             />{' '}
-            Upload
+            上传
           </label>
           <label>
             <input
@@ -131,7 +131,7 @@ export default function GroupEditorForm({
                 }))
               }
             />{' '}
-            Review
+            审核
           </label>
           <label>
             <input
@@ -145,7 +145,7 @@ export default function GroupEditorForm({
                 }))
               }
             />{' '}
-            Download
+            下载
           </label>
           <label>
             <input
@@ -159,7 +159,7 @@ export default function GroupEditorForm({
                 }))
               }
             />{' '}
-            Delete
+            删除
           </label>
         </div>
       </div>
@@ -177,7 +177,7 @@ export default function GroupEditorForm({
             padding: '8px 14px',
           }}
         >
-          Cancel
+          取消
         </button>
         <button
           type="submit"
@@ -192,7 +192,7 @@ export default function GroupEditorForm({
             padding: '8px 14px',
           }}
         >
-          Save
+          保存
         </button>
       </div>
     </form>

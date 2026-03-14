@@ -103,9 +103,11 @@ export const normalizeFailedEntries = (items) => {
 
 export const formatImportReason = (reason, detail = '') => {
   const code = String(reason || '').trim().toLowerCase();
-  if (code === 'unsupported_extension') return `Unsupported extension${detail ? ` (${detail})` : ''}`;
-  if (code === 'ingestion_failed') return detail ? `Ingestion failed (${detail})` : 'Ingestion failed';
-  if (detail) return `${reason}: ${detail}`;
+  if (code === 'unsupported_extension') return `不支持的扩展名${detail ? `（${detail}）` : ''}`;
+  if (code === 'ingestion_failed') return detail ? `入库失败（${detail}）` : '入库失败';
+  if (code === 'skipped') return detail ? `已跳过（${detail}）` : '已跳过';
+  if (code === 'failed') return detail ? `失败（${detail}）` : '失败';
+  if (detail) return `${reason}：${detail}`;
   return reason || '-';
 };
 
@@ -113,14 +115,14 @@ export const buildImportSummary = (result, noun) => {
   const skippedEntries = normalizeSkippedEntries(result?.skipped);
   const failedEntries = normalizeFailedEntries(result?.failed);
   const detailLines = [];
-  skippedEntries.slice(0, 3).forEach((item) => detailLines.push(`Skipped: ${item.path} | ${formatImportReason(item.reason, item.detail)}`));
-  failedEntries.slice(0, 3).forEach((item) => detailLines.push(`Failed: ${item.path} | ${formatImportReason(item.reason, item.detail)}`));
+  skippedEntries.slice(0, 3).forEach((item) => detailLines.push(`已跳过：${item.path} | ${formatImportReason(item.reason, item.detail)}`));
+  failedEntries.slice(0, 3).forEach((item) => detailLines.push(`失败：${item.path} | ${formatImportReason(item.reason, item.detail)}`));
   return [
-    `${noun} import completed`,
+    `${noun}导入完成`,
     '',
-    `Imported: ${result.imported_count ?? 0}`,
-    `Skipped: ${result.skipped_count ?? 0}`,
-    `Failed: ${result.failed_count ?? 0}`,
+    `已导入：${result.imported_count ?? 0}`,
+    `已跳过：${result.skipped_count ?? 0}`,
+    `失败：${result.failed_count ?? 0}`,
     detailLines.length ? '' : null,
     ...detailLines,
   ]

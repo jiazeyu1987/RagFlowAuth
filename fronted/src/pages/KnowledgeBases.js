@@ -65,11 +65,11 @@ export default function KnowledgeBases() {
     return m;
   }, [kbList]);
   const breadcrumb = useMemo(
-    () => [{ id: ROOT, name: '(root)' }, ...pathNodes(currentDirId, indexes.byId).map((n) => ({ id: n.id, name: n.name || '(unnamed-dir)' }))],
+    () => [{ id: ROOT, name: '根目录' }, ...pathNodes(currentDirId, indexes.byId).map((n) => ({ id: n.id, name: n.name || '未命名目录' }))],
     [currentDirId, indexes.byId]
   );
   const dirOptions = useMemo(() => {
-    const opts = [{ id: ROOT, label: '(鎸傝浇鍒版牴鐩綍)' }];
+    const opts = [{ id: ROOT, label: '根目录' }];
     const nodes = [...(directoryTree?.nodes || [])].sort((a, b) => String(a.path || '').localeCompare(String(b.path || ''), 'zh-Hans-CN'));
     nodes.forEach((n) => opts.push({ id: n.id, label: n.path || n.name || n.id }));
     return opts;
@@ -78,10 +78,10 @@ export default function KnowledgeBases() {
   const rows = useMemo(() => {
     const out = [];
     (indexes.childrenByParent.get(currentDirId) || []).forEach((n) =>
-      out.push({ kind: 'dir', id: n.id, name: n.name || '(unnamed-dir)', modified: fmtTime(n.updated_at_ms), type: 'directory' }),
+      out.push({ kind: 'dir', id: n.id, name: n.name || '未命名目录', modified: fmtTime(n.updated_at_ms), type: '目录' }),
     );
     (datasetsByNode.get(currentDirId) || []).forEach((d) =>
-      out.push({ kind: 'dataset', id: d.id, name: d.name || '(unnamed-kb)', modified: '-', type: 'dataset' }),
+      out.push({ kind: 'dataset', id: d.id, name: d.name || '未命名知识库', modified: '-', type: '知识库' }),
     );
     return out;
   }, [currentDirId, indexes.childrenByParent, datasetsByNode]);
@@ -126,7 +126,7 @@ export default function KnowledgeBases() {
       if (selectedNodeId && selectedNodeId !== ROOT && !validIds.has(selectedNodeId)) setSelectedNodeId(ROOT);
       setExpanded((prev) => prev.filter((id) => validIds.has(id)));
     } catch (e) {
-      setTreeError(e?.message || '鍔犺浇鐩綍澶辫触');
+      setTreeError(e?.message || '加载目录树失败');
     }
   }
 
@@ -142,7 +142,7 @@ export default function KnowledgeBases() {
       setDatasetDirId(nodeId);
     } catch (e) {
       setKbSelected(null);
-      setKbError(e?.message || 'Failed to load knowledge base detail');
+      setKbError(e?.message || '加载知识库详情失败');
     }
   }
 
@@ -150,7 +150,7 @@ export default function KnowledgeBases() {
     try {
       await Promise.all([fetchKbList(), fetchTree()]);
     } catch (e) {
-      setKbError(e?.message || '鍒锋柊澶辫触');
+      setKbError(e?.message || '刷新数据失败');
     }
   }
 
@@ -166,17 +166,17 @@ export default function KnowledgeBases() {
     setKbSaveStatus('');
     try {
       const name = String(kbNameText || '').trim();
-      if (!name) throw new Error('Knowledge base name is required');
+      if (!name) throw new Error('请输入知识库名称');
       const updates = { ...pickAllowed(kbSelected, DATASET_UPDATE_ALLOWED_KEYS), name };
       const updated = await knowledgeApi.updateRagflowDataset(kbSelected.id, updates);
-      if (!updated?.id) throw new Error('Save succeeded but dataset is missing in response');
+      if (!updated?.id) throw new Error('保存成功，但响应中缺少知识库信息');
       await knowledgeApi.assignDatasetDirectory(updated.id, datasetDirId || null);
       setKbSelected(updated);
       setKbNameText(String(updated.name || name));
-      setKbSaveStatus('Saved');
+      setKbSaveStatus('已保存');
       await refreshAll();
     } catch (e) {
-      setKbError(e?.message || '淇濆瓨澶辫触');
+      setKbError(e?.message || '保存知识库失败');
     } finally {
       setKbBusy(false);
     }
@@ -185,10 +185,10 @@ export default function KnowledgeBases() {
   async function deleteKb(ds) {
     if (!isAdmin || !ds?.id) return;
     if (!datasetEmpty(ds)) {
-      setKbError('Only empty knowledge bases can be deleted');
+      setKbError('仅可删除空知识库');
       return;
     }
-    if (!window.confirm(`Confirm deleting empty knowledge base "${ds.name || ds.id}"?`)) return;
+    if (!window.confirm(`确认删除空知识库“${ds.name || ds.id}”吗？`)) return;
     setKbBusy(true);
     setKbError('');
     try {
@@ -197,7 +197,7 @@ export default function KnowledgeBases() {
       if (selectedItem?.kind === 'dataset' && selectedItem.id === ds.id) setSelectedItem(null);
       await refreshAll();
     } catch (e) {
-      setKbError(e?.message || '鍒犻櫎澶辫触');
+      setKbError(e?.message || '删除知识库失败');
     } finally {
       setKbBusy(false);
     }
@@ -211,13 +211,13 @@ export default function KnowledgeBases() {
     setKbError('');
     try {
       await knowledgeApi.assignDatasetDirectory(datasetId, nextNodeId || null);
-      setKbSaveStatus(`Moved knowledge base ${datasetId} to ${nextNodeId ? 'target directory' : 'root directory'}`);
+      setKbSaveStatus(`已将知识库 ${datasetId} 移动到${nextNodeId ? '目标目录' : '根目录'}`);
       await fetchTree();
       if (kbSelected?.id === datasetId) {
         setDatasetDirId(nextNodeId);
       }
     } catch (e) {
-      setKbError(e?.message || '鎷栨嫿绉诲姩澶辫触');
+      setKbError(e?.message || '移动知识库失败');
     }
   }
 
@@ -246,7 +246,7 @@ export default function KnowledgeBases() {
 
   async function createDirectory() {
     if (!isAdmin) return;
-    const name = window.prompt('璇疯緭鍏ユ柊鐩綍鍚嶇О');
+    const name = window.prompt('请输入新目录名称');
     if (!name || !name.trim()) return;
     try {
       const res = await knowledgeApi.createKnowledgeDirectory({ name: name.trim(), parent_id: currentDirId || null });
@@ -257,27 +257,27 @@ export default function KnowledgeBases() {
         setSelectedItem({ kind: 'dir', id: newId });
       }
     } catch (e) {
-      setTreeError(e?.message || '鍒涘缓鐩綍澶辫触');
+      setTreeError(e?.message || '创建目录失败');
     }
   }
 
   async function renameDirectory() {
     if (!isAdmin || !selectedNodeId || selectedNodeId === ROOT) return;
     const node = indexes.byId.get(selectedNodeId);
-    const next = window.prompt('璇疯緭鍏ユ柊鐩綍鍚嶇О', node?.name || '');
+    const next = window.prompt('请输入新目录名称', node?.name || '');
     if (!next || !next.trim()) return;
     try {
       await knowledgeApi.updateKnowledgeDirectory(selectedNodeId, { name: next.trim() });
       await fetchTree();
     } catch (e) {
-      setTreeError(e?.message || 'Failed to rename directory');
+      setTreeError(e?.message || '重命名目录失败');
     }
   }
 
   async function deleteDirectory() {
     if (!isAdmin || !selectedNodeId || selectedNodeId === ROOT) return;
     const node = indexes.byId.get(selectedNodeId);
-    if (!window.confirm(`Confirm deleting directory "${node?.name || selectedNodeId}"?\nIf it contains child directories or datasets, deletion will fail.`)) return;
+    if (!window.confirm(`确认删除目录 "${node?.name || selectedNodeId}"?\n如果目录下仍有子目录或知识库，删除将失败。`)) return;
     try {
       const parent = node?.parent_id || ROOT;
       await knowledgeApi.deleteKnowledgeDirectory(selectedNodeId);
@@ -286,7 +286,7 @@ export default function KnowledgeBases() {
       setSelectedItem(null);
       await fetchTree();
     } catch (e) {
-      setTreeError(e?.message || '鍒犻櫎鐩綍澶辫触');
+      setTreeError(e?.message || '删除目录失败');
     }
   }
 
@@ -304,12 +304,12 @@ export default function KnowledgeBases() {
     if (!sourceId) return;
     try {
       const src = await knowledgeApi.getRagflowDataset(sourceId);
-      if (!src?.id) throw new Error('鏈鍙栧埌婧愮煡璇嗗簱閰嶇疆');
+      if (!src?.id) throw new Error('未读取到来源知识库配置');
       setCreatePayload(pickAllowed(src, DATASET_CREATE_ALLOWED_KEYS));
       setCreateError('');
     } catch (e) {
       setCreatePayload({});
-      setCreateError(e?.message || 'Failed to load source config');
+      setCreateError(e?.message || '加载来源配置失败');
     }
   }
 
@@ -318,16 +318,16 @@ export default function KnowledgeBases() {
     setKbBusy(true);
     try {
       const name = String(createName || '').trim();
-      if (!name) throw new Error('璇疯緭鍏ョ煡璇嗗簱鍚嶇О');
+      if (!name) throw new Error('请输入知识库名称');
       const created = await knowledgeApi.createRagflowDataset({ name, ...pickAllowed(createPayload, DATASET_CREATE_ALLOWED_KEYS) });
-      if (!created?.id) throw new Error('Create succeeded but dataset is missing in response');
+      if (!created?.id) throw new Error('创建成功，但响应中缺少知识库信息');
       await knowledgeApi.assignDatasetDirectory(created.id, createDirId || null);
       setCreateOpen(false);
       await refreshAll();
       await loadKbDetail(created.id);
       setSelectedItem({ kind: 'dataset', id: created.id });
     } catch (e) {
-      setCreateError(e?.message || '鍒涘缓澶辫触');
+      setCreateError(e?.message || '创建知识库失败');
     } finally {
       setKbBusy(false);
     }
@@ -346,14 +346,14 @@ export default function KnowledgeBases() {
   return (
     <div style={{ padding: 14 }}>
       <div style={{ marginBottom: 10, display: 'flex', gap: 8 }}>
-        <button data-testid="kbs-subtab-kbs" onClick={() => setSubtab('kbs')} style={subtabBtn(subtab === 'kbs')}>鐭ヨ瘑閰嶇疆</button>
-        <button data-testid="kbs-subtab-chats" onClick={() => setSubtab('chats')} style={subtabBtn(subtab === 'chats')}>瀵硅瘽閰嶇疆</button>
+        <button data-testid="kbs-subtab-kbs" onClick={() => setSubtab('kbs')} style={subtabBtn(subtab === 'kbs')}>知识库管理</button>
+        <button data-testid="kbs-subtab-chats" onClick={() => setSubtab('chats')} style={subtabBtn(subtab === 'chats')}>问答配置</button>
       </div>
 
       {subtab === 'kbs' ? (
         <div style={{ display: 'grid', gridTemplateColumns: '320px 1fr', gap: 14 }}>
           <section style={{ border: '1px solid #e5e7eb', borderRadius: 12, background: '#fff' }}>
-            <div style={{ padding: '10px 12px', borderBottom: '1px solid #e5e7eb', fontWeight: 800 }}>Directory Tree</div>
+            <div style={{ padding: '10px 12px', borderBottom: '1px solid #e5e7eb', fontWeight: 800 }}>目录树</div>
             <div style={{ padding: 12, maxHeight: 720, overflowY: 'auto' }}>
               {treeError && <div style={{ color: '#b91c1c', marginBottom: 8 }}>{treeError}</div>}
               <DirectoryTreeView
@@ -377,20 +377,20 @@ export default function KnowledgeBases() {
           <section style={{ border: '1px solid #e5e7eb', borderRadius: 12, background: '#fff' }}>
             <div style={{ padding: '10px 12px', borderBottom: '1px solid #e5e7eb' }}>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
-                <button data-testid="kbs-refresh-all" onClick={refreshAll} style={{ border: '1px solid #d1d5db', borderRadius: 8, background: '#fff', cursor: 'pointer', padding: '6px 9px' }}>鍒锋柊</button>
-                <button data-testid="kbs-go-parent" onClick={() => openDir(indexes.byId.get(currentDirId)?.parent_id || ROOT)} disabled={currentDirId === ROOT} style={{ border: '1px solid #d1d5db', borderRadius: 8, background: currentDirId === ROOT ? '#f3f4f6' : '#fff', cursor: currentDirId === ROOT ? 'not-allowed' : 'pointer', padding: '6px 9px' }}>杩斿洖涓婄骇</button>
+                <button data-testid="kbs-refresh-all" onClick={refreshAll} style={{ border: '1px solid #d1d5db', borderRadius: 8, background: '#fff', cursor: 'pointer', padding: '6px 9px' }}>刷新</button>
+                <button data-testid="kbs-go-parent" onClick={() => openDir(indexes.byId.get(currentDirId)?.parent_id || ROOT)} disabled={currentDirId === ROOT} style={{ border: '1px solid #d1d5db', borderRadius: 8, background: currentDirId === ROOT ? '#f3f4f6' : '#fff', cursor: currentDirId === ROOT ? 'not-allowed' : 'pointer', padding: '6px 9px' }}>返回上级</button>
                 {isAdmin && (
                   <>
-                    <button data-testid="kbs-create-dir" onClick={createDirectory} style={{ border: '1px solid #2563eb', borderRadius: 8, background: '#2563eb', color: '#fff', cursor: 'pointer', padding: '6px 9px' }}>鏂板缓鐩綍</button>
-                    <button data-testid="kbs-rename-dir" onClick={renameDirectory} disabled={!selectedNodeId || selectedNodeId === ROOT} style={{ border: '1px solid #f59e0b', borderRadius: 8, background: !selectedNodeId || selectedNodeId === ROOT ? '#fde68a' : '#f59e0b', color: '#fff', cursor: !selectedNodeId || selectedNodeId === ROOT ? 'not-allowed' : 'pointer', padding: '6px 9px' }}>Rename Directory</button>
-                    <button data-testid="kbs-delete-dir" onClick={deleteDirectory} disabled={!selectedNodeId || selectedNodeId === ROOT} style={{ border: '1px solid #ef4444', borderRadius: 8, background: !selectedNodeId || selectedNodeId === ROOT ? '#fecaca' : '#ef4444', color: '#fff', cursor: !selectedNodeId || selectedNodeId === ROOT ? 'not-allowed' : 'pointer', padding: '6px 9px' }}>鍒犻櫎鐩綍</button>
-                    <button data-testid="kbs-create-kb" onClick={openCreateKb} style={{ border: '1px solid #059669', borderRadius: 8, background: '#10b981', color: '#fff', cursor: 'pointer', padding: '6px 9px' }}>Create Knowledge Base</button>
+                    <button data-testid="kbs-create-dir" onClick={createDirectory} style={{ border: '1px solid #2563eb', borderRadius: 8, background: '#2563eb', color: '#fff', cursor: 'pointer', padding: '6px 9px' }}>新建目录</button>
+                    <button data-testid="kbs-rename-dir" onClick={renameDirectory} disabled={!selectedNodeId || selectedNodeId === ROOT} style={{ border: '1px solid #f59e0b', borderRadius: 8, background: !selectedNodeId || selectedNodeId === ROOT ? '#fde68a' : '#f59e0b', color: '#fff', cursor: !selectedNodeId || selectedNodeId === ROOT ? 'not-allowed' : 'pointer', padding: '6px 9px' }}>重命名目录</button>
+                    <button data-testid="kbs-delete-dir" onClick={deleteDirectory} disabled={!selectedNodeId || selectedNodeId === ROOT} style={{ border: '1px solid #ef4444', borderRadius: 8, background: !selectedNodeId || selectedNodeId === ROOT ? '#fecaca' : '#ef4444', color: '#fff', cursor: !selectedNodeId || selectedNodeId === ROOT ? 'not-allowed' : 'pointer', padding: '6px 9px' }}>删除目录</button>
+                    <button data-testid="kbs-create-kb" onClick={openCreateKb} style={{ border: '1px solid #059669', borderRadius: 8, background: '#10b981', color: '#fff', cursor: 'pointer', padding: '6px 9px' }}>创建知识库</button>
                   </>
                 )}
               </div>
 
               <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
-                <span style={{ color: '#6b7280', fontSize: 13 }}>璺緞:</span>
+                <span style={{ color: '#6b7280', fontSize: 13 }}>路径：</span>
                 {breadcrumb.map((b, i) => (
                   <React.Fragment key={b.id || '__root__'}>
                     <button type="button" onClick={() => openDir(b.id)} style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: currentDirId === b.id ? '#1d4ed8' : '#374151', fontWeight: currentDirId === b.id ? 700 : 500, padding: 0 }}>{b.name}</button>
@@ -399,9 +399,9 @@ export default function KnowledgeBases() {
                 ))}
               </div>
 
-              <input value={keyword} onChange={(e) => setKeyword(e.target.value)} placeholder="Filter current directory" style={{ width: 320, maxWidth: '100%', border: '1px solid #d1d5db', borderRadius: 8, padding: '8px 10px' }} />
+              <input value={keyword} onChange={(e) => setKeyword(e.target.value)} placeholder="筛选当前目录" style={{ width: 320, maxWidth: '100%', border: '1px solid #d1d5db', borderRadius: 8, padding: '8px 10px' }} />
               <div style={{ marginTop: 6, color: '#6b7280', fontSize: 12 }}>
-                Drag support: drag a dataset row on the right to any directory on the left to move its mount location.
+                支持拖拽：将右侧知识库拖到左侧目录即可调整挂载位置。
               </div>
               {kbError && <div style={{ color: '#b91c1c', marginTop: 8 }}>{kbError}</div>}
               {kbSaveStatus && <div style={{ color: '#047857', marginTop: 8 }}>{kbSaveStatus}</div>}
@@ -411,9 +411,9 @@ export default function KnowledgeBases() {
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead>
                   <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e5e7eb' }}>
-                    <th style={{ textAlign: 'left', padding: '8px 10px' }}>鍚嶇О</th>
-                    <th style={{ textAlign: 'left', padding: '8px 10px' }}>淇敼鏃ユ湡</th>
-                    <th style={{ textAlign: 'left', padding: '8px 10px' }}>绫诲瀷</th>
+                    <th style={{ textAlign: 'left', padding: '8px 10px' }}>名称</th>
+                    <th style={{ textAlign: 'left', padding: '8px 10px' }}>更新时间</th>
+                    <th style={{ textAlign: 'left', padding: '8px 10px' }}>类型</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -453,27 +453,27 @@ export default function KnowledgeBases() {
                           opacity: dragDatasetId && r.kind === 'dataset' && dragDatasetId === r.id ? 0.5 : 1,
                         }}
                       >
-                        <td style={{ padding: '8px 10px' }}>{r.kind === 'dir' ? '馃搧 ' : '馃搫 '}{r.name}</td>
+                        <td style={{ padding: '8px 10px' }}>{r.kind === 'dir' ? '[目录] ' : '[知识库] '}{r.name}</td>
                         <td style={{ padding: '8px 10px', color: '#4b5563' }}>{r.modified}</td>
                         <td style={{ padding: '8px 10px', color: '#4b5563' }}>{r.type}</td>
                       </tr>
                     );
                   })}
-                  {!filteredRows.length && <tr><td colSpan={3} style={{ padding: 18, color: '#6b7280', textAlign: 'center' }}>褰撳墠鐩綍涓虹┖</td></tr>}
+                  {!filteredRows.length && <tr><td colSpan={3} style={{ padding: 18, color: '#6b7280', textAlign: 'center' }}>当前目录暂无内容</td></tr>}
                 </tbody>
               </table>
             </div>
 
             {selectedItem?.kind === 'dataset' && kbSelected?.id === selectedItem.id && (
               <div style={{ borderTop: '1px solid #e5e7eb', padding: 12 }}>
-                <div style={{ fontWeight: 700, marginBottom: 8 }}>Knowledge Base Detail</div>
+                <div style={{ fontWeight: 700, marginBottom: 8 }}>知识库详情</div>
                 <div style={{ display: 'grid', gridTemplateColumns: '100px 1fr 130px', gap: 8, alignItems: 'center', marginBottom: 8 }}>
-                  <label>鍚嶇О</label>
+                  <label>名称</label>
                   <input data-testid="kbs-detail-name" value={kbNameText} onChange={(e) => setKbNameText(e.target.value)} disabled={!isAdmin} style={{ border: '1px solid #d1d5db', borderRadius: 8, padding: '8px 10px', background: isAdmin ? '#fff' : '#f9fafb' }} />
-                  {isAdmin && <button data-testid="kbs-detail-save" onClick={saveKb} disabled={kbBusy} style={{ border: '1px solid #059669', borderRadius: 8, background: kbBusy ? '#6ee7b7' : '#10b981', color: '#fff', cursor: kbBusy ? 'not-allowed' : 'pointer', padding: '8px 10px' }}>淇濆瓨</button>}
+                  {isAdmin && <button data-testid="kbs-detail-save" onClick={saveKb} disabled={kbBusy} style={{ border: '1px solid #059669', borderRadius: 8, background: kbBusy ? '#6ee7b7' : '#10b981', color: '#fff', cursor: kbBusy ? 'not-allowed' : 'pointer', padding: '8px 10px' }}>保存</button>}
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '100px 1fr 130px', gap: 8, alignItems: 'center' }}>
-                  <label>鎸傝浇鐩綍</label>
+                  <label>所属目录</label>
                   <select value={datasetDirId} onChange={(e) => setDatasetDirId(e.target.value)} disabled={!isAdmin} style={{ border: '1px solid #d1d5db', borderRadius: 8, padding: '8px 10px', background: isAdmin ? '#fff' : '#f9fafb' }}>
                     {dirOptions.map((o) => <option key={o.id || '__root__'} value={o.id}>{o.label}</option>)}
                   </select>
@@ -484,7 +484,8 @@ export default function KnowledgeBases() {
                       disabled={kbBusy || !datasetEmpty(kbById.get(kbSelected.id))}
                       style={{ border: '1px solid #ef4444', borderRadius: 8, background: kbBusy || !datasetEmpty(kbById.get(kbSelected.id)) ? '#fecaca' : '#ef4444', color: '#fff', cursor: kbBusy || !datasetEmpty(kbById.get(kbSelected.id)) ? 'not-allowed' : 'pointer', padding: '8px 10px' }}
                     >
-                      鍒犻櫎鐭ヨ瘑搴?                    </button>
+                      删除知识库
+                    </button>
                   )}
                 </div>
               </div>
@@ -517,5 +518,6 @@ export default function KnowledgeBases() {
     </div>
   );
 }
+
 
 

@@ -89,25 +89,25 @@ const DocumentReview = ({ embedded = false }) => {
 
   const openDiff = async (oldDocId, oldFilename, newDocId, newFilename) => {
     setError(null);
-    setDiffTitle(`???${oldFilename} vs ${newFilename}`);
+    setDiffTitle(`文档对比：${oldFilename} vs ${newFilename}`);
     setDiffOpen(true);
     setDiffLoading(true);
     setDiffOldText('');
     setDiffNewText('');
     try {
       if (!isTextComparable(oldFilename) || !isTextComparable(newFilename)) {
-        throw new Error('????????md/txt/ini/log');
+        throw new Error('仅支持对比 md/txt/ini/log 文本文件');
       }
       const [oldText, newText] = await Promise.all([fetchKnowledgePreviewText(oldDocId), fetchKnowledgePreviewText(newDocId)]);
       const maxLines = 2500;
       if (countLines(oldText) > maxLines || countLines(newText) > maxLines) {
-        throw new Error('????????????????????????');
+        throw new Error('文本过长，暂不支持对比超过限制行数的文件');
       }
       setDiffOldText(oldText);
       setDiffNewText(newText);
     } catch (e) {
       setDiffOpen(false);
-      setError(e.message || '????');
+      setError(e.message || '加载对比内容失败');
     } finally {
       setDiffLoading(false);
     }
@@ -184,7 +184,7 @@ const DocumentReview = ({ embedded = false }) => {
       />
 
       {loading ? (
-        <div>Loading...</div>
+        <div>加载中...</div>
       ) : (
         <DocumentReviewTable
           actionLoading={actionLoading}
@@ -209,4 +209,5 @@ const DocumentReview = ({ embedded = false }) => {
 };
 
 export default DocumentReview;
+
 

@@ -97,10 +97,10 @@ export default function PaperDownload() {
             fontWeight: 700,
           }}
         >
-          Back To Tools
+          返回实用工具
         </button>
         <div style={{ color: '#6b7280', fontSize: '0.88rem' }}>
-          Target KB: <span style={{ color: '#111827', fontWeight: 800 }}>{PAPER_LOCAL_KB_REF}</span>
+          目标知识库：<span style={{ color: '#111827', fontWeight: 800 }}>{PAPER_LOCAL_KB_REF}</span>
         </div>
       </div>
 
@@ -115,23 +115,23 @@ export default function PaperDownload() {
         <div style={{ display: 'grid', gap: '12px' }}>
           <DownloadKeywordConfigCard
             boxStyle={PAPER_BOX_STYLE}
-            title="Keyword Settings"
-            keywordLabel="Keywords (comma/semicolon/newline separated)"
+            title="关键词设置"
+            keywordLabel="关键词（可用逗号/分号/换行分隔）"
             keywordText={keywordText}
             onKeywordChange={setKeywordText}
-            placeholder={'3D printer\n导板'}
+            placeholder={'3D打印\n导板'}
             useAnd={useAnd}
             onUseAndChange={setUseAnd}
             useAndId="paper-use-and"
-            useAndLabel="Use AND (unchecked means OR)"
-            parsedTitle="Parsed Keywords"
+            useAndLabel="使用“并且”逻辑（不勾选则使用“或者”）"
+            parsedTitle="解析后的关键词"
             parsedKeywords={parsedKeywords}
-            emptyParsedText="None"
+            emptyParsedText="无"
           />
 
           <DownloadSourceConfigCard
             boxStyle={PAPER_BOX_STYLE}
-            title="Paper Source Settings"
+            title="论文来源设置"
             sourceLabelMap={PAPER_SOURCE_LABEL_MAP}
             sources={sources}
             onUpdateSource={updateSource}
@@ -140,10 +140,10 @@ export default function PaperDownload() {
             onAutoAnalyzeChange={setAutoAnalyze}
             onRunDownload={runDownload}
             loading={loading}
-            autoAnalyzeLabel="Auto Analyze"
-            runText="Run Download"
-            runLoadingText="Running..."
-            limitLabel="Limit"
+            autoAnalyzeLabel="自动解析"
+            runText="开始下载"
+            runLoadingText="下载中..."
+            limitLabel="数量上限"
           >
             <PaperSourceSummaryPanel
               sourceStats={sourceStats}
@@ -168,21 +168,21 @@ export default function PaperDownload() {
             removeAllDisabled={!sessionId || deletingSession}
             stopBusy={stopping}
             addAllBusy={addingAll}
-            currentTabText="Current Results"
-            historyTabText="History"
-            stopText="Stop Download"
-            stopBusyText="Stopping..."
-            addAllText="Add All To KB"
-            addAllBusyText="Adding..."
-            removeAllText="Delete All"
+            currentTabText="当前结果"
+            historyTabText="历史记录"
+            stopText="停止下载"
+            stopBusyText="停止中..."
+            addAllText="全部加入知识库"
+            addAllBusyText="处理中..."
+            removeAllText="删除全部"
           />
 
           {resultTab === 'current' ? (
             !items.length ? (
               <div style={{ color: '#9ca3af', fontSize: '0.9rem' }}>
                 {sessionStatus === 'running'
-                  ? 'Downloading, results will stream in...'
-                  : 'No current download results'}
+                  ? '下载进行中，结果会持续更新...'
+                  : '当前暂无下载结果'}
               </div>
             ) : (
               <PaperResultList
@@ -214,21 +214,21 @@ export default function PaperDownload() {
                 onSelectKey={(key) => setSelectedHistoryKey(key)}
                 onAdd={addHistoryKeywordToKb}
                 onDelete={deleteHistoryKeyword}
-                title="History Keywords"
-                refreshText="Refresh"
-                loadingText="Loading..."
-                emptyText="No history keywords"
-                addText="Add to KB"
-                addingText="Adding..."
-                deleteText="Delete"
-                deletingText="Deleting..."
+                title="历史关键词"
+                refreshText="刷新"
+                loadingText="加载中..."
+                emptyText="暂无历史关键词"
+                addText="加入知识库"
+                addingText="处理中..."
+                deleteText="删除"
+                deletingText="删除中..."
               />
               <DownloadHistoryDetailPanel
                 error={historyError}
                 loading={historyItemsLoading}
-                loadingText="Loading paper history..."
+                loadingText="正在加载论文历史..."
                 payload={historyPayload}
-                itemLabel="papers"
+                itemLabel="论文"
               >
                 <PaperResultList
                   items={historyItems}

@@ -59,14 +59,14 @@ export default function ConfigListPanel({
           }}
         >
           <div style={{ fontWeight: 900, fontSize: '15px', color: '#111827' }}>
-            Search Configs <span style={{ color: '#6b7280' }}>({list.length})</span>
+            检索配置 <span style={{ color: '#6b7280' }}>({list.length})</span>
           </div>
           <div style={{ display: 'flex', gap: '8px' }}>
             <button onClick={onOpenCreate} disabled={!isAdmin} style={headerButtonStyle}>
-              New
+              新建
             </button>
             <button onClick={onRefresh} disabled={loading} style={headerButtonStyle}>
-              Refresh
+              刷新
             </button>
           </div>
         </div>
@@ -75,7 +75,7 @@ export default function ConfigListPanel({
           <input
             value={filter}
             onChange={(event) => onChangeFilter(event.target.value)}
-            placeholder="Filter by name or id"
+            placeholder="按名称或编号筛选"
             style={{
               width: '100%',
               padding: '10px 12px',
@@ -89,7 +89,7 @@ export default function ConfigListPanel({
         {error ? (
           <div style={{ marginTop: '10px', color: '#b91c1c', fontWeight: 800 }}>{error}</div>
         ) : null}
-        {loading ? <div style={{ marginTop: '10px', color: '#6b7280' }}>Loading...</div> : null}
+        {loading ? <div style={{ marginTop: '10px', color: '#6b7280' }}>加载中...</div> : null}
       </div>
 
       <div style={{ padding: '14px', maxHeight: '72vh', overflow: 'auto' }}>
@@ -107,10 +107,10 @@ export default function ConfigListPanel({
                     textOverflow: 'ellipsis',
                   }}
                 >
-                  {item.name || '(Unnamed)'}
+                  {item.name || '（未命名）'}
                 </div>
                 <div style={{ marginTop: '4px', color: '#6b7280', fontSize: '12px' }}>
-                  ID: {item.id}
+                  ID：{item.id}
                 </div>
               </div>
               <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
@@ -122,7 +122,7 @@ export default function ConfigListPanel({
                       onDelete(item);
                     }}
                     disabled={busy}
-                    title="Delete"
+                    title="删除"
                     style={{
                       width: '44px',
                       height: '36px',
@@ -134,14 +134,14 @@ export default function ConfigListPanel({
                       fontWeight: 900,
                     }}
                   >
-                    Del
+                    删
                   </button>
                 ) : null}
               </div>
             </div>
           );
         })}
-        {!filteredList.length ? <div style={{ color: '#6b7280' }}>No configs</div> : null}
+        {!filteredList.length ? <div style={{ color: '#6b7280' }}>暂无配置</div> : null}
       </div>
     </div>
   );

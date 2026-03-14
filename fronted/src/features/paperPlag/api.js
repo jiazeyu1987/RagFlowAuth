@@ -23,7 +23,7 @@ async function parseErrorMessage(response) {
   } catch (_err) {
     // no-op
   }
-  return `Request failed (${response.status})`;
+  return `请求失败（${response.status}）`;
 }
 
 export const paperPlagApi = {
@@ -98,7 +98,7 @@ export const paperPlagApi = {
 
     const blob = await response.blob();
     const contentDisposition = response.headers.get('content-disposition') || '';
-    const fallbackName = `paper_plag_report_${String(reportId || '').trim() || 'latest'}.${format === 'txt' ? 'txt' : 'md'}`;
+    const fallbackName = `论文查重报告_${String(reportId || '').trim() || '最新'}.${format === 'txt' ? 'txt' : 'md'}`;
     const filename = extractFilenameFromContentDisposition(contentDisposition, fallbackName);
     triggerBlobDownload(blob, filename);
     return {

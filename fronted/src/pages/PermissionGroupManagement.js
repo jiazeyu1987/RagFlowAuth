@@ -69,7 +69,7 @@ export default function PermissionGroupManagement() {
           marginBottom: 10,
         }}
       >
-        <h2 style={{ margin: 0 }}>Permission Group Management</h2>
+        <h2 style={{ margin: 0 }}>权限组管理</h2>
       </div>
 
       <section style={{ ...panelStyle, marginBottom: 12 }}>
@@ -86,7 +86,7 @@ export default function PermissionGroupManagement() {
           <input
             value={searchKeyword}
             onChange={(event) => setSearchKeyword(event.target.value)}
-            placeholder="Filter items in current folder"
+            placeholder="筛选当前目录内容"
             style={{
               width: 260,
               maxWidth: '100%',
@@ -105,7 +105,7 @@ export default function PermissionGroupManagement() {
               padding: '9px 12px',
             }}
           >
-            Refresh
+            刷新
           </button>
           <button
             onClick={createFolder}
@@ -118,7 +118,7 @@ export default function PermissionGroupManagement() {
               padding: '9px 12px',
             }}
           >
-            New Folder
+            新建目录
           </button>
           <button
             onClick={renameFolder}
@@ -136,7 +136,7 @@ export default function PermissionGroupManagement() {
               padding: '9px 12px',
             }}
           >
-            Rename Folder
+            重命名目录
           </button>
           <button
             onClick={deleteFolder}
@@ -154,7 +154,7 @@ export default function PermissionGroupManagement() {
               padding: '9px 12px',
             }}
           >
-            Delete Folder
+            删除目录
           </button>
           <button
             onClick={startCreateGroup}
@@ -168,10 +168,10 @@ export default function PermissionGroupManagement() {
               padding: '9px 12px',
             }}
           >
-            New Group
+            新建权限组
           </button>
           <div style={{ color: '#6b7280', fontSize: 12 }}>
-            Total groups: {groups.length}
+            权限组总数：{groups.length}
           </div>
         </div>
       </section>
@@ -185,7 +185,7 @@ export default function PermissionGroupManagement() {
               fontWeight: 800,
             }}
           >
-            Folder Tree
+            目录树
           </div>
           <div style={{ padding: 10, maxHeight: 700, overflowY: 'auto' }}>
             <FolderTree
@@ -215,7 +215,7 @@ export default function PermissionGroupManagement() {
         <section style={panelStyle}>
           <div style={{ padding: '10px 12px', borderBottom: '1px solid #e5e7eb' }}>
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
-              <span style={{ color: '#6b7280', fontSize: 13 }}>Path:</span>
+              <span style={{ color: '#6b7280', fontSize: 13 }}>路径：</span>
               {folderPath.map((folder, index) => (
                 <React.Fragment key={folder.id || '__root__'}>
                   <button
@@ -239,7 +239,7 @@ export default function PermissionGroupManagement() {
               ))}
             </div>
             <div style={{ color: '#6b7280', fontSize: 12 }}>
-              Drag groups from the table and drop them into any folder on the left.
+              可将表格中的权限组拖到左侧任意目录中。
             </div>
             {error && <div style={{ color: '#b91c1c', marginTop: 8 }}>{error}</div>}
             {hint && <div style={{ color: '#047857', marginTop: 8 }}>{hint}</div>}

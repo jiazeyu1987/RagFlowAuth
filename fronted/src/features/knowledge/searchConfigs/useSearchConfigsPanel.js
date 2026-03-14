@@ -45,7 +45,7 @@ export default function useSearchConfigsPanel() {
       setList(normalizeListResponse(response));
     } catch (requestError) {
       setList([]);
-      setError(requestError?.message || 'Failed to load configs');
+      setError(requestError?.message || '加载配置列表失败');
     } finally {
       setLoading(false);
     }
@@ -64,7 +64,7 @@ export default function useSearchConfigsPanel() {
       setJsonText(prettyJson(config?.config || {}));
     } catch (requestError) {
       setSelected(null);
-      setDetailError(requestError?.message || 'Failed to load config');
+      setDetailError(requestError?.message || '加载配置详情失败');
     } finally {
       setDetailLoading(false);
     }
@@ -91,7 +91,7 @@ export default function useSearchConfigsPanel() {
 
     const name = String(nameText || selected.name || '').trim();
     if (!name) {
-      setDetailError('Name is required');
+      setDetailError('名称不能为空');
       return;
     }
 
@@ -105,10 +105,10 @@ export default function useSearchConfigsPanel() {
       setSelected(updated);
       setNameText(String(updated?.name || name));
       setJsonText(prettyJson(updated?.config || parsed.value));
-      setSaveStatus('Saved');
+      setSaveStatus('已保存');
       await fetchList();
     } catch (requestError) {
-      setDetailError(requestError?.message || 'Failed to save config');
+      setDetailError(requestError?.message || '保存配置失败');
     } finally {
       setBusy(false);
     }
@@ -117,14 +117,14 @@ export default function useSearchConfigsPanel() {
   const removeItem = useCallback(
     async (item) => {
       if (!item?.id) return;
-      if (!window.confirm(`Delete search config: ${item.name || item.id}?`)) return;
+      if (!window.confirm(`确定删除检索配置“${item.name || item.id}”吗？`)) return;
       setBusy(true);
       try {
         await knowledgeApi.deleteSearchConfig(item.id);
         if (selected?.id === item.id) setSelected(null);
         await fetchList();
       } catch (requestError) {
-        setError(requestError?.message || 'Failed to delete config');
+        setError(requestError?.message || '删除配置失败');
       } finally {
         setBusy(false);
       }
@@ -154,7 +154,7 @@ export default function useSearchConfigsPanel() {
       setCreateJsonText(prettyJson(source?.config || {}));
     } catch (requestError) {
       setCreateJsonText('{}');
-      setCreateError(requestError?.message || 'Failed to load source config');
+      setCreateError(requestError?.message || '加载来源配置失败');
     }
   }, []);
 
@@ -164,7 +164,7 @@ export default function useSearchConfigsPanel() {
 
     const name = String(createName || '').trim();
     if (!name) {
-      setCreateError('Name is required');
+      setCreateError('名称不能为空');
       return;
     }
 
@@ -185,7 +185,7 @@ export default function useSearchConfigsPanel() {
       await fetchList();
       await loadDetail(created.id);
     } catch (requestError) {
-      setCreateError(requestError?.message || 'Failed to create config');
+      setCreateError(requestError?.message || '创建配置失败');
     } finally {
       setBusy(false);
     }

@@ -183,7 +183,7 @@ export const useChatStream = ({
       });
 
       if (!response.ok) {
-        throw new Error('send_failed');
+        throw new Error('发送失败');
       }
 
       const reader = response.body.getReader();
@@ -453,7 +453,7 @@ export const useChatStream = ({
         traceId,
         message: String(err?.message || err || 'unknown_error'),
       });
-      setError(err?.message || 'send_failed');
+      setError(err?.message || '发送失败');
       setMessages((prev) => {
         const next = Array.isArray(prev) ? [...prev] : [];
         const last = next[next.length - 1];

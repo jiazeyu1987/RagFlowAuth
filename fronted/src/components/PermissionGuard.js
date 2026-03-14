@@ -11,7 +11,7 @@ const PermissionGuard = ({ children, allowedRoles, permission, permissions, fall
     return [];
   }, [permission, permissions]);
 
-  // 同步检查权限（can 是同步函数）
+  // 同步检查权限（can 为同步函数）
   const permissionAllowed = useMemo(() => {
     if (!user || requiredPermissions.length === 0) {
       return true; // 没有权限要求时允许访问
@@ -21,7 +21,7 @@ const PermissionGuard = ({ children, allowedRoles, permission, permissions, fall
   }, [user, requiredPermissions, can]);
 
   if (loading) {
-    return <div>Loading...</div>;
+    return <div>加载中...</div>;
   }
 
   if (!user) {

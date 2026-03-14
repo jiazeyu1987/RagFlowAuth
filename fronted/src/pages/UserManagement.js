@@ -60,13 +60,13 @@ const UserManagement = () => {
     handleResetFilters,
   } = useUserManagement();
 
-  if (loading) return <div>Loading...</div>;
-  if (error) return <div>Error: {error}</div>;
+  if (loading) return <div>加载中...</div>;
+  if (error) return <div>错误：{error}</div>;
 
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-        <h2 style={{ margin: 0 }}>{'用户管理'}</h2>
+        <h2 style={{ margin: 0 }}>用户管理</h2>
         {canManageUsers && (
           <button
             onClick={handleOpenCreateModal}
@@ -80,7 +80,7 @@ const UserManagement = () => {
               cursor: 'pointer',
             }}
           >
-            {'新建用户'}
+            新建用户
           </button>
         )}
       </div>
@@ -164,3 +164,4 @@ const UserManagement = () => {
 };
 
 export default UserManagement;
+

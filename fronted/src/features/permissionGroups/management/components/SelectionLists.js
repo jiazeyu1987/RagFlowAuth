@@ -65,10 +65,10 @@ export function ChatSelection({
 }) {
   return (
     <div style={{ marginBottom: 12 }}>
-      <div style={{ fontWeight: 700, marginBottom: 8 }}>Chat Access</div>
+      <div style={{ fontWeight: 700, marginBottom: 8 }}>问答访问权限</div>
       {!chatAgents.length ? (
         <div data-testid={emptyTestId || undefined} style={{ color: '#6b7280', fontSize: 13 }}>
-          No chats
+          暂无问答配置
         </div>
       ) : (
         <div
@@ -102,7 +102,7 @@ export function ChatSelection({
                 }
               />
               <span>
-                {chat.name} ({chat.type || 'chat'})
+                {chat.name}（{chat.type || '对话'}）
               </span>
             </label>
           ))}

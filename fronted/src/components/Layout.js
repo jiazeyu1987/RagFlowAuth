@@ -32,32 +32,32 @@ const Layout = ({ children }) => {
   const navigation = [
     { name: '智能对话', path: '/chat', icon: '💬' },
     { name: '全库搜索', path: '/agents', icon: '🔎' },
-    { name: '知识配置', path: '/kbs', icon: '📎' },
+    { name: '知识配置', path: '/kbs', icon: '📚' },
     { name: '文档浏览', path: '/browser', icon: '📁' },
     { name: '文档审核', path: '/documents', icon: '✅', show: canReview },
     { name: '文档上传', path: '/upload', icon: '⬆️', show: canUpload },
     { name: '修改密码', path: '/change-password', icon: '🔐' },
     { name: '实用工具', path: '/tools', icon: '🧰' },
-    { name: '用户管理', path: '/users', icon: '👥', allowedRoles: ['admin'] },
-    { name: '组织管理', path: '/org-directory', icon: '🗂️', allowedRoles: ['admin'] },
+    { name: '用户管理', path: '/users', icon: '👤', allowedRoles: ['admin'] },
+    { name: '组织管理', path: '/org-directory', icon: '🏢', allowedRoles: ['admin'] },
     { name: '权限分组', path: '/permission-groups', icon: '🛡️', allowedRoles: ['admin'] },
     { name: '数据安全', path: '/data-security', icon: '🔒', allowedRoles: ['admin'] },
-    { name: '日志审计', path: '/logs', icon: '📒', allowedRoles: ['admin'] },
+    { name: '日志审计', path: '/logs', icon: '🧾', allowedRoles: ['admin'] },
   ];
 
   const pageTitleOverrides = {
-    '/tools/patent-download': 'Patent Download',
-    '/tools/paper-download': 'Paper Download',
-    '/tools/paper-workspace': 'Paper Workspace',
-    '/tools/collection-workbench': 'Collection Workbench',
-    '/tools/nas-browser': 'NAS Browser',
-    '/tools/drug-admin': 'Drug Admin',
+    '/tools/patent-download': '专利下载分析',
+    '/tools/paper-download': '论文下载分析',
+    '/tools/paper-workspace': '论文工作台',
+    '/tools/collection-workbench': '采集工作台',
+    '/tools/nas-browser': 'NAS 网盘',
+    '/tools/drug-admin': '药监导航',
     '/tools/nmpa': 'NMPA',
   };
 
   const currentTitle = pageTitleOverrides[location.pathname]
     || navigation.find((item) => item.path === location.pathname)?.name
-    || 'Dashboard';
+    || '仪表盘';
 
   return (
     <div style={{ display: 'flex', height: '100vh' }}>
@@ -82,7 +82,7 @@ const Layout = ({ children }) => {
           }}
         >
           <h2 style={{ margin: 0, fontSize: sidebarOpen ? '1.5rem' : '0.9rem' }}>
-            {sidebarOpen ? '知识库系统' : 'KB'}
+            {sidebarOpen ? '知识库系统' : '知识库'}
           </h2>
           <button
             onClick={() => setSidebarOpen(!sidebarOpen)}
@@ -94,7 +94,7 @@ const Layout = ({ children }) => {
               cursor: 'pointer',
               fontSize: '1.2rem',
             }}
-            aria-label="toggle sidebar"
+            aria-label="切换侧边栏"
           >
             {sidebarOpen ? '<' : '>'}
           </button>
@@ -134,8 +134,8 @@ const Layout = ({ children }) => {
                     style={{
                       width: '24px',
                       textAlign: 'center',
-                      fontSize: sidebarOpen ? '1.05rem' : '1.15rem',
-                      lineHeight: 1,
+                      fontSize: sidebarOpen ? '1.05rem' : '1.1rem',
+                      lineHeight: 1.3,
                       flexShrink: 0,
                     }}
                     title={item.name}
@@ -179,7 +179,7 @@ const Layout = ({ children }) => {
               e.currentTarget.style.backgroundColor = '#ef4444';
             }}
           >
-            {sidebarOpen ? '退出' : 'X'}
+            {sidebarOpen ? '退出' : '退'}
           </button>
         </div>
       </aside>

@@ -25,7 +25,7 @@ export function countLines(value) {
 export async function fetchKnowledgePreviewText(docId) {
   const data = await documentClient.preview({ source: DOCUMENT_SOURCE.KNOWLEDGE, docId });
   if (data?.type !== 'text') {
-    throw new Error(data?.message || 'Preview failed: not a text document');
+    throw new Error(data?.message || '预览失败：该文档不是文本类型');
   }
   return String(data.content || '');
 }
@@ -67,7 +67,9 @@ export function buildApproveBatchSummary(conflictChecks, result) {
     conflicted: conflicted.map((item) => ({
       docId: item.doc.doc_id,
       filename: item.doc.filename,
-      detail: item.conflict?.existing?.filename ? `与已通过文档重复：${item.conflict.existing.filename}` : '检测到命名冲突',
+      detail: item.conflict?.existing?.filename
+        ? `与已通过文档重名：${item.conflict.existing.filename}`
+        : '检测到命名冲突',
       existing: item.conflict?.existing || null,
       normalized: item.conflict?.normalized_name || '',
     })),
@@ -98,15 +100,15 @@ export function buildBatchSummaryText(batchReviewSummary) {
     `成功 ${batchReviewSummary.successCount}，失败 ${batchReviewSummary.failedCount}，冲突跳过 ${batchReviewSummary.conflicted.length}，检查失败 ${batchReviewSummary.checkFailed.length}`,
   ];
   if (batchReviewSummary.failedItems.length > 0) {
-    lines.push('失败项');
+    lines.push('失败项：');
     batchReviewSummary.failedItems.forEach((item) => lines.push(`${item.doc_id}: ${item.detail}`));
   }
   if (batchReviewSummary.conflicted.length > 0) {
-    lines.push('冲突跳过');
+    lines.push('冲突跳过：');
     batchReviewSummary.conflicted.forEach((item) => lines.push(`${item.filename}: ${item.detail}`));
   }
   if (batchReviewSummary.checkFailed.length > 0) {
-    lines.push('检查失败');
+    lines.push('检查失败：');
     batchReviewSummary.checkFailed.forEach((item) => lines.push(`${item.filename}: ${item.detail}`));
   }
   return lines.join('\n');

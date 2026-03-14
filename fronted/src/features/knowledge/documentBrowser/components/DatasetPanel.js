@@ -64,7 +64,7 @@ export default function DatasetPanel({
           {loadingDocs ? <div style={{ color: '#6b7280', textAlign: 'center', padding: 20 }}>{TEXT.loadingDocs}</div> : null}
           {!loadingDocs && datasetError ? (
             <div style={{ color: '#dc2626', textAlign: 'center', padding: 20 }}>
-              <div style={{ marginBottom: 10 }}>Load failed: {datasetError}</div>
+              <div style={{ marginBottom: 10 }}>加载失败：{datasetError}</div>
               <button type="button" onClick={() => fetchDocumentsForDataset(dataset.name)}>{TEXT.retry}</button>
             </div>
           ) : null}
@@ -175,3 +175,4 @@ export default function DatasetPanel({
     </div>
   );
 }
+

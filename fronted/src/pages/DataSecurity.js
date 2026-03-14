@@ -9,6 +9,19 @@ const formatTime = (ms) => {
   return d.toLocaleString();
 };
 
+const BACKUP_STATUS_LABELS = {
+  queued: '排队中',
+  running: '执行中',
+  success: '成功',
+  failed: '失败',
+  canceled: '已取消',
+};
+
+const formatBackupStatus = (status) => {
+  const key = String(status || '').trim().toLowerCase();
+  return BACKUP_STATUS_LABELS[key] || String(status || '-');
+};
+
 const ProgressBar = ({ value }) => {
   const pct = Math.max(0, Math.min(100, Number(value || 0)));
   return (
@@ -360,14 +373,14 @@ const DataSecurity = () => {
               <input data-testid="ds-target-local-dir"
                 value={settings?.target_local_dir || ''}
                 onChange={(e) => setSettings((p) => ({ ...p, target_local_dir: e.target.value }))}
-                placeholder="例如：D:\\backup\\ragflowauth"
+                placeholder="例如：备份目录/项目目录"
                 style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '8px', marginTop: '6px' }}
               />
             </label>
           ) : (
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
               <label>
-                目标电脑 IP
+                目标电脑地址（IP）
                 <input
                   value={settings?.target_ip || ''}
                   onChange={(e) => setSettings((p) => ({ ...p, target_ip: e.target.value }))}
@@ -377,12 +390,12 @@ const DataSecurity = () => {
                 />
               </label>
               <label>
-                共享名（Share Name）
+                共享名
                 <input
                   value={settings?.target_share_name || ''}
                   onChange={(e) => setSettings((p) => ({ ...p, target_share_name: e.target.value }))}
                   data-testid="ds-target-share-name"
-                  placeholder="例如：backup"
+                  placeholder="例如：备份"
                   style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '8px', marginTop: '6px' }}
                 />
               </label>
@@ -392,7 +405,7 @@ const DataSecurity = () => {
                   value={settings?.target_subdir || ''}
                   onChange={(e) => setSettings((p) => ({ ...p, target_subdir: e.target.value }))}
                   data-testid="ds-target-subdir"
-                  placeholder="例如：ragflowauth"
+                  placeholder="例如：项目备份"
                   style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '8px', marginTop: '6px' }}
                 />
               </label>
@@ -405,12 +418,12 @@ const DataSecurity = () => {
           <div style={{ borderTop: '1px solid #e5e7eb', paddingTop: '12px' }} />
 
           <label>
-            RAGFlow docker-compose.yml 路径（容器内路径）
+            RAGFlow 编排文件路径（容器内路径）
             <input
               value={settings?.ragflow_compose_path || ''}
               onChange={(e) => setSettings((p) => ({ ...p, ragflow_compose_path: e.target.value }))}
               data-testid="ds-ragflow-compose-path"
-              placeholder="/app/ragflow_compose/docker-compose.yml"
+              placeholder="例如：容器内编排文件路径"
               style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '8px', marginTop: '6px' }}
             />
             <div style={{ color: '#6b7280', marginTop: '6px', fontSize: '0.9rem' }}>
@@ -420,7 +433,7 @@ const DataSecurity = () => {
 
           <label>
             <div style={{ color: '#6b7280', marginTop: '6px', fontSize: '0.9rem' }}>
-              只需要填写 docker-compose.yml 路径即可。系统会自动识别 Compose 项目名（必要时会提示你怎么处理）。
+              只需要填写编排文件路径即可。系统会自动识别项目名（必要时会提示你怎么处理）。
             </div>
           </label>
 
@@ -441,16 +454,16 @@ const DataSecurity = () => {
               onChange={(e) => setSettings((p) => ({ ...p, full_backup_include_images: e.target.checked }))}
               data-testid="ds-full-backup-include-images"
             />
-            全量备份包含 Docker 镜像（体积较大，但可离线恢复）
+            全量备份包含镜像文件（体积较大，但可离线恢复）
           </label>
 
           <label>
-            本项目数据库路径（默认 data/auth.db）
+            本项目数据库路径（默认值见输入框）
             <input
               value={settings?.auth_db_path || 'data/auth.db'}
               onChange={(e) => setSettings((p) => ({ ...p, auth_db_path: e.target.value }))}
               data-testid="ds-auth-db-path"
-              placeholder="data/auth.db"
+              placeholder="例如：项目数据目录/认证库文件路径"
               style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '8px', marginTop: '6px' }}
             />
           </label>
@@ -468,7 +481,7 @@ const DataSecurity = () => {
             <div data-testid="ds-active-job" style={{ display: 'flex', justifyContent: 'space-between', gap: '10px', alignItems: 'center' }}>
               <div>
                 <div data-testid="ds-active-job-status" style={{ fontWeight: 600 }}>
-                  #{activeJob.id} {activeJob.status}
+                  #{activeJob.id} {formatBackupStatus(activeJob.status)}
                 </div>
                 <div data-testid="ds-active-job-message" style={{ color: '#6b7280', fontSize: '0.9rem' }}>
                   {activeJob.message || ''} {activeJob.output_dir ? `（输出：${activeJob.output_dir}）` : ''}
@@ -523,7 +536,7 @@ const DataSecurity = () => {
                 <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
                   <div style={{ fontWeight: 700 }}>#{j.id}</div>
                   <div style={{ color: j.status === 'success' ? '#059669' : j.status === 'failed' ? '#dc2626' : '#6b7280' }}>
-                    {j.status}
+                    {formatBackupStatus(j.status)}
                   </div>
                   <div style={{ color: '#6b7280' }}>{j.message || ''}</div>
                 </div>

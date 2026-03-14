@@ -21,9 +21,9 @@ function renderPatentMeta(item) {
       <span>{PATENT_SOURCE_LABEL_MAP[item.source] || item.source || '-'}</span>
       <span>{item.publication_number || '-'}</span>
       <span>{item.publication_date || '-'}</span>
-      <span>Assignee: {item.assignee || '-'}</span>
-      <span>Inventor: {item.inventor || '-'}</span>
-      <span>Patent ID: {item.patent_id || '-'}</span>
+      <span>申请人：{item.assignee || '-'}</span>
+      <span>发明人：{item.inventor || '-'}</span>
+      <span>专利 ID：{item.patent_id || '-'}</span>
       {item.error ? <span style={{ color: '#b91c1c' }}>{item.error}</span> : null}
     </div>
   );
@@ -42,7 +42,7 @@ function renderPatentAnalysis(item) {
         padding: '8px',
       }}
     >
-      <strong>Analysis:</strong> {item.analysis_text}
+      <strong>分析：</strong> {item.analysis_text}
     </div>
   ) : null;
 }
@@ -61,7 +61,7 @@ export default function PatentResultList({
       items={items}
       sessionId={sessionId}
       itemKeyPrefix="s"
-      emptyText="No patents found"
+      emptyText="未找到专利"
       listStyle={{ maxHeight: '70vh', overflow: 'auto', paddingRight: '4px' }}
       cardStyle={{ background: '#fff', gap: '8px' }}
       titleStyle={{ fontWeight: 800, lineHeight: 1.35 }}

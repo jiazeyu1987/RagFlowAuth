@@ -65,7 +65,7 @@ const DocumentAudit = ({ embedded = false }) => {
         setDeletions(Array.isArray(deletionsResp?.deletions) ? deletionsResp.deletions : []);
         setDownloads(Array.isArray(downloadsResp?.downloads) ? downloadsResp.downloads : []);
       } catch (err) {
-        setError(err?.message || 'load_failed');
+        setError(err?.message || '加载记录失败');
       } finally {
         setLoading(false);
       }

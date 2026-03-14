@@ -79,19 +79,19 @@ const Tools = () => {
     const list = [
       ...(isAdmin() ? [{
         id: 'nas_browser',
-        name: 'NAS云盘',
+        name: 'NAS 网盘',
         description: '浏览 NAS 共享中的文件夹和文件，仅管理员可见。',
         route: '/tools/nas-browser',
       }, {
         id: 'collection_workbench',
-        name: 'Collection Workbench',
-        description: 'Collection orchestration with task controls, failure classes, batch ingest and trace logs.',
+        name: '采集工作台',
+        description: '统一管理采集任务、失败分类、批量入库与追踪日志。',
         route: '/tools/collection-workbench',
       }] : []),
       {
         id: 'paper_download',
         name: '论文下载分析',
-        description: '进入论文下载页面：配置关键词、下载源和上限，下载并添加到 [本地论文]。',
+        description: '配置关键词、下载来源与数量上限，下载后自动加入 [本地论文]。',
         route: '/tools/paper-download',
       },
       {
@@ -103,39 +103,39 @@ const Tools = () => {
       {
         id: 'patent_download',
         name: '专利下载分析',
-        description: '进入专利下载页面：配置关键词、数据源和上限，下载并添加到 [本地专利]。',
+        description: '配置关键词、数据源与数量上限，下载后自动加入 [本地专利]。',
         route: '/tools/patent-download',
       },
       {
         id: 'nhsa_code_search',
         name: '医保编码查询工具',
-        description: '打开国家医保服务平台：医保编码查询（新窗口）',
+        description: '打开国家医保服务平台的医保编码查询页面（新窗口）。',
         href: 'https://code.nhsa.gov.cn/toSearch.html?sysflag=1004',
       },
       {
         id: 'shanghai_tax',
         name: '上海电子税务局',
-        description: '打开上海电子税务局登录页面（新窗口）',
+        description: '打开上海电子税务局登录页面（新窗口）。',
         href: 'https://tpass.shanghai.chinatax.gov.cn:8443/#/login?response_type=code&client_id=d3f156f230415796834bed5e954ed4de&redirect_uri=https%3A%2F%2Fdppt.shanghai.chinatax.gov.cn%3A8443%2Fszzhzz%2FOauth2HandleServlet%3FcdPath%3DL2RlZGV1Y3Rpb24tdHlwZS1jaGVja2VkLWJ1c2luZXNzP3J1dWlkPTE3Njg1Mzg4ODUyMDUmb2F1dGgyc3RhdGU9N2Q4YTRlZDMzOWQyNGVhMWI3OTNlNzRjNDc5OWZlYzk%3D&state=1039c7dafc8d4ac69dcd1fac61121679&ruuid=1770379445455',
       },
       {
         id: 'drug_admin',
-        name: '药监局',
-        description: '各省和国家药监局官网',
+        name: '药监导航',
+        description: '各省与国家药监局官网入口。',
         route: '/tools/drug-admin',
       },
       {
         id: 'nmpa',
         name: 'NMPA',
-        description: '国家药监局器审中心',
+        description: '国家药监局器审中心。',
         route: '/tools/nmpa',
       },
     ];
 
-    for (let i = 4; i <= 48; i++) {
+    for (let i = 4; i <= 48; i += 1) {
       list.push({
-        id: `tbd_${i}`,
-        name: 'TBD',
+        id: `placeholder_${i}`,
+        name: '待开放工具',
         description: '敬请期待',
         href: '',
       });
@@ -157,7 +157,7 @@ const Tools = () => {
       window.open(tool.href, '_blank', 'noopener,noreferrer');
       return;
     }
-    window.alert('该工具尚未开放（TBD）。');
+    window.alert('该工具尚未开放。');
   };
 
   return (

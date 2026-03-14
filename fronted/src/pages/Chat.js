@@ -129,7 +129,7 @@ const Chat = () => {
     async (rawSource) => {
       const source = normalizeSource(rawSource);
       if (!source.docId || !source.dataset) return;
-      if (!canDownloadFiles) throw new Error('no_download_permission');
+      if (!canDownloadFiles) throw new Error('暂无下载权限');
       await documentClient.downloadToBrowser({
         source: DOCUMENT_SOURCE.RAGFLOW,
         docId: source.docId,
@@ -147,7 +147,7 @@ const Chat = () => {
     console.debug('[Chat:CitationPopup] open', { id, chunkLen: String(chunk || '').length, x, y });
     setCitationHover({
       id,
-      chunk: String(chunk || '').trim() || '(未获取到chunk内容)',
+      chunk: String(chunk || '').trim() || '(未获取到片段内容)',
       x,
       y,
     });

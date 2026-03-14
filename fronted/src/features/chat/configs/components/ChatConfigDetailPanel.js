@@ -202,7 +202,7 @@ export default function ChatConfigDetailPanel({
                           />
                           <div style={{ minWidth: 0 }}>
                             <div style={{ fontWeight: 950, color: '#111827', lineHeight: 1.2 }}>{name}</div>
-                            <div style={{ marginTop: '4px', color: '#6b7280', fontSize: '0.82rem' }}>ID: {id || '(unknown)'}</div>
+                            <div style={{ marginTop: '4px', color: '#6b7280', fontSize: '0.82rem' }}>编号：{id || '（未知）'}</div>
                           </div>
                         </label>
                       );

@@ -52,7 +52,7 @@ export const useUserManagement = () => {
       setAllUsers(Array.isArray(data) ? data : []);
       setError(null);
     } catch (err) {
-      setError(err?.message || String(err || 'Failed to load users'));
+      setError(err?.message || String(err || '加载用户列表失败'));
     } finally {
       setLoading(false);
     }
@@ -65,7 +65,7 @@ export const useUserManagement = () => {
         setAvailableGroups(Array.isArray(data.data) ? data.data : []);
       }
     } catch (err) {
-      console.error('Failed to load permission groups:', err);
+      console.error('加载权限分组失败：', err);
     }
   }, []);
 
@@ -78,7 +78,7 @@ export const useUserManagement = () => {
       setCompanies(Array.isArray(companyList) ? companyList : []);
       setDepartments(Array.isArray(deptList) ? deptList : []);
     } catch (err) {
-      console.error('Failed to load org directory:', err);
+      console.error('加载组织架构失败：', err);
     }
   }, []);
 
@@ -130,7 +130,7 @@ export const useUserManagement = () => {
         handleCloseCreateModal();
         fetchUsers();
       } catch (err) {
-        setError(err?.message || String(err || 'Create user failed'));
+        setError(err?.message || String(err || '创建用户失败'));
       }
     },
     [fetchUsers, handleCloseCreateModal, newUser]
@@ -143,7 +143,7 @@ export const useUserManagement = () => {
         await usersApi.remove(userId);
         fetchUsers();
       } catch (err) {
-        setError(err?.message || String(err || 'Delete user failed'));
+        setError(err?.message || String(err || '删除用户失败'));
       }
     },
     [fetchUsers]
@@ -159,7 +159,7 @@ export const useUserManagement = () => {
         await usersApi.update(user.user_id, { status: nextStatus });
         await fetchUsers();
       } catch (err) {
-        setError(err?.message || String(err || 'Toggle user status failed'));
+        setError(err?.message || String(err || '切换用户状态失败'));
       } finally {
         setStatusUpdatingUserId(null);
       }
@@ -288,7 +288,7 @@ export const useUserManagement = () => {
       handleCloseGroupModal();
       fetchUsers();
     } catch (err) {
-      setError(err?.message || String(err || 'Save group failed'));
+      setError(err?.message || String(err || '保存权限分组失败'));
     }
   }, [editingGroupUser, fetchUsers, handleCloseGroupModal, selectedGroupIds]);
 

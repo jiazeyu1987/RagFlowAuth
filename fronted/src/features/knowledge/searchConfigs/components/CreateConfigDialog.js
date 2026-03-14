@@ -62,7 +62,7 @@ export default function CreateConfigDialog({
             justifyContent: 'space-between',
           }}
         >
-          <div style={{ fontWeight: 900 }}>Create Search Config</div>
+          <div style={{ fontWeight: 900 }}>创建检索配置</div>
           <button
             onClick={onClose}
             style={{
@@ -86,22 +86,22 @@ export default function CreateConfigDialog({
           }}
         >
           <div>
-            <div style={{ fontWeight: 900, color: '#111827' }}>Create Mode</div>
+            <div style={{ fontWeight: 900, color: '#111827' }}>创建方式</div>
             <div style={{ display: 'flex', gap: '10px', marginTop: '8px' }}>
               <button onClick={() => onChangeMode('blank')} style={modeButtonStyle(mode === 'blank')}>
-                Blank
+                空白创建
               </button>
               <button onClick={() => onChangeMode('copy')} style={modeButtonStyle(mode === 'copy')}>
-                Copy
+                复制现有配置
               </button>
             </div>
           </div>
           <div>
-            <div style={{ fontWeight: 900, color: '#111827' }}>Name</div>
+            <div style={{ fontWeight: 900, color: '#111827' }}>名称</div>
             <input
               value={name}
               onChange={(event) => onChangeName(event.target.value)}
-              placeholder="Input name"
+              placeholder="请输入名称"
               style={{
                 width: '100%',
                 marginTop: '8px',
@@ -117,7 +117,7 @@ export default function CreateConfigDialog({
 
         {mode === 'copy' ? (
           <div style={{ padding: '0 16px 14px' }}>
-            <div style={{ fontWeight: 900, color: '#111827' }}>Copy From Existing Config</div>
+            <div style={{ fontWeight: 900, color: '#111827' }}>从已有配置复制</div>
             <select
               value={fromId}
               onChange={(event) => onChangeFromId(event.target.value)}
@@ -132,7 +132,7 @@ export default function CreateConfigDialog({
                 background: '#ffffff',
               }}
             >
-              <option value="">Select...</option>
+              <option value="">请选择...</option>
               {list.map((item) => (
                 <option key={item.id} value={item.id}>
                   {item.name || item.id}
@@ -143,7 +143,7 @@ export default function CreateConfigDialog({
         ) : null}
 
         <div style={{ padding: '0 16px 16px' }}>
-          <div style={{ fontWeight: 900, color: '#111827' }}>Config JSON</div>
+          <div style={{ fontWeight: 900, color: '#111827' }}>配置 JSON</div>
           <textarea
             value={jsonText}
             onChange={(event) => onChangeJsonText(event.target.value)}
@@ -186,7 +186,7 @@ export default function CreateConfigDialog({
               fontWeight: 800,
             }}
           >
-            Cancel
+            取消
           </button>
           <button
             onClick={onCreate}
@@ -201,7 +201,7 @@ export default function CreateConfigDialog({
               fontWeight: 900,
             }}
           >
-            Create
+            创建
           </button>
         </div>
       </div>

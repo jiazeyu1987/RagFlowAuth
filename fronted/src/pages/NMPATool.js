@@ -36,13 +36,13 @@ export default function NMPATool() {
     <div style={{ width: '100%', boxSizing: 'border-box' }} data-testid="nmpa-tool-page">
       <div style={{ ...CARD, padding: '16px', marginBottom: '14px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
-          <div style={{ fontSize: '1.1rem', fontWeight: 900, color: '#111827' }}>NMPA</div>
+          <div style={{ fontSize: '1.1rem', fontWeight: 900, color: '#111827' }}>国家药监局工具</div>
           <button type="button" onClick={() => navigate('/tools')} style={BUTTON}>
             返回实用工具
           </button>
         </div>
         <div style={{ marginTop: '8px', color: '#6b7280', fontSize: '0.9rem', lineHeight: 1.6 }}>
-          国家药监局器审中心
+          国家药品监督管理局器审中心
         </div>
       </div>
 
@@ -54,7 +54,7 @@ export default function NMPATool() {
             style={PRIMARY_BUTTON}
             data-testid="nmpa-home-btn"
           >
-            主页
+            首页
           </button>
           <button
             type="button"
@@ -69,3 +69,4 @@ export default function NMPATool() {
     </div>
   );
 }
+

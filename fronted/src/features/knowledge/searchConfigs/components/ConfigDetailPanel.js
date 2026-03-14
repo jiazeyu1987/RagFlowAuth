@@ -33,25 +33,25 @@ export default function ConfigDetailPanel({
           gap: '10px',
         }}
       >
-        <div style={{ fontWeight: 900, color: '#111827' }}>Config</div>
+        <div style={{ fontWeight: 900, color: '#111827' }}>配置详情</div>
         <div style={{ color: '#6b7280', fontWeight: 700 }}>{selected?.name || ''}</div>
       </div>
 
       <div style={{ padding: '14px' }}>
-        {detailLoading ? <div style={{ color: '#6b7280' }}>Loading...</div> : null}
+        {detailLoading ? <div style={{ color: '#6b7280' }}>加载中...</div> : null}
         {detailError ? (
           <div style={{ color: '#b91c1c', fontWeight: 800 }}>{detailError}</div>
         ) : null}
-        {!selected && !detailLoading ? <div style={{ color: '#6b7280' }}>No selected config</div> : null}
+        {!selected && !detailLoading ? <div style={{ color: '#6b7280' }}>未选择配置</div> : null}
 
         {selected ? (
           <div>
-            <div style={{ fontWeight: 900, color: '#111827', marginTop: '8px' }}>Name</div>
+            <div style={{ fontWeight: 900, color: '#111827', marginTop: '8px' }}>名称</div>
             <input
               value={nameText}
               disabled={!isAdmin}
               onChange={(event) => onChangeName(event.target.value)}
-              placeholder="Config name"
+              placeholder="配置名称"
               style={{
                 width: '100%',
                 padding: '10px 12px',
@@ -72,7 +72,7 @@ export default function ConfigDetailPanel({
                 marginTop: '14px',
               }}
             >
-              <div style={{ fontWeight: 900, color: '#111827' }}>Raw JSON</div>
+              <div style={{ fontWeight: 900, color: '#111827' }}>原始 JSON</div>
               <div style={{ display: 'flex', gap: '10px' }}>
                 <button
                   onClick={onReset}
@@ -86,7 +86,7 @@ export default function ConfigDetailPanel({
                     fontWeight: 900,
                   }}
                 >
-                  Reset
+                  重置
                 </button>
                 {isAdmin ? (
                   <button
@@ -102,7 +102,7 @@ export default function ConfigDetailPanel({
                       fontWeight: 900,
                     }}
                   >
-                    Save
+                    保存
                   </button>
                 ) : null}
               </div>

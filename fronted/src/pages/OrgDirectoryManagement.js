@@ -166,7 +166,7 @@ const OrgDirectoryManagement = () => {
 
   const auditRows = useMemo(() => auditLogs || [], [auditLogs]);
 
-  if (loading) return <div>Loading...</div>;
+  if (loading) return <div>加载中...</div>;
 
   return (
     <div data-testid="org-page">
@@ -184,7 +184,7 @@ const OrgDirectoryManagement = () => {
             marginBottom: 12,
           }}
         >
-          Error: {error}
+          错误：{error}
         </div>
       ) : null}
 
@@ -399,7 +399,7 @@ const OrgDirectoryManagement = () => {
                   marginBottom: 12,
                 }}
               >
-                Error: {auditError}
+                错误：{auditError}
               </div>
             ) : null}
             <div style={{ display: 'flex', gap: '12px', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap' }}>

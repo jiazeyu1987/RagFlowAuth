@@ -17,9 +17,9 @@ export default function GroupContentTable({
     <table style={{ width: '100%', borderCollapse: 'collapse' }}>
       <thead>
         <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e5e7eb' }}>
-          <th style={{ textAlign: 'left', padding: '8px 10px' }}>Name</th>
-          <th style={{ textAlign: 'left', padding: '8px 10px', width: 90 }}>Type</th>
-          <th style={{ textAlign: 'left', padding: '8px 10px', width: 120 }}>Actions</th>
+          <th style={{ textAlign: 'left', padding: '8px 10px' }}>名称</th>
+          <th style={{ textAlign: 'left', padding: '8px 10px', width: 90 }}>类型</th>
+          <th style={{ textAlign: 'left', padding: '8px 10px', width: 120 }}>操作</th>
         </tr>
       </thead>
       <tbody>
@@ -57,7 +57,7 @@ export default function GroupContentTable({
               }}
             >
               <td style={{ padding: '8px 10px' }}>
-                {row.kind === 'folder' ? '[Folder] ' : '[Group] '}
+                {row.kind === 'folder' ? '[目录] ' : '[权限组] '}
                 {row.name}
               </td>
               <td style={{ padding: '8px 10px', color: '#4b5563' }}>{row.type}</td>
@@ -83,7 +83,7 @@ export default function GroupContentTable({
                         fontSize: 12,
                       }}
                     >
-                      Edit
+                      编辑
                     </button>
                     <button
                       type="button"
@@ -103,7 +103,7 @@ export default function GroupContentTable({
                         fontSize: 12,
                       }}
                     >
-                      Delete
+                      删除
                     </button>
                   </>
                 )}
@@ -114,7 +114,7 @@ export default function GroupContentTable({
         {!rows.length && (
           <tr>
             <td colSpan={3} style={{ padding: 18, color: '#6b7280', textAlign: 'center' }}>
-              This folder is empty
+              当前目录为空
             </td>
           </tr>
         )}

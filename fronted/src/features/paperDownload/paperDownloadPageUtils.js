@@ -7,7 +7,7 @@ export const DEFAULT_PAPER_SOURCES = {
 
 export const PAPER_LAST_CONFIG_KEY = 'paper_download_last_config_v1';
 
-export const PAPER_LOCAL_KB_REF = '[鏈湴璁烘枃]';
+export const PAPER_LOCAL_KB_REF = '[本地论文]';
 
 export const PAPER_SOURCE_LABEL_MAP = {
   arxiv: 'arXiv',

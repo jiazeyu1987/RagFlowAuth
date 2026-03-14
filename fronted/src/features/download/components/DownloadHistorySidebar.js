@@ -11,14 +11,14 @@ export default function DownloadHistorySidebar({
   onSelectKey,
   onAdd,
   onDelete,
-  title = 'History Keywords',
-  refreshText = 'Refresh',
-  loadingText = 'Loading...',
-  emptyText = 'No history keywords',
-  addText = 'Add to KB',
-  addingText = 'Adding...',
-  deleteText = 'Delete',
-  deletingText = 'Deleting...',
+  title = '历史关键词',
+  refreshText = '刷新',
+  loadingText = '加载中...',
+  emptyText = '暂无历史关键词',
+  addText = '加入知识库',
+  addingText = '处理中...',
+  deleteText = '删除',
+  deletingText = '删除中...',
   getRowKey = (row) => String(row?.history_key || ''),
   getRowTitle = (row) => row?.keyword_display || '-',
 }) {
@@ -87,7 +87,7 @@ export default function DownloadHistorySidebar({
               >
                 <div style={{ fontWeight: 700, color: '#111827', fontSize: '0.88rem' }}>{getRowTitle(row)}</div>
                 <div style={{ fontSize: '0.78rem', color: '#6b7280', marginTop: '4px' }}>
-                  downloaded {downloadedCount}, analyzed {analyzedCount}, added {addedCount}
+                  已下载 {downloadedCount}，已分析 {analyzedCount}，已加入 {addedCount}
                 </div>
               </button>
 

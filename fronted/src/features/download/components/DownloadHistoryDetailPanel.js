@@ -3,9 +3,9 @@ import React from 'react';
 export default function DownloadHistoryDetailPanel({
   error = '',
   loading = false,
-  loadingText = 'Loading...',
+  loadingText = '加载中...',
   payload = null,
-  itemLabel = 'items',
+  itemLabel = '条',
   children = null,
 }) {
   const summary = payload?.history || null;
@@ -16,7 +16,7 @@ export default function DownloadHistoryDetailPanel({
       {loading ? <div style={{ color: '#6b7280', fontSize: '0.88rem' }}>{loadingText}</div> : null}
       {!loading && summary ? (
         <div style={{ color: '#6b7280', fontSize: '0.82rem', marginBottom: '8px' }}>
-          Keyword: {summary.keyword_display || '-'}, Sessions {summary.session_count || 0}, {itemLabel} {summary.item_count || 0}
+          关键词：{summary.keyword_display || '-'}，会话数 {summary.session_count || 0}，{itemLabel} {summary.item_count || 0}
         </div>
       ) : null}
       {!loading ? children : null}

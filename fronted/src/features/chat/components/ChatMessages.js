@@ -160,7 +160,7 @@ export default function ChatMessages({
                             cursor: 'pointer',
                             userSelect: 'none',
                           }}
-                          title="点击查看chunk"
+                          title="点击查看片段"
                         >
                           {children}
                         </span>

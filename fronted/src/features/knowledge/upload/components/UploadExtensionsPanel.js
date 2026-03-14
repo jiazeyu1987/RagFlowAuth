@@ -72,7 +72,7 @@ export default function UploadExtensionsPanel({
                 event.preventDefault();
                 if (onAddExtension) onAddExtension();
               }}
-              placeholder="输入后缀，例如 .dwg 或 dwg"
+              placeholder="输入后缀，例如 .示例后缀 或 示例后缀"
               style={{
                 flex: '1 1 260px',
                 minWidth: 220,

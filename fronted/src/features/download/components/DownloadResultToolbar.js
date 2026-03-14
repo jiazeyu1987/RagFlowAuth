@@ -56,13 +56,13 @@ export default function DownloadResultToolbar({
   removeAllDisabled = false,
   stopBusy = false,
   addAllBusy = false,
-  currentTabText = 'Current',
-  historyTabText = 'History',
-  stopText = 'Stop',
-  stopBusyText = 'Stopping...',
-  addAllText = 'Add All',
-  addAllBusyText = 'Adding...',
-  removeAllText = 'Delete All',
+  currentTabText = '当前结果',
+  historyTabText = '历史记录',
+  stopText = '停止',
+  stopBusyText = '停止中...',
+  addAllText = '全部加入',
+  addAllBusyText = '处理中...',
+  removeAllText = '删除全部',
 }) {
   return (
     <>

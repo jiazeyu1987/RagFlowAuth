@@ -49,7 +49,7 @@ export default function ChatConfigListPanel({
             value={chatFilter}
             onChange={(event) => onFilterChange && onFilterChange(event.target.value)}
             data-testid="chat-config-filter"
-            placeholder="按名称/ID/描述筛选"
+            placeholder="按名称/编号/描述筛选"
             style={{ flex: 1, padding: '10px 12px', border: '1px solid #e5e7eb', borderRadius: '10px', outline: 'none' }}
           />
           <button
@@ -103,7 +103,7 @@ export default function ChatConfigListPanel({
                 title={id}
               >
                 <div style={{ fontWeight: 950, color: '#111827', fontSize: '0.95rem', lineHeight: 1.2 }}>{name || '(未命名)'}</div>
-                <div style={{ marginTop: '6px', color: '#6b7280', fontSize: '0.8rem' }}>{id ? `ID: ${id}` : 'ID: (unknown)'}</div>
+                <div style={{ marginTop: '6px', color: '#6b7280', fontSize: '0.8rem' }}>{id ? `编号：${id}` : '编号：（未知）'}</div>
               </button>
 
               {isAdmin ? (

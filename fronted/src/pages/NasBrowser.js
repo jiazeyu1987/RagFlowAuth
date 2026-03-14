@@ -20,8 +20,8 @@ import {
 
 const ACTIVE_TASK_STATUSES = new Set(['pending', 'running', 'canceling', 'pausing']);
 const TASK_STATUS_LABELS = {
-  pending: '排队中',
-  running: '执行中',
+  pending: '待处理',
+  running: '运行中',
   completed: '已完成',
   failed: '失败',
   canceling: '取消中',
@@ -211,7 +211,7 @@ export default function NasBrowser() {
       window.alert(buildImportSummary(result, '文件'));
     } catch (err) {
       setImportLoading(false);
-      setError(err.message || `上传${importTarget.is_dir ? '文件夹' : '文件'}失败`);
+      setError(err.message || `${importTarget.is_dir ? '文件夹' : '文件'}上传失败`);
     }
   };
 
@@ -322,16 +322,16 @@ export default function NasBrowser() {
   }[folderTaskStatus] || '#2563eb';
 
   if (!isAdmin()) {
-    return <div style={{ color: '#991b1b' }}>仅管理员可访问 NAS 云盘。</div>;
+    return <div style={{ color: '#991b1b' }}>仅管理员可访问 NAS 浏览器。</div>;
   }
 
   return (
     <div style={PAGE_STYLE} data-testid="nas-browser-page">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px' }}>
         <div>
-          <h2 style={{ margin: 0, fontSize: '1.4rem', color: '#111827' }}>NAS 云盘</h2>
+          <h2 style={{ margin: 0, fontSize: '1.4rem', color: '#111827' }}>NAS 网盘</h2>
           <div style={{ marginTop: '6px', color: '#6b7280', fontSize: '0.95rem' }}>
-            NAS: `172.30.30.4` / 共享目录: `it共享`
+            NAS：`172.30.30.4` / 共享目录：`it共享`
           </div>
         </div>
         <div style={{ display: 'flex', gap: '8px' }}>
@@ -388,8 +388,8 @@ export default function NasBrowser() {
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', alignItems: 'center' }}>
             <div>
               <div style={{ fontSize: '1rem', fontWeight: 800, color: '#111827' }}>文件夹上传进度</div>
-              <div style={{ marginTop: '4px', color: '#475569' }}>路径: {folderImportProgress.folder_path}</div>
-              <div style={{ marginTop: '4px', color: '#475569' }}>知识库: {folderImportProgress.kb_ref}</div>
+              <div style={{ marginTop: '4px', color: '#475569' }}>路径：{folderImportProgress.folder_path}</div>
+              <div style={{ marginTop: '4px', color: '#475569' }}>知识库：{folderImportProgress.kb_ref}</div>
             </div>
             <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
               <button
@@ -458,10 +458,10 @@ export default function NasBrowser() {
             </div>
           </div>
           <div style={{ marginTop: '14px', color: '#111827', fontWeight: 700 }}>
-            待上传文件数: {folderImportProgress.total_files}
+            待上传文件数：{folderImportProgress.total_files}
           </div>
           <div style={{ marginTop: '8px', color: '#475569' }}>
-            当前进度: {folderImportProgress.processed_files} / {folderImportProgress.total_files} ({folderImportProgress.progress_percent}%)
+            当前进度：{folderImportProgress.processed_files} / {folderImportProgress.total_files} ({folderImportProgress.progress_percent}%)
           </div>
           <div style={{ marginTop: '10px', height: '10px', background: '#e5e7eb', borderRadius: '999px', overflow: 'hidden' }}>
             <div
@@ -474,21 +474,21 @@ export default function NasBrowser() {
             />
           </div>
           <div style={{ marginTop: '10px', display: 'flex', gap: '16px', flexWrap: 'wrap', color: '#475569' }}>
-            <span>已导入: {folderImportProgress.imported_count}</span>
-            <span>跳过: {folderImportProgress.skipped_count}</span>
-            <span>失败: {folderImportProgress.failed_count}</span>
-            <span>状态: {TASK_STATUS_LABELS[folderImportProgress.status] || folderImportProgress.status}</span>
-            <span>优先级: {folderImportProgress.task_priority ?? '-'}</span>
+            <span>已导入：{folderImportProgress.imported_count}</span>
+            <span>跳过：{folderImportProgress.skipped_count}</span>
+            <span>失败：{folderImportProgress.failed_count}</span>
+            <span>状态：{TASK_STATUS_LABELS[folderImportProgress.status] || folderImportProgress.status}</span>
+            <span>优先级：{folderImportProgress.task_priority ?? '-'}</span>
             {Number.isInteger(folderImportProgress.queue_position) && (
-              <span>队列位置: {folderImportProgress.queue_position}</span>
+              <span>队列位置：{folderImportProgress.queue_position}</span>
             )}
-            <span>重试次数: {folderImportProgress.retry_count || 0}</span>
+            <span>重试次数：{folderImportProgress.retry_count || 0}</span>
           </div>
           {folderImportProgress.current_file && (
-            <div style={{ marginTop: '10px', color: '#1f2937' }}>当前文件: {folderImportProgress.current_file}</div>
+            <div style={{ marginTop: '10px', color: '#1f2937' }}>当前文件：{folderImportProgress.current_file}</div>
           )}
           {folderImportProgress.error && (
-            <div style={{ marginTop: '10px', color: '#b91c1c' }}>错误: {folderImportProgress.error}</div>
+            <div style={{ marginTop: '10px', color: '#b91c1c' }}>错误：{folderImportProgress.error}</div>
           )}
           {(skippedDetails.length > 0 || failedDetails.length > 0) && (
             <div style={{ marginTop: '14px', borderTop: '1px solid #e5e7eb', paddingTop: '12px' }}>
@@ -498,8 +498,8 @@ export default function NasBrowser() {
                   <div style={{ marginTop: '6px', maxHeight: '180px', overflowY: 'auto', border: '1px solid #fcd34d', borderRadius: '8px', background: '#fffbeb' }}>
                     {skippedDetails.map((item, index) => (
                       <div key={`skipped_${item.path}_${index}`} style={{ padding: '8px 10px', borderBottom: index === skippedDetails.length - 1 ? 'none' : '1px solid #fde68a', color: '#78350f', fontSize: '13px' }}>
-                        <div>路径: {item.path}</div>
-                        <div>原因: {formatImportReason(item.reason, item.detail)}</div>
+                        <div>路径：{item.path}</div>
+                        <div>原因：{formatImportReason(item.reason, item.detail)}</div>
                       </div>
                     ))}
                   </div>
@@ -511,8 +511,8 @@ export default function NasBrowser() {
                   <div style={{ marginTop: '6px', maxHeight: '220px', overflowY: 'auto', border: '1px solid #fca5a5', borderRadius: '8px', background: '#fef2f2' }}>
                     {failedDetails.map((item, index) => (
                       <div key={`failed_${item.path}_${index}`} style={{ padding: '8px 10px', borderBottom: index === failedDetails.length - 1 ? 'none' : '1px solid #fecaca', color: '#7f1d1d', fontSize: '13px' }}>
-                        <div>路径: {item.path}</div>
-                        <div>原因: {formatImportReason(item.reason, item.detail)}</div>
+                        <div>路径：{item.path}</div>
+                        <div>原因：{formatImportReason(item.reason, item.detail)}</div>
                       </div>
                     ))}
                   </div>
@@ -570,7 +570,7 @@ export default function NasBrowser() {
                       <span style={{ color: '#111827' }}>{`[文件] ${item.name}`}</span>
                     )}
                   </td>
-                  <td style={{ padding: '14px 16px', color: '#475569' }}>{item.is_dir ? '文件夹' : '文件'}</td>
+                  <td style={{ padding: '14px 16px', color: '#475569' }}>{item.is_dir ? '目录' : '文件'}</td>
                   <td style={{ padding: '14px 16px', textAlign: 'right', color: '#475569' }}>{item.is_dir ? '-' : formatFileSize(item.size)}</td>
                   <td style={{ padding: '14px 16px', color: '#475569' }}>{formatTime(item.modified_at)}</td>
                   <td style={{ padding: '14px 16px', textAlign: 'right' }}>
@@ -580,7 +580,7 @@ export default function NasBrowser() {
                       data-testid={`nas-import-btn-${String(item.path || item.name || 'item').replace(/[^a-zA-Z0-9_-]/g, '_')}`}
                       style={item.is_dir ? BUTTON_STYLES.primary : BUTTON_STYLES.success}
                     >
-                      {item.is_dir ? '上传文件夹到知识库' : '上传文件到知识库'}
+                      {item.is_dir ? '上传目录到知识库' : '上传文件到知识库'}
                     </button>
                   </td>
                 </tr>
@@ -610,16 +610,16 @@ export default function NasBrowser() {
             onClick={(e) => e.stopPropagation()}
           >
             <div style={{ fontSize: '1.15rem', fontWeight: 800, color: '#111827' }}>
-              {importTarget.is_dir ? '上传文件夹到知识库' : '上传文件到知识库'}
+              {importTarget.is_dir ? '上传目录到知识库' : '上传文件到知识库'}
             </div>
             <div style={{ marginTop: '10px', color: '#475569', lineHeight: 1.6 }}>
-              名称: {importTarget.name}
+              名称：{importTarget.name}
               <br />
-              路径: {importTarget.path}
+              路径：{importTarget.path}
               <br />
               {importTarget.is_dir
-                ? '会先统计支持格式的文件数量，然后递归上传当前文件夹及其子目录中的文件。'
-                : '仅上传当前文件，并且只支持知识库允许的文件格式。'}
+                ? '将递归上传当前目录及其子目录中的文件。'
+                : '仅当格式受支持时才会上传此文件。'}
             </div>
             <div style={{ marginTop: '16px' }}>
               <label style={{ display: 'block', marginBottom: '8px', fontWeight: 700, color: '#111827' }}>选择知识库</label>
@@ -671,3 +671,4 @@ export default function NasBrowser() {
     </div>
   );
 }
+

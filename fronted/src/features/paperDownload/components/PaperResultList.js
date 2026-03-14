@@ -37,7 +37,7 @@ function renderPaperAnalysis(item) {
         padding: '8px',
       }}
     >
-      <strong>Analysis:</strong> {item.analysis_text}
+      <strong>分析：</strong> {item.analysis_text}
     </div>
   ) : null;
 }
@@ -55,7 +55,7 @@ export default function PaperResultList({
     <DownloadResultList
       items={items}
       sessionId={sessionId}
-      emptyText="No papers found"
+      emptyText="未找到论文"
       addingItemId={addingItemId}
       deletingItemId={deletingItemId}
       isAddDisabled={(item, { adding }) =>

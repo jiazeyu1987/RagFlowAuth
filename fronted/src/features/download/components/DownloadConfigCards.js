@@ -29,8 +29,8 @@ const defaultTagStyle = {
 
 export function DownloadKeywordConfigCard({
   boxStyle,
-  title = 'Keyword Settings',
-  keywordLabel = 'Keywords',
+  title = '关键词设置',
+  keywordLabel = '关键词',
   keywordText = '',
   onKeywordChange,
   placeholder = '',
@@ -38,10 +38,10 @@ export function DownloadKeywordConfigCard({
   useAnd = true,
   onUseAndChange,
   useAndId = 'download-use-and',
-  useAndLabel = 'Use AND',
-  parsedTitle = 'Parsed Keywords',
+  useAndLabel = '使用 AND',
+  parsedTitle = '解析后的关键词',
   parsedKeywords = [],
-  emptyParsedText = 'None',
+  emptyParsedText = '无',
   titleStyle,
   labelStyle,
   tagStyle,
@@ -93,7 +93,7 @@ export function DownloadKeywordConfigCard({
 
 export function DownloadSourceConfigCard({
   boxStyle,
-  title = 'Source Settings',
+  title = '来源设置',
   sourceLabelMap = {},
   sources = {},
   onUpdateSource,
@@ -102,10 +102,10 @@ export function DownloadSourceConfigCard({
   onAutoAnalyzeChange,
   onRunDownload,
   loading = false,
-  autoAnalyzeLabel = 'Auto Analyze',
-  runText = 'Run Download',
-  runLoadingText = 'Running...',
-  limitLabel = 'Limit',
+  autoAnalyzeLabel = '自动解析',
+  runText = '开始下载',
+  runLoadingText = '下载中...',
+  limitLabel = '数量上限',
   titleStyle,
   children,
 }) {

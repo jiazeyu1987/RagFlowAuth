@@ -4,19 +4,19 @@ import authClient from '../api/authClient';
 import ResearchWorkbenchShell from '../features/researchWorkbench/components/ResearchWorkbenchShell';
 
 const STATUS_META = {
-  pending: { label: 'Pending', text: '#075985', background: '#e0f2fe' },
-  running: { label: 'Running', text: '#1d4ed8', background: '#dbeafe' },
-  paused: { label: 'Paused', text: '#334155', background: '#e2e8f0' },
-  pausing: { label: 'Pausing', text: '#334155', background: '#e2e8f0' },
-  canceling: { label: 'Canceling', text: '#92400e', background: '#fef3c7' },
-  canceled: { label: 'Canceled', text: '#92400e', background: '#fde68a' },
-  completed: { label: 'Completed', text: '#065f46', background: '#d1fae5' },
-  failed: { label: 'Failed', text: '#991b1b', background: '#fee2e2' },
+  pending: { label: '待处理', text: '#075985', background: '#e0f2fe' },
+  running: { label: '运行中', text: '#1d4ed8', background: '#dbeafe' },
+  paused: { label: '已暂停', text: '#334155', background: '#e2e8f0' },
+  pausing: { label: '暂停中', text: '#334155', background: '#e2e8f0' },
+  canceling: { label: '取消中', text: '#92400e', background: '#fef3c7' },
+  canceled: { label: '已取消', text: '#92400e', background: '#fde68a' },
+  completed: { label: '已完成', text: '#065f46', background: '#d1fae5' },
+  failed: { label: '失败', text: '#991b1b', background: '#fee2e2' },
 };
 
 const KIND_LABEL = {
-  paper_download: 'Paper Collection',
-  patent_download: 'Patent Collection',
+  paper_download: '论文采集',
+  patent_download: '专利采集',
 };
 
 const ACTION_FLAG = {
@@ -28,11 +28,18 @@ const ACTION_FLAG = {
 
 const FAILURE_META = {
   none: { label: '-', color: '#6b7280' },
-  source: { label: 'Source', color: '#b45309' },
-  network: { label: 'Network', color: '#1d4ed8' },
-  partial: { label: 'Partial', color: '#b45309' },
-  task: { label: 'Task', color: '#991b1b' },
-  unknown: { label: 'Unknown', color: '#991b1b' },
+  source: { label: '来源异常', color: '#b45309' },
+  network: { label: '网络异常', color: '#1d4ed8' },
+  partial: { label: '部分失败', color: '#b45309' },
+  task: { label: '任务异常', color: '#991b1b' },
+  unknown: { label: '未知异常', color: '#991b1b' },
+};
+
+const ACTION_LABEL = {
+  pause: '暂停',
+  resume: '继续',
+  cancel: '取消',
+  retry: '重试',
 };
 
 function toSafeTestId(value) {
@@ -98,36 +105,36 @@ function classifyFailure(task) {
   if (sourceErrors.length > 0) {
     return {
       type: 'source',
-      label: `Source (${sourceErrors.length})`,
+      label: `来源异常（${sourceErrors.length}）`,
       detail: `${sourceErrors.join(', ')}${errorText ? ` | ${errorText}` : ''}`,
     };
   }
   if (/timeout|timed out|network|connect|dns|socket/i.test(errorText)) {
     return {
       type: 'network',
-      label: 'Network',
+      label: '网络异常',
       detail: errorText,
     };
   }
   if (failedItems > 0) {
     return {
       type: 'partial',
-      label: `Partial (${failedItems})`,
-      detail: errorText || `failed_items=${failedItems}`,
+      label: `部分失败（${failedItems}）`,
+      detail: errorText || `失败条数=${failedItems}`,
     };
   }
   if (status === 'failed' && errorText) {
     return {
       type: 'task',
-      label: 'Task',
+      label: '任务异常',
       detail: errorText,
     };
   }
   if (status === 'failed') {
     return {
       type: 'unknown',
-      label: 'Unknown',
-      detail: 'No explicit error text',
+      label: '未知异常',
+      detail: '无明确错误信息',
     };
   }
   return {
@@ -177,7 +184,7 @@ export default function CollectionWorkbench() {
   const [selectedTaskId, setSelectedTaskId] = useState('');
   const [lastUpdatedAt, setLastUpdatedAt] = useState(0);
   const [logs, setLogs] = useState([]);
-  const [startKeywordText, setStartKeywordText] = useState('mental health');
+  const [startKeywordText, setStartKeywordText] = useState('心理健康');
   const [startBusyKind, setStartBusyKind] = useState('');
   const [researchUiLayoutEnabled, setResearchUiLayoutEnabled] = useState(true);
 
@@ -242,7 +249,7 @@ export default function CollectionWorkbench() {
           return nextTasks[0]?.task_id ? String(nextTasks[0].task_id) : '';
         });
       } catch (loadError) {
-        const detail = loadError?.message || 'Failed to load collection tasks';
+        const detail = loadError?.message || '加载采集任务失败';
         setError(detail);
         appendLog('error', detail, { stage: 'loadData' });
       } finally {
@@ -349,7 +356,7 @@ export default function CollectionWorkbench() {
 
       const flagName = ACTION_FLAG[action];
       if (!flagName || !task?.[flagName]) {
-        appendLog('warn', `Task ${taskId} does not support action ${action}`);
+        appendLog('warn', `任务 ${taskId} 不支持操作：${ACTION_LABEL[action] || action}`);
         return false;
       }
 
@@ -365,12 +372,12 @@ export default function CollectionWorkbench() {
         } else if (action === 'retry') {
           await authClient.retryCollectionTask(taskId);
         } else {
-          throw new Error(`Unsupported action: ${action}`);
+          throw new Error(`不支持的操作：${action}`);
         }
-        appendLog('success', `${action.toUpperCase()} -> ${taskId}`);
+        appendLog('success', `${ACTION_LABEL[action] || action} -> ${taskId}`);
         return true;
       } catch (actionError) {
-        const detail = actionError?.message || `Failed to ${action} task ${taskId}`;
+        const detail = actionError?.message || `${ACTION_LABEL[action] || action}任务失败：${taskId}`;
         setError(detail);
         appendLog('error', detail, { action, taskId });
         return false;
@@ -389,7 +396,7 @@ export default function CollectionWorkbench() {
     async (task, action) => {
       const ok = await executeTaskAction(task, action);
       if (ok) {
-        setInfo(`Action ${action} applied: ${task?.task_id}`);
+        setInfo(`已执行${ACTION_LABEL[action] || action}：${task?.task_id}`);
         await loadData({ silent: true });
       }
     },
@@ -403,7 +410,7 @@ export default function CollectionWorkbench() {
 
       const candidates = selectedTasks.filter((task) => !!task?.[flagName]);
       if (candidates.length <= 0) {
-        setError(`No selected task can run action: ${action}`);
+        setError(`所选任务中没有可执行“${ACTION_LABEL[action] || action}”的任务`);
         return;
       }
 
@@ -423,8 +430,8 @@ export default function CollectionWorkbench() {
       }
 
       setBatchBusy(false);
-      setInfo(`Batch ${action}: success ${successCount}, failed ${failureCount}`);
-      appendLog('info', `Batch ${action} done`, { successCount, failureCount });
+      setInfo(`批量${ACTION_LABEL[action] || action}完成：成功 ${successCount}，失败 ${failureCount}`);
+      appendLog('info', `批量${ACTION_LABEL[action] || action}完成`, { successCount, failureCount });
       await loadData({ silent: true });
     },
     [appendLog, executeTaskAction, loadData, selectedTasks]
@@ -436,7 +443,7 @@ export default function CollectionWorkbench() {
       return kind === 'paper_download' || kind === 'patent_download';
     });
     if (candidates.length <= 0) {
-      setError('No selected task supports batch ingest');
+      setError('所选任务均不支持批量入库');
       return;
     }
 
@@ -452,19 +459,19 @@ export default function CollectionWorkbench() {
       try {
         const payload = await authClient.addCollectionTaskToLocalKb(taskId, taskKind);
         successCount += 1;
-        appendLog('success', `INGEST -> ${taskId}`, {
+        appendLog('success', `入库 -> ${taskId}`, {
           taskKind,
           success: toNumber(payload?.success, 0),
           failed: toNumber(payload?.failed, 0),
         });
       } catch (ingestError) {
         failureCount += 1;
-        appendLog('error', ingestError?.message || `Failed to ingest task ${taskId}`, { taskKind, taskId });
+        appendLog('error', ingestError?.message || `任务入库失败：${taskId}`, { taskKind, taskId });
       }
     }
 
     setBatchIngestBusy(false);
-    setInfo(`Batch ingest done: success ${successCount}, failed ${failureCount}`);
+    setInfo(`批量入库完成：成功 ${successCount}，失败 ${failureCount}`);
     await loadData({ silent: true });
   }, [appendLog, loadData, selectedTasks]);
 
@@ -473,7 +480,7 @@ export default function CollectionWorkbench() {
       const normalizedKind = String(kind || '').trim().toLowerCase();
       const keywordText = String(startKeywordText || '').trim();
       if (!keywordText) {
-        setError('Keyword is required to start collection.');
+        setError('请输入关键词后再启动采集');
         return;
       }
 
@@ -505,15 +512,15 @@ export default function CollectionWorkbench() {
             },
           });
         } else {
-          throw new Error(`Unsupported start kind: ${normalizedKind}`);
+          throw new Error(`不支持的采集类型：${normalizedKind}`);
         }
 
         const sessionId = String(payload?.session?.session_id || '');
-        appendLog('success', `START ${normalizedKind.toUpperCase()} -> ${sessionId || '(session created)'}`);
-        setInfo(`Collection started (${normalizedKind})${sessionId ? `: ${sessionId}` : ''}`);
+        appendLog('success', `启动${normalizedKind === 'paper' ? '论文' : '专利'}采集 -> ${sessionId || '已创建会话'}`);
+        setInfo(`采集已启动（${normalizedKind === 'paper' ? '论文' : '专利'}）${sessionId ? `：${sessionId}` : ''}`);
         await loadData({ silent: true });
       } catch (startError) {
-        const detail = startError?.message || `Failed to start ${normalizedKind} collection`;
+        const detail = startError?.message || `启动${normalizedKind === 'paper' ? '论文' : '专利'}采集失败`;
         setError(detail);
         appendLog('error', detail, { stage: 'startCollectionTask', kind: normalizedKind });
       } finally {
@@ -526,17 +533,17 @@ export default function CollectionWorkbench() {
   const exportTasks = useCallback(() => {
     const rows = [
       [
-        'task_id',
-        'task_kind',
-        'status',
-        'progress_percent',
-        'total_items',
-        'downloaded_items',
-        'failed_items',
-        'failure_class',
-        'error',
-        'created_at',
-        'updated_at',
+        '任务ID',
+        '任务类型',
+        '状态',
+        '进度百分比',
+        '总条数',
+        '已下载条数',
+        '失败条数',
+        '失败分类',
+        '错误信息',
+        '创建时间',
+        '更新时间',
       ],
     ];
 
@@ -561,18 +568,18 @@ export default function CollectionWorkbench() {
     const now = new Date();
     const stamp = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}`;
     downloadCsv(rows, `collection_tasks_${stamp}.csv`);
-    appendLog('info', `Exported ${target.length} rows to CSV`);
+    appendLog('info', `已导出 ${target.length} 行 CSV`);
   }, [appendLog, selectedTasks, visibleTasks]);
 
   const summaryCards = useMemo(() => {
     const statusCounts = metrics?.status_counts || {};
     return [
-      { title: 'Total', value: toNumber(metrics?.total_tasks, 0), tone: '#1f2937' },
-      { title: 'Backlog', value: toNumber(metrics?.backlog_tasks, 0), tone: '#1d4ed8' },
-      { title: 'Failed', value: toNumber(metrics?.failed_tasks, 0), tone: '#991b1b' },
-      { title: 'Failure Rate', value: formatRate(metrics?.failure_rate), tone: '#b45309' },
-      { title: 'Running', value: toNumber(statusCounts.running, 0), tone: '#1d4ed8' },
-      { title: 'Completed', value: toNumber(statusCounts.completed, 0), tone: '#065f46' },
+      { title: '任务总数', value: toNumber(metrics?.total_tasks, 0), tone: '#1f2937' },
+      { title: '待执行数', value: toNumber(metrics?.backlog_tasks, 0), tone: '#1d4ed8' },
+      { title: '失败数', value: toNumber(metrics?.failed_tasks, 0), tone: '#991b1b' },
+      { title: '失败率', value: formatRate(metrics?.failure_rate), tone: '#b45309' },
+      { title: '运行中', value: toNumber(statusCounts.running, 0), tone: '#1d4ed8' },
+      { title: '已完成', value: toNumber(statusCounts.completed, 0), tone: '#065f46' },
     ];
   }, [metrics]);
 
@@ -596,7 +603,7 @@ export default function CollectionWorkbench() {
             fontWeight: 700,
           }}
         >
-          Back To Tools
+          返回实用工具
         </button>
         <button
           type="button"
@@ -612,17 +619,17 @@ export default function CollectionWorkbench() {
           }}
           disabled={loading}
         >
-          {loading ? 'Refreshing...' : 'Refresh'}
+          {loading ? '刷新中...' : '刷新'}
         </button>
       </div>
 
       <div style={{ display: 'grid', gap: '6px' }}>
-        <div style={{ fontWeight: 700, color: '#111827' }}>Quick Start</div>
+        <div style={{ fontWeight: 700, color: '#111827' }}>快速启动</div>
         <textarea
           value={startKeywordText}
           onChange={(event) => setStartKeywordText(event.target.value)}
           rows={3}
-          placeholder="Keywords (comma/newline separated)"
+          placeholder="关键词（可用逗号或换行分隔）"
           style={{ padding: '8px', borderRadius: '8px', border: '1px solid #d1d5db', resize: 'vertical' }}
         />
         <button
@@ -639,7 +646,7 @@ export default function CollectionWorkbench() {
             cursor: startBusyKind === 'paper' ? 'not-allowed' : 'pointer',
           }}
         >
-          {startBusyKind === 'paper' ? 'Starting...' : 'Start Paper Collection'}
+          {startBusyKind === 'paper' ? '启动中...' : '启动论文采集'}
         </button>
         <button
           type="button"
@@ -655,47 +662,47 @@ export default function CollectionWorkbench() {
             cursor: startBusyKind === 'patent' ? 'not-allowed' : 'pointer',
           }}
         >
-          {startBusyKind === 'patent' ? 'Starting...' : 'Start Patent Collection'}
+          {startBusyKind === 'patent' ? '启动中...' : '启动专利采集'}
         </button>
       </div>
 
       <div style={{ display: 'grid', gap: '6px' }}>
-        <div style={{ fontWeight: 700, color: '#111827' }}>Filters</div>
+        <div style={{ fontWeight: 700, color: '#111827' }}>筛选条件</div>
         <label style={{ display: 'grid', gap: '4px' }}>
-          <span style={{ fontSize: '0.85rem', color: '#6b7280' }}>Status</span>
+          <span style={{ fontSize: '0.85rem', color: '#6b7280' }}>状态</span>
           <select
             value={statusFilter}
             onChange={(event) => setStatusFilter(event.target.value)}
             style={{ padding: '7px 8px', borderRadius: '8px', border: '1px solid #d1d5db' }}
           >
-            <option value="all">All</option>
-            <option value="pending">Pending</option>
-            <option value="running">Running</option>
-            <option value="paused">Paused</option>
-            <option value="canceling">Canceling</option>
-            <option value="canceled">Canceled</option>
-            <option value="completed">Completed</option>
-            <option value="failed">Failed</option>
+            <option value="all">全部</option>
+            <option value="pending">待处理</option>
+            <option value="running">运行中</option>
+            <option value="paused">已暂停</option>
+            <option value="canceling">取消中</option>
+            <option value="canceled">已取消</option>
+            <option value="completed">已完成</option>
+            <option value="failed">失败</option>
           </select>
         </label>
         <label style={{ display: 'grid', gap: '4px' }}>
-          <span style={{ fontSize: '0.85rem', color: '#6b7280' }}>Kind</span>
+          <span style={{ fontSize: '0.85rem', color: '#6b7280' }}>类型</span>
           <select
             value={kindFilter}
             onChange={(event) => setKindFilter(event.target.value)}
             style={{ padding: '7px 8px', borderRadius: '8px', border: '1px solid #d1d5db' }}
           >
-            <option value="all">All</option>
-            <option value="paper_download">Paper Collection</option>
-            <option value="patent_download">Patent Collection</option>
+            <option value="all">全部</option>
+            <option value="paper_download">论文采集</option>
+            <option value="patent_download">专利采集</option>
           </select>
         </label>
         <label style={{ display: 'grid', gap: '4px' }}>
-          <span style={{ fontSize: '0.85rem', color: '#6b7280' }}>Keyword</span>
+          <span style={{ fontSize: '0.85rem', color: '#6b7280' }}>关键词</span>
           <input
             value={keywordFilter}
             onChange={(event) => setKeywordFilter(event.target.value)}
-            placeholder="task_id / error / source"
+            placeholder="任务编号 / 错误信息 / 来源"
             style={{ padding: '7px 8px', borderRadius: '8px', border: '1px solid #d1d5db' }}
           />
         </label>
@@ -705,14 +712,14 @@ export default function CollectionWorkbench() {
             checked={autoRefresh}
             onChange={(event) => setAutoRefresh(event.target.checked)}
           />
-          Auto refresh every 6s
+          每 6 秒自动刷新
         </label>
       </div>
 
       <div style={{ display: 'grid', gap: '6px' }}>
-        <div style={{ fontWeight: 700, color: '#111827' }}>Batch Operations</div>
+        <div style={{ fontWeight: 700, color: '#111827' }}>批量操作</div>
         <div style={{ fontSize: '0.85rem', color: '#6b7280' }}>
-          Selected: <span style={{ color: '#111827', fontWeight: 700 }}>{selectedTasks.length}</span>
+          已选：<span style={{ color: '#111827', fontWeight: 700 }}>{selectedTasks.length}</span>
         </div>
         <button
           type="button"
@@ -728,7 +735,7 @@ export default function CollectionWorkbench() {
             cursor: batchBusy || selectedTasks.length <= 0 ? 'not-allowed' : 'pointer',
           }}
         >
-          Batch Cancel
+          批量取消
         </button>
         <button
           type="button"
@@ -744,7 +751,7 @@ export default function CollectionWorkbench() {
             cursor: batchBusy || selectedTasks.length <= 0 ? 'not-allowed' : 'pointer',
           }}
         >
-          Batch Retry
+          批量重试
         </button>
         <button
           type="button"
@@ -760,7 +767,7 @@ export default function CollectionWorkbench() {
             cursor: batchIngestBusy || selectedTasks.length <= 0 ? 'not-allowed' : 'pointer',
           }}
         >
-          {batchIngestBusy ? 'Ingesting...' : 'Batch Ingest'}
+          {batchIngestBusy ? '入库中...' : '批量入库'}
         </button>
         <button
           type="button"
@@ -775,7 +782,7 @@ export default function CollectionWorkbench() {
             cursor: visibleTasks.length <= 0 ? 'not-allowed' : 'pointer',
           }}
         >
-          Export CSV
+          导出 CSV
         </button>
       </div>
     </>
@@ -857,7 +864,7 @@ export default function CollectionWorkbench() {
                   type="checkbox"
                   checked={allVisibleSelected}
                   onChange={toggleSelectAllVisible}
-                  aria-label="select all visible tasks"
+                  aria-label="选择全部可见任务"
                 />
               </th>
               <th
@@ -872,16 +879,16 @@ export default function CollectionWorkbench() {
                   borderBottom: '1px solid #e5e7eb',
                 }}
               >
-                Task ID
+                任务ID
               </th>
-              <th style={{ minWidth: '120px', padding: '6px 8px', textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>Kind</th>
-              <th style={{ minWidth: '100px', padding: '6px 8px', textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>Status</th>
-              <th style={{ minWidth: '140px', padding: '6px 8px', textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>Progress</th>
-              <th style={{ minWidth: '120px', padding: '6px 8px', textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>Result</th>
-              <th style={{ minWidth: '140px', padding: '6px 8px', textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>Failure Class</th>
-              <th style={{ minWidth: '220px', padding: '6px 8px', textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>Error</th>
-              <th style={{ minWidth: '160px', padding: '6px 8px', textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>Updated</th>
-              <th style={{ minWidth: '240px', padding: '6px 8px', textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>Actions</th>
+              <th style={{ minWidth: '120px', padding: '6px 8px', textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>类型</th>
+              <th style={{ minWidth: '100px', padding: '6px 8px', textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>状态</th>
+              <th style={{ minWidth: '140px', padding: '6px 8px', textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>进度</th>
+              <th style={{ minWidth: '120px', padding: '6px 8px', textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>结果</th>
+              <th style={{ minWidth: '140px', padding: '6px 8px', textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>失败分类</th>
+              <th style={{ minWidth: '220px', padding: '6px 8px', textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>错误信息</th>
+              <th style={{ minWidth: '160px', padding: '6px 8px', textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>更新时间</th>
+              <th style={{ minWidth: '240px', padding: '6px 8px', textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>操作</th>
             </tr>
           </thead>
           <tbody>
@@ -916,7 +923,7 @@ export default function CollectionWorkbench() {
                       type="checkbox"
                       checked={selected}
                       onChange={() => toggleTaskSelected(taskId)}
-                      aria-label={`select task ${taskId}`}
+                      aria-label={`选择任务 ${taskId}`}
                     />
                   </td>
                   <td
@@ -973,7 +980,7 @@ export default function CollectionWorkbench() {
                   <td style={{ borderTop: '1px solid #f1f5f9', padding: '6px 8px' }}>
                     {toNumber(task?.downloaded_items, 0)} / {toNumber(task?.total_items, 0)}
                     {toNumber(task?.failed_items, 0) > 0 && (
-                      <span style={{ color: '#991b1b' }}> (failed {toNumber(task?.failed_items, 0)})</span>
+                      <span style={{ color: '#991b1b' }}>（失败 {toNumber(task?.failed_items, 0)}）</span>
                     )}
                   </td>
                   <td style={{ borderTop: '1px solid #f1f5f9', padding: '6px 8px', color: failureStyle.color, fontWeight: 700 }}>
@@ -1014,7 +1021,7 @@ export default function CollectionWorkbench() {
                             cursor: !allowed || busy ? 'not-allowed' : 'pointer',
                           }}
                         >
-                          {busy ? `${action}...` : action}
+                          {busy ? `${ACTION_LABEL[action]}中...` : ACTION_LABEL[action]}
                         </button>
                       );
                     })}
@@ -1025,7 +1032,7 @@ export default function CollectionWorkbench() {
             {visibleTasks.length <= 0 && (
               <tr>
                 <td colSpan={10} style={{ padding: '20px', color: '#9ca3af', textAlign: 'center' }}>
-                  No tasks matched current filters.
+                  当前筛选条件下没有匹配的任务。
                 </td>
               </tr>
             )}
@@ -1033,52 +1040,52 @@ export default function CollectionWorkbench() {
         </table>
       </div>
       <div style={{ color: '#6b7280', fontSize: '0.82rem' }}>
-        Last Updated: {lastUpdatedAt ? formatTime(lastUpdatedAt) : '-'} | Visible: {visibleTasks.length} | Selected: {selectedTasks.length}
+        最后更新时间：{lastUpdatedAt ? formatTime(lastUpdatedAt) : '-'} | 可见：{visibleTasks.length} | 已选：{selectedTasks.length}
       </div>
     </>
   );
 
   const rightPane = (
     <>
-      <div style={{ fontWeight: 700, color: '#111827' }}>Evidence & Parameters</div>
+      <div style={{ fontWeight: 700, color: '#111827' }}>证据与参数</div>
       {!focusedTask && (
         <div style={{ color: '#9ca3af', fontSize: '0.88rem' }}>
-          Select one task row to inspect details.
+          请选择一条任务查看详情。
         </div>
       )}
       {focusedTask && (
         <div style={{ display: 'grid', gap: '10px', fontSize: '0.86rem' }}>
           <div style={{ border: '1px solid #e5e7eb', borderRadius: '8px', padding: '8px' }}>
-            <div style={{ color: '#6b7280' }}>Task</div>
+            <div style={{ color: '#6b7280' }}>任务</div>
             <div style={{ fontFamily: 'monospace', color: '#111827' }}>{focusedTask.task_id}</div>
             <div style={{ marginTop: '4px', color: '#4b5563' }}>
-              Kind: {KIND_LABEL[String(focusedTask.task_kind || '').toLowerCase()] || focusedTask.task_kind}
+              类型：{KIND_LABEL[String(focusedTask.task_kind || '').toLowerCase()] || focusedTask.task_kind}
             </div>
             <div style={{ marginTop: '4px', color: '#4b5563' }}>
-              Status: {statusMeta(focusedTask.status).label}
+              状态：{statusMeta(focusedTask.status).label}
             </div>
             <div style={{ marginTop: '4px', color: '#4b5563' }}>
-              Retry Count: {toNumber(focusedTask.retry_count, 0)}
+              重试次数：{toNumber(focusedTask.retry_count, 0)}
             </div>
           </div>
 
           <div style={{ border: '1px solid #e5e7eb', borderRadius: '8px', padding: '8px' }}>
-            <div style={{ color: '#6b7280', marginBottom: '4px' }}>Collection Inputs</div>
+            <div style={{ color: '#6b7280', marginBottom: '4px' }}>采集输入</div>
             <div style={{ color: '#111827' }}>
-              Keyword: {String(focusedTask.keyword_text || '').trim() || '-'}
+              关键词：{String(focusedTask.keyword_text || '').trim() || '-'}
             </div>
             <div style={{ color: '#4b5563', marginTop: '4px' }}>
-              Created: {formatTime(focusedTask.created_at_ms)}
+              创建时间：{formatTime(focusedTask.created_at_ms)}
             </div>
             <div style={{ color: '#4b5563', marginTop: '4px' }}>
-              Updated: {formatTime(focusedTask.updated_at_ms || focusedTask.finished_at_ms)}
+              更新时间：{formatTime(focusedTask.updated_at_ms || focusedTask.finished_at_ms)}
             </div>
           </div>
 
           <div style={{ border: '1px solid #e5e7eb', borderRadius: '8px', padding: '8px' }}>
-            <div style={{ color: '#6b7280', marginBottom: '4px' }}>Source Errors</div>
+            <div style={{ color: '#6b7280', marginBottom: '4px' }}>来源错误</div>
             {Object.keys(focusedTask.source_errors || {}).length <= 0 && (
-              <div style={{ color: '#9ca3af' }}>No source-level error</div>
+              <div style={{ color: '#9ca3af' }}>暂无来源级错误</div>
             )}
             {Object.entries(focusedTask.source_errors || {}).map(([source, detail]) => (
               <div key={source} style={{ marginTop: '5px' }}>
@@ -1089,18 +1096,18 @@ export default function CollectionWorkbench() {
           </div>
 
           <div style={{ border: '1px solid #e5e7eb', borderRadius: '8px', padding: '8px' }}>
-            <div style={{ color: '#6b7280', marginBottom: '4px' }}>Quota / Runtime</div>
+            <div style={{ color: '#6b7280', marginBottom: '4px' }}>配额 / 运行态</div>
             <div style={{ color: '#4b5563' }}>
-              Global: {toNumber(focusedTask?.quota?.global_limit, 0)} | Kind: {toNumber(focusedTask?.quota?.task_kind_limit, 0)} | User: {toNumber(focusedTask?.quota?.per_user_limit, 0)}
+              全局：{toNumber(focusedTask?.quota?.global_limit, 0)} | 类型：{toNumber(focusedTask?.quota?.task_kind_limit, 0)} | 用户：{toNumber(focusedTask?.quota?.per_user_limit, 0)}
             </div>
             <div style={{ color: '#4b5563', marginTop: '4px' }}>
-              Max Concurrency: {toNumber(focusedTask?.max_concurrency, 0)}
+              最大并发：{toNumber(focusedTask?.max_concurrency, 0)}
             </div>
             <div style={{ color: '#4b5563', marginTop: '4px' }}>
-              Queue Position: {focusedTask?.queue_position ?? '-'}
+              队列位置：{focusedTask?.queue_position ?? '-'}
             </div>
             <div style={{ color: '#4b5563', marginTop: '4px' }}>
-              Quota Blocked Reason: {String(focusedTask?.quota_blocked_reason || '-')}
+              配额阻塞原因：{String(focusedTask?.quota_blocked_reason || '-')}
             </div>
           </div>
         </div>
@@ -1111,7 +1118,7 @@ export default function CollectionWorkbench() {
   const bottomPane = (
     <div style={{ display: 'grid', gap: '6px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div style={{ fontWeight: 700, color: '#f8fafc' }}>Task Log Stream</div>
+        <div style={{ fontWeight: 700, color: '#f8fafc' }}>任务日志流</div>
         <button
           type="button"
           onClick={() => setLogs([])}
@@ -1124,10 +1131,10 @@ export default function CollectionWorkbench() {
             cursor: 'pointer',
           }}
         >
-          Clear
+          清空
         </button>
       </div>
-      {!logs.length && <div style={{ color: '#94a3b8', fontSize: '0.84rem' }}>No task logs yet.</div>}
+      {!logs.length && <div style={{ color: '#94a3b8', fontSize: '0.84rem' }}>暂无任务日志。</div>}
       {logs.map((entry) => {
         const tone =
           entry.level === 'error'
