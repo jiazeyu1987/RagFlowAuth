@@ -1,6 +1,7 @@
 import React from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import ChatSafetyFlow from './ChatSafetyFlow';
 
 export default function ChatMessages({
   messagesEndRef,
@@ -218,6 +219,7 @@ export default function ChatMessages({
                       </ReactMarkdown>
                     )}
 
+                    {m.role === 'assistant' ? <ChatSafetyFlow flow={m.safetyFlow} messageIndex={idx} /> : null}
                     {m.role === 'assistant' && uniqueCitationIds.length > 0 ? (
                       <div style={{ marginTop: '8px', borderTop: '1px solid #e5e7eb', paddingTop: '8px' }}>
                         <div style={{ fontSize: '0.85rem', color: '#6b7280', marginBottom: '6px' }}>引用文件</div>

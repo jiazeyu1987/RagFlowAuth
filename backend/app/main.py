@@ -144,6 +144,7 @@ def create_app() -> FastAPI:
         ragflow,
         review,
         search_configs,
+        super_admin,
         tasks,
         users,
     )
@@ -159,6 +160,7 @@ def create_app() -> FastAPI:
     app.include_router(chat.router, prefix="/api", tags=["Chat"])
     app.include_router(agents.router, prefix="/api", tags=["Agents"])
     app.include_router(search_configs.router, prefix="/api", tags=["Search Configs"])
+    app.include_router(super_admin.router, prefix="/api", tags=["Super Admin"])
     app.include_router(tasks.router, prefix="/api", tags=["Tasks"])
     app.include_router(me.router, prefix="/api", tags=["Me"])
     app.include_router(nas.router, prefix="/api", tags=["NAS"])

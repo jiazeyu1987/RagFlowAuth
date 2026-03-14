@@ -4,6 +4,7 @@ from typing import Any
 
 from backend.app.core.permdbg import permdbg
 from backend.app.core.permission_resolver import ResourceScope
+from backend.services.super_admin import is_super_admin_user
 
 
 def _build_permission_groups(*, deps: Any, user: Any) -> list[dict[str, Any]]:
@@ -82,6 +83,7 @@ def build_auth_me_payload(*, deps: Any, user: Any, snapshot: Any) -> dict[str, A
         "username": user.username,
         "email": user.email,
         "role": user.role,
+        "is_super_admin": bool(is_super_admin_user(user)),
         "status": user.status,
         "group_id": user.group_id,
         "group_ids": user.group_ids,

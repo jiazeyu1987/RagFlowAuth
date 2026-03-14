@@ -4,6 +4,8 @@ from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from backend.app.core.authz import AuthContextDep
+from backend.services.feature_visibility import assert_feature_visible_or_404
+from backend.services.feature_visibility_store import FLAG_TOOL_NAS_VISIBLE
 from backend.services.nas_browser_service import NasBrowserService
 
 router = APIRouter()
@@ -24,8 +26,16 @@ class NasImportRequest(BaseModel):
 
 def _raise_task_http_error(exc: RuntimeError) -> None:
     detail = str(exc)
-    status_code = 404 if "不存在" in detail else 409
+    status_code = 404 if "not_found" in detail.lower() else 409
     raise HTTPException(status_code=status_code, detail=detail) from exc
+
+
+def _assert_nas_visible(ctx: AuthContextDep) -> None:
+    assert_feature_visible_or_404(
+        deps=ctx.deps,
+        user=ctx.user,
+        flag_key=FLAG_TOOL_NAS_VISIBLE,
+    )
 
 
 @router.get("/nas/files", response_model=NasListResponse)
@@ -33,6 +43,7 @@ async def list_nas_files(
     ctx: AuthContextDep,
     path: str = Query("", description="NAS 相对路径，根目录为空字符串"),
 ):
+    _assert_nas_visible(ctx)
     if not ctx.snapshot.is_admin:
         raise HTTPException(status_code=403, detail="admin_required")
 
@@ -45,6 +56,7 @@ async def start_nas_folder_import(
     body: NasImportRequest,
     ctx: AuthContextDep,
 ):
+    _assert_nas_visible(ctx)
     if not ctx.snapshot.is_admin:
         raise HTTPException(status_code=403, detail="admin_required")
 
@@ -66,6 +78,7 @@ async def get_nas_folder_import_status(
     task_id: str,
     ctx: AuthContextDep,
 ):
+    _assert_nas_visible(ctx)
     if not ctx.snapshot.is_admin:
         raise HTTPException(status_code=403, detail="admin_required")
 
@@ -81,6 +94,7 @@ async def cancel_nas_folder_import(
     task_id: str,
     ctx: AuthContextDep,
 ):
+    _assert_nas_visible(ctx)
     if not ctx.snapshot.is_admin:
         raise HTTPException(status_code=403, detail="admin_required")
 
@@ -96,6 +110,7 @@ async def pause_nas_folder_import(
     task_id: str,
     ctx: AuthContextDep,
 ):
+    _assert_nas_visible(ctx)
     if not ctx.snapshot.is_admin:
         raise HTTPException(status_code=403, detail="admin_required")
 
@@ -111,6 +126,7 @@ async def resume_nas_folder_import(
     task_id: str,
     ctx: AuthContextDep,
 ):
+    _assert_nas_visible(ctx)
     if not ctx.snapshot.is_admin:
         raise HTTPException(status_code=403, detail="admin_required")
 
@@ -126,6 +142,7 @@ async def retry_nas_folder_import(
     task_id: str,
     ctx: AuthContextDep,
 ):
+    _assert_nas_visible(ctx)
     if not ctx.snapshot.is_admin:
         raise HTTPException(status_code=403, detail="admin_required")
 
@@ -141,6 +158,7 @@ async def import_nas_file_to_kb(
     body: NasImportRequest,
     ctx: AuthContextDep,
 ):
+    _assert_nas_visible(ctx)
     if not ctx.snapshot.is_admin:
         raise HTTPException(status_code=403, detail="admin_required")
 

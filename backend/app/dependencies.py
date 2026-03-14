@@ -28,6 +28,7 @@ from backend.services.audit import AuditLogManager
 from backend.services.auth_session import AuthSessionManager
 from backend.services.knowledge_ingestion import KnowledgeIngestionManager
 from backend.services.knowledge_tree import KnowledgeTreeManager
+from backend.services.super_admin import ensure_builtin_super_admin
 
 
 @dataclass
@@ -65,6 +66,7 @@ def create_dependencies(db_path: str | None = None) -> AppDependencies:
     db_path = resolve_auth_db_path(db_path)
 
     ensure_schema(str(db_path))
+    ensure_builtin_super_admin(db_path=str(db_path))
 
     chat_session_store = ChatSessionStore(db_path=str(db_path))
     auth_session_store = AuthSessionStore(db_path=str(db_path))

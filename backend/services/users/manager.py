@@ -5,6 +5,7 @@ from typing import Optional, Protocol
 
 from backend.core.roles import VALID_ROLES
 from backend.models.user import UserCreate, UserResponse, UserUpdate
+from backend.services.super_admin import is_super_admin_user
 
 VALID_USER_STATUSES = {"active", "inactive"}
 
@@ -153,6 +154,10 @@ class UserManagementManager:
             last_login_at_ms=user.last_login_at_ms,
         )
 
+    @staticmethod
+    def _is_hidden_super_admin(user) -> bool:
+        return bool(user and is_super_admin_user(user))
+
     def list_users(
         self,
         *,
@@ -177,6 +182,7 @@ class UserManagementManager:
             created_to_ms=created_to_ms,
             limit=limit,
         )
+        users = [u for u in users if not self._is_hidden_super_admin(u)]
         idle_by_user = {
             u.user_id: int(getattr(u, "idle_timeout_minutes", 120) or 120)
             for u in users
@@ -241,6 +247,8 @@ class UserManagementManager:
         user = self._port.get_user(user_id)
         if not user:
             raise UserManagementError("user_not_found", status_code=404)
+        if self._is_hidden_super_admin(user):
+            raise UserManagementError("user_not_found", status_code=404)
         summary = self._port.get_login_session_summary(
             user.user_id,
             int(getattr(user, "idle_timeout_minutes", 120) or 120),
@@ -250,6 +258,8 @@ class UserManagementManager:
     def update_user(self, *, user_id: str, user_data: UserUpdate) -> UserResponse:
         current_user = self._port.get_user(user_id)
         if not current_user:
+            raise UserManagementError("user_not_found", status_code=404)
+        if self._is_hidden_super_admin(current_user):
             raise UserManagementError("user_not_found", status_code=404)
 
         role = user_data.role
@@ -310,11 +320,16 @@ class UserManagementManager:
         return self._to_response(user, summary)
 
     def delete_user(self, user_id: str) -> None:
+        existing = self._port.get_user(user_id)
+        if self._is_hidden_super_admin(existing):
+            raise UserManagementError("user_not_found", status_code=404)
         if not self._port.delete_user(user_id):
             raise UserManagementError("user_not_found", status_code=404)
 
     def reset_password(self, user_id: str, new_password: str) -> None:
         user = self._port.get_user(user_id)
         if not user:
+            raise UserManagementError("user_not_found", status_code=404)
+        if self._is_hidden_super_admin(user):
             raise UserManagementError("user_not_found", status_code=404)
         self._port.update_password(user_id, new_password)

@@ -14,6 +14,7 @@ from backend.runtime.backup import run_backup, write_default_backup_config
 from backend.database.paths import resolve_auth_db_path
 from backend.database.schema_migrations import ensure_schema
 from backend.database.sqlite import connect_sqlite
+from backend.services.super_admin import ensure_builtin_super_admin
 from backend.services.user_store import hash_password
 
 logger = logging.getLogger(__name__)
@@ -88,6 +89,7 @@ def ensure_default_admin(*, db_path: str | Path | None = None) -> None:
         print("[OK] 已创建默认管理员：admin / admin123")
     finally:
         conn.close()
+        ensure_builtin_super_admin(db_path=str(db))
 
 
 def print_paths(*, db_path: str | Path | None = None) -> None:

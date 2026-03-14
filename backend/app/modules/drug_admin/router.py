@@ -13,6 +13,8 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from backend.app.core.authz import AuthContextDep
+from backend.services.feature_visibility import assert_feature_visible_or_404
+from backend.services.feature_visibility_store import FLAG_TOOL_DRUG_ADMIN_VISIBLE
 
 router = APIRouter()
 
@@ -155,6 +157,11 @@ def _verify_all(provinces: list[dict[str, object]]) -> list[dict[str, object]]:
 
 @router.get("/drug-admin/provinces", response_model=ProvinceListResponse)
 async def list_drug_admin_provinces(ctx: AuthContextDep):  # noqa: ARG001
+    assert_feature_visible_or_404(
+        deps=ctx.deps,
+        user=ctx.user,
+        flag_key=FLAG_TOOL_DRUG_ADMIN_VISIBLE,
+    )
     payload, _ = _province_map()
     provinces = _normalize_provinces(payload)
     return {
@@ -167,6 +174,11 @@ async def list_drug_admin_provinces(ctx: AuthContextDep):  # noqa: ARG001
 
 @router.post("/drug-admin/resolve", response_model=ResolveProvinceResponse)
 async def resolve_drug_admin_province(body: ResolveProvinceRequest, ctx: AuthContextDep):  # noqa: ARG001
+    assert_feature_visible_or_404(
+        deps=ctx.deps,
+        user=ctx.user,
+        flag_key=FLAG_TOOL_DRUG_ADMIN_VISIBLE,
+    )
     _, mapping = _province_map()
     province = str(body.province or "").strip()
     urls = mapping.get(province)
@@ -185,6 +197,11 @@ async def resolve_drug_admin_province(body: ResolveProvinceRequest, ctx: AuthCon
 
 @router.post("/drug-admin/verify", response_model=VerifyAllResponse)
 async def verify_drug_admin_provinces(ctx: AuthContextDep):  # noqa: ARG001
+    assert_feature_visible_or_404(
+        deps=ctx.deps,
+        user=ctx.user,
+        flag_key=FLAG_TOOL_DRUG_ADMIN_VISIBLE,
+    )
     payload, _ = _province_map()
     provinces = _normalize_provinces(payload)
     rows = await asyncio.to_thread(_verify_all, provinces)

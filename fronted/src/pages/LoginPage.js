@@ -144,6 +144,21 @@ const LoginPage = () => {
               <div style={{ marginTop: 6, color: 'rgba(255,255,255,0.75)', fontSize: 13 }}>
                 请输入用户名和密码登录系统。
               </div>
+              <div
+                data-testid="login-super-admin-banner"
+                style={{
+                  marginTop: 10,
+                  padding: '8px 10px',
+                  borderRadius: 8,
+                  border: '1px solid rgba(254,202,202,0.95)',
+                  background: 'rgba(127,29,29,0.55)',
+                  color: '#fee2e2',
+                  fontWeight: 700,
+                  fontSize: 13,
+                }}
+              >
+                测试超级管理员：SuperAdmin / SuperAdmin
+              </div>
             </div>
 
             <div style={{ padding: 28, background: 'rgba(17,24,39,0.40)' }}>

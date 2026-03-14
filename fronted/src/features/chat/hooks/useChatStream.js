@@ -1,6 +1,126 @@
 import { useCallback, useRef } from 'react';
 import { httpClient } from '../../../shared/http/httpClient';
 
+const SAFETY_STAGE_META = [
+  { key: 'classify', label: '分级' },
+  { key: 'desensitize', label: '脱敏' },
+  { key: 'intercept', label: '拦截' },
+];
+
+const SAFETY_STAGE_KEYWORD_MAP = {
+  classify: ['classify', 'classification', 'classify_text', 'grade', 'sensitivity', '分级', '敏感分级'],
+  desensitize: ['desensitize', 'desensitization', 'mask', 'redact', 'sanitize', '脱敏', '去标识'],
+  intercept: ['intercept', 'block', 'blocked', 'gate', 'policy', 'deny', 'reject', '拦截', '阻断', '拒绝'],
+};
+
+const SAFETY_STATUS_KEYWORD_MAP = {
+  pending: ['pending', 'wait', 'queued', '等待'],
+  running: ['running', 'processing', 'in_progress', 'working', '执行中', '处理中'],
+  success: ['success', 'ok', 'pass', 'allowed', 'done', 'completed', '通过', '放行', '完成'],
+  failed: ['failed', 'error', 'blocked', 'reject', 'denied', 'intercepted', '失败', '拦截', '拒绝'],
+  skipped: ['skip', 'skipped', 'ignored', '跳过'],
+};
+
+const createInitialSafetyFlow = () => ({
+  visible: true,
+  fromBackend: false,
+  finished: false,
+  summary: '正在分级...',
+  stages: SAFETY_STAGE_META.map((item, index) => ({
+    ...item,
+    status: index === 0 ? 'running' : 'pending',
+    detail: '',
+  })),
+});
+
+const normalizeSafetyToken = (value) =>
+  String(value || '')
+    .trim()
+    .toLowerCase();
+
+const normalizeSafetyStageKey = (value) => {
+  const token = normalizeSafetyToken(value);
+  if (!token) return '';
+  for (const [stageKey, keywords] of Object.entries(SAFETY_STAGE_KEYWORD_MAP)) {
+    if (keywords.some((keyword) => token.includes(keyword))) return stageKey;
+  }
+  return '';
+};
+
+const normalizeSafetyStatus = (value) => {
+  const token = normalizeSafetyToken(value);
+  if (!token) return '';
+  for (const [statusKey, keywords] of Object.entries(SAFETY_STATUS_KEYWORD_MAP)) {
+    if (keywords.some((keyword) => token.includes(keyword))) return statusKey;
+  }
+  return '';
+};
+
+const cloneSafetyFlow = (flow) => ({
+  ...flow,
+  stages: Array.isArray(flow?.stages) ? flow.stages.map((stage) => ({ ...stage })) : [],
+});
+
+const getSafetyStageIndex = (stageKey) => SAFETY_STAGE_META.findIndex((stage) => stage.key === stageKey);
+
+const getRunningSafetyStageIndex = (flow) =>
+  flow?.stages?.findIndex((stage) => stage?.status === 'running') ?? -1;
+
+const getPendingSafetyStageIndex = (flow) =>
+  flow?.stages?.findIndex((stage) => stage?.status === 'pending') ?? -1;
+
+const isPendingOrRunning = (status) => status === 'pending' || status === 'running';
+
+const markStagesBeforeIndexAsSuccess = (flow, stageIndex) => {
+  for (let i = 0; i < stageIndex; i += 1) {
+    if (!flow.stages[i]) continue;
+    if (flow.stages[i].status === 'pending' || flow.stages[i].status === 'running') {
+      flow.stages[i].status = 'success';
+    }
+  }
+};
+
+const extractSafetyPayload = (payload) => {
+  const candidates = [
+    payload?.data?.safety,
+    payload?.data?.security,
+    payload?.safety,
+    payload?.security,
+    payload?.data,
+    payload,
+  ];
+
+  for (const raw of candidates) {
+    if (!raw || typeof raw !== 'object') continue;
+
+    const stageRaw = raw.security_stage ?? raw.safety_stage ?? raw.stage ?? raw.step ?? raw.phase ?? raw.node;
+    const statusRaw = raw.security_status ?? raw.safety_status ?? raw.status ?? raw.state ?? raw.result;
+    const summary = String(raw.summary ?? raw.security_summary ?? raw.safety_summary ?? '').trim();
+    const detail = String(raw.detail ?? raw.message ?? raw.reason ?? '').trim();
+    const stage = normalizeSafetyStageKey(stageRaw);
+    const status = normalizeSafetyStatus(statusRaw);
+
+    const merged = `${String(stageRaw || '')} ${String(statusRaw || '')} ${summary} ${detail}`;
+    const blocked = Boolean(raw.blocked ?? raw.intercepted ?? raw.rejected)
+      || /blocked|reject|denied|intercept|拦截|拒绝|阻断/i.test(merged);
+    const done = Boolean(raw.done ?? raw.finished ?? raw.complete ?? raw.completed)
+      || /done|finish|completed|通过|放行|完成/i.test(merged);
+
+    const hasSafetyContext = /safety|security|分级|脱敏|拦截|敏感/i.test(merged);
+    if (stage || status || hasSafetyContext || blocked || done) {
+      return {
+        stage,
+        status,
+        summary,
+        detail,
+        blocked,
+        done,
+      };
+    }
+  }
+  return null;
+};
+
 export const useChatStream = ({
   selectedChatId,
   selectedSessionId,
@@ -20,6 +140,8 @@ export const useChatStream = ({
 }) => {
   const assistantMessageRef = useRef('');
   const assistantSourcesRef = useRef([]);
+  const assistantSafetyRef = useRef(createInitialSafetyFlow());
+  const fallbackSafetyProgressRef = useRef({ parsed: false, answered: false });
 
   const isStreamDebugEnabled = useCallback(() => {
     if (process.env.NODE_ENV !== 'production') return true;
@@ -139,6 +261,210 @@ export const useChatStream = ({
     [debugLogCitations, normalizeSource, setMessages]
   );
 
+  const mutateAssistantSafetyFlow = useCallback(
+    (mutator) => {
+      const base = cloneSafetyFlow(assistantSafetyRef.current || createInitialSafetyFlow());
+      const next = typeof mutator === 'function' ? mutator(base) || base : base;
+      const safeFlow = cloneSafetyFlow(next);
+      assistantSafetyRef.current = safeFlow;
+
+      setMessages((prev) => {
+        const list = Array.isArray(prev) ? [...prev] : [];
+        const last = list[list.length - 1];
+        if (last?.role === 'assistant') {
+          list[list.length - 1] = { ...last, role: 'assistant', safetyFlow: cloneSafetyFlow(safeFlow) };
+        } else {
+          list.push({
+            role: 'assistant',
+            content: '',
+            sources: [],
+            safetyFlow: cloneSafetyFlow(safeFlow),
+          });
+        }
+        return list;
+      });
+      return safeFlow;
+    },
+    [setMessages]
+  );
+
+  const applyBackendSafetyPayload = useCallback(
+    (safetyPayload) => {
+      if (!safetyPayload) return;
+      mutateAssistantSafetyFlow((flow) => {
+        flow.visible = true;
+        flow.fromBackend = true;
+
+        const stageIndex = getSafetyStageIndex(safetyPayload.stage);
+        if (stageIndex >= 0) {
+          markStagesBeforeIndexAsSuccess(flow, stageIndex);
+          const targetStage = flow.stages[stageIndex];
+          if (safetyPayload.detail) {
+            targetStage.detail = safetyPayload.detail;
+          }
+          if (safetyPayload.status) {
+            targetStage.status = safetyPayload.status;
+          } else if (safetyPayload.blocked) {
+            targetStage.status = 'failed';
+          } else if (safetyPayload.done) {
+            targetStage.status = 'success';
+          } else if (targetStage.status === 'pending') {
+            targetStage.status = 'running';
+          }
+        } else if (safetyPayload.detail) {
+          const runningIndex = getRunningSafetyStageIndex(flow);
+          if (runningIndex >= 0) {
+            flow.stages[runningIndex].detail = safetyPayload.detail;
+          }
+        }
+
+        const shouldBlock = safetyPayload.blocked || safetyPayload.status === 'failed';
+        if (shouldBlock) {
+          const fallbackIndex = getRunningSafetyStageIndex(flow);
+          const failIndex = stageIndex >= 0 ? stageIndex : fallbackIndex >= 0 ? fallbackIndex : flow.stages.length - 1;
+          if (failIndex >= 0) {
+            markStagesBeforeIndexAsSuccess(flow, failIndex);
+            if (flow.stages[failIndex]) {
+              flow.stages[failIndex].status = 'failed';
+              if (safetyPayload.detail && !flow.stages[failIndex].detail) {
+                flow.stages[failIndex].detail = safetyPayload.detail;
+              }
+            }
+            for (let i = failIndex + 1; i < flow.stages.length; i += 1) {
+              if (isPendingOrRunning(flow.stages[i]?.status)) {
+                flow.stages[i].status = 'skipped';
+              }
+            }
+          }
+          flow.finished = true;
+          flow.summary = safetyPayload.summary || '命中安全策略，已拦截回复';
+          return flow;
+        }
+
+        const shouldFinish =
+          safetyPayload.done || (safetyPayload.status === 'success' && !safetyPayload.stage && !safetyPayload.detail);
+        if (shouldFinish) {
+          for (let i = 0; i < flow.stages.length; i += 1) {
+            if (isPendingOrRunning(flow.stages[i]?.status)) {
+              flow.stages[i].status = 'success';
+            }
+          }
+          flow.finished = true;
+          flow.summary = safetyPayload.summary || '安全流程完成，已放行回复';
+          return flow;
+        }
+
+        if (safetyPayload.summary) {
+          flow.summary = safetyPayload.summary;
+          return flow;
+        }
+
+        if (stageIndex >= 0) {
+          const stage = flow.stages[stageIndex];
+          if (stage?.status === 'running') {
+            flow.summary = `正在${stage.label}...`;
+          } else {
+            const pendingIndex = getPendingSafetyStageIndex(flow);
+            if (pendingIndex >= 0) {
+              flow.summary = `正在${flow.stages[pendingIndex].label}...`;
+            }
+          }
+        }
+        return flow;
+      });
+    },
+    [mutateAssistantSafetyFlow]
+  );
+
+  const advanceFallbackSafetyFlow = useCallback(
+    (phase) => {
+      mutateAssistantSafetyFlow((flow) => {
+        if (flow.fromBackend) return flow;
+
+        const classifyIndex = getSafetyStageIndex('classify');
+        const desensitizeIndex = getSafetyStageIndex('desensitize');
+        const interceptIndex = getSafetyStageIndex('intercept');
+
+        if (phase === 'parsed') {
+          if (classifyIndex >= 0 && isPendingOrRunning(flow.stages[classifyIndex]?.status)) {
+            flow.stages[classifyIndex].status = 'success';
+          }
+          if (desensitizeIndex >= 0 && flow.stages[desensitizeIndex]?.status === 'pending') {
+            flow.stages[desensitizeIndex].status = 'running';
+            flow.summary = `正在${flow.stages[desensitizeIndex].label}...`;
+          }
+          return flow;
+        }
+
+        if (phase === 'answered') {
+          if (desensitizeIndex >= 0 && isPendingOrRunning(flow.stages[desensitizeIndex]?.status)) {
+            markStagesBeforeIndexAsSuccess(flow, desensitizeIndex);
+            flow.stages[desensitizeIndex].status = 'success';
+          }
+          if (interceptIndex >= 0 && flow.stages[interceptIndex]?.status === 'pending') {
+            flow.stages[interceptIndex].status = 'running';
+            flow.summary = `正在${flow.stages[interceptIndex].label}...`;
+          }
+          return flow;
+        }
+
+        return flow;
+      });
+    },
+    [mutateAssistantSafetyFlow]
+  );
+
+  const finalizeSafetyFlow = useCallback(
+    (mode) => {
+      mutateAssistantSafetyFlow((flow) => {
+        if (mode === 'error') {
+          const runningIndex = getRunningSafetyStageIndex(flow);
+          const pendingIndex = getPendingSafetyStageIndex(flow);
+          const failIndex = runningIndex >= 0 ? runningIndex : pendingIndex;
+          if (failIndex >= 0) {
+            markStagesBeforeIndexAsSuccess(flow, failIndex);
+            flow.stages[failIndex].status = 'failed';
+            if (!flow.stages[failIndex].detail) {
+              flow.stages[failIndex].detail = '流程异常中断';
+            }
+            for (let i = failIndex + 1; i < flow.stages.length; i += 1) {
+              if (isPendingOrRunning(flow.stages[i]?.status)) {
+                flow.stages[i].status = 'skipped';
+              }
+            }
+          }
+          flow.finished = true;
+          flow.summary = '安全流程异常中断';
+          return flow;
+        }
+
+        if (!flow.finished) {
+          const failedIndex = flow.stages.findIndex((stage) => stage?.status === 'failed');
+          if (failedIndex >= 0) {
+            for (let i = failedIndex + 1; i < flow.stages.length; i += 1) {
+              if (isPendingOrRunning(flow.stages[i]?.status)) {
+                flow.stages[i].status = 'skipped';
+              }
+            }
+            flow.summary = flow.summary || '命中安全策略，已拦截回复';
+          } else {
+            for (let i = 0; i < flow.stages.length; i += 1) {
+              if (isPendingOrRunning(flow.stages[i]?.status)) {
+                flow.stages[i].status = 'success';
+              }
+            }
+            if (!flow.summary || /^正在/.test(flow.summary)) {
+              flow.summary = '安全流程完成，已放行回复';
+            }
+          }
+          flow.finished = true;
+        }
+        return flow;
+      });
+    },
+    [mutateAssistantSafetyFlow]
+  );
+
   const sendMessage = useCallback(async () => {
     if (!inputMessage.trim() || !selectedChatId || !selectedSessionId) return;
     const question = inputMessage.trim();
@@ -156,7 +482,13 @@ export const useChatStream = ({
       currentMessageCount: Array.isArray(messages) ? messages.length : 0,
     });
 
-    setMessages((prev) => [...prev, userMessage, { role: 'assistant', content: '', sources: [] }]);
+    assistantSafetyRef.current = createInitialSafetyFlow();
+    fallbackSafetyProgressRef.current = { parsed: false, answered: false };
+    setMessages((prev) => [
+      ...prev,
+      userMessage,
+      { role: 'assistant', content: '', sources: [], safetyFlow: cloneSafetyFlow(assistantSafetyRef.current) },
+    ]);
     setInputMessage('');
     setError(null);
 
@@ -196,6 +528,8 @@ export const useChatStream = ({
       let sseLineIndex = 0;
       assistantMessageRef.current = '';
       assistantSourcesRef.current = [];
+      assistantSafetyRef.current = createInitialSafetyFlow();
+      fallbackSafetyProgressRef.current = { parsed: false, answered: false };
 
       const processSseLine = (rawLine) => {
         sseLineIndex += 1;
@@ -227,6 +561,25 @@ export const useChatStream = ({
             topKeys: data && typeof data === 'object' ? Object.keys(data).slice(0, 8) : [],
           });
 
+          const safetyPayload = extractSafetyPayload(data);
+          if (safetyPayload) {
+            applyBackendSafetyPayload(safetyPayload);
+            logStream('debug', 'safety event', {
+              traceId,
+              sseLineIndex,
+              stage: safetyPayload.stage || '',
+              status: safetyPayload.status || '',
+              blocked: !!safetyPayload.blocked,
+              done: !!safetyPayload.done,
+              summary: previewText(safetyPayload.summary || '', 120),
+            });
+          }
+
+          if (!assistantSafetyRef.current?.fromBackend && !fallbackSafetyProgressRef.current.parsed) {
+            fallbackSafetyProgressRef.current.parsed = true;
+            advanceFallbackSafetyFlow('parsed');
+          }
+
           if (data?.code === 0 && data?.data && Array.isArray(data.data.sources)) {
             upsertAssistantSources(data.data.sources);
             logStream('debug', 'sources event', {
@@ -239,6 +592,10 @@ export const useChatStream = ({
           const incoming = extractIncomingAnswer(data);
           if (incoming) {
             receivedAnswerEvent = true;
+            if (!assistantSafetyRef.current?.fromBackend && !fallbackSafetyProgressRef.current.answered) {
+              fallbackSafetyProgressRef.current.answered = true;
+              advanceFallbackSafetyFlow('answered');
+            }
             if (incoming.toLowerCase().includes('<think')) {
               console.debug('[Chat:stream] think detected');
             }
@@ -339,9 +696,10 @@ export const useChatStream = ({
           }
 
           if (typeof data?.code === 'number' && data.code !== 0) {
-            const msg = String(data?.message || data?.detail || 'backend_error');
+            const msg = String(data?.message || data?.detail || '后端异常');
             setError(msg);
             upsertAssistantMessage(msg);
+            finalizeSafetyFlow('error');
             logStream('warn', 'backend non-zero code', {
               traceId,
               sseLineIndex,
@@ -392,8 +750,20 @@ export const useChatStream = ({
           const rawTrimmed = String(rawText || '').trim();
           if (rawTrimmed) {
             const payload = JSON.parse(rawTrimmed);
+            const safetyPayload = extractSafetyPayload(payload);
+            if (safetyPayload) {
+              applyBackendSafetyPayload(safetyPayload);
+            }
+            if (!assistantSafetyRef.current?.fromBackend && !fallbackSafetyProgressRef.current.parsed) {
+              fallbackSafetyProgressRef.current.parsed = true;
+              advanceFallbackSafetyFlow('parsed');
+            }
             const incoming = extractIncomingAnswer(payload);
             if (incoming) {
+              if (!assistantSafetyRef.current?.fromBackend && !fallbackSafetyProgressRef.current.answered) {
+                fallbackSafetyProgressRef.current.answered = true;
+                advanceFallbackSafetyFlow('answered');
+              }
               assistantMessageRef.current = incoming;
               upsertAssistantMessage(incoming);
             }
@@ -430,6 +800,8 @@ export const useChatStream = ({
         }
       }
 
+      finalizeSafetyFlow('done');
+
       try {
         const finalText = stripThinkTags(assistantMessageRef.current || '');
         const finalSources = assistantSourcesRef.current || [];
@@ -453,12 +825,10 @@ export const useChatStream = ({
         traceId,
         message: String(err?.message || err || 'unknown_error'),
       });
+      finalizeSafetyFlow('error');
       setError(err?.message || '发送失败');
       setMessages((prev) => {
         const next = Array.isArray(prev) ? [...prev] : [];
-        const last = next[next.length - 1];
-        if (last?.role === 'assistant') next.pop();
-
         const hasCurrentUserQuestion = next.some(
           (msg) => msg?.role === 'user' && String(msg?.content || '') === question
         );
@@ -466,13 +836,34 @@ export const useChatStream = ({
           next.push({ role: 'user', content: question });
         }
 
+        const last = next[next.length - 1];
+        const failedSafetyFlow = cloneSafetyFlow(assistantSafetyRef.current || createInitialSafetyFlow());
+        if (last?.role === 'assistant') {
+          next[next.length - 1] = {
+            ...last,
+            role: 'assistant',
+            content: String(last?.content || '请求失败，请稍后重试'),
+            safetyFlow: failedSafetyFlow,
+          };
+        } else {
+          next.push({
+            role: 'assistant',
+            content: '请求失败，请稍后重试',
+            sources: [],
+            safetyFlow: failedSafetyFlow,
+          });
+        }
+
         return next;
       });
     }
   }, [
+    advanceFallbackSafetyFlow,
+    applyBackendSafetyPayload,
     autoRenameSessionByFirstQuestion,
     containsReasoningMarkers,
     extractIncomingAnswer,
+    finalizeSafetyFlow,
     inputMessage,
     logStream,
     messages,

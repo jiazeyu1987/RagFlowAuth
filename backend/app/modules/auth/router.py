@@ -12,6 +12,7 @@ from backend.services.auth_flow_service import login as auth_login
 from backend.services.auth_flow_service import logout as auth_logout
 from backend.services.auth_flow_service import refresh as auth_refresh
 from backend.services.auth_me_service import build_auth_me_payload
+from backend.services.super_admin import is_super_admin_user
 from backend.services.user_store import hash_password
 from backend.services.users import validate_password_requirements
 
@@ -66,6 +67,9 @@ async def change_password(
     """
     deps = ctx.deps
     user = ctx.user
+
+    if is_super_admin_user(user):
+        raise HTTPException(status_code=403, detail="super_admin_password_fixed")
 
     # Verify old password
     if hash_password(request_data.old_password) != user.password_hash:

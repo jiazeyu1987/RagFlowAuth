@@ -3,6 +3,8 @@ from __future__ import annotations
 from fastapi import APIRouter
 
 from backend.app.core.authz import AdminOnly, AuthContextDep
+from backend.services.feature_visibility import assert_feature_visible_or_404
+from backend.services.feature_visibility_store import FLAG_API_AUDIT_EVENTS_VISIBLE
 
 router = APIRouter()
 
@@ -24,6 +26,12 @@ async def list_audit_events(
     offset: int = 0,
     limit: int = 200,
 ):
+    assert_feature_visible_or_404(
+        deps=ctx.deps,
+        user=ctx.user,
+        flag_key=FLAG_API_AUDIT_EVENTS_VISIBLE,
+    )
+
     """
     Unified audit events list (admin only).
 

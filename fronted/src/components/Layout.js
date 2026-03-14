@@ -1,22 +1,26 @@
-import React, { useState } from 'react';
-import { Link, useNavigate, useLocation } from 'react-router-dom';
+import React, { useMemo, useState } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
+import { useRuntimeFeatureFlags } from '../hooks/useRuntimeFeatureFlags';
 import PermissionGuard from './PermissionGuard';
 
 const Layout = ({ children }) => {
-  const { user, logout, canUpload, canReview } = useAuth();
+  const { user, logout, canUpload, canReview, isSuperAdmin } = useAuth();
+  const { flags } = useRuntimeFeatureFlags();
   const navigate = useNavigate();
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
-  const permissionGroupLabel = (() => {
+  const permissionGroupLabel = useMemo(() => {
     const groups = (user?.permission_groups || [])
       .map((g) => (g && typeof g.group_name === 'string' ? g.group_name.trim() : ''))
       .filter(Boolean);
     const unique = Array.from(new Set(groups));
     if (unique.length > 0) return unique.join(' / ');
     return user?.role || '';
-  })();
+  }, [user]);
+
+  const canSee = (flagKey) => isSuperAdmin() || flags?.[flagKey] !== false;
 
   const handleLogout = async () => {
     await logout();
@@ -33,16 +37,29 @@ const Layout = ({ children }) => {
     { name: '智能对话', path: '/chat', icon: '💬' },
     { name: '全库搜索', path: '/agents', icon: '🔎' },
     { name: '知识配置', path: '/kbs', icon: '📚' },
-    { name: '文档浏览', path: '/browser', icon: '📁' },
+    { name: '文档浏览', path: '/browser', icon: '📄' },
     { name: '文档审核', path: '/documents', icon: '✅', show: canReview },
-    { name: '文档上传', path: '/upload', icon: '⬆️', show: canUpload },
+    { name: '文档上传', path: '/upload', icon: '⏫', show: canUpload },
     { name: '修改密码', path: '/change-password', icon: '🔐' },
     { name: '实用工具', path: '/tools', icon: '🧰' },
     { name: '用户管理', path: '/users', icon: '👤', allowedRoles: ['admin'] },
     { name: '组织管理', path: '/org-directory', icon: '🏢', allowedRoles: ['admin'] },
     { name: '权限分组', path: '/permission-groups', icon: '🛡️', allowedRoles: ['admin'] },
     { name: '数据安全', path: '/data-security', icon: '🔒', allowedRoles: ['admin'] },
-    { name: '日志审计', path: '/logs', icon: '🧾', allowedRoles: ['admin'] },
+    {
+      name: '日志审计',
+      path: '/logs',
+      icon: '🧾',
+      allowedRoles: ['admin'],
+      show: () => canSee('page_logs_visible'),
+    },
+    {
+      name: '功能隐藏控制',
+      path: '/super-admin/features',
+      icon: '⚙️',
+      allowedRoles: ['admin'],
+      show: () => isSuperAdmin(),
+    },
   ];
 
   const pageTitleOverrides = {
@@ -53,11 +70,13 @@ const Layout = ({ children }) => {
     '/tools/nas-browser': 'NAS 网盘',
     '/tools/drug-admin': '药监导航',
     '/tools/nmpa': 'NMPA',
+    '/super-admin/features': '功能隐藏控制',
   };
 
-  const currentTitle = pageTitleOverrides[location.pathname]
-    || navigation.find((item) => item.path === location.pathname)?.name
-    || '仪表盘';
+  const currentTitle =
+    pageTitleOverrides[location.pathname] ||
+    navigation.find((item) => item.path === location.pathname)?.name ||
+    '仪表盘';
 
   return (
     <div style={{ display: 'flex', height: '100vh' }}>
@@ -102,7 +121,7 @@ const Layout = ({ children }) => {
 
         <nav style={{ flex: 1, padding: '10px 0' }}>
           {navigation.map((item) => {
-            if (item.show !== undefined && !item.show()) return null;
+            if (item.show && !item.show()) return null;
 
             return (
               <PermissionGuard key={item.path} allowedRoles={item.allowedRoles} fallback={null}>
@@ -196,6 +215,22 @@ const Layout = ({ children }) => {
           <h1 style={{ margin: 0, fontSize: '1.5rem', color: '#111827' }} data-testid="layout-header-title">
             {currentTitle}
           </h1>
+          <div
+            data-testid="super-admin-credential-banner"
+            style={{
+              marginTop: 10,
+              display: 'inline-block',
+              padding: '6px 10px',
+              borderRadius: 8,
+              border: '1px solid #ef4444',
+              backgroundColor: '#fef2f2',
+              color: '#991b1b',
+              fontWeight: 700,
+              fontSize: '0.95rem',
+            }}
+          >
+            测试超级管理员：SuperAdmin / SuperAdmin
+          </div>
         </header>
 
         <div style={{ padding: '24px' }}>{children}</div>

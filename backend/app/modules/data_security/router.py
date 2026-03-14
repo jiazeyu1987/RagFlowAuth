@@ -7,6 +7,11 @@ from fastapi import APIRouter, HTTPException
 
 from backend.app.core.authz import AdminOnly, AuthContextDep
 from backend.app.modules.data_security.runner import start_job_if_idle
+from backend.services.feature_visibility import (
+    assert_feature_visible_or_404,
+    resolve_feature_visibility_store,
+)
+from backend.services.feature_visibility_store import FLAG_API_ADMIN_FEATURE_FLAGS_VISIBLE
 from backend.services.egress_decision_audit_store import EgressDecisionAuditStore
 from backend.services.egress_mode_runtime import clear_egress_policy_cache
 from backend.services.data_security_store import DataSecurityStore
@@ -213,16 +218,28 @@ async def list_egress_decision_audits(
 @router.get("/security/feature-flags")
 async def get_feature_flags(ctx: AuthContextDep) -> dict[str, Any]:
     store = _resolve_feature_flag_store(ctx.deps)
-    return store.list_flags()
+    payload = store.list_flags()
+    payload.update(resolve_feature_visibility_store(ctx.deps).list_flags())
+    return payload
 
 
 @router.get("/admin/security/feature-flags")
-async def get_admin_feature_flags(_: AdminOnly) -> dict[str, Any]:
+async def get_admin_feature_flags(_: AdminOnly, ctx: AuthContextDep) -> dict[str, Any]:
+    assert_feature_visible_or_404(
+        deps=ctx.deps,
+        user=ctx.user,
+        flag_key=FLAG_API_ADMIN_FEATURE_FLAGS_VISIBLE,
+    )
     return SystemFeatureFlagStore().list_flags()
 
 
 @router.put("/admin/security/feature-flags")
-async def update_feature_flags(admin: AdminOnly, body: dict[str, Any] | None = None) -> dict[str, Any]:
+async def update_feature_flags(admin: AdminOnly, ctx: AuthContextDep, body: dict[str, Any] | None = None) -> dict[str, Any]:
+    assert_feature_visible_or_404(
+        deps=ctx.deps,
+        user=ctx.user,
+        flag_key=FLAG_API_ADMIN_FEATURE_FLAGS_VISIBLE,
+    )
     store = SystemFeatureFlagStore()
     try:
         payload = store.update_flags(body or {}, actor_user_id=str(getattr(admin, "sub", "") or ""))
@@ -233,7 +250,12 @@ async def update_feature_flags(admin: AdminOnly, body: dict[str, Any] | None = N
 
 
 @router.post("/admin/security/feature-flags/rollback-disable")
-async def rollback_disable_feature_flags(admin: AdminOnly) -> dict[str, Any]:
+async def rollback_disable_feature_flags(admin: AdminOnly, ctx: AuthContextDep) -> dict[str, Any]:
+    assert_feature_visible_or_404(
+        deps=ctx.deps,
+        user=ctx.user,
+        flag_key=FLAG_API_ADMIN_FEATURE_FLAGS_VISIBLE,
+    )
     store = SystemFeatureFlagStore()
     payload = store.rollback_disable_all(actor_user_id=str(getattr(admin, "sub", "") or ""))
     clear_egress_policy_cache()

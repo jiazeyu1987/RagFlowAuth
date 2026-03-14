@@ -22,6 +22,39 @@ const formatBackupStatus = (status) => {
   return BACKUP_STATUS_LABELS[key] || String(status || '-');
 };
 
+const listToLines = (value) => (Array.isArray(value) ? value.map((item) => String(item || '').trim()).filter(Boolean).join('\n') : '');
+
+const linesToList = (value) =>
+  String(value || '')
+    .split(/\r?\n|,/)
+    .map((item) => String(item || '').trim())
+    .filter(Boolean);
+
+const buildEgressDraft = (config) => {
+  const rules = config?.sensitivity_rules || {};
+  return {
+    mode: String(config?.mode || 'intranet'),
+    sensitive_classification_enabled: Boolean(config?.sensitive_classification_enabled),
+    auto_desensitize_enabled: Boolean(config?.auto_desensitize_enabled),
+    high_sensitive_block_enabled: Boolean(config?.high_sensitive_block_enabled),
+    sensitivity_rules_low: listToLines(rules?.low || []),
+    sensitivity_rules_medium: listToLines(rules?.medium || []),
+    sensitivity_rules_high: listToLines(rules?.high || []),
+  };
+};
+
+const buildEgressPayload = (draft) => ({
+  mode: String(draft?.mode || 'intranet'),
+  sensitive_classification_enabled: Boolean(draft?.sensitive_classification_enabled),
+  auto_desensitize_enabled: Boolean(draft?.auto_desensitize_enabled),
+  high_sensitive_block_enabled: Boolean(draft?.high_sensitive_block_enabled),
+  sensitivity_rules: {
+    low: linesToList(draft?.sensitivity_rules_low),
+    medium: linesToList(draft?.sensitivity_rules_medium),
+    high: linesToList(draft?.sensitivity_rules_high),
+  },
+});
+
 const ProgressBar = ({ value }) => {
   const pct = Math.max(0, Math.min(100, Number(value || 0)));
   return (
@@ -54,6 +87,9 @@ const DataSecurity = () => {
   const [jobs, setJobs] = useState([]);
   const [activeJob, setActiveJob] = useState(null);
   const [savingRetention, setSavingRetention] = useState(false);
+  const [egressDraft, setEgressDraft] = useState(buildEgressDraft(null));
+  const [savingEgress, setSavingEgress] = useState(false);
+  const [egressMessage, setEgressMessage] = useState('');
   const pollTimer = useRef(null);
   const showAdvanced = useMemo(
     () => new URLSearchParams(location.search).get('advanced') === '1',
@@ -99,10 +135,16 @@ const DataSecurity = () => {
 
   const loadAll = async () => {
     setError(null);
+    setEgressMessage('');
     setLoading(true);
     try {
-      const [s, j] = await Promise.all([dataSecurityApi.getSettings(), dataSecurityApi.listJobs(30)]);
+      const [s, j, egressConfig] = await Promise.all([
+        dataSecurityApi.getSettings(),
+        dataSecurityApi.listJobs(30),
+        dataSecurityApi.getEgressConfig().catch(() => null),
+      ]);
       setSettings(s);
+      setEgressDraft(buildEgressDraft(egressConfig));
       // 更新定时备份状态
       setIncrementalSchedule(cronToSchedule(s.incremental_schedule) || { type: 'daily', hour: '18', minute: '30' });
       setFullBackupSchedule(cronToSchedule(s.full_backup_schedule) || { type: 'weekly', hour: '04', minute: '00', weekday: '1' });
@@ -170,6 +212,24 @@ const DataSecurity = () => {
       }
     } catch (e) {
       setError(e.message || '全量备份启动失败');
+    }
+  };
+
+  const saveEgressConfig = async () => {
+    setError(null);
+    setEgressMessage('');
+    setSavingEgress(true);
+    try {
+      const payload = buildEgressPayload(egressDraft);
+      const updated = await dataSecurityApi.updateEgressConfig(payload);
+      setEgressDraft(buildEgressDraft(updated));
+      setEgressMessage('对话安全策略已保存并生效');
+    } catch (e) {
+      const msg = e?.message || '保存对话安全策略失败';
+      setError(msg);
+      setEgressMessage(msg);
+    } finally {
+      setSavingEgress(false);
     }
   };
 
@@ -268,6 +328,123 @@ const DataSecurity = () => {
             <div style={{ color: '#6b7280', fontSize: '0.9rem' }}>
               超出数量，系统会在备份任务完成后自动删除最老的 `migration_pack_*`。
             </div>
+          </div>
+        </div>
+      </Card>
+
+      <Card title="对话外发安全策略">
+        <div style={{ display: 'grid', gap: '12px' }}>
+          <div style={{ color: '#6b7280', fontSize: '0.9rem' }}>
+            这里配置“分级、脱敏、拦截”规则。聊天时会按此策略执行并在对话中可视化展示。
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+            <label>
+              外发模式
+              <select
+                data-testid="ds-egress-mode"
+                value={egressDraft.mode}
+                onChange={(e) => setEgressDraft((prev) => ({ ...prev, mode: e.target.value }))}
+                style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '8px', marginTop: '6px' }}
+              >
+                <option value="intranet">内网模式（仅内网出网）</option>
+                <option value="extranet">外网模式（允许策略化外发）</option>
+              </select>
+            </label>
+            <div style={{ color: '#6b7280', fontSize: '0.9rem', alignSelf: 'end' }}>
+              建议默认使用“内网模式”，外网场景再启用外网模式并配套敏感策略。
+            </div>
+          </div>
+
+          <label style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+            <input
+              type="checkbox"
+              data-testid="ds-egress-sensitive-enabled"
+              checked={!!egressDraft.sensitive_classification_enabled}
+              onChange={(e) => setEgressDraft((prev) => ({ ...prev, sensitive_classification_enabled: e.target.checked }))}
+            />
+            启用敏感分级（识别敏感词并计算敏感等级）
+          </label>
+
+          <label style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+            <input
+              type="checkbox"
+              data-testid="ds-egress-auto-desensitize"
+              checked={!!egressDraft.auto_desensitize_enabled}
+              onChange={(e) => setEgressDraft((prev) => ({ ...prev, auto_desensitize_enabled: e.target.checked }))}
+            />
+            启用自动脱敏（命中规则时自动替换敏感内容）
+          </label>
+
+          <label style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+            <input
+              type="checkbox"
+              data-testid="ds-egress-high-block"
+              checked={!!egressDraft.high_sensitive_block_enabled}
+              onChange={(e) => setEgressDraft((prev) => ({ ...prev, high_sensitive_block_enabled: e.target.checked }))}
+            />
+            启用高敏拦截（高敏内容直接拦截，不发送到模型）
+          </label>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
+            <label>
+              低敏规则（每行一个）
+              <textarea
+                data-testid="ds-egress-rules-low"
+                value={egressDraft.sensitivity_rules_low}
+                onChange={(e) => setEgressDraft((prev) => ({ ...prev, sensitivity_rules_low: e.target.value }))}
+                placeholder="例如：公开信息"
+                rows={6}
+                style={{ width: '100%', resize: 'vertical', padding: '8px', border: '1px solid #d1d5db', borderRadius: '8px', marginTop: '6px' }}
+              />
+            </label>
+
+            <label>
+              中敏规则（每行一个）
+              <textarea
+                data-testid="ds-egress-rules-medium"
+                value={egressDraft.sensitivity_rules_medium}
+                onChange={(e) => setEgressDraft((prev) => ({ ...prev, sensitivity_rules_medium: e.target.value }))}
+                placeholder="例如：内部资料"
+                rows={6}
+                style={{ width: '100%', resize: 'vertical', padding: '8px', border: '1px solid #d1d5db', borderRadius: '8px', marginTop: '6px' }}
+              />
+            </label>
+
+            <label>
+              高敏规则（每行一个）
+              <textarea
+                data-testid="ds-egress-rules-high"
+                value={egressDraft.sensitivity_rules_high}
+                onChange={(e) => setEgressDraft((prev) => ({ ...prev, sensitivity_rules_high: e.target.value }))}
+                placeholder="例如：身份证号"
+                rows={6}
+                style={{ width: '100%', resize: 'vertical', padding: '8px', border: '1px solid #d1d5db', borderRadius: '8px', marginTop: '6px' }}
+              />
+            </label>
+          </div>
+
+          <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
+            <button
+              data-testid="ds-egress-save"
+              onClick={saveEgressConfig}
+              disabled={savingEgress}
+              style={{
+                padding: '10px 14px',
+                borderRadius: '8px',
+                border: 'none',
+                cursor: savingEgress ? 'not-allowed' : 'pointer',
+                background: savingEgress ? '#9ca3af' : '#111827',
+                color: 'white',
+              }}
+            >
+              {savingEgress ? '保存中…' : '保存对话安全策略'}
+            </button>
+            {egressMessage ? (
+              <div data-testid="ds-egress-message" style={{ color: egressMessage.includes('失败') ? '#991b1b' : '#166534' }}>
+                {egressMessage}
+              </div>
+            ) : null}
           </div>
         </div>
       </Card>

@@ -3,6 +3,8 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './hooks/useAuth';
 import Layout from './components/Layout';
 import PermissionGuard from './components/PermissionGuard';
+import FeatureVisibilityGuard from './components/FeatureVisibilityGuard';
+import SuperAdminGuard from './components/SuperAdminGuard';
 
 const LoginPage = lazy(() => import('./pages/LoginPage'));
 const Dashboard = lazy(() => import('./pages/Dashboard'));
@@ -32,6 +34,7 @@ const SearchConfigsPanel = lazy(() => import('./pages/SearchConfigsPanel'));
 const ChatConfigsPanel = lazy(() => import('./pages/ChatConfigsPanel'));
 const DocumentReview = lazy(() => import('./pages/DocumentReview'));
 const DocumentAudit = lazy(() => import('./pages/DocumentAudit'));
+const SuperAdminFeatureVisibility = lazy(() => import('./pages/SuperAdminFeatureVisibility'));
 
 
 function RouteLoadingFallback() {
@@ -209,9 +212,11 @@ function App() {
               path="/tools/nas-browser"
               element={
                 <PermissionGuard allowedRoles={['admin']}>
-                  <Layout>
-                    <NasBrowser />
-                  </Layout>
+                  <FeatureVisibilityGuard flagKey="tool_nas_visible">
+                    <Layout>
+                      <NasBrowser />
+                    </Layout>
+                  </FeatureVisibilityGuard>
                 </PermissionGuard>
               }
             />
@@ -219,9 +224,11 @@ function App() {
               path="/tools/drug-admin"
               element={
                 <PermissionGuard>
-                  <Layout>
-                    <DrugAdminNavigator />
-                  </Layout>
+                  <FeatureVisibilityGuard flagKey="tool_drug_admin_visible">
+                    <Layout>
+                      <DrugAdminNavigator />
+                    </Layout>
+                  </FeatureVisibilityGuard>
                 </PermissionGuard>
               }
             />
@@ -229,9 +236,11 @@ function App() {
               path="/tools/nmpa"
               element={
                 <PermissionGuard>
-                  <Layout>
-                    <NMPATool />
-                  </Layout>
+                  <FeatureVisibilityGuard flagKey="tool_nmpa_visible">
+                    <Layout>
+                      <NMPATool />
+                    </Layout>
+                  </FeatureVisibilityGuard>
                 </PermissionGuard>
               }
             />
@@ -307,9 +316,11 @@ function App() {
               path="/data-security-test"
               element={
                 <PermissionGuard allowedRoles={['admin']}>
-                  <Layout>
-                    <DataSecurityTest />
-                  </Layout>
+                  <FeatureVisibilityGuard flagKey="page_data_security_test_visible">
+                    <Layout>
+                      <DataSecurityTest />
+                    </Layout>
+                  </FeatureVisibilityGuard>
                 </PermissionGuard>
               }
             />
@@ -317,9 +328,23 @@ function App() {
               path="/logs"
               element={
                 <PermissionGuard allowedRoles={['admin']}>
-                  <Layout>
-                    <AuditLogs />
-                  </Layout>
+                  <FeatureVisibilityGuard flagKey="page_logs_visible">
+                    <Layout>
+                      <AuditLogs />
+                    </Layout>
+                  </FeatureVisibilityGuard>
+                </PermissionGuard>
+              }
+            />
+            <Route
+              path="/super-admin/features"
+              element={
+                <PermissionGuard allowedRoles={['admin']}>
+                  <SuperAdminGuard>
+                    <Layout>
+                      <SuperAdminFeatureVisibility />
+                    </Layout>
+                  </SuperAdminGuard>
                 </PermissionGuard>
               }
             />

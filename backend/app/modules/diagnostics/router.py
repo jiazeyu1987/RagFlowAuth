@@ -7,6 +7,8 @@ from pathlib import Path
 
 from backend.app.core.authz import AdminOnly, AuthContextDep
 from backend.app.core.permission_resolver import ResourceScope
+from backend.services.feature_visibility import assert_feature_visible_or_404
+from backend.services.feature_visibility_store import FLAG_API_DIAGNOSTICS_VISIBLE
 from backend.services.ragflow_config import is_placeholder_api_key
 
 
@@ -14,7 +16,12 @@ router = APIRouter()
 
 
 @router.get("/diagnostics/routes")
-async def routes_diagnostics(request: Request, _: AdminOnly):
+async def routes_diagnostics(request: Request, ctx: AuthContextDep, _: AdminOnly):
+    assert_feature_visible_or_404(
+        deps=ctx.deps,
+        user=ctx.user,
+        flag_key=FLAG_API_DIAGNOSTICS_VISIBLE,
+    )
     """
     Quick runtime verification for route wiring.
 
@@ -46,6 +53,11 @@ async def routes_diagnostics(request: Request, _: AdminOnly):
 
 @router.get("/diagnostics/permissions")
 async def permissions_diagnostics(ctx: AuthContextDep):
+    assert_feature_visible_or_404(
+        deps=ctx.deps,
+        user=ctx.user,
+        flag_key=FLAG_API_DIAGNOSTICS_VISIBLE,
+    )
     deps = ctx.deps
     user = ctx.user
     snapshot = ctx.snapshot
@@ -92,6 +104,11 @@ async def permissions_diagnostics(ctx: AuthContextDep):
 
 @router.get("/diagnostics/ragflow")
 async def ragflow_diagnostics(ctx: AuthContextDep, _: AdminOnly):
+    assert_feature_visible_or_404(
+        deps=ctx.deps,
+        user=ctx.user,
+        flag_key=FLAG_API_DIAGNOSTICS_VISIBLE,
+    )
     deps = ctx.deps
     ragflow = deps.ragflow_service
     chat = deps.ragflow_chat_service
@@ -134,7 +151,12 @@ async def ragflow_diagnostics(ctx: AuthContextDep, _: AdminOnly):
 
 
 @router.get("/diagnostics/build")
-async def build_diagnostics(_: AdminOnly):
+async def build_diagnostics(ctx: AuthContextDep, _: AdminOnly):
+    assert_feature_visible_or_404(
+        deps=ctx.deps,
+        user=ctx.user,
+        flag_key=FLAG_API_DIAGNOSTICS_VISIBLE,
+    )
     """
     Runtime build/code fingerprint.
 

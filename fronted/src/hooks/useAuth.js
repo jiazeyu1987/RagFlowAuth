@@ -218,7 +218,8 @@ export const AuthProvider = ({ children }) => {
     return user.role === roles;
   };
 
-  const isAdmin = () => user?.role === 'admin';
+  const isSuperAdmin = () => Boolean(user?.is_super_admin) || String(user?.username || '').toLowerCase() === 'superadmin';
+  const isAdmin = () => user?.role === 'admin' || isSuperAdmin();
   const isReviewer = () => user?.role === 'admin' || permissions.can_review;
   const isOperator = () => user?.role === 'admin' || permissions.can_upload || permissions.can_review;
 
@@ -277,6 +278,7 @@ export const AuthProvider = ({ children }) => {
     logout,
     hasRole,
     isAdmin,
+    isSuperAdmin,
     isReviewer,
     isOperator,
     can,

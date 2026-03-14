@@ -20,6 +20,15 @@ export const dataSecurityApi = {
   listJobs: async (limit = 30) =>
     httpClient.requestJson(`/api/admin/data-security/backup/jobs?limit=${encodeURIComponent(limit)}`),
   getJob: async (jobId) => httpClient.requestJson(`/api/admin/data-security/backup/jobs/${jobId}`),
+  getEgressConfig: async () =>
+    httpClient.requestJson('/api/admin/security/egress/config', {
+      skipSessionRedirect: true,
+    }),
+  updateEgressConfig: async (payload) =>
+    httpClient.requestJson('/api/admin/security/egress/config', {
+      method: 'PUT',
+      body: JSON.stringify(payload || {}),
+    }),
   getFeatureFlags: async () => httpClient.requestJson('/api/admin/security/feature-flags'),
   updateFeatureFlags: async (payload) =>
     httpClient.requestJson('/api/admin/security/feature-flags', {
