@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import ChatConfigCreateDialog from '../features/chat/configs/components/ChatConfigCreateDialog';
 import ChatConfigDetailPanel from '../features/chat/configs/components/ChatConfigDetailPanel';
 import ChatConfigListPanel from '../features/chat/configs/components/ChatConfigListPanel';
@@ -14,27 +14,11 @@ import {
 } from '../features/chat/configs/chatConfigUtils';
 import { knowledgeApi } from '../features/knowledge/api';
 import { useAuth } from '../hooks/useAuth';
-
-const shellStyle = {
-  padding: '16px',
-  display: 'grid',
-  gridTemplateColumns: '360px 1fr',
-  gap: '14px',
-  alignItems: 'start',
-};
-
-const panelStyle = {
-  background: '#ffffff',
-  border: '1px solid #e5e7eb',
-  borderRadius: '12px',
-  overflow: 'hidden',
-  boxShadow: '0 6px 18px rgba(15, 23, 42, 0.06)',
-};
+import { normalizeDisplayError } from '../shared/utils/displayError';
 
 export function ChatConfigsPanel() {
   const { user } = useAuth();
   const isAdmin = (user?.role || '') === 'admin';
-
   const [chatList, setChatList] = useState([]);
   const [chatLoading, setChatLoading] = useState(false);
   const [chatError, setChatError] = useState('');
@@ -71,7 +55,7 @@ export function ChatConfigsPanel() {
     });
   }, [chatFilter, chatList]);
 
-  async function fetchChatList() {
+  const fetchChatList = useCallback(async () => {
     setChatError('');
     setChatLoading(true);
     try {
@@ -84,13 +68,13 @@ export function ChatConfigsPanel() {
       setChatList(visibleChats);
     } catch (error) {
       setChatList([]);
-      setChatError(error?.message || '加载对话失败');
+      setChatError(normalizeDisplayError(error?.message, '加载对话失败'));
     } finally {
       setChatLoading(false);
     }
-  }
+  }, []);
 
-  async function fetchKbList() {
+  const fetchKbList = useCallback(async () => {
     setKbError('');
     setKbLoading(true);
     try {
@@ -98,11 +82,11 @@ export function ChatConfigsPanel() {
       setKbList(normalizeDatasetListResponse(res));
     } catch (error) {
       setKbList([]);
-      setKbError(error?.message || '加载知识库失败');
+      setKbError(normalizeDisplayError(error?.message, '加载知识库失败'));
     } finally {
       setKbLoading(false);
     }
-  }
+  }, []);
 
   async function loadChatDetail(chatId) {
     if (!chatId) return;
@@ -112,13 +96,13 @@ export function ChatConfigsPanel() {
     setChatDetailLoading(true);
     try {
       const chat = await knowledgeApi.getRagflowChat(chatId);
-      if (!chat || !chat.id) throw new Error('chat_not_found');
+      if (!chat || !chat.id) throw new Error('未找到对话配置');
       setChatSelected(chat);
       setChatNameText(String(chat?.name || ''));
       setChatJsonText(prettyJson(sanitizeChatPayload(chat)));
     } catch (error) {
       setChatSelected(null);
-      setChatDetailError(error?.message || '加载失败');
+      setChatDetailError(normalizeDisplayError(error?.message, '加载详情失败'));
     } finally {
       setChatDetailLoading(false);
     }
@@ -159,7 +143,7 @@ export function ChatConfigsPanel() {
   useEffect(() => {
     fetchChatList();
     fetchKbList();
-  }, []);
+  }, [fetchChatList, fetchKbList]);
 
   useEffect(() => {
     if (!chatSelected && chatList.length) loadChatDetail(chatList[0]?.id || '');
@@ -188,7 +172,7 @@ export function ChatConfigsPanel() {
     setBusy(true);
     try {
       const updated = await knowledgeApi.updateRagflowChat(chatSelected.id, updates);
-      if (!updated || !updated.id) throw new Error('保存成功但未返回最新配置');
+      if (!updated || !updated.id) throw new Error('保存成功，但未返回最新配置');
 
       setChatSelected(updated);
       setChatNameText(String(updated?.name || name));
@@ -203,15 +187,15 @@ export function ChatConfigsPanel() {
           setChatNameText(String(fresh?.name || name));
           setChatJsonText(prettyJson(sanitizeChatPayload(fresh)));
         }
-      } catch (_) {
+      } catch {
       }
     } catch (error) {
       const message = String(error?.message || '');
       if (message.includes('chat_dataset_locked') || message.includes("doesn't own parsed file")) {
         setChatLocked({ message, desiredPayload: updates });
-        setChatDetailError('该对话已关联已解析文档，当前配置不允许直接切换到不包含这些文档的知识库。可复制为新对话后再调整知识库。');
+        setChatDetailError('该对话已关联已解析文件，当前配置不允许直接切换到不包含这些文件的知识库。可复制为新对话后再调整知识库。');
       } else {
-        setChatDetailError(message || '保存失败');
+        setChatDetailError(normalizeDisplayError(message, '保存失败'));
       }
     } finally {
       setBusy(false);
@@ -231,7 +215,7 @@ export function ChatConfigsPanel() {
     setBusy(true);
     try {
       const updated = await knowledgeApi.updateRagflowChat(chatSelected.id, { name });
-      if (!updated || !updated.id) throw new Error('保存成功但未返回最新配置');
+      if (!updated || !updated.id) throw new Error('保存成功，但未返回最新配置');
       setChatSelected(updated);
       setChatNameText(String(updated?.name || name));
       setChatJsonText(prettyJson(sanitizeChatPayload(updated)));
@@ -239,7 +223,7 @@ export function ChatConfigsPanel() {
       setChatLocked(null);
       await fetchChatList();
     } catch (error) {
-      setChatDetailError(error?.message || '保存失败');
+      setChatDetailError(normalizeDisplayError(error?.message, '保存失败'));
     } finally {
       setBusy(false);
     }
@@ -248,19 +232,19 @@ export function ChatConfigsPanel() {
   async function copyToNewChat() {
     if (!isAdmin || !chatLocked?.desiredPayload) return;
     const baseName = String(chatNameText || chatSelected?.name || '新对话').trim() || '新对话';
-    const name = baseName + '_copy';
+    const name = `${baseName}_副本`;
 
     setBusy(true);
     try {
       const created = await knowledgeApi.createRagflowChat({ ...chatLocked.desiredPayload, name });
-      if (!created || !created.id) throw new Error('新建成功但未返回对话信息');
+      if (!created || !created.id) throw new Error('新建成功，但未返回对话信息');
       setChatLocked(null);
       setChatDetailError('');
       setChatSaveStatus('已复制为新对话');
       await fetchChatList();
       await loadChatDetail(created.id);
     } catch (error) {
-      setChatDetailError(error?.message || '复制创建失败');
+      setChatDetailError(normalizeDisplayError(error?.message, '复制创建失败'));
     } finally {
       setBusy(false);
     }
@@ -268,7 +252,7 @@ export function ChatConfigsPanel() {
 
   async function clearParsedFiles() {
     if (!chatSelected?.id || !isAdmin) return;
-    const ok = window.confirm('确认清除该对话的已解析文件绑定？\n\n这将尝试解除 RAGFlow 的 parsed files 归属限制，以便切换知识库。');
+    const ok = window.confirm('确认清除该对话的已解析文件绑定？\n\n这将尝试解除 RAGFlow 的解析文件归属限制，以便切换知识库。');
     if (!ok) return;
 
     setChatDetailError('');
@@ -281,7 +265,7 @@ export function ChatConfigsPanel() {
       await loadChatDetail(chatSelected.id);
       setChatSaveStatus('已清除解析绑定（如支持）');
     } catch (error) {
-      setChatDetailError(error?.message || '清除失败');
+      setChatDetailError(normalizeDisplayError(error?.message, '清除失败'));
     } finally {
       setBusy(false);
     }
@@ -289,7 +273,7 @@ export function ChatConfigsPanel() {
 
   async function deleteChat(chat) {
     if (!chat?.id) return;
-    const ok = window.confirm('确认删除对话: ' + (chat.name || chat.id));
+    const ok = window.confirm(`确认删除对话：${chat.name || chat.id}`);
     if (!ok) return;
 
     setBusy(true);
@@ -298,7 +282,7 @@ export function ChatConfigsPanel() {
       if (chatSelected?.id === chat.id) setChatSelected(null);
       await fetchChatList();
     } catch (error) {
-      setChatError(error?.message || '删除失败');
+      setChatError(normalizeDisplayError(error?.message, '删除失败'));
     } finally {
       setBusy(false);
     }
@@ -313,7 +297,7 @@ export function ChatConfigsPanel() {
       setCreateJsonText(prettyJson(sanitizeChatPayload(source)));
     } catch (error) {
       setCreateJsonText('{}');
-      setCreateError(error?.message || '读取源对话配置失败');
+      setCreateError(normalizeDisplayError(error?.message, '读取源对话配置失败'));
     }
   }
 
@@ -347,58 +331,69 @@ export function ChatConfigsPanel() {
     setBusy(true);
     try {
       const created = await knowledgeApi.createRagflowChat(payload);
-      if (!created || !created.id) throw new Error('新建成功但未返回对话信息');
+      if (!created || !created.id) throw new Error('新建成功，但未返回对话信息');
       setCreateOpen(false);
       await fetchChatList();
       await loadChatDetail(created.id);
     } catch (error) {
-      setCreateError(error?.message || '创建失败');
+      setCreateError(normalizeDisplayError(error?.message, '创建失败'));
     } finally {
       setBusy(false);
     }
   }
 
   return (
-    <div style={shellStyle} data-testid="chat-configs-page">
-      <ChatConfigListPanel
-        panelStyle={panelStyle}
-        chatLoading={chatLoading}
-        chatListLength={chatList.length}
-        isAdmin={isAdmin}
-        onOpenCreate={openCreate}
-        chatFilter={chatFilter}
-        onFilterChange={setChatFilter}
-        onRefresh={fetchChatList}
-        chatError={chatError}
-        filteredChatList={filteredChatList}
-        selectedChatId={chatSelected?.id}
-        onSelectChat={loadChatDetail}
-        onDeleteChat={deleteChat}
-        busy={busy}
-      />
+    <div className="admin-med-page" data-testid="chat-configs-page">
+      <section className="medui-surface medui-card-pad">
+        <div className="admin-med-head">
+          <h2 className="admin-med-title" style={{ margin: 0 }}>对话配置管理</h2>
+          <div className="admin-med-inline-note">
+            用于维护对话名称与关联知识库，保存后立即生效。
+          </div>
+        </div>
+      </section>
 
-      <ChatConfigDetailPanel
-        panelStyle={panelStyle}
-        isAdmin={isAdmin}
-        chatSaveStatus={chatSaveStatus}
-        onSave={saveChat}
-        saveDisabled={!chatSelected?.id || busy || chatDetailLoading}
-        chatDetailError={chatDetailError}
-        chatLocked={chatLocked}
-        onCopyToNewChat={copyToNewChat}
-        onSaveNameOnly={saveChatNameOnly}
-        onClearParsedFiles={clearParsedFiles}
-        busy={busy}
-        hasChatSelected={Boolean(chatSelected?.id)}
-        chatNameText={chatNameText}
-        onChatNameChange={setChatNameText}
-        kbLoading={kbLoading}
-        kbList={kbList}
-        kbError={kbError}
-        onRefreshKb={fetchKbList}
-        selectedDatasetIds={selectedDatasetIds}
-        onToggleDatasetSelection={toggleDatasetSelection}
-      />
+      <div className="admin-med-config-layout">
+        <ChatConfigListPanel
+          panelClassName="admin-med-panel"
+          chatLoading={chatLoading}
+          chatListLength={chatList.length}
+          isAdmin={isAdmin}
+          onOpenCreate={openCreate}
+          chatFilter={chatFilter}
+          onFilterChange={setChatFilter}
+          onRefresh={fetchChatList}
+          chatError={chatError}
+          filteredChatList={filteredChatList}
+          selectedChatId={chatSelected?.id}
+          onSelectChat={loadChatDetail}
+          onDeleteChat={deleteChat}
+          busy={busy}
+        />
+
+        <ChatConfigDetailPanel
+          panelClassName="admin-med-panel"
+          isAdmin={isAdmin}
+          chatSaveStatus={chatSaveStatus}
+          onSave={saveChat}
+          saveDisabled={!chatSelected?.id || busy || chatDetailLoading}
+          chatDetailError={chatDetailError}
+          chatLocked={chatLocked}
+          onCopyToNewChat={copyToNewChat}
+          onSaveNameOnly={saveChatNameOnly}
+          onClearParsedFiles={clearParsedFiles}
+          busy={busy}
+          hasChatSelected={Boolean(chatSelected?.id)}
+          chatNameText={chatNameText}
+          onChatNameChange={setChatNameText}
+          kbLoading={kbLoading}
+          kbList={kbList}
+          kbError={kbError}
+          onRefreshKb={fetchKbList}
+          selectedDatasetIds={selectedDatasetIds}
+          onToggleDatasetSelection={toggleDatasetSelection}
+        />
+      </div>
 
       <ChatConfigCreateDialog
         open={createOpen}

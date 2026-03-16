@@ -3,6 +3,23 @@ import tokenStore from '../../shared/auth/tokenStore';
 import { httpClient } from './httpClient';
 
 export const authApiMethods = {
+  normalizeDisplayError(message, fallback = '请求失败') {
+    const text = String(message || '').trim();
+    if (!text) return fallback;
+    // 页面不直接显示英文后端错误，统一回退中文提示。
+    if (/[\u4e00-\u9fff]/.test(text)) return text;
+    return fallback;
+  },
+
+  resolveErrorMessage(errorPayload, fallback = '请求失败') {
+    const detail =
+      (typeof errorPayload?.detail === 'string' && errorPayload.detail) ||
+      (typeof errorPayload?.message === 'string' && errorPayload.message) ||
+      (typeof errorPayload?.error === 'string' && errorPayload.error) ||
+      '';
+    return this.normalizeDisplayError(detail, fallback);
+  },
+
   async refreshAccessToken() {
     try {
       const token = await httpClient.refreshAccessToken();
@@ -37,12 +54,12 @@ export const authApiMethods = {
       skipRefresh: true,
     });
   
-    // 瀛樺偍涓ょ浠ょ墝
+    // 存储访问令牌与刷新令牌
     this.setAuth(data.access_token, data.refresh_token, user);
   
     return {
       ...data,
-      user  // 涓轰簡鍏煎鏃т唬鐮?
+      user  // 兼容历史调用
     };
   },
 
@@ -53,7 +70,7 @@ export const authApiMethods = {
         skipRefresh: true,
       });
     } catch (error) {
-      console.error('Logout error:', error);
+      console.error('退出登录失败：', error);
     } finally {
       this.clearAuth();
     }
@@ -65,7 +82,7 @@ export const authApiMethods = {
     });
   
     if (!response.ok) {
-      throw new Error('Failed to get current user');
+      throw new Error('获取当前用户失败');
     }
   
     return response.json();
@@ -81,10 +98,10 @@ export const authApiMethods = {
     );
   
     if (!response.ok) {
-      let errorMessage = 'Failed to change password';
+      let errorMessage = '修改密码失败';
       try {
         const data = await response.json();
-        if (data?.detail) errorMessage = data.detail;
+        errorMessage = this.resolveErrorMessage(data, '修改密码失败');
       } catch {
         // ignore
       }

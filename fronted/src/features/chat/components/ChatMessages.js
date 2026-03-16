@@ -3,6 +3,12 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import ChatSafetyFlow from './ChatSafetyFlow';
 
+function normalizeDisplayError(message, fallback) {
+  const text = String(message || '').trim();
+  if (!text) return fallback;
+  return /[\u4e00-\u9fff]/.test(text) ? text : fallback;
+}
+
 export default function ChatMessages({
   messagesEndRef,
   selectedChatId,
@@ -20,86 +26,63 @@ export default function ChatMessages({
   setError,
 }) {
   return (
-    <div data-testid="chat-messages" style={{ flex: 1, overflowY: 'auto', padding: '16px' }}>
+    <div data-testid="chat-messages" className="chat-med-messages">
       {!selectedChatId ? (
-        <div style={{ color: '#6b7280' }}>请先选择聊天助手</div>
+        <div className="medui-empty">请先选择助手。</div>
       ) : !selectedSessionId ? (
-        <div style={{ color: '#6b7280' }}>
-          当前没有会话页签，请先新建一个会话。
-          <div style={{ marginTop: '12px' }}>
+        <div className="medui-empty">
+          当前没有会话，请先新建一个会话。
+          <div style={{ marginTop: 12 }}>
             <button
               onClick={onCreateSession}
               data-testid="chat-create-session-empty"
-              style={{
-                padding: '10px 14px',
-                borderRadius: '6px',
-                border: 'none',
-                backgroundColor: '#3b82f6',
-                color: 'white',
-                cursor: 'pointer',
-                fontWeight: 600,
-              }}
+              type="button"
+              className="medui-btn medui-btn--primary"
             >
               新建会话
             </button>
           </div>
         </div>
       ) : messages.length === 0 ? (
-        <div style={{ color: '#6b7280' }}>开始新的对话...</div>
+        <div className="medui-empty">开始新的对话吧。</div>
       ) : (
-        messages.map((m, idx) => (
+        messages.map((message, idx) => (
           <div
             key={idx}
-            data-testid={`chat-message-${idx}-${m.role}`}
-            style={{
-              marginBottom: '12px',
-              display: 'flex',
-              justifyContent: m.role === 'user' ? 'flex-end' : 'flex-start',
-            }}
+            data-testid={`chat-message-${idx}-${message.role}`}
+            className={`chat-med-msg-row ${message.role === 'user' ? 'is-user' : 'is-assistant'}`}
           >
-            <div
-              style={{
-                maxWidth: '75%',
-                padding: '10px 12px',
-                borderRadius: '10px',
-                backgroundColor: m.role === 'user' ? '#3b82f6' : '#f3f4f6',
-                color: m.role === 'user' ? 'white' : '#111827',
-                lineHeight: 1.5,
-                overflowX: 'auto',
-              }}
-            >
+            <div className={`chat-med-msg ${message.role === 'user' ? 'is-user' : 'is-assistant'}`}>
               {(() => {
-                const raw = String(m.content ?? '');
-                const assistantSegments = m.role === 'assistant' ? parseThinkSegments(raw) : [];
-                if (m.role === 'assistant' && raw.toLowerCase().includes('<think') && !assistantSegments.some((s) => s.type === 'think')) {
-                  console.debug('[Chat:render] think tag present but no think segment parsed');
-                }
+                const raw = String(message.content ?? '');
+                const assistantSegments = message.role === 'assistant' ? parseThinkSegments(raw) : [];
                 const assistantVisible =
-                  m.role === 'assistant'
+                  message.role === 'assistant'
                     ? assistantSegments
-                        .filter((s) => s && s.type === 'text')
-                        .map((s) => String(s.text ?? ''))
+                        .filter((segment) => segment && segment.type === 'text')
+                        .map((segment) => String(segment.text ?? ''))
                         .join('')
                     : '';
 
-                const display = m.role === 'assistant' ? assistantVisible : raw;
-                const markdownText = m.role === 'assistant' ? rewriteCitationLinks(display) : display;
-                const citationIds = m.role === 'assistant' ? extractCitationIds(display) : [];
-                const sources = Array.isArray(m.sources) ? m.sources : [];
+                const display = message.role === 'assistant' ? assistantVisible : raw;
+                const markdownText = message.role === 'assistant' ? rewriteCitationLinks(display) : display;
+                const citationIds = message.role === 'assistant' ? extractCitationIds(display) : [];
+                const sources = Array.isArray(message.sources) ? message.sources : [];
                 const uniqueCitationIds = (() => {
-                  const out = [];
+                  const output = [];
                   const seen = new Set();
                   for (const id of citationIds) {
                     const item = sources[id];
                     if (!item) continue;
-                    const src = normalizeSource(item);
-                    const key = String(src.title || src.docId || '').trim();
+                    const source = normalizeSource(item);
+                    const key = String(source.title || source.docId || '').trim();
                     if (!key || seen.has(key)) continue;
                     seen.add(key);
-                    out.push(id);
+                    output.push(id);
                   }
-                  return out;
+                  return output;
                 })();
+
                 const markdownComponents = {
                   p: ({ node, ...props }) => <p style={{ margin: '0 0 10px 0' }} {...props} />,
                   ul: ({ node, ...props }) => <ul style={{ margin: '0 0 10px 18px' }} {...props} />,
@@ -109,9 +92,9 @@ export default function ChatMessages({
                       style={{
                         margin: '0 0 10px 0',
                         padding: '10px 12px',
-                        background: m.role === 'user' ? 'rgba(255,255,255,0.12)' : '#111827',
-                        color: m.role === 'user' ? 'white' : '#f9fafb',
-                        borderRadius: '8px',
+                        background: message.role === 'user' ? 'rgba(255,255,255,0.16)' : '#17324a',
+                        color: '#f4f8fd',
+                        borderRadius: '10px',
                         overflowX: 'auto',
                       }}
                       {...props}
@@ -125,7 +108,7 @@ export default function ChatMessages({
                           ? {
                               padding: '0 6px',
                               borderRadius: '6px',
-                              background: m.role === 'user' ? 'rgba(255,255,255,0.18)' : '#e5e7eb',
+                              background: message.role === 'user' ? 'rgba(255,255,255,0.18)' : '#dce9f7',
                             }
                           : undefined
                       }
@@ -135,32 +118,21 @@ export default function ChatMessages({
                     </code>
                   ),
                   a: ({ node, href, children, ...props }) => {
-                    const h = String(href || '');
-                    if (m.role === 'assistant' && h.startsWith('#cid-')) {
-                      const idRaw = h.slice('#cid-'.length);
+                    const targetHref = String(href || '');
+                    if (message.role === 'assistant' && targetHref.startsWith('#cid-')) {
+                      const idRaw = targetHref.slice('#cid-'.length);
                       const id = Number(idRaw);
                       const item = Number.isFinite(id) ? sources[id] : null;
-                      const src = item ? normalizeSource(item) : null;
-                      const chunk = src?.chunk || '';
+                      const source = item ? normalizeSource(item) : null;
+                      const chunk = source?.chunk || '';
                       return (
                         <span
-                          onClick={(e) => {
-                            e.preventDefault?.();
-                            e.stopPropagation?.();
-                            onCitationClick(e, { id: Number.isFinite(id) ? id : -1, chunk });
+                          onClick={(event) => {
+                            event.preventDefault?.();
+                            event.stopPropagation?.();
+                            onCitationClick(event, { id: Number.isFinite(id) ? id : -1, chunk });
                           }}
-                          style={{
-                            display: 'inline-block',
-                            padding: '0 6px',
-                            margin: '0 2px',
-                            borderRadius: '999px',
-                            background: '#e5e7eb',
-                            color: '#111827',
-                            fontSize: '0.85em',
-                            lineHeight: 1.6,
-                            cursor: 'pointer',
-                            userSelect: 'none',
-                          }}
+                          className="chat-med-citation-link"
                           title="点击查看片段"
                         >
                           {children}
@@ -173,7 +145,7 @@ export default function ChatMessages({
                         href={href}
                         target="_blank"
                         rel="noreferrer"
-                        style={{ color: m.role === 'user' ? 'white' : '#2563eb', textDecoration: 'underline' }}
+                        style={{ color: message.role === 'user' ? '#f8fcff' : '#0d5ea6', textDecoration: 'underline' }}
                       >
                         {children}
                       </a>
@@ -183,28 +155,18 @@ export default function ChatMessages({
 
                 return (
                   <>
-                    {m.role === 'assistant' ? (
+                    {message.role === 'assistant' ? (
                       <>
-                        {assistantSegments.map((seg, segIdx) => {
-                          if (!seg || !seg.text) return null;
-                          if (seg.type === 'think') {
+                        {assistantSegments.map((segment, segIdx) => {
+                          if (!segment || !segment.text) return null;
+                          if (segment.type === 'think') {
                             return (
-                              <div
-                                key={`think-${segIdx}`}
-                                style={{
-                                  color: '#6b7280',
-                                  fontSize: '0.9em',
-                                  whiteSpace: 'pre-wrap',
-                                  borderLeft: '3px solid #d1d5db',
-                                  paddingLeft: '10px',
-                                  margin: '0 0 10px 0',
-                                }}
-                              >
-                                {String(seg.text ?? '')}
+                              <div key={`think-${segIdx}`} className="chat-med-think">
+                                {String(segment.text ?? '')}
                               </div>
                             );
                           }
-                          const part = rewriteCitationLinks(String(seg.text ?? ''));
+                          const part = rewriteCitationLinks(String(segment.text ?? ''));
                           if (!part) return null;
                           return (
                             <ReactMarkdown key={`text-${segIdx}`} components={markdownComponents} remarkPlugins={[remarkGfm]}>
@@ -219,47 +181,29 @@ export default function ChatMessages({
                       </ReactMarkdown>
                     )}
 
-                    {m.role === 'assistant' ? <ChatSafetyFlow flow={m.safetyFlow} messageIndex={idx} /> : null}
-                    {m.role === 'assistant' && uniqueCitationIds.length > 0 ? (
-                      <div style={{ marginTop: '8px', borderTop: '1px solid #e5e7eb', paddingTop: '8px' }}>
-                        <div style={{ fontSize: '0.85rem', color: '#6b7280', marginBottom: '6px' }}>引用文件</div>
+                    {message.role === 'assistant' ? <ChatSafetyFlow flow={message.safetyFlow} messageIndex={idx} /> : null}
+                    {message.role === 'assistant' && uniqueCitationIds.length > 0 ? (
+                      <div className="chat-med-source">
+                        <div style={{ fontSize: '0.85rem', color: '#58738c', marginBottom: 6 }}>引用文件</div>
                         {uniqueCitationIds.map((id) => {
                           const item = sources[id];
-                          const src = item ? normalizeSource(item) : null;
-                          const canOpen = Boolean(src?.docId && src?.dataset);
+                          const source = item ? normalizeSource(item) : null;
+                          const canOpen = Boolean(source?.docId && source?.dataset);
                           return (
-                            <div
-                              key={id}
-                              style={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'space-between',
-                                gap: '10px',
-                                padding: '6px 8px',
-                                borderRadius: '6px',
-                                background: '#ffffff',
-                                border: '1px solid #e5e7eb',
-                                marginBottom: '6px',
-                              }}
-                            >
+                            <div key={id} className="chat-med-source-item">
                               <div style={{ minWidth: 0, flex: 1 }}>
-                                <div style={{ fontSize: '0.9rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                  {src ? src.title : '未知文件'}
+                                <div style={{ fontSize: '0.88rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                  {source ? source.title : '未知文件'}
                                 </div>
                               </div>
-                              <div style={{ display: 'flex', gap: '8px' }}>
+                              <div style={{ display: 'flex', gap: 8 }}>
                                 <button
                                   disabled={!canOpen}
                                   onClick={() => openSourcePreview(item)}
                                   data-testid={`chat-source-view-${id}`}
-                                  style={{
-                                    padding: '6px 10px',
-                                    borderRadius: '6px',
-                                    border: '1px solid #d1d5db',
-                                    background: canOpen ? '#ffffff' : '#f3f4f6',
-                                    color: canOpen ? '#111827' : '#9ca3af',
-                                    cursor: canOpen ? 'pointer' : 'not-allowed',
-                                  }}
+                                  type="button"
+                                  className="medui-btn medui-btn--secondary"
+                                  style={{ height: 32, padding: '0 10px' }}
                                 >
                                   查看
                                 </button>
@@ -267,16 +211,11 @@ export default function ChatMessages({
                                   <button
                                     disabled={!canOpen}
                                     onClick={() => {
-                                      downloadSource(item).catch((e) => setError(e?.message || '下载失败'));
+                                      downloadSource(item).catch((error) => setError(normalizeDisplayError(error?.message, '下载失败')));
                                     }}
-                                    style={{
-                                      padding: '6px 10px',
-                                      borderRadius: '6px',
-                                      border: 'none',
-                                      background: canOpen ? '#3b82f6' : '#9ca3af',
-                                      color: 'white',
-                                      cursor: canOpen ? 'pointer' : 'not-allowed',
-                                    }}
+                                    type="button"
+                                    className="medui-btn medui-btn--primary"
+                                    style={{ height: 32, padding: '0 10px' }}
                                   >
                                     下载
                                   </button>

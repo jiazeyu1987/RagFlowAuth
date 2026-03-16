@@ -43,13 +43,9 @@ export default function FolderTree({
     return (
       <div key={id}>
         <div
+          className="browser-med-folder-row"
           style={{
             marginLeft: depth * 16,
-            borderRadius: 6,
-            display: 'flex',
-            alignItems: 'center',
-            gap: 6,
-            padding: '3px 6px',
             background:
               dropTargetFolderId === id
                 ? '#dcfce7'
@@ -66,22 +62,16 @@ export default function FolderTree({
           <button
             type="button"
             onClick={() => hasChildren && onToggleExpand(id)}
-            style={{
-              width: 14,
-              border: 'none',
-              background: 'transparent',
-              cursor: hasChildren ? 'pointer' : 'default',
-              color: '#6b7280',
-              padding: 0,
-            }}
+            className="browser-med-folder-toggle"
+            style={{ cursor: hasChildren ? 'pointer' : 'default' }}
           >
             {hasChildren ? (isExpanded ? '-' : '+') : ''}
           </button>
           <RowButton onClick={() => onOpenFolder(id)} title={folder.path || folder.name}>
-            [目录] {folder.name || '未命名目录'}
+            {`[目录] ${folder.name || '未命名目录'}`}
           </RowButton>
         </div>
-        {isExpanded && children.map((child) => renderFolder(child, depth + 1))}
+        {isExpanded ? children.map((child) => renderFolder(child, depth + 1)) : null}
       </div>
     );
   };
@@ -91,9 +81,8 @@ export default function FolderTree({
   return (
     <div>
       <div
+        className="browser-med-folder-row"
         style={{
-          borderRadius: 6,
-          padding: '3px 6px',
           marginBottom: 6,
           background:
             dropTargetFolderId === ROOT
@@ -109,7 +98,7 @@ export default function FolderTree({
         <RowButton onClick={() => onOpenFolder(ROOT)}>[根目录]</RowButton>
       </div>
       {roots.map((folder) => renderFolder(folder, 0))}
-      {!roots.length && <div style={{ color: '#6b7280', fontSize: 13 }}>暂无目录</div>}
+      {!roots.length ? <div className="admin-med-small">暂无目录</div> : null}
     </div>
   );
 }

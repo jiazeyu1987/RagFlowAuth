@@ -12,39 +12,39 @@ export const policyRagflowApiMethods = {
     );
 
     if (!response.ok) {
-      throw new Error('Failed to list datasets');
+      throw new Error('获取数据集列表失败');
     }
 
     return response.json();
   },
 
-  async listRagflowDocuments(datasetName = '灞曞巺') {
+  async listRagflowDocuments(datasetName = '展厅') {
     const response = await this.fetchWithAuth(
       authBackendUrl(`/api/ragflow/documents?dataset_name=${encodeURIComponent(datasetName)}`),
       { method: 'GET' }
     );
 
     if (!response.ok) {
-      throw new Error('Failed to list documents');
+      throw new Error('获取文档列表失败');
     }
 
     return response.json();
   },
 
-  async downloadDocument(docId, datasetName = '灞曞巺') {
+  async downloadDocument(docId, datasetName = '展厅') {
     const response = await this.fetchWithAuth(
       authBackendUrl(`/api/documents/ragflow/${docId}/download?dataset=${encodeURIComponent(datasetName)}`),
       { method: 'GET' }
     );
 
     if (!response.ok) {
-      throw new Error('Failed to download document');
+      throw new Error('下载文档失败');
     }
 
     return response.blob();
   },
 
-  async downloadRagflowDocument(docId, dataset = '灞曞巺', docName = null) {
+  async downloadRagflowDocument(docId, dataset = '展厅', docName = null) {
     const params = new URLSearchParams({ dataset });
     if (docName) {
       params.append('filename', docName);
@@ -57,7 +57,7 @@ export const policyRagflowApiMethods = {
 
     if (!response.ok) {
       const error = await response.json();
-      throw new Error(error.detail || 'Failed to download document');
+      throw new Error(this.resolveErrorMessage(error, '下载文档失败'));
     }
 
     const contentDisposition = response.headers.get('Content-Disposition');
@@ -67,7 +67,7 @@ export const policyRagflowApiMethods = {
     return { success: true, filename };
   },
 
-  async previewDocument(docId, dataset = '灞曞巺') {
+  async previewDocument(docId, dataset = '展厅') {
     const params = new URLSearchParams({ dataset });
     const response = await this.fetchWithAuth(
       authBackendUrl(`/api/preview/documents/ragflow/${docId}/preview?${params}`),
@@ -76,7 +76,7 @@ export const policyRagflowApiMethods = {
 
     if (!response.ok) {
       const error = await response.json();
-      throw new Error(error.detail || 'Failed to preview document');
+      throw new Error(this.resolveErrorMessage(error, '预览文档失败'));
     }
 
     return await response.json();
@@ -90,19 +90,19 @@ export const policyRagflowApiMethods = {
 
     if (!response.ok) {
       const error = await response.json().catch(() => ({}));
-      throw new Error(error.detail || 'Failed to preview document');
+      throw new Error(this.resolveErrorMessage(error, '预览文档失败'));
     }
 
     return await response.json();
   },
 
-  async previewRagflowDocument(docId, dataset = '灞曞巺', docName = null) {
+  async previewRagflowDocument(docId, dataset = '展厅', docName = null) {
     const blob = await this.previewRagflowDocumentBlob(docId, dataset, docName);
     const url = window.URL.createObjectURL(blob);
     return url;
   },
 
-  async previewRagflowDocumentBlob(docId, dataset = '灞曞巺', docName = null) {
+  async previewRagflowDocumentBlob(docId, dataset = '展厅', docName = null) {
     const params = new URLSearchParams({ dataset });
     if (docName) {
       params.append('filename', docName);
@@ -115,7 +115,7 @@ export const policyRagflowApiMethods = {
 
     if (!response.ok) {
       const error = await response.json();
-      throw new Error(error.detail || 'Failed to preview document');
+      throw new Error(this.resolveErrorMessage(error, '预览文档失败'));
     }
 
     return response.blob();
@@ -131,7 +131,7 @@ export const policyRagflowApiMethods = {
     );
 
     if (!response.ok) {
-      throw new Error('Failed to batch download');
+      throw new Error('批量下载失败');
     }
 
     return response.blob();
@@ -148,7 +148,7 @@ export const policyRagflowApiMethods = {
 
     if (!response.ok) {
       const error = await response.json();
-      throw new Error(error.detail || 'Failed to batch download documents');
+      throw new Error(this.resolveErrorMessage(error, '批量下载文档失败'));
     }
 
     const contentDisposition = response.headers.get('Content-Disposition');
@@ -158,14 +158,14 @@ export const policyRagflowApiMethods = {
     return { success: true, filename };
   },
 
-  async deleteRagflowDocument(docId, datasetName = '灞曞巺') {
+  async deleteRagflowDocument(docId, datasetName = '展厅') {
     const response = await this.fetchWithAuth(
       authBackendUrl(`/api/documents/ragflow/${docId}?dataset_name=${encodeURIComponent(datasetName)}`),
       { method: 'DELETE' }
     );
 
     if (!response.ok) {
-      throw new Error('Failed to delete document');
+      throw new Error('删除文档失败');
     }
 
     return response.json();
@@ -187,7 +187,7 @@ export const policyRagflowApiMethods = {
     if (!response.ok) {
       const error = await response.json().catch(() => ({}));
       const detail = typeof error?.detail === 'string' ? error.detail : (error?.detail?.code || '');
-      throw new Error(detail || 'Failed to transfer document');
+      throw new Error(this.normalizeDisplayError(detail, '转移文档失败'));
     }
 
     return response.json();
@@ -208,7 +208,7 @@ export const policyRagflowApiMethods = {
     if (!response.ok) {
       const error = await response.json().catch(() => ({}));
       const detail = typeof error?.detail === 'string' ? error.detail : (error?.detail?.code || '');
-      throw new Error(detail || 'Failed to batch transfer documents');
+      throw new Error(this.normalizeDisplayError(detail, '批量转移文档失败'));
     }
 
     return response.json();

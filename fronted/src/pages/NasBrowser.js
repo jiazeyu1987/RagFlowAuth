@@ -5,14 +5,11 @@ import { knowledgeApi } from '../features/knowledge/api';
 import { useAuth } from '../hooks/useAuth';
 import {
   buildImportSummary,
-  BUTTON_STYLES,
-  CARD_STYLE,
   formatFileSize,
   formatImportReason,
   formatTime,
   normalizeFailedEntries,
   normalizeSkippedEntries,
-  PAGE_STYLE,
   pathSegments,
   readStoredFolderImportTaskId,
   writeStoredFolderImportTaskId,
@@ -35,6 +32,12 @@ export default function NasBrowser() {
   const { isAdmin } = useAuth();
   const pollTimerRef = useRef(null);
 
+  const normalizeDisplayError = useCallback((message, fallback) => {
+    const text = String(message || '').trim();
+    if (!text) return fallback;
+    return /[\u4e00-\u9fff]/.test(text) ? text : fallback;
+  }, []);
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [currentPath, setCurrentPath] = useState('');
@@ -49,14 +52,8 @@ export default function NasBrowser() {
   const [taskActionLoading, setTaskActionLoading] = useState(false);
 
   const breadcrumbs = useMemo(() => pathSegments(currentPath), [currentPath]);
-  const skippedDetails = useMemo(
-    () => normalizeSkippedEntries(folderImportProgress?.skipped),
-    [folderImportProgress?.skipped],
-  );
-  const failedDetails = useMemo(
-    () => normalizeFailedEntries(folderImportProgress?.failed),
-    [folderImportProgress?.failed],
-  );
+  const skippedDetails = useMemo(() => normalizeSkippedEntries(folderImportProgress?.skipped), [folderImportProgress?.skipped]);
+  const failedDetails = useMemo(() => normalizeFailedEntries(folderImportProgress?.failed), [folderImportProgress?.failed]);
 
   const stopPolling = useCallback(() => {
     if (pollTimerRef.current) {
@@ -78,11 +75,11 @@ export default function NasBrowser() {
       setParentPath(data.parent_path ?? null);
       setItems(Array.isArray(data.items) ? data.items : []);
     } catch (err) {
-      setError(err.message || '加载 NAS 目录失败');
+      setError(normalizeDisplayError(err?.message, '加载 NAS 目录失败'));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [normalizeDisplayError]);
 
   const pollFolderImportStatus = useCallback(
     async (taskId, options = {}) => {
@@ -108,7 +105,7 @@ export default function NasBrowser() {
           setTaskActionLoading(false);
           clearStoredTask();
           if (status.status === 'failed') {
-            setError(status.error || '文件夹上传失败');
+            setError(normalizeDisplayError(status.error, '文件夹导入失败'));
           }
           return;
         }
@@ -129,10 +126,10 @@ export default function NasBrowser() {
         setTaskActionLoading(false);
         clearStoredTask();
         setFolderImportProgress(null);
-        setError(err.message || '获取文件夹上传进度失败');
+        setError(normalizeDisplayError(err?.message, '获取文件夹导入进度失败'));
       }
     },
-    [clearStoredTask, stopPolling],
+    [clearStoredTask, normalizeDisplayError, stopPolling]
   );
 
   useEffect(() => {
@@ -148,7 +145,7 @@ export default function NasBrowser() {
         if (nextDatasets.length > 0) {
           setSelectedKb((current) => current || nextDatasets[0].name);
         }
-      } catch (_err) {
+      } catch {
         setDatasets([]);
       }
     };
@@ -180,7 +177,7 @@ export default function NasBrowser() {
 
   const handleImport = async () => {
     if (!importTarget || !selectedKb) {
-      setError('请选择要上传到的知识库');
+      setError('请选择要导入到的知识库');
       return;
     }
 
@@ -211,7 +208,7 @@ export default function NasBrowser() {
       window.alert(buildImportSummary(result, '文件'));
     } catch (err) {
       setImportLoading(false);
-      setError(err.message || `${importTarget.is_dir ? '文件夹' : '文件'}上传失败`);
+      setError(normalizeDisplayError(err?.message, `${importTarget.is_dir ? '文件夹' : '文件'}导入失败`));
     }
   };
 
@@ -229,7 +226,7 @@ export default function NasBrowser() {
         clearStoredTask();
       }
     } catch (err) {
-      setError(err.message || '取消文件夹上传任务失败');
+      setError(normalizeDisplayError(err?.message, '取消文件夹导入任务失败'));
     } finally {
       setTaskActionLoading(false);
     }
@@ -248,7 +245,7 @@ export default function NasBrowser() {
         setImportLoading(false);
       }
     } catch (err) {
-      setError(err.message || '暂停文件夹上传任务失败');
+      setError(normalizeDisplayError(err?.message, '暂停文件夹导入任务失败'));
     } finally {
       setTaskActionLoading(false);
     }
@@ -274,7 +271,7 @@ export default function NasBrowser() {
     } catch (err) {
       setImportLoading(false);
       setTaskActionLoading(false);
-      setError(err.message || '继续文件夹上传任务失败');
+      setError(normalizeDisplayError(err?.message, '继续文件夹导入任务失败'));
     }
   };
 
@@ -294,61 +291,64 @@ export default function NasBrowser() {
     } catch (err) {
       setImportLoading(false);
       setTaskActionLoading(false);
-      setError(err.message || '重试文件夹上传任务失败');
+      setError(normalizeDisplayError(err?.message, '重试文件夹导入任务失败'));
     }
   };
 
   const closeProgressPanel = () => {
-    if (ACTIVE_TASK_STATUSES.has(folderImportProgress?.status)) {
-      return;
-    }
+    if (ACTIVE_TASK_STATUSES.has(folderImportProgress?.status)) return;
     clearStoredTask();
     setFolderImportProgress(null);
   };
 
   const folderTaskStatus = folderImportProgress?.status || '';
+  const folderTaskStatusLabel = TASK_STATUS_LABELS[folderTaskStatus] || '未知状态';
   const isFolderTaskActive = ACTIVE_TASK_STATUSES.has(folderTaskStatus);
   const canPauseFolderTask = Boolean(folderImportProgress?.can_pause && folderImportProgress?.task_id && !taskActionLoading);
   const canResumeFolderTask = Boolean(folderImportProgress?.can_resume && folderImportProgress?.task_id && !taskActionLoading);
   const canCancelFolderTask = Boolean(folderImportProgress?.can_cancel && folderImportProgress?.task_id && !taskActionLoading);
-  const canRetryFolderTask = Boolean(
-    folderImportProgress?.can_retry && folderImportProgress?.task_id && !isFolderTaskActive && !taskActionLoading
-  );
+  const canRetryFolderTask = Boolean(folderImportProgress?.can_retry && folderImportProgress?.task_id && !isFolderTaskActive && !taskActionLoading);
   const progressBarColor = {
-    failed: '#dc2626',
-    canceled: '#f59e0b',
-    paused: '#64748b',
-    pausing: '#64748b',
-  }[folderTaskStatus] || '#2563eb';
+    failed: '#d05656',
+    canceled: '#cc8a2e',
+    paused: '#60788e',
+    pausing: '#60788e',
+  }[folderTaskStatus] || '#0d5ea6';
 
   if (!isAdmin()) {
-    return <div style={{ color: '#991b1b' }}>仅管理员可访问 NAS 浏览器。</div>;
+    return (
+      <div className="admin-med-page">
+        <div className="admin-med-danger">仅管理员可访问 NAS 网盘页面。</div>
+      </div>
+    );
   }
 
   return (
-    <div style={PAGE_STYLE} data-testid="nas-browser-page">
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px' }}>
-        <div>
-          <h2 style={{ margin: 0, fontSize: '1.4rem', color: '#111827' }}>NAS 网盘</h2>
-          <div style={{ marginTop: '6px', color: '#6b7280', fontSize: '0.95rem' }}>
-            NAS：`172.30.30.4` / 共享目录：`it共享`
+    <div className="admin-med-page" data-testid="nas-browser-page">
+      <section className="medui-surface medui-card-pad">
+        <div className="admin-med-head">
+          <div>
+            <h2 className="admin-med-title" style={{ margin: 0 }}>NAS 网盘浏览</h2>
+            <div className="admin-med-inline-note" style={{ marginTop: 6 }}>
+              共享地址：`172.30.30.4`，共享目录：`共享资料`
+            </div>
+          </div>
+          <div className="admin-med-actions">
+            <button type="button" onClick={() => navigate('/tools')} className="medui-btn medui-btn--secondary">
+              返回实用工具
+            </button>
+            <button type="button" onClick={() => loadPath(currentPath)} className="medui-btn medui-btn--primary">
+              刷新
+            </button>
           </div>
         </div>
-        <div style={{ display: 'flex', gap: '8px' }}>
-          <button type="button" onClick={() => navigate('/tools')} style={BUTTON_STYLES.neutral}>
-            返回实用工具
-          </button>
-          <button type="button" onClick={() => loadPath(currentPath)} style={BUTTON_STYLES.primary}>
-            刷新
-          </button>
-        </div>
-      </div>
+      </section>
 
-      <div style={{ ...CARD_STYLE, marginTop: '16px', padding: '14px 16px' }}>
-        <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+      <section className="medui-surface medui-card-pad">
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
           {breadcrumbs.map((segment, index) => (
             <React.Fragment key={segment.path || 'root'}>
-              {index > 0 && <span style={{ color: '#9ca3af' }}>/</span>}
+              {index > 0 ? <span style={{ color: '#99acc0' }}>/</span> : null}
               <button
                 type="button"
                 onClick={() => loadPath(segment.path)}
@@ -356,9 +356,9 @@ export default function NasBrowser() {
                   border: 'none',
                   background: 'transparent',
                   padding: 0,
-                  color: segment.path === currentPath ? '#111827' : '#2563eb',
+                  color: segment.path === currentPath ? '#16324d' : '#0d5ea6',
                   cursor: 'pointer',
-                  fontWeight: segment.path === currentPath ? 800 : 600,
+                  fontWeight: segment.path === currentPath ? 700 : 600,
                 }}
               >
                 {segment.label}
@@ -366,104 +366,53 @@ export default function NasBrowser() {
             </React.Fragment>
           ))}
         </div>
-        <div style={{ marginTop: '12px', display: 'flex', gap: '8px' }}>
+
+        <div className="admin-med-actions" style={{ marginTop: 12 }}>
           <button
             type="button"
             onClick={() => loadPath(parentPath || '')}
             disabled={parentPath === null}
-            style={{
-              ...BUTTON_STYLES.neutral,
-              background: parentPath === null ? '#f3f4f6' : '#fff',
-              color: parentPath === null ? '#9ca3af' : '#111827',
-              cursor: parentPath === null ? 'not-allowed' : 'pointer',
-            }}
+            className="medui-btn medui-btn--neutral"
           >
-            上一级
+            上一级目录
           </button>
         </div>
-      </div>
+      </section>
 
-      {folderImportProgress && (
-        <div style={{ ...CARD_STYLE, marginTop: '16px', padding: '16px 18px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', alignItems: 'center' }}>
+      {folderImportProgress ? (
+        <section className="medui-surface medui-card-pad">
+          <div className="admin-med-head" style={{ alignItems: 'flex-start' }}>
             <div>
-              <div style={{ fontSize: '1rem', fontWeight: 800, color: '#111827' }}>文件夹上传进度</div>
-              <div style={{ marginTop: '4px', color: '#475569' }}>路径：{folderImportProgress.folder_path}</div>
-              <div style={{ marginTop: '4px', color: '#475569' }}>知识库：{folderImportProgress.kb_ref}</div>
+              <div style={{ fontSize: '1rem', fontWeight: 700, color: '#16324d' }}>文件夹导入进度</div>
+              <div className="admin-med-inline-note" style={{ marginTop: 4 }}>路径：{folderImportProgress.folder_path}</div>
+              <div className="admin-med-inline-note" style={{ marginTop: 4 }}>知识库：{folderImportProgress.kb_ref}</div>
             </div>
-            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-              <button
-                type="button"
-                onClick={handlePauseFolderImport}
-                disabled={!canPauseFolderTask}
-                style={{
-                  ...BUTTON_STYLES.neutral,
-                  borderColor: canPauseFolderTask ? '#93c5fd' : '#e5e7eb',
-                  color: canPauseFolderTask ? '#1d4ed8' : '#9ca3af',
-                  cursor: canPauseFolderTask ? 'pointer' : 'not-allowed',
-                }}
-              >
+
+            <div className="admin-med-actions">
+              <button type="button" onClick={handlePauseFolderImport} disabled={!canPauseFolderTask} className="medui-btn medui-btn--secondary">
                 {taskActionLoading && canPauseFolderTask ? '暂停中...' : '暂停任务'}
               </button>
-              <button
-                type="button"
-                onClick={handleResumeFolderImport}
-                disabled={!canResumeFolderTask}
-                style={{
-                  ...BUTTON_STYLES.neutral,
-                  borderColor: canResumeFolderTask ? '#86efac' : '#e5e7eb',
-                  color: canResumeFolderTask ? '#15803d' : '#9ca3af',
-                  cursor: canResumeFolderTask ? 'pointer' : 'not-allowed',
-                }}
-              >
+              <button type="button" onClick={handleResumeFolderImport} disabled={!canResumeFolderTask} className="medui-btn medui-btn--success">
                 {taskActionLoading && canResumeFolderTask ? '继续中...' : '继续任务'}
               </button>
-              <button
-                type="button"
-                onClick={handleCancelFolderImport}
-                disabled={!canCancelFolderTask}
-                style={{
-                  ...BUTTON_STYLES.neutral,
-                  borderColor: canCancelFolderTask ? '#fca5a5' : '#e5e7eb',
-                  color: canCancelFolderTask ? '#b91c1c' : '#9ca3af',
-                  cursor: canCancelFolderTask ? 'pointer' : 'not-allowed',
-                }}
-              >
+              <button type="button" onClick={handleCancelFolderImport} disabled={!canCancelFolderTask} className="medui-btn medui-btn--danger">
                 {taskActionLoading && canCancelFolderTask ? '取消中...' : '取消任务'}
               </button>
-              <button
-                type="button"
-                onClick={handleRetryFolderImport}
-                disabled={!canRetryFolderTask}
-                style={{
-                  ...BUTTON_STYLES.neutral,
-                  borderColor: canRetryFolderTask ? '#c7d2fe' : '#e5e7eb',
-                  color: canRetryFolderTask ? '#3730a3' : '#9ca3af',
-                  cursor: canRetryFolderTask ? 'pointer' : 'not-allowed',
-                }}
-              >
+              <button type="button" onClick={handleRetryFolderImport} disabled={!canRetryFolderTask} className="medui-btn medui-btn--warn">
                 {taskActionLoading && canRetryFolderTask ? '重试中...' : '重试失败文件'}
               </button>
-              <button
-                type="button"
-                onClick={closeProgressPanel}
-                disabled={isFolderTaskActive}
-                style={{
-                  ...BUTTON_STYLES.neutral,
-                  cursor: isFolderTaskActive ? 'not-allowed' : 'pointer',
-                }}
-              >
+              <button type="button" onClick={closeProgressPanel} disabled={isFolderTaskActive} className="medui-btn medui-btn--neutral">
                 关闭
               </button>
             </div>
           </div>
-          <div style={{ marginTop: '14px', color: '#111827', fontWeight: 700 }}>
-            待上传文件数：{folderImportProgress.total_files}
+
+          <div style={{ marginTop: 14, color: '#17324d', fontWeight: 700 }}>待导入文件数：{folderImportProgress.total_files}</div>
+          <div className="admin-med-inline-note" style={{ marginTop: 8 }}>
+            当前进度：{folderImportProgress.processed_files} / {folderImportProgress.total_files}（{folderImportProgress.progress_percent}%）
           </div>
-          <div style={{ marginTop: '8px', color: '#475569' }}>
-            当前进度：{folderImportProgress.processed_files} / {folderImportProgress.total_files} ({folderImportProgress.progress_percent}%)
-          </div>
-          <div style={{ marginTop: '10px', height: '10px', background: '#e5e7eb', borderRadius: '999px', overflow: 'hidden' }}>
+
+          <div style={{ marginTop: 10, height: 10, background: '#dbe7f3', borderRadius: 999, overflow: 'hidden' }}>
             <div
               style={{
                 width: `${folderImportProgress.progress_percent}%`,
@@ -473,180 +422,140 @@ export default function NasBrowser() {
               }}
             />
           </div>
-          <div style={{ marginTop: '10px', display: 'flex', gap: '16px', flexWrap: 'wrap', color: '#475569' }}>
-            <span>已导入：{folderImportProgress.imported_count}</span>
-            <span>跳过：{folderImportProgress.skipped_count}</span>
-            <span>失败：{folderImportProgress.failed_count}</span>
-            <span>状态：{TASK_STATUS_LABELS[folderImportProgress.status] || folderImportProgress.status}</span>
-            <span>优先级：{folderImportProgress.task_priority ?? '-'}</span>
-            {Number.isInteger(folderImportProgress.queue_position) && (
-              <span>队列位置：{folderImportProgress.queue_position}</span>
-            )}
-            <span>重试次数：{folderImportProgress.retry_count || 0}</span>
+
+          <div style={{ marginTop: 10, display: 'flex', gap: 14, flexWrap: 'wrap' }}>
+            <span className="medui-chip">已导入：{folderImportProgress.imported_count}</span>
+            <span className="medui-chip">已跳过：{folderImportProgress.skipped_count}</span>
+            <span className="medui-chip">失败：{folderImportProgress.failed_count}</span>
+            <span className="medui-chip">状态：{folderTaskStatusLabel}</span>
+            <span className="medui-chip">优先级：{folderImportProgress.task_priority ?? '-'}</span>
+            {Number.isInteger(folderImportProgress.queue_position) ? <span className="medui-chip">队列位置：{folderImportProgress.queue_position}</span> : null}
+            <span className="medui-chip">重试次数：{folderImportProgress.retry_count || 0}</span>
           </div>
-          {folderImportProgress.current_file && (
-            <div style={{ marginTop: '10px', color: '#1f2937' }}>当前文件：{folderImportProgress.current_file}</div>
-          )}
-          {folderImportProgress.error && (
-            <div style={{ marginTop: '10px', color: '#b91c1c' }}>错误：{folderImportProgress.error}</div>
-          )}
-          {(skippedDetails.length > 0 || failedDetails.length > 0) && (
-            <div style={{ marginTop: '14px', borderTop: '1px solid #e5e7eb', paddingTop: '12px' }}>
-              {skippedDetails.length > 0 && (
-                <div style={{ marginBottom: '12px' }}>
-                  <div style={{ fontWeight: 700, color: '#92400e' }}>跳过明细（最多显示 50 条）</div>
-                  <div style={{ marginTop: '6px', maxHeight: '180px', overflowY: 'auto', border: '1px solid #fcd34d', borderRadius: '8px', background: '#fffbeb' }}>
+
+          {folderImportProgress.current_file ? <div className="admin-med-inline-note" style={{ marginTop: 10 }}>当前文件：{folderImportProgress.current_file}</div> : null}
+          {folderImportProgress.error ? <div className="admin-med-danger" style={{ marginTop: 10 }}>{normalizeDisplayError(folderImportProgress.error, '文件夹导入失败')}</div> : null}
+
+          {skippedDetails.length > 0 || failedDetails.length > 0 ? (
+            <div className="admin-med-grid admin-med-grid--2" style={{ marginTop: 14 }}>
+              {skippedDetails.length > 0 ? (
+                <div className="medui-surface medui-card-pad" style={{ borderColor: '#f2d6a6', background: '#fffaf1' }}>
+                  <div style={{ fontWeight: 700, color: '#9a651f', marginBottom: 8 }}>跳过明细（最多显示 50 条）</div>
+                  <div style={{ maxHeight: 180, overflowY: 'auto' }}>
                     {skippedDetails.map((item, index) => (
-                      <div key={`skipped_${item.path}_${index}`} style={{ padding: '8px 10px', borderBottom: index === skippedDetails.length - 1 ? 'none' : '1px solid #fde68a', color: '#78350f', fontSize: '13px' }}>
-                        <div>路径：{item.path}</div>
-                        <div>原因：{formatImportReason(item.reason, item.detail)}</div>
+                      <div key={`skipped_${item.path}_${index}`} style={{ borderBottom: index === skippedDetails.length - 1 ? 'none' : '1px solid #f2e3c6', padding: '8px 0' }}>
+                        <div style={{ color: '#8a632c', fontSize: '0.85rem' }}>路径：{item.path}</div>
+                        <div style={{ color: '#8a632c', fontSize: '0.85rem' }}>原因：{formatImportReason(item.reason, item.detail)}</div>
                       </div>
                     ))}
                   </div>
                 </div>
-              )}
-              {failedDetails.length > 0 && (
-                <div>
-                  <div style={{ fontWeight: 700, color: '#991b1b' }}>失败明细（最多显示 50 条）</div>
-                  <div style={{ marginTop: '6px', maxHeight: '220px', overflowY: 'auto', border: '1px solid #fca5a5', borderRadius: '8px', background: '#fef2f2' }}>
+              ) : null}
+
+              {failedDetails.length > 0 ? (
+                <div className="medui-surface medui-card-pad" style={{ borderColor: '#f3c1c1', background: '#fff6f6' }}>
+                  <div style={{ fontWeight: 700, color: '#9a3939', marginBottom: 8 }}>失败明细（最多显示 50 条）</div>
+                  <div style={{ maxHeight: 220, overflowY: 'auto' }}>
                     {failedDetails.map((item, index) => (
-                      <div key={`failed_${item.path}_${index}`} style={{ padding: '8px 10px', borderBottom: index === failedDetails.length - 1 ? 'none' : '1px solid #fecaca', color: '#7f1d1d', fontSize: '13px' }}>
-                        <div>路径：{item.path}</div>
-                        <div>原因：{formatImportReason(item.reason, item.detail)}</div>
+                      <div key={`failed_${item.path}_${index}`} style={{ borderBottom: index === failedDetails.length - 1 ? 'none' : '1px solid #f4d7d7', padding: '8px 0' }}>
+                        <div style={{ color: '#9a3939', fontSize: '0.85rem' }}>路径：{item.path}</div>
+                        <div style={{ color: '#9a3939', fontSize: '0.85rem' }}>原因：{formatImportReason(item.reason, item.detail)}</div>
                       </div>
                     ))}
                   </div>
                 </div>
-              )}
+              ) : null}
             </div>
-          )}
-        </div>
-      )}
+          ) : null}
+        </section>
+      ) : null}
 
-      {error && (
-        <div
-          style={{
-            marginTop: '16px',
-            padding: '12px 16px',
-            borderRadius: '12px',
-            background: '#fef2f2',
-            color: '#b91c1c',
-            border: '1px solid #fecaca',
-          }}
-        >
-          {error}
-        </div>
-      )}
+      {error ? <div className="admin-med-danger">{error}</div> : null}
 
-      <div style={{ ...CARD_STYLE, marginTop: '16px', overflow: 'hidden' }}>
+      <section className="medui-surface medui-card-pad">
         {loading ? (
-          <div style={{ padding: '32px', color: '#6b7280' }}>正在加载 NAS 内容...</div>
+          <div className="medui-empty" style={{ padding: '28px 0' }}>正在加载 NAS 内容...</div>
         ) : items.length === 0 ? (
-          <div style={{ padding: '32px', color: '#6b7280' }}>当前目录为空</div>
+          <div className="medui-empty" style={{ padding: '28px 0' }}>当前目录为空</div>
         ) : (
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead style={{ background: '#f8fafc' }}>
-              <tr>
-                <th style={{ padding: '14px 16px', textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>名称</th>
-                <th style={{ padding: '14px 16px', textAlign: 'left', borderBottom: '1px solid #e5e7eb', width: '120px' }}>类型</th>
-                <th style={{ padding: '14px 16px', textAlign: 'right', borderBottom: '1px solid #e5e7eb', width: '140px' }}>大小</th>
-                <th style={{ padding: '14px 16px', textAlign: 'left', borderBottom: '1px solid #e5e7eb', width: '220px' }}>修改时间</th>
-                <th style={{ padding: '14px 16px', textAlign: 'right', borderBottom: '1px solid #e5e7eb', width: '280px' }}>操作</th>
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((item) => (
-                <tr key={item.path} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                  <td style={{ padding: '14px 16px' }}>
-                    {item.is_dir ? (
+          <div className="medui-table-wrap">
+            <table className="medui-table">
+              <thead>
+                <tr>
+                  <th>名称</th>
+                  <th style={{ width: 120 }}>类型</th>
+                  <th style={{ width: 140, textAlign: 'right' }}>大小</th>
+                  <th style={{ width: 220 }}>修改时间</th>
+                  <th style={{ width: 260, textAlign: 'right' }}>操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((item) => (
+                  <tr key={item.path}>
+                    <td>
+                      {item.is_dir ? (
+                        <button
+                          type="button"
+                          onClick={() => loadPath(item.path)}
+                          style={{ border: 'none', background: 'transparent', padding: 0, cursor: 'pointer', color: '#0d5ea6', fontWeight: 700 }}
+                        >
+                          [目录] {item.name}
+                        </button>
+                      ) : (
+                        <span>[文件] {item.name}</span>
+                      )}
+                    </td>
+                    <td>{item.is_dir ? '目录' : '文件'}</td>
+                    <td style={{ textAlign: 'right' }}>{item.is_dir ? '-' : formatFileSize(item.size)}</td>
+                    <td>{formatTime(item.modified_at)}</td>
+                    <td style={{ textAlign: 'right' }}>
                       <button
                         type="button"
-                        onClick={() => loadPath(item.path)}
-                        style={{ border: 'none', background: 'transparent', padding: 0, cursor: 'pointer', color: '#1d4ed8', fontWeight: 700 }}
+                        onClick={() => openImportDialog(item)}
+                        data-testid={`nas-import-btn-${String(item.path || item.name || 'item').replace(/[^a-zA-Z0-9_-]/g, '_')}`}
+                        className={`medui-btn ${item.is_dir ? 'medui-btn--primary' : 'medui-btn--success'}`}
                       >
-                        {`[目录] ${item.name}`}
+                        {item.is_dir ? '导入目录到知识库' : '导入文件到知识库'}
                       </button>
-                    ) : (
-                      <span style={{ color: '#111827' }}>{`[文件] ${item.name}`}</span>
-                    )}
-                  </td>
-                  <td style={{ padding: '14px 16px', color: '#475569' }}>{item.is_dir ? '目录' : '文件'}</td>
-                  <td style={{ padding: '14px 16px', textAlign: 'right', color: '#475569' }}>{item.is_dir ? '-' : formatFileSize(item.size)}</td>
-                  <td style={{ padding: '14px 16px', color: '#475569' }}>{formatTime(item.modified_at)}</td>
-                  <td style={{ padding: '14px 16px', textAlign: 'right' }}>
-                    <button
-                      type="button"
-                      onClick={() => openImportDialog(item)}
-                      data-testid={`nas-import-btn-${String(item.path || item.name || 'item').replace(/[^a-zA-Z0-9_-]/g, '_')}`}
-                      style={item.is_dir ? BUTTON_STYLES.primary : BUTTON_STYLES.success}
-                    >
-                      {item.is_dir ? '上传目录到知识库' : '上传文件到知识库'}
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
-
-      {importDialogOpen && importTarget && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(15, 23, 42, 0.45)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: '24px',
-            zIndex: 50,
-          }}
-          onClick={closeImportDialog}
-        >
-          <div
-            data-testid="nas-import-dialog"
-            style={{ width: 'min(520px, 100%)', background: '#fff', borderRadius: '16px', padding: '20px', border: '1px solid #e5e7eb' }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div style={{ fontSize: '1.15rem', fontWeight: 800, color: '#111827' }}>
-              {importTarget.is_dir ? '上传目录到知识库' : '上传文件到知识库'}
-            </div>
-            <div style={{ marginTop: '10px', color: '#475569', lineHeight: 1.6 }}>
-              名称：{importTarget.name}
-              <br />
-              路径：{importTarget.path}
-              <br />
-              {importTarget.is_dir
-                ? '将递归上传当前目录及其子目录中的文件。'
-                : '仅当格式受支持时才会上传此文件。'}
-            </div>
-            <div style={{ marginTop: '16px' }}>
-              <label style={{ display: 'block', marginBottom: '8px', fontWeight: 700, color: '#111827' }}>选择知识库</label>
-              <select
-                data-testid="nas-import-kb-select"
-                value={selectedKb}
-                onChange={(e) => setSelectedKb(e.target.value)}
-                style={{ width: '100%', padding: '10px 12px', borderRadius: '10px', border: '1px solid #d1d5db', background: '#fff' }}
-              >
-                {datasets.map((ds) => (
-                  <option key={ds.id} value={ds.name}>
-                    {ds.name}
-                  </option>
+                    </td>
+                  </tr>
                 ))}
-              </select>
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+
+      {importDialogOpen && importTarget ? (
+        <div className="admin-med-dialog" onClick={closeImportDialog}>
+          <div data-testid="nas-import-dialog" className="admin-med-dialog__panel" style={{ width: 'min(560px, 96vw)' }} onClick={(e) => e.stopPropagation()}>
+            <div className="admin-med-dialog__head">
+              <div style={{ fontWeight: 700, color: '#16324d' }}>{importTarget.is_dir ? '导入目录到知识库' : '导入文件到知识库'}</div>
             </div>
-            <div style={{ marginTop: '18px', display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
-              <button
-                type="button"
-                onClick={closeImportDialog}
-                disabled={importLoading}
-                data-testid="nas-import-cancel"
-                style={{
-                  ...BUTTON_STYLES.neutral,
-                  cursor: importLoading ? 'not-allowed' : 'pointer',
-                }}
-              >
+
+            <div className="admin-med-dialog__body">
+              <div className="admin-med-inline-note" style={{ lineHeight: 1.7 }}>
+                名称：{importTarget.name}
+                <br />
+                路径：{importTarget.path}
+                <br />
+                {importTarget.is_dir ? '将递归导入当前目录及其子目录中的文件。' : '仅当文件格式受支持时才会导入。'}
+              </div>
+
+              <label>
+                <div style={{ fontWeight: 700, color: '#17324d', marginBottom: 8 }}>选择知识库</div>
+                <select data-testid="nas-import-kb-select" value={selectedKb} onChange={(e) => setSelectedKb(e.target.value)} className="medui-select">
+                  {datasets.map((ds) => (
+                    <option key={ds.id} value={ds.name}>
+                      {ds.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+
+            <div className="admin-med-dialog__foot">
+              <button type="button" onClick={closeImportDialog} disabled={importLoading} data-testid="nas-import-cancel" className="medui-btn medui-btn--neutral">
                 取消
               </button>
               <button
@@ -654,21 +563,14 @@ export default function NasBrowser() {
                 onClick={handleImport}
                 disabled={importLoading || !selectedKb}
                 data-testid="nas-import-confirm"
-                style={{
-                  ...BUTTON_STYLES.primary,
-                  border: 'none',
-                  background: importLoading || !selectedKb ? '#94a3b8' : '#2563eb',
-                  color: '#fff',
-                  cursor: importLoading || !selectedKb ? 'not-allowed' : 'pointer',
-                }}
+                className="medui-btn medui-btn--primary"
               >
-                {importLoading ? '处理中...' : '开始上传'}
+                {importLoading ? '处理中...' : '开始导入'}
               </button>
             </div>
           </div>
         </div>
-      )}
+      ) : null}
     </div>
   );
 }
-

@@ -8,7 +8,7 @@ const AuthContext = createContext(null);
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (!context) {
-    throw new Error('useAuth must be used within an AuthProvider');
+    throw new Error('认证上下文钩子必须在认证提供器内部使用');
   }
   return context;
 };
@@ -62,7 +62,7 @@ export const AuthProvider = ({ children }) => {
         // 检查应用版本
         const lastVersion = localStorage.getItem(STORAGE_KEYS.APP_VERSION);
         if (lastVersion !== APP_VERSION) {
-          console.log(`[App Version Update] ${lastVersion} -> ${APP_VERSION}, clearing all caches`);
+          console.log(`[应用版本更新] ${lastVersion} -> ${APP_VERSION}，正在清理缓存`);
           localStorage.setItem(STORAGE_KEYS.APP_VERSION, APP_VERSION);
 
           // 清除所有认证相关的localStorage数据
@@ -74,7 +74,7 @@ export const AuthProvider = ({ children }) => {
               const names = await caches.keys();
               await Promise.all(names.map((name) => caches.delete(name)));
             } catch (e) {
-              console.warn('Failed to clear Cache Storage:', e);
+              console.warn('清理缓存存储失败：', e);
             }
           }
         }
@@ -170,7 +170,7 @@ export const AuthProvider = ({ children }) => {
           const data = await authClient.getMyKnowledgeBases();
           setAccessibleKbs(data.kb_ids || []);
         } catch (err) {
-          console.error('Failed to fetch accessible KBs:', err);
+          console.error('获取可访问知识库失败：', err);
           setAccessibleKbs([]);
         }
       } else {
@@ -186,7 +186,7 @@ export const AuthProvider = ({ children }) => {
       setError(null);
       const data = await authClient.login(username, password);
       // 新后端的 login 方法已经在内部调用了 /me 并设置 user
-      console.log('[Login] Logged in user:', data.user);
+      console.log('[登录] 当前用户：', data.user);
       setUser(data.user);
       // 更新权限组操作权限
       if (data.user.permissions) {

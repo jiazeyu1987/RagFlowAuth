@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { useRuntimeFeatureFlags } from '../hooks/useRuntimeFeatureFlags';
+import './Tools.css';
 
 const PAGE_SIZE = 12;
 
@@ -10,64 +11,12 @@ const ToolCard = ({ id, name, description, onClick, disabled, background }) => (
     type="button"
     onClick={onClick}
     disabled={disabled}
-    style={{
-      textAlign: 'left',
-      padding: '21px 21px',
-      borderRadius: '18px',
-      border: '1px solid #e5e7eb',
-      background: disabled ? '#f3f4f6' : (background || 'white'),
-      cursor: disabled ? 'not-allowed' : 'pointer',
-      boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
-      transition: 'transform 0.12s ease, box-shadow 0.12s ease, border-color 0.12s ease',
-      minHeight: '210px',
-      display: 'flex',
-      flexDirection: 'column',
-      justifyContent: 'space-between',
-    }}
-    onMouseEnter={(e) => {
-      if (disabled) return;
-      e.currentTarget.style.transform = 'translateY(-1px)';
-      e.currentTarget.style.boxShadow = '0 6px 18px rgba(0,0,0,0.08)';
-      e.currentTarget.style.borderColor = '#c7d2fe';
-    }}
-    onMouseLeave={(e) => {
-      if (disabled) return;
-      e.currentTarget.style.transform = 'translateY(0px)';
-      e.currentTarget.style.boxShadow = '0 1px 2px rgba(0,0,0,0.04)';
-      e.currentTarget.style.borderColor = '#e5e7eb';
-    }}
+    className="tools-med-card"
+    style={background ? { background } : undefined}
     data-testid={`tool-card-${id}`}
   >
-    <div
-      style={{
-        fontSize: '1.5rem',
-        fontWeight: 900,
-        color: disabled ? '#6b7280' : '#111827',
-        lineHeight: 1.2,
-        minHeight: '40%',
-        display: '-webkit-box',
-        WebkitBoxOrient: 'vertical',
-        WebkitLineClamp: 2,
-        overflow: 'hidden',
-      }}
-    >
-      {name}
-    </div>
-    <div
-      style={{
-        marginTop: '12px',
-        fontSize: '1.05rem',
-        color: '#4b5563',
-        lineHeight: 1.55,
-        minHeight: '50%',
-        display: '-webkit-box',
-        WebkitBoxOrient: 'vertical',
-        WebkitLineClamp: 4,
-        overflow: 'hidden',
-      }}
-    >
-      {description}
-    </div>
+    <div className="tools-med-card__name">{name}</div>
+    <div className="tools-med-card__desc">{description}</div>
   </button>
 );
 
@@ -85,7 +34,7 @@ const Tools = () => {
       list.push({
         id: 'nas_browser',
         name: 'NAS 网盘',
-        description: '浏览 NAS 共享中的文件夹和文件，仅管理员可见。',
+        description: '浏览 NAS 共享目录中的文件夹和文件，仅管理员可见。',
         route: '/tools/nas-browser',
       });
     }
@@ -94,7 +43,7 @@ const Tools = () => {
       list.push({
         id: 'collection_workbench',
         name: '采集工作台',
-        description: '统一管理采集任务、失败分类、批量入库与追踪日志。',
+        description: '统一管理采集任务、失败分类、批量入库和过程日志。',
         route: '/tools/collection-workbench',
       });
     }
@@ -103,7 +52,7 @@ const Tools = () => {
       {
         id: 'paper_download',
         name: '论文下载分析',
-        description: '配置关键词、下载来源与数量上限，下载后自动加入本地论文。',
+        description: '配置关键词、下载来源和数量上限，下载后自动加入本地论文。',
         route: '/tools/paper-download',
       },
       {
@@ -115,7 +64,7 @@ const Tools = () => {
       {
         id: 'patent_download',
         name: '专利下载分析',
-        description: '配置关键词、数据源与数量上限，下载后自动加入本地专利。',
+        description: '配置关键词、数据源和数量上限，下载后自动加入本地专利。',
         route: '/tools/patent-download',
       }
     );
@@ -142,7 +91,7 @@ const Tools = () => {
       list.push({
         id: 'drug_admin',
         name: '药监导航',
-        description: '各省与国家药监局官网入口。',
+        description: '国家及各省药监局官网入口。',
         route: '/tools/drug-admin',
       });
     }
@@ -150,8 +99,8 @@ const Tools = () => {
     if (canSee('tool_nmpa_visible')) {
       list.push({
         id: 'nmpa',
-        name: 'NMPA',
-        description: '国家药监局器审中心。',
+        name: 'NMPA 专用工具',
+        description: '国家药监局相关专用工具入口。',
         route: '/tools/nmpa',
       });
     }
@@ -186,53 +135,34 @@ const Tools = () => {
   };
 
   return (
-    <div style={{ padding: '20px', width: '100%', boxSizing: 'border-box' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: '12px' }}>
-        <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+    <div className="tools-med-page">
+      <div className="tools-med-head">
+        <div className="medui-subtitle" data-testid="tools-page-indicator">
+          第 <strong>{safePage}</strong> / {pageCount} 页
+        </div>
+        <div style={{ display: 'flex', gap: 10 }}>
           <button
             type="button"
             onClick={() => setPage((p) => Math.max(1, p - 1))}
             disabled={safePage <= 1}
             data-testid="tools-prev-page"
-            style={{
-              padding: '8px 12px',
-              borderRadius: '10px',
-              border: '1px solid #e5e7eb',
-              background: safePage <= 1 ? '#f3f4f6' : 'white',
-              cursor: safePage <= 1 ? 'not-allowed' : 'pointer',
-            }}
+            className="medui-btn medui-btn--secondary"
           >
             上一页
           </button>
-          <div style={{ color: '#6b7280', fontSize: '0.9rem' }} data-testid="tools-page-indicator">
-            第 <span style={{ color: '#111827', fontWeight: 700 }}>{safePage}</span> / {pageCount} 页
-          </div>
           <button
             type="button"
             onClick={() => setPage((p) => Math.min(pageCount, p + 1))}
             disabled={safePage >= pageCount}
             data-testid="tools-next-page"
-            style={{
-              padding: '8px 12px',
-              borderRadius: '10px',
-              border: '1px solid #e5e7eb',
-              background: safePage >= pageCount ? '#f3f4f6' : 'white',
-              cursor: safePage >= pageCount ? 'not-allowed' : 'pointer',
-            }}
+            className="medui-btn medui-btn--secondary"
           >
             下一页
           </button>
         </div>
       </div>
 
-      <div
-        style={{
-          marginTop: '16px',
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))',
-          gap: '20px',
-        }}
-      >
+      <div className="tools-med-grid">
         {pageItems.map((t, idx) => (
           <ToolCard
             key={t.id}
@@ -241,7 +171,7 @@ const Tools = () => {
             description={t.description}
             disabled={!(t.href || t.route)}
             onClick={() => openTool(t)}
-            background={idx % 2 === 0 ? '#ffffff' : '#f8fafc'}
+            background={idx % 2 === 0 ? '#ffffff' : '#f9fcff'}
           />
         ))}
       </div>

@@ -25,8 +25,8 @@ export const loadDocumentPreview = async ({ docId, dataset, title, getPreviewJso
     // eslint-disable-next-line no-console
     console.info('[PreviewTrace][Manager]', step, { docId, dataset, title, elapsedMs, ...extra });
   };
-  if (!docId) throw new Error('Missing document id; cannot preview.');
-  if (typeof getPreviewJson !== 'function') throw new Error('getPreviewJson is required');
+  if (!docId) throw new Error('缺少文档编号，无法预览');
+  if (typeof getPreviewJson !== 'function') throw new Error('缺少预览接口方法');
 
   mark('getPreviewJson:start');
   const data = await getPreviewJson({ docId, dataset });

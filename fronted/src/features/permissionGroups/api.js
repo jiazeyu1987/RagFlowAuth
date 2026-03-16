@@ -4,7 +4,10 @@ import { authBackendUrl } from '../../config/backend';
 const parseError = async (response, fallbackMessage) => {
   try {
     const data = await response.json();
-    return data?.detail || data?.message || data?.error || fallbackMessage;
+    const message = String(data?.detail || data?.message || data?.error || '').trim();
+    if (!message) return fallbackMessage;
+    if (/[\u4e00-\u9fff]/.test(message)) return message;
+    return fallbackMessage;
   } catch {
     return fallbackMessage;
   }

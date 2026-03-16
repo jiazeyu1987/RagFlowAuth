@@ -7,6 +7,7 @@ import {
   buildRejectBatchSummary,
   collectConflictChecks,
 } from './documentReviewUtils';
+import { normalizeDisplayError } from '../../shared/utils/displayError';
 
 export function useDocumentReviewActions({
   activeDocMap,
@@ -44,7 +45,7 @@ export function useDocumentReviewActions({
       await reviewApi.approve(docId);
       await refreshDocuments();
     } catch (err) {
-      setError(err.message);
+      setError(normalizeDisplayError(err?.message ?? err, '审核通过失败'));
     } finally {
       setActionLoading(null);
     }
@@ -54,7 +55,7 @@ export function useDocumentReviewActions({
     if (!overwritePrompt) return;
     const { newDocId, oldDoc } = overwritePrompt;
     const ok = window.confirm(
-      `确定用新文档覆盖旧文档吗？\n\n旧文档：${oldDoc.filename}\n新文档：${activeDocMap.get(newDocId)?.filename || ''}\n\n该操作会将旧文档替换为新文档，并通过当前待审核文档。`
+      `确定用新文档覆盖旧文档吗？\n\n旧文档：${oldDoc.filename}\n新文档：${activeDocMap.get(newDocId)?.filename || ''}\n\n该操作会将旧文档替换为新文档，并通过当前待审核文档。`,
     );
     if (!ok) return;
 
@@ -73,7 +74,7 @@ export function useDocumentReviewActions({
       setOverwritePrompt(null);
       await refreshDocuments();
     } catch (err) {
-      setError(err.message);
+      setError(normalizeDisplayError(err?.message ?? err, '覆盖文档失败'));
     } finally {
       setActionLoading(null);
     }
@@ -95,7 +96,7 @@ export function useDocumentReviewActions({
       setOverwritePrompt(null);
       await refreshDocuments();
     } catch (err) {
-      setError(err.message);
+      setError(normalizeDisplayError(err?.message ?? err, '跳过冲突失败'));
     } finally {
       setActionLoading(null);
     }
@@ -123,7 +124,7 @@ export function useDocumentReviewActions({
       setOverwritePrompt(null);
       await refreshDocuments();
     } catch (err) {
-      setError(err.message);
+      setError(normalizeDisplayError(err?.message ?? err, '重命名文档失败'));
     } finally {
       setActionLoading(null);
     }
@@ -138,7 +139,7 @@ export function useDocumentReviewActions({
       await reviewApi.reject(docId, notes);
       await refreshDocuments();
     } catch (err) {
-      setError(err.message);
+      setError(normalizeDisplayError(err?.message ?? err, '驳回文档失败'));
     } finally {
       setActionLoading(null);
     }
@@ -152,7 +153,7 @@ export function useDocumentReviewActions({
       await documentClient.delete({ source: DOCUMENT_SOURCE.KNOWLEDGE, docId });
       await refreshDocuments();
     } catch (err) {
-      setError(err.message);
+      setError(normalizeDisplayError(err?.message ?? err, '删除文档失败'));
     } finally {
       setActionLoading(null);
     }
@@ -163,7 +164,7 @@ export function useDocumentReviewActions({
     try {
       await documentClient.downloadToBrowser({ source: DOCUMENT_SOURCE.KNOWLEDGE, docId });
     } catch (err) {
-      setError(err.message);
+      setError(normalizeDisplayError(err?.message ?? err, '批量下载失败'));
     } finally {
       setDownloadLoading(null);
     }
@@ -198,7 +199,7 @@ export function useDocumentReviewActions({
       await documentClient.batchDownloadKnowledgeToBrowser(Array.from(selectedDocIds));
       setSelectedDocIds(new Set());
     } catch (err) {
-      setError(err.message);
+      setError(normalizeDisplayError(err?.message ?? err, '批量审核失败'));
     } finally {
       setBatchDownloadLoading(false);
     }
@@ -232,7 +233,7 @@ export function useDocumentReviewActions({
           }),
         );
         setError(
-          `批量审批未执行：冲突 ${conflicted.length}，检查失败 ${conflictCheckFailed.length}${firstConflict ? `。首个文档：${firstConflict}` : ''}`,
+          `批量审核未执行：冲突 ${conflicted.length}，检查失败 ${conflictCheckFailed.length}${firstConflict ? `。首个文档：${firstConflict}` : ''}`,
         );
         return;
       }
@@ -245,11 +246,11 @@ export function useDocumentReviewActions({
         const firstFailure = result.failed_items?.[0];
         const firstConflict = conflicted[0]?.doc?.filename || conflictCheckFailed[0]?.doc?.filename || '';
         setError(
-          `批量审批完成：成功 ${result.success_count}，失败 ${result.failed_count}，冲突跳过 ${conflicted.length}，检查失败 ${conflictCheckFailed.length}${firstFailure ? `。首个失败：${firstFailure.doc_id} - ${firstFailure.detail}` : firstConflict ? `。首个跳过：${firstConflict}` : ''}`,
+          `批量审核完成：成功 ${result.success_count}，失败 ${result.failed_count}，冲突跳过 ${conflicted.length}，检查失败 ${conflictCheckFailed.length}${firstFailure ? `。首个失败：${firstFailure.doc_id} - ${normalizeDisplayError(firstFailure.detail, '请查看详情')}` : firstConflict ? `。首个跳过：${firstConflict}` : ''}`,
         );
       }
     } catch (err) {
-      setError(err.message);
+      setError(normalizeDisplayError(err?.message ?? err, '批量驳回失败'));
     } finally {
       setBatchReviewLoading(null);
     }
@@ -274,10 +275,10 @@ export function useDocumentReviewActions({
       setSelectedDocIds(new Set());
       if (result.failed_count > 0) {
         const firstFailure = result.failed_items?.[0];
-        setError(`批量驳回完成：成功 ${result.success_count}，失败 ${result.failed_count}${firstFailure ? `。首个失败：${firstFailure.doc_id} - ${firstFailure.detail}` : ''}`);
+        setError(`批量驳回完成：成功 ${result.success_count}，失败 ${result.failed_count}${firstFailure ? `。首个失败：${firstFailure.doc_id} - ${normalizeDisplayError(firstFailure.detail, '请查看详情')}` : ''}`);
       }
     } catch (err) {
-      setError(err.message);
+      setError(normalizeDisplayError(err?.message ?? err, '批量驳回失败'));
     } finally {
       setBatchReviewLoading(null);
     }
@@ -289,7 +290,7 @@ export function useDocumentReviewActions({
       setBatchSummaryCopied(true);
       window.setTimeout(() => setBatchSummaryCopied(false), 1500);
     } catch (err) {
-      setError(err.message || '复制失败');
+      setError(normalizeDisplayError(err?.message ?? err, '复制失败'));
     }
   }, [batchReviewSummary, setError]);
 

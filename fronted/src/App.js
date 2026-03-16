@@ -38,7 +38,7 @@ const SuperAdminFeatureVisibility = lazy(() => import('./pages/SuperAdminFeature
 
 
 function RouteLoadingFallback() {
-  return <div style={{ padding: 16 }}>Loading...</div>;
+  return <div style={{ padding: 16 }}>页面加载中...</div>;
 }
 
 function App() {

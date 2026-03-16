@@ -1,0 +1,338 @@
+.medui-workspace {
+  display: flex;
+  gap: 16px;
+  min-height: calc(100vh - 160px);
+}
+
+.medui-surface {
+  background: var(--medical-panel);
+  border: 1px solid var(--medical-border);
+  border-radius: var(--medical-radius-md);
+  box-shadow: var(--medical-shadow-sm);
+}
+
+.medui-surface--muted {
+  background: #f7fbff;
+}
+
+.medui-surface--soft {
+  background: #fbfdff;
+}
+
+.medui-card-pad {
+  padding: 16px;
+}
+
+.medui-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.medui-title {
+  color: var(--medical-text);
+  font-size: 1.08rem;
+  font-weight: 700;
+}
+
+.medui-subtitle {
+  color: var(--medical-text-secondary);
+  font-size: 0.9rem;
+}
+
+.medui-muted {
+  color: var(--medical-text-secondary);
+}
+
+.medui-empty {
+  color: var(--medical-text-secondary);
+  text-align: center;
+  padding: 24px 12px;
+}
+
+.medui-scroll {
+  overflow-y: auto;
+}
+
+.medui-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border-radius: 999px;
+  border: 1px solid #c7dbef;
+  background: #eff7ff;
+  color: #245a86;
+  font-size: 0.8rem;
+  padding: 4px 10px;
+}
+
+.medui-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.medui-badge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  font-size: 0.76rem;
+  font-weight: 700;
+  padding: 4px 8px;
+  border: 1px solid transparent;
+}
+
+.medui-badge--success {
+  color: #146c42;
+  background: #edf9f2;
+  border-color: #b7e8cb;
+}
+
+.medui-badge--danger {
+  color: #a63333;
+  background: #fff2f2;
+  border-color: #f5c1c1;
+}
+
+.medui-badge--info {
+  color: #225a89;
+  background: #edf6ff;
+  border-color: #bfdbf4;
+}
+
+.medui-badge--neutral {
+  color: #526780;
+  background: #f1f6fb;
+  border-color: #d3e1ef;
+}
+
+.medui-btn {
+  border: 1px solid transparent;
+  border-radius: 10px;
+  height: 36px;
+  padding: 0 14px;
+  font-size: 0.88rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: filter 0.16s ease, box-shadow 0.16s ease;
+}
+
+.medui-btn:hover:not(:disabled) {
+  filter: brightness(1.04);
+}
+
+.medui-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.medui-btn--primary {
+  color: #fff;
+  background: linear-gradient(135deg, #0d5ea6 0%, #0a4f8b 100%);
+  box-shadow: 0 8px 18px rgba(13, 94, 166, 0.18);
+}
+
+.medui-btn--secondary {
+  color: #214766;
+  background: #edf5ff;
+  border-color: #bfd7ef;
+}
+
+.medui-btn--neutral {
+  color: #3a546f;
+  background: #f3f7fb;
+  border-color: #d3e0ee;
+}
+
+.medui-btn--success {
+  color: #fff;
+  background: linear-gradient(135deg, #1f8a57 0%, #177146 100%);
+}
+
+.medui-btn--warn {
+  color: #fff;
+  background: linear-gradient(135deg, #d48825 0%, #b26e14 100%);
+}
+
+.medui-btn--danger {
+  color: #fff;
+  background: linear-gradient(135deg, #cf5656 0%, #b83f3f 100%);
+}
+
+.medui-input,
+.medui-select,
+.medui-textarea {
+  width: 100%;
+  border: 1px solid #c7d9ec;
+  border-radius: 10px;
+  background: #fbfdff;
+  color: var(--medical-text);
+  font-size: 0.9rem;
+  outline: none;
+  transition: all 0.15s ease;
+}
+
+.medui-input,
+.medui-select {
+  height: 38px;
+  padding: 0 11px;
+}
+
+.medui-textarea {
+  padding: 9px 11px;
+  min-height: 44px;
+}
+
+.medui-input:focus,
+.medui-select:focus,
+.medui-textarea:focus {
+  border-color: #6f9fcd;
+  box-shadow: 0 0 0 3px rgba(13, 94, 166, 0.15);
+  background: #fff;
+}
+
+.medui-table-wrap {
+  overflow: auto;
+  border-radius: 12px;
+  border: 1px solid #d9e6f4;
+}
+
+.medui-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 760px;
+}
+
+.medui-table th {
+  background: #f5faff;
+  color: #305374;
+  font-size: 0.84rem;
+  font-weight: 700;
+  text-align: left;
+  border-bottom: 1px solid #d9e6f4;
+  padding: 10px 12px;
+}
+
+.medui-table td {
+  border-bottom: 1px solid #e8f0f8;
+  padding: 11px 12px;
+  color: var(--medical-text);
+  font-size: 0.88rem;
+  vertical-align: top;
+}
+
+.medui-table tbody tr:hover {
+  background: #f9fcff;
+}
+
+.medui-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #235685;
+  background: #eaf3ff;
+  border: 1px solid #bfdaef;
+}
+
+.medui-toast {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 1100;
+  max-width: 420px;
+  border-radius: 12px;
+  border: 1px solid #f2c3c3;
+  background: #fff4f4;
+  color: #a33a3a;
+  box-shadow: 0 14px 30px rgba(177, 75, 75, 0.18);
+  padding: 11px 14px;
+  font-size: 0.88rem;
+  line-height: 1.5;
+}
+
+.medui-toast__close {
+  border: none;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font-size: 0.9rem;
+  margin-left: 10px;
+}
+
+.medui-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(13, 35, 58, 0.42);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1200;
+  padding: 20px;
+}
+
+.medui-modal {
+  width: 100%;
+  max-width: 520px;
+  border-radius: 16px;
+  border: 1px solid #c9dbec;
+  background: #fff;
+  box-shadow: 0 18px 44px rgba(13, 45, 78, 0.28);
+}
+
+.medui-modal__head {
+  border-bottom: 1px solid #deebf8;
+  background: #f7fbff;
+  padding: 16px 18px 14px;
+}
+
+.medui-modal__title {
+  color: #123d63;
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+.medui-modal__body {
+  padding: 16px 18px;
+}
+
+.medui-modal__foot {
+  border-top: 1px solid #deebf8;
+  padding: 12px 18px 16px;
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.medui-section-grid {
+  display: grid;
+  gap: 16px;
+}
+
+.medui-section-grid--2 {
+  grid-template-columns: 300px minmax(0, 1fr);
+}
+
+.medui-placeholder {
+  border: 1px dashed #c8d8e9;
+  border-radius: 12px;
+  background: #f8fbff;
+  color: #56718d;
+  text-align: center;
+  padding: 24px;
+}
+
+@media (max-width: 1080px) {
+  .medui-workspace {
+    flex-direction: column;
+  }
+
+  .medui-section-grid--2 {
+    grid-template-columns: 1fr;
+  }
+}

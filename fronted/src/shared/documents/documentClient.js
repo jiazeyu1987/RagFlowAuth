@@ -25,11 +25,21 @@ const parseMaybeJson = async (resp) => {
   }
 };
 
+const normalizeDisplayError = (message, fallback) => {
+  const text = String(message || '').trim();
+  if (!text) return fallback;
+  if (/[\u4e00-\u9fff]/.test(text)) return text;
+  return fallback;
+};
+
 const requestJsonWithResponse = async (path, options = {}) => {
   const response = await httpClient.request(path, options);
   const data = await parseMaybeJson(response);
   if (!response.ok) {
-    const message = data?.detail || data?.message || data?.error || `Request failed (${response.status})`;
+    const message = normalizeDisplayError(
+      data?.detail || data?.message || data?.error,
+      `请求失败（状态码：${response.status}）`
+    );
     const error = new Error(message);
     error.status = response.status;
     error.data = data;
@@ -70,11 +80,11 @@ class DocumentClient {
     const source = String(ref?.source || '').toLowerCase();
     const docId = ref?.docId;
     const render = ref?.render;
-    if (!docId) throw new Error('missing_doc_id');
+    if (!docId) throw new Error('缺少文档编号');
 
     if (source === DOCUMENT_SOURCE.RAGFLOW) {
       const datasetName = ref?.datasetName || ref?.dataset || '';
-      if (!datasetName) throw new Error('missing_dataset');
+      if (!datasetName) throw new Error('缺少数据集');
       const { data, response } = await requestJsonWithResponse(
         `/api/preview/documents/ragflow/${encodeURIComponent(docId)}/preview${buildQuery({ dataset: datasetName, render })}`,
         { method: 'GET' }
@@ -98,7 +108,7 @@ class DocumentClient {
 
     if (source === DOCUMENT_SOURCE.PATENT) {
       const sessionId = String(ref?.sessionId || '').trim();
-      if (!sessionId) throw new Error('missing_session_id');
+      if (!sessionId) throw new Error('缺少会话编号');
       const { data, response } = await requestJsonWithResponse(
         `/api/patent-download/sessions/${encodeURIComponent(sessionId)}/items/${encodeURIComponent(docId)}/preview${buildQuery({ render })}`,
         { method: 'GET' }
@@ -111,7 +121,7 @@ class DocumentClient {
 
     if (source === DOCUMENT_SOURCE.PAPER) {
       const sessionId = String(ref?.sessionId || '').trim();
-      if (!sessionId) throw new Error('missing_session_id');
+      if (!sessionId) throw new Error('缺少会话编号');
       const { data, response } = await requestJsonWithResponse(
         `/api/paper-download/sessions/${encodeURIComponent(sessionId)}/items/${encodeURIComponent(docId)}/preview${buildQuery({ render })}`,
         { method: 'GET' }
@@ -122,18 +132,18 @@ class DocumentClient {
       return data;
     }
 
-    throw new Error('invalid_source');
+    throw new Error('无效的数据来源');
   }
 
   async _downloadResponse(ref) {
     const t0 = (typeof performance !== 'undefined' ? performance.now() : Date.now());
     const source = String(ref?.source || '').toLowerCase();
     const docId = ref?.docId;
-    if (!docId) throw new Error('missing_doc_id');
+    if (!docId) throw new Error('缺少文档编号');
 
     if (source === DOCUMENT_SOURCE.RAGFLOW) {
       const datasetName = ref?.datasetName || ref?.dataset || '';
-      if (!datasetName) throw new Error('missing_dataset');
+      if (!datasetName) throw new Error('缺少数据集');
       const filename = ref?.filename || ref?.title || '';
       const path = `/api/documents/ragflow/${encodeURIComponent(docId)}/download${buildQuery({
         dataset: datasetName,
@@ -148,7 +158,10 @@ class DocumentClient {
       }
 
       const data = await parseMaybeJson(resp);
-      const message = data?.detail || data?.message || `download_failed (${resp.status})`;
+      const message = normalizeDisplayError(
+        data?.detail || data?.message || data?.error,
+        `下载失败（状态码：${resp.status}）`
+      );
       const err = new Error(message);
       err.status = resp.status;
       err.data = data;
@@ -165,7 +178,10 @@ class DocumentClient {
       }
 
       const data = await parseMaybeJson(resp);
-      const message = data?.detail || data?.message || `download_failed (${resp.status})`;
+      const message = normalizeDisplayError(
+        data?.detail || data?.message || data?.error,
+        `下载失败（状态码：${resp.status}）`
+      );
       const err = new Error(message);
       err.status = resp.status;
       err.data = data;
@@ -174,7 +190,7 @@ class DocumentClient {
 
     if (source === DOCUMENT_SOURCE.PATENT) {
       const sessionId = String(ref?.sessionId || '').trim();
-      if (!sessionId) throw new Error('missing_session_id');
+      if (!sessionId) throw new Error('缺少会话编号');
       const resp = await httpClient.request(
         `/api/patent-download/sessions/${encodeURIComponent(sessionId)}/items/${encodeURIComponent(docId)}/download`,
         { method: 'GET' }
@@ -187,7 +203,10 @@ class DocumentClient {
       }
 
       const data = await parseMaybeJson(resp);
-      const message = data?.detail || data?.message || `download_failed (${resp.status})`;
+      const message = normalizeDisplayError(
+        data?.detail || data?.message || data?.error,
+        `下载失败（状态码：${resp.status}）`
+      );
       const err = new Error(message);
       err.status = resp.status;
       err.data = data;
@@ -196,7 +215,7 @@ class DocumentClient {
 
     if (source === DOCUMENT_SOURCE.PAPER) {
       const sessionId = String(ref?.sessionId || '').trim();
-      if (!sessionId) throw new Error('missing_session_id');
+      if (!sessionId) throw new Error('缺少会话编号');
       const resp = await httpClient.request(
         `/api/paper-download/sessions/${encodeURIComponent(sessionId)}/items/${encodeURIComponent(docId)}/download`,
         { method: 'GET' }
@@ -209,14 +228,17 @@ class DocumentClient {
       }
 
       const data = await parseMaybeJson(resp);
-      const message = data?.detail || data?.message || `download_failed (${resp.status})`;
+      const message = normalizeDisplayError(
+        data?.detail || data?.message || data?.error,
+        `下载失败（状态码：${resp.status}）`
+      );
       const err = new Error(message);
       err.status = resp.status;
       err.data = data;
       throw err;
     }
 
-    throw new Error('invalid_source');
+    throw new Error('无效的数据来源');
   }
 
   async downloadBlob(ref) {
@@ -245,7 +267,7 @@ class DocumentClient {
 
   async batchDownloadKnowledgeToBrowser(docIds) {
     const ids = Array.isArray(docIds) ? docIds : [];
-    if (ids.length === 0) throw new Error('no_documents_selected');
+    if (ids.length === 0) throw new Error('未选择文档');
 
     const resp = await httpClient.request(`/api/documents/knowledge/batch/download`, {
       method: 'POST',
@@ -253,7 +275,10 @@ class DocumentClient {
     });
     if (!resp.ok) {
       const data = await parseMaybeJson(resp);
-      const message = data?.detail || data?.message || `batch_download_failed (${resp.status})`;
+      const message = normalizeDisplayError(
+        data?.detail || data?.message || data?.error,
+        `批量下载失败（状态码：${resp.status}）`
+      );
       const err = new Error(message);
       err.status = resp.status;
       err.data = data;
@@ -278,7 +303,7 @@ class DocumentClient {
 
   async batchDownloadRagflowToBrowser(documents) {
     const docs = Array.isArray(documents) ? documents : [];
-    if (docs.length === 0) throw new Error('no_documents_selected');
+    if (docs.length === 0) throw new Error('未选择文档');
 
     const resp = await httpClient.request(`/api/documents/ragflow/batch/download`, {
       method: 'POST',
@@ -286,7 +311,10 @@ class DocumentClient {
     });
     if (!resp.ok) {
       const data = await parseMaybeJson(resp);
-      const message = data?.detail || data?.message || `batch_download_failed (${resp.status})`;
+      const message = normalizeDisplayError(
+        data?.detail || data?.message || data?.error,
+        `批量下载失败（状态码：${resp.status}）`
+      );
       const err = new Error(message);
       err.status = resp.status;
       err.data = data;
@@ -312,11 +340,11 @@ class DocumentClient {
   async delete(ref) {
     const source = String(ref?.source || '').toLowerCase();
     const docId = ref?.docId;
-    if (!docId) throw new Error('missing_doc_id');
+    if (!docId) throw new Error('缺少文档编号');
 
     if (source === DOCUMENT_SOURCE.RAGFLOW) {
       const datasetName = ref?.datasetName || ref?.dataset || '';
-      if (!datasetName) throw new Error('missing_dataset');
+      if (!datasetName) throw new Error('缺少数据集');
       return httpClient.requestJson(
         `/api/documents/ragflow/${encodeURIComponent(docId)}${buildQuery({ dataset_name: datasetName })}`,
         { method: 'DELETE' }
@@ -327,12 +355,12 @@ class DocumentClient {
       return httpClient.requestJson(`/api/documents/knowledge/${encodeURIComponent(docId)}`, { method: 'DELETE' });
     }
 
-    throw new Error('invalid_source');
+    throw new Error('无效的数据来源');
   }
 
   async uploadKnowledge(file, kbId) {
-    if (!file) throw new Error('missing_file');
-    if (!kbId) throw new Error('missing_kb_id');
+    if (!file) throw new Error('缺少上传文件');
+    if (!kbId) throw new Error('缺少知识库编号');
     const formData = new FormData();
     formData.append('file', file);
     return httpClient.requestJson(`/api/documents/knowledge/upload${buildQuery({ kb_id: kbId })}`, {
@@ -346,8 +374,8 @@ class DocumentClient {
     const t0 = (typeof performance !== 'undefined' ? performance.now() : Date.now());
     const source = String(ref?.source || '').toLowerCase();
     const docId = String(ref?.docId || '').trim();
-    if (!docId) throw new Error('missing_doc_id');
-    if (!source) throw new Error('missing_source');
+    if (!docId) throw new Error('缺少文档编号');
+    if (!source) throw new Error('缺少数据来源');
     const { data, response } = await requestJsonWithResponse('/api/onlyoffice/editor-config', {
       method: 'POST',
       body: JSON.stringify({

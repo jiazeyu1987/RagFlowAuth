@@ -8,11 +8,11 @@ export function parseJson(text) {
   try {
     const value = JSON.parse(text || '{}');
     if (!value || typeof value !== 'object' || Array.isArray(value)) {
-      return { ok: false, error: 'JSON 必须是对象' };
+      return { ok: false, error: 'JSON 必须是对象格式' };
     }
     return { ok: true, value };
-  } catch (error) {
-    return { ok: false, error: 'JSON 解析失败：' + (error?.message || String(error)) };
+  } catch {
+    return { ok: false, error: 'JSON 解析失败，请检查格式后重试' };
   }
 }
 
@@ -69,7 +69,9 @@ export function sanitizeChatPayload(payload) {
   }
 
   for (const key of Object.keys(body)) {
-    if (key.endsWith('_task_id') || key.endsWith('_task_finish_at') || key.endsWith('_task_start_at')) delete body[key];
+    if (key.endsWith('_task_id') || key.endsWith('_task_finish_at') || key.endsWith('_task_start_at')) {
+      delete body[key];
+    }
   }
 
   const derivedIds = getSelectedDatasetIdsFromChatJson(body);

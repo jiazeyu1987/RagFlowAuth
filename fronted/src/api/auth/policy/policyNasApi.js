@@ -22,7 +22,7 @@ export const policyNasApiMethods = {
 
     if (!response.ok) {
       const error = await response.json().catch(() => ({}));
-      throw new Error(error.detail || 'Failed to list NAS files');
+      throw new Error(this.resolveErrorMessage(error, '获取 NAS 文件列表失败'));
     }
 
     return response.json();
@@ -43,7 +43,7 @@ export const policyNasApiMethods = {
 
     if (!response.ok) {
       const error = await response.json().catch(() => ({}));
-      throw new Error(error.detail || 'Failed to import NAS folder');
+      throw new Error(this.resolveErrorMessage(error, '导入 NAS 文件夹失败'));
     }
 
     return response.json();
@@ -57,7 +57,7 @@ export const policyNasApiMethods = {
 
     if (!response.ok) {
       const error = await response.json().catch(() => ({}));
-      throw new Error(error.detail || 'Failed to get NAS folder import status');
+      throw new Error(this.resolveErrorMessage(error, '获取 NAS 文件夹导入状态失败'));
     }
 
     return response.json();
@@ -71,7 +71,7 @@ export const policyNasApiMethods = {
 
     if (!response.ok) {
       const error = await response.json().catch(() => ({}));
-      throw new Error(error.detail || 'Failed to cancel NAS folder import');
+      throw new Error(this.resolveErrorMessage(error, '取消 NAS 文件夹导入失败'));
     }
 
     return response.json();
@@ -85,7 +85,7 @@ export const policyNasApiMethods = {
 
     if (!response.ok) {
       const error = await response.json().catch(() => ({}));
-      throw new Error(error.detail || 'Failed to pause NAS folder import');
+      throw new Error(this.resolveErrorMessage(error, '暂停 NAS 文件夹导入失败'));
     }
 
     return response.json();
@@ -99,7 +99,7 @@ export const policyNasApiMethods = {
 
     if (!response.ok) {
       const error = await response.json().catch(() => ({}));
-      throw new Error(error.detail || 'Failed to resume NAS folder import');
+      throw new Error(this.resolveErrorMessage(error, '继续 NAS 文件夹导入失败'));
     }
 
     return response.json();
@@ -113,7 +113,7 @@ export const policyNasApiMethods = {
 
     if (!response.ok) {
       const error = await response.json().catch(() => ({}));
-      throw new Error(error.detail || 'Failed to retry NAS folder import');
+      throw new Error(this.resolveErrorMessage(error, '重试 NAS 文件夹导入失败'));
     }
 
     return response.json();
@@ -130,7 +130,7 @@ export const policyNasApiMethods = {
 
     if (!response.ok) {
       const error = await response.json().catch(() => ({}));
-      throw new Error(error.detail || 'Failed to import NAS file');
+      throw new Error(this.resolveErrorMessage(error, '导入 NAS 文件失败'));
     }
 
     return response.json();

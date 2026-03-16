@@ -7,6 +7,12 @@ import { knowledgeApi } from '../api';
 import { ROOT, TEXT } from './constants';
 import { buildDatasetsWithFolders, buildIndexes, pathNodes } from './treeUtils';
 
+function normalizeDisplayError(message, fallback) {
+  const text = String(message || '').trim();
+  if (!text) return fallback;
+  return /[\u4e00-\u9fff]/.test(text) ? text : fallback;
+}
+
 export default function useDocumentBrowserPage() {
   const location = useLocation();
   const { user, can, canDownload, accessibleKbs } = useAuth();
@@ -140,7 +146,7 @@ export default function useDocumentBrowserPage() {
         );
         setError(nextDatasets.length ? null : TEXT.noPermission);
       } catch (requestError) {
-        setError(requestError?.message || TEXT.loadKbFail);
+        setError(normalizeDisplayError(requestError?.message, TEXT.loadKbFail));
       } finally {
         setLoading(false);
       }
@@ -160,7 +166,7 @@ export default function useDocumentBrowserPage() {
     } catch (requestError) {
       setDocumentErrors((previous) => ({
         ...previous,
-        [datasetName]: requestError?.message || TEXT.loadDocFail,
+        [datasetName]: normalizeDisplayError(requestError?.message, TEXT.loadDocFail),
       }));
       setDocuments((previous) => ({ ...previous, [datasetName]: [] }));
     }
@@ -276,7 +282,7 @@ export default function useDocumentBrowserPage() {
         filename: doc?.name || `document_${docId}`,
       });
     } catch (requestError) {
-      setError(requestError?.message || TEXT.downloadFail);
+      setError(normalizeDisplayError(requestError?.message, TEXT.downloadFail));
     } finally {
       setActionLoading((previous) => ({ ...previous, [`${docId}-download`]: false }));
     }
@@ -296,7 +302,7 @@ export default function useDocumentBrowserPage() {
         [datasetName]: (previous[datasetName] || []).filter((item) => item.id !== docId),
       }));
     } catch (requestError) {
-      setError(requestError?.message || TEXT.deleteFail);
+      setError(normalizeDisplayError(requestError?.message, TEXT.deleteFail));
     } finally {
       setActionLoading((previous) => ({ ...previous, [`${docId}-delete`]: false }));
     }
@@ -397,7 +403,7 @@ export default function useDocumentBrowserPage() {
       await documentClient.batchDownloadRagflowToBrowser(items);
       clearAllSelections();
     } catch (requestError) {
-      setError(requestError?.message || TEXT.batchFail);
+      setError(normalizeDisplayError(requestError?.message, TEXT.batchFail));
     } finally {
       setActionLoading((previous) => ({ ...previous, 'batch-download': false }));
     }
@@ -465,7 +471,7 @@ export default function useDocumentBrowserPage() {
           });
         }
       } catch (requestError) {
-        setError(requestError?.message || (operation === 'move' ? TEXT.moveFail : TEXT.copyFail));
+        setError(normalizeDisplayError(requestError?.message, operation === 'move' ? TEXT.moveFail : TEXT.copyFail));
       } finally {
         setActionLoading((previous) => ({ ...previous, [`${docId}-${operation}`]: false }));
       }
@@ -514,7 +520,7 @@ export default function useDocumentBrowserPage() {
           failedItems.push({
             source_dataset_name: item.source_dataset_name,
             doc_id: item.doc_id,
-            detail: requestError?.message || 'transfer_failed',
+            detail: normalizeDisplayError(requestError?.message, '传输失败'),
           });
         } finally {
           progress.processed += 1;

@@ -37,7 +37,7 @@ export default function DownloadResultList({
   onAdd,
   onDelete,
   viewText = '查看',
-  addText = '添加知识库',
+  addText = '添加到知识库',
   addingText = '添加中...',
   addedText = '已添加',
   deleteText = '删除',

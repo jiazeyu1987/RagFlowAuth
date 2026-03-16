@@ -1,6 +1,7 @@
 import React from 'react';
 
 export default function ConfigDetailPanel({
+  panelClassName,
   selected,
   detailLoading,
   detailError,
@@ -15,93 +16,41 @@ export default function ConfigDetailPanel({
   onSave,
 }) {
   return (
-    <div
-      style={{
-        background: '#ffffff',
-        border: '1px solid #e5e7eb',
-        borderRadius: '12px',
-        overflow: 'hidden',
-        boxShadow: '0 6px 18px rgba(15, 23, 42, 0.06)',
-      }}
-    >
-      <div
-        style={{
-          padding: '14px',
-          borderBottom: '1px solid #e5e7eb',
-          display: 'flex',
-          justifyContent: 'space-between',
-          gap: '10px',
-        }}
-      >
-        <div style={{ fontWeight: 900, color: '#111827' }}>配置详情</div>
-        <div style={{ color: '#6b7280', fontWeight: 700 }}>{selected?.name || ''}</div>
+    <section className={panelClassName}>
+      <div className="admin-med-panel__head">
+        <div className="admin-med-head">
+          <div style={{ fontWeight: 700, color: '#163f63' }}>配置详情</div>
+          <div className="admin-med-inline-note">{selected?.name || '未选择'}</div>
+        </div>
       </div>
 
-      <div style={{ padding: '14px' }}>
-        {detailLoading ? <div style={{ color: '#6b7280' }}>加载中...</div> : null}
-        {detailError ? (
-          <div style={{ color: '#b91c1c', fontWeight: 800 }}>{detailError}</div>
-        ) : null}
-        {!selected && !detailLoading ? <div style={{ color: '#6b7280' }}>未选择配置</div> : null}
+      <div className="admin-med-panel__body">
+        {detailLoading ? <div className="medui-empty" style={{ paddingTop: 4 }}>加载中...</div> : null}
+        {detailError ? <div className="admin-med-danger">{detailError}</div> : null}
+        {!selected && !detailLoading ? <div className="medui-empty">请先选择左侧配置项</div> : null}
 
         {selected ? (
-          <div>
-            <div style={{ fontWeight: 900, color: '#111827', marginTop: '8px' }}>名称</div>
-            <input
-              value={nameText}
-              disabled={!isAdmin}
-              onChange={(event) => onChangeName(event.target.value)}
-              placeholder="配置名称"
-              style={{
-                width: '100%',
-                padding: '10px 12px',
-                borderRadius: '12px',
-                border: '1px solid #e5e7eb',
-                outline: 'none',
-                fontWeight: 700,
-                marginTop: '8px',
-                background: !isAdmin ? '#f9fafb' : '#ffffff',
-              }}
-            />
+          <>
+            <div className="admin-med-form-grid admin-med-form-grid--2">
+              <div style={{ fontWeight: 700, color: '#17324d' }}>配置名称</div>
+              <input
+                value={nameText}
+                disabled={!isAdmin}
+                onChange={(event) => onChangeName(event.target.value)}
+                placeholder="请输入配置名称"
+                className="medui-input"
+                style={{ background: !isAdmin ? '#f5f9fd' : '#fff' }}
+              />
+            </div>
 
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                marginTop: '14px',
-              }}
-            >
-              <div style={{ fontWeight: 900, color: '#111827' }}>原始 JSON</div>
-              <div style={{ display: 'flex', gap: '10px' }}>
-                <button
-                  onClick={onReset}
-                  disabled={busy}
-                  style={{
-                    padding: '10px 14px',
-                    borderRadius: '12px',
-                    border: '1px solid #e5e7eb',
-                    background: '#ffffff',
-                    cursor: busy ? 'not-allowed' : 'pointer',
-                    fontWeight: 900,
-                  }}
-                >
+            <div className="admin-med-head" style={{ marginTop: 14 }}>
+              <div style={{ fontWeight: 700, color: '#17324d' }}>配置 JSON</div>
+              <div className="admin-med-actions">
+                <button type="button" onClick={onReset} disabled={busy} className="medui-btn medui-btn--neutral">
                   重置
                 </button>
                 {isAdmin ? (
-                  <button
-                    onClick={onSave}
-                    disabled={busy}
-                    style={{
-                      padding: '10px 14px',
-                      borderRadius: '12px',
-                      border: '1px solid #1d4ed8',
-                      background: busy ? '#93c5fd' : '#2563eb',
-                      color: '#ffffff',
-                      cursor: busy ? 'not-allowed' : 'pointer',
-                      fontWeight: 900,
-                    }}
-                  >
+                  <button type="button" onClick={onSave} disabled={busy} className="medui-btn medui-btn--primary">
                     保存
                   </button>
                 ) : null}
@@ -113,29 +62,14 @@ export default function ConfigDetailPanel({
               disabled={!isAdmin}
               onChange={(event) => onChangeJson(event.target.value)}
               spellCheck={false}
-              style={{
-                width: '100%',
-                minHeight: '360px',
-                marginTop: '10px',
-                borderRadius: '12px',
-                border: '1px solid #e5e7eb',
-                padding: '12px',
-                fontFamily:
-                  'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
-                fontSize: '12px',
-                outline: 'none',
-                background: !isAdmin ? '#f9fafb' : '#ffffff',
-              }}
+              className="medui-textarea admin-med-code"
+              style={{ minHeight: 360, marginTop: 10, background: !isAdmin ? '#f5f9fd' : '#fff' }}
             />
 
-            {saveStatus ? (
-              <div style={{ marginTop: '10px', color: '#065f46', fontWeight: 800 }}>
-                {saveStatus}
-              </div>
-            ) : null}
-          </div>
+            {saveStatus ? <div className="admin-med-success" style={{ marginTop: 10 }}>{saveStatus}</div> : null}
+          </>
         ) : null}
       </div>
-    </div>
+    </section>
   );
 }

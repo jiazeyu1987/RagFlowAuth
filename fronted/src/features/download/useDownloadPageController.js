@@ -7,6 +7,19 @@ import {
 import useDownloadHistory from './useDownloadHistory';
 import useDownloadSessionPolling from './useDownloadSessionPolling';
 
+function normalizeDisplayError(message, fallback) {
+  const text = String(message || '').trim();
+  if (!text) return fallback;
+  return /[\u4e00-\u9fff]/.test(text) ? text : fallback;
+}
+
+function normalizeErrorMap(errorMap) {
+  if (!errorMap || typeof errorMap !== 'object') return {};
+  return Object.fromEntries(
+    Object.entries(errorMap).map(([key, value]) => [key, normalizeDisplayError(value, '处理失败')])
+  );
+}
+
 export default function useDownloadPageController({
   manager,
   storageKey,
@@ -52,7 +65,7 @@ export default function useDownloadPageController({
       stopRequestedInfo: '已请求停止，正在等待当前条目处理完成。',
       stopFailed: '停止下载失败',
       progressFailed: '加载下载进度失败',
-      noResultsError: '已配置来源中没有可下载结果。',
+      noResultsError: '已配置的来源中没有可下载结果。',
       noDownloadedError: '已找到结果，但全部下载失败，请检查来源错误。',
       completedInfo: (downloaded, total) => `下载完成：${downloaded} / ${total}`,
       stoppedInfo: (downloaded, total) => `下载已停止：${downloaded} / ${total}`,
@@ -171,7 +184,7 @@ export default function useDownloadPageController({
       if (!id) return null;
       const data = await manager.getSession(id);
       setSessionPayload(data);
-      setSourceErrors(data?.source_errors || {});
+      setSourceErrors(normalizeErrorMap(data?.source_errors));
       setSourceStats(data?.source_stats || {});
       return data;
     },
@@ -224,12 +237,12 @@ export default function useDownloadPageController({
       }
 
       if (status === 'failed') {
-        setError(data?.session?.error || msg.taskFailed);
+        setError(normalizeDisplayError(data?.session?.error, msg.taskFailed));
         setInfo('');
       }
     },
     onSessionError: (pollError) => {
-      setError(pollError?.message || msg.progressFailed);
+      setError(normalizeDisplayError(pollError?.message, msg.progressFailed));
     },
   });
 
@@ -255,7 +268,7 @@ export default function useDownloadPageController({
       setInfo(msg.startedInfo);
       loadHistoryKeywords();
     } catch (runError) {
-      setError(runError?.message || msg.downloadFailed);
+      setError(normalizeDisplayError(runError?.message, msg.downloadFailed));
       setSessionPayload(null);
       setSourceErrors({});
       setSourceStats({});
@@ -282,7 +295,7 @@ export default function useDownloadPageController({
       setInfo(response?.status === 'stopped' ? msg.stopDoneInfo : msg.stopRequestedInfo);
       await refreshSession(sessionId);
     } catch (stopError) {
-      setError(stopError?.message || msg.stopFailed);
+      setError(normalizeDisplayError(stopError?.message, msg.stopFailed));
     } finally {
       setStopping(false);
     }
@@ -320,7 +333,7 @@ export default function useDownloadPageController({
         await loadHistoryItems();
         setInfo(msg.addItemInfo);
       } catch (addError) {
-        setError(addError?.message || msg.addItemFailed);
+        setError(normalizeDisplayError(addError?.message, msg.addItemFailed));
       } finally {
         setAddingItemId(null);
       }
@@ -351,7 +364,7 @@ export default function useDownloadPageController({
         await loadHistoryItems();
         setInfo(msg.deleteItemInfo);
       } catch (deleteError) {
-        setError(deleteError?.message || msg.deleteItemFailed);
+        setError(normalizeDisplayError(deleteError?.message, msg.deleteItemFailed));
       } finally {
         setDeletingItemId(null);
       }
@@ -379,17 +392,11 @@ export default function useDownloadPageController({
       else await refreshSession(sessionId);
       setInfo(msg.addAllInfo(res));
     } catch (addAllError) {
-      setError(addAllError?.message || msg.addAllFailed);
+      setError(normalizeDisplayError(addAllError?.message, msg.addAllFailed));
     } finally {
       setAddingAll(false);
     }
-  }, [
-    localKbRef,
-    manager,
-    msg,
-    refreshSession,
-    sessionId,
-  ]);
+  }, [localKbRef, manager, msg, refreshSession, sessionId]);
 
   const removeSession = useCallback(async () => {
     if (!sessionId) return;
@@ -404,7 +411,7 @@ export default function useDownloadPageController({
       await loadHistoryKeywords();
       await loadHistoryItems();
     } catch (removeError) {
-      setError(removeError?.message || msg.deleteSessionFailed);
+      setError(normalizeDisplayError(removeError?.message, msg.deleteSessionFailed));
     } finally {
       setDeletingSession(false);
     }
@@ -435,7 +442,7 @@ export default function useDownloadPageController({
         else clearHistoryPayload();
         if (sessionId) await refreshSession(sessionId);
       } catch (deleteError) {
-        setError(deleteError?.message || msg.deleteHistoryFailed);
+        setError(normalizeDisplayError(deleteError?.message, msg.deleteHistoryFailed));
       } finally {
         setDeletingHistoryKey('');
       }
@@ -467,7 +474,7 @@ export default function useDownloadPageController({
         if (selectedHistoryKey === key) await loadHistoryItems(key);
         if (sessionId) await refreshSession(sessionId);
       } catch (addError) {
-        setError(addError?.message || msg.addHistoryFailed);
+        setError(normalizeDisplayError(addError?.message, msg.addHistoryFailed));
       } finally {
         setAddingHistoryKey('');
       }
@@ -498,7 +505,7 @@ export default function useDownloadPageController({
       }
       setInfo(msg.refreshHistoryInfo);
     } catch (refreshError) {
-      setError(refreshError?.message || msg.refreshHistoryFailed);
+      setError(normalizeDisplayError(refreshError?.message, msg.refreshHistoryFailed));
     }
   }, [
     clearHistoryPayload,

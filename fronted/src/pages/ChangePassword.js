@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import authClient from '../api/authClient';
 import { useAuth } from '../hooks/useAuth';
+import { normalizeDisplayError } from '../shared/utils/displayError';
 
 const ChangePassword = () => {
   const { user } = useAuth();
@@ -33,111 +34,69 @@ const ChangePassword = () => {
       setNewPassword('');
       setConfirmPassword('');
     } catch (err) {
-      setError(err.message || '修改密码失败');
+      setError(normalizeDisplayError(err?.message ?? err, '修改密码失败'));
     } finally {
       setSubmitting(false);
     }
   };
 
   return (
-    <div style={{ maxWidth: 520 }}>
-      <div style={{ marginBottom: 16 }}>
-        <h2 style={{ margin: 0 }}>修改密码</h2>
-        <div style={{ marginTop: 6, color: '#6b7280', fontSize: '0.9rem' }}>
-          当前用户：{user?.username || '-'}
-        </div>
-      </div>
+    <div className="admin-med-page" style={{ maxWidth: 620 }}>
+      <section className="medui-surface medui-card-pad">
+        <h2 className="admin-med-title" style={{ margin: 0 }}>修改密码</h2>
+        <div className="admin-med-inline-note" style={{ marginTop: 6 }}>当前用户：{user?.username || '-'}</div>
+      </section>
 
-      <div style={{
-        backgroundColor: 'white',
-        borderRadius: 8,
-        boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
-        padding: 16,
-      }}>
-        <form onSubmit={handleSubmit}>
-          <div style={{ marginBottom: 12 }}>
-            <label style={{ display: 'block', marginBottom: 6 }}>旧密码</label>
+      <section className="medui-surface medui-card-pad">
+        <form onSubmit={handleSubmit} className="admin-med-grid" style={{ gap: 12 }}>
+          <label>
+            <div className="admin-med-small" style={{ marginBottom: 6, fontWeight: 700 }}>旧密码</div>
             <input
               type="password"
               value={oldPassword}
               autoComplete="current-password"
               onChange={(e) => setOldPassword(e.target.value)}
               data-testid="change-password-old"
-              style={{
-                width: '100%',
-                padding: '10px 12px',
-                border: '1px solid #d1d5db',
-                borderRadius: 6,
-              }}
+              className="medui-input"
             />
-          </div>
+          </label>
 
-          <div style={{ marginBottom: 12 }}>
-            <label style={{ display: 'block', marginBottom: 6 }}>新密码</label>
+          <label>
+            <div className="admin-med-small" style={{ marginBottom: 6, fontWeight: 700 }}>新密码</div>
             <input
               type="password"
               value={newPassword}
               autoComplete="new-password"
               onChange={(e) => setNewPassword(e.target.value)}
               data-testid="change-password-new"
-              style={{
-                width: '100%',
-                padding: '10px 12px',
-                border: '1px solid #d1d5db',
-                borderRadius: 6,
-              }}
+              className="medui-input"
             />
-          </div>
+          </label>
 
-          <div style={{ marginBottom: 12 }}>
-            <label style={{ display: 'block', marginBottom: 6 }}>确认新密码</label>
+          <label>
+            <div className="admin-med-small" style={{ marginBottom: 6, fontWeight: 700 }}>确认新密码</div>
             <input
               type="password"
               value={confirmPassword}
               autoComplete="new-password"
               onChange={(e) => setConfirmPassword(e.target.value)}
               data-testid="change-password-confirm"
-              style={{
-                width: '100%',
-                padding: '10px 12px',
-                border: '1px solid #d1d5db',
-                borderRadius: 6,
-              }}
+              className="medui-input"
             />
+          </label>
+
+          {error ? <div data-testid="change-password-error" className="admin-med-danger">{error}</div> : null}
+          {message ? <div data-testid="change-password-success" className="admin-med-success">{message}</div> : null}
+
+          <div className="admin-med-actions">
+            <button type="submit" disabled={submitting} data-testid="change-password-submit" className="medui-btn medui-btn--primary">
+              {submitting ? '提交中...' : '确认修改'}
+            </button>
           </div>
-
-          {error && (
-            <div style={{ marginBottom: 12, color: '#ef4444' }} data-testid="change-password-error">
-              {error}
-            </div>
-          )}
-          {message && (
-            <div style={{ marginBottom: 12, color: '#10b981' }} data-testid="change-password-success">
-              {message}
-            </div>
-          )}
-
-          <button
-            type="submit"
-            disabled={submitting}
-            data-testid="change-password-submit"
-            style={{
-              width: '100%',
-              padding: '10px 14px',
-              backgroundColor: submitting ? '#93c5fd' : '#3b82f6',
-              color: 'white',
-              border: 'none',
-              borderRadius: 6,
-              cursor: submitting ? 'not-allowed' : 'pointer',
-            }}
-          >
-            {submitting ? '提交中...' : '修改密码'}
-          </button>
         </form>
-      </div>
+      </section>
     </div>
   );
 };
 
 export default ChangePassword;
-

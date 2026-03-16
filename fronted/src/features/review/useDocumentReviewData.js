@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { knowledgeApi } from '../knowledge/api';
 import { loadPendingReviewDocuments, loadReviewDatasets } from './documentReviewUtils';
+import { normalizeDisplayError } from '../../shared/utils/displayError';
 
 export function useDocumentReviewData(setError) {
   const [documents, setDocuments] = useState([]);
@@ -40,7 +41,7 @@ export function useDocumentReviewData(setError) {
       const nextDocuments = await loadPendingReviewDocuments(knowledgeApi, selectedDataset);
       setDocuments(nextDocuments);
     } catch (err) {
-      setError(err.message);
+      setError(normalizeDisplayError(err?.message ?? err, '?????????'));
     } finally {
       setLoading(false);
     }

@@ -3,6 +3,12 @@ import { permissionGroupsApi } from '../api';
 import { HIDDEN_CHAT_NAMES, emptyForm, ROOT } from './constants';
 import { buildFolderIndexes, normalizeGroups, pathFolders, toggleInArray } from './utils';
 
+function normalizeDisplayError(message, fallback) {
+  const text = String(message || '').trim();
+  if (!text) return fallback;
+  return /[\u4e00-\u9fff]/.test(text) ? text : fallback;
+}
+
 function fillFormFromGroup(group) {
   return {
     ...emptyForm,
@@ -63,20 +69,10 @@ export default function usePermissionGroupManagement() {
   const contentRows = useMemo(() => {
     const rows = [];
     (folderIndexes.childrenByParent.get(currentFolderId) || []).forEach((folder) => {
-      rows.push({
-        kind: 'folder',
-        id: folder.id,
-        name: folder.name || '(未命名目录)',
-        type: '目录',
-      });
+      rows.push({ kind: 'folder', id: folder.id, name: folder.name || '(未命名目录)', type: '目录' });
     });
     groupsInCurrentFolder.forEach((group) => {
-      rows.push({
-        kind: 'group',
-        id: group.group_id,
-        name: group.group_name || '(未命名权限组)',
-        type: '权限组',
-      });
+      rows.push({ kind: 'group', id: group.group_id, name: group.group_name || '(未命名权限组)', type: '权限组' });
     });
     return rows;
   }, [currentFolderId, folderIndexes.childrenByParent, groupsInCurrentFolder]);
@@ -109,35 +105,27 @@ export default function usePermissionGroupManagement() {
     () =>
       (knowledgeTree?.datasets || []).map((dataset) => ({
         id: dataset.id,
-        name: `${dataset.name || '(未命名知识库)'}${
-          dataset.node_path && dataset.node_path !== '/' ? ` (${dataset.node_path})` : ''
-        }`,
+        name: `${dataset.name || '(未命名知识库)'}${dataset.node_path && dataset.node_path !== '/' ? ` (${dataset.node_path})` : ''}`,
       })),
     [knowledgeTree?.datasets]
   );
 
-  const ensureFolderExpanded = useCallback(
-    (folderId) => {
-      if (!folderId) return;
-      const ids = pathFolders(folderId, folderIndexes.byId).map((folder) => folder.id);
-      setExpandedFolderIds((previous) => {
-        const next = new Set(previous);
-        ids.forEach((id) => next.add(id));
-        return Array.from(next);
-      });
-    },
-    [folderIndexes.byId]
-  );
+  const ensureFolderExpanded = useCallback((folderId) => {
+    if (!folderId) return;
+    const ids = pathFolders(folderId, folderIndexes.byId).map((folder) => folder.id);
+    setExpandedFolderIds((previous) => {
+      const next = new Set(previous);
+      ids.forEach((id) => next.add(id));
+      return Array.from(next);
+    });
+  }, [folderIndexes.byId]);
 
-  const openFolder = useCallback(
-    (folderId) => {
-      const next = folderId || ROOT;
-      setCurrentFolderId(next);
-      setSelectedFolderId(next);
-      if (next) ensureFolderExpanded(next);
-    },
-    [ensureFolderExpanded]
-  );
+  const openFolder = useCallback((folderId) => {
+    const next = folderId || ROOT;
+    setCurrentFolderId(next);
+    setSelectedFolderId(next);
+    if (next) ensureFolderExpanded(next);
+  }, [ensureFolderExpanded]);
 
   const startCreateGroup = useCallback(() => {
     setMode('create');
@@ -158,23 +146,12 @@ export default function usePermissionGroupManagement() {
     try {
       const groupsRes = await permissionGroupsApi.list();
       const [folderRes, knowledgeRes, chatsRes] = await Promise.all([
-        permissionGroupsApi
-          .listGroupFolders()
-          .catch(() => ({ data: { folders: [], group_bindings: {}, root_group_count: 0 } })),
-        permissionGroupsApi
-          .listKnowledgeTree()
-          .catch(() => ({ data: { nodes: [], datasets: [] } })),
+        permissionGroupsApi.listGroupFolders().catch(() => ({ data: { folders: [], group_bindings: {}, root_group_count: 0 } })),
+        permissionGroupsApi.listKnowledgeTree().catch(() => ({ data: { nodes: [], datasets: [] } })),
         permissionGroupsApi.listChats().catch(() => ({ data: [] })),
       ]);
-      const folderData = folderRes?.data || {
-        folders: [],
-        group_bindings: {},
-        root_group_count: 0,
-      };
-      const normalizedGroups = normalizeGroups(
-        groupsRes?.data || [],
-        folderData.group_bindings || {}
-      );
+      const folderData = folderRes?.data || { folders: [], group_bindings: {}, root_group_count: 0 };
+      const normalizedGroups = normalizeGroups(groupsRes?.data || [], folderData.group_bindings || {});
       const visibleChats = (chatsRes?.data || []).filter((chat) => {
         const rawName = String(chat?.name || '').trim();
         const normalized = rawName.replace(/^\[|\]$/g, '').trim();
@@ -186,7 +163,7 @@ export default function usePermissionGroupManagement() {
       setChatAgents(visibleChats);
       return normalizedGroups;
     } catch (requestError) {
-      setError(requestError?.message || '加载权限组失败');
+      setError(normalizeDisplayError(requestError?.message, '加载权限组失败'));
       return [];
     } finally {
       setLoading(false);
@@ -200,40 +177,36 @@ export default function usePermissionGroupManagement() {
     });
   }, [fetchAll, startCreateGroup, startEditGroup]);
 
-  const saveForm = useCallback(
-    async (event) => {
-      event.preventDefault();
-      setSaving(true);
-      setError('');
-      setHint('');
-      try {
-        if (mode === 'create') {
-          const response = await permissionGroupsApi.create(formData);
-          const newId = response?.data?.group_id;
-          const nextGroups = await fetchAll();
-          const created = nextGroups.find((group) => group.group_id === newId) || null;
-          if (created) {
-            startEditGroup(created);
-            setHint('权限组已创建');
-          }
-        } else if (mode === 'edit' && editingGroupId != null) {
-          await permissionGroupsApi.update(editingGroupId, formData);
-          const nextGroups = await fetchAll();
-          const updated =
-            nextGroups.find((group) => group.group_id === editingGroupId) || null;
-          if (updated) {
-            startEditGroup(updated);
-            setHint('权限组已保存');
-          }
+  const saveForm = useCallback(async (event) => {
+    event.preventDefault();
+    setSaving(true);
+    setError('');
+    setHint('');
+    try {
+      if (mode === 'create') {
+        const response = await permissionGroupsApi.create(formData);
+        const newId = response?.data?.group_id;
+        const nextGroups = await fetchAll();
+        const created = nextGroups.find((group) => group.group_id === newId) || null;
+        if (created) {
+          startEditGroup(created);
+          setHint('权限组已创建');
         }
-      } catch (saveError) {
-        setError(saveError?.message || '保存权限组失败');
-      } finally {
-        setSaving(false);
+      } else if (mode === 'edit' && editingGroupId != null) {
+        await permissionGroupsApi.update(editingGroupId, formData);
+        const nextGroups = await fetchAll();
+        const updated = nextGroups.find((group) => group.group_id === editingGroupId) || null;
+        if (updated) {
+          startEditGroup(updated);
+          setHint('权限组已保存');
+        }
       }
-    },
-    [editingGroupId, fetchAll, formData, mode, startEditGroup]
-  );
+    } catch (saveError) {
+      setError(normalizeDisplayError(saveError?.message, '保存权限组失败'));
+    } finally {
+      setSaving(false);
+    }
+  }, [editingGroupId, fetchAll, formData, mode, startEditGroup]);
 
   const cancelEdit = useCallback(() => {
     if (mode === 'edit' && editingGroup) {
@@ -243,26 +216,23 @@ export default function usePermissionGroupManagement() {
     startCreateGroup();
   }, [editingGroup, mode, startCreateGroup]);
 
-  const removeGroup = useCallback(
-    async (group) => {
-      if (!group?.group_id) return;
-      if (!window.confirm(`确定删除权限组“${group.group_name}”吗？`)) return;
-      setError('');
-      setHint('');
-      try {
-        await permissionGroupsApi.remove(group.group_id);
-        const nextGroups = await fetchAll();
-        if (editingGroupId === group.group_id) {
-          if (nextGroups.length) startEditGroup(nextGroups[0]);
-          else startCreateGroup();
-        }
-        setHint('权限组已删除');
-      } catch (removeError) {
-        setError(removeError?.message || '删除权限组失败');
+  const removeGroup = useCallback(async (group) => {
+    if (!group?.group_id) return;
+    if (!window.confirm(`确定删除权限组“${group.group_name}”吗？`)) return;
+    setError('');
+    setHint('');
+    try {
+      await permissionGroupsApi.remove(group.group_id);
+      const nextGroups = await fetchAll();
+      if (editingGroupId === group.group_id) {
+        if (nextGroups.length) startEditGroup(nextGroups[0]);
+        else startCreateGroup();
       }
-    },
-    [editingGroupId, fetchAll, startCreateGroup, startEditGroup]
-  );
+      setHint('权限组已删除');
+    } catch (removeError) {
+      setError(normalizeDisplayError(removeError?.message, '删除权限组失败'));
+    }
+  }, [editingGroupId, fetchAll, startCreateGroup, startEditGroup]);
 
   const createFolder = useCallback(async () => {
     const name = window.prompt('请输入目录名称');
@@ -282,7 +252,7 @@ export default function usePermissionGroupManagement() {
       }
       setHint('目录已创建');
     } catch (createError) {
-      setError(createError?.message || '创建目录失败');
+      setError(normalizeDisplayError(createError?.message, '创建目录失败'));
     }
   }, [currentFolderId, fetchAll, openFolder]);
 
@@ -300,7 +270,7 @@ export default function usePermissionGroupManagement() {
       ensureFolderExpanded(targetId);
       setHint('目录已重命名');
     } catch (renameError) {
-      setError(renameError?.message || '重命名目录失败');
+      setError(normalizeDisplayError(renameError?.message, '重命名目录失败'));
     }
   }, [ensureFolderExpanded, fetchAll, folderIndexes.byId, selectedFolderId]);
 
@@ -308,11 +278,7 @@ export default function usePermissionGroupManagement() {
     const targetId = selectedFolderId || ROOT;
     if (!targetId || targetId === ROOT) return;
     const folder = folderIndexes.byId.get(targetId);
-    if (
-      !window.confirm(
-        `确定删除目录“${folder?.name || targetId}”吗？\n请先确保目录为空。`
-      )
-    ) {
+    if (!window.confirm(`确定删除目录“${folder?.name || targetId}”吗？\n请先确保目录为空。`)) {
       return;
     }
     setError('');
@@ -325,7 +291,7 @@ export default function usePermissionGroupManagement() {
       await fetchAll();
       setHint('目录已删除');
     } catch (deleteError) {
-      setError(deleteError?.message || '删除目录失败');
+      setError(normalizeDisplayError(deleteError?.message, '删除目录失败'));
     }
   }, [fetchAll, folderIndexes.byId, openFolder, selectedFolderId]);
 
@@ -350,59 +316,47 @@ export default function usePermissionGroupManagement() {
     }));
   }, []);
 
-  const moveGroupToFolder = useCallback(
-    async (groupId, folderId) => {
-      if (!groupId) return;
-      setError('');
-      setHint('');
-      try {
-        await permissionGroupsApi.update(groupId, { folder_id: folderId || null });
-        const nextGroups = await fetchAll();
-        const moved = nextGroups.find((group) => group.group_id === groupId);
-        if (editingGroupId === groupId && moved) {
-          setFormData((previous) => ({ ...previous, folder_id: moved.folder_id || null }));
-        }
-        setHint('权限组已移动');
-      } catch (moveError) {
-        setError(moveError?.message || '移动权限组失败');
+  const moveGroupToFolder = useCallback(async (groupId, folderId) => {
+    if (!groupId) return;
+    setError('');
+    setHint('');
+    try {
+      await permissionGroupsApi.update(groupId, { folder_id: folderId || null });
+      const nextGroups = await fetchAll();
+      const moved = nextGroups.find((group) => group.group_id === groupId);
+      if (editingGroupId === groupId && moved) {
+        setFormData((previous) => ({ ...previous, folder_id: moved.folder_id || null }));
       }
-    },
-    [editingGroupId, fetchAll]
-  );
+      setHint('权限组已移动');
+    } catch (moveError) {
+      setError(normalizeDisplayError(moveError?.message, '移动权限组失败'));
+    }
+  }, [editingGroupId, fetchAll]);
 
-  const onDragOverFolder = useCallback(
-    (event, folderId) => {
-      if (!dragGroupId) return;
-      event.preventDefault();
-      if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
-      setDropTargetFolderId(folderId);
-    },
-    [dragGroupId]
-  );
+  const onDragOverFolder = useCallback((event, folderId) => {
+    if (!dragGroupId) return;
+    event.preventDefault();
+    if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
+    setDropTargetFolderId(folderId);
+  }, [dragGroupId]);
 
-  const onDragLeaveFolder = useCallback(
-    (event, folderId) => {
-      if (!dragGroupId) return;
-      const related = event.relatedTarget;
-      if (related && event.currentTarget.contains(related)) return;
-      if (dropTargetFolderId === folderId) setDropTargetFolderId(null);
-    },
-    [dragGroupId, dropTargetFolderId]
-  );
+  const onDragLeaveFolder = useCallback((event, folderId) => {
+    if (!dragGroupId) return;
+    const related = event.relatedTarget;
+    if (related && event.currentTarget.contains(related)) return;
+    if (dropTargetFolderId === folderId) setDropTargetFolderId(null);
+  }, [dragGroupId, dropTargetFolderId]);
 
-  const onDropFolder = useCallback(
-    async (event, folderId) => {
-      if (!dragGroupId) return;
-      event.preventDefault();
-      const raw = event.dataTransfer?.getData('application/x-pg-group-id');
-      const droppedId = Number(raw || dragGroupId);
-      setDropTargetFolderId(null);
-      setDragGroupId(null);
-      if (!Number.isFinite(droppedId)) return;
-      await moveGroupToFolder(droppedId, folderId);
-    },
-    [dragGroupId, moveGroupToFolder]
-  );
+  const onDropFolder = useCallback(async (event, folderId) => {
+    if (!dragGroupId) return;
+    event.preventDefault();
+    const raw = event.dataTransfer?.getData('application/x-pg-group-id');
+    const droppedId = Number(raw || dragGroupId);
+    setDropTargetFolderId(null);
+    setDragGroupId(null);
+    if (!Number.isFinite(droppedId)) return;
+    await moveGroupToFolder(droppedId, folderId);
+  }, [dragGroupId, moveGroupToFolder]);
 
   const startGroupDrag = useCallback((event, groupId) => {
     event.dataTransfer.setData('application/x-pg-group-id', String(groupId));

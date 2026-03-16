@@ -115,7 +115,7 @@ export default function UploadExtensionsPanel({
             </button>
           </div>
           <div style={{ marginTop: 10, fontSize: '0.85rem', color: '#6b7280' }}>
-            admin 可在这里新增、删除并保存允许上传的文件后缀。修改后会影响后续上传校验。
+            管理员可在这里新增、删除并保存允许上传的文件后缀。修改后会影响后续上传校验。
           </div>
         </div>
       ) : null}

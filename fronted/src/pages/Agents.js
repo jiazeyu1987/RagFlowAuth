@@ -5,10 +5,12 @@ import { agentsApi } from '../features/agents/api';
 import { ensureTablePreviewStyles } from '../shared/preview/tablePreviewStyles';
 import { useEscapeClose } from '../shared/hooks/useEscapeClose';
 import { DocumentPreviewModal } from '../shared/documents/preview/DocumentPreviewModal';
+import { normalizeDisplayError } from '../shared/utils/displayError';
 import AgentsDatasetSidebar from '../features/agents/components/AgentsDatasetSidebar';
 import AgentsSearchControls from '../features/agents/components/AgentsSearchControls';
 import AgentsSearchResults from '../features/agents/components/AgentsSearchResults';
 import useSearchHistory from '../features/agents/hooks/useSearchHistory';
+import '../features/agents/agentsMedical.css';
 
 const SEARCH_HISTORY_LIMIT = 10;
 
@@ -89,7 +91,7 @@ const Agents = () => {
         setSelectedDatasetIds(rows.map((item) => item.id));
       }
     } catch (err) {
-      setError(err?.message || '加载知识库失败');
+      setError(normalizeDisplayError(err?.message ?? err, '加载知识库失败'));
     } finally {
       setLoading(false);
     }
@@ -105,7 +107,7 @@ const Agents = () => {
       const nextPage = Number.isInteger(pageOverride) && pageOverride > 0 ? pageOverride : page;
 
       if (!query) {
-        setError('请输入搜索关键词');
+        setError('请输入检索关键词');
         return;
       }
       if (!selectedDatasetIds.length) {
@@ -148,7 +150,7 @@ const Agents = () => {
         pushSearchHistory(query);
         setSearchResults(normalized);
       } catch (err) {
-        setError(err?.message || '搜索失败');
+        setError(normalizeDisplayError(err?.message ?? err, '检索失败'));
       } finally {
         setLoading(false);
       }
@@ -205,7 +207,7 @@ const Agents = () => {
       try {
         setError(null);
         const dataset = datasets.find((item) => item.id === datasetId);
-        const datasetName = dataset ? dataset.name || dataset.id : '展厅';
+        const datasetName = dataset ? dataset.name || dataset.id : '知识库';
         await documentClient.downloadToBrowser({
           source: DOCUMENT_SOURCE.RAGFLOW,
           docId,
@@ -213,7 +215,7 @@ const Agents = () => {
           filename: docName,
         });
       } catch (err) {
-        setError(`下载文档失败: ${err?.message || '未知错误'}`);
+        setError(`下载文档失败：${normalizeDisplayError(err?.message ?? err, '请稍后重试')}`);
       }
     },
     [datasets]
@@ -233,14 +235,14 @@ const Agents = () => {
         });
         setPreviewOpen(true);
       } catch (err) {
-        setError(`预览文档失败: ${err?.message || '未知错误'}`);
+        setError(`预览文档失败：${normalizeDisplayError(err?.message ?? err, '请稍后重试')}`);
       }
     },
     [datasets]
   );
 
   return (
-    <div style={{ height: 'calc(100vh - 120px)', display: 'flex', gap: '16px' }}>
+    <div className="agents-med-page">
       <AgentsDatasetSidebar
         datasets={datasets}
         selectedDatasetIds={selectedDatasetIds}
@@ -249,17 +251,7 @@ const Agents = () => {
         onClearSelection={clearDatasetSelection}
       />
 
-      <div
-        style={{
-          flex: 1,
-          backgroundColor: 'white',
-          borderRadius: '8px',
-          boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
-          display: 'flex',
-          flexDirection: 'column',
-          overflow: 'hidden',
-        }}
-      >
+      <div className="medui-surface agents-med-panel">
         <AgentsSearchControls
           searchQuery={searchQuery}
           onSearchQueryChange={setSearchQuery}
@@ -295,28 +287,10 @@ const Agents = () => {
       </div>
 
       {error ? (
-        <div
-          data-testid="agents-error"
-          style={{
-            position: 'fixed',
-            bottom: '20px',
-            right: '20px',
-            backgroundColor: '#fee2e2',
-            color: '#991b1b',
-            padding: '12px 16px',
-            borderRadius: '4px',
-            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
-            zIndex: 1000,
-            maxWidth: '400px',
-          }}
-        >
+        <div data-testid="agents-error" className="medui-toast">
           {error}
-          <button
-            type="button"
-            onClick={() => setError(null)}
-            style={{ marginLeft: '12px', background: 'none', border: 'none', color: '#991b1b', cursor: 'pointer' }}
-          >
-            ×
+          <button type="button" onClick={() => setError(null)} className="medui-toast__close">
+            关闭
           </button>
         </div>
       ) : null}

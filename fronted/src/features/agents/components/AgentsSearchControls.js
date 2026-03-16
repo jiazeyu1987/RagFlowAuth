@@ -29,116 +29,59 @@ export default function AgentsSearchControls({
   );
 
   return (
-    <div
-      style={{
-        padding: '16px',
-        borderBottom: '1px solid #e5e7eb',
-        backgroundColor: '#f9fafb',
-      }}
-    >
-      <div style={{ marginBottom: '12px' }}>
+    <div className="agents-med-control">
+      <div style={{ marginBottom: 12 }}>
         <input
           type="text"
           data-testid="agents-search-input"
           value={searchQuery}
           onChange={(event) => onSearchQueryChange && onSearchQueryChange(event.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="输入搜索关键词或问题..."
+          placeholder="输入检索关键词或问题"
           disabled={loading}
-          style={{
-            width: '100%',
-            padding: '10px 12px',
-            border: '1px solid #d1d5db',
-            borderRadius: '4px',
-            fontSize: '0.875rem',
-            boxSizing: 'border-box',
-          }}
+          className="medui-input"
         />
       </div>
 
-      <div style={{ marginBottom: '12px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', marginBottom: '8px' }}>
-          <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#4b5563' }}>最近搜索</span>
+      <div style={{ marginBottom: 12 }}>
+        <div className="medui-header-row" style={{ marginBottom: 8 }}>
+          <span className="medui-subtitle" style={{ fontWeight: 700 }}>
+            最近检索
+          </span>
           <button
             type="button"
             onClick={onClearHistory}
             disabled={!searchHistory?.length}
-            style={{
-              border: 'none',
-              background: 'transparent',
-              color: !searchHistory?.length ? '#9ca3af' : '#2563eb',
-              cursor: !searchHistory?.length ? 'not-allowed' : 'pointer',
-              fontSize: '0.8rem',
-              padding: 0,
-            }}
+            className="medui-btn medui-btn--neutral"
+            style={{ height: 30, padding: '0 10px', fontSize: '0.8rem' }}
           >
             清空
           </button>
         </div>
 
         {searchHistory?.length ? (
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+          <div className="agents-med-history">
             {searchHistory.map((item) => (
-              <div
-                key={item}
-                style={{
-                  borderRadius: '999px',
-                  border: '1px solid #bfdbfe',
-                  background: '#eff6ff',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  overflow: 'hidden',
-                }}
-              >
-                <button
-                  type="button"
-                  onClick={() => onHistorySearch && onHistorySearch(item)}
-                  style={{
-                    padding: '6px 10px',
-                    border: 'none',
-                    background: 'transparent',
-                    color: '#1d4ed8',
-                    fontSize: '0.8rem',
-                    cursor: 'pointer',
-                  }}
-                  title={`搜索: ${item}`}
-                >
+              <div key={item} className="agents-med-history-item">
+                <button type="button" onClick={() => onHistorySearch && onHistorySearch(item)} title={`搜索: ${item}`}>
                   {item}
                 </button>
-                <button
-                  type="button"
-                  onClick={() => onRemoveHistoryItem && onRemoveHistoryItem(item)}
-                  style={{
-                    border: 'none',
-                    borderLeft: '1px solid #bfdbfe',
-                    background: 'transparent',
-                    color: '#6b7280',
-                    fontSize: '0.8rem',
-                    cursor: 'pointer',
-                    padding: '6px 8px',
-                  }}
-                  title={`删除历史: ${item}`}
-                >
-                  ×
+                <button type="button" onClick={() => onRemoveHistoryItem && onRemoveHistoryItem(item)} title={`删除历史: ${item}`}>
+                  删
                 </button>
               </div>
             ))}
           </div>
         ) : (
-          <div style={{ fontSize: '0.8rem', color: '#9ca3af' }}>暂无搜索历史</div>
+          <div className="medui-muted" style={{ fontSize: '0.84rem' }}>
+            暂无检索历史
+          </div>
         )}
       </div>
 
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
-          gap: '12px',
-          marginBottom: '12px',
-        }}
-      >
+      <div className="agents-med-filters" style={{ marginBottom: 12 }}>
         <div>
-          <label style={{ fontSize: '0.75rem', color: '#6b7280', display: 'block', marginBottom: '4px' }}>
+          <label className="medui-subtitle" style={{ display: 'block', marginBottom: 4 }}>
             相似度阈值: {similarityThreshold}
           </label>
           <input
@@ -153,7 +96,7 @@ export default function AgentsSearchControls({
         </div>
 
         <div>
-          <label style={{ fontSize: '0.75rem', color: '#6b7280', display: 'block', marginBottom: '4px' }}>
+          <label className="medui-subtitle" style={{ display: 'block', marginBottom: 4 }}>
             Top-K: {topK}
           </label>
           <input
@@ -162,33 +105,27 @@ export default function AgentsSearchControls({
             max="1024"
             value={topK}
             onChange={(event) => onTopKChange && onTopKChange(parseInt(event.target.value, 10) || 30)}
-            style={{
-              width: '100%',
-              padding: '6px',
-              border: '1px solid #d1d5db',
-              borderRadius: '4px',
-              fontSize: '0.875rem',
-            }}
+            className="medui-input"
           />
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-          <label style={{ display: 'flex', alignItems: 'center', fontSize: '0.875rem', cursor: 'pointer' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 18, flexWrap: 'wrap' }}>
+          <label style={{ display: 'flex', alignItems: 'center', fontSize: '0.88rem', cursor: 'pointer' }}>
             <input
               type="checkbox"
               checked={keyword}
               onChange={(event) => onKeywordChange && onKeywordChange(event.target.checked)}
-              style={{ marginRight: '6px' }}
+              style={{ marginRight: 6 }}
             />
             关键词匹配
           </label>
 
-          <label style={{ display: 'flex', alignItems: 'center', fontSize: '0.875rem', cursor: 'pointer' }}>
+          <label style={{ display: 'flex', alignItems: 'center', fontSize: '0.88rem', cursor: 'pointer' }}>
             <input
               type="checkbox"
               checked={highlight}
               onChange={(event) => onHighlightChange && onHighlightChange(event.target.checked)}
-              style={{ marginRight: '6px' }}
+              style={{ marginRight: 6 }}
             />
             高亮匹配
           </label>
@@ -200,19 +137,10 @@ export default function AgentsSearchControls({
         data-testid="agents-search-button"
         onClick={onSearch}
         disabled={disableSearch}
-        style={{
-          width: '100%',
-          padding: '10px',
-          backgroundColor: disableSearch ? '#9ca3af' : '#3b82f6',
-          color: 'white',
-          border: 'none',
-          borderRadius: '4px',
-          cursor: disableSearch ? 'not-allowed' : 'pointer',
-          fontSize: '0.875rem',
-          fontWeight: 'bold',
-        }}
+        className="medui-btn medui-btn--primary"
+        style={{ width: '100%', height: 40 }}
       >
-        {loading ? '搜索中...' : '搜索'}
+        {loading ? '检索中...' : '开始检索'}
       </button>
     </div>
   );

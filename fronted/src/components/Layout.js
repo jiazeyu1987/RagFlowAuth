@@ -3,6 +3,17 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { useRuntimeFeatureFlags } from '../hooks/useRuntimeFeatureFlags';
 import PermissionGuard from './PermissionGuard';
+import './Layout.css';
+
+const roleLabel = (user) => {
+  if (user?.is_super_admin || String(user?.username || '').toLowerCase() === 'superadmin') return '超级管理员';
+  const role = String(user?.role || '').trim().toLowerCase();
+  if (role === 'admin') return '管理员';
+  if (role === 'reviewer') return '审核员';
+  if (role === 'operator') return '操作员';
+  if (role === 'user') return '普通用户';
+  return user?.role || '';
+};
 
 const Layout = ({ children }) => {
   const { user, logout, canUpload, canReview, isSuperAdmin } = useAuth();
@@ -17,7 +28,7 @@ const Layout = ({ children }) => {
       .filter(Boolean);
     const unique = Array.from(new Set(groups));
     if (unique.length > 0) return unique.join(' / ');
-    return user?.role || '';
+    return roleLabel(user);
   }, [user]);
 
   const canSee = (flagKey) => isSuperAdmin() || flags?.[flagKey] !== false;
@@ -34,29 +45,27 @@ const Layout = ({ children }) => {
   };
 
   const navigation = [
-    { name: '智能对话', path: '/chat', icon: '💬' },
-    { name: '全库搜索', path: '/agents', icon: '🔎' },
-    { name: '知识配置', path: '/kbs', icon: '📚' },
-    { name: '文档浏览', path: '/browser', icon: '📄' },
-    { name: '文档审核', path: '/documents', icon: '✅', show: canReview },
-    { name: '文档上传', path: '/upload', icon: '⏫', show: canUpload },
-    { name: '修改密码', path: '/change-password', icon: '🔐' },
-    { name: '实用工具', path: '/tools', icon: '🧰' },
-    { name: '用户管理', path: '/users', icon: '👤', allowedRoles: ['admin'] },
-    { name: '组织管理', path: '/org-directory', icon: '🏢', allowedRoles: ['admin'] },
-    { name: '权限分组', path: '/permission-groups', icon: '🛡️', allowedRoles: ['admin'] },
-    { name: '数据安全', path: '/data-security', icon: '🔒', allowedRoles: ['admin'] },
+    { name: '智能对话', path: '/chat' },
+    { name: '全文检索', path: '/agents' },
+    { name: '知识库配置', path: '/kbs' },
+    { name: '文档浏览', path: '/browser' },
+    { name: '文档审核', path: '/documents', show: canReview },
+    { name: '文档上传', path: '/upload', show: canUpload },
+    { name: '修改密码', path: '/change-password' },
+    { name: '实用工具', path: '/tools' },
+    { name: '用户管理', path: '/users', allowedRoles: ['admin'] },
+    { name: '组织管理', path: '/org-directory', allowedRoles: ['admin'] },
+    { name: '权限分组', path: '/permission-groups', allowedRoles: ['admin'] },
+    { name: '数据安全', path: '/data-security', allowedRoles: ['admin'] },
     {
       name: '日志审计',
       path: '/logs',
-      icon: '🧾',
       allowedRoles: ['admin'],
       show: () => canSee('page_logs_visible'),
     },
     {
       name: '功能隐藏控制',
       path: '/super-admin/features',
-      icon: '⚙️',
       allowedRoles: ['admin'],
       show: () => isSuperAdmin(),
     },
@@ -69,57 +78,69 @@ const Layout = ({ children }) => {
     '/tools/collection-workbench': '采集工作台',
     '/tools/nas-browser': 'NAS 网盘',
     '/tools/drug-admin': '药监导航',
-    '/tools/nmpa': 'NMPA',
+    '/tools/nmpa': 'NMPA 专用工具',
     '/super-admin/features': '功能隐藏控制',
   };
 
   const currentTitle =
     pageTitleOverrides[location.pathname] ||
     navigation.find((item) => item.path === location.pathname)?.name ||
-    '仪表盘';
+    '系统首页';
+
+  const currentDate = new Date().toLocaleString('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 
   return (
-    <div style={{ display: 'flex', height: '100vh' }}>
-      <aside
-        style={{
-          width: sidebarOpen ? '250px' : '60px',
-          backgroundColor: '#1f2937',
-          color: 'white',
-          transition: 'width 0.3s',
-          display: 'flex',
-          flexDirection: 'column',
-        }}
-        data-testid="layout-sidebar"
-      >
-        <div
-          style={{
-            padding: '20px',
-            borderBottom: '1px solid #374151',
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-          }}
-        >
-          <h2 style={{ margin: 0, fontSize: sidebarOpen ? '1.5rem' : '0.9rem' }}>
-            {sidebarOpen ? '知识库系统' : '知识库'}
-          </h2>
+    <div className={`med-layout ${sidebarOpen ? 'is-expanded' : 'is-collapsed'}`}>
+      <main className="med-main">
+        <header className="med-header">
+          <div className="med-header__left">
+            <h1 className="med-header__title" data-testid="layout-header-title">
+              {currentTitle}
+            </h1>
+            <p className="med-header__subtitle">{'\u7cbe\u795e\u5fc3\u7406\u9886\u57df\u6570\u636e\u5e93\u667a\u80fd\u5206\u6790\u7cfb\u7edf'}</p>
+          </div>
+          <div className="med-header__right">
+            <span className="med-header__time">{currentDate}</span>
+            <div data-testid="super-admin-credential-banner" className="med-super-admin-banner">
+              {'\u6d4b\u8bd5\u8d85\u7ea7\u7ba1\u7406\u5458\u8d26\u53f7\uff1a'}SuperAdmin / SuperAdmin
+            </div>
+          </div>
+        </header>
+
+        <div className="med-content">{children}</div>
+      </main>
+
+      <aside className="med-sidebar" data-testid="layout-sidebar">
+        <div className="med-sidebar__head">
+          <div className="med-brand">
+            <div className="med-sidebar__eyebrow">{sidebarOpen ? '\u4e3b\u63a7\u5236\u533a' : '\u63a7'}</div>
+            <h2 className="med-brand__title">{sidebarOpen ? '\u7cbe\u795e\u5fc3\u7406\u6570\u636e\u5e93' : '\u7cbe\u5fc3\u5e93'}</h2>
+            {sidebarOpen && <p className="med-brand__subtitle">{'\u4e34\u5e8a\u77e5\u8bc6\u4e0e\u667a\u80fd\u5206\u6790\u5e73\u53f0'}</p>}
+          </div>
           <button
             onClick={() => setSidebarOpen(!sidebarOpen)}
             data-testid="layout-sidebar-toggle"
-            style={{
-              background: 'none',
-              border: 'none',
-              color: 'white',
-              cursor: 'pointer',
-              fontSize: '1.2rem',
-            }}
-            aria-label="切换侧边栏"
+            className="med-sidebar__toggle"
+            aria-label="\u5207\u6362\u4fa7\u8fb9\u680f"
+            type="button"
           >
-            {sidebarOpen ? '<' : '>'}
+            {sidebarOpen ? '\u6536' : '\u5c55'}
           </button>
         </div>
 
-        <nav style={{ flex: 1, padding: '10px 0' }}>
+        {sidebarOpen && (
+          <div className="med-sidebar__hint">
+            {'\u4e34\u5e8a\u5e38\u7528\u5165\u53e3\u96c6\u4e2d\u5728\u6b64\u5904\uff0c\u53ef\u6309\u5de5\u4f5c\u6d41\u7a0b\u5feb\u901f\u5207\u6362\u3002'}
+          </div>
+        )}
+
+        <nav className="med-nav">
           {navigation.map((item) => {
             if (item.show && !item.show()) return null;
 
@@ -128,53 +149,23 @@ const Layout = ({ children }) => {
                 <Link
                   to={item.path}
                   data-testid={`nav-${item.path.replace('/', '') || 'home'}`}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: sidebarOpen ? 'flex-start' : 'center',
-                    gap: sidebarOpen ? '10px' : '0px',
-                    padding: sidebarOpen ? '12px 20px' : '12px 0px',
-                    color: isActive(item.path) ? '#60a5fa' : '#d1d5db',
-                    textDecoration: 'none',
-                    backgroundColor: isActive(item.path) ? '#374151' : 'transparent',
-                    transition: 'background-color 0.2s',
-                    whiteSpace: sidebarOpen ? 'normal' : 'nowrap',
-                    overflow: 'hidden',
-                  }}
-                  onMouseEnter={(e) => {
-                    if (!isActive(item.path)) e.currentTarget.style.backgroundColor = '#374151';
-                  }}
-                  onMouseLeave={(e) => {
-                    if (!isActive(item.path)) e.currentTarget.style.backgroundColor = 'transparent';
-                  }}
+                  className={`med-nav__link ${isActive(item.path) ? 'is-active' : ''}`}
                 >
-                  <span
-                    aria-hidden
-                    style={{
-                      width: '24px',
-                      textAlign: 'center',
-                      fontSize: sidebarOpen ? '1.05rem' : '1.1rem',
-                      lineHeight: 1.3,
-                      flexShrink: 0,
-                    }}
-                    title={item.name}
-                  >
-                    {item.icon || '-'}
-                  </span>
-                  {sidebarOpen && <span style={{ flex: 1 }}>{item.name}</span>}
+                  <span className="med-nav__icon" aria-hidden />
+                  {sidebarOpen && <span className="med-nav__label">{item.name}</span>}
                 </Link>
               </PermissionGuard>
             );
           })}
         </nav>
 
-        <div style={{ padding: '20px', borderTop: '1px solid #374151' }}>
+        <div className="med-sidebar__footer">
           {sidebarOpen && (
-            <div style={{ marginBottom: '10px', fontSize: '0.9rem' }}>
-              <div style={{ fontWeight: 'bold' }} data-testid="layout-user-name">
+            <div className="med-user-card">
+              <div className="med-user-card__name" data-testid="layout-user-name">
                 {user?.username}
               </div>
-              <div style={{ color: '#9ca3af', fontSize: '0.8rem' }} data-testid="layout-user-role">
+              <div className="med-user-card__role" data-testid="layout-user-role">
                 {permissionGroupLabel}
               </div>
             </div>
@@ -182,59 +173,13 @@ const Layout = ({ children }) => {
           <button
             onClick={handleLogout}
             data-testid="layout-logout"
-            style={{
-              width: '100%',
-              padding: '8px',
-              backgroundColor: '#ef4444',
-              color: 'white',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: 'pointer',
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = '#dc2626';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.backgroundColor = '#ef4444';
-            }}
+            className="med-logout-btn"
+            type="button"
           >
-            {sidebarOpen ? '退出' : '退'}
+            {sidebarOpen ? '\u9000\u51fa\u767b\u5f55' : '\u9000'}
           </button>
         </div>
       </aside>
-
-      <main style={{ flex: 1, overflow: 'auto', backgroundColor: '#f9fafb' }}>
-        <header
-          style={{
-            backgroundColor: 'white',
-            padding: '16px 24px',
-            borderBottom: '1px solid #e5e7eb',
-            boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)',
-          }}
-        >
-          <h1 style={{ margin: 0, fontSize: '1.5rem', color: '#111827' }} data-testid="layout-header-title">
-            {currentTitle}
-          </h1>
-          <div
-            data-testid="super-admin-credential-banner"
-            style={{
-              marginTop: 10,
-              display: 'inline-block',
-              padding: '6px 10px',
-              borderRadius: 8,
-              border: '1px solid #ef4444',
-              backgroundColor: '#fef2f2',
-              color: '#991b1b',
-              fontWeight: 700,
-              fontSize: '0.95rem',
-            }}
-          >
-            测试超级管理员：SuperAdmin / SuperAdmin
-          </div>
-        </header>
-
-        <div style={{ padding: '24px' }}>{children}</div>
-      </main>
     </div>
   );
 };

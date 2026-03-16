@@ -4,6 +4,7 @@ import { ensureTablePreviewStyles } from '../../preview/tablePreviewStyles';
 import { isMarkdownFilename, MarkdownPreview } from '../../preview/markdownPreview';
 import { loadDocumentPreview } from '../../preview/ragflowPreviewManager';
 import documentClient, { DOCUMENT_SOURCE } from '../documentClient';
+import { normalizeDisplayError } from '../../utils/displayError';
 import OnlyOfficeViewer from './OnlyOfficeViewer';
 import {
   ONLYOFFICE_EXTENSIONS,
@@ -150,7 +151,6 @@ export const DocumentPreviewModal = ({ open, target, onClose, canDownloadFiles =
         setEffectiveName(name);
         setPayload(data || null);
 
-        // Cleanup old URL
         if (lastUrlRef.current) {
           try {
             window.URL.revokeObjectURL(lastUrlRef.current);
@@ -179,9 +179,9 @@ export const DocumentPreviewModal = ({ open, target, onClose, canDownloadFiles =
               const total = Number(pdf.numPages) || 0;
               const pages = [];
 
-              for (let i = 1; i <= total; i++) {
+              for (let i = 1; i <= total; i += 1) {
                 if (cancelled) return;
-                setPdfRenderingMessage(`PDF 预览加载中 (${i}/${total})...`);
+                setPdfRenderingMessage(`PDF 预览加载中（${i}/${total}）...`);
                 previewTrace('pdf:render:page:start', { ...traceContext, page: i, total });
                 const page = await pdf.getPage(i);
                 const viewport = page.getViewport({ scale: 1.4 });
@@ -196,9 +196,13 @@ export const DocumentPreviewModal = ({ open, target, onClose, canDownloadFiles =
               }
 
               if (!cancelled) setPdfPageImages(pages);
-              previewTrace('pdf:render:done', { ...traceContext, pages: pages.length, elapsedMs: Math.round(nowMs() - pdfStart) });
+              previewTrace('pdf:render:done', {
+                ...traceContext,
+                pages: pages.length,
+                elapsedMs: Math.round(nowMs() - pdfStart),
+              });
             } catch (pdfError) {
-              if (!cancelled) setError(pdfError?.message || 'PDF 预览失败');
+              if (!cancelled) setError(normalizeDisplayError(pdfError?.message ?? pdfError, 'PDF 预览失败'));
               previewTrace('pdf:render:failed', { ...traceContext, error: pdfError?.message || String(pdfError) });
             } finally {
               if (!cancelled) {
@@ -222,7 +226,7 @@ export const DocumentPreviewModal = ({ open, target, onClose, canDownloadFiles =
         }
       } catch (e) {
         if (cancelled) return;
-        setError(e?.message || '预览失败');
+        setError(normalizeDisplayError(e?.message ?? e, '预览失败'));
         previewTrace('open:failed', { ...traceContext, elapsedMs: Math.round(nowMs() - t0), error: e?.message || String(e) });
       } finally {
         if (!cancelled) {
@@ -254,7 +258,7 @@ export const DocumentPreviewModal = ({ open, target, onClose, canDownloadFiles =
 
   const excelRenderHint = useMemo(() => {
     if (payload?.type !== 'excel') return '';
-    return '如果 Excel 里包含流程图/形状，表格模式可能看不到；可点“原样预览(HTML)”查看。';
+    return '如果表格文件里包含流程图或形状，表格模式可能看不到；可点“原样预览（HTML）”查看。';
   }, [payload?.type]);
 
   const openOriginalHtml = useCallback(async () => {
@@ -272,7 +276,7 @@ export const DocumentPreviewModal = ({ open, target, onClose, canDownloadFiles =
             : undefined,
         render: 'html',
       });
-      if (data?.type !== 'html' || !data?.content) throw new Error(data?.message || '此文件类型不支持原样预览(HTML)');
+      if (data?.type !== 'html' || !data?.content) throw new Error(normalizeDisplayError(data?.message, '此文件类型不支持原样预览（HTML）'));
 
       const name = String(data?.filename || effectiveName || '');
       setEffectiveName(name);
@@ -297,7 +301,7 @@ export const DocumentPreviewModal = ({ open, target, onClose, canDownloadFiles =
       lastUrlRef.current = url;
       setObjectUrl(url);
     } catch (e) {
-      setError(e?.message || '预览失败');
+      setError(normalizeDisplayError(e?.message ?? e, '预览失败'));
     } finally {
       setLoading(false);
     }
@@ -384,7 +388,7 @@ export const DocumentPreviewModal = ({ open, target, onClose, canDownloadFiles =
               }}
               onMouseEnter={(e) => (e.currentTarget.style.color = '#111827')}
               onMouseLeave={(e) => (e.currentTarget.style.color = '#6b7280')}
-              aria-label="close"
+              aria-label="关闭"
             >
               ×
             </button>
@@ -393,7 +397,7 @@ export const DocumentPreviewModal = ({ open, target, onClose, canDownloadFiles =
 
         <div style={{ flex: 1, overflow: 'auto', padding: '18px' }}>
           {loading ? (
-            <div style={{ color: '#6b7280' }}>加载中…</div>
+            <div style={{ color: '#6b7280' }}>加载中...</div>
           ) : error ? (
             <div style={{ color: '#991b1b' }}>{error}</div>
           ) : payload ? (
@@ -433,7 +437,7 @@ export const DocumentPreviewModal = ({ open, target, onClose, canDownloadFiles =
                           whiteSpace: 'nowrap',
                         }}
                       >
-                        原样预览(HTML)
+                        原样预览（HTML）
                       </button>
                     </div>
 
@@ -488,7 +492,7 @@ export const DocumentPreviewModal = ({ open, target, onClose, canDownloadFiles =
               }
 
               if (p.type === 'html' && objectUrl) {
-                return <iframe title="html-preview" src={objectUrl} style={{ width: '100%', height: '78vh', border: '1px solid #e5e7eb', borderRadius: '10px' }} />;
+                return <iframe title="文档原样预览" src={objectUrl} style={{ width: '100%', height: '78vh', border: '1px solid #e5e7eb', borderRadius: '10px' }} />;
               }
 
               if (p.type === 'onlyoffice' && onlyOfficeServerUrl && onlyOfficeConfig) {
@@ -502,7 +506,7 @@ export const DocumentPreviewModal = ({ open, target, onClose, canDownloadFiles =
               }
 
               if (p.type === 'pdf' && objectUrl) {
-                return <iframe title="pdf-preview" src={objectUrl} style={{ width: '100%', height: '78vh', border: '1px solid #e5e7eb', borderRadius: '10px' }} />;
+                return <iframe title="PDF 预览" src={objectUrl} style={{ width: '100%', height: '78vh', border: '1px solid #e5e7eb', borderRadius: '10px' }} />;
               }
 
               if (p.type === 'pdf' && !canDownloadFiles) {
@@ -510,11 +514,11 @@ export const DocumentPreviewModal = ({ open, target, onClose, canDownloadFiles =
                 if (pdfPageImages.length > 0) {
                   return (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                      <div style={{ color: '#6b7280', fontSize: '0.88rem' }}>仅预览，不可下载/打印</div>
+                      <div style={{ color: '#6b7280', fontSize: '0.88rem' }}>仅预览，不可下载或打印</div>
                       {pdfPageImages.map((imgSrc, index) => (
                         <img
                           key={`pdf-page-${index + 1}`}
-                          alt={`pdf-page-${index + 1}`}
+                          alt={`PDF 第 ${index + 1} 页`}
                           src={imgSrc}
                           style={{
                             width: '100%',
@@ -533,12 +537,12 @@ export const DocumentPreviewModal = ({ open, target, onClose, canDownloadFiles =
               if (p.type === 'image' && objectUrl) {
                 return (
                   <div style={{ textAlign: 'center' }}>
-                    <img alt={effectiveName || 'image'} src={objectUrl} style={{ maxWidth: '100%', maxHeight: '78vh', borderRadius: '10px' }} />
+                    <img alt={effectiveName || '图片预览'} src={objectUrl} style={{ maxWidth: '100%', maxHeight: '78vh', borderRadius: '10px' }} />
                   </div>
                 );
               }
 
-              return <div style={{ color: '#6b7280' }}>{p.message || '不支持预览，请下载查看。'}</div>;
+              return <div style={{ color: '#6b7280' }}>{p.message ? normalizeDisplayError(p.message, '不支持预览，请下载查看。') : '不支持预览，请下载查看。'}</div>;
             })()
           ) : (
             <div style={{ color: '#6b7280' }}>暂无内容</div>

@@ -18,27 +18,27 @@ export const policyKnowledgeApiMethods = {
     );
 
     if (!response.ok) {
-      throw new Error('Failed to list documents');
+      throw new Error('获取文档列表失败');
     }
 
     return response.json();
   },
 
-  async uploadDocument(file, kbId = '灞曞巺') {
-    console.log('[authClient] Step 6 - uploadDocument called');
-    console.log('[authClient] Step 7 - Parameters:', {
-      fileName: file.name,
-      fileSize: file.size,
+  async uploadDocument(file, kbId = '展厅') {
+    console.log('[认证客户端] 开始上传文档');
+    console.log('[认证客户端] 上传参数：', {
+      文件名: file.name,
+      文件大小: file.size,
       kbId,
-      kbIdType: typeof kbId,
-      kbIdLength: kbId?.length
+      知识库标识类型: typeof kbId,
+      知识库标识长度: kbId?.length
     });
 
     const formData = new FormData();
     formData.append('file', file);
 
     const url = authBackendUrl(`/api/documents/knowledge/upload?kb_id=${encodeURIComponent(kbId)}`);
-    console.log('[authClient] Step 8 - Sending request to:', url);
+    console.log('[认证客户端] 请求地址：', url);
 
     const response = await this.fetchWithAuth(
       url,
@@ -49,7 +49,7 @@ export const policyKnowledgeApiMethods = {
       }
     );
 
-    console.log('[authClient] Step 9 - Response received:', {
+    console.log('[认证客户端] 收到响应：', {
       status: response.status,
       statusText: response.statusText,
       ok: response.ok
@@ -57,12 +57,12 @@ export const policyKnowledgeApiMethods = {
 
     if (!response.ok) {
       const error = await response.json();
-      console.log('[authClient] Step 9a - Error response:', error);
-      throw new Error(error.detail || 'Failed to upload document');
+      console.log('[认证客户端] 错误响应：', error);
+      throw new Error(this.resolveErrorMessage(error, '上传文档失败'));
     }
 
     const result = await response.json();
-    console.log('[authClient] Step 9b - Success response:', result);
+    console.log('[认证客户端] 上传成功：', result);
     return result;
   },
 
@@ -73,7 +73,7 @@ export const policyKnowledgeApiMethods = {
     );
 
     if (!response.ok) {
-      throw new Error('Failed to get stats');
+      throw new Error('获取统计信息失败');
     }
 
     return response.json();
@@ -90,7 +90,7 @@ export const policyKnowledgeApiMethods = {
 
     if (!response.ok) {
       const error = await response.json();
-      throw new Error(error.detail || 'Failed to approve document');
+      throw new Error(this.resolveErrorMessage(error, '审核通过失败'));
     }
 
     return response.json();
@@ -107,7 +107,7 @@ export const policyKnowledgeApiMethods = {
 
     if (!response.ok) {
       const error = await response.json();
-      throw new Error(error.detail || 'Failed to reject document');
+      throw new Error(this.resolveErrorMessage(error, '审核驳回失败'));
     }
 
     return response.json();
@@ -120,7 +120,7 @@ export const policyKnowledgeApiMethods = {
     );
 
     if (!response.ok) {
-      throw new Error('Failed to delete document');
+      throw new Error('删除文档失败');
     }
 
     return response.json();
@@ -134,7 +134,7 @@ export const policyKnowledgeApiMethods = {
 
     if (!response.ok) {
       const error = await response.json();
-      throw new Error(error.detail || 'Failed to download document');
+      throw new Error(this.resolveErrorMessage(error, '下载文档失败'));
     }
 
     const contentDisposition = response.headers.get('Content-Disposition');
@@ -152,7 +152,7 @@ export const policyKnowledgeApiMethods = {
 
     if (!response.ok) {
       const error = await response.json().catch(() => ({}));
-      throw new Error(error.detail || 'Failed to download document');
+      throw new Error(this.resolveErrorMessage(error, '下载文档失败'));
     }
 
     return response.blob();
@@ -169,7 +169,7 @@ export const policyKnowledgeApiMethods = {
 
     if (!response.ok) {
       const error = await response.json();
-      throw new Error(error.detail || 'Failed to batch download documents');
+      throw new Error(this.resolveErrorMessage(error, '批量下载文档失败'));
     }
 
     const contentDisposition = response.headers.get('Content-Disposition');
@@ -187,7 +187,7 @@ export const policyKnowledgeApiMethods = {
     );
 
     if (!response.ok) {
-      throw new Error('Failed to list deletions');
+      throw new Error('获取删除记录失败');
     }
 
     return response.json();
@@ -201,7 +201,7 @@ export const policyKnowledgeApiMethods = {
     );
 
     if (!response.ok) {
-      throw new Error('Failed to list downloads');
+      throw new Error('获取下载记录失败');
     }
 
     return response.json();

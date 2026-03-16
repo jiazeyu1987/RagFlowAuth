@@ -72,7 +72,7 @@ export function DocumentReviewTable({
             <th style={{ padding: '12px 16px', textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>文档名称</th>
             <th style={{ padding: '12px 16px', textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>状态</th>
             <th style={{ padding: '12px 16px', textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>知识库</th>
-            <th style={{ padding: '12px 16px', textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>上传人</th>
+            <th style={{ padding: '12px 16px', textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>上传者</th>
             <th style={{ padding: '12px 16px', textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>上传时间</th>
             <th style={{ padding: '12px 16px', textAlign: 'right', borderBottom: '1px solid #e5e7eb' }}>操作</th>
           </tr>
@@ -88,7 +88,7 @@ export function DocumentReviewTable({
                 : doc.status === 'rejected'
                   ? '已驳回'
                   : doc.status;
-            const statusColor = doc.status === 'pending' ? '#f59e0b' : doc.status === 'approved' ? '#10b981' : '#6b7280';
+            const statusColor = doc.status === 'pending' ? '#f59e0b' : doc.status === 'approved' ? '#10b981' : doc.status === 'rejected' ? '#ef4444' : '#6b7280';
 
             return (
               <tr key={doc.doc_id} style={{ borderBottom: '1px solid #e5e7eb' }}>

@@ -7,6 +7,7 @@ import ResetPasswordModal from '../features/users/components/modals/ResetPasswor
 import PolicyModal from '../features/users/components/modals/PolicyModal';
 import GroupModal from '../features/users/components/modals/GroupModal';
 import { useUserManagement } from '../features/users/hooks/useUserManagement';
+import '../features/users/usersMedical.css';
 
 const UserManagement = () => {
   const {
@@ -60,26 +61,20 @@ const UserManagement = () => {
     handleResetFilters,
   } = useUserManagement();
 
-  if (loading) return <div>加载中...</div>;
-  if (error) return <div>错误：{error}</div>;
+  if (loading) return <div className="medui-empty">加载中...</div>;
+  if (error) return <div className="medui-toast" style={{ position: 'static' }}>{`错误：${error}`}</div>;
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-        <h2 style={{ margin: 0 }}>用户管理</h2>
+      <div className="users-med-head">
+        <div>
+          <h2 style={{ margin: 0, color: '#163f63' }}>用户管理</h2>
+          <div className="medui-subtitle" style={{ marginTop: 4 }}>
+            医疗场景账号、权限组与登录策略统一管理
+          </div>
+        </div>
         {canManageUsers && (
-          <button
-            onClick={handleOpenCreateModal}
-            data-testid="users-create-open"
-            style={{
-              padding: '10px 20px',
-              backgroundColor: '#3b82f6',
-              color: 'white',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: 'pointer',
-            }}
-          >
+          <button onClick={handleOpenCreateModal} data-testid="users-create-open" type="button" className="medui-btn medui-btn--primary">
             新建用户
           </button>
         )}
@@ -164,4 +159,3 @@ const UserManagement = () => {
 };
 
 export default UserManagement;
-

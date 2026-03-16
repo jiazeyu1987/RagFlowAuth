@@ -112,7 +112,7 @@ export function DocumentReviewToolbar({
             <option value="">加载中...</option>
           ) : (
             <>
-              <option value="">全部</option>
+              <option value="">全部知识库</option>
               {datasets.map((ds) => (
                 <option key={ds.id} value={ds.name}>
                   {ds.name}

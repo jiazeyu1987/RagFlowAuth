@@ -16,19 +16,11 @@ export default function GroupEditorForm({
   onSaveForm,
   onCancelEdit,
 }) {
-  if (loading) return <div style={{ color: '#6b7280' }}>加载中...</div>;
+  if (loading) return <div className="admin-med-small">加载中...</div>;
 
   return (
     <form onSubmit={onSaveForm} data-testid="pg-modal">
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: '130px 1fr',
-          gap: 10,
-          alignItems: 'center',
-          marginBottom: 10,
-        }}
-      >
+      <div className="admin-med-grid" style={{ gridTemplateColumns: '130px 1fr', alignItems: 'center', marginBottom: 10 }}>
         <label>权限组名称</label>
         <input
           data-testid="pg-form-group-name"
@@ -41,23 +33,11 @@ export default function GroupEditorForm({
           }
           required
           disabled={editingGroup?.is_system === 1}
-          style={{
-            padding: '9px 10px',
-            border: '1px solid #d1d5db',
-            borderRadius: 8,
-          }}
+          className="medui-input"
         />
       </div>
 
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: '130px 1fr',
-          gap: 10,
-          alignItems: 'start',
-          marginBottom: 10,
-        }}
-      >
+      <div className="admin-med-grid" style={{ gridTemplateColumns: '130px 1fr', alignItems: 'start', marginBottom: 10 }}>
         <label>说明</label>
         <textarea
           data-testid="pg-form-description"
@@ -69,11 +49,7 @@ export default function GroupEditorForm({
             }))
           }
           rows={2}
-          style={{
-            padding: '9px 10px',
-            border: '1px solid #d1d5db',
-            borderRadius: 8,
-          }}
+          className="medui-textarea"
         />
       </div>
 
@@ -105,95 +81,16 @@ export default function GroupEditorForm({
       <div style={{ marginBottom: 12 }}>
         <div style={{ fontWeight: 700, marginBottom: 8 }}>操作权限</div>
         <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-          <label>
-            <input
-              type="checkbox"
-              data-testid="pg-form-can-upload"
-              checked={formData.can_upload}
-              onChange={(event) =>
-                onSetFormData((previous) => ({
-                  ...previous,
-                  can_upload: event.target.checked,
-                }))
-              }
-            />{' '}
-            上传
-          </label>
-          <label>
-            <input
-              type="checkbox"
-              data-testid="pg-form-can-review"
-              checked={formData.can_review}
-              onChange={(event) =>
-                onSetFormData((previous) => ({
-                  ...previous,
-                  can_review: event.target.checked,
-                }))
-              }
-            />{' '}
-            审核
-          </label>
-          <label>
-            <input
-              type="checkbox"
-              data-testid="pg-form-can-download"
-              checked={formData.can_download}
-              onChange={(event) =>
-                onSetFormData((previous) => ({
-                  ...previous,
-                  can_download: event.target.checked,
-                }))
-              }
-            />{' '}
-            下载
-          </label>
-          <label>
-            <input
-              type="checkbox"
-              data-testid="pg-form-can-delete"
-              checked={formData.can_delete}
-              onChange={(event) =>
-                onSetFormData((previous) => ({
-                  ...previous,
-                  can_delete: event.target.checked,
-                }))
-              }
-            />{' '}
-            删除
-          </label>
+          <label><input type="checkbox" data-testid="pg-form-can-upload" checked={formData.can_upload} onChange={(event) => onSetFormData((previous) => ({ ...previous, can_upload: event.target.checked }))} /> 上传</label>
+          <label><input type="checkbox" data-testid="pg-form-can-review" checked={formData.can_review} onChange={(event) => onSetFormData((previous) => ({ ...previous, can_review: event.target.checked }))} /> 审核</label>
+          <label><input type="checkbox" data-testid="pg-form-can-download" checked={formData.can_download} onChange={(event) => onSetFormData((previous) => ({ ...previous, can_download: event.target.checked }))} /> 下载</label>
+          <label><input type="checkbox" data-testid="pg-form-can-delete" checked={formData.can_delete} onChange={(event) => onSetFormData((previous) => ({ ...previous, can_delete: event.target.checked }))} /> 删除</label>
         </div>
       </div>
 
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
-        <button
-          type="button"
-          data-testid="pg-form-cancel"
-          onClick={onCancelEdit}
-          style={{
-            border: '1px solid #d1d5db',
-            borderRadius: 8,
-            background: '#fff',
-            cursor: 'pointer',
-            padding: '8px 14px',
-          }}
-        >
-          取消
-        </button>
-        <button
-          type="submit"
-          data-testid="pg-form-submit"
-          disabled={saving}
-          style={{
-            border: '1px solid #2563eb',
-            borderRadius: 8,
-            background: saving ? '#93c5fd' : '#2563eb',
-            color: '#fff',
-            cursor: saving ? 'not-allowed' : 'pointer',
-            padding: '8px 14px',
-          }}
-        >
-          保存
-        </button>
+        <button type="button" data-testid="pg-form-cancel" onClick={onCancelEdit} className="medui-btn medui-btn--neutral">取消</button>
+        <button type="submit" data-testid="pg-form-submit" disabled={saving} className="medui-btn medui-btn--primary">保存</button>
       </div>
     </form>
   );

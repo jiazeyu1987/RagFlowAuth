@@ -1,10 +1,11 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { dataSecurityApi } from '../features/dataSecurity/api';
+import { normalizeDisplayError } from '../shared/utils/displayError';
 
 const formatTime = (ms) => {
   if (!ms) return '';
   const d = new Date(ms);
-  return d.toLocaleString();
+  return d.toLocaleString('zh-CN');
 };
 
 const BACKUP_STATUS_LABELS = {
@@ -23,12 +24,12 @@ const formatBackupStatus = (status) => {
 const ProgressBar = ({ value }) => {
   const pct = Math.max(0, Math.min(100, Number(value || 0)));
   return (
-    <div style={{ width: '100%', background: '#e5e7eb', borderRadius: '999px', height: '10px', overflow: 'hidden' }}>
+    <div style={{ width: '100%', background: '#dbe7f3', borderRadius: '999px', height: 10, overflow: 'hidden' }}>
       <div
         style={{
           width: `${pct}%`,
-          height: '10px',
-          background: pct >= 100 ? '#10b981' : '#3b82f6',
+          height: 10,
+          background: pct >= 100 ? '#1f8a57' : '#0d5ea6',
           transition: 'width 0.2s',
         }}
       />
@@ -37,10 +38,10 @@ const ProgressBar = ({ value }) => {
 };
 
 const Card = ({ title, children }) => (
-  <div style={{ marginTop: '16px', background: 'white', borderRadius: '12px', padding: '16px', border: '1px solid #e5e7eb' }}>
-    <h3 style={{ marginTop: 0 }}>{title}</h3>
+  <section className="medui-surface medui-card-pad">
+    <h3 style={{ marginTop: 0, marginBottom: 12, color: '#184469' }}>{title}</h3>
     {children}
-  </div>
+  </section>
 );
 
 const DataSecurity = () => {
@@ -74,7 +75,7 @@ const DataSecurity = () => {
       setActiveJob(latest || null);
       setRunning(latest ? ['queued', 'running'].includes(latest.status) : false);
     } catch (e) {
-      setError(e.message || '加载失败');
+      setError(normalizeDisplayError(e?.message ?? e, '加载失败'));
     } finally {
       setLoading(false);
     }
@@ -114,7 +115,7 @@ const DataSecurity = () => {
       const updated = await dataSecurityApi.updateSettings(settings);
       setSettings(updated);
     } catch (e) {
-      setError(e.message || '保存失败');
+      setError(normalizeDisplayError(e?.message ?? e, '保存失败'));
     } finally {
       setSaving(false);
     }
@@ -126,17 +127,14 @@ const DataSecurity = () => {
       if (!settings) return;
       if (settings.target_mode === 'local') {
         if (!String(settings.target_local_dir || '').trim()) {
-          setError('请先填写"本机目标目录"，再点击"立即备份"。');
+          setError('请先填写“本机目标目录”，再点击“立即备份”。');
           return;
         }
-      } else {
-        if (!String(settings.target_ip || '').trim() || !String(settings.target_share_name || '').trim()) {
-          setError('请先填写"目标电脑 IP"和"共享名"，再点击"立即备份"。');
-          return;
-        }
+      } else if (!String(settings.target_ip || '').trim() || !String(settings.target_share_name || '').trim()) {
+        setError('请先填写“目标电脑地址”和“共享名”，再点击“立即备份”。');
+        return;
       }
 
-      // "立即备份"默认使用你当前看到的设置（无需先点"保存设置"）
       setSaving(true);
       const updated = await dataSecurityApi.updateSettings(settings);
       setSettings(updated);
@@ -150,7 +148,7 @@ const DataSecurity = () => {
         pollTimer.current = setInterval(() => pollActiveJob(res.job_id), 1000);
       }
     } catch (e) {
-      setError(e.message || '启动失败');
+      setError(normalizeDisplayError(e?.message ?? e, '启动失败'));
       setSaving(false);
     }
   };
@@ -161,14 +159,12 @@ const DataSecurity = () => {
       if (!settings) return;
       if (settings.target_mode === 'local') {
         if (!String(settings.target_local_dir || '').trim()) {
-          setError('请先填写"本机目标目录"，再点击"全量备份"。');
+          setError('请先填写“本机目标目录”，再点击“全量备份”。');
           return;
         }
-      } else {
-        if (!String(settings.target_ip || '').trim() || !String(settings.target_share_name || '').trim()) {
-          setError('请先填写"目标电脑 IP"和"共享名"，再点击"全量备份"。');
-          return;
-        }
+      } else if (!String(settings.target_ip || '').trim() || !String(settings.target_share_name || '').trim()) {
+        setError('请先填写“目标电脑地址”和“共享名”，再点击“全量备份”。');
+        return;
       }
 
       setSaving(true);
@@ -184,71 +180,35 @@ const DataSecurity = () => {
         pollTimer.current = setInterval(() => pollActiveJob(res.job_id), 1000);
       }
     } catch (e) {
-      setError(e.message || '全量备份启动失败');
+      setError(normalizeDisplayError(e?.message ?? e, '全量备份启动失败'));
       setSaving(false);
     }
   };
 
-  if (loading) return <div style={{ padding: '12px' }}>加载中…</div>;
+  if (loading) return <div className="medui-empty">加载中...</div>;
 
   return (
-    <div style={{ maxWidth: '980px' }} data-testid="data-security-test-page">
-      <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', alignItems: 'center' }}>
-        <h2 style={{ margin: 0 }}>数据安全</h2>
-        <div style={{ display: 'flex', gap: '10px' }}>
-          <button
-            onClick={runNow}
-            disabled={running}
-            style={{
-              padding: '10px 14px',
-              borderRadius: '8px',
-              border: 'none',
-              cursor: running ? 'not-allowed' : 'pointer',
-              background: running ? '#9ca3af' : '#3b82f6',
-              color: 'white',
-            }}
-          >
-            {running ? '备份中…' : '立即备份'}
+    <div className="admin-med-page" style={{ maxWidth: 980 }} data-testid="data-security-test-page">
+      <div className="admin-med-head">
+        <h2 className="admin-med-title">数据安全（测试）</h2>
+        <div className="admin-med-actions">
+          <button onClick={runNow} disabled={running} type="button" className="medui-btn medui-btn--primary">
+            {running ? '备份中...' : '立即备份'}
           </button>
-          <button
-            onClick={runFullBackupNow}
-            disabled={running}
-            style={{
-              padding: '10px 14px',
-              borderRadius: '8px',
-              border: 'none',
-              cursor: running ? 'not-allowed' : 'pointer',
-              background: running ? '#9ca3af' : '#8b5cf6',
-              color: 'white',
-            }}
-          >
-            {running ? '备份中…' : '全量备份'}
+          <button onClick={runFullBackupNow} disabled={running} type="button" className="medui-btn medui-btn--secondary">
+            {running ? '备份中...' : '全量备份'}
           </button>
-          <button
-            onClick={saveSettings}
-            disabled={saving || !settings}
-            style={{
-              padding: '10px 14px',
-              borderRadius: '8px',
-              border: '1px solid #d1d5db',
-              cursor: saving ? 'not-allowed' : 'pointer',
-              background: 'white',
-            }}
-          >
-            {saving ? '保存中…' : '保存设置'}
+          <button onClick={saveSettings} disabled={saving || !settings} type="button" className="medui-btn medui-btn--neutral">
+            {saving ? '保存中...' : '保存设置'}
           </button>
         </div>
       </div>
 
-      {error && (
-        <div style={{ marginTop: '12px', padding: '10px 12px', background: '#fef2f2', color: '#991b1b', borderRadius: '10px' }}>
-          {error}
-        </div>
-      )}
+      {error ? <div className="admin-med-danger">{error}</div> : null}
 
       <Card title="备份设置">
-        <div style={{ display: 'grid', gap: '12px' }}>
-          <label style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+        <div className="admin-med-grid">
+          <label style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
             <input
               type="checkbox"
               checked={!!settings?.enabled}
@@ -257,59 +217,61 @@ const DataSecurity = () => {
             启用自动备份
           </label>
 
-          <div style={{ borderTop: '1px solid #e5e7eb', paddingTop: '16px', marginTop: '8px' }}>
-            <h4 style={{ margin: '0 0 12px 0', color: '#1f2937' }}>⏰ 定时备份设置</h4>
-            <div style={{ color: '#6b7280', fontSize: '0.85rem', marginBottom: '12px' }}>
-              使用 cron 表达式设置备份时间，格式：<strong>分 时 日 月 周</strong>
+          <div style={{ borderTop: '1px solid #deebf8', paddingTop: 12 }}>
+            <h4 style={{ margin: '0 0 12px 0', color: '#1f2937' }}>定时备份设置</h4>
+            <div className="admin-med-inline-note" style={{ marginBottom: 12 }}>
+              使用五段式定时表达式配置时间，格式：分 时 日 月 周
             </div>
 
             <label>
-              <strong>增量备份时间（默认：每天凌晨2点）</strong>
+              <div style={{ fontWeight: 700 }}>增量备份时间（默认：每天凌晨 2 点）</div>
               <input
                 value={settings?.incremental_schedule || '0 2 * * *'}
                 onChange={(e) => setSettings((p) => ({ ...p, incremental_schedule: e.target.value }))}
                 placeholder="0 2 * * *"
-                style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '8px', marginTop: '6px', fontFamily: 'monospace' }}
+                className="medui-input"
+                style={{ marginTop: 6, fontFamily: 'Consolas, Menlo, monospace' }}
               />
-              <div style={{ color: '#6b7280', fontSize: '0.8rem', marginTop: '4px' }}>
-                常用示例：0 2 * * * (每天2点) | 0 */6 * * * (每6小时) | 30 1 * * * (每天1:30)
+              <div className="admin-med-small" style={{ marginTop: 4 }}>
+                常用示例：`0 2 * * *`（每天 2 点） | `0 */6 * * *`（每 6 小时） | `30 1 * * *`（每天 1:30）
               </div>
             </label>
 
-            <label style={{ marginTop: '12px' }}>
-              <strong>全量备份时间（默认：每周一凌晨4点）</strong>
+            <label style={{ marginTop: 12, display: 'block' }}>
+              <div style={{ fontWeight: 700 }}>全量备份时间（默认：每周一凌晨 4 点）</div>
               <input
                 value={settings?.full_backup_schedule || '0 4 * * 1'}
                 onChange={(e) => setSettings((p) => ({ ...p, full_backup_schedule: e.target.value }))}
                 placeholder="0 4 * * 1"
-                style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '8px', marginTop: '6px', fontFamily: 'monospace' }}
+                className="medui-input"
+                style={{ marginTop: 6, fontFamily: 'Consolas, Menlo, monospace' }}
               />
-              <div style={{ color: '#6b7280', fontSize: '0.8rem', marginTop: '4px' }}>
-                常用示例：0 4 * * 1 (周一4点) | 0 3 * * 0 (周日3点) | 0 2 1 * * (每月1号2点)
+              <div className="admin-med-small" style={{ marginTop: 4 }}>
+                常用示例：`0 4 * * 1`（周一 4 点） | `0 3 * * 0`（周日 3 点） | `0 2 1 * *`（每月 1 日 2 点）
               </div>
             </label>
 
-            <div style={{ marginTop: '12px', padding: '10px', background: '#f0fdf4', border: '1px solid #86efac', borderRadius: '8px', color: '#166534', fontSize: '0.85rem' }}>
-              💡 系统会按照设定的时间自动执行备份，备份完成后自动清理旧副本（只保留最新的1个）
+            <div className="admin-med-success" style={{ marginTop: 12 }}>
+              系统会按计划自动执行备份，备份完成后自动清理旧副本。
             </div>
           </div>
 
-          <div style={{ borderTop: '1px solid #e5e7eb', paddingTop: '16px', marginTop: '8px' }}>
-            <h4 style={{ margin: '0 0 12px 0', color: '#1f2937' }}>📁 备份目标设置</h4>
+          <div style={{ borderTop: '1px solid #deebf8', paddingTop: 12 }}>
+            <h4 style={{ margin: '0 0 12px 0', color: '#1f2937' }}>备份目标设置</h4>
             <label>
               目标类型
               <select
                 value={settings?.target_mode || 'share'}
                 onChange={(e) => setSettings((p) => ({ ...p, target_mode: e.target.value }))}
-                style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '8px', marginTop: '6px' }}
+                className="medui-select"
+                style={{ marginTop: 6 }}
               >
                 <option value="share">另一台电脑共享目录（推荐）</option>
                 <option value="local">本机目录</option>
               </select>
             </label>
-
-            <div style={{ color: '#6b7280', fontSize: '0.9rem', alignSelf: 'end' }}>
-              说明：这里填写的是"后端服务器所在电脑"的路径/共享信息。
+            <div className="admin-med-inline-note" style={{ marginTop: 8 }}>
+              说明：这里填写的是后端服务所在机器可访问的路径或共享信息。
             </div>
           </div>
 
@@ -319,19 +281,21 @@ const DataSecurity = () => {
               <input
                 value={settings?.target_local_dir || ''}
                 onChange={(e) => setSettings((p) => ({ ...p, target_local_dir: e.target.value }))}
-                placeholder="例如：备份目录/项目目录"
-                style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '8px', marginTop: '6px' }}
+                placeholder="示例：数据备份目录\\项目目录"
+                className="medui-input"
+                style={{ marginTop: 6 }}
               />
             </label>
           ) : (
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
+            <div className="admin-med-grid admin-med-grid--3">
               <label>
-                目标电脑地址（IP）
+                目标电脑地址（内网地址）
                 <input
                   value={settings?.target_ip || ''}
                   onChange={(e) => setSettings((p) => ({ ...p, target_ip: e.target.value }))}
-                  placeholder="例如：192.168.1.10"
-                  style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '8px', marginTop: '6px' }}
+                  placeholder="示例：内网地址"
+                  className="medui-input"
+                  style={{ marginTop: 6 }}
                 />
               </label>
               <label>
@@ -339,8 +303,9 @@ const DataSecurity = () => {
                 <input
                   value={settings?.target_share_name || ''}
                   onChange={(e) => setSettings((p) => ({ ...p, target_share_name: e.target.value }))}
-                  placeholder="例如：备份"
-                  style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '8px', marginTop: '6px' }}
+                  placeholder="示例：备份共享目录"
+                  className="medui-input"
+                  style={{ marginTop: 6 }}
                 />
               </label>
               <label>
@@ -348,47 +313,47 @@ const DataSecurity = () => {
                 <input
                   value={settings?.target_subdir || ''}
                   onChange={(e) => setSettings((p) => ({ ...p, target_subdir: e.target.value }))}
-                  placeholder="例如：项目备份"
-                  style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '8px', marginTop: '6px' }}
+                  placeholder="示例：项目备份目录"
+                  className="medui-input"
+                  style={{ marginTop: 6 }}
                 />
               </label>
-              <div style={{ gridColumn: '1 / -1', color: '#6b7280', fontSize: '0.9rem' }}>
+              <div className="admin-med-inline-note" style={{ gridColumn: '1 / -1' }}>
                 预览：{targetPreview || '（未完整填写）'}
               </div>
             </div>
           )}
 
-          <div style={{ borderTop: '1px solid #e5e7eb', paddingTop: '12px' }} />
+          <div style={{ borderTop: '1px solid #deebf8', paddingTop: 12 }} />
 
           <label>
             RAGFlow 编排文件路径（容器内路径）
             <input
               value={settings?.ragflow_compose_path || ''}
               onChange={(e) => setSettings((p) => ({ ...p, ragflow_compose_path: e.target.value }))}
-              placeholder="例如：容器内编排文件路径"
-              style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '8px', marginTop: '6px' }}
+              placeholder="示例：容器内编排文件路径"
+              className="medui-input"
+              style={{ marginTop: 6 }}
             />
-            <div style={{ color: '#6b7280', marginTop: '6px', fontSize: '0.9rem' }}>
-              如果找不到该文件，备份会提示你。
+            <div className="admin-med-inline-note" style={{ marginTop: 6 }}>
+              如果找不到该文件，备份流程会给出提示。
             </div>
           </label>
 
-          <label>
-            <div style={{ color: '#6b7280', marginTop: '6px', fontSize: '0.9rem' }}>
-              只需要填写编排文件路径即可。系统会自动识别项目名（必要时会提示你怎么处理）。
-            </div>
-          </label>
+          <div className="admin-med-inline-note">
+            仅需填写编排文件路径，系统会自动识别项目信息并在必要时提示处理方式。
+          </div>
 
-          <label style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+          <label style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
             <input
               type="checkbox"
               checked={!!settings?.ragflow_stop_services}
               onChange={(e) => setSettings((p) => ({ ...p, ragflow_stop_services: e.target.checked }))}
             />
-            备份前停止 RAGFlow 服务（更一致，但会短暂停机）
+            备份前停止 RAGFlow 服务（数据更一致，但会短暂停机）
           </label>
 
-          <label style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+          <label style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
             <input
               type="checkbox"
               checked={!!settings?.full_backup_include_images}
@@ -400,67 +365,55 @@ const DataSecurity = () => {
           <label>
             本项目数据库路径（默认值见输入框）
             <input
-              value={settings?.auth_db_path || 'data/auth.db'}
+              value={settings?.auth_db_path || ''}
               onChange={(e) => setSettings((p) => ({ ...p, auth_db_path: e.target.value }))}
-              placeholder="例如：项目数据目录/认证库文件路径"
-              style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '8px', marginTop: '6px' }}
+              placeholder="示例：项目数据目录\\认证库文件路径"
+              className="medui-input"
+              style={{ marginTop: 6 }}
             />
           </label>
 
-          <div style={{ color: '#6b7280', fontSize: '0.9rem', marginTop: '12px' }}>
-            上次自动备份：{settings?.last_run_at_ms ? formatTime(settings.last_run_at_ms) : '暂无'}
-          </div>
+          <div className="admin-med-inline-note">上次自动备份：{settings?.last_run_at_ms ? formatTime(settings.last_run_at_ms) : '暂无'}</div>
         </div>
       </Card>
 
       <Card title="备份进度">
         {activeJob ? (
           <>
-            <div style={{ display: 'flex', justifyContent: 'space-between', gap: '10px', alignItems: 'center' }}>
+            <div className="admin-med-head" style={{ alignItems: 'center' }}>
               <div>
-                <div style={{ fontWeight: 600 }}>
+                <div style={{ fontWeight: 700 }}>
                   #{activeJob.id} {formatBackupStatus(activeJob.status)}
                 </div>
-                <div style={{ color: '#6b7280', fontSize: '0.9rem' }}>
-                  {activeJob.message || ''} {activeJob.output_dir ? `（输出：${activeJob.output_dir}）` : ''}
+                <div className="admin-med-inline-note">
+                  {activeJob.message ? normalizeDisplayError(activeJob.message, '任务执行中') : ''} {activeJob.output_dir ? `（输出：${activeJob.output_dir}）` : ''}
                 </div>
               </div>
-              <div style={{ minWidth: '140px', textAlign: 'right', color: '#6b7280' }}>
+              <div className="admin-med-inline-note" style={{ minWidth: 140, textAlign: 'right' }}>
                 {activeJob.started_at_ms ? formatTime(activeJob.started_at_ms) : ''}
               </div>
             </div>
-            <div style={{ marginTop: '10px' }}>
+            <div style={{ marginTop: 10 }}>
               <ProgressBar value={activeJob.progress} />
-              <div style={{ marginTop: '6px', color: '#6b7280', fontSize: '0.9rem' }}>{activeJob.progress}%</div>
+              <div className="admin-med-inline-note" style={{ marginTop: 6 }}>{activeJob.progress}%</div>
             </div>
-            {activeJob.detail && (
-              <div style={{ marginTop: '10px', padding: '10px', background: '#fef2f2', color: '#991b1b', borderRadius: '8px' }}>
-                {activeJob.detail}
-              </div>
-            )}
+            {activeJob.detail ? <div className="admin-med-danger" style={{ marginTop: 10 }}>{normalizeDisplayError(activeJob.detail, '请查看任务详情')}</div> : null}
           </>
         ) : (
-          <div style={{ color: '#6b7280' }}>暂无备份记录</div>
+          <div className="admin-med-inline-note">暂无备份记录</div>
         )}
       </Card>
 
       <Card title="备份记录">
         {jobs.length === 0 ? (
-          <div style={{ color: '#6b7280' }}>暂无</div>
+          <div className="admin-med-inline-note">暂无</div>
         ) : (
-          <div style={{ display: 'grid', gap: '10px' }}>
+          <div className="admin-med-grid">
             {jobs.map((j) => (
               <div
                 key={j.id}
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  padding: '10px 12px',
-                  border: '1px solid #e5e7eb',
-                  borderRadius: '10px',
-                  cursor: 'pointer',
-                }}
+                className="medui-surface"
+                style={{ padding: '10px 12px', cursor: 'pointer' }}
                 onClick={() => {
                   setActiveJob(j);
                   if (['queued', 'running'].includes(j.status)) {
@@ -470,14 +423,16 @@ const DataSecurity = () => {
                   }
                 }}
               >
-                <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-                  <div style={{ fontWeight: 700 }}>#{j.id}</div>
-                  <div style={{ color: j.status === 'success' ? '#059669' : j.status === 'failed' ? '#dc2626' : '#6b7280' }}>
-                    {formatBackupStatus(j.status)}
+                <div className="admin-med-head">
+                  <div className="admin-med-actions" style={{ alignItems: 'center' }}>
+                    <div style={{ fontWeight: 700 }}>#{j.id}</div>
+                    <div style={{ color: j.status === 'success' ? '#176940' : j.status === 'failed' ? '#a53a3a' : '#60788e' }}>
+                      {formatBackupStatus(j.status)}
+                    </div>
+                    <div className="admin-med-inline-note">{j.message ? normalizeDisplayError(j.message, '任务执行中') : ''}</div>
                   </div>
-                  <div style={{ color: '#6b7280' }}>{j.message || ''}</div>
+                  <div className="admin-med-small">{formatTime(j.created_at_ms)}</div>
                 </div>
-                <div style={{ color: '#6b7280', fontSize: '0.9rem' }}>{formatTime(j.created_at_ms)}</div>
               </div>
             ))}
           </div>

@@ -44,45 +44,48 @@ export function SearchConfigsPanel() {
   } = useSearchConfigsPanel();
 
   return (
-    <div
-      style={{
-        padding: '16px',
-        display: 'grid',
-        gridTemplateColumns: '360px 1fr',
-        gap: '14px',
-        alignItems: 'start',
-      }}
-    >
-      <ConfigListPanel
-        list={list}
-        filteredList={filteredList}
-        selectedId={selected?.id}
-        filter={filter}
-        loading={loading}
-        error={error}
-        busy={busy}
-        isAdmin={isAdmin}
-        onChangeFilter={setFilter}
-        onOpenCreate={openCreate}
-        onRefresh={fetchList}
-        onSelect={loadDetail}
-        onDelete={removeItem}
-      />
+    <div className="admin-med-page" data-testid="search-configs-page">
+      <section className="medui-surface medui-card-pad">
+        <div className="admin-med-head">
+          <h2 className="admin-med-title" style={{ margin: 0 }}>检索配置管理</h2>
+          <div className="admin-med-inline-note">用于维护检索参数模板，支持复制后快速创建。</div>
+        </div>
+      </section>
 
-      <ConfigDetailPanel
-        selected={selected}
-        detailLoading={detailLoading}
-        detailError={detailError}
-        nameText={nameText}
-        jsonText={jsonText}
-        saveStatus={saveStatus}
-        busy={busy}
-        isAdmin={isAdmin}
-        onChangeName={setNameText}
-        onChangeJson={setJsonText}
-        onReset={resetDetailToSelected}
-        onSave={save}
-      />
+      <div className="admin-med-config-layout">
+        <ConfigListPanel
+          panelClassName="admin-med-panel"
+          list={list}
+          filteredList={filteredList}
+          selectedId={selected?.id}
+          filter={filter}
+          loading={loading}
+          error={error}
+          busy={busy}
+          isAdmin={isAdmin}
+          onChangeFilter={setFilter}
+          onOpenCreate={openCreate}
+          onRefresh={fetchList}
+          onSelect={loadDetail}
+          onDelete={removeItem}
+        />
+
+        <ConfigDetailPanel
+          panelClassName="admin-med-panel"
+          selected={selected}
+          detailLoading={detailLoading}
+          detailError={detailError}
+          nameText={nameText}
+          jsonText={jsonText}
+          saveStatus={saveStatus}
+          busy={busy}
+          isAdmin={isAdmin}
+          onChangeName={setNameText}
+          onChangeJson={setJsonText}
+          onReset={resetDetailToSelected}
+          onSave={save}
+        />
+      </div>
 
       <CreateConfigDialog
         open={createOpen}

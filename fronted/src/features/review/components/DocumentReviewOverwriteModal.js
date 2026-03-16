@@ -41,7 +41,7 @@ export function DocumentReviewOverwriteModal({
         onClick={(e) => e.stopPropagation()}
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: '10px', alignItems: 'center' }}>
-          <div style={{ fontWeight: 700, fontSize: '1.05rem' }}>检测到可能重复文档</div>
+          <div style={{ fontWeight: 700, fontSize: '1.05rem' }}>检测到可能重复的文档</div>
           <button
             type="button"
             onClick={() => setOverwritePrompt(null)}
@@ -57,7 +57,7 @@ export function DocumentReviewOverwriteModal({
             <div style={{ fontWeight: 700, marginBottom: '6px', color: '#b91c1c' }}>已通过文档</div>
             <div style={{ color: '#111827' }}>{overwritePrompt.oldDoc.filename}</div>
             <div style={{ color: '#6b7280', fontSize: '0.9rem', marginTop: '6px' }}>
-              上传时间：{overwritePrompt.oldDoc.uploaded_at_ms ? new Date(overwritePrompt.oldDoc.uploaded_at_ms).toLocaleString('zh-CN') : ''}
+              {`上传时间：${overwritePrompt.oldDoc.uploaded_at_ms ? new Date(overwritePrompt.oldDoc.uploaded_at_ms).toLocaleString('zh-CN') : ''}`}
             </div>
             <div style={{ marginTop: '10px' }}>
               <button
@@ -97,7 +97,7 @@ export function DocumentReviewOverwriteModal({
             <div style={{ fontWeight: 700, marginBottom: '6px', color: '#1d4ed8' }}>待审核文档</div>
             <div style={{ color: '#111827' }}>{newFilename}</div>
             <div style={{ color: '#6b7280', fontSize: '0.9rem', marginTop: '6px' }}>
-              归一化名称：{overwritePrompt.normalized || ''}
+              {`归一化名称：${overwritePrompt.normalized || ''}`}
             </div>
             <div style={{ marginTop: '10px' }}>
               <button

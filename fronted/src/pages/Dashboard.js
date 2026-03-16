@@ -2,30 +2,24 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import authClient from '../api/authClient';
+import { normalizeDisplayError } from '../shared/utils/displayError';
 
-const CARD_GRID_STYLE = {
-  display: 'grid',
-  gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-  gap: '14px',
+const CARD_TONES = {
+  pending: { color: '#ad7a17', bg: '#fff7e7', border: '#f2d49f' },
+  approved: { color: '#176a43', bg: '#f0faf4', border: '#b7e8cb' },
+  rejected: { color: '#a53a3a', bg: '#fff4f4', border: '#f2c0c0' },
+  total: { color: '#1f5f91', bg: '#edf6ff', border: '#c0daf2' },
 };
 
-const CARD_STYLE = {
-  background: '#ffffff',
-  border: '1px solid #e5e7eb',
-  borderRadius: '12px',
-  padding: '16px',
-  boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
+const roleLabel = (user) => {
+  if (user?.is_super_admin || String(user?.username || '').toLowerCase() === 'superadmin') return '超级管理员';
+  const role = String(user?.role || '').trim().toLowerCase();
+  if (role === 'admin') return '管理员';
+  if (role === 'reviewer') return '审核员';
+  if (role === 'operator') return '操作员';
+  if (role === 'user') return '普通用户';
+  return user?.role || '-';
 };
-
-const quickButtonStyle = (bg) => ({
-  padding: '10px 14px',
-  borderRadius: '10px',
-  border: 'none',
-  background: bg,
-  color: '#ffffff',
-  cursor: 'pointer',
-  fontWeight: 800,
-});
 
 export default function Dashboard() {
   const { user, can } = useAuth();
@@ -67,7 +61,7 @@ export default function Dashboard() {
           }
         }
       } catch (e) {
-        if (!cancelled) setStatsError(e?.message || '加载统计数据失败');
+        if (!cancelled) setStatsError(normalizeDisplayError(e?.message ?? e, '加载统计数据失败'));
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -85,7 +79,6 @@ export default function Dashboard() {
           key: 'pending',
           title: '待处理',
           value: stats.pending,
-          color: '#f59e0b',
           show: capabilities.canReviewKb,
           onClick: () => navigate('/documents'),
         },
@@ -93,7 +86,6 @@ export default function Dashboard() {
           key: 'approved',
           title: '已通过',
           value: stats.approved,
-          color: '#10b981',
           show: capabilities.canViewKb,
           onClick: () => navigate('/documents'),
         },
@@ -101,7 +93,6 @@ export default function Dashboard() {
           key: 'rejected',
           title: '已驳回',
           value: stats.rejected,
-          color: '#ef4444',
           show: capabilities.canViewKb,
           onClick: () => navigate('/documents'),
         },
@@ -109,7 +100,6 @@ export default function Dashboard() {
           key: 'total',
           title: '总数',
           value: stats.total,
-          color: '#3b82f6',
           show: capabilities.canViewKb,
           onClick: () => navigate('/documents'),
         },
@@ -118,70 +108,75 @@ export default function Dashboard() {
   );
 
   if (loading) {
-    return <div data-testid="dashboard-loading">加载中...</div>;
+    return <div className="medui-empty" data-testid="dashboard-loading">加载中...</div>;
   }
 
   return (
-    <div data-testid="dashboard-page">
-      <div style={{ marginBottom: '14px' }}>
-        <h2 style={{ margin: 0, color: '#111827' }}>仪表盘</h2>
-        <div style={{ marginTop: '6px', color: '#6b7280' }}>
-          用户：{user?.username || '-'} | 角色：{user?.role || '-'}
+    <div className="admin-med-page" data-testid="dashboard-page">
+      <section className="medui-surface medui-card-pad">
+        <div className="admin-med-head">
+          <div>
+            <h2 className="admin-med-title" style={{ margin: 0 }}>业务总览</h2>
+            <div className="admin-med-inline-note" style={{ marginTop: 6 }}>
+              用户：{user?.username || '-'} ｜ 角色：{roleLabel(user)}
+            </div>
+          </div>
         </div>
-      </div>
+      </section>
 
-      {statsError ? (
-        <div data-testid="dashboard-stats-error" style={{ color: '#b91c1c', marginBottom: '12px' }}>
-          {statsError}
-        </div>
-      ) : null}
+      {statsError ? <div data-testid="dashboard-stats-error" className="admin-med-danger">{statsError}</div> : null}
 
       {cards.length > 0 ? (
-        <div style={CARD_GRID_STYLE}>
-          {cards.map((card) => (
-            <button
-              key={card.key}
-              type="button"
-              data-testid={`dashboard-card-${card.key}`}
-              onClick={card.onClick}
-              style={{
-                ...CARD_STYLE,
-                textAlign: 'left',
-                cursor: 'pointer',
-              }}
-            >
-              <div style={{ color: '#6b7280', fontWeight: 700 }}>{card.title}</div>
-              <div style={{ marginTop: '8px', fontSize: '1.8rem', color: card.color, fontWeight: 900 }}>{card.value}</div>
-            </button>
-          ))}
-        </div>
+        <section className="admin-med-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))' }}>
+          {cards.map((card) => {
+            const tone = CARD_TONES[card.key] || CARD_TONES.total;
+            return (
+              <button
+                key={card.key}
+                type="button"
+                data-testid={`dashboard-card-${card.key}`}
+                onClick={card.onClick}
+                className="medui-surface"
+                style={{
+                  textAlign: 'left',
+                  cursor: 'pointer',
+                  padding: 16,
+                  borderColor: tone.border,
+                  background: tone.bg,
+                }}
+              >
+                <div style={{ color: '#5f768d', fontWeight: 700 }}>{card.title}</div>
+                <div style={{ marginTop: 8, fontSize: '1.72rem', color: tone.color, fontWeight: 800 }}>{card.value}</div>
+              </button>
+            );
+          })}
+        </section>
       ) : (
-        <div style={{ ...CARD_STYLE, color: '#6b7280' }} data-testid="dashboard-empty">
-          当前角色暂无可展示的卡片。
+        <div className="medui-surface medui-card-pad medui-empty" data-testid="dashboard-empty">
+          当前角色暂无可展示的数据卡片。
         </div>
       )}
 
-      <div style={{ ...CARD_STYLE, marginTop: '14px' }}>
-        <div style={{ marginBottom: '10px', fontWeight: 900, color: '#111827' }}>快捷操作</div>
-        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+      <section className="medui-surface medui-card-pad">
+        <div style={{ marginBottom: 10, fontWeight: 700, color: '#17324d' }}>快捷操作</div>
+        <div className="admin-med-actions">
           {capabilities.canBrowse ? (
-            <button type="button" data-testid="dashboard-quick-browser" onClick={() => navigate('/browser')} style={quickButtonStyle('#2563eb')}>
+            <button type="button" data-testid="dashboard-quick-browser" onClick={() => navigate('/browser')} className="medui-btn medui-btn--secondary">
               浏览文档
             </button>
           ) : null}
           {capabilities.canUploadKb ? (
-            <button type="button" data-testid="dashboard-quick-upload" onClick={() => navigate('/upload')} style={quickButtonStyle('#059669')}>
+            <button type="button" data-testid="dashboard-quick-upload" onClick={() => navigate('/upload')} className="medui-btn medui-btn--success">
               上传文档
             </button>
           ) : null}
           {capabilities.canViewKb ? (
-            <button type="button" data-testid="dashboard-quick-documents" onClick={() => navigate('/documents')} style={quickButtonStyle('#7c3aed')}>
+            <button type="button" data-testid="dashboard-quick-documents" onClick={() => navigate('/documents')} className="medui-btn medui-btn--primary">
               文档列表
             </button>
           ) : null}
         </div>
-      </div>
+      </section>
     </div>
   );
 }
-

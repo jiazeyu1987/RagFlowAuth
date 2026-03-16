@@ -5,12 +5,6 @@ import GroupEditorForm from '../features/permissionGroups/management/components/
 import { ROOT } from '../features/permissionGroups/management/constants';
 import usePermissionGroupManagement from '../features/permissionGroups/management/usePermissionGroupManagement';
 
-const panelStyle = {
-  border: '1px solid #e5e7eb',
-  borderRadius: 10,
-  background: '#fff',
-};
-
 export default function PermissionGroupManagement() {
   const {
     groups,
@@ -59,135 +53,33 @@ export default function PermissionGroupManagement() {
   } = usePermissionGroupManagement();
 
   return (
-    <div style={{ padding: 12 }}>
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          gap: 10,
-          alignItems: 'center',
-          marginBottom: 10,
-        }}
-      >
-        <h2 style={{ margin: 0 }}>权限组管理</h2>
+    <div className="admin-med-page">
+      <div className="admin-med-head">
+        <h2 className="admin-med-title">权限组管理</h2>
       </div>
 
-      <section style={{ ...panelStyle, marginBottom: 12 }}>
-        <div
-          style={{
-            padding: '10px 12px',
-            borderBottom: '1px solid #e5e7eb',
-            display: 'flex',
-            gap: 8,
-            flexWrap: 'wrap',
-            alignItems: 'center',
-          }}
-        >
+      <section className="medui-surface medui-card-pad">
+        <div className="admin-med-actions" style={{ alignItems: 'center' }}>
           <input
             value={searchKeyword}
             onChange={(event) => setSearchKeyword(event.target.value)}
             placeholder="筛选当前目录内容"
-            style={{
-              width: 260,
-              maxWidth: '100%',
-              padding: '9px 10px',
-              border: '1px solid #d1d5db',
-              borderRadius: 8,
-            }}
+            className="medui-input"
+            style={{ width: 260, maxWidth: '100%' }}
           />
-          <button
-            onClick={fetchAll}
-            style={{
-              border: '1px solid #d1d5db',
-              borderRadius: 8,
-              background: '#fff',
-              cursor: 'pointer',
-              padding: '9px 12px',
-            }}
-          >
-            刷新
-          </button>
-          <button
-            onClick={createFolder}
-            style={{
-              border: '1px solid #2563eb',
-              borderRadius: 8,
-              background: '#2563eb',
-              color: '#fff',
-              cursor: 'pointer',
-              padding: '9px 12px',
-            }}
-          >
-            新建目录
-          </button>
-          <button
-            onClick={renameFolder}
-            disabled={!selectedFolderId || selectedFolderId === ROOT}
-            style={{
-              border: '1px solid #f59e0b',
-              borderRadius: 8,
-              background:
-                !selectedFolderId || selectedFolderId === ROOT ? '#fde68a' : '#f59e0b',
-              color: '#fff',
-              cursor:
-                !selectedFolderId || selectedFolderId === ROOT
-                  ? 'not-allowed'
-                  : 'pointer',
-              padding: '9px 12px',
-            }}
-          >
-            重命名目录
-          </button>
-          <button
-            onClick={deleteFolder}
-            disabled={!selectedFolderId || selectedFolderId === ROOT}
-            style={{
-              border: '1px solid #ef4444',
-              borderRadius: 8,
-              background:
-                !selectedFolderId || selectedFolderId === ROOT ? '#fecaca' : '#ef4444',
-              color: '#fff',
-              cursor:
-                !selectedFolderId || selectedFolderId === ROOT
-                  ? 'not-allowed'
-                  : 'pointer',
-              padding: '9px 12px',
-            }}
-          >
-            删除目录
-          </button>
-          <button
-            onClick={startCreateGroup}
-            data-testid="pg-create-open"
-            style={{
-              border: '1px solid #10b981',
-              borderRadius: 8,
-              background: '#10b981',
-              color: '#fff',
-              cursor: 'pointer',
-              padding: '9px 12px',
-            }}
-          >
-            新建权限组
-          </button>
-          <div style={{ color: '#6b7280', fontSize: 12 }}>
-            权限组总数：{groups.length}
-          </div>
+          <button onClick={fetchAll} type="button" className="medui-btn medui-btn--secondary">刷新</button>
+          <button onClick={createFolder} type="button" className="medui-btn medui-btn--primary">新建目录</button>
+          <button onClick={renameFolder} disabled={!selectedFolderId || selectedFolderId === ROOT} type="button" className="medui-btn medui-btn--warn">重命名目录</button>
+          <button onClick={deleteFolder} disabled={!selectedFolderId || selectedFolderId === ROOT} type="button" className="medui-btn medui-btn--danger">删除目录</button>
+          <button onClick={startCreateGroup} data-testid="pg-create-open" type="button" className="medui-btn medui-btn--success">新建权限组</button>
+          <div className="admin-med-small">{`权限组总数：${groups.length}`}</div>
         </div>
       </section>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '320px 1fr', gap: 12 }}>
-        <section style={panelStyle}>
-          <div
-            style={{
-              padding: '10px 12px',
-              borderBottom: '1px solid #e5e7eb',
-              fontWeight: 800,
-            }}
-          >
-            目录树
-          </div>
-          <div style={{ padding: 10, maxHeight: 700, overflowY: 'auto' }}>
+      <div className="admin-med-tree-layout">
+        <section className="medui-surface">
+          <div className="kb-med-pane-head">目录树</div>
+          <div className="admin-med-tree-body">
             <FolderTree
               indexes={folderIndexes}
               currentFolderId={currentFolderId}
@@ -212,40 +104,23 @@ export default function PermissionGroupManagement() {
           </div>
         </section>
 
-        <section style={panelStyle}>
-          <div style={{ padding: '10px 12px', borderBottom: '1px solid #e5e7eb' }}>
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
-              <span style={{ color: '#6b7280', fontSize: 13 }}>路径：</span>
+        <section className="medui-surface">
+          <div className="medui-card-pad" style={{ borderBottom: '1px solid #deebf8' }}>
+            <div className="kb-med-breadcrumb">
+              <span className="admin-med-small">路径：</span>
               {folderPath.map((folder, index) => (
                 <React.Fragment key={folder.id || '__root__'}>
-                  <button
-                    type="button"
-                    onClick={() => openFolder(folder.id)}
-                    style={{
-                      border: 'none',
-                      background: 'transparent',
-                      cursor: 'pointer',
-                      color: currentFolderId === folder.id ? '#1d4ed8' : '#374151',
-                      fontWeight: currentFolderId === folder.id ? 700 : 500,
-                      padding: 0,
-                    }}
-                  >
-                    {folder.name}
-                  </button>
-                  {index < folderPath.length - 1 && (
-                    <span style={{ color: '#9ca3af' }}>{'>'}</span>
-                  )}
+                  <button type="button" onClick={() => openFolder(folder.id)} className={currentFolderId === folder.id ? 'is-current' : ''}>{folder.name}</button>
+                  {index < folderPath.length - 1 ? <span style={{ color: '#9ca3af' }}>{'>'}</span> : null}
                 </React.Fragment>
               ))}
             </div>
-            <div style={{ color: '#6b7280', fontSize: 12 }}>
-              可将表格中的权限组拖到左侧任意目录中。
-            </div>
-            {error && <div style={{ color: '#b91c1c', marginTop: 8 }}>{error}</div>}
-            {hint && <div style={{ color: '#047857', marginTop: 8 }}>{hint}</div>}
+            <div className="admin-med-small">可将表格中的权限组拖到左侧任意目录中。</div>
+            {error ? <div className="admin-med-danger" style={{ marginTop: 8 }}>{error}</div> : null}
+            {hint ? <div className="admin-med-success" style={{ marginTop: 8 }}>{hint}</div> : null}
           </div>
 
-          <div style={{ maxHeight: 280, overflowY: 'auto' }}>
+          <div className="admin-med-table-scroll" style={{ maxHeight: 280 }}>
             <GroupContentTable
               rows={filteredRows}
               groups={groups}
@@ -261,7 +136,7 @@ export default function PermissionGroupManagement() {
             />
           </div>
 
-          <div style={{ borderTop: '1px solid #e5e7eb', padding: 12 }}>
+          <div style={{ borderTop: '1px solid #deebf8', padding: 12 }}>
             <GroupEditorForm
               loading={loading}
               formData={formData}

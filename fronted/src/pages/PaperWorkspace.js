@@ -1,10 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { paperPlagApi } from '../features/paperPlag/api';
+import { normalizeDisplayError } from '../shared/utils/displayError';
 
 const activeReportStatuses = new Set(['pending', 'running', 'canceling']);
 const REPORT_STATUS_LABELS = {
-  pending: '待处理',
+  pending: '排队中',
   running: '执行中',
   completed: '已完成',
   failed: '失败',
@@ -29,8 +30,8 @@ function parseManualSources(text) {
     .map((line) => String(line || '').trim())
     .filter(Boolean)
     .map((line, index) => ({
-      source_doc_id: `手动文档_${index + 1}`,
-      source_title: `手动来源_${index + 1}`,
+      source_doc_id: `手工来源_${index + 1}`,
+      source_title: `手工来源标题_${index + 1}`,
       content_text: line,
     }));
 }
@@ -38,7 +39,7 @@ function parseManualSources(text) {
 export default function PaperWorkspace() {
   const navigate = useNavigate();
 
-  const [paperId, setPaperId] = useState('论文_1');
+  const [paperId, setPaperId] = useState('论文1');
   const [title, setTitle] = useState('');
   const [contentText, setContentText] = useState('');
   const [note, setNote] = useState('');
@@ -91,7 +92,7 @@ export default function PaperWorkspace() {
         setDiffToVersionId(String(nextItems[0].id));
       }
     } catch (err) {
-      setError(err.message || '加载版本失败');
+      setError(normalizeDisplayError(err?.message ?? err, '加载版本列表失败'));
     } finally {
       if (!silent) setVersionsLoading(false);
     }
@@ -117,7 +118,7 @@ export default function PaperWorkspace() {
         }
       }
     } catch (err) {
-      setError(err.message || '加载查重报告失败');
+      setError(normalizeDisplayError(err?.message ?? err, '加载查重报告列表失败'));
     } finally {
       if (!silent) setReportsLoading(false);
     }
@@ -132,7 +133,7 @@ export default function PaperWorkspace() {
       setSelectedReportId(normalizedReportId);
       setReportDetail(payload);
     } catch (err) {
-      setError(err.message || '加载报告详情失败');
+      setError(normalizeDisplayError(err?.message ?? err, '加载报告详情失败'));
     } finally {
       if (!silent) setReportDetailLoading(false);
     }
@@ -168,7 +169,7 @@ export default function PaperWorkspace() {
       return;
     }
     if (!String(contentText || '').trim()) {
-      setError('论文内容不能为空');
+      setError('请输入论文正文内容');
       return;
     }
     setSaveLoading(true);
@@ -179,10 +180,10 @@ export default function PaperWorkspace() {
         note: note || null,
       });
       const versionNo = payload?.version?.version_no;
-      setInfo(`版本保存成功${versionNo ? `（第 ${versionNo} 版）` : ''}`);
+      setInfo(`版本已保存${versionNo ? `，版本号 ${versionNo}` : ''}`);
       await loadVersions();
     } catch (err) {
-      setError(err.message || '保存版本失败');
+      setError(normalizeDisplayError(err?.message ?? err, '保存版本失败'));
     } finally {
       setSaveLoading(false);
     }
@@ -196,7 +197,7 @@ export default function PaperWorkspace() {
       return;
     }
     if (!String(contentText || '').trim()) {
-      setError('请先填写论文内容再提交查重');
+      setError('提交查重前请先填写论文正文内容');
       return;
     }
 
@@ -215,13 +216,13 @@ export default function PaperWorkspace() {
         sources: parseManualSources(sourceText),
       });
       const reportId = String(payload?.report?.report_id || '');
-      setInfo(`查重任务已提交${reportId ? `（${reportId}）` : ''}`);
+      setInfo(`查重任务已提交${reportId ? `，报告编号 ${reportId}` : ''}`);
       await Promise.all([loadVersions(), loadReports()]);
       if (reportId) {
         await loadReportDetail(reportId);
       }
     } catch (err) {
-      setError(err.message || '提交查重失败');
+      setError(normalizeDisplayError(err?.message ?? err, '启动查重失败'));
     } finally {
       setStartLoading(false);
     }
@@ -236,9 +237,9 @@ export default function PaperWorkspace() {
       setTitle(String(version.title || ''));
       setContentText(String(version.content_text || ''));
       setNote(String(version.note || ''));
-      setInfo(`已加载版本 第 ${version.version_no || version.id} 版`);
+      setInfo(`已将版本 ${version.version_no || version.id} 加载到编辑区`);
     } catch (err) {
-      setError(err.message || '加载版本内容失败');
+      setError(normalizeDisplayError(err?.message ?? err, '加载版本内容失败'));
     }
   };
 
@@ -248,7 +249,7 @@ export default function PaperWorkspace() {
     const fromVersionId = Number(diffFromVersionId);
     const toVersionId = Number(diffToVersionId);
     if (!Number.isFinite(fromVersionId) || !Number.isFinite(toVersionId) || fromVersionId <= 0 || toVersionId <= 0) {
-      setError('请选择有效的版本进行对比');
+      setError('请选择有效的两个版本进行对比');
       return;
     }
 
@@ -256,17 +257,17 @@ export default function PaperWorkspace() {
     try {
       const payload = await paperPlagApi.diffVersions(normalizedPaperId, fromVersionId, toVersionId);
       setDiffResult(payload);
-      setInfo('版本对比完成');
+      setInfo('版本对比已完成');
     } catch (err) {
-      setError(err.message || '版本对比失败');
+      setError(normalizeDisplayError(err?.message ?? err, '版本对比失败'));
     } finally {
       setDiffLoading(false);
     }
   };
 
   const handleRollback = async (versionId) => {
-    if (!window.confirm(`确定回滚到版本 ${versionId} 并生成新版本吗？`)) return;
-    const rollbackNote = window.prompt('请输入回滚备注（可选）', `页面回滚来源版本=${versionId}`);
+    if (!window.confirm(`确认回滚到版本 ${versionId} 并覆盖当前内容吗？`)) return;
+    const rollbackNote = window.prompt('请输入回滚说明（可选）', `回滚到版本=${versionId}`);
     if (rollbackNote === null) return;
 
     setError('');
@@ -274,10 +275,10 @@ export default function PaperWorkspace() {
     setRollbackLoadingId(String(versionId));
     try {
       await paperPlagApi.rollbackVersion(normalizedPaperId, versionId, String(rollbackNote || '').trim() || null);
-      setInfo(`版本 ${versionId} 回滚成功`);
+      setInfo(`已回滚到版本 ${versionId}`);
       await loadVersions();
     } catch (err) {
-      setError(err.message || '版本回滚失败');
+      setError(normalizeDisplayError(err?.message ?? err, '版本回滚失败'));
     } finally {
       setRollbackLoadingId('');
     }
@@ -289,13 +290,13 @@ export default function PaperWorkspace() {
     setCancelLoadingId(String(reportId));
     try {
       const payload = await paperPlagApi.cancelReport(reportId);
-      setInfo(`报告 ${reportId} 已请求取消`);
+      setInfo(`报告 ${reportId} 已提交取消请求`);
       await loadReports();
       if (payload?.report?.report_id) {
         await loadReportDetail(payload.report.report_id);
       }
     } catch (err) {
-      setError(err.message || '取消查重任务失败');
+      setError(normalizeDisplayError(err?.message ?? err, '取消查重失败'));
     } finally {
       setCancelLoadingId('');
     }
@@ -307,9 +308,9 @@ export default function PaperWorkspace() {
     setExportLoadingId(String(reportId));
     try {
       const payload = await paperPlagApi.exportReport(reportId, 'md');
-      setInfo(`报告导出成功：${payload.filename}`);
+      setInfo(`报告已导出：${payload.filename}`);
     } catch (err) {
-      setError(err.message || '导出报告失败');
+      setError(normalizeDisplayError(err?.message ?? err, '导出报告失败'));
     } finally {
       setExportLoadingId('');
     }
@@ -330,7 +331,7 @@ export default function PaperWorkspace() {
             fontWeight: 700,
           }}
         >
-          Back To Tools
+          返回工具页
         </button>
         <button
           type="button"
@@ -350,7 +351,7 @@ export default function PaperWorkspace() {
             fontWeight: 700,
           }}
         >
-          Refresh
+          刷新
         </button>
       </div>
 
@@ -367,14 +368,14 @@ export default function PaperWorkspace() {
 
       <div style={{ display: 'grid', gap: '12px', gridTemplateColumns: 'minmax(520px, 2fr) minmax(420px, 1fr)' }}>
         <section style={{ background: 'white', border: '1px solid #e5e7eb', borderRadius: '12px', padding: '14px', display: 'grid', gap: '10px' }}>
-          <div style={{ fontWeight: 700, fontSize: '1.02rem' }}>论文工作台</div>
+          <div style={{ fontWeight: 700, fontSize: '1.02rem' }}>论文编辑区</div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
             <label style={{ display: 'grid', gap: '4px' }}>
               <span style={{ color: '#6b7280', fontSize: '0.86rem' }}>论文编号</span>
               <input
                 value={paperId}
                 onChange={(e) => setPaperId(e.target.value)}
-                placeholder="例如：工作台_1"
+                placeholder="示例：论文1"
                 style={{ padding: '8px 10px', borderRadius: '8px', border: '1px solid #d1d5db' }}
               />
             </label>
@@ -390,22 +391,22 @@ export default function PaperWorkspace() {
           </div>
 
           <label style={{ display: 'grid', gap: '4px' }}>
-            <span style={{ color: '#6b7280', fontSize: '0.86rem' }}>论文内容</span>
+            <span style={{ color: '#6b7280', fontSize: '0.86rem' }}>论文正文</span>
             <textarea
               value={contentText}
               onChange={(e) => setContentText(e.target.value)}
-              placeholder="输入论文内容..."
+              placeholder="请粘贴或输入论文正文内容..."
               rows={12}
               style={{ padding: '10px', borderRadius: '8px', border: '1px solid #d1d5db', resize: 'vertical', fontFamily: 'monospace' }}
             />
           </label>
 
           <label style={{ display: 'grid', gap: '4px' }}>
-            <span style={{ color: '#6b7280', fontSize: '0.86rem' }}>版本备注/提交备注（可选）</span>
+            <span style={{ color: '#6b7280', fontSize: '0.86rem' }}>版本备注 / 查重备注</span>
             <input
               value={note}
               onChange={(e) => setNote(e.target.value)}
-              placeholder="例如：第一版草稿"
+              placeholder="可选，用于记录当前版本或本次查重说明"
               style={{ padding: '8px 10px', borderRadius: '8px', border: '1px solid #d1d5db' }}
             />
           </label>
@@ -469,11 +470,11 @@ export default function PaperWorkspace() {
           </div>
 
           <label style={{ display: 'grid', gap: '4px' }}>
-            <span style={{ color: '#6b7280', fontSize: '0.86rem' }}>手动来源文本（每行一条，可选）</span>
+            <span style={{ color: '#6b7280', fontSize: '0.86rem' }}>手工来源文本（每行一条，作为对比来源，可选）</span>
             <textarea
               value={sourceText}
               onChange={(e) => setSourceText(e.target.value)}
-              placeholder="用于模拟相似片段来源，每行一段文本"
+              placeholder="每行输入一条来源文本，用于辅助查重与相似片段匹配"
               rows={4}
               style={{ padding: '10px', borderRadius: '8px', border: '1px solid #d1d5db', resize: 'vertical', fontFamily: 'monospace' }}
             />
@@ -561,22 +562,22 @@ export default function PaperWorkspace() {
             {!reportDetailLoading && reportDetail && (
               <div style={{ display: 'grid', gap: '8px' }}>
                 <div style={{ color: '#374151', fontSize: '0.88rem' }}>
-                  状态：{formatReportStatus(reportDetail?.report?.status)}，重复率：{Math.round((Number(reportDetail?.report?.duplicate_rate || 0) || 0) * 10000) / 100}%
+                  {`状态：${formatReportStatus(reportDetail?.report?.status)}；重复率：${Math.round((Number(reportDetail?.report?.duplicate_rate || 0) || 0) * 10000) / 100}%`}
                 </div>
                 <div style={{ color: '#374151', fontSize: '0.88rem' }}>
-                  摘要：{reportDetail?.report?.summary || '-'}
+                  {`摘要：${reportDetail?.report?.summary || '-'}`}
                 </div>
                 <div style={{ maxHeight: '140px', overflow: 'auto', border: '1px solid #f3f4f6', borderRadius: '6px' }}>
                   {(reportDetail?.hits || []).map((hit) => (
                     <div key={hit.id} style={{ padding: '8px', borderTop: '1px solid #f3f4f6' }}>
                       <div style={{ fontSize: '0.84rem', color: '#111827' }}>
                         {hit.source_title || hit.source_doc_id || '未知来源'}
-                        {' · '}相似度 {Math.round((Number(hit.similarity_score || 0) || 0) * 10000) / 100}%
+                        {` 相似度 ${Math.round((Number(hit.similarity_score || 0) || 0) * 10000) / 100}%`}
                       </div>
                       <div style={{ marginTop: '4px', color: '#4b5563', fontSize: '0.82rem' }}>{hit.snippet_text || '-'}</div>
                     </div>
                   ))}
-                  {!reportDetail?.hits?.length && <div style={{ padding: '8px', color: '#9ca3af' }}>无命中片段</div>}
+                  {!reportDetail?.hits?.length && <div style={{ padding: '8px', color: '#9ca3af' }}>暂无命中片段</div>}
                 </div>
               </div>
             )}
@@ -587,7 +588,7 @@ export default function PaperWorkspace() {
       <div style={{ display: 'grid', gap: '12px', gridTemplateColumns: 'minmax(520px, 2fr) minmax(420px, 1fr)' }}>
         <section style={{ background: 'white', border: '1px solid #e5e7eb', borderRadius: '12px', padding: '14px', display: 'grid', gap: '10px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div style={{ fontWeight: 700, fontSize: '1.02rem' }}>版本历史</div>
+            <div style={{ fontWeight: 700, fontSize: '1.02rem' }}>版本列表</div>
             <span style={{ color: '#6b7280', fontSize: '0.86rem' }}>{versionsLoading ? '加载中...' : `${versions.length} 条`}</span>
           </div>
 
@@ -597,9 +598,9 @@ export default function PaperWorkspace() {
               onChange={(e) => setDiffFromVersionId(e.target.value)}
               style={{ padding: '8px 10px', borderRadius: '8px', border: '1px solid #d1d5db' }}
             >
-              <option value="">选择对比起点版本</option>
+              <option value="">请选择对比起始版本</option>
               {versions.map((item) => (
-                <option key={`from_${item.id}`} value={item.id}>版本{item.version_no}（编号={item.id}）</option>
+                <option key={`from_${item.id}`} value={item.id}>{`版本 ${item.version_no}（ID ${item.id}）`}</option>
               ))}
             </select>
             <select
@@ -607,9 +608,9 @@ export default function PaperWorkspace() {
               onChange={(e) => setDiffToVersionId(e.target.value)}
               style={{ padding: '8px 10px', borderRadius: '8px', border: '1px solid #d1d5db' }}
             >
-              <option value="">选择对比目标版本</option>
+              <option value="">请选择对比目标版本</option>
               {versions.map((item) => (
-                <option key={`to_${item.id}`} value={item.id}>版本{item.version_no}（编号={item.id}）</option>
+                <option key={`to_${item.id}`} value={item.id}>{`版本 ${item.version_no}（ID ${item.id}）`}</option>
               ))}
             </select>
             <button
@@ -641,7 +642,7 @@ export default function PaperWorkspace() {
               <tbody>
                 {versions.map((item) => (
                   <tr key={item.id}>
-                    <td style={{ padding: '8px', borderTop: '1px solid #f3f4f6' }}>版本{item.version_no}（编号={item.id}）</td>
+                    <td style={{ padding: '8px', borderTop: '1px solid #f3f4f6' }}>{`版本 ${item.version_no}（ID ${item.id}）`}</td>
                     <td style={{ padding: '8px', borderTop: '1px solid #f3f4f6' }}>{item.note || '-'}</td>
                     <td style={{ padding: '8px', borderTop: '1px solid #f3f4f6' }}>{formatTime(item.created_at_ms)}</td>
                     <td style={{ padding: '8px', borderTop: '1px solid #f3f4f6', whiteSpace: 'nowrap' }}>
@@ -681,12 +682,12 @@ export default function PaperWorkspace() {
         </section>
 
         <section style={{ background: 'white', border: '1px solid #e5e7eb', borderRadius: '12px', padding: '14px', display: 'grid', gap: '10px' }}>
-          <div style={{ fontWeight: 700, fontSize: '1.02rem' }}>对比结果</div>
-          {!diffResult && <div style={{ color: '#9ca3af' }}>请先选择两个版本并执行对比</div>}
+          <div style={{ fontWeight: 700, fontSize: '1.02rem' }}>版本对比结果</div>
+          {!diffResult && <div style={{ color: '#9ca3af' }}>请选择两个版本后执行版本对比</div>}
           {diffResult && (
             <div style={{ display: 'grid', gap: '8px' }}>
               <div style={{ color: '#374151', fontSize: '0.88rem' }}>
-                新增行：{diffResult.added_lines || 0}，删除行：{diffResult.removed_lines || 0}，变更块：{diffResult.changed_blocks || 0}
+                {`新增行数 ${diffResult.added_lines || 0}，删除行数 ${diffResult.removed_lines || 0}，变更块数 ${diffResult.changed_blocks || 0}`}
               </div>
               <pre
                 style={{
@@ -700,7 +701,7 @@ export default function PaperWorkspace() {
                   fontSize: '0.82rem',
                 }}
               >
-                {(diffResult.diff_preview || []).join('\n') || '(无差异内容)'}
+                {(diffResult.diff_preview || []).join('\n') || '暂无差异内容'}
               </pre>
             </div>
           )}

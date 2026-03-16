@@ -16,7 +16,7 @@ export default function DownloadHistoryDetailPanel({
       {loading ? <div style={{ color: '#6b7280', fontSize: '0.88rem' }}>{loadingText}</div> : null}
       {!loading && summary ? (
         <div style={{ color: '#6b7280', fontSize: '0.82rem', marginBottom: '8px' }}>
-          关键词：{summary.keyword_display || '-'}，会话数 {summary.session_count || 0}，{itemLabel} {summary.item_count || 0}
+          关键词：{summary.keyword_display || '-'}，会话数 {summary.session_count || 0}，{itemLabel}数 {summary.item_count || 0}
         </div>
       ) : null}
       {!loading ? children : null}

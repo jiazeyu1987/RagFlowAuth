@@ -1,5 +1,6 @@
 import { useCallback, useRef } from 'react';
 import { httpClient } from '../../../shared/http/httpClient';
+import { normalizeDisplayError } from '../../../shared/utils/displayError';
 
 const SAFETY_STAGE_META = [
   { key: 'classify', label: '分级' },
@@ -163,9 +164,9 @@ export const useChatStream = ({
       if (!isStreamDebugEnabled()) return;
       const writer = console?.[level] || console.log;
       if (payload === null || payload === undefined) {
-        writer(`[Chat:stream] ${message}`);
+        writer(`[对话流] ${message}`);
       } else {
-        writer(`[Chat:stream] ${message}`, payload);
+        writer(`[对话流] ${message}`, payload);
       }
     },
     [isStreamDebugEnabled]
@@ -232,7 +233,7 @@ export const useChatStream = ({
       try {
         if (typeof debugLogCitations === 'function') {
           debugLogCitations(
-            'sources received',
+            '收到来源',
             list.map((s) => {
               const n = normalizeSource(s);
               return {
@@ -473,7 +474,7 @@ export const useChatStream = ({
     const userMessage = { role: 'user', content: question };
     const isFirstUserMessage = !(messages || []).some((m) => m?.role === 'user');
 
-    logStream('info', 'send start', {
+    logStream('info', '发送开始', {
       traceId,
       selectedChatId,
       selectedSessionId,
@@ -506,7 +507,7 @@ export const useChatStream = ({
         body: JSON.stringify({ question, stream: true, session_id: selectedSessionId }),
       });
 
-      logStream('info', 'send response received', {
+      logStream('info', '收到发送响应', {
         traceId,
         ok: response.ok,
         status: response.status,
@@ -537,7 +538,7 @@ export const useChatStream = ({
           .replace(/^\uFEFF/, '')
           .trim();
 
-        logStream('debug', 'sse line received', {
+        logStream('debug', '收到 SSE 行', {
           traceId,
           sseLineIndex,
           rawLen: String(rawLine ?? '').length,
@@ -553,7 +554,7 @@ export const useChatStream = ({
           consumedSseEvent = true;
           const data = JSON.parse(dataStr);
 
-          logStream('debug', 'sse json parsed', {
+          logStream('debug', 'SSE JSON 解析完成', {
             traceId,
             sseLineIndex,
             code: data?.code,
@@ -564,7 +565,7 @@ export const useChatStream = ({
           const safetyPayload = extractSafetyPayload(data);
           if (safetyPayload) {
             applyBackendSafetyPayload(safetyPayload);
-            logStream('debug', 'safety event', {
+            logStream('debug', '安全流程事件', {
               traceId,
               sseLineIndex,
               stage: safetyPayload.stage || '',
@@ -582,7 +583,7 @@ export const useChatStream = ({
 
           if (data?.code === 0 && data?.data && Array.isArray(data.data.sources)) {
             upsertAssistantSources(data.data.sources);
-            logStream('debug', 'sources event', {
+            logStream('debug', '来源事件', {
               traceId,
               sseLineIndex,
               sourcesCount: data.data.sources.length,
@@ -597,9 +598,9 @@ export const useChatStream = ({
               advanceFallbackSafetyFlow('answered');
             }
             if (incoming.toLowerCase().includes('<think')) {
-              console.debug('[Chat:stream] think detected');
+              console.debug('[对话流] 检测到思考标记');
             }
-            logStream('debug', 'answer event', {
+            logStream('debug', '回答事件', {
               traceId,
               sseLineIndex,
               incomingLen: incoming.length,
@@ -641,7 +642,7 @@ export const useChatStream = ({
             if (next) {
               assistantMessageRef.current = next;
               upsertAssistantMessage(next);
-              logStream('debug', 'assistant message updated', {
+              logStream('debug', '助手消息已更新', {
                 traceId,
                 sseLineIndex,
                 nextLen: next.length,
@@ -687,7 +688,7 @@ export const useChatStream = ({
 
             assistantMessageRef.current = next;
             upsertAssistantMessage(next);
-            logStream('debug', 'assistant message merged', {
+            logStream('debug', '助手消息已合并', {
               traceId,
               sseLineIndex,
               nextLen: next.length,
@@ -696,11 +697,11 @@ export const useChatStream = ({
           }
 
           if (typeof data?.code === 'number' && data.code !== 0) {
-            const msg = String(data?.message || data?.detail || '后端异常');
+            const msg = normalizeDisplayError(data?.message || data?.detail, '后端异常');
             setError(msg);
             upsertAssistantMessage(msg);
             finalizeSafetyFlow('error');
-            logStream('warn', 'backend non-zero code', {
+            logStream('warn', '后端返回非零状态码', {
               traceId,
               sseLineIndex,
               code: data.code,
@@ -708,7 +709,7 @@ export const useChatStream = ({
             });
           }
         } catch {
-          logStream('warn', 'malformed sse chunk ignored', {
+          logStream('warn', '已忽略异常 SSE 分片', {
             traceId,
             sseLineIndex,
             dataPreview: previewText(dataStr, 180),
@@ -724,7 +725,7 @@ export const useChatStream = ({
         const decoded = decoder.decode(value, { stream: true });
         rawText += decoded;
         buffer += decoded;
-        logStream('debug', 'reader chunk', {
+        logStream('debug', '读取流分片', {
           traceId,
           readerChunkIndex,
           byteLength: value?.byteLength || 0,
@@ -771,14 +772,14 @@ export const useChatStream = ({
             if (Array.isArray(maybeSources)) {
               upsertAssistantSources(maybeSources);
             }
-            logStream('info', 'json-body fallback used', {
+            logStream('info', '启用 JSON 回退解析', {
               traceId,
               rawLen: rawTrimmed.length,
               fallbackAnswerLen: String(assistantMessageRef.current || '').length,
             });
           }
         } catch {
-          logStream('warn', 'json-body fallback failed', {
+          logStream('warn', 'JSON 回退解析失败', {
             traceId,
             rawPreview: previewText(rawText, 180),
           });
@@ -788,7 +789,7 @@ export const useChatStream = ({
       const visibleAssistantText = String(stripThinkTags(assistantMessageRef.current || '') || '').trim();
       if (!visibleAssistantText && !receivedAnswerEvent && !consumedSseEvent && typeof refreshSessionMessages === 'function') {
         try {
-          logStream('warn', 'no answer parsed, refreshing session messages', {
+          logStream('warn', '未解析到回答，开始刷新会话消息', {
             traceId,
             consumedSseEvent,
             receivedAnswerEvent,
@@ -796,7 +797,7 @@ export const useChatStream = ({
           });
           await Promise.resolve(refreshSessionMessages());
         } catch {
-          logStream('warn', 'refresh session messages failed', { traceId });
+          logStream('warn', '刷新会话消息失败', { traceId });
         }
       }
 
@@ -807,7 +808,7 @@ export const useChatStream = ({
         const finalSources = assistantSourcesRef.current || [];
         saveSourcesForAssistantMessage(selectedChatId, selectedSessionId, finalText, finalSources);
         const finishedAt = typeof performance !== 'undefined' ? performance.now() : Date.now();
-        logStream('info', 'send finished', {
+        logStream('info', '发送完成', {
           traceId,
           durationMs: Math.max(0, Math.round(finishedAt - sendStartedAt)),
           readerChunkIndex,
@@ -818,15 +819,15 @@ export const useChatStream = ({
           finalSourcesCount: Array.isArray(finalSources) ? finalSources.length : 0,
         });
       } catch {
-        logStream('warn', 'saveSourcesForAssistantMessage failed', { traceId });
+        logStream('warn', '保存助手消息来源失败', { traceId });
       }
     } catch (err) {
-      logStream('error', 'send failed', {
+      logStream('error', '发送失败', {
         traceId,
-        message: String(err?.message || err || 'unknown_error'),
+        message: String(err?.message || err || '未知错误'),
       });
       finalizeSafetyFlow('error');
-      setError(err?.message || '发送失败');
+      setError(normalizeDisplayError(err?.message ?? err, '发送失败'));
       setMessages((prev) => {
         const next = Array.isArray(prev) ? [...prev] : [];
         const hasCurrentUserQuestion = next.some(

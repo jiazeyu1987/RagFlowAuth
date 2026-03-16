@@ -10,28 +10,17 @@ export default function ChatComposer({
   onSendMessage,
 }) {
   if (!selectedChatId) {
-    return (
-      <div style={{ padding: '12px', borderTop: '1px solid #e5e7eb', color: '#6b7280' }}>
-        请先选择聊天助手
-      </div>
-    );
+    return <div className="chat-med-composer__hint">请先选择助手。</div>;
   }
 
   if (!selectedSessionId) {
     return (
-      <div style={{ padding: '12px', borderTop: '1px solid #e5e7eb' }}>
+      <div className="chat-med-composer__hint">
         <button
           onClick={onCreateSession}
           data-testid="chat-create-session-bottom"
-          style={{
-            padding: '10px 14px',
-            borderRadius: '6px',
-            border: 'none',
-            backgroundColor: '#3b82f6',
-            color: 'white',
-            cursor: 'pointer',
-            fontWeight: 600,
-          }}
+          type="button"
+          className="medui-btn medui-btn--primary"
         >
           新建会话
         </button>
@@ -40,37 +29,23 @@ export default function ChatComposer({
   }
 
   return (
-    <div style={{ padding: '12px', borderTop: '1px solid #e5e7eb', display: 'flex', gap: '10px' }}>
+    <div className="chat-med-composer">
       <textarea
         value={inputMessage}
-        onChange={(e) => setInputMessage(e.target.value)}
+        onChange={(event) => setInputMessage(event.target.value)}
         onKeyDown={onKeyPress}
         data-testid="chat-input"
-        placeholder="输入消息...（回车发送，上档键+回车换行）"
-        style={{
-          flex: 1,
-          resize: 'none',
-          padding: '10px 12px',
-          borderRadius: '6px',
-          border: '1px solid #d1d5db',
-          outline: 'none',
-          minHeight: '44px',
-          maxHeight: '120px',
-        }}
+        placeholder="请输入消息。回车发送，使用换行组合键可换行。"
+        className="medui-textarea"
+        style={{ flex: 1, resize: 'none', maxHeight: 140 }}
       />
       <button
         onClick={onSendMessage}
         disabled={!inputMessage.trim()}
         data-testid="chat-send"
-        style={{
-          padding: '0 16px',
-          borderRadius: '6px',
-          border: 'none',
-          backgroundColor: !inputMessage.trim() ? '#9ca3af' : '#3b82f6',
-          color: 'white',
-          cursor: !inputMessage.trim() ? 'not-allowed' : 'pointer',
-          fontWeight: 600,
-        }}
+        type="button"
+        className="medui-btn medui-btn--primary"
+        style={{ minWidth: 88, height: 42 }}
       >
         发送
       </button>

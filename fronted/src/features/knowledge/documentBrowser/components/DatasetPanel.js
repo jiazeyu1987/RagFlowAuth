@@ -29,54 +29,42 @@ export default function DatasetPanel({
   const loadingDocs = !Object.prototype.hasOwnProperty.call(documents, dataset.name) && !datasetError;
 
   return (
-    <div
-      data-testid={`browser-dataset-${dataset.id}`}
-      style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, overflow: 'hidden' }}
-    >
-      <div
-        data-testid={`browser-dataset-toggle-${dataset.id}`}
-        onClick={() => toggleDataset(dataset.name)}
-        style={{
-          padding: '14px 16px',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          cursor: 'pointer',
-          background: '#f9fafb',
-        }}
-      >
+    <div data-testid={`browser-dataset-${dataset.id}`} className="browser-med-dataset">
+      <div data-testid={`browser-dataset-toggle-${dataset.id}`} onClick={() => toggleDataset(dataset.name)} className="browser-med-dataset-head">
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <div style={{ fontSize: '1rem', transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>{'>'}</div>
           <div>
-            <div style={{ fontWeight: 700, color: '#111827' }}>{dataset.name}</div>
-            <div style={{ fontSize: '0.8rem', color: '#6b7280', marginTop: 2 }}>
-              {dataset.node_path && dataset.node_path !== '/' ? `${TEXT.root} -> ${dataset.node_path.split('/').filter(Boolean).join(' -> ')}` : TEXT.root}
+            <div className="browser-med-dataset-name">{dataset.name}</div>
+            <div className="browser-med-dataset-sub">
+              {dataset.node_path && dataset.node_path !== '/'
+                ? `${TEXT.root} -> ${dataset.node_path.split('/').filter(Boolean).join(' -> ')}`
+                : TEXT.root}
             </div>
           </div>
         </div>
-        <span style={{ padding: '4px 8px', background: '#dbeafe', color: '#1e40af', borderRadius: 4, fontSize: '0.85rem' }}>
-          {loadingDocs ? '...' : datasetDocs.length}
-        </span>
+        <span className="browser-med-dataset-count">{loadingDocs ? '...' : datasetDocs.length}</span>
       </div>
 
       {isExpanded ? (
-        <div style={{ padding: 16 }}>
-          {loadingDocs ? <div style={{ color: '#6b7280', textAlign: 'center', padding: 20 }}>{TEXT.loadingDocs}</div> : null}
+        <div style={{ padding: 14 }}>
+          {loadingDocs ? <div className="medui-empty" style={{ padding: 20 }}>{TEXT.loadingDocs}</div> : null}
           {!loadingDocs && datasetError ? (
-            <div style={{ color: '#dc2626', textAlign: 'center', padding: 20 }}>
-              <div style={{ marginBottom: 10 }}>加载失败：{datasetError}</div>
-              <button type="button" onClick={() => fetchDocumentsForDataset(dataset.name)}>{TEXT.retry}</button>
+            <div className="browser-med-error" style={{ textAlign: 'center' }}>
+              <div style={{ marginBottom: 10 }}>{`加载失败：${datasetError}`}</div>
+              <button type="button" onClick={() => fetchDocumentsForDataset(dataset.name)} className="medui-btn medui-btn--neutral">
+                {TEXT.retry}
+              </button>
             </div>
           ) : null}
           {!loadingDocs && !datasetError && datasetDocs.length === 0 ? (
-            <div style={{ color: '#6b7280', textAlign: 'center', padding: 20 }}>{TEXT.noDocs}</div>
+            <div className="medui-empty" style={{ padding: 20 }}>{TEXT.noDocs}</div>
           ) : null}
 
           {!loadingDocs && !datasetError && datasetDocs.length > 0 ? (
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <table className="browser-med-doc-table">
               <thead>
-                <tr style={{ borderBottom: '2px solid #e5e7eb' }}>
-                  <th style={{ width: 40, textAlign: 'left', padding: '12px 8px' }}>
+                <tr>
+                  <th style={{ width: 40 }}>
                     <input
                       type="checkbox"
                       checked={isAllSelectedInDataset(dataset.name)}
@@ -84,16 +72,16 @@ export default function DatasetPanel({
                       data-testid={`browser-dataset-selectall-${dataset.id}`}
                     />
                   </th>
-                  <th style={{ textAlign: 'left', padding: '12px 8px', color: '#6b7280' }}>{TEXT.docName}</th>
-                  <th style={{ textAlign: 'right', padding: '12px 8px', color: '#6b7280', width: 420 }}>{'\u64cd\u4f5c'}</th>
+                  <th>{TEXT.docName}</th>
+                  <th style={{ textAlign: 'right', width: 420 }}>操作</th>
                 </tr>
               </thead>
               <tbody>
                 {datasetDocs.map((doc) => {
                   const viewDisabled = actionLoading[`${doc.id}-view`] || !canPreviewFilename(doc.name);
                   return (
-                    <tr key={doc.id} data-testid={`browser-doc-row-${dataset.id}-${doc.id}`} style={{ borderBottom: '1px solid #f3f4f6' }}>
-                      <td style={{ padding: '12px 8px' }}>
+                    <tr key={doc.id} data-testid={`browser-doc-row-${dataset.id}-${doc.id}`}>
+                      <td>
                         <input
                           type="checkbox"
                           checked={isDocSelected(doc.id, dataset.name)}
@@ -101,8 +89,8 @@ export default function DatasetPanel({
                           data-testid={`browser-doc-select-${dataset.id}-${doc.id}`}
                         />
                       </td>
-                      <td style={{ padding: '12px 8px', fontWeight: 500, color: '#111827' }}>{doc.name}</td>
-                      <td style={{ padding: '12px 8px', textAlign: 'right' }}>
+                      <td style={{ fontWeight: 600, color: '#173d60' }}>{doc.name}</td>
+                      <td style={{ textAlign: 'right' }}>
                         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
                           <button
                             type="button"
@@ -175,4 +163,3 @@ export default function DatasetPanel({
     </div>
   );
 }
-

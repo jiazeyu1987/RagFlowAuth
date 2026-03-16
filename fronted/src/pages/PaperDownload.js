@@ -116,17 +116,17 @@ export default function PaperDownload() {
           <DownloadKeywordConfigCard
             boxStyle={PAPER_BOX_STYLE}
             title="关键词设置"
-            keywordLabel="关键词（可用逗号/分号/换行分隔）"
+            keywordLabel="关键词（可用逗号、分号、换行分隔）"
             keywordText={keywordText}
             onKeywordChange={setKeywordText}
-            placeholder={'3D打印\n导板'}
+            placeholder={'三维打印\n导板'}
             useAnd={useAnd}
             onUseAndChange={setUseAnd}
             useAndId="paper-use-and"
             useAndLabel="使用“并且”逻辑（不勾选则使用“或者”）"
             parsedTitle="解析后的关键词"
             parsedKeywords={parsedKeywords}
-            emptyParsedText="无"
+            emptyParsedText="暂无"
           />
 
           <DownloadSourceConfigCard
@@ -140,7 +140,7 @@ export default function PaperDownload() {
             onAutoAnalyzeChange={setAutoAnalyze}
             onRunDownload={runDownload}
             loading={loading}
-            autoAnalyzeLabel="自动解析"
+            autoAnalyzeLabel="自动分析"
             runText="开始下载"
             runLoadingText="下载中..."
             limitLabel="数量上限"

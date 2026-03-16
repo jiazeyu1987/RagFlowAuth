@@ -7,6 +7,12 @@ export default function useSearchConfigsPanel() {
   const { user } = useAuth();
   const isAdmin = (user?.role || '') === 'admin';
 
+  const normalizeDisplayError = useCallback((message, fallback) => {
+    const text = String(message || '').trim();
+    if (!text) return fallback;
+    return /[\u4e00-\u9fff]/.test(text) ? text : fallback;
+  }, []);
+
   const [list, setList] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -45,11 +51,11 @@ export default function useSearchConfigsPanel() {
       setList(normalizeListResponse(response));
     } catch (requestError) {
       setList([]);
-      setError(requestError?.message || '加载配置列表失败');
+      setError(normalizeDisplayError(requestError?.message, '加载配置列表失败'));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [normalizeDisplayError]);
 
   const loadDetail = useCallback(async (configId) => {
     if (!configId) return;
@@ -58,17 +64,17 @@ export default function useSearchConfigsPanel() {
     setDetailLoading(true);
     try {
       const config = await knowledgeApi.getSearchConfig(configId);
-      if (!config || !config.id) throw new Error('config_not_found');
+      if (!config || !config.id) throw new Error('未找到检索配置');
       setSelected(config);
       setNameText(String(config?.name || ''));
       setJsonText(prettyJson(config?.config || {}));
     } catch (requestError) {
       setSelected(null);
-      setDetailError(requestError?.message || '加载配置详情失败');
+      setDetailError(normalizeDisplayError(requestError?.message, '加载配置详情失败'));
     } finally {
       setDetailLoading(false);
     }
-  }, []);
+  }, [normalizeDisplayError]);
 
   useEffect(() => {
     fetchList();
@@ -101,18 +107,18 @@ export default function useSearchConfigsPanel() {
         name,
         config: parsed.value,
       });
-      if (!updated || !updated.id) throw new Error('update_success_without_payload');
+      if (!updated || !updated.id) throw new Error('保存成功，但响应缺少配置内容');
       setSelected(updated);
       setNameText(String(updated?.name || name));
       setJsonText(prettyJson(updated?.config || parsed.value));
       setSaveStatus('已保存');
       await fetchList();
     } catch (requestError) {
-      setDetailError(requestError?.message || '保存配置失败');
+      setDetailError(normalizeDisplayError(requestError?.message, '保存配置失败'));
     } finally {
       setBusy(false);
     }
-  }, [fetchList, jsonText, nameText, selected]);
+  }, [fetchList, jsonText, nameText, normalizeDisplayError, selected]);
 
   const removeItem = useCallback(
     async (item) => {
@@ -124,12 +130,12 @@ export default function useSearchConfigsPanel() {
         if (selected?.id === item.id) setSelected(null);
         await fetchList();
       } catch (requestError) {
-        setError(requestError?.message || '删除配置失败');
+        setError(normalizeDisplayError(requestError?.message, '删除配置失败'));
       } finally {
         setBusy(false);
       }
     },
-    [fetchList, selected?.id]
+    [fetchList, normalizeDisplayError, selected?.id]
   );
 
   const openCreate = useCallback(() => {
@@ -150,13 +156,13 @@ export default function useSearchConfigsPanel() {
     setCreateError('');
     try {
       const source = await knowledgeApi.getSearchConfig(sourceId);
-      if (!source || !source.id) throw new Error('source_config_not_found');
+      if (!source || !source.id) throw new Error('未找到来源配置');
       setCreateJsonText(prettyJson(source?.config || {}));
     } catch (requestError) {
       setCreateJsonText('{}');
-      setCreateError(requestError?.message || '加载来源配置失败');
+      setCreateError(normalizeDisplayError(requestError?.message, '加载来源配置失败'));
     }
-  }, []);
+  }, [normalizeDisplayError]);
 
   const create = useCallback(async () => {
     if (!isAdmin) return;
@@ -180,16 +186,16 @@ export default function useSearchConfigsPanel() {
         name,
         config: parsed.value,
       });
-      if (!created || !created.id) throw new Error('create_success_without_payload');
+      if (!created || !created.id) throw new Error('创建成功，但响应缺少配置内容');
       setCreateOpen(false);
       await fetchList();
       await loadDetail(created.id);
     } catch (requestError) {
-      setCreateError(requestError?.message || '创建配置失败');
+      setCreateError(normalizeDisplayError(requestError?.message, '创建配置失败'));
     } finally {
       setBusy(false);
     }
-  }, [createJsonText, createName, fetchList, isAdmin, loadDetail]);
+  }, [createJsonText, createName, fetchList, isAdmin, loadDetail, normalizeDisplayError]);
 
   const resetDetailToSelected = useCallback(() => {
     setNameText(String(selected?.name || ''));

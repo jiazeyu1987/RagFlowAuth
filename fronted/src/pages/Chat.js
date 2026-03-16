@@ -25,6 +25,7 @@ import {
 } from '../features/chat/utils/citationStore';
 import { useChatSessions } from '../features/chat/hooks/useChatSessions';
 import { useChatStream } from '../features/chat/hooks/useChatStream';
+import '../features/chat/chatMedical.css';
 
 const Chat = () => {
   const { canDownload } = useAuth();
@@ -53,7 +54,7 @@ const Chat = () => {
   const debugLogCitations = useCallback(
     (...args) => {
       if (!debugChatCitations()) return;
-      console.debug('[Chat:Citations]', ...args);
+      console.debug('[对话:引用]', ...args);
     },
     [debugChatCitations]
   );
@@ -113,7 +114,7 @@ const Chat = () => {
     async (rawSource) => {
       const source = normalizeSource(rawSource);
       if (!source.docId || !source.dataset) return;
-      debugLogCitations('preview open', { before_title: source.title, docId: source.docId, dataset: source.dataset });
+      debugLogCitations('打开预览', { before_title: source.title, docId: source.docId, dataset: source.dataset });
       setPreviewTarget({
         source: DOCUMENT_SOURCE.RAGFLOW,
         docId: source.docId,
@@ -140,11 +141,10 @@ const Chat = () => {
     [canDownloadFiles]
   );
 
-  const onCitationClick = useCallback((e, { id, chunk }) => {
-    const rect = e?.currentTarget?.getBoundingClientRect?.();
-    const x = rect ? rect.left + rect.width / 2 : e?.clientX ?? 0;
-    const y = rect ? rect.top : e?.clientY ?? 0;
-    console.debug('[Chat:CitationPopup] open', { id, chunkLen: String(chunk || '').length, x, y });
+  const onCitationClick = useCallback((event, { id, chunk }) => {
+    const rect = event?.currentTarget?.getBoundingClientRect?.();
+    const x = rect ? rect.left + rect.width / 2 : event?.clientX ?? 0;
+    const y = rect ? rect.top : event?.clientY ?? 0;
     setCitationHover({
       id,
       chunk: String(chunk || '').trim() || '(未获取到片段内容)',
@@ -154,14 +154,13 @@ const Chat = () => {
   }, []);
 
   const onCitationPopupLeave = useCallback(() => {
-    console.debug('[Chat:CitationPopup] close');
     setCitationHover(null);
   }, []);
 
   const handleKeyPress = useCallback(
-    (e) => {
-      if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
+    (event) => {
+      if (event.key === 'Enter' && !event.shiftKey) {
+        event.preventDefault();
         if (selectedChatId && selectedSessionId) {
           sendMessage();
         }
@@ -171,7 +170,7 @@ const Chat = () => {
   );
 
   return (
-    <div data-testid="chat-page" style={{ height: 'calc(100vh - 120px)', display: 'flex', gap: '16px' }}>
+    <div data-testid="chat-page" className="chat-med-page">
       <ChatSidebar
         loading={loading}
         chats={chats}
@@ -181,30 +180,19 @@ const Chat = () => {
         onSelectChat={actions.setSelectedChatId}
         onCreateSession={actions.createSession}
         onSelectSession={actions.selectSession}
-        onOpenRenameDialog={(s) => actions.setRenameDialog({ show: true, sessionId: s.id, value: s.name || '' })}
-        onOpenDeleteDialog={(s) =>
+        onOpenRenameDialog={(session) => actions.setRenameDialog({ show: true, sessionId: session.id, value: session.name || '' })}
+        onOpenDeleteDialog={(session) =>
           actions.setDeleteConfirm({
             show: true,
-            sessionId: s.id,
-            sessionName: s.name || s.id,
+            sessionId: session.id,
+            sessionName: session.name || session.id,
           })
         }
       />
 
-      <div
-        data-testid="chat-panel"
-        style={{
-          backgroundColor: 'white',
-          borderRadius: '8px',
-          boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
-          flex: 1,
-          display: 'flex',
-          flexDirection: 'column',
-          overflow: 'hidden',
-        }}
-      >
-        <div data-testid="chat-header" style={{ padding: '14px 16px', borderBottom: '1px solid #e5e7eb', fontWeight: 600 }}>
-          {selectedChatId ? '对话' : '请选择聊天助手开始对话'}
+      <div data-testid="chat-panel" className="chat-med-card chat-med-panel">
+        <div data-testid="chat-header" className="chat-med-header">
+          {selectedChatId ? '对话窗口' : '请选择左侧助手开始对话'}
         </div>
 
         <ChatMessages
@@ -225,7 +213,7 @@ const Chat = () => {
         />
 
         {error && (
-          <div data-testid="chat-error" style={{ padding: '10px 16px', backgroundColor: '#fee2e2', color: '#991b1b' }}>
+          <div data-testid="chat-error" className="chat-med-error">
             {error}
           </div>
         )}

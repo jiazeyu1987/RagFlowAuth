@@ -23,58 +23,35 @@ export default function ChatConfigCreateDialog({
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) onClose && onClose();
       }}
-      style={{
-        position: 'fixed',
-        inset: 0,
-        background: 'rgba(17, 24, 39, 0.55)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: '20px',
-        zIndex: 1000,
-      }}
+      className="admin-med-dialog"
     >
-      <div
-        style={{
-          width: 'min(980px, 96vw)',
-          background: 'white',
-          borderRadius: '14px',
-          border: '1px solid #e5e7eb',
-          overflow: 'hidden',
-          boxShadow: '0 20px 50px rgba(0,0,0,0.35)',
-        }}
-      >
-        <div style={{ padding: '14px 16px', borderBottom: '1px solid #e5e7eb', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div style={{ fontWeight: 950, color: '#111827' }}>新建对话</div>
-          <button
-            type="button"
-            onClick={onClose}
-            data-testid="chat-config-create-close"
-            style={{ border: '1px solid #e5e7eb', background: '#ffffff', borderRadius: '10px', padding: '8px 10px', cursor: 'pointer', fontWeight: 900 }}
-          >
+      <div className="admin-med-dialog__panel">
+        <div className="admin-med-dialog__head">
+          <div style={{ fontWeight: 700, color: '#163f63' }}>新建对话</div>
+          <button type="button" onClick={onClose} data-testid="chat-config-create-close" className="medui-btn medui-btn--secondary">
             关闭
           </button>
         </div>
 
-        <div style={{ padding: '14px 16px' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '160px 1fr', gap: '10px', alignItems: 'center' }}>
-            <div style={{ fontWeight: 900, color: '#111827' }}>名称</div>
+        <div className="admin-med-dialog__body">
+          <div className="admin-med-form-grid admin-med-form-grid--2">
+            <div style={{ fontWeight: 700, color: '#17324d' }}>对话名称</div>
             <input
               value={createName}
               onChange={(event) => onCreateNameChange && onCreateNameChange(event.target.value)}
-              placeholder="输入新对话名称"
+              placeholder="请输入新对话名称"
               data-testid="chat-config-create-name"
-              style={{ width: '100%', padding: '10px 12px', borderRadius: '10px', border: '1px solid #e5e7eb', outline: 'none' }}
+              className="medui-input"
             />
           </div>
 
-          <div style={{ marginTop: '12px', display: 'grid', gridTemplateColumns: '160px 1fr', gap: '10px' }}>
-            <div style={{ fontWeight: 900, color: '#111827' }}>复制配置</div>
+          <div className="admin-med-form-grid admin-med-form-grid--2">
+            <div style={{ fontWeight: 700, color: '#17324d' }}>复制来源</div>
             <select
               value={createFromId}
               onChange={(event) => onCreateFromIdChange && onCreateFromIdChange(event.target.value)}
               data-testid="chat-config-create-from"
-              style={{ padding: '10px 12px', borderRadius: '10px', border: '1px solid #e5e7eb' }}
+              className="medui-select"
               disabled={!chatList.length}
             >
               {chatList.map((chat) => (
@@ -84,40 +61,17 @@ export default function ChatConfigCreateDialog({
               ))}
             </select>
           </div>
-          {!chatList.length ? <div style={{ marginTop: '8px', color: '#6b7280' }}>暂无可复制来源对话</div> : null}
 
-          {createError ? (
-            <div data-testid="chat-config-create-error" style={{ marginTop: '10px', color: '#b91c1c' }}>
-              {createError}
-            </div>
-          ) : null}
+          {!chatList.length ? <div className="admin-med-inline-note">暂无可复制来源对话</div> : null}
+          {createError ? <div data-testid="chat-config-create-error" className="admin-med-danger">{createError}</div> : null}
         </div>
 
-        <div style={{ padding: '14px 16px', borderTop: '1px solid #e5e7eb', display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
-          <button
-            type="button"
-            onClick={onClose}
-            data-testid="chat-config-create-cancel"
-            style={{ padding: '10px 14px', borderRadius: '12px', border: '1px solid #e5e7eb', background: '#ffffff', cursor: 'pointer', fontWeight: 900 }}
-          >
+        <div className="admin-med-dialog__foot">
+          <button type="button" onClick={onClose} data-testid="chat-config-create-cancel" className="medui-btn medui-btn--neutral">
             取消
           </button>
-          <button
-            type="button"
-            onClick={onCreate}
-            disabled={!isAdmin || busy}
-            data-testid="chat-config-create-confirm"
-            style={{
-              padding: '10px 14px',
-              borderRadius: '12px',
-              border: '1px solid #1d4ed8',
-              background: busy ? '#93c5fd' : '#2563eb',
-              color: '#ffffff',
-              cursor: busy ? 'not-allowed' : 'pointer',
-              fontWeight: 950,
-            }}
-          >
-            创建
+          <button type="button" onClick={onCreate} disabled={!isAdmin || busy} data-testid="chat-config-create-confirm" className="medui-btn medui-btn--primary">
+            {busy ? '创建中...' : '创建'}
           </button>
         </div>
       </div>

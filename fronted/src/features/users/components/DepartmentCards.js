@@ -2,70 +2,47 @@ import React from 'react';
 
 export default function DepartmentCards({ filteredUsers, groupedUsers, filters, setFilters }) {
   return (
-    <div
-      style={{
-        backgroundColor: 'white',
-        borderRadius: '8px',
-        boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
-        padding: '16px',
-        marginBottom: '16px',
-      }}
-    >
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          marginBottom: '12px',
-          gap: '12px',
-          flexWrap: 'wrap',
-        }}
-      >
+    <div className="users-med-section">
+      <div className="medui-header-row" style={{ marginBottom: 12 }}>
         <div>
-          <div style={{ fontSize: '1rem', fontWeight: 600, color: '#111827' }}>{'按部门划分'}</div>
-          <div style={{ fontSize: '0.9rem', color: '#6b7280' }}>
-            {'当前筛选结果共'} {filteredUsers.length} {'个用户，分布在'} {groupedUsers.length} {'个部门中'}
+          <div className="medui-title">按部门分布</div>
+          <div className="medui-subtitle">
+            {`当前筛选结果共 ${filteredUsers.length} 个用户，分布在 ${groupedUsers.length} 个部门中`}
           </div>
         </div>
         {filters.department_id && (
           <button
             type="button"
             onClick={() => setFilters({ ...filters, department_id: '' })}
-            style={{
-              padding: '8px 12px',
-              backgroundColor: '#6b7280',
-              color: 'white',
-              border: 'none',
-              borderRadius: '6px',
-              cursor: 'pointer',
-            }}
+            className="medui-btn medui-btn--neutral"
           >
-            {'清除部门筛选'}
+            清除部门筛选
           </button>
         )}
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '12px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12 }}>
         {groupedUsers.map((group) => (
           <div
             key={group.key}
             data-testid={`users-department-group-${group.key}`}
+            className="medui-surface--soft"
             style={{
-              border: '1px solid #e5e7eb',
-              borderRadius: '8px',
-              padding: '14px',
-              backgroundColor:
+              border: '1px solid #d8e5f3',
+              borderRadius: 12,
+              padding: 12,
+              background:
                 group.departmentId != null && String(filters.department_id || '') === String(group.departmentId)
-                  ? '#eff6ff'
-                  : '#f9fafb',
+                  ? '#eaf4ff'
+                  : '#f9fcff',
             }}
           >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-              <div style={{ fontWeight: 600, color: '#111827' }}>{group.departmentName}</div>
-              <div style={{ fontSize: '0.85rem', color: '#6b7280' }}>{`${group.users.length} 人`}</div>
+            <div className="medui-header-row" style={{ marginBottom: 8 }}>
+              <div style={{ fontWeight: 700, color: '#173d60' }}>{group.departmentName}</div>
+              <div className="medui-subtitle">{`${group.users.length} 人`}</div>
             </div>
 
-            <div style={{ fontSize: '0.9rem', color: '#4b5563', marginBottom: '10px', minHeight: '40px' }}>
+            <div style={{ fontSize: '0.88rem', color: '#4b6781', marginBottom: 10, minHeight: 40 }}>
               {group.users
                 .slice(0, 6)
                 .map((user) => String(user?.email || '').trim() || user.username)
@@ -77,26 +54,19 @@ export default function DepartmentCards({ filteredUsers, groupedUsers, filters, 
               <button
                 type="button"
                 onClick={() => setFilters({ ...filters, department_id: String(group.departmentId) })}
-                style={{
-                  padding: '8px 12px',
-                  backgroundColor: '#2563eb',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '6px',
-                  cursor: 'pointer',
-                  width: '100%',
-                }}
+                className="medui-btn medui-btn--secondary"
+                style={{ width: '100%' }}
               >
-                {'只看本部门'}
+                仅看本部门
               </button>
             ) : (
-              <div style={{ fontSize: '0.85rem', color: '#9ca3af' }}>{'这些用户尚未分配部门'}</div>
+              <div className="users-med-note">这些用户尚未分配部门。</div>
             )}
           </div>
         ))}
       </div>
 
-      {groupedUsers.length === 0 && <div style={{ marginTop: '12px', color: '#6b7280', textAlign: 'center' }}>{'暂无用户分组'}</div>}
+      {groupedUsers.length === 0 && <div className="medui-empty">暂无用户分组。</div>}
     </div>
   );
 }

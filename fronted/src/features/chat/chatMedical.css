@@ -1,0 +1,246 @@
+.chat-med-page {
+  display: flex;
+  gap: 16px;
+  min-height: calc(100vh - 160px);
+}
+
+.chat-med-sidebar {
+  width: 320px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  flex-shrink: 0;
+}
+
+.chat-med-card {
+  background: #fff;
+  border: 1px solid #d8e5f3;
+  border-radius: 14px;
+  box-shadow: var(--medical-shadow-sm);
+}
+
+.chat-med-card__head {
+  padding: 14px 16px 10px;
+  border-bottom: 1px solid #e2edf9;
+}
+
+.chat-med-card__title {
+  font-size: 0.98rem;
+  font-weight: 700;
+  color: #163f63;
+}
+
+.chat-med-card__body {
+  padding: 12px;
+}
+
+.chat-med-list {
+  display: grid;
+  gap: 8px;
+}
+
+.chat-med-item {
+  border-radius: 10px;
+  border: 1px solid #d9e6f3;
+  background: #f8fbff;
+  color: #1f4668;
+  padding: 9px 10px;
+  cursor: pointer;
+  transition: all 0.14s ease;
+}
+
+.chat-med-item:hover {
+  background: #edf6ff;
+}
+
+.chat-med-item.is-active {
+  border-color: #7ca8d0;
+  background: linear-gradient(90deg, #e9f3ff 0%, #f4f9ff 100%);
+  box-shadow: inset 3px 0 0 var(--medical-primary);
+  font-weight: 700;
+}
+
+.chat-med-item__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-med-item__actions {
+  display: flex;
+  gap: 6px;
+}
+
+.chat-med-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.chat-med-header {
+  padding: 14px 16px;
+  border-bottom: 1px solid #e2edf9;
+  background: #f8fbff;
+  color: #18486f;
+  font-size: 0.94rem;
+  font-weight: 700;
+}
+
+.chat-med-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+}
+
+.chat-med-msg-row {
+  display: flex;
+  margin-bottom: 12px;
+}
+
+.chat-med-msg-row.is-user {
+  justify-content: flex-end;
+}
+
+.chat-med-msg-row.is-assistant {
+  justify-content: flex-start;
+}
+
+.chat-med-msg {
+  max-width: 78%;
+  border-radius: 14px;
+  padding: 11px 12px;
+  line-height: 1.62;
+  overflow-x: auto;
+  border: 1px solid transparent;
+}
+
+.chat-med-msg.is-user {
+  background: linear-gradient(135deg, #0d5ea6 0%, #0a4f8b 100%);
+  color: #fff;
+  border-color: #0c4f8d;
+}
+
+.chat-med-msg.is-assistant {
+  background: #f6fbff;
+  color: #1a3954;
+  border-color: #d8e8f7;
+}
+
+.chat-med-citation-link {
+  display: inline-block;
+  padding: 0 7px;
+  margin: 0 2px;
+  border-radius: 999px;
+  background: #e1edf9;
+  color: #1b507c;
+  font-size: 0.84em;
+  line-height: 1.65;
+  cursor: pointer;
+  user-select: none;
+}
+
+.chat-med-source {
+  border-top: 1px solid #d9e6f3;
+  margin-top: 8px;
+  padding-top: 8px;
+}
+
+.chat-med-source-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border: 1px solid #d8e4f3;
+  border-radius: 10px;
+  padding: 6px 8px;
+  background: #fff;
+  margin-bottom: 6px;
+}
+
+.chat-med-composer {
+  border-top: 1px solid #e2edf9;
+  padding: 12px;
+  display: flex;
+  gap: 10px;
+}
+
+.chat-med-composer__hint {
+  border-top: 1px solid #e2edf9;
+  padding: 12px;
+  color: #58718a;
+  font-size: 0.9rem;
+}
+
+.chat-med-error {
+  border-top: 1px solid #f3c1c1;
+  background: #fff3f3;
+  color: #a13a3a;
+  padding: 10px 14px;
+}
+
+.chat-med-think {
+  color: #5e7287;
+  font-size: 0.88em;
+  white-space: pre-wrap;
+  border-left: 3px solid #c5d8eb;
+  padding-left: 10px;
+  margin: 0 0 10px;
+}
+
+.chat-med-tooltip {
+  position: fixed;
+  width: 440px;
+  max-width: calc(100vw - 20px);
+  max-height: 280px;
+  overflow: auto;
+  background: #17324a;
+  color: #f8fcff;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 12px;
+  padding: 10px 12px;
+  z-index: 900;
+  box-shadow: 0 14px 30px rgba(6, 24, 41, 0.4);
+  line-height: 1.45;
+}
+
+.chat-med-tooltip table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.chat-med-tooltip th,
+.chat-med-tooltip td {
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  padding: 7px 8px;
+  text-align: left;
+}
+
+.chat-med-tooltip th {
+  background: rgba(255, 255, 255, 0.09);
+}
+
+.chat-med-tooltip a {
+  color: #9ad0ff;
+}
+
+.chat-med-dialog-sub {
+  color: #3f5c74;
+  line-height: 1.6;
+}
+
+@media (max-width: 1080px) {
+  .chat-med-page {
+    flex-direction: column;
+  }
+
+  .chat-med-sidebar {
+    width: 100%;
+  }
+
+  .chat-med-msg {
+    max-width: 94%;
+  }
+}

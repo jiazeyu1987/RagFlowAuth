@@ -40,27 +40,20 @@ export default function ChatSafetyFlow({ flow, messageIndex }) {
   const stages = Array.isArray(flow.stages) ? flow.stages : [];
   if (stages.length === 0) return null;
 
-  const summary = String(flow.summary || '').trim() || '安全流程执行中';
+  const summary = String(flow.summary || '').trim() || '安全流程执行中。';
 
   return (
-    <div
-      data-testid={`chat-safety-flow-${messageIndex}`}
-      style={{
-        marginTop: '8px',
-        borderTop: '1px solid #e5e7eb',
-        paddingTop: '8px',
-      }}
-    >
+    <div data-testid={`chat-safety-flow-${messageIndex}`} className="chat-med-source">
       <div style={{ fontSize: '0.85rem', color: '#4b5563', marginBottom: '6px' }}>对话安全流程</div>
       <div
         style={{
           fontSize: '0.85rem',
-          color: '#111827',
+          color: '#17324d',
           marginBottom: '8px',
           padding: '6px 8px',
-          borderRadius: '6px',
-          background: '#f9fafb',
-          border: '1px solid #e5e7eb',
+          borderRadius: '8px',
+          background: '#f4f9ff',
+          border: '1px solid #d9e7f5',
         }}
       >
         {summary}
@@ -76,7 +69,7 @@ export default function ChatSafetyFlow({ flow, messageIndex }) {
               style={{
                 border: `1px solid ${meta.border}`,
                 background: meta.background,
-                borderRadius: '6px',
+                borderRadius: '8px',
                 padding: '6px 8px',
               }}
             >
@@ -91,14 +84,32 @@ export default function ChatSafetyFlow({ flow, messageIndex }) {
                       flex: '0 0 8px',
                     }}
                   />
-                  <span style={{ color: '#111827', fontSize: '0.86rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  <span
+                    style={{
+                      color: '#111827',
+                      fontSize: '0.86rem',
+                      whiteSpace: 'nowrap',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                    }}
+                  >
                     {title}
                   </span>
                 </div>
                 <span style={{ color: meta.color, fontSize: '0.8rem', flexShrink: 0 }}>{meta.label}</span>
               </div>
               {detail ? (
-                <div style={{ marginTop: '4px', fontSize: '0.8rem', color: '#4b5563', lineHeight: 1.45, whiteSpace: 'pre-wrap' }}>{detail}</div>
+                <div
+                  style={{
+                    marginTop: '4px',
+                    fontSize: '0.8rem',
+                    color: '#4b5563',
+                    lineHeight: 1.45,
+                    whiteSpace: 'pre-wrap',
+                  }}
+                >
+                  {detail}
+                </div>
               ) : null}
             </div>
           );
@@ -107,4 +118,3 @@ export default function ChatSafetyFlow({ flow, messageIndex }) {
     </div>
   );
 }
-

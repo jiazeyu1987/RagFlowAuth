@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import authClient from '../api/authClient';
 import { useAuth } from '../hooks/useAuth';
+import { normalizeDisplayError } from '../shared/utils/displayError';
 
 const STATUS_LABELS = {
   pending: '\u5f85\u5ba1\u6838',
@@ -65,7 +66,7 @@ const DocumentAudit = ({ embedded = false }) => {
         setDeletions(Array.isArray(deletionsResp?.deletions) ? deletionsResp.deletions : []);
         setDownloads(Array.isArray(downloadsResp?.downloads) ? downloadsResp.downloads : []);
       } catch (err) {
-        setError(err?.message || '加载记录失败');
+        setError(normalizeDisplayError(err?.message ?? err, '加载审核数据失败'));
       } finally {
         setLoading(false);
       }

@@ -1,32 +1,31 @@
 import React from 'react';
 import { TEXT } from '../constants';
-import { toolbarButtonStyle } from '../styles';
 
 export default function BatchTransferProgress({ progress, onClose }) {
   if (!progress) return null;
 
   return (
-    <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, padding: 14, marginBottom: 16 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-        <strong>{TEXT.transferInProgress}</strong>
+    <div className="medui-surface medui-card-pad">
+      <div className="medui-header-row" style={{ marginBottom: 8 }}>
+        <strong style={{ color: '#173d60' }}>{TEXT.transferInProgress}</strong>
         {progress.done ? (
-          <button type="button" onClick={onClose} style={toolbarButtonStyle('neutral')}>
-            {TEXT.cancel}
+          <button type="button" onClick={onClose} className="medui-btn medui-btn--neutral">
+            关闭
           </button>
         ) : null}
       </div>
-      <div style={{ color: '#4b5563', fontSize: '0.9rem' }}>
+      <div className="medui-subtitle">
         {TEXT.transferCurrent}: {progress.current || '-'}
       </div>
       <div style={{ marginTop: 6, color: '#4b5563', fontSize: '0.9rem' }}>
         {progress.processed}/{progress.total} | {TEXT.transferSuccess}: {progress.success} | {TEXT.transferFailed}: {progress.failed}
       </div>
-      <div style={{ marginTop: 8, height: 8, background: '#e5e7eb', borderRadius: 999, overflow: 'hidden' }}>
+      <div style={{ marginTop: 8, height: 8, background: '#dbe7f3', borderRadius: 999, overflow: 'hidden' }}>
         <div
           style={{
             width: `${Math.round((progress.processed / Math.max(progress.total, 1)) * 100)}%`,
             height: '100%',
-            background: '#2563eb',
+            background: '#0d5ea6',
             transition: 'width 0.2s',
           }}
         />

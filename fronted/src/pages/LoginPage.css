@@ -1,0 +1,226 @@
+.medical-login {
+  position: relative;
+  min-height: 100vh;
+  overflow: hidden;
+  background: linear-gradient(135deg, #edf5ff 0%, #f5fbff 45%, #eefaf8 100%);
+}
+
+.medical-login__bg {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(920px 420px at 8% 2%, rgba(13, 94, 166, 0.16), transparent 65%),
+    radial-gradient(900px 420px at 92% 93%, rgba(23, 162, 164, 0.14), transparent 66%),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.72) 0%, rgba(255, 255, 255, 0.44) 100%);
+}
+
+.medical-login__shell {
+  position: relative;
+  min-height: 100vh;
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 42px 24px;
+  display: grid;
+  grid-template-columns: 1.2fr 0.86fr;
+  align-items: center;
+  gap: 32px;
+}
+
+.medical-login__intro {
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(215, 227, 241, 0.95);
+  border-radius: 22px;
+  box-shadow: var(--medical-shadow-md);
+  padding: 36px 34px;
+  backdrop-filter: blur(4px);
+}
+
+.medical-login__kicker {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  color: #0d5ea6;
+  background: #e9f3ff;
+  border: 1px solid #c8dff9;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+}
+
+.medical-login__title {
+  margin-top: 16px;
+  color: #0f3f69;
+  font-size: 2.3rem;
+  line-height: 1.14;
+  letter-spacing: 0.01em;
+}
+
+.medical-login__desc {
+  margin-top: 16px;
+  color: #34516f;
+  line-height: 1.85;
+  font-size: 15px;
+}
+
+.medical-login__tips {
+  margin-top: 20px;
+  display: grid;
+  gap: 10px;
+}
+
+.medical-login__tip {
+  position: relative;
+  border-radius: 12px;
+  border: 1px solid #d7e6f5;
+  background: #f8fcff;
+  padding: 10px 14px 10px 34px;
+  color: #33516f;
+  font-size: 14px;
+}
+
+.medical-login__tip::before {
+  content: '';
+  position: absolute;
+  left: 13px;
+  top: 50%;
+  width: 10px;
+  height: 10px;
+  margin-top: -5px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #17a2a4 0%, #0d5ea6 100%);
+}
+
+.medical-login__panel {
+  background: #fff;
+  border-radius: 20px;
+  border: 1px solid #d7e3f1;
+  box-shadow: var(--medical-shadow-md);
+  overflow: hidden;
+}
+
+.medical-login__panel-head {
+  padding: 26px 28px 18px;
+  background: linear-gradient(180deg, #f7fbff 0%, #f0f7ff 100%);
+  border-bottom: 1px solid #d7e6f6;
+}
+
+.medical-login__panel-head h2 {
+  font-size: 24px;
+  color: #0f3f69;
+}
+
+.medical-login__panel-head p {
+  margin-top: 6px;
+  color: #4f6b88;
+  font-size: 13px;
+}
+
+.medical-login__super-admin {
+  margin-top: 12px;
+  border-radius: 10px;
+  border: 1px solid #f1b9b9;
+  background: #fff4f4;
+  color: #a73636;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 8px 10px;
+}
+
+.medical-login__panel-body {
+  padding: 22px 28px 28px;
+}
+
+.medical-login__error {
+  border-radius: 10px;
+  border: 1px solid #f0b1b1;
+  background: #fff1f1;
+  color: #a73636;
+  padding: 9px 11px;
+  margin-bottom: 14px;
+  font-size: 13px;
+}
+
+.medical-login__field {
+  margin-bottom: 16px;
+}
+
+.medical-login__field label {
+  display: block;
+  margin-bottom: 7px;
+  color: #305171;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.medical-login__field input {
+  width: 100%;
+  border-radius: 12px;
+  border: 1px solid #cddff2;
+  background: #fafdff;
+  height: 44px;
+  padding: 0 12px;
+  font-size: 14px;
+  color: #17324d;
+  outline: none;
+  transition: all 0.16s ease;
+}
+
+.medical-login__field input:focus {
+  border-color: #5e98cf;
+  box-shadow: 0 0 0 3px rgba(13, 94, 166, 0.14);
+  background: #ffffff;
+}
+
+.medical-login__submit {
+  width: 100%;
+  height: 44px;
+  border: none;
+  border-radius: 12px;
+  color: #fff;
+  font-weight: 700;
+  font-size: 15px;
+  cursor: pointer;
+  background: linear-gradient(135deg, #0d5ea6 0%, #0b518f 100%);
+  box-shadow: 0 12px 26px rgba(13, 94, 166, 0.22);
+  transition: filter 0.16s ease;
+}
+
+.medical-login__submit:hover:not(:disabled) {
+  filter: brightness(1.05);
+}
+
+.medical-login__submit:disabled {
+  cursor: not-allowed;
+  opacity: 0.75;
+}
+
+@media (max-width: 980px) {
+  .medical-login__shell {
+    grid-template-columns: 1fr;
+    max-width: 700px;
+    gap: 20px;
+  }
+
+  .medical-login__intro,
+  .medical-login__panel {
+    width: 100%;
+  }
+}
+
+@media (max-width: 620px) {
+  .medical-login__shell {
+    padding: 20px 14px;
+  }
+
+  .medical-login__intro,
+  .medical-login__panel-head,
+  .medical-login__panel-body {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  .medical-login__title {
+    font-size: 1.8rem;
+  }
+}

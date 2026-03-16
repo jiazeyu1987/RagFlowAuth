@@ -23,7 +23,7 @@ export function DocumentReviewBatchSummary({
     >
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', alignItems: 'center', marginBottom: '8px' }}>
         <div style={{ fontWeight: 600 }}>
-          {batchReviewSummary.mode === 'approve' ? '批量审批结果' : '批量驳回结果'}
+          {batchReviewSummary.mode === 'approve' ? '批量审核结果' : '批量驳回结果'}
         </div>
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
           <button

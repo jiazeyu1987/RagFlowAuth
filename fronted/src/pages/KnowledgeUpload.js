@@ -17,6 +17,7 @@ import {
   normalizeExtension,
 } from '../features/knowledge/upload/utils';
 import { useAuth } from '../hooks/useAuth';
+import { normalizeDisplayError } from '../shared/utils/displayError';
 
 const KnowledgeUpload = () => {
   const navigate = useNavigate();
@@ -65,7 +66,7 @@ const KnowledgeUpload = () => {
         }
       } catch (err) {
         setDatasets([]);
-        setError(err.message || '无法加载知识库列表，请检查网络连接');
+        setError(normalizeDisplayError(err?.message ?? err, '无法加载知识库列表，请检查网络连接'));
       } finally {
         setLoadingDatasets(false);
       }
@@ -81,7 +82,10 @@ const KnowledgeUpload = () => {
         setAllowedExtensions(Array.from(new Set(items)).sort());
       } catch (err) {
         setAllowedExtensions(DEFAULT_ACCEPTED_EXTENSIONS);
-        setExtensionsMessage({ type: 'error', text: err.message || '无法加载可上传文件后缀，已回退到默认配置' });
+        setExtensionsMessage({
+          type: 'error',
+          text: normalizeDisplayError(err?.message ?? err, '无法加载允许上传的文件后缀，已恢复为默认配置'),
+        });
       } finally {
         setLoadingExtensions(false);
       }
@@ -122,7 +126,7 @@ const KnowledgeUpload = () => {
       const parts = [];
       if (tooLarge) parts.push(`${tooLarge} 个文件过大（超过 ${maxFileSizeMB}MB）`);
       if (unsupported) parts.push(`${unsupported} 个文件后缀不在允许列表中`);
-      setError(`部分文件未加入上传队列：${parts.join('，')}`);
+      setError(`部分文件未加入上传队列：${parts.join('；')}`);
     } else {
       setError(null);
     }
@@ -149,7 +153,7 @@ const KnowledgeUpload = () => {
           const result = await knowledgeApi.uploadDocument(file, kbId);
           results.push({ ok: true, filename: result?.filename || getDisplayPath(file) });
         } catch (err) {
-          results.push({ ok: false, filename: getDisplayPath(file), error: err?.message || '上传失败' });
+          results.push({ ok: false, filename: getDisplayPath(file), error: normalizeDisplayError(err?.message ?? err, '上传失败') });
         }
       }
 
@@ -162,11 +166,11 @@ const KnowledgeUpload = () => {
       } else {
         const firstFail = results.find((item) => !item.ok);
         setError(
-          `上传完成：成功 ${okCount} 个，失败 ${failCount} 个${firstFail ? `。（例如：${firstFail.filename}：${firstFail.error}）` : ''}`
+          `上传完成：成功 ${okCount} 个，失败 ${failCount} 个${firstFail ? `。例如：${firstFail.filename}，${firstFail.error}` : ''}`
         );
       }
     } catch (err) {
-      setError(err.message || '上传失败');
+      setError(normalizeDisplayError(err?.message ?? err, '上传失败'));
     } finally {
       setUploading(false);
       setUploadProgress(null);
@@ -236,11 +240,13 @@ const KnowledgeUpload = () => {
     setExtensionsMessage(null);
     try {
       const payload = await knowledgeApi.updateAllowedUploadExtensions(allowedExtensions);
-      const next = Array.isArray(payload?.allowed_extensions) ? payload.allowed_extensions.map(normalizeExtension).filter(Boolean) : allowedExtensions;
+      const next = Array.isArray(payload?.allowed_extensions)
+        ? payload.allowed_extensions.map(normalizeExtension).filter(Boolean)
+        : allowedExtensions;
       setAllowedExtensions(Array.from(new Set(next)).sort());
       setExtensionsMessage({ type: 'success', text: '文件后缀配置已保存，后续上传立即生效' });
     } catch (err) {
-      setExtensionsMessage({ type: 'error', text: err.message || '保存文件后缀配置失败' });
+      setExtensionsMessage({ type: 'error', text: normalizeDisplayError(err?.message ?? err, '保存文件后缀配置失败') });
     } finally {
       setSavingExtensions(false);
     }
@@ -350,7 +356,7 @@ const KnowledgeUpload = () => {
           />
 
           <div style={{ marginTop: '8px', fontSize: '0.85rem', color: '#6b7280' }}>
-            Supported extensions: {acceptAttr} (max 16MB per file; folder upload is recursive).
+            允许后缀：{acceptAttr}（单个文件最大 {maxFileSizeMB}MB；选择文件夹时会递归导入子目录文件）
           </div>
 
           <button
@@ -387,7 +393,7 @@ const KnowledgeUpload = () => {
           <ol style={{ margin: 0, paddingLeft: '20px' }}>
             <li>选择知识库并上传文件</li>
             <li>文档进入“待审核”状态</li>
-            <li>审核通过后自动上传到 RAGFlow 知识库</li>
+            <li>审核通过后自动同步到 RAGFlow 知识库</li>
           </ol>
         </div>
       </div>

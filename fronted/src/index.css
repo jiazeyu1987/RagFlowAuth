@@ -1,26 +1,52 @@
+:root {
+  --medical-primary: #0d5ea6;
+  --medical-primary-strong: #074f8a;
+  --medical-primary-soft: #eaf4ff;
+  --medical-accent: #17a2a4;
+  --medical-bg: #f4f8fc;
+  --medical-panel: #ffffff;
+  --medical-border: #d7e3f1;
+  --medical-text: #17324d;
+  --medical-text-secondary: #4b6480;
+  --medical-danger: #c64646;
+  --medical-success: #1f8a57;
+  --medical-radius-sm: 10px;
+  --medical-radius-md: 14px;
+  --medical-radius-lg: 18px;
+  --medical-shadow-sm: 0 6px 18px rgba(13, 94, 166, 0.08);
+  --medical-shadow-md: 0 14px 32px rgba(13, 94, 166, 0.12);
+  --medical-font-family: 'HarmonyOS Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+}
+
 * {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
 }
 
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
+  font-family: var(--medical-font-family);
+  background: linear-gradient(180deg, #f8fbff 0%, #f2f7fb 55%, #eef4fb 100%);
+  color: var(--medical-text);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
 code {
-  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
-    monospace;
+  font-family: 'Consolas', 'Courier New', monospace;
 }
 
-button {
-  font-family: inherit;
+a {
+  color: inherit;
 }
 
+button,
 input,
 select,
 textarea {

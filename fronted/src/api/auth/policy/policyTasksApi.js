@@ -3,6 +3,13 @@ import { authBackendUrl } from '../../../config/backend';
 const COLLECTION_KIND = 'collection';
 const CONTROL_ACTIONS = new Set(['pause', 'resume', 'cancel', 'retry']);
 
+const normalizeDisplayError = (message, fallback) => {
+  const text = String(message || '').trim();
+  if (!text) return fallback;
+  if (/[\u4e00-\u9fff]/.test(text)) return text;
+  return fallback;
+};
+
 async function throwResponseError(response, fallbackMessage) {
   let detail = '';
   try {
@@ -15,7 +22,7 @@ async function throwResponseError(response, fallbackMessage) {
   } catch (_err) {
     detail = '';
   }
-  throw new Error(detail || fallbackMessage);
+  throw new Error(normalizeDisplayError(detail, fallbackMessage));
 }
 
 export const policyTasksApiMethods = {
@@ -24,7 +31,7 @@ export const policyTasksApiMethods = {
       method: 'GET',
     });
     if (!response.ok) {
-      await throwResponseError(response, 'Failed to load runtime feature flags');
+      await throwResponseError(response, '加载运行时功能开关失败');
     }
     return response.json();
   },
@@ -40,7 +47,7 @@ export const policyTasksApiMethods = {
       }),
     });
     if (!response.ok) {
-      await throwResponseError(response, 'Failed to start paper collection task');
+      await throwResponseError(response, '启动文献采集任务失败');
     }
     return response.json();
   },
@@ -56,7 +63,7 @@ export const policyTasksApiMethods = {
       }),
     });
     if (!response.ok) {
-      await throwResponseError(response, 'Failed to start patent collection task');
+      await throwResponseError(response, '启动专利采集任务失败');
     }
     return response.json();
   },
@@ -75,7 +82,7 @@ export const policyTasksApiMethods = {
       { method: 'GET' }
     );
     if (!response.ok) {
-      await throwResponseError(response, 'Failed to list collection tasks');
+      await throwResponseError(response, '获取采集任务列表失败');
     }
     return response.json();
   },
@@ -86,7 +93,7 @@ export const policyTasksApiMethods = {
       { method: 'GET' }
     );
     if (!response.ok) {
-      await throwResponseError(response, 'Failed to load collection task metrics');
+      await throwResponseError(response, '加载采集任务统计失败');
     }
     return response.json();
   },
@@ -97,7 +104,7 @@ export const policyTasksApiMethods = {
       { method: 'GET' }
     );
     if (!response.ok) {
-      await throwResponseError(response, 'Failed to load collection task');
+      await throwResponseError(response, '加载采集任务详情失败');
     }
     return response.json();
   },
@@ -105,14 +112,14 @@ export const policyTasksApiMethods = {
   async controlCollectionTask(taskId, action) {
     const normalizedAction = String(action || '').trim().toLowerCase();
     if (!CONTROL_ACTIONS.has(normalizedAction)) {
-      throw new Error(`Unsupported task action: ${normalizedAction}`);
+      throw new Error(`不支持的任务操作：${normalizedAction}`);
     }
     const response = await this.fetchWithAuth(
       authBackendUrl(`/api/tasks/${encodeURIComponent(taskId)}/${normalizedAction}?kind=${COLLECTION_KIND}`),
       { method: 'POST' }
     );
     if (!response.ok) {
-      await throwResponseError(response, `Failed to ${normalizedAction} collection task`);
+      await throwResponseError(response, `采集任务操作失败：${normalizedAction}`);
     }
     return response.json();
   },
@@ -144,7 +151,7 @@ export const policyTasksApiMethods = {
           : '';
 
     if (!endpoint) {
-      throw new Error(`Unsupported collection task kind: ${kind}`);
+      throw new Error(`不支持的采集任务类型：${kind}`);
     }
 
     const payload = {};
@@ -157,7 +164,7 @@ export const policyTasksApiMethods = {
       body: JSON.stringify(payload),
     });
     if (!response.ok) {
-      await throwResponseError(response, 'Failed to add collection results to local KB');
+      await throwResponseError(response, '加入采集结果到本地知识库失败');
     }
     return response.json();
   },

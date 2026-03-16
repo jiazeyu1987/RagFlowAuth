@@ -8,8 +8,8 @@ export const PATENT_LAST_CONFIG_KEY = 'patent_download_last_config_v1';
 export const PATENT_LOCAL_KB_REF = '[本地专利]';
 
 export const PATENT_SOURCE_LABEL_MAP = {
-  uspto: 'USPTO',
-  google_patents: 'Google Patents',
+  uspto: '美国专利局（USPTO）',
+  google_patents: '谷歌专利',
 };
 
 export const PATENT_BOX_STYLE = {
@@ -25,13 +25,20 @@ const reasonLabelMap = {
   download_failed: '下载失败',
 };
 
+const normalizeBackendErrorText = (value, fallback) => {
+  const text = String(value || '').trim();
+  if (!text) return fallback;
+  if (/[\u4e00-\u9fff]/.test(text)) return text;
+  return fallback;
+};
+
 export function humanizeSourceError(msg) {
   const text = String(msg || '').trim();
   if (!text) return '-';
   const lower = text.toLowerCase();
 
   if (lower.includes('method chat not supported yet')) {
-    return '自动分析失败：当前 LLM 端点不支持 chat。';
+    return '自动分析失败：当前模型端点不支持对话模式。';
   }
   if (text === 'no_results') return '该来源无结果';
   if (text === 'source_not_implemented') return '该来源尚未实现';
@@ -42,9 +49,9 @@ export function humanizeSourceError(msg) {
     return `下载失败：${text.slice('download_failed:'.length).trim()}`;
   }
   if (text.startsWith('source_failed:')) {
-    return `来源失败：${text.slice('source_failed:'.length).trim()}`;
+    return `来源失败：${normalizeBackendErrorText(text.slice('source_failed:'.length).trim(), '请检查来源配置')}`;
   }
-  return text;
+  return normalizeBackendErrorText(text, '来源异常，请检查配置后重试');
 }
 
 export function stripHtml(value) {
@@ -71,9 +78,9 @@ export function humanizeAnalysisErrorText(value) {
   const text = String(value || '').trim();
   if (!text) return '';
   if (text.toLowerCase().includes('method chat not supported yet')) {
-    return '自动分析失败：当前 LLM 端点不支持 chat。';
+    return '自动分析失败：当前模型端点不支持对话模式。';
   }
-  return text;
+  return normalizeBackendErrorText(text, '自动分析失败，请检查模型与网络配置');
 }
 
 export function buildPatentFrontendLogs({

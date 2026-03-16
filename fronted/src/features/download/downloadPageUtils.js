@@ -11,7 +11,7 @@ export const isDownloadedItem = (item) => DOWNLOAD_SUCCESS_STATUSES.has(String(i
 
 export const getStatusChip = (item) => {
   if (item?.added_doc_id) return { text: '已添加', color: '#065f46', bg: '#d1fae5', border: '#a7f3d0' };
-  if (item?.status === 'downloaded_cached') return { text: '已下载(历史)', color: '#374151', bg: '#f3f4f6', border: '#e5e7eb' };
+  if (item?.status === 'downloaded_cached') return { text: '已下载（历史）', color: '#374151', bg: '#f3f4f6', border: '#e5e7eb' };
   if (item?.status === 'downloaded') return { text: '已下载', color: '#1e3a8a', bg: '#dbeafe', border: '#bfdbfe' };
   return { text: '失败', color: '#991b1b', bg: '#fee2e2', border: '#fecaca' };
 };

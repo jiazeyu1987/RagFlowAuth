@@ -13,6 +13,13 @@ const parseMaybeJson = async (response) => {
   }
 };
 
+const normalizeDisplayError = (message, fallback) => {
+  const text = String(message || '').trim();
+  if (!text) return fallback;
+  if (/[\u4e00-\u9fff]/.test(text)) return text;
+  return fallback;
+};
+
 let refreshPromise = null;
 let authRedirecting = false;
 
@@ -48,7 +55,7 @@ const refreshAccessToken = async () => {
   const refreshToken = tokenStore.getRefreshToken();
   if (!refreshToken) {
     tokenStore.clearAuth();
-    throw new Error('No refresh token available');
+    throw new Error('未找到刷新令牌');
   }
 
   refreshPromise = (async () => {
@@ -62,7 +69,7 @@ const refreshAccessToken = async () => {
 
     if (!response.ok) {
       tokenStore.clearAuth();
-      throw new Error('Token refresh failed');
+      throw new Error('刷新令牌失败');
     }
 
     const data = await response.json();
@@ -98,8 +105,12 @@ const request = async (pathOrUrl, options = {}) => {
   const url = buildUrl(pathOrUrl);
   const includeContentType = options.includeContentType !== false;
   const headers = withAuthHeaders(options.headers, includeContentType, options.body, options.skipAuth);
-
-  const response = await fetch(url, { ...options, headers });
+  let response = null;
+  try {
+    response = await fetch(url, { ...options, headers });
+  } catch {
+    throw new Error('网络请求失败，请检查连接后重试');
+  }
 
   if (response.status !== 401) return response;
 
@@ -126,7 +137,12 @@ const request = async (pathOrUrl, options = {}) => {
   }
 
   const retryHeaders = withAuthHeaders(options.headers, includeContentType, options.body, options.skipAuth);
-  const retryResponse = await fetch(url, { ...options, headers: retryHeaders });
+  let retryResponse = null;
+  try {
+    retryResponse = await fetch(url, { ...options, headers: retryHeaders });
+  } catch {
+    throw new Error('网络请求失败，请检查连接后重试');
+  }
   if (retryResponse.status === 401) {
     handleUnauthorizedTerminal(url, options);
   }
@@ -138,7 +154,10 @@ const requestJson = async (pathOrUrl, options = {}) => {
   if (response.ok) return response.json();
 
   const data = await parseMaybeJson(response);
-  const message = data?.detail || data?.message || data?.error || `Request failed (${response.status})`;
+  const message = normalizeDisplayError(
+    data?.detail || data?.message || data?.error,
+    `请求失败（状态码：${response.status}）`
+  );
   const error = new Error(message);
   error.status = response.status;
   error.data = data;

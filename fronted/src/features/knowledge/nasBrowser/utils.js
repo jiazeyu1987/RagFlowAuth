@@ -101,14 +101,22 @@ export const normalizeFailedEntries = (items) => {
     .filter((item) => item && item.path);
 };
 
+const normalizeReadableText = (value, fallback) => {
+  const text = String(value || '').trim();
+  if (!text) return fallback;
+  if (/[\u4e00-\u9fff]/.test(text)) return text;
+  if (/^[A-Za-z0-9_.:/\\-]+$/.test(text)) return text;
+  return fallback;
+};
+
 export const formatImportReason = (reason, detail = '') => {
   const code = String(reason || '').trim().toLowerCase();
-  if (code === 'unsupported_extension') return `不支持的扩展名${detail ? `（${detail}）` : ''}`;
-  if (code === 'ingestion_failed') return detail ? `入库失败（${detail}）` : '入库失败';
-  if (code === 'skipped') return detail ? `已跳过（${detail}）` : '已跳过';
-  if (code === 'failed') return detail ? `失败（${detail}）` : '失败';
-  if (detail) return `${reason}：${detail}`;
-  return reason || '-';
+  if (code === 'unsupported_extension') return `不支持的文件后缀${detail ? `：${detail}` : ''}`;
+  if (code === 'ingestion_failed') return detail ? `入库失败：${detail}` : '入库失败';
+  if (code === 'skipped') return detail ? `已跳过：${detail}` : '已跳过';
+  if (code === 'failed') return detail ? `失败：${detail}` : '失败';
+  if (detail) return `${normalizeReadableText(reason, '未知原因')}：${normalizeReadableText(detail, '未提供详情')}`;
+  return normalizeReadableText(reason, '未知原因');
 };
 
 export const buildImportSummary = (result, noun) => {

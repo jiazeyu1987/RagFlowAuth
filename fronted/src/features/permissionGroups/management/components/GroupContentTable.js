@@ -14,18 +14,17 @@ export default function GroupContentTable({
   onEndGroupDrag,
 }) {
   return (
-    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+    <table className="medui-table" style={{ minWidth: '100%' }}>
       <thead>
-        <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e5e7eb' }}>
-          <th style={{ textAlign: 'left', padding: '8px 10px' }}>名称</th>
-          <th style={{ textAlign: 'left', padding: '8px 10px', width: 90 }}>类型</th>
-          <th style={{ textAlign: 'left', padding: '8px 10px', width: 120 }}>操作</th>
+        <tr>
+          <th style={{ padding: '8px 10px' }}>名称</th>
+          <th style={{ padding: '8px 10px', width: 90 }}>类型</th>
+          <th style={{ padding: '8px 10px', width: 150 }}>操作</th>
         </tr>
       </thead>
       <tbody>
         {rows.map((row) => {
-          const selected =
-            selectedItem?.kind === row.kind && selectedItem?.id === row.id;
+          const selected = selectedItem?.kind === row.kind && selectedItem?.id === row.id;
           return (
             <tr
               key={`${row.kind}_${row.id}`}
@@ -46,14 +45,10 @@ export default function GroupContentTable({
                   if (group) onStartEditGroup(group);
                 }
               }}
+              className={selected ? 'admin-med-table-row-selected' : ''}
               style={{
-                borderBottom: '1px solid #f1f5f9',
-                background: selected ? '#eff6ff' : '#fff',
                 cursor: row.kind === 'group' ? 'grab' : 'pointer',
-                opacity:
-                  dragGroupId && row.kind === 'group' && dragGroupId === row.id
-                    ? 0.5
-                    : 1,
+                opacity: dragGroupId && row.kind === 'group' && dragGroupId === row.id ? 0.5 : 1,
               }}
             >
               <td style={{ padding: '8px 10px' }}>
@@ -62,7 +57,7 @@ export default function GroupContentTable({
               </td>
               <td style={{ padding: '8px 10px', color: '#4b5563' }}>{row.type}</td>
               <td style={{ padding: '8px 10px' }}>
-                {row.kind === 'group' && (
+                {row.kind === 'group' ? (
                   <>
                     <button
                       type="button"
@@ -72,16 +67,8 @@ export default function GroupContentTable({
                         const group = groups.find((item) => item.group_id === row.id);
                         if (group) onStartEditGroup(group);
                       }}
-                      style={{
-                        border: '1px solid #3b82f6',
-                        borderRadius: 8,
-                        background: '#3b82f6',
-                        color: '#fff',
-                        cursor: 'pointer',
-                        padding: '4px 8px',
-                        marginRight: 6,
-                        fontSize: 12,
-                      }}
+                      className="medui-btn medui-btn--secondary"
+                      style={{ height: 30, padding: '0 10px', marginRight: 6 }}
                     >
                       编辑
                     </button>
@@ -93,31 +80,22 @@ export default function GroupContentTable({
                         const group = groups.find((item) => item.group_id === row.id);
                         if (group) onRemoveGroup(group);
                       }}
-                      style={{
-                        border: '1px solid #ef4444',
-                        borderRadius: 8,
-                        background: '#ef4444',
-                        color: '#fff',
-                        cursor: 'pointer',
-                        padding: '4px 8px',
-                        fontSize: 12,
-                      }}
+                      className="medui-btn medui-btn--danger"
+                      style={{ height: 30, padding: '0 10px' }}
                     >
                       删除
                     </button>
                   </>
-                )}
+                ) : null}
               </td>
             </tr>
           );
         })}
-        {!rows.length && (
+        {!rows.length ? (
           <tr>
-            <td colSpan={3} style={{ padding: 18, color: '#6b7280', textAlign: 'center' }}>
-              当前目录为空
-            </td>
+            <td colSpan={3} style={{ padding: 18, color: '#6b7280', textAlign: 'center' }}>当前目录为空</td>
           </tr>
-        )}
+        ) : null}
       </tbody>
     </table>
   );

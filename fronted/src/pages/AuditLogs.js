@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { auditApi } from '../features/audit/api';
 import { orgDirectoryApi } from '../features/orgDirectory/api';
+import { normalizeDisplayError } from '../shared/utils/displayError';
 
 const parseDateTimeLocalToMs = (value) => {
   if (!value) return null;
@@ -11,90 +12,69 @@ const parseDateTimeLocalToMs = (value) => {
 const formatMs = (ms) => {
   if (!ms) return '';
   try {
-    return new Date(ms).toLocaleString();
+    return new Date(ms).toLocaleString('zh-CN');
   } catch {
     return String(ms);
   }
 };
 
 const ACTION_LABELS = {
-  auth_login: '\u767b\u5f55',
-  auth_logout: '\u9000\u51fa\u767b\u5f55',
-  auth_session_kick: '\u4f1a\u8bdd\u8e22\u51fa',
-  document_preview: '\u67e5\u770b/\u9884\u89c8\u6587\u6863',
-  document_upload: '\u4e0a\u4f20\u6587\u6863',
-  document_download: '\u4e0b\u8f7d\u6587\u6863',
-  document_delete: '\u5220\u9664\u6587\u6863',
-  patent_kb_add: '\u4e13\u5229\u6dfb\u52a0\u5230\u672c\u5730\u4e13\u5229',
-  patent_kb_add_all: '\u4e13\u5229\u6279\u91cf\u6dfb\u52a0\u5230\u672c\u5730\u4e13\u5229',
-  patent_item_delete: '\u5220\u9664\u4e13\u5229\u6761\u76ee',
-  patent_session_delete: '\u5220\u9664\u4e13\u5229\u4f1a\u8bdd',
-  paper_kb_add: '\u8bba\u6587\u6dfb\u52a0\u5230\u672c\u5730\u8bba\u6587',
-  paper_kb_add_all: '\u8bba\u6587\u6279\u91cf\u6dfb\u52a0\u5230\u672c\u5730\u8bba\u6587',
-  paper_item_delete: '\u5220\u9664\u8bba\u6587\u6761\u76ee',
-  paper_session_delete: '\u5220\u9664\u8bba\u6587\u4f1a\u8bdd',
-  datasets_create: '\u65b0\u5efa\u77e5\u8bc6\u5e93',
-  datasets_update: '\u4fee\u6539\u77e5\u8bc6\u5e93',
-  datasets_delete: '\u5220\u9664\u77e5\u8bc6\u5e93',
-  overwrite: '\u8986\u76d6\u5165\u5e93',
+  auth_login: '登录',
+  auth_logout: '退出登录',
+  auth_session_kick: '会话踢出',
+  document_preview: '查看/预览文档',
+  document_upload: '上传文档',
+  document_download: '下载文档',
+  document_delete: '删除文档',
+  patent_kb_add: '专利添加到本地专利',
+  patent_kb_add_all: '专利批量添加到本地专利',
+  patent_item_delete: '删除专利条目',
+  patent_session_delete: '删除专利会话',
+  paper_kb_add: '论文添加到本地论文',
+  paper_kb_add_all: '论文批量添加到本地论文',
+  paper_item_delete: '删除论文条目',
+  paper_session_delete: '删除论文会话',
+  datasets_create: '新建知识库',
+  datasets_update: '修改知识库',
+  datasets_delete: '删除知识库',
+  overwrite: '覆盖入库',
 };
 
 const SOURCE_LABELS = {
-  auth: '\u8ba4\u8bc1',
-  knowledge: '\u672c\u5730\u77e5\u8bc6\u5e93',
+  auth: '认证',
+  knowledge: '本地知识库',
   ragflow: 'RAGFlow',
-  patent_download: '\u4e13\u5229\u4e0b\u8f7d',
-  paper_download: '\u8bba\u6587\u4e0b\u8f7d',
-  patent: '\u4e13\u5229',
-  paper: '\u8bba\u6587',
+  patent_download: '专利下载',
+  paper_download: '论文下载',
+  patent: '专利',
+  paper: '论文',
 };
 
 const actionLabel = (value) => ACTION_LABELS[String(value || '').trim()] || String(value || '');
 const sourceLabel = (value) => SOURCE_LABELS[String(value || '').trim()] || String(value || '');
 
 const ACTION_OPTIONS = [
-  { value: '', label: '\u5168\u90e8' },
-  { value: 'auth_login', label: '\u767b\u5f55' },
-  { value: 'auth_logout', label: '\u9000\u51fa\u767b\u5f55' },
-  { value: 'auth_session_kick', label: '\u4f1a\u8bdd\u8e22\u51fa' },
-  { value: 'document_preview', label: '\u67e5\u770b/\u9884\u89c8\u6587\u6863' },
-  { value: 'document_upload', label: '\u4e0a\u4f20\u6587\u6863' },
-  { value: 'document_download', label: '\u4e0b\u8f7d\u6587\u6863' },
-  { value: 'document_delete', label: '\u5220\u9664\u6587\u6863' },
-  { value: 'patent_kb_add', label: '\u4e13\u5229\u6dfb\u52a0\u5230\u672c\u5730\u4e13\u5229' },
-  { value: 'patent_kb_add_all', label: '\u4e13\u5229\u6279\u91cf\u6dfb\u52a0\u5230\u672c\u5730\u4e13\u5229' },
-  { value: 'patent_item_delete', label: '\u5220\u9664\u4e13\u5229\u6761\u76ee' },
-  { value: 'patent_session_delete', label: '\u5220\u9664\u4e13\u5229\u4f1a\u8bdd' },
-  { value: 'paper_kb_add', label: '\u8bba\u6587\u6dfb\u52a0\u5230\u672c\u5730\u8bba\u6587' },
-  { value: 'paper_kb_add_all', label: '\u8bba\u6587\u6279\u91cf\u6dfb\u52a0\u5230\u672c\u5730\u8bba\u6587' },
-  { value: 'paper_item_delete', label: '\u5220\u9664\u8bba\u6587\u6761\u76ee' },
-  { value: 'paper_session_delete', label: '\u5220\u9664\u8bba\u6587\u4f1a\u8bdd' },
-  { value: 'datasets_create', label: '\u65b0\u5efa\u77e5\u8bc6\u5e93' },
-  { value: 'datasets_update', label: '\u4fee\u6539\u77e5\u8bc6\u5e93' },
-  { value: 'datasets_delete', label: '\u5220\u9664\u77e5\u8bc6\u5e93' },
-  { value: 'overwrite', label: '\u8986\u76d6\u5165\u5e93' },
+  { value: '', label: '全部' },
+  { value: 'auth_login', label: '登录' },
+  { value: 'auth_logout', label: '退出登录' },
+  { value: 'auth_session_kick', label: '会话踢出' },
+  { value: 'document_preview', label: '查看/预览文档' },
+  { value: 'document_upload', label: '上传文档' },
+  { value: 'document_download', label: '下载文档' },
+  { value: 'document_delete', label: '删除文档' },
+  { value: 'patent_kb_add', label: '专利添加到本地专利' },
+  { value: 'patent_kb_add_all', label: '专利批量添加到本地专利' },
+  { value: 'patent_item_delete', label: '删除专利条目' },
+  { value: 'patent_session_delete', label: '删除专利会话' },
+  { value: 'paper_kb_add', label: '论文添加到本地论文' },
+  { value: 'paper_kb_add_all', label: '论文批量添加到本地论文' },
+  { value: 'paper_item_delete', label: '删除论文条目' },
+  { value: 'paper_session_delete', label: '删除论文会话' },
+  { value: 'datasets_create', label: '新建知识库' },
+  { value: 'datasets_update', label: '修改知识库' },
+  { value: 'datasets_delete', label: '删除知识库' },
+  { value: 'overwrite', label: '覆盖入库' },
 ];
-
-const tableStyle = {
-  width: '100%',
-  borderCollapse: 'collapse',
-};
-
-const thStyle = {
-  padding: '10px 12px',
-  textAlign: 'left',
-  borderBottom: '1px solid #e5e7eb',
-  backgroundColor: '#f9fafb',
-  fontSize: '0.85rem',
-  color: '#374151',
-};
-
-const tdStyle = {
-  padding: '10px 12px',
-  borderBottom: '1px solid #e5e7eb',
-  verticalAlign: 'top',
-  fontSize: '0.9rem',
-};
 
 const AuditLogs = () => {
   const [loading, setLoading] = useState(true);
@@ -147,7 +127,7 @@ const AuditLogs = () => {
         items: Array.isArray(data?.items) ? data.items : [],
       });
     } catch (e) {
-      setError(e.message || String(e));
+      setError(normalizeDisplayError(e?.message ?? e, '加载操作日志失败'));
       setResult({ total: 0, items: [] });
     } finally {
       setLoading(false);
@@ -189,161 +169,103 @@ const AuditLogs = () => {
   };
 
   return (
-    <div data-testid="audit-logs-page">
-      <h2 style={{ margin: '0 0 12px 0' }}>操作日志</h2>
+    <div data-testid="audit-logs-page" className="admin-med-page">
+      <div className="admin-med-head">
+        <h2 className="admin-med-title">操作日志</h2>
+      </div>
 
-      <div
-        style={{
-          backgroundColor: 'white',
-          border: '1px solid #e5e7eb',
-          borderRadius: '8px',
-          padding: '12px',
-          boxShadow: '0 1px 3px rgba(0, 0, 0, 0.08)',
-          marginBottom: '12px',
-        }}
-      >
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(6, minmax(0, 1fr))',
-            gap: '10px',
-            alignItems: 'end',
-          }}
-        >
+      <div className="medui-surface medui-card-pad">
+        <div className="admin-med-grid" style={{ gridTemplateColumns: 'repeat(6, minmax(0, 1fr))', gap: 10, alignItems: 'end' }}>
           <div>
-            <div style={{ fontSize: '0.85rem', color: '#6b7280', marginBottom: 4 }}>类型</div>
+            <div className="admin-med-small" style={{ marginBottom: 4 }}>类型</div>
             <select
               value={filters.action}
               onChange={(e) => setFilters((s) => ({ ...s, action: e.target.value }))}
-              style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: 6 }}
+              className="medui-select"
               data-testid="audit-filter-action"
             >
               {ACTION_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
               ))}
             </select>
           </div>
 
           <div>
-            <div style={{ fontSize: '0.85rem', color: '#6b7280', marginBottom: 4 }}>公司</div>
+            <div className="admin-med-small" style={{ marginBottom: 4 }}>公司</div>
             <select
               value={filters.company_id}
               onChange={(e) => setFilters((s) => ({ ...s, company_id: e.target.value }))}
-              style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: 6 }}
+              className="medui-select"
               data-testid="audit-filter-company"
             >
               <option value="">全部</option>
               {companies.map((c) => (
-                <option key={c.id} value={String(c.id)}>
-                  {c.name}
-                </option>
+                <option key={c.id} value={String(c.id)}>{c.name}</option>
               ))}
             </select>
           </div>
 
           <div>
-            <div style={{ fontSize: '0.85rem', color: '#6b7280', marginBottom: 4 }}>部门</div>
+            <div className="admin-med-small" style={{ marginBottom: 4 }}>部门</div>
             <select
               value={filters.department_id}
               onChange={(e) => setFilters((s) => ({ ...s, department_id: e.target.value }))}
-              style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: 6 }}
+              className="medui-select"
               data-testid="audit-filter-department"
             >
               <option value="">全部</option>
               {departments.map((d) => (
-                <option key={d.id} value={String(d.id)}>
-                  {d.name}
-                </option>
+                <option key={d.id} value={String(d.id)}>{d.name}</option>
               ))}
             </select>
           </div>
 
           <div>
-            <div style={{ fontSize: '0.85rem', color: '#6b7280', marginBottom: 4 }}>账号</div>
+            <div className="admin-med-small" style={{ marginBottom: 4 }}>账号</div>
             <input
               value={filters.username}
               onChange={(e) => setFilters((s) => ({ ...s, username: e.target.value }))}
               placeholder="账号精确匹配"
-              style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: 6 }}
+              className="medui-input"
               data-testid="audit-filter-username"
             />
           </div>
 
           <div>
-            <div style={{ fontSize: '0.85rem', color: '#6b7280', marginBottom: 4 }}>开始时间</div>
+            <div className="admin-med-small" style={{ marginBottom: 4 }}>开始时间</div>
             <input
               type="datetime-local"
               value={filters.from}
               onChange={(e) => setFilters((s) => ({ ...s, from: e.target.value }))}
-              style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: 6 }}
+              className="medui-input"
               data-testid="audit-filter-from"
             />
           </div>
 
           <div>
-            <div style={{ fontSize: '0.85rem', color: '#6b7280', marginBottom: 4 }}>结束时间</div>
+            <div className="admin-med-small" style={{ marginBottom: 4 }}>结束时间</div>
             <input
               type="datetime-local"
               value={filters.to}
               onChange={(e) => setFilters((s) => ({ ...s, to: e.target.value }))}
-              style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: 6 }}
+              className="medui-input"
               data-testid="audit-filter-to"
             />
           </div>
         </div>
 
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 10 }}>
-          <div style={{ color: '#6b7280', fontSize: '0.9rem' }}>
-            总条数： <span data-testid="audit-total" style={{ fontWeight: 700, color: '#111827' }}>{result.total}</span>
+        <div className="admin-med-head" style={{ marginTop: 10 }}>
+          <div className="admin-med-inline-note">
+            总条数：<span data-testid="audit-total" style={{ fontWeight: 700, color: '#17324d' }}>{result.total}</span>
           </div>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button
-              type="button"
-              onClick={onApply}
-              disabled={loading}
-              style={{
-                padding: '8px 12px',
-                backgroundColor: '#3b82f6',
-                color: 'white',
-                border: 'none',
-                borderRadius: 6,
-                cursor: 'pointer',
-                opacity: loading ? 0.6 : 1,
-              }}
-              data-testid="audit-apply"
-            >
-              查询
-            </button>
-            <button
-              type="button"
-              onClick={onPrev}
-              disabled={loading || (filters.offset || 0) <= 0}
-              style={{
-                padding: '8px 12px',
-                backgroundColor: '#f3f4f6',
-                color: '#111827',
-                border: '1px solid #e5e7eb',
-                borderRadius: 6,
-                cursor: 'pointer',
-              }}
-              data-testid="audit-prev"
-            >
-              上一页
-            </button>
+          <div className="admin-med-actions">
+            <button type="button" onClick={onApply} disabled={loading} className="medui-btn medui-btn--primary" data-testid="audit-apply">查询</button>
+            <button type="button" onClick={onPrev} disabled={loading || (filters.offset || 0) <= 0} className="medui-btn medui-btn--secondary" data-testid="audit-prev">上一页</button>
             <button
               type="button"
               onClick={onNext}
               disabled={loading || (filters.offset || 0) + rows.length >= result.total}
-              style={{
-                padding: '8px 12px',
-                backgroundColor: '#f3f4f6',
-                color: '#111827',
-                border: '1px solid #e5e7eb',
-                borderRadius: 6,
-                cursor: 'pointer',
-              }}
+              className="medui-btn medui-btn--secondary"
               data-testid="audit-next"
             >
               下一页
@@ -352,53 +274,41 @@ const AuditLogs = () => {
         </div>
       </div>
 
-      {error && <div style={{ color: '#ef4444', marginBottom: 12 }}>错误：{error}</div>}
+      {error ? <div className="admin-med-danger">错误：{error}</div> : null}
 
-      <div
-        style={{
-          backgroundColor: 'white',
-          border: '1px solid #e5e7eb',
-          borderRadius: '8px',
-          overflow: 'hidden',
-          boxShadow: '0 1px 3px rgba(0, 0, 0, 0.08)',
-        }}
-      >
-        <table style={tableStyle} data-testid="audit-table">
+      <div className="medui-surface admin-med-table-scroll">
+        <table className="medui-table" data-testid="audit-table" style={{ minWidth: 1050 }}>
           <thead>
             <tr>
-              <th style={thStyle}>时间</th>
-              <th style={thStyle}>类型</th>
-              <th style={thStyle}>账号</th>
-              <th style={thStyle}>公司</th>
-              <th style={thStyle}>部门</th>
-              <th style={thStyle}>来源</th>
-              <th style={thStyle}>知识库</th>
-              <th style={thStyle}>文件</th>
+              <th>时间</th>
+              <th>类型</th>
+              <th>账号</th>
+              <th>公司</th>
+              <th>部门</th>
+              <th>来源</th>
+              <th>知识库</th>
+              <th>文件</th>
             </tr>
           </thead>
           <tbody>
-            {loading && (
-              <tr>
-                <td style={tdStyle} colSpan={8}>加载中...</td>
-              </tr>
-            )}
-            {!loading && rows.length === 0 && (
-              <tr>
-                <td style={tdStyle} colSpan={8}>暂无日志</td>
-              </tr>
-            )}
+            {loading ? (
+              <tr><td colSpan={8}>加载中...</td></tr>
+            ) : null}
+            {!loading && rows.length === 0 ? (
+              <tr><td colSpan={8}>暂无日志</td></tr>
+            ) : null}
             {!loading && rows.map((r) => (
               <tr key={r.id}>
-                <td style={tdStyle}>{formatMs(r.created_at_ms)}</td>
-                <td style={tdStyle}>{actionLabel(r.action)}</td>
-                <td style={tdStyle}>{r.username || r.actor}</td>
-                <td style={tdStyle}>{r.company_name || (r.company_id != null ? String(r.company_id) : '')}</td>
-                <td style={tdStyle}>{r.department_name || (r.department_id != null ? String(r.department_id) : '')}</td>
-                <td style={tdStyle}>{sourceLabel(r.source)}</td>
-                <td style={tdStyle}>{r.kb_name || r.kb_id || ''}</td>
-                <td style={tdStyle}>
+                <td>{formatMs(r.created_at_ms)}</td>
+                <td>{actionLabel(r.action)}</td>
+                <td>{r.username || r.actor}</td>
+                <td>{r.company_name || (r.company_id != null ? String(r.company_id) : '')}</td>
+                <td>{r.department_name || (r.department_id != null ? String(r.department_id) : '')}</td>
+                <td>{sourceLabel(r.source)}</td>
+                <td>{r.kb_name || r.kb_id || ''}</td>
+                <td>
                   <div style={{ fontWeight: 600 }}>{r.filename || ''}</div>
-                  <div style={{ color: '#6b7280', fontSize: '0.8rem' }}>{r.doc_id || ''}</div>
+                  <div className="admin-med-small">{r.doc_id || ''}</div>
                 </td>
               </tr>
             ))}
@@ -410,5 +320,3 @@ const AuditLogs = () => {
 };
 
 export default AuditLogs;
-
-

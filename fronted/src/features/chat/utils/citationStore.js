@@ -16,7 +16,7 @@ export const normalizeSource = (src) => {
   const s = src && typeof src === 'object' ? src : {};
   const docId = s.doc_id || s.docId || s.document_id || s.documentId || s.ragflow_doc_id || s.ragflowDocId || s.id || '';
   const dataset = s.dataset_id || s.datasetId || s.dataset || s.dataset_name || s.datasetName || s.kb_id || s.kbId || s.kb_name || s.kbName || '';
-  const title = s.filename || s.doc_name || s.docName || s.document_name || s.documentName || s.name || s.title || docId || 'unknown';
+  const title = s.filename || s.doc_name || s.docName || s.document_name || s.documentName || s.name || s.title || docId || '未命名';
   const chunk = s.chunk || s.chunk_text || s.chunkText || s.content || s.text || '';
   return {
     docId: String(docId || ''),
@@ -49,11 +49,11 @@ export const saveSourcesForAssistantMessage = (chatId, sessionId, content, sourc
     const key = computeMessageKey(chatId, sessionId, content);
     window.localStorage.setItem(key, JSON.stringify(list));
     if (typeof debugLog === 'function') {
-      debugLog('persist sources', { key, count: list.length });
+      debugLog('保存来源成功', { key, count: list.length });
     }
   } catch (e) {
     if (typeof debugLog === 'function') {
-      debugLog('persist sources failed', { error: e?.message || String(e || '') });
+      debugLog('保存来源失败', { error: e?.message || String(e || '') });
     }
   }
 };

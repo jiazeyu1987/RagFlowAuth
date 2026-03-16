@@ -1,6 +1,12 @@
 import { useCallback, useMemo, useState } from 'react';
 import { resolveHistoryKey } from './downloadPageUtils';
 
+function normalizeDisplayError(message, fallback) {
+  const text = String(message || '').trim();
+  if (!text) return fallback;
+  return /[\u4e00-\u9fff]/.test(text) ? text : fallback;
+}
+
 export default function useDownloadHistory({
   manager,
   normalizeHistoryKeywords,
@@ -34,7 +40,7 @@ export default function useDownloadHistory({
       if (nextSelectedKey !== String(selectedHistoryKey || '')) setSelectedHistoryKey(nextSelectedKey);
       return list;
     } catch (e) {
-      setHistoryError(e?.message || keywordsErrorMessage);
+      setHistoryError(normalizeDisplayError(e?.message, keywordsErrorMessage));
       setHistoryKeywords([]);
       return [];
     } finally {
@@ -55,7 +61,7 @@ export default function useDownloadHistory({
         setHistoryPayload(payload);
         return payload;
       } catch (e) {
-        setHistoryError(e?.message || itemsErrorMessage);
+        setHistoryError(normalizeDisplayError(e?.message, itemsErrorMessage));
         setHistoryPayload(null);
         return null;
       } finally {

@@ -1,6 +1,5 @@
 import React from 'react';
 import { TEXT } from '../constants';
-import { toolbarButtonStyle } from '../styles';
 
 export default function TransferDialog({
   transferDialog,
@@ -17,41 +16,33 @@ export default function TransferDialog({
     : transferTargetOptions;
 
   return (
-    <div
-      style={{
-        position: 'fixed',
-        inset: 0,
-        background: 'rgba(15,23,42,0.45)',
-        zIndex: 1000,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-      }}
-    >
-      <div style={{ width: 'min(520px, 94vw)', background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12 }}>
-        <div style={{ padding: '12px 14px', borderBottom: '1px solid #e5e7eb', fontWeight: 800 }}>
-          {transferDialog.operation === 'move' ? TEXT.transferTitleMove : TEXT.transferTitleCopy}
+    <div className="medui-modal-backdrop">
+      <div className="medui-modal" style={{ maxWidth: 520 }}>
+        <div className="medui-modal__head">
+          <div className="medui-modal__title">
+            {transferDialog.operation === 'move' ? TEXT.transferTitleMove : TEXT.transferTitleCopy}
+          </div>
         </div>
-        <div style={{ padding: 14 }}>
-          <div style={{ marginBottom: 10, color: '#4b5563', fontSize: '0.9rem' }}>
+        <div className="medui-modal__body">
+          <div className="medui-subtitle" style={{ marginBottom: 10 }}>
             {transferDialog.scope === 'single'
               ? `${transferDialog.sourceDatasetName} / ${transferDialog.docId}`
-              : `${selectedCount} docs`}
+              : `已选择 ${selectedCount} 个文档`}
           </div>
-          <label style={{ display: 'block', marginBottom: 6 }}>{TEXT.targetKb}</label>
+          <label style={{ display: 'block', marginBottom: 6, color: '#365774', fontWeight: 700 }}>{TEXT.targetKb}</label>
           <select
             value={transferDialog.targetDatasetName}
             onChange={(event) => onChangeTarget && onChangeTarget(event.target.value)}
-            style={{ width: '100%', border: '1px solid #d1d5db', borderRadius: 8, padding: '8px 10px' }}
+            className="medui-select"
           >
             {options.map((name) => (
               <option key={name} value={name}>{name}</option>
             ))}
           </select>
         </div>
-        <div style={{ padding: '12px 14px', borderTop: '1px solid #e5e7eb', display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-          <button type="button" onClick={onClose} style={toolbarButtonStyle('neutral')}>{TEXT.cancel}</button>
-          <button type="button" onClick={onConfirm} style={toolbarButtonStyle('primary')}>{TEXT.confirm}</button>
+        <div className="medui-modal__foot">
+          <button type="button" onClick={onClose} className="medui-btn medui-btn--neutral">{TEXT.cancel}</button>
+          <button type="button" onClick={onConfirm} className="medui-btn medui-btn--primary">{TEXT.confirm}</button>
         </div>
       </div>
     </div>

@@ -9,7 +9,7 @@ export const policyAgentApiMethods = {
 
     if (!response.ok) {
       const error = await response.json();
-      throw new Error(error.detail || 'Failed to get my KBs');
+      throw new Error(this.resolveErrorMessage(error, '获取我的知识库失败'));
     }
 
     return response.json(); // { kb_ids: [...] }
@@ -24,7 +24,7 @@ export const policyAgentApiMethods = {
 
     if (!response.ok) {
       const error = await response.json();
-      throw new Error(error.detail || 'Failed to list agents');
+      throw new Error(this.resolveErrorMessage(error, '获取助手列表失败'));
     }
 
     return response.json(); // { agents: [...], count: N }
@@ -38,7 +38,7 @@ export const policyAgentApiMethods = {
 
     if (!response.ok) {
       const error = await response.json();
-      throw new Error(error.detail || 'Failed to get agent');
+      throw new Error(this.resolveErrorMessage(error, '获取助手详情失败'));
     }
 
     return response.json();
@@ -55,7 +55,7 @@ export const policyAgentApiMethods = {
 
     if (!response.ok) {
       const error = await response.json();
-      throw new Error(error.detail || 'Failed to search chunks');
+      throw new Error(this.resolveErrorMessage(error, '检索分段内容失败'));
     }
 
     return response.json(); // { chunks: [...], total: N, page: N, page_size: N }
@@ -69,7 +69,7 @@ export const policyAgentApiMethods = {
 
     if (!response.ok) {
       const error = await response.json();
-      throw new Error(error.detail || 'Failed to get datasets');
+      throw new Error(this.resolveErrorMessage(error, '获取数据集失败'));
     }
 
     return response.json(); // { datasets: [...], count: N }

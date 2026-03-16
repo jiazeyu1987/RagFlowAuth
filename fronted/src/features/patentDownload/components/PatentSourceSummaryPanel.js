@@ -14,8 +14,7 @@ export default function PatentSourceSummaryPanel({
           {Object.entries(sourceStats).map(([key, stat]) => (
             <div key={key}>
               <div>
-                {sourceLabelMap[key] || key}：候选 {stat?.candidates || 0}，已下载{' '}
-                {stat?.downloaded || 0}，已复用 {stat?.reused || 0}，失败 {stat?.failed || 0}
+                {sourceLabelMap[key] || key}：候选 {stat?.candidates || 0}，已下载 {stat?.downloaded || 0}，已复用 {stat?.reused || 0}，失败 {stat?.failed || 0}
               </div>
               {stat?.query ? (
                 <div style={{ marginTop: '2px' }}>

@@ -9,7 +9,7 @@ export const usersApiMethods = {
     );
   
     if (!response.ok) {
-      throw new Error('Failed to list users');
+      throw new Error('获取用户列表失败');
     }
   
     return response.json();
@@ -26,7 +26,7 @@ export const usersApiMethods = {
   
     if (!response.ok) {
       const error = await response.json();
-      throw new Error(error.detail || 'Failed to create user');
+      throw new Error(this.resolveErrorMessage(error, '创建用户失败'));
     }
   
     return response.json();
@@ -43,7 +43,7 @@ export const usersApiMethods = {
   
     if (!response.ok) {
       const error = await response.json();
-      throw new Error(error.detail || 'Failed to update user');
+      throw new Error(this.resolveErrorMessage(error, '更新用户失败'));
     }
   
     return response.json();
@@ -56,7 +56,7 @@ export const usersApiMethods = {
     );
   
     if (!response.ok) {
-      throw new Error('Failed to delete user');
+      throw new Error('删除用户失败');
     }
   
     return response.json();
@@ -72,7 +72,7 @@ export const usersApiMethods = {
     );
   
     if (!response.ok) {
-      throw new Error('Failed to reset password');
+      throw new Error('重置密码失败');
     }
   
     return response.json();
@@ -86,7 +86,7 @@ export const usersApiMethods = {
   
     if (!response.ok) {
       const error = await response.json();
-      throw new Error(error.detail || 'Failed to get user KBs');
+      throw new Error(this.resolveErrorMessage(error, '获取用户知识库权限失败'));
     }
   
     return response.json();  // { kb_ids: [...] }
@@ -100,7 +100,7 @@ export const usersApiMethods = {
   
     if (!response.ok) {
       const error = await response.json();
-      throw new Error(error.detail || 'Failed to grant KB access');
+      throw new Error(this.resolveErrorMessage(error, '授予知识库权限失败'));
     }
   
     return response.json();
@@ -114,7 +114,7 @@ export const usersApiMethods = {
   
     if (!response.ok) {
       const error = await response.json();
-      throw new Error(error.detail || 'Failed to revoke KB access');
+      throw new Error(this.resolveErrorMessage(error, '撤销知识库权限失败'));
     }
   
     return response.json();
@@ -131,7 +131,7 @@ export const usersApiMethods = {
   
     if (!response.ok) {
       const error = await response.json();
-      throw new Error(error.detail || 'Failed to batch grant');
+      throw new Error(this.resolveErrorMessage(error, '批量授权失败'));
     }
   
     return response.json();
@@ -145,7 +145,7 @@ export const usersApiMethods = {
   
     if (!response.ok) {
       const error = await response.json();
-      throw new Error(error.detail || 'Failed to get user chats');
+      throw new Error(this.resolveErrorMessage(error, '获取用户对话权限失败'));
     }
   
     return response.json();  // { chat_ids: [...] }
@@ -159,7 +159,7 @@ export const usersApiMethods = {
   
     if (!response.ok) {
       const error = await response.json();
-      throw new Error(error.detail || 'Failed to grant chat access');
+      throw new Error(this.resolveErrorMessage(error, '授予对话权限失败'));
     }
   
     return response.json();
@@ -173,7 +173,7 @@ export const usersApiMethods = {
   
     if (!response.ok) {
       const error = await response.json();
-      throw new Error(error.detail || 'Failed to revoke chat access');
+      throw new Error(this.resolveErrorMessage(error, '撤销对话权限失败'));
     }
   
     return response.json();
@@ -190,7 +190,7 @@ export const usersApiMethods = {
   
     if (!response.ok) {
       const error = await response.json();
-      throw new Error(error.detail || 'Failed to batch grant chats');
+      throw new Error(this.resolveErrorMessage(error, '批量授予对话权限失败'));
     }
   
     return response.json();

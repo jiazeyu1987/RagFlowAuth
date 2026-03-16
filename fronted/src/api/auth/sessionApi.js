@@ -9,7 +9,7 @@ export const sessionApiMethods = {
   
     if (!response.ok) {
       const error = await response.json();
-      throw new Error(error.detail || 'Failed to get my chats');
+      throw new Error(this.resolveErrorMessage(error, '获取我的对话失败'));
     }
   
     return response.json();  // { chat_ids: [...] }
@@ -23,7 +23,7 @@ export const sessionApiMethods = {
   
     if (!response.ok) {
       const error = await response.json();
-      throw new Error(error.detail || 'Failed to get chat');
+      throw new Error(this.resolveErrorMessage(error, '获取对话失败'));
     }
   
     return response.json();
@@ -40,7 +40,7 @@ export const sessionApiMethods = {
   
     if (!response.ok) {
       const error = await response.json();
-      throw new Error(error.detail || 'Failed to create session');
+      throw new Error(this.resolveErrorMessage(error, '创建会话失败'));
     }
   
     return response.json();
@@ -54,7 +54,7 @@ export const sessionApiMethods = {
   
     if (!response.ok) {
       const error = await response.json();
-      throw new Error(error.detail || 'Failed to list sessions');
+      throw new Error(this.resolveErrorMessage(error, '获取会话列表失败'));
     }
   
     return response.json();
@@ -71,7 +71,7 @@ export const sessionApiMethods = {
   
     if (!response.ok) {
       const error = await response.json();
-      throw new Error(error.detail || 'Failed to delete sessions');
+      throw new Error(this.resolveErrorMessage(error, '删除会话失败'));
     }
   
     return response.json();
@@ -85,7 +85,7 @@ export const sessionApiMethods = {
   
     if (!response.ok) {
       const error = await response.json();
-      throw new Error(error.detail || 'Failed to get my chats');
+      throw new Error(this.resolveErrorMessage(error, '获取我的对话失败'));
     }
   
     return response.json();  // { chat_ids: [...] }
@@ -94,7 +94,7 @@ export const sessionApiMethods = {
   createAgentCompletionStream(agentId, question, sessionId = null) {
     const token = localStorage.getItem('access_token');
     if (!token) {
-      throw new Error('No access token');
+      throw new Error('未找到访问令牌');
     }
   
     const url = new URL(authBackendUrl(`/api/agents/${agentId}/completions`));

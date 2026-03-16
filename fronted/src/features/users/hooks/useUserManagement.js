@@ -5,6 +5,7 @@ import { usersApi } from '../api';
 import { orgDirectoryApi } from '../../orgDirectory/api';
 import { DEFAULT_FILTERS, DEFAULT_NEW_USER, DEFAULT_POLICY_FORM } from '../utils/constants';
 import { buildListParams, filterUsers, groupUsersByDepartment } from '../utils/userFilters';
+import { normalizeDisplayError } from '../../../shared/utils/displayError';
 
 export const useUserManagement = () => {
   const { can } = useAuth();
@@ -52,7 +53,7 @@ export const useUserManagement = () => {
       setAllUsers(Array.isArray(data) ? data : []);
       setError(null);
     } catch (err) {
-      setError(err?.message || String(err || '加载用户列表失败'));
+      setError(normalizeDisplayError(err?.message ?? err, '加载用户列表失败'));
     } finally {
       setLoading(false);
     }
@@ -115,57 +116,48 @@ export const useUserManagement = () => {
     });
   }, []);
 
-  const handleCreateUser = useCallback(
-    async (e) => {
-      e.preventDefault();
-      try {
-        const payload = {
-          ...newUser,
-          company_id: newUser.company_id ? Number(newUser.company_id) : null,
-          department_id: newUser.department_id ? Number(newUser.department_id) : null,
-          max_login_sessions: Number(newUser.max_login_sessions),
-          idle_timeout_minutes: Number(newUser.idle_timeout_minutes),
-        };
-        await usersApi.create(payload);
-        handleCloseCreateModal();
-        fetchUsers();
-      } catch (err) {
-        setError(err?.message || String(err || '创建用户失败'));
-      }
-    },
-    [fetchUsers, handleCloseCreateModal, newUser]
-  );
+  const handleCreateUser = useCallback(async (e) => {
+    e.preventDefault();
+    try {
+      const payload = {
+        ...newUser,
+        company_id: newUser.company_id ? Number(newUser.company_id) : null,
+        department_id: newUser.department_id ? Number(newUser.department_id) : null,
+        max_login_sessions: Number(newUser.max_login_sessions),
+        idle_timeout_minutes: Number(newUser.idle_timeout_minutes),
+      };
+      await usersApi.create(payload);
+      handleCloseCreateModal();
+      fetchUsers();
+    } catch (err) {
+      setError(normalizeDisplayError(err?.message ?? err, '创建用户失败'));
+    }
+  }, [fetchUsers, handleCloseCreateModal, newUser]);
 
-  const handleDeleteUser = useCallback(
-    async (userId) => {
-      if (!window.confirm('确定要删除该用户吗？')) return;
-      try {
-        await usersApi.remove(userId);
-        fetchUsers();
-      } catch (err) {
-        setError(err?.message || String(err || '删除用户失败'));
-      }
-    },
-    [fetchUsers]
-  );
+  const handleDeleteUser = useCallback(async (userId) => {
+    if (!window.confirm('确定要删除该用户吗？')) return;
+    try {
+      await usersApi.remove(userId);
+      fetchUsers();
+    } catch (err) {
+      setError(normalizeDisplayError(err?.message ?? err, '删除用户失败'));
+    }
+  }, [fetchUsers]);
 
-  const handleToggleUserStatus = useCallback(
-    async (user) => {
-      if (!user?.user_id) return;
-      if (String(user?.username || '').toLowerCase() === 'admin') return;
-      const nextStatus = user.status === 'active' ? 'inactive' : 'active';
-      try {
-        setStatusUpdatingUserId(user.user_id);
-        await usersApi.update(user.user_id, { status: nextStatus });
-        await fetchUsers();
-      } catch (err) {
-        setError(err?.message || String(err || '切换用户状态失败'));
-      } finally {
-        setStatusUpdatingUserId(null);
-      }
-    },
-    [fetchUsers]
-  );
+  const handleToggleUserStatus = useCallback(async (user) => {
+    if (!user?.user_id) return;
+    if (String(user?.username || '').toLowerCase() === 'admin') return;
+    const nextStatus = user.status === 'active' ? 'inactive' : 'active';
+    try {
+      setStatusUpdatingUserId(user.user_id);
+      await usersApi.update(user.user_id, { status: nextStatus });
+      await fetchUsers();
+    } catch (err) {
+      setError(normalizeDisplayError(err?.message ?? err, '切换用户状态失败'));
+    } finally {
+      setStatusUpdatingUserId(null);
+    }
+  }, [fetchUsers]);
 
   const handleOpenResetPassword = useCallback((user) => {
     setResetPasswordUser(user);
@@ -201,7 +193,7 @@ export const useUserManagement = () => {
       await usersApi.resetPassword(resetPasswordUser.user_id, resetPasswordValue);
       handleCloseResetPassword();
     } catch (err) {
-      setResetPasswordError(err?.message || '修改密码失败');
+      setResetPasswordError(normalizeDisplayError(err?.message ?? err, '修改密码失败'));
     } finally {
       setResetPasswordSubmitting(false);
     }
@@ -250,7 +242,7 @@ export const useUserManagement = () => {
       handleClosePolicyModal();
       fetchUsers();
     } catch (err) {
-      setPolicyError(err?.message || '保存登录策略失败');
+      setPolicyError(normalizeDisplayError(err?.message ?? err, '保存登录策略失败'));
     } finally {
       setPolicySubmitting(false);
     }
@@ -288,7 +280,7 @@ export const useUserManagement = () => {
       handleCloseGroupModal();
       fetchUsers();
     } catch (err) {
-      setError(err?.message || String(err || '保存权限分组失败'));
+      setError(normalizeDisplayError(err?.message ?? err, '保存权限分组失败'));
     }
   }, [editingGroupUser, fetchUsers, handleCloseGroupModal, selectedGroupIds]);
 

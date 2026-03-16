@@ -1,7 +1,7 @@
 import React from 'react';
 
 export default function ChatConfigListPanel({
-  panelStyle,
+  panelClassName,
   chatLoading,
   chatListLength,
   isAdmin,
@@ -17,125 +17,78 @@ export default function ChatConfigListPanel({
   busy,
 }) {
   return (
-    <section style={panelStyle} data-testid="chat-config-list-panel">
-      <div style={{ padding: '14px 16px', borderBottom: '1px solid #e5e7eb' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: '10px' }}>
-          <div style={{ fontSize: '1rem', fontWeight: 950, color: '#111827' }}>对话</div>
-          <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-            <div style={{ fontSize: '0.85rem', color: '#6b7280' }}>{chatLoading ? '加载中...' : `${chatListLength} 个`}</div>
-            {isAdmin ? (
-              <button
-                type="button"
-                onClick={onOpenCreate}
-                data-testid="chat-config-new"
-                style={{
-                  padding: '6px 10px',
-                  borderRadius: '10px',
-                  border: '1px solid #1d4ed8',
-                  background: '#1d4ed8',
-                  color: '#ffffff',
-                  cursor: 'pointer',
-                  fontWeight: 900,
-                }}
-              >
-                新建
-              </button>
-            ) : null}
-          </div>
+    <section className={panelClassName} data-testid="chat-config-list-panel">
+      <div className="admin-med-panel__head">
+        <div className="admin-med-head" style={{ alignItems: 'baseline' }}>
+          <div style={{ fontSize: '1rem', fontWeight: 700, color: '#163f63' }}>对话列表</div>
+          <div className="admin-med-inline-note">{chatLoading ? '加载中...' : `共 ${chatListLength} 项`}</div>
         </div>
 
-        <div style={{ display: 'flex', gap: '8px', marginTop: '10px' }}>
+        <div className="admin-med-actions" style={{ marginTop: 10 }}>
           <input
             value={chatFilter}
             onChange={(event) => onFilterChange && onFilterChange(event.target.value)}
             data-testid="chat-config-filter"
-            placeholder="按名称/编号/描述筛选"
-            style={{ flex: 1, padding: '10px 12px', border: '1px solid #e5e7eb', borderRadius: '10px', outline: 'none' }}
+            placeholder="按名称、编号或描述筛选"
+            className="medui-input"
+            style={{ flex: 1, minWidth: 180 }}
           />
-          <button
-            type="button"
-            onClick={onRefresh}
-            disabled={chatLoading}
-            data-testid="chat-config-refresh"
-            style={{
-              padding: '10px 12px',
-              borderRadius: '10px',
-              border: '1px solid #e5e7eb',
-              background: chatLoading ? '#f3f4f6' : '#ffffff',
-              cursor: chatLoading ? 'not-allowed' : 'pointer',
-              fontWeight: 800,
-            }}
-          >
+          <button type="button" onClick={onRefresh} disabled={chatLoading} data-testid="chat-config-refresh" className="medui-btn medui-btn--secondary">
             刷新
           </button>
+          {isAdmin ? (
+            <button type="button" onClick={onOpenCreate} data-testid="chat-config-new" className="medui-btn medui-btn--primary">
+              新建对话
+            </button>
+          ) : null}
         </div>
-
-        {chatError ? (
-          <div data-testid="chat-config-list-error" style={{ marginTop: '10px', color: '#b91c1c', fontSize: '0.9rem' }}>
-            {chatError}
-          </div>
-        ) : null}
       </div>
 
-      <div style={{ padding: '12px' }}>
-        {filteredChatList.map((chat) => {
-          const id = String(chat?.id || '');
-          const name = String(chat?.name || '');
-          const safeId = id.replace(/[^a-zA-Z0-9_-]/g, '_');
-          const isSelected = String(selectedChatId || '') === id;
-          const deleteDisabled = !isAdmin || busy;
+      <div className="admin-med-panel__body admin-med-list-scroll">
+        {chatError ? <div data-testid="chat-config-list-error" className="admin-med-danger">{chatError}</div> : null}
 
-          return (
-            <div key={id} style={{ position: 'relative', marginBottom: '10px' }}>
-              <button
-                type="button"
-                onClick={() => onSelectChat && onSelectChat(id)}
-                data-testid={`chat-config-item-${safeId}`}
-                style={{
-                  width: '100%',
-                  textAlign: 'left',
-                  padding: '12px 56px 12px 12px',
-                  borderRadius: '10px',
-                  border: `1px solid ${isSelected ? '#60a5fa' : '#e5e7eb'}`,
-                  background: isSelected ? '#eff6ff' : '#ffffff',
-                  cursor: 'pointer',
-                }}
-                title={id}
-              >
-                <div style={{ fontWeight: 950, color: '#111827', fontSize: '0.95rem', lineHeight: 1.2 }}>{name || '(未命名)'}</div>
-                <div style={{ marginTop: '6px', color: '#6b7280', fontSize: '0.8rem' }}>{id ? `编号：${id}` : '编号：（未知）'}</div>
-              </button>
+        {filteredChatList.length === 0 ? (
+          <div className="medui-empty" style={{ paddingTop: 16 }}>暂无可显示对话</div>
+        ) : (
+          filteredChatList.map((chat) => {
+            const id = String(chat?.id || '');
+            const name = String(chat?.name || '');
+            const safeId = id.replace(/[^a-zA-Z0-9_-]/g, '_');
+            const isSelected = String(selectedChatId || '') === id;
+            const deleteDisabled = !isAdmin || busy;
 
-              {isAdmin ? (
+            return (
+              <div key={id} className="admin-med-list-item">
                 <button
                   type="button"
-                  onClick={(event) => {
-                    event.preventDefault();
-                    event.stopPropagation();
-                    onDeleteChat && onDeleteChat({ ...chat, id });
-                  }}
-                  disabled={deleteDisabled}
-                  data-testid={`chat-config-delete-${safeId}`}
-                  style={{
-                    position: 'absolute',
-                    right: '10px',
-                    top: '10px',
-                    width: '44px',
-                    height: '36px',
-                    borderRadius: '10px',
-                    border: `1px solid ${deleteDisabled ? '#e5e7eb' : '#fecaca'}`,
-                    background: deleteDisabled ? '#f9fafb' : '#fff1f2',
-                    color: deleteDisabled ? '#9ca3af' : '#b91c1c',
-                    cursor: deleteDisabled ? 'not-allowed' : 'pointer',
-                    fontWeight: 900,
-                  }}
+                  onClick={() => onSelectChat && onSelectChat(id)}
+                  data-testid={`chat-config-item-${safeId}`}
+                  className={`admin-med-list-item__button${isSelected ? ' is-active' : ''}`}
                 >
-                  删除
+                  <div className="admin-med-list-item__title">{name || '（未命名）'}</div>
+                  <div className="admin-med-list-item__meta">{id ? `编号：${id}` : '编号：（未知）'}</div>
                 </button>
-              ) : null}
-            </div>
-          );
-        })}
+
+                {isAdmin ? (
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      onDeleteChat && onDeleteChat({ ...chat, id });
+                    }}
+                    disabled={deleteDisabled}
+                    data-testid={`chat-config-delete-${safeId}`}
+                    className="medui-btn medui-btn--danger admin-med-list-item__delete"
+                    title="删除"
+                  >
+                    删除
+                  </button>
+                ) : null}
+              </div>
+            );
+          })
+        )}
       </div>
     </section>
   );

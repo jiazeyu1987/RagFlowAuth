@@ -1,0 +1,270 @@
+.admin-med-page {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.admin-med-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.admin-med-title {
+  margin: 0;
+  color: #163f63;
+}
+
+.admin-med-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.admin-med-grid--2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.admin-med-grid--3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.admin-med-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.admin-med-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 2px;
+}
+
+.admin-med-table-scroll {
+  overflow: auto;
+}
+
+.admin-med-inline-note {
+  color: #60788e;
+  font-size: 0.86rem;
+}
+
+.admin-med-danger {
+  border: 1px solid #f1c5c5;
+  border-radius: 10px;
+  background: #fff3f3;
+  color: #a53a3a;
+  padding: 10px 12px;
+}
+
+.admin-med-success {
+  border: 1px solid #b5e6c8;
+  border-radius: 10px;
+  background: #f0fbf5;
+  color: #176940;
+  padding: 10px 12px;
+}
+
+.admin-med-small {
+  font-size: 0.82rem;
+  color: #60788e;
+}
+
+.admin-med-tree-layout {
+  display: grid;
+  grid-template-columns: 320px minmax(0, 1fr);
+  gap: 12px;
+}
+
+.admin-med-tree-body {
+  padding: 10px;
+  max-height: 700px;
+  overflow-y: auto;
+}
+
+.admin-med-table-row-selected {
+  background: #eaf4ff;
+}
+
+.admin-med-config-layout {
+  display: grid;
+  grid-template-columns: 340px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+
+.admin-med-panel {
+  background: #ffffff;
+  border: 1px solid #d7e4f2;
+  border-radius: 14px;
+  box-shadow: 0 10px 24px rgba(9, 45, 79, 0.08);
+  overflow: hidden;
+}
+
+.admin-med-panel__head {
+  padding: 14px 16px;
+  border-bottom: 1px solid #deebf8;
+  background: linear-gradient(180deg, #f8fcff 0%, #f3f9ff 100%);
+}
+
+.admin-med-panel__body {
+  padding: 14px;
+}
+
+.admin-med-list-scroll {
+  max-height: 70vh;
+  overflow-y: auto;
+}
+
+.admin-med-list-item {
+  position: relative;
+  margin-bottom: 10px;
+}
+
+.admin-med-list-item__button {
+  width: 100%;
+  text-align: left;
+  border-radius: 12px;
+  border: 1px solid #d7e5f4;
+  background: #fff;
+  padding: 12px 56px 12px 12px;
+  cursor: pointer;
+}
+
+.admin-med-list-item__button.is-active {
+  border-color: #76a9d4;
+  background: #ecf6ff;
+}
+
+.admin-med-list-item__title {
+  color: #17324d;
+  font-weight: 700;
+  font-size: 0.94rem;
+  line-height: 1.2;
+  word-break: break-all;
+}
+
+.admin-med-list-item__meta {
+  margin-top: 5px;
+  color: #60788e;
+  font-size: 0.8rem;
+}
+
+.admin-med-list-item__delete {
+  position: absolute;
+  right: 10px;
+  top: 10px;
+  width: 42px;
+  height: 34px;
+}
+
+.admin-med-form-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.admin-med-form-grid--2 {
+  grid-template-columns: 140px minmax(0, 1fr);
+  align-items: center;
+}
+
+.admin-med-kb-list {
+  border: 1px solid #d7e5f4;
+  border-radius: 12px;
+  background: #fbfdff;
+  padding: 10px;
+  max-height: 260px;
+  overflow-y: auto;
+  display: grid;
+  gap: 8px;
+}
+
+.admin-med-kb-item {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  border: 1px solid #dbe8f5;
+  border-radius: 12px;
+  background: #fff;
+  padding: 10px 12px;
+}
+
+.admin-med-kb-item.is-active {
+  border-color: #80add2;
+  background: #eff7ff;
+}
+
+.admin-med-code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+}
+
+.admin-med-dialog {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  background: rgba(10, 35, 58, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.admin-med-dialog__panel {
+  width: min(920px, 96vw);
+  border-radius: 16px;
+  border: 1px solid #c9dbec;
+  background: #fff;
+  box-shadow: 0 20px 50px rgba(13, 45, 78, 0.3);
+}
+
+.admin-med-dialog__head {
+  padding: 14px 16px;
+  border-bottom: 1px solid #deebf8;
+  background: #f7fbff;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+
+.admin-med-dialog__body {
+  padding: 14px 16px;
+  display: grid;
+  gap: 12px;
+}
+
+.admin-med-dialog__foot {
+  padding: 14px 16px;
+  border-top: 1px solid #deebf8;
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.admin-med-flag-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.admin-med-flag-item {
+  display: grid;
+  grid-template-columns: 24px 1fr;
+  gap: 10px;
+  padding: 9px 0;
+  border-bottom: 1px dashed #d8e6f4;
+}
+
+@media (max-width: 1080px) {
+  .admin-med-grid--2,
+  .admin-med-grid--3,
+  .admin-med-tree-layout,
+  .admin-med-config-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-med-form-grid--2 {
+    grid-template-columns: 1fr;
+  }
+}

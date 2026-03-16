@@ -15,7 +15,7 @@ import { DocumentReviewToolbar } from '../features/review/components/DocumentRev
 import { useEscapeClose } from '../shared/hooks/useEscapeClose';
 import { DOCUMENT_SOURCE } from '../shared/documents/documentClient';
 import { DocumentPreviewModal } from '../shared/documents/preview/DocumentPreviewModal';
-
+import { normalizeDisplayError } from '../shared/utils/displayError';
 
 const DocumentReview = ({ embedded = false }) => {
   const { isReviewer, isAdmin, canDownload } = useAuth();
@@ -89,29 +89,30 @@ const DocumentReview = ({ embedded = false }) => {
 
   const openDiff = async (oldDocId, oldFilename, newDocId, newFilename) => {
     setError(null);
-    setDiffTitle(`文档对比：${oldFilename} vs ${newFilename}`);
+    setDiffTitle(`文档对比：${oldFilename} 与 ${newFilename}`);
     setDiffOpen(true);
     setDiffLoading(true);
     setDiffOldText('');
     setDiffNewText('');
     try {
       if (!isTextComparable(oldFilename) || !isTextComparable(newFilename)) {
-        throw new Error('仅支持对比 md/txt/ini/log 文本文件');
+        throw new Error('仅支持对比文本类文件');
       }
       const [oldText, newText] = await Promise.all([fetchKnowledgePreviewText(oldDocId), fetchKnowledgePreviewText(newDocId)]);
       const maxLines = 2500;
       if (countLines(oldText) > maxLines || countLines(newText) > maxLines) {
-        throw new Error('文本过长，暂不支持对比超过限制行数的文件');
+        throw new Error('文本过长，暂不支持对比超出限制行数的文件');
       }
       setDiffOldText(oldText);
       setDiffNewText(newText);
     } catch (e) {
       setDiffOpen(false);
-      setError(e.message || '加载对比内容失败');
+      setError(normalizeDisplayError(e?.message ?? e, '加载对比内容失败'));
     } finally {
       setDiffLoading(false);
     }
   };
+
   const openLocalPreview = async (docId, filename) => {
     setPreviewTarget({ source: DOCUMENT_SOURCE.KNOWLEDGE, docId, filename });
     setPreviewOpen(true);
@@ -142,7 +143,6 @@ const DocumentReview = ({ embedded = false }) => {
       />
 
       <DocumentPreviewModal open={previewOpen} target={previewTarget} onClose={closePreview} canDownloadFiles={!!canDownload()} />
-
 
       <DocumentReviewToolbar
         batchDownloadLoading={batchDownloadLoading}
@@ -209,5 +209,3 @@ const DocumentReview = ({ embedded = false }) => {
 };
 
 export default DocumentReview;
-
-

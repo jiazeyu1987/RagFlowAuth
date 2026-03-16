@@ -2,10 +2,11 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import authClient from '../api/authClient';
 import ResearchWorkbenchShell from '../features/researchWorkbench/components/ResearchWorkbenchShell';
+import { normalizeDisplayError } from '../shared/utils/displayError';
 
 const STATUS_META = {
   pending: { label: '待处理', text: '#075985', background: '#e0f2fe' },
-  running: { label: '运行中', text: '#1d4ed8', background: '#dbeafe' },
+  running: { label: '进行中', text: '#1d4ed8', background: '#dbeafe' },
   paused: { label: '已暂停', text: '#334155', background: '#e2e8f0' },
   pausing: { label: '暂停中', text: '#334155', background: '#e2e8f0' },
   canceling: { label: '取消中', text: '#92400e', background: '#fef3c7' },
@@ -15,8 +16,8 @@ const STATUS_META = {
 };
 
 const KIND_LABEL = {
-  paper_download: '论文采集',
-  patent_download: '专利采集',
+  paper_download: '论文下载',
+  patent_download: '专利下载',
 };
 
 const ACTION_FLAG = {
@@ -31,16 +32,40 @@ const FAILURE_META = {
   source: { label: '来源异常', color: '#b45309' },
   network: { label: '网络异常', color: '#1d4ed8' },
   partial: { label: '部分失败', color: '#b45309' },
-  task: { label: '任务异常', color: '#991b1b' },
-  unknown: { label: '未知异常', color: '#991b1b' },
+  task: { label: '任务失败', color: '#991b1b' },
+  unknown: { label: '未知失败', color: '#991b1b' },
 };
 
 const ACTION_LABEL = {
   pause: '暂停',
-  resume: '继续',
+  resume: '恢复',
   cancel: '取消',
   retry: '重试',
 };
+
+const SOURCE_LABEL = {
+  arxiv: 'arXiv',
+  pubmed: 'PubMed',
+  europe_pmc: 'Europe PMC',
+  openalex: 'OpenAlex',
+  uspto: '美国专利商标局 USPTO',
+  google_patents: 'Google Patents',
+};
+
+function normalizeActionLabel(action) {
+  const key = String(action || '').trim().toLowerCase();
+  return ACTION_LABEL[key] || '操作';
+}
+
+function normalizeKindLabel(kind) {
+  const key = String(kind || '').trim().toLowerCase();
+  return KIND_LABEL[key] || '未知类型';
+}
+
+function normalizeSourceLabel(source) {
+  const key = String(source || '').trim().toLowerCase();
+  return SOURCE_LABEL[key] || '未知来源';
+}
 
 function toSafeTestId(value) {
   return String(value || '')
@@ -79,6 +104,12 @@ function taskTimestamp(task) {
   );
 }
 
+function normalizeVisibleMessage(message, fallback = '') {
+  const text = String(message || '').trim();
+  if (!text) return fallback;
+  return normalizeDisplayError(text, fallback || '请查看详情');
+}
+
 function truncateText(value, maxLength = 120) {
   const text = String(value || '').trim();
   if (!text) return '';
@@ -94,9 +125,7 @@ function statusMeta(status) {
 function classifyFailure(task) {
   const status = String(task?.status || '').trim().toLowerCase();
   const errorText = String(task?.error || '').trim();
-  const sourceErrorsObj = task?.source_errors && typeof task.source_errors === 'object'
-    ? task.source_errors
-    : {};
+  const sourceErrorsObj = task?.source_errors && typeof task.source_errors === 'object' ? task.source_errors : {};
   const sourceErrors = Object.entries(sourceErrorsObj)
     .filter(([, detail]) => String(detail || '').trim())
     .map(([source]) => source);
@@ -105,8 +134,8 @@ function classifyFailure(task) {
   if (sourceErrors.length > 0) {
     return {
       type: 'source',
-      label: `来源异常（${sourceErrors.length}）`,
-      detail: `${sourceErrors.join(', ')}${errorText ? ` | ${errorText}` : ''}`,
+      label: `来源异常 ${sourceErrors.length} 项`,
+      detail: `${sourceErrors.map((source) => normalizeSourceLabel(source)).join('、')}${errorText ? ` | ${errorText}` : ''}`,
     };
   }
   if (/timeout|timed out|network|connect|dns|socket/i.test(errorText)) {
@@ -119,22 +148,22 @@ function classifyFailure(task) {
   if (failedItems > 0) {
     return {
       type: 'partial',
-      label: `部分失败（${failedItems}）`,
-      detail: errorText || `失败条数=${failedItems}`,
+      label: `失败条目 ${failedItems} 项`,
+      detail: errorText || `失败数量=${failedItems}`,
     };
   }
   if (status === 'failed' && errorText) {
     return {
       type: 'task',
-      label: '任务异常',
+      label: '任务失败',
       detail: errorText,
     };
   }
   if (status === 'failed') {
     return {
       type: 'unknown',
-      label: '未知异常',
-      detail: '无明确错误信息',
+      label: '未知失败',
+      detail: '任务失败，但未返回详细错误。',
     };
   }
   return {
@@ -184,7 +213,7 @@ export default function CollectionWorkbench() {
   const [selectedTaskId, setSelectedTaskId] = useState('');
   const [lastUpdatedAt, setLastUpdatedAt] = useState(0);
   const [logs, setLogs] = useState([]);
-  const [startKeywordText, setStartKeywordText] = useState('心理健康');
+  const [startKeywordText, setStartKeywordText] = useState('精神心理');
   const [startBusyKind, setStartBusyKind] = useState('');
   const [researchUiLayoutEnabled, setResearchUiLayoutEnabled] = useState(true);
 
@@ -192,7 +221,7 @@ export default function CollectionWorkbench() {
     const entry = {
       id: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
       level: String(level || 'info').trim().toLowerCase(),
-      message: String(message || ''),
+      message: normalizeVisibleMessage(message),
       meta,
       at: Date.now(),
     };
@@ -221,45 +250,42 @@ export default function CollectionWorkbench() {
     };
   }, []);
 
-  const loadData = useCallback(
-    async ({ silent = false } = {}) => {
+  const loadData = useCallback(async ({ silent = false } = {}) => {
+    if (!silent) {
+      setLoading(true);
+    }
+    setError('');
+    try {
+      const [taskPayload, metricPayload] = await Promise.all([
+        authClient.listCollectionTasks({
+          status: statusFilter === 'all' ? '' : statusFilter,
+          limit: 200,
+        }),
+        authClient.getCollectionTaskMetrics(),
+      ]);
+
+      const nextTasks = Array.isArray(taskPayload?.tasks) ? taskPayload.tasks.slice() : [];
+      nextTasks.sort((a, b) => taskTimestamp(b) - taskTimestamp(a));
+      setTasks(nextTasks);
+      setMetrics(metricPayload || null);
+      setLastUpdatedAt(Date.now());
+
+      const availableIds = new Set(nextTasks.map((task) => String(task?.task_id || '')));
+      setSelectedTaskIds((previous) => previous.filter((id) => availableIds.has(id)));
+      setSelectedTaskId((previous) => {
+        if (previous && availableIds.has(previous)) return previous;
+        return nextTasks[0]?.task_id ? String(nextTasks[0].task_id) : '';
+      });
+    } catch (loadError) {
+      const detail = normalizeVisibleMessage(loadError?.message ?? loadError, '加载采集任务失败。');
+      setError(detail);
+      appendLog('error', detail, { stage: 'loadData' });
+    } finally {
       if (!silent) {
-        setLoading(true);
+        setLoading(false);
       }
-      setError('');
-      try {
-        const [taskPayload, metricPayload] = await Promise.all([
-          authClient.listCollectionTasks({
-            status: statusFilter === 'all' ? '' : statusFilter,
-            limit: 200,
-          }),
-          authClient.getCollectionTaskMetrics(),
-        ]);
-
-        const nextTasks = Array.isArray(taskPayload?.tasks) ? taskPayload.tasks.slice() : [];
-        nextTasks.sort((a, b) => taskTimestamp(b) - taskTimestamp(a));
-        setTasks(nextTasks);
-        setMetrics(metricPayload || null);
-        setLastUpdatedAt(Date.now());
-
-        const availableIds = new Set(nextTasks.map((task) => String(task?.task_id || '')));
-        setSelectedTaskIds((previous) => previous.filter((id) => availableIds.has(id)));
-        setSelectedTaskId((previous) => {
-          if (previous && availableIds.has(previous)) return previous;
-          return nextTasks[0]?.task_id ? String(nextTasks[0].task_id) : '';
-        });
-      } catch (loadError) {
-        const detail = loadError?.message || '加载采集任务失败';
-        setError(detail);
-        appendLog('error', detail, { stage: 'loadData' });
-      } finally {
-        if (!silent) {
-          setLoading(false);
-        }
-      }
-    },
-    [appendLog, statusFilter]
-  );
+    }
+  }, [appendLog, statusFilter]);
 
   useEffect(() => {
     loadData();
@@ -344,98 +370,86 @@ export default function CollectionWorkbench() {
     });
   }, [visibleTasks]);
 
-  const isActionBusy = useCallback(
-    (taskId, action) => !!busyActionMap[`${action}:${String(taskId || '')}`],
-    [busyActionMap]
-  );
+  const isActionBusy = useCallback((taskId, action) => !!busyActionMap[`${action}:${String(taskId || '')}`], [busyActionMap]);
 
-  const executeTaskAction = useCallback(
-    async (task, action) => {
-      const taskId = String(task?.task_id || '').trim();
-      if (!taskId) return false;
+  const executeTaskAction = useCallback(async (task, action) => {
+    const taskId = String(task?.task_id || '').trim();
+    if (!taskId) return false;
 
-      const flagName = ACTION_FLAG[action];
-      if (!flagName || !task?.[flagName]) {
-        appendLog('warn', `任务 ${taskId} 不支持操作：${ACTION_LABEL[action] || action}`);
-        return false;
+    const flagName = ACTION_FLAG[action];
+    if (!flagName || !task?.[flagName]) {
+      appendLog('warn', `任务 ${taskId} 当前不支持${normalizeActionLabel(action)}`);
+      return false;
+    }
+
+    const busyKey = `${action}:${taskId}`;
+    setBusyActionMap((previous) => ({ ...previous, [busyKey]: true }));
+    try {
+      if (action === 'pause') {
+        await authClient.pauseCollectionTask(taskId);
+      } else if (action === 'resume') {
+        await authClient.resumeCollectionTask(taskId);
+      } else if (action === 'cancel') {
+        await authClient.cancelCollectionTask(taskId);
+      } else if (action === 'retry') {
+        await authClient.retryCollectionTask(taskId);
+      } else {
+        throw new Error(`不支持的操作：${normalizeActionLabel(action)}`);
       }
+      appendLog('success', `${normalizeActionLabel(action)}任务：${taskId}`);
+      return true;
+    } catch (actionError) {
+      const detail = normalizeVisibleMessage(actionError?.message ?? actionError, `${normalizeActionLabel(action)}任务失败：${taskId}`);
+      setError(detail);
+      appendLog('error', detail, { action, taskId });
+      return false;
+    } finally {
+      setBusyActionMap((previous) => {
+        const next = { ...previous };
+        delete next[busyKey];
+        return next;
+      });
+    }
+  }, [appendLog]);
 
-      const busyKey = `${action}:${taskId}`;
-      setBusyActionMap((previous) => ({ ...previous, [busyKey]: true }));
-      try {
-        if (action === 'pause') {
-          await authClient.pauseCollectionTask(taskId);
-        } else if (action === 'resume') {
-          await authClient.resumeCollectionTask(taskId);
-        } else if (action === 'cancel') {
-          await authClient.cancelCollectionTask(taskId);
-        } else if (action === 'retry') {
-          await authClient.retryCollectionTask(taskId);
-        } else {
-          throw new Error(`不支持的操作：${action}`);
-        }
-        appendLog('success', `${ACTION_LABEL[action] || action} -> ${taskId}`);
-        return true;
-      } catch (actionError) {
-        const detail = actionError?.message || `${ACTION_LABEL[action] || action}任务失败：${taskId}`;
-        setError(detail);
-        appendLog('error', detail, { action, taskId });
-        return false;
-      } finally {
-        setBusyActionMap((previous) => {
-          const next = { ...previous };
-          delete next[busyKey];
-          return next;
-        });
-      }
-    },
-    [appendLog]
-  );
+  const runSingleAction = useCallback(async (task, action) => {
+    const ok = await executeTaskAction(task, action);
+    if (ok) {
+      setInfo(`已${normalizeActionLabel(action)}任务 ${task?.task_id}`);
+      await loadData({ silent: true });
+    }
+  }, [executeTaskAction, loadData]);
 
-  const runSingleAction = useCallback(
-    async (task, action) => {
+  const runBatchAction = useCallback(async (action) => {
+    const flagName = ACTION_FLAG[action];
+    if (!flagName) return;
+
+    const candidates = selectedTasks.filter((task) => !!task?.[flagName]);
+    if (candidates.length <= 0) {
+      setError(`当前选中的任务中，没有可执行“${normalizeActionLabel(action)}”的项。`);
+      return;
+    }
+
+    setBatchBusy(true);
+    setError('');
+    setInfo('');
+    let successCount = 0;
+    let failureCount = 0;
+
+    for (const task of candidates) {
       const ok = await executeTaskAction(task, action);
       if (ok) {
-        setInfo(`已执行${ACTION_LABEL[action] || action}：${task?.task_id}`);
-        await loadData({ silent: true });
+        successCount += 1;
+      } else {
+        failureCount += 1;
       }
-    },
-    [executeTaskAction, loadData]
-  );
+    }
 
-  const runBatchAction = useCallback(
-    async (action) => {
-      const flagName = ACTION_FLAG[action];
-      if (!flagName) return;
-
-      const candidates = selectedTasks.filter((task) => !!task?.[flagName]);
-      if (candidates.length <= 0) {
-        setError(`所选任务中没有可执行“${ACTION_LABEL[action] || action}”的任务`);
-        return;
-      }
-
-      setBatchBusy(true);
-      setError('');
-      setInfo('');
-      let successCount = 0;
-      let failureCount = 0;
-
-      for (const task of candidates) {
-        const ok = await executeTaskAction(task, action);
-        if (ok) {
-          successCount += 1;
-        } else {
-          failureCount += 1;
-        }
-      }
-
-      setBatchBusy(false);
-      setInfo(`批量${ACTION_LABEL[action] || action}完成：成功 ${successCount}，失败 ${failureCount}`);
-      appendLog('info', `批量${ACTION_LABEL[action] || action}完成`, { successCount, failureCount });
-      await loadData({ silent: true });
-    },
-    [appendLog, executeTaskAction, loadData, selectedTasks]
-  );
+    setBatchBusy(false);
+    setInfo(`批量${normalizeActionLabel(action)}完成：成功 ${successCount}，失败 ${failureCount}`);
+    appendLog('info', `批量${normalizeActionLabel(action)}完成`, { successCount, failureCount });
+    await loadData({ silent: true });
+  }, [appendLog, executeTaskAction, loadData, selectedTasks]);
 
   const runBatchIngest = useCallback(async () => {
     const candidates = selectedTasks.filter((task) => {
@@ -443,7 +457,7 @@ export default function CollectionWorkbench() {
       return kind === 'paper_download' || kind === 'patent_download';
     });
     if (candidates.length <= 0) {
-      setError('所选任务均不支持批量入库');
+      setError('当前没有可入库的已选任务。');
       return;
     }
 
@@ -459,14 +473,14 @@ export default function CollectionWorkbench() {
       try {
         const payload = await authClient.addCollectionTaskToLocalKb(taskId, taskKind);
         successCount += 1;
-        appendLog('success', `入库 -> ${taskId}`, {
+        appendLog('success', `任务入库：${taskId}`, {
           taskKind,
           success: toNumber(payload?.success, 0),
           failed: toNumber(payload?.failed, 0),
         });
       } catch (ingestError) {
         failureCount += 1;
-        appendLog('error', ingestError?.message || `任务入库失败：${taskId}`, { taskKind, taskId });
+        appendLog('error', normalizeVisibleMessage(ingestError?.message ?? ingestError, `任务入库失败：${taskId}`), { taskKind, taskId });
       }
     }
 
@@ -475,85 +489,80 @@ export default function CollectionWorkbench() {
     await loadData({ silent: true });
   }, [appendLog, loadData, selectedTasks]);
 
-  const startCollectionTask = useCallback(
-    async (kind) => {
-      const normalizedKind = String(kind || '').trim().toLowerCase();
-      const keywordText = String(startKeywordText || '').trim();
-      if (!keywordText) {
-        setError('请输入关键词后再启动采集');
-        return;
+  const startCollectionTask = useCallback(async (kind) => {
+    const normalizedKind = String(kind || '').trim().toLowerCase();
+    const keywordText = String(startKeywordText || '').trim();
+    if (!keywordText) {
+      setError('请输入采集关键词后再启动任务。');
+      return;
+    }
+
+    setStartBusyKind(normalizedKind);
+    setError('');
+    setInfo('');
+    try {
+      let payload = null;
+      if (normalizedKind === 'paper') {
+        payload = await authClient.startPaperCollectionTask({
+          keywordText,
+          useAnd: true,
+          autoAnalyze: false,
+          sources: {
+            arxiv: { enabled: true, limit: 20 },
+            pubmed: { enabled: false, limit: 20 },
+            europe_pmc: { enabled: false, limit: 20 },
+            openalex: { enabled: false, limit: 20 },
+          },
+        });
+      } else if (normalizedKind === 'patent') {
+        payload = await authClient.startPatentCollectionTask({
+          keywordText,
+          useAnd: true,
+          autoAnalyze: false,
+          sources: {
+            uspto: { enabled: false, limit: 20 },
+            google_patents: { enabled: true, limit: 20 },
+          },
+        });
+      } else {
+        throw new Error('未知的采集类型。');
       }
 
-      setStartBusyKind(normalizedKind);
-      setError('');
-      setInfo('');
-      try {
-        let payload = null;
-        if (normalizedKind === 'paper') {
-          payload = await authClient.startPaperCollectionTask({
-            keywordText,
-            useAnd: true,
-            autoAnalyze: false,
-            sources: {
-              arxiv: { enabled: true, limit: 20 },
-              pubmed: { enabled: false, limit: 20 },
-              europe_pmc: { enabled: false, limit: 20 },
-              openalex: { enabled: false, limit: 20 },
-            },
-          });
-        } else if (normalizedKind === 'patent') {
-          payload = await authClient.startPatentCollectionTask({
-            keywordText,
-            useAnd: true,
-            autoAnalyze: false,
-            sources: {
-              uspto: { enabled: false, limit: 20 },
-              google_patents: { enabled: true, limit: 20 },
-            },
-          });
-        } else {
-          throw new Error(`不支持的采集类型：${normalizedKind}`);
-        }
-
-        const sessionId = String(payload?.session?.session_id || '');
-        appendLog('success', `启动${normalizedKind === 'paper' ? '论文' : '专利'}采集 -> ${sessionId || '已创建会话'}`);
-        setInfo(`采集已启动（${normalizedKind === 'paper' ? '论文' : '专利'}）${sessionId ? `：${sessionId}` : ''}`);
-        await loadData({ silent: true });
-      } catch (startError) {
-        const detail = startError?.message || `启动${normalizedKind === 'paper' ? '论文' : '专利'}采集失败`;
-        setError(detail);
-        appendLog('error', detail, { stage: 'startCollectionTask', kind: normalizedKind });
-      } finally {
-        setStartBusyKind('');
-      }
-    },
-    [appendLog, loadData, startKeywordText]
-  );
+      const sessionId = String(payload?.session?.session_id || '');
+      appendLog('success', `已启动${normalizedKind === 'paper' ? '论文' : '专利'}采集任务${sessionId ? `，会话 ${sessionId}` : ''}`);
+      setInfo(`已启动${normalizedKind === 'paper' ? '论文' : '专利'}采集任务${sessionId ? `：${sessionId}` : ''}`);
+      await loadData({ silent: true });
+    } catch (startError) {
+      const detail = normalizeVisibleMessage(startError?.message ?? startError, `启动${normalizedKind === 'paper' ? '论文' : '专利'}采集任务失败。`);
+      setError(detail);
+      appendLog('error', detail, { stage: 'startCollectionTask', kind: normalizedKind });
+    } finally {
+      setStartBusyKind('');
+    }
+  }, [appendLog, loadData, startKeywordText]);
 
   const exportTasks = useCallback(() => {
-    const rows = [
-      [
-        '任务ID',
-        '任务类型',
-        '状态',
-        '进度百分比',
-        '总条数',
-        '已下载条数',
-        '失败条数',
-        '失败分类',
-        '错误信息',
-        '创建时间',
-        '更新时间',
-      ],
-    ];
+    const rows = [[
+      '任务编号',
+      '任务类型',
+      '状态',
+      '进度百分比',
+      '总条目',
+      '已下载条目',
+      '失败条目',
+      '失败分类',
+      '错误信息',
+      '创建时间',
+      '更新时间',
+    ]];
 
     const target = selectedTasks.length > 0 ? selectedTasks : visibleTasks;
     target.forEach((task) => {
       const failure = classifyFailure(task);
       rows.push([
         String(task?.task_id || ''),
-        String(task?.task_kind || ''),
-        String(task?.status || ''),
+        normalizeKindLabel(task?.task_kind),
+        statusMeta(task?.status).label,
         String(toNumber(task?.progress_percent, 0)),
         String(toNumber(task?.total_items, 0)),
         String(toNumber(task?.downloaded_items, 0)),
@@ -567,18 +576,18 @@ export default function CollectionWorkbench() {
 
     const now = new Date();
     const stamp = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}`;
-    downloadCsv(rows, `collection_tasks_${stamp}.csv`);
-    appendLog('info', `已导出 ${target.length} 行 CSV`);
+    downloadCsv(rows, `采集任务_${stamp}.csv`);
+    appendLog('info', `已导出 ${target.length} 条任务到 CSV`);
   }, [appendLog, selectedTasks, visibleTasks]);
 
   const summaryCards = useMemo(() => {
     const statusCounts = metrics?.status_counts || {};
     return [
       { title: '任务总数', value: toNumber(metrics?.total_tasks, 0), tone: '#1f2937' },
-      { title: '待执行数', value: toNumber(metrics?.backlog_tasks, 0), tone: '#1d4ed8' },
-      { title: '失败数', value: toNumber(metrics?.failed_tasks, 0), tone: '#991b1b' },
+      { title: '排队任务', value: toNumber(metrics?.backlog_tasks, 0), tone: '#1d4ed8' },
+      { title: '失败任务', value: toNumber(metrics?.failed_tasks, 0), tone: '#991b1b' },
       { title: '失败率', value: formatRate(metrics?.failure_rate), tone: '#b45309' },
-      { title: '运行中', value: toNumber(statusCounts.running, 0), tone: '#1d4ed8' },
+      { title: '进行中', value: toNumber(statusCounts.running, 0), tone: '#1d4ed8' },
       { title: '已完成', value: toNumber(statusCounts.completed, 0), tone: '#065f46' },
     ];
   }, [metrics]);
@@ -603,7 +612,7 @@ export default function CollectionWorkbench() {
             fontWeight: 700,
           }}
         >
-          返回实用工具
+          返回工具页
         </button>
         <button
           type="button"
@@ -619,17 +628,17 @@ export default function CollectionWorkbench() {
           }}
           disabled={loading}
         >
-          {loading ? '刷新中...' : '刷新'}
+          {loading ? '刷新中...' : '立即刷新'}
         </button>
       </div>
 
       <div style={{ display: 'grid', gap: '6px' }}>
-        <div style={{ fontWeight: 700, color: '#111827' }}>快速启动</div>
+        <div style={{ fontWeight: 700, color: '#111827' }}>新建采集任务</div>
         <textarea
           value={startKeywordText}
           onChange={(event) => setStartKeywordText(event.target.value)}
           rows={3}
-          placeholder="关键词（可用逗号或换行分隔）"
+          placeholder="请输入主题关键词，可填写疾病、药物、疗法或研究方向"
           style={{ padding: '8px', borderRadius: '8px', border: '1px solid #d1d5db', resize: 'vertical' }}
         />
         <button
@@ -677,7 +686,7 @@ export default function CollectionWorkbench() {
           >
             <option value="all">全部</option>
             <option value="pending">待处理</option>
-            <option value="running">运行中</option>
+            <option value="running">进行中</option>
             <option value="paused">已暂停</option>
             <option value="canceling">取消中</option>
             <option value="canceled">已取消</option>
@@ -693,16 +702,16 @@ export default function CollectionWorkbench() {
             style={{ padding: '7px 8px', borderRadius: '8px', border: '1px solid #d1d5db' }}
           >
             <option value="all">全部</option>
-            <option value="paper_download">论文采集</option>
-            <option value="patent_download">专利采集</option>
+            <option value="paper_download">论文下载</option>
+            <option value="patent_download">专利下载</option>
           </select>
         </label>
         <label style={{ display: 'grid', gap: '4px' }}>
-          <span style={{ fontSize: '0.85rem', color: '#6b7280' }}>关键词</span>
+          <span style={{ fontSize: '0.85rem', color: '#6b7280' }}>关键词检索</span>
           <input
             value={keywordFilter}
             onChange={(event) => setKeywordFilter(event.target.value)}
-            placeholder="任务编号 / 错误信息 / 来源"
+            placeholder="支持任务编号、关键词、错误信息"
             style={{ padding: '7px 8px', borderRadius: '8px', border: '1px solid #d1d5db' }}
           />
         </label>
@@ -716,10 +725,10 @@ export default function CollectionWorkbench() {
         </label>
       </div>
 
-      <div style={{ display: 'grid', gap: '6px' }}>
+      <div style={{ display: 'grid', gap: '8px' }}>
         <div style={{ fontWeight: 700, color: '#111827' }}>批量操作</div>
-        <div style={{ fontSize: '0.85rem', color: '#6b7280' }}>
-          已选：<span style={{ color: '#111827', fontWeight: 700 }}>{selectedTasks.length}</span>
+        <div style={{ fontSize: '0.86rem', color: '#4b5563' }}>
+          已选 <span style={{ color: '#111827', fontWeight: 700 }}>{selectedTasks.length}</span> 条任务
         </div>
         <button
           type="button"
@@ -790,13 +799,7 @@ export default function CollectionWorkbench() {
 
   const centerPane = (
     <>
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
-          gap: '8px',
-        }}
-      >
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '8px' }}>
         {summaryCards.map((card) => (
           <div
             key={card.title}
@@ -828,65 +831,20 @@ export default function CollectionWorkbench() {
         </div>
       )}
 
-      <div
-        style={{
-          border: '1px solid #e5e7eb',
-          borderRadius: '10px',
-          overflow: 'auto',
-          maxHeight: '520px',
-        }}
-        data-testid="collection-task-table"
-      >
-        <table
-          style={{
-            width: '100%',
-            borderCollapse: 'separate',
-            borderSpacing: 0,
-            fontSize: '0.82rem',
-            minWidth: '1120px',
-          }}
-        >
+      <div style={{ border: '1px solid #e5e7eb', borderRadius: '10px', overflow: 'auto', maxHeight: '520px' }} data-testid="collection-task-table">
+        <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, fontSize: '0.82rem', minWidth: '1120px' }}>
           <thead>
             <tr style={{ background: '#f8fafc' }}>
-              <th
-                style={{
-                  position: 'sticky',
-                  left: 0,
-                  zIndex: 5,
-                  background: '#f8fafc',
-                  width: '44px',
-                  minWidth: '44px',
-                  padding: '6px',
-                  borderBottom: '1px solid #e5e7eb',
-                }}
-              >
-                <input
-                  type="checkbox"
-                  checked={allVisibleSelected}
-                  onChange={toggleSelectAllVisible}
-                  aria-label="选择全部可见任务"
-                />
+              <th style={{ position: 'sticky', left: 0, zIndex: 5, background: '#f8fafc', width: '44px', minWidth: '44px', padding: '6px', borderBottom: '1px solid #e5e7eb' }}>
+                <input type="checkbox" checked={allVisibleSelected} onChange={toggleSelectAllVisible} aria-label="选择全部可见任务" />
               </th>
-              <th
-                style={{
-                  position: 'sticky',
-                  left: '44px',
-                  zIndex: 5,
-                  background: '#f8fafc',
-                  minWidth: '220px',
-                  padding: '6px 8px',
-                  textAlign: 'left',
-                  borderBottom: '1px solid #e5e7eb',
-                }}
-              >
-                任务ID
-              </th>
+              <th style={{ position: 'sticky', left: '44px', zIndex: 5, background: '#f8fafc', minWidth: '220px', padding: '6px 8px', textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>任务编号</th>
               <th style={{ minWidth: '120px', padding: '6px 8px', textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>类型</th>
               <th style={{ minWidth: '100px', padding: '6px 8px', textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>状态</th>
               <th style={{ minWidth: '140px', padding: '6px 8px', textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>进度</th>
-              <th style={{ minWidth: '120px', padding: '6px 8px', textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>结果</th>
+              <th style={{ minWidth: '120px', padding: '6px 8px', textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>下载量</th>
               <th style={{ minWidth: '140px', padding: '6px 8px', textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>失败分类</th>
-              <th style={{ minWidth: '220px', padding: '6px 8px', textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>错误信息</th>
+              <th style={{ minWidth: '220px', padding: '6px 8px', textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>失败详情</th>
               <th style={{ minWidth: '160px', padding: '6px 8px', textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>更新时间</th>
               <th style={{ minWidth: '240px', padding: '6px 8px', textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>操作</th>
             </tr>
@@ -904,70 +862,22 @@ export default function CollectionWorkbench() {
               const safeTaskId = toSafeTestId(taskId);
 
               return (
-                <tr
-                  key={taskId}
-                  data-testid={`collection-task-row-${safeTaskId}`}
-                  style={{ background: rowBackground }}
-                >
-                  <td
-                    style={{
-                      position: 'sticky',
-                      left: 0,
-                      zIndex: 4,
-                      background: rowBackground,
-                      borderTop: '1px solid #f1f5f9',
-                      padding: '6px',
-                    }}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={selected}
-                      onChange={() => toggleTaskSelected(taskId)}
-                      aria-label={`选择任务 ${taskId}`}
-                    />
+                <tr key={taskId} data-testid={`collection-task-row-${safeTaskId}`} style={{ background: rowBackground }}>
+                  <td style={{ position: 'sticky', left: 0, zIndex: 4, background: rowBackground, borderTop: '1px solid #f1f5f9', padding: '6px' }}>
+                    <input type="checkbox" checked={selected} onChange={() => toggleTaskSelected(taskId)} aria-label={`选择任务 ${taskId}`} />
                   </td>
-                  <td
-                    style={{
-                      position: 'sticky',
-                      left: '44px',
-                      zIndex: 4,
-                      background: rowBackground,
-                      borderTop: '1px solid #f1f5f9',
-                      padding: '6px 8px',
-                    }}
-                  >
+                  <td style={{ position: 'sticky', left: '44px', zIndex: 4, background: rowBackground, borderTop: '1px solid #f1f5f9', padding: '6px 8px' }}>
                     <button
                       type="button"
                       onClick={() => setSelectedTaskId(taskId)}
-                      style={{
-                        border: 'none',
-                        background: 'transparent',
-                        color: '#1d4ed8',
-                        cursor: 'pointer',
-                        padding: 0,
-                        textAlign: 'left',
-                        fontFamily: 'monospace',
-                        fontSize: '0.8rem',
-                      }}
+                      style={{ border: 'none', background: 'transparent', color: '#1d4ed8', cursor: 'pointer', padding: 0, textAlign: 'left', fontFamily: 'monospace', fontSize: '0.8rem' }}
                     >
                       {taskId}
                     </button>
                   </td>
+                  <td style={{ borderTop: '1px solid #f1f5f9', padding: '6px 8px' }}>{normalizeKindLabel(task?.task_kind)}</td>
                   <td style={{ borderTop: '1px solid #f1f5f9', padding: '6px 8px' }}>
-                    {KIND_LABEL[String(task?.task_kind || '').toLowerCase()] || String(task?.task_kind || '-')}
-                  </td>
-                  <td style={{ borderTop: '1px solid #f1f5f9', padding: '6px 8px' }}>
-                    <span
-                      style={{
-                        padding: '2px 8px',
-                        borderRadius: '999px',
-                        color: status.text,
-                        background: status.background,
-                        fontWeight: 700,
-                      }}
-                    >
-                      {status.label}
-                    </span>
+                    <span style={{ padding: '2px 8px', borderRadius: '999px', color: status.text, background: status.background, fontWeight: 700 }}>{status.label}</span>
                   </td>
                   <td style={{ borderTop: '1px solid #f1f5f9', padding: '6px 8px' }}>
                     <div style={{ display: 'grid', gap: '4px' }}>
@@ -979,30 +889,17 @@ export default function CollectionWorkbench() {
                   </td>
                   <td style={{ borderTop: '1px solid #f1f5f9', padding: '6px 8px' }}>
                     {toNumber(task?.downloaded_items, 0)} / {toNumber(task?.total_items, 0)}
-                    {toNumber(task?.failed_items, 0) > 0 && (
-                      <span style={{ color: '#991b1b' }}>（失败 {toNumber(task?.failed_items, 0)}）</span>
-                    )}
+                    {toNumber(task?.failed_items, 0) > 0 && <span style={{ color: '#991b1b', marginLeft: '6px' }}>（失败 {toNumber(task?.failed_items, 0)}）</span>}
                   </td>
-                  <td style={{ borderTop: '1px solid #f1f5f9', padding: '6px 8px', color: failureStyle.color, fontWeight: 700 }}>
-                    {failure.label}
-                  </td>
-                  <td style={{ borderTop: '1px solid #f1f5f9', padding: '6px 8px', color: '#4b5563' }}>
-                    {truncateText(failure.detail || task?.error || '-', 100) || '-'}
-                  </td>
-                  <td style={{ borderTop: '1px solid #f1f5f9', padding: '6px 8px', color: '#4b5563' }}>
-                    {formatTime(task?.updated_at_ms || task?.finished_at_ms || task?.created_at_ms)}
-                  </td>
+                  <td style={{ borderTop: '1px solid #f1f5f9', padding: '6px 8px', color: failureStyle.color, fontWeight: 700 }}>{failure.label}</td>
+                  <td style={{ borderTop: '1px solid #f1f5f9', padding: '6px 8px', color: '#4b5563' }}>{truncateText((failure.detail || task?.error) ? normalizeVisibleMessage(failure.detail || task?.error, '请查看任务详情') : '-', 100) || '-'}</td>
+                  <td style={{ borderTop: '1px solid #f1f5f9', padding: '6px 8px', color: '#4b5563' }}>{formatTime(task?.updated_at_ms || task?.finished_at_ms || task?.created_at_ms)}</td>
                   <td style={{ borderTop: '1px solid #f1f5f9', padding: '6px 8px', whiteSpace: 'nowrap' }}>
                     {['pause', 'resume', 'cancel', 'retry'].map((action) => {
                       const flagName = ACTION_FLAG[action];
                       const allowed = !!task?.[flagName];
                       const busy = isActionBusy(taskId, action);
-                      const colorMap = {
-                        pause: '#64748b',
-                        resume: '#0f766e',
-                        cancel: '#dc2626',
-                        retry: '#2563eb',
-                      };
+                      const colorMap = { pause: '#64748b', resume: '#0f766e', cancel: '#dc2626', retry: '#2563eb' };
                       return (
                         <button
                           key={`${taskId}_${action}`}
@@ -1031,7 +928,7 @@ export default function CollectionWorkbench() {
             })}
             {visibleTasks.length <= 0 && (
               <tr>
-                <td colSpan={10} style={{ padding: '20px', color: '#9ca3af', textAlign: 'center' }}>
+                <td colSpan={10} style={{ padding: '16px', textAlign: 'center', color: '#9ca3af' }}>
                   当前筛选条件下没有匹配的任务。
                 </td>
               </tr>
@@ -1040,75 +937,49 @@ export default function CollectionWorkbench() {
         </table>
       </div>
       <div style={{ color: '#6b7280', fontSize: '0.82rem' }}>
-        最后更新时间：{lastUpdatedAt ? formatTime(lastUpdatedAt) : '-'} | 可见：{visibleTasks.length} | 已选：{selectedTasks.length}
+        最后更新时间：{lastUpdatedAt ? formatTime(lastUpdatedAt) : '-'} | 可见任务：{visibleTasks.length} | 已选任务：{selectedTasks.length}
       </div>
     </>
   );
 
   const rightPane = (
     <>
-      <div style={{ fontWeight: 700, color: '#111827' }}>证据与参数</div>
-      {!focusedTask && (
-        <div style={{ color: '#9ca3af', fontSize: '0.88rem' }}>
-          请选择一条任务查看详情。
-        </div>
-      )}
+      <div style={{ fontWeight: 700, color: '#111827' }}>详情面板</div>
+      {!focusedTask && <div style={{ color: '#9ca3af', fontSize: '0.88rem' }}>请选择一条任务查看详细信息。</div>}
       {focusedTask && (
         <div style={{ display: 'grid', gap: '10px', fontSize: '0.86rem' }}>
           <div style={{ border: '1px solid #e5e7eb', borderRadius: '8px', padding: '8px' }}>
-            <div style={{ color: '#6b7280' }}>任务</div>
-            <div style={{ fontFamily: 'monospace', color: '#111827' }}>{focusedTask.task_id}</div>
-            <div style={{ marginTop: '4px', color: '#4b5563' }}>
-              类型：{KIND_LABEL[String(focusedTask.task_kind || '').toLowerCase()] || focusedTask.task_kind}
-            </div>
-            <div style={{ marginTop: '4px', color: '#4b5563' }}>
-              状态：{statusMeta(focusedTask.status).label}
-            </div>
-            <div style={{ marginTop: '4px', color: '#4b5563' }}>
-              重试次数：{toNumber(focusedTask.retry_count, 0)}
-            </div>
+            <div style={{ fontWeight: 700, color: '#111827' }}>任务概览</div>
+            <div style={{ fontFamily: 'monospace', color: '#111827', marginTop: '6px' }}>{focusedTask.task_id}</div>
+            <div style={{ marginTop: '4px', color: '#4b5563' }}>类型：{normalizeKindLabel(focusedTask.task_kind)}</div>
+            <div style={{ marginTop: '4px', color: '#4b5563' }}>状态：{statusMeta(focusedTask.status).label}</div>
+            <div style={{ marginTop: '4px', color: '#4b5563' }}>重试次数：{toNumber(focusedTask.retry_count, 0)}</div>
           </div>
 
           <div style={{ border: '1px solid #e5e7eb', borderRadius: '8px', padding: '8px' }}>
             <div style={{ color: '#6b7280', marginBottom: '4px' }}>采集输入</div>
-            <div style={{ color: '#111827' }}>
-              关键词：{String(focusedTask.keyword_text || '').trim() || '-'}
-            </div>
-            <div style={{ color: '#4b5563', marginTop: '4px' }}>
-              创建时间：{formatTime(focusedTask.created_at_ms)}
-            </div>
-            <div style={{ color: '#4b5563', marginTop: '4px' }}>
-              更新时间：{formatTime(focusedTask.updated_at_ms || focusedTask.finished_at_ms)}
-            </div>
+            <div style={{ color: '#111827' }}>关键词：{String(focusedTask.keyword_text || '').trim() || '-'}</div>
+            <div style={{ color: '#4b5563', marginTop: '4px' }}>创建时间：{formatTime(focusedTask.created_at_ms)}</div>
+            <div style={{ color: '#4b5563', marginTop: '4px' }}>更新时间：{formatTime(focusedTask.updated_at_ms || focusedTask.finished_at_ms)}</div>
           </div>
 
           <div style={{ border: '1px solid #e5e7eb', borderRadius: '8px', padding: '8px' }}>
             <div style={{ color: '#6b7280', marginBottom: '4px' }}>来源错误</div>
-            {Object.keys(focusedTask.source_errors || {}).length <= 0 && (
-              <div style={{ color: '#9ca3af' }}>暂无来源级错误</div>
-            )}
+            {Object.keys(focusedTask.source_errors || {}).length <= 0 && <div style={{ color: '#9ca3af' }}>暂无来源级错误。</div>}
             {Object.entries(focusedTask.source_errors || {}).map(([source, detail]) => (
               <div key={source} style={{ marginTop: '5px' }}>
-                <div style={{ color: '#b45309', fontWeight: 700 }}>{source}</div>
+                <div style={{ color: '#b45309', fontWeight: 700 }}>{normalizeSourceLabel(source)}</div>
                 <div style={{ color: '#4b5563', fontSize: '0.82rem' }}>{String(detail || '-')}</div>
               </div>
             ))}
           </div>
 
           <div style={{ border: '1px solid #e5e7eb', borderRadius: '8px', padding: '8px' }}>
-            <div style={{ color: '#6b7280', marginBottom: '4px' }}>配额 / 运行态</div>
-            <div style={{ color: '#4b5563' }}>
-              全局：{toNumber(focusedTask?.quota?.global_limit, 0)} | 类型：{toNumber(focusedTask?.quota?.task_kind_limit, 0)} | 用户：{toNumber(focusedTask?.quota?.per_user_limit, 0)}
-            </div>
-            <div style={{ color: '#4b5563', marginTop: '4px' }}>
-              最大并发：{toNumber(focusedTask?.max_concurrency, 0)}
-            </div>
-            <div style={{ color: '#4b5563', marginTop: '4px' }}>
-              队列位置：{focusedTask?.queue_position ?? '-'}
-            </div>
-            <div style={{ color: '#4b5563', marginTop: '4px' }}>
-              配额阻塞原因：{String(focusedTask?.quota_blocked_reason || '-')}
-            </div>
+            <div style={{ color: '#6b7280', marginBottom: '4px' }}>配额与运行状态</div>
+            <div style={{ color: '#4b5563' }}>全局配额：{toNumber(focusedTask?.quota?.global_limit, 0)} | 类型配额：{toNumber(focusedTask?.quota?.task_kind_limit, 0)} | 用户配额：{toNumber(focusedTask?.quota?.per_user_limit, 0)}</div>
+            <div style={{ color: '#4b5563', marginTop: '4px' }}>最大并发数：{toNumber(focusedTask?.max_concurrency, 0)}</div>
+            <div style={{ color: '#4b5563', marginTop: '4px' }}>队列位置：{focusedTask?.queue_position ?? '-'}</div>
+            <div style={{ color: '#4b5563', marginTop: '4px' }}>配额阻塞原因：{String(focusedTask?.quota_blocked_reason || '-')}</div>
           </div>
         </div>
       )}
@@ -1131,19 +1002,12 @@ export default function CollectionWorkbench() {
             cursor: 'pointer',
           }}
         >
-          清空
+          清空日志
         </button>
       </div>
       {!logs.length && <div style={{ color: '#94a3b8', fontSize: '0.84rem' }}>暂无任务日志。</div>}
       {logs.map((entry) => {
-        const tone =
-          entry.level === 'error'
-            ? '#fca5a5'
-            : entry.level === 'warn'
-              ? '#fcd34d'
-              : entry.level === 'success'
-                ? '#86efac'
-                : '#bfdbfe';
+        const tone = entry.level === 'error' ? '#fca5a5' : entry.level === 'warn' ? '#fcd34d' : entry.level === 'success' ? '#86efac' : '#bfdbfe';
         return (
           <div key={entry.id} style={{ fontSize: '0.82rem', color: tone, fontFamily: 'monospace' }}>
             [{formatTime(entry.at)}] [{entry.level.toUpperCase()}] {entry.message}

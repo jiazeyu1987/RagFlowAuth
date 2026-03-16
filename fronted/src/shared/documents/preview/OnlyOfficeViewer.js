@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 
 import { nowMs, previewTrace } from './previewUtils';
+import { normalizeDisplayError } from '../../utils/displayError';
 
 export default function OnlyOfficeViewer({ serverUrl, config, traceContext }) {
   const containerId = useMemo(
@@ -26,7 +27,7 @@ export default function OnlyOfficeViewer({ serverUrl, config, traceContext }) {
     const initEditor = () => {
       if (disposed) return;
       if (!window.DocsAPI || typeof window.DocsAPI.DocEditor !== 'function') {
-        setViewerError('ONLYOFFICE DocsAPI not ready');
+        setViewerError('ONLYOFFICE 服务尚未就绪');
         previewTrace('onlyoffice:init:not-ready', {
           source: traceSource,
           docId: traceDocId,
@@ -49,7 +50,7 @@ export default function OnlyOfficeViewer({ serverUrl, config, traceContext }) {
           elapsedMs: Math.round(nowMs() - t0),
         });
       } catch (e) {
-        setViewerError(e?.message || 'ONLYOFFICE init failed');
+        setViewerError(normalizeDisplayError(e?.message ?? e, 'ONLYOFFICE 初始化失败'));
         previewTrace('onlyoffice:init:failed', {
           source: traceSource,
           docId: traceDocId,
@@ -62,7 +63,7 @@ export default function OnlyOfficeViewer({ serverUrl, config, traceContext }) {
 
     const handleLoad = () => initEditor();
     const handleError = () => {
-      setViewerError('Failed to load ONLYOFFICE script');
+      setViewerError('加载 ONLYOFFICE 脚本失败');
       previewTrace('onlyoffice:script:error', {
         source: traceSource,
         docId: traceDocId,

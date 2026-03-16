@@ -1,4 +1,5 @@
 import documentClient, { DOCUMENT_SOURCE } from '../../shared/documents/documentClient';
+import { normalizeDisplayError } from '../../shared/utils/displayError';
 
 export function isMarkdownFile(filename) {
   if (!filename) return false;
@@ -25,7 +26,7 @@ export function countLines(value) {
 export async function fetchKnowledgePreviewText(docId) {
   const data = await documentClient.preview({ source: DOCUMENT_SOURCE.KNOWLEDGE, docId });
   if (data?.type !== 'text') {
-    throw new Error(data?.message || '预览失败：该文档不是文本类型');
+    throw new Error(normalizeDisplayError(data?.message, '预览失败：该文档不是文本类型'));
   }
   return String(data.content || '');
 }
@@ -51,7 +52,7 @@ export async function collectConflictChecks(documents, reviewApi) {
         const conflict = await reviewApi.getConflict(doc.doc_id);
         return { doc, conflict };
       } catch (err) {
-        return { doc, conflictError: err?.message || '冲突检查失败' };
+        return { doc, conflictError: normalizeDisplayError(err?.message ?? err, '冲突检查失败') };
       }
     }),
   );
