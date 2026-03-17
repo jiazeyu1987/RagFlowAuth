@@ -18,10 +18,16 @@ import {
 } from '../features/knowledge/upload/utils';
 import { useAuth } from '../hooks/useAuth';
 
+const MOBILE_BREAKPOINT = 768;
+
 const KnowledgeUpload = () => {
   const navigate = useNavigate();
   const auth = useAuth();
   const canManageExtensions = auth.isAdmin();
+  const [isMobile, setIsMobile] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return window.innerWidth <= MOBILE_BREAKPOINT;
+  });
 
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [kbId, setKbId] = useState(DEFAULT_KB_NAME);
@@ -48,6 +54,14 @@ const KnowledgeUpload = () => {
 
   const extensionSet = useMemo(() => new Set(allowedExtensions), [allowedExtensions]);
   const maxFileSizeMB = Math.floor(MAX_FILE_SIZE_BYTES / (1024 * 1024));
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+    const handleResize = () => setIsMobile(window.innerWidth <= MOBILE_BREAKPOINT);
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   useEffect(() => {
     const fetchDatasets = async () => {
@@ -112,7 +126,9 @@ const KnowledgeUpload = () => {
 
     setSelectedFiles((prev) => {
       const map = new Map((prev || []).map((file) => [getFileUniqueKey(file), file]));
-      for (const file of valid) map.set(getFileUniqueKey(file), file);
+      for (const file of valid) {
+        map.set(getFileUniqueKey(file), file);
+      }
       return Array.from(map.values());
     });
 
@@ -144,7 +160,11 @@ const KnowledgeUpload = () => {
       const results = [];
       for (let index = 0; index < selectedFiles.length; index += 1) {
         const file = selectedFiles[index];
-        setUploadProgress({ current: index + 1, total: selectedFiles.length, filename: getDisplayPath(file) });
+        setUploadProgress({
+          current: index + 1,
+          total: selectedFiles.length,
+          filename: getDisplayPath(file),
+        });
         try {
           const result = await knowledgeApi.uploadDocument(file, kbId);
           results.push({ ok: true, filename: result?.filename || getDisplayPath(file) });
@@ -161,9 +181,7 @@ const KnowledgeUpload = () => {
         setTimeout(() => navigate('/documents'), 1200);
       } else {
         const firstFail = results.find((item) => !item.ok);
-        setError(
-          `上传完成：成功 ${okCount} 个，失败 ${failCount} 个${firstFail ? `。（例如：${firstFail.filename}：${firstFail.error}）` : ''}`
-        );
+        setError(`上传完成：成功 ${okCount} 个，失败 ${failCount} 个${firstFail ? `。（例如：${firstFail.filename}：${firstFail.error}）` : ''}`);
       }
     } catch (err) {
       setError(err.message || '上传失败');
@@ -236,7 +254,9 @@ const KnowledgeUpload = () => {
     setExtensionsMessage(null);
     try {
       const payload = await knowledgeApi.updateAllowedUploadExtensions(allowedExtensions);
-      const next = Array.isArray(payload?.allowed_extensions) ? payload.allowed_extensions.map(normalizeExtension).filter(Boolean) : allowedExtensions;
+      const next = Array.isArray(payload?.allowed_extensions)
+        ? payload.allowed_extensions.map(normalizeExtension).filter(Boolean)
+        : allowedExtensions;
       setAllowedExtensions(Array.from(new Set(next)).sort());
       setExtensionsMessage({ type: 'success', text: '文件后缀配置已保存，后续上传立即生效' });
     } catch (err) {
@@ -250,7 +270,7 @@ const KnowledgeUpload = () => {
     <div>
       <h2 style={{ marginBottom: '24px' }}>上传知识库文档</h2>
 
-      {error && (
+      {error ? (
         <div
           data-testid="upload-error"
           style={{
@@ -263,9 +283,9 @@ const KnowledgeUpload = () => {
         >
           {error}
         </div>
-      )}
+      ) : null}
 
-      {success && (
+      {success ? (
         <div
           data-testid="upload-success"
           style={{
@@ -278,9 +298,9 @@ const KnowledgeUpload = () => {
         >
           {success}
         </div>
-      )}
+      ) : null}
 
-      <div style={uploadPanelStyle}>
+      <div style={{ ...uploadPanelStyle, padding: isMobile ? '14px' : uploadPanelStyle.padding }}>
         <form onSubmit={handleUpload}>
           <div style={{ marginBottom: '24px' }}>
             <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', color: '#374151' }}>
@@ -349,8 +369,8 @@ const KnowledgeUpload = () => {
             onRemove={removeFile}
           />
 
-          <div style={{ marginTop: '8px', fontSize: '0.85rem', color: '#6b7280' }}>
-            Supported extensions: {acceptAttr} (max 16MB per file; folder upload is recursive).
+          <div style={{ marginTop: '8px', fontSize: '0.85rem', color: '#6b7280', lineHeight: 1.6 }}>
+            {`支持后缀：${acceptAttr}（单文件最大 ${maxFileSizeMB}MB；文件夹上传会递归处理）`}
           </div>
 
           <button
@@ -376,18 +396,19 @@ const KnowledgeUpload = () => {
         <div
           style={{
             marginTop: '24px',
-            padding: '16px',
+            padding: isMobile ? '14px' : '16px',
             backgroundColor: '#f9fafb',
             borderRadius: '4px',
             fontSize: '0.9rem',
             color: '#6b7280',
+            lineHeight: 1.6,
           }}
         >
           <div style={{ marginBottom: '8px', fontWeight: '500', color: '#374151' }}>上传流程</div>
           <ol style={{ margin: 0, paddingLeft: '20px' }}>
             <li>选择知识库并上传文件</li>
             <li>文档进入“待审核”状态</li>
-            <li>审核通过后自动上传到 RAGFlow 知识库</li>
+            <li>审核通过后自动同步到 RAGFlow 知识库</li>
           </ol>
         </div>
       </div>

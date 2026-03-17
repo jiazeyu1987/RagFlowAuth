@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import FolderTree from '../features/permissionGroups/management/components/FolderTree';
 import GroupContentTable from '../features/permissionGroups/management/components/GroupContentTable';
 import GroupEditorForm from '../features/permissionGroups/management/components/GroupEditorForm';
@@ -11,7 +11,13 @@ const panelStyle = {
   background: '#fff',
 };
 
+const MOBILE_BREAKPOINT = 768;
+
 export default function PermissionGroupManagement() {
+  const [isMobile, setIsMobile] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return window.innerWidth <= MOBILE_BREAKPOINT;
+  });
   const {
     groups,
     loading,
@@ -58,18 +64,28 @@ export default function PermissionGroupManagement() {
     endGroupDrag,
   } = usePermissionGroupManagement();
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+
+    const handleResize = () => setIsMobile(window.innerWidth <= MOBILE_BREAKPOINT);
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
   return (
-    <div style={{ padding: 12 }}>
+    <div style={{ padding: isMobile ? 10 : 12 }}>
       <div
         style={{
           display: 'flex',
+          flexDirection: isMobile ? 'column' : 'row',
           justifyContent: 'space-between',
           gap: 10,
-          alignItems: 'center',
+          alignItems: isMobile ? 'stretch' : 'center',
           marginBottom: 10,
         }}
       >
-        <h2 style={{ margin: 0 }}>Permission Group Management</h2>
+        <h2 style={{ margin: 0 }}>权限组管理</h2>
       </div>
 
       <section style={{ ...panelStyle, marginBottom: 12 }}>
@@ -78,17 +94,18 @@ export default function PermissionGroupManagement() {
             padding: '10px 12px',
             borderBottom: '1px solid #e5e7eb',
             display: 'flex',
+            flexDirection: isMobile ? 'column' : 'row',
             gap: 8,
             flexWrap: 'wrap',
-            alignItems: 'center',
+            alignItems: isMobile ? 'stretch' : 'center',
           }}
         >
           <input
             value={searchKeyword}
             onChange={(event) => setSearchKeyword(event.target.value)}
-            placeholder="Filter items in current folder"
+            placeholder="筛选当前目录内容"
             style={{
-              width: 260,
+              width: isMobile ? '100%' : 260,
               maxWidth: '100%',
               padding: '9px 10px',
               border: '1px solid #d1d5db',
@@ -103,9 +120,10 @@ export default function PermissionGroupManagement() {
               background: '#fff',
               cursor: 'pointer',
               padding: '9px 12px',
+              width: isMobile ? '100%' : 'auto',
             }}
           >
-            Refresh
+            刷新
           </button>
           <button
             onClick={createFolder}
@@ -116,9 +134,10 @@ export default function PermissionGroupManagement() {
               color: '#fff',
               cursor: 'pointer',
               padding: '9px 12px',
+              width: isMobile ? '100%' : 'auto',
             }}
           >
-            New Folder
+            新建文件夹
           </button>
           <button
             onClick={renameFolder}
@@ -134,9 +153,10 @@ export default function PermissionGroupManagement() {
                   ? 'not-allowed'
                   : 'pointer',
               padding: '9px 12px',
+              width: isMobile ? '100%' : 'auto',
             }}
           >
-            Rename Folder
+            重命名文件夹
           </button>
           <button
             onClick={deleteFolder}
@@ -152,9 +172,10 @@ export default function PermissionGroupManagement() {
                   ? 'not-allowed'
                   : 'pointer',
               padding: '9px 12px',
+              width: isMobile ? '100%' : 'auto',
             }}
           >
-            Delete Folder
+            删除文件夹
           </button>
           <button
             onClick={startCreateGroup}
@@ -165,17 +186,18 @@ export default function PermissionGroupManagement() {
               color: '#fff',
               cursor: 'pointer',
               padding: '9px 12px',
+              width: isMobile ? '100%' : 'auto',
             }}
           >
-            New Group
+            新建分组
           </button>
           <div style={{ color: '#6b7280', fontSize: 12 }}>
-            Total groups: {groups.length}
+            分组总数: {groups.length}
           </div>
         </div>
       </section>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '320px 1fr', gap: 12 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '320px 1fr', gap: 12 }}>
         <section style={panelStyle}>
           <div
             style={{
@@ -184,9 +206,9 @@ export default function PermissionGroupManagement() {
               fontWeight: 800,
             }}
           >
-            Folder Tree
+            文件夹树
           </div>
-          <div style={{ padding: 10, maxHeight: 700, overflowY: 'auto' }}>
+          <div style={{ padding: 10, maxHeight: isMobile ? 280 : 700, overflowY: 'auto' }}>
             <FolderTree
               indexes={folderIndexes}
               currentFolderId={currentFolderId}
@@ -214,7 +236,7 @@ export default function PermissionGroupManagement() {
         <section style={panelStyle}>
           <div style={{ padding: '10px 12px', borderBottom: '1px solid #e5e7eb' }}>
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
-              <span style={{ color: '#6b7280', fontSize: 13 }}>Path:</span>
+              <span style={{ color: '#6b7280', fontSize: 13 }}>路径:</span>
               {folderPath.map((folder, index) => (
                 <React.Fragment key={folder.id || '__root__'}>
                   <button
@@ -238,7 +260,7 @@ export default function PermissionGroupManagement() {
               ))}
             </div>
             <div style={{ color: '#6b7280', fontSize: 12 }}>
-              Drag groups from the table and drop them into any folder on the left.
+              可从表格中拖拽分组，并拖放到左侧任意文件夹中。
             </div>
             {error && <div style={{ color: '#b91c1c', marginTop: 8 }}>{error}</div>}
             {hint && <div style={{ color: '#047857', marginTop: 8 }}>{hint}</div>}

@@ -1,4 +1,6 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
+
+const MOBILE_BREAKPOINT = 768;
 
 export default function DownloadHistorySidebar({
   rows,
@@ -11,41 +13,37 @@ export default function DownloadHistorySidebar({
   onSelectKey,
   onAdd,
   onDelete,
-  title = 'History Keywords',
-  refreshText = 'Refresh',
-  loadingText = 'Loading...',
-  emptyText = 'No history keywords',
-  addText = 'Add to KB',
-  addingText = 'Adding...',
-  deleteText = 'Delete',
-  deletingText = 'Deleting...',
+  title = '历史关键词',
+  refreshText = '刷新',
+  loadingText = '加载中...',
+  emptyText = '暂无历史关键词',
+  addText = '加入知识库',
+  addingText = '加入中...',
+  deleteText = '删除',
+  deletingText = '删除中...',
   getRowKey = (row) => String(row?.history_key || ''),
   getRowTitle = (row) => row?.keyword_display || '-',
 }) {
+  const [isMobile, setIsMobile] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return window.innerWidth <= MOBILE_BREAKPOINT;
+  });
   const list = Array.isArray(rows) ? rows : [];
   const selected = String(selectedKey || '');
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+    const handleResize = () => setIsMobile(window.innerWidth <= MOBILE_BREAKPOINT);
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
   return (
     <div style={{ border: '1px solid #e5e7eb', borderRadius: '10px', padding: '8px', maxHeight: '70vh', overflow: 'auto' }}>
-      <div style={{ fontWeight: 800, color: '#111827', marginBottom: '6px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+      <div style={{ fontWeight: 800, color: '#111827', marginBottom: '6px', display: 'flex', alignItems: isMobile ? 'stretch' : 'center', justifyContent: 'space-between', gap: '8px', flexDirection: isMobile ? 'column' : 'row' }}>
         <span>{title}</span>
-        <button
-          type="button"
-          onClick={onRefresh}
-          disabled={Boolean(loading || loadingItems)}
-          style={{
-            padding: '4px 8px',
-            borderRadius: '7px',
-            border: '1px solid #2563eb',
-            background: loading || loadingItems ? '#93c5fd' : '#2563eb',
-            color: '#fff',
-            cursor: loading || loadingItems ? 'not-allowed' : 'pointer',
-            fontSize: '0.78rem',
-            fontWeight: 700,
-          }}
-        >
-          {refreshText}
-        </button>
+        <button type="button" onClick={onRefresh} disabled={Boolean(loading || loadingItems)} style={{ padding: '4px 8px', borderRadius: '7px', border: '1px solid #2563eb', background: loading || loadingItems ? '#93c5fd' : '#2563eb', color: '#fff', cursor: loading || loadingItems ? 'not-allowed' : 'pointer', fontSize: '0.78rem', fontWeight: 700, width: isMobile ? '100%' : 'auto' }}>{refreshText}</button>
       </div>
 
       {loading ? <div style={{ color: '#6b7280', fontSize: '0.86rem' }}>{loadingText}</div> : null}
@@ -68,67 +66,15 @@ export default function DownloadHistorySidebar({
           const addBtnBorder = allAdded ? '#9ca3af' : partialAdded ? '#d97706' : '#15803d';
 
           return (
-            <div
-              key={key}
-              data-testid={`download-history-row-${safeKey}`}
-              style={{
-                border: active ? '1px solid #60a5fa' : '1px solid #e5e7eb',
-                background: active ? '#eff6ff' : '#fff',
-                borderRadius: '8px',
-                padding: '8px',
-                display: 'grid',
-                gap: '6px',
-              }}
-            >
-              <button
-                type="button"
-                onClick={() => onSelectKey && onSelectKey(key, row)}
-                style={{ textAlign: 'left', border: 'none', background: 'transparent', padding: 0, cursor: 'pointer' }}
-              >
-                <div style={{ fontWeight: 700, color: '#111827', fontSize: '0.88rem' }}>{getRowTitle(row)}</div>
-                <div style={{ fontSize: '0.78rem', color: '#6b7280', marginTop: '4px' }}>
-                  downloaded {downloadedCount}, analyzed {analyzedCount}, added {addedCount}
-                </div>
+            <div key={key} data-testid={`download-history-row-${safeKey}`} style={{ border: active ? '1px solid #60a5fa' : '1px solid #e5e7eb', background: active ? '#eff6ff' : '#fff', borderRadius: '8px', padding: '8px', display: 'grid', gap: '6px' }}>
+              <button type="button" onClick={() => onSelectKey && onSelectKey(key, row)} style={{ textAlign: 'left', border: 'none', background: 'transparent', padding: 0, cursor: 'pointer' }}>
+                <div style={{ fontWeight: 700, color: '#111827', fontSize: '0.88rem', wordBreak: 'break-word' }}>{getRowTitle(row)}</div>
+                <div style={{ fontSize: '0.78rem', color: '#6b7280', marginTop: '4px', lineHeight: 1.5 }}>已下载 {downloadedCount}，已解析 {analyzedCount}，已加入 {addedCount}</div>
               </button>
 
-              <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                <button
-                  type="button"
-                  onClick={() => onAdd && onAdd(row)}
-                  disabled={!canAdd || adding}
-                  data-testid={`download-history-add-${safeKey}`}
-                  style={{
-                    padding: '4px 8px',
-                    borderRadius: '7px',
-                    border: `1px solid ${addBtnBorder}`,
-                    background: addBtnBg,
-                    color: '#fff',
-                    cursor: !canAdd || adding ? 'not-allowed' : 'pointer',
-                    fontSize: '0.78rem',
-                    fontWeight: 700,
-                    opacity: !canAdd || adding ? 0.75 : 1,
-                  }}
-                >
-                  {adding ? addingText : addText}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => onDelete && onDelete(row)}
-                  disabled={deleting}
-                  data-testid={`download-history-delete-${safeKey}`}
-                  style={{
-                    padding: '4px 8px',
-                    borderRadius: '7px',
-                    border: '1px solid #ef4444',
-                    background: deleting ? '#fecaca' : '#ef4444',
-                    color: '#fff',
-                    cursor: deleting ? 'not-allowed' : 'pointer',
-                    fontSize: '0.78rem',
-                    fontWeight: 700,
-                  }}
-                >
-                  {deleting ? deletingText : deleteText}
-                </button>
+              <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', flexDirection: isMobile ? 'column' : 'row' }}>
+                <button type="button" onClick={() => onAdd && onAdd(row)} disabled={!canAdd || adding} data-testid={`download-history-add-${safeKey}`} style={{ padding: '4px 8px', borderRadius: '7px', border: `1px solid ${addBtnBorder}`, background: addBtnBg, color: '#fff', cursor: !canAdd || adding ? 'not-allowed' : 'pointer', fontSize: '0.78rem', fontWeight: 700, opacity: !canAdd || adding ? 0.75 : 1, width: isMobile ? '100%' : 'auto' }}>{adding ? addingText : addText}</button>
+                <button type="button" onClick={() => onDelete && onDelete(row)} disabled={deleting} data-testid={`download-history-delete-${safeKey}`} style={{ padding: '4px 8px', borderRadius: '7px', border: '1px solid #ef4444', background: deleting ? '#fecaca' : '#ef4444', color: '#fff', cursor: deleting ? 'not-allowed' : 'pointer', fontSize: '0.78rem', fontWeight: 700, width: isMobile ? '100%' : 'auto' }}>{deleting ? deletingText : deleteText}</button>
               </div>
             </div>
           );

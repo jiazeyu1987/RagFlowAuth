@@ -12,30 +12,50 @@ export function DocumentReviewToolbar({
   handleBatchRejectAll,
   handleSelectAll,
   isReviewer,
+  isMobile,
   loadingDatasets,
   selectedDataset,
   selectedDocIds,
   setSelectedDataset,
 }) {
+  const allSelected = documents.length > 0 && selectedDocIds.size === documents.length;
+
   return (
     <div style={{ marginBottom: '24px' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: isMobile ? 'stretch' : 'center',
+          flexDirection: isMobile ? 'column' : 'row',
+          gap: '12px',
+          marginBottom: '16px',
+        }}
+      >
         {embedded ? <div /> : <h2 style={{ margin: 0 }}>文档审核</h2>}
-        <div style={{ display: 'flex', gap: '8px' }}>
+        <div
+          style={{
+            display: 'flex',
+            gap: '8px',
+            flexDirection: isMobile ? 'column' : 'row',
+            width: isMobile ? '100%' : 'auto',
+          }}
+        >
           <button
             onClick={handleSelectAll}
             disabled={documents.length === 0}
             style={{
               padding: '8px 16px',
-              backgroundColor: selectedDocIds.size === documents.length ? '#6b7280' : '#3b82f6',
+              backgroundColor: allSelected ? '#6b7280' : '#3b82f6',
               color: 'white',
               border: 'none',
               borderRadius: '4px',
               cursor: documents.length === 0 ? 'not-allowed' : 'pointer',
               fontSize: '0.9rem',
+              width: isMobile ? '100%' : 'auto',
             }}
           >
-            {selectedDocIds.size === documents.length ? '取消全选' : '全选'}
+            {allSelected ? '取消全选' : '全选'}
           </button>
           {isReviewer && (
             <>
@@ -50,6 +70,7 @@ export function DocumentReviewToolbar({
                   borderRadius: '4px',
                   cursor: documents.length > 0 && !batchReviewLoading ? 'pointer' : 'not-allowed',
                   fontSize: '0.9rem',
+                  width: isMobile ? '100%' : 'auto',
                 }}
               >
                 {batchReviewLoading === 'approve' ? '处理中...' : `一键通过 (${documents.length})`}
@@ -65,6 +86,7 @@ export function DocumentReviewToolbar({
                   borderRadius: '4px',
                   cursor: documents.length > 0 && !batchReviewLoading ? 'pointer' : 'not-allowed',
                   fontSize: '0.9rem',
+                  width: isMobile ? '100%' : 'auto',
                 }}
               >
                 {batchReviewLoading === 'reject' ? '处理中...' : `一键驳回 (${documents.length})`}
@@ -77,12 +99,15 @@ export function DocumentReviewToolbar({
               disabled={selectedDocIds.size === 0 || batchDownloadLoading || !!batchReviewLoading}
               style={{
                 padding: '8px 16px',
-                backgroundColor: selectedDocIds.size > 0 && !batchDownloadLoading && !batchReviewLoading ? '#10b981' : '#9ca3af',
+                backgroundColor:
+                  selectedDocIds.size > 0 && !batchDownloadLoading && !batchReviewLoading ? '#10b981' : '#9ca3af',
                 color: 'white',
                 border: 'none',
                 borderRadius: '4px',
-                cursor: selectedDocIds.size > 0 && !batchDownloadLoading && !batchReviewLoading ? 'pointer' : 'not-allowed',
+                cursor:
+                  selectedDocIds.size > 0 && !batchDownloadLoading && !batchReviewLoading ? 'pointer' : 'not-allowed',
                 fontSize: '0.9rem',
+                width: isMobile ? '100%' : 'auto',
               }}
             >
               {batchDownloadLoading ? '下载中...' : `批量下载 (${selectedDocIds.size})`}
@@ -91,7 +116,14 @@ export function DocumentReviewToolbar({
         </div>
       </div>
 
-      <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
+      <div
+        style={{
+          display: 'flex',
+          gap: '16px',
+          alignItems: isMobile ? 'stretch' : 'center',
+          flexDirection: isMobile ? 'column' : 'row',
+        }}
+      >
         <select
           value={selectedDataset === null ? '' : selectedDataset}
           onChange={(e) => setSelectedDataset(e.target.value)}
@@ -104,13 +136,14 @@ export function DocumentReviewToolbar({
             fontSize: '0.95rem',
             backgroundColor: 'white',
             cursor: 'pointer',
+            width: isMobile ? '100%' : 'auto',
           }}
         >
           {loadingDatasets ? (
             <option value="">加载中...</option>
           ) : (
             <>
-              <option value="">全部</option>
+              <option value="">全部知识库</option>
               {datasets.map((ds) => (
                 <option key={ds.id} value={ds.name}>
                   {ds.name}

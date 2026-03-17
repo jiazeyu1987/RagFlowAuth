@@ -2,6 +2,8 @@ import React, { useEffect, useMemo, useState } from 'react';
 import authClient from '../api/authClient';
 import { useAuth } from '../hooks/useAuth';
 
+const MOBILE_BREAKPOINT = 768;
+
 const STATUS_LABELS = {
   pending: '\u5f85\u5ba1\u6838',
   approved: '\u5df2\u901a\u8fc7',
@@ -35,6 +37,10 @@ const formatTime = (timestampMs) => {
 
 const DocumentAudit = ({ embedded = false }) => {
   const { user } = useAuth();
+  const [isMobile, setIsMobile] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return window.innerWidth <= MOBILE_BREAKPOINT;
+  });
   const [documents, setDocuments] = useState([]);
   const [deletions, setDeletions] = useState([]);
   const [downloads, setDownloads] = useState([]);
@@ -72,6 +78,15 @@ const DocumentAudit = ({ embedded = false }) => {
     };
 
     fetchData();
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+
+    const handleResize = () => setIsMobile(window.innerWidth <= MOBILE_BREAKPOINT);
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
   }, []);
 
   const userMap = useMemo(() => {
@@ -118,7 +133,7 @@ const DocumentAudit = ({ embedded = false }) => {
   }), [downloads, filterKb]);
 
   const renderKbFilter = (withStatus = false) => (
-    <div style={{ display: 'flex', gap: '16px', alignItems: 'center', flexWrap: 'wrap' }}>
+    <div style={{ display: 'flex', gap: '16px', alignItems: isMobile ? 'stretch' : 'center', flexDirection: isMobile ? 'column' : 'row', flexWrap: 'wrap' }}>
       <div>
         <label style={{ marginRight: '8px', fontSize: '0.9rem', color: '#6b7280' }}>{'\u77e5\u8bc6\u5e93'}</label>
         <select
@@ -132,6 +147,7 @@ const DocumentAudit = ({ embedded = false }) => {
             fontSize: '0.95rem',
             backgroundColor: 'white',
             cursor: 'pointer',
+            width: isMobile ? '100%' : 'auto',
           }}
         >
           <option value="">{'\u5168\u90e8\u77e5\u8bc6\u5e93'}</option>
@@ -155,6 +171,7 @@ const DocumentAudit = ({ embedded = false }) => {
               fontSize: '0.95rem',
               backgroundColor: 'white',
               cursor: 'pointer',
+              width: isMobile ? '100%' : 'auto',
             }}
           >
             <option value="">{'\u5168\u90e8\u72b6\u6001'}</option>
@@ -180,13 +197,14 @@ const DocumentAudit = ({ embedded = false }) => {
             borderRadius: '4px',
             cursor: 'pointer',
             fontSize: '0.9rem',
+            width: isMobile ? '100%' : 'auto',
           }}
         >
           {'\u91cd\u7f6e'}
         </button>
       )}
 
-      <span style={{ marginLeft: 'auto', fontSize: '0.9rem', color: '#6b7280' }}>
+      <span style={{ marginLeft: isMobile ? 0 : 'auto', fontSize: '0.9rem', color: '#6b7280', alignSelf: isMobile ? 'flex-start' : 'auto' }}>
         {withStatus ? `\u5171 ${filteredDocuments.length} \u6761\u8bb0\u5f55` : activeTab === 'deletions' ? `\u5171 ${filteredDeletions.length} \u6761\u8bb0\u5f55` : `\u5171 ${filteredDownloads.length} \u6761\u8bb0\u5f55`}
       </span>
     </div>
@@ -201,7 +219,7 @@ const DocumentAudit = ({ embedded = false }) => {
       <div style={{ marginBottom: '24px' }}>
         {!embedded && <h2 style={{ margin: '0 0 16px 0' }}>{'\u6587\u6863\u5ba1\u6838\u8bb0\u5f55'}</h2>}
 
-        <div style={{ marginBottom: '16px', borderBottom: '1px solid #e5e7eb' }}>
+        <div style={{ marginBottom: '16px', borderBottom: '1px solid #e5e7eb', display: 'flex', flexWrap: 'wrap', gap: isMobile ? '8px' : 0 }}>
           <button
             onClick={() => setActiveTab('documents')}
             data-testid="audit-tab-documents"
@@ -214,7 +232,7 @@ const DocumentAudit = ({ embedded = false }) => {
               cursor: 'pointer',
               fontSize: '0.95rem',
               fontWeight: activeTab === 'documents' ? '600' : '400',
-              marginRight: '8px',
+               marginRight: isMobile ? 0 : '8px',
             }}
           >
             {`\u6587\u6863\u5217\u8868 (${documents.length})`}
@@ -231,7 +249,7 @@ const DocumentAudit = ({ embedded = false }) => {
               cursor: 'pointer',
               fontSize: '0.95rem',
               fontWeight: activeTab === 'deletions' ? '600' : '400',
-              marginRight: '8px',
+               marginRight: isMobile ? 0 : '8px',
             }}
           >
             {`\u5220\u9664\u8bb0\u5f55 (${deletions.length})`}

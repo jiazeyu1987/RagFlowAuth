@@ -5,7 +5,7 @@ export const DEFAULT_PATENT_SOURCES = {
 
 export const PATENT_LAST_CONFIG_KEY = 'patent_download_last_config_v1';
 
-export const PATENT_LOCAL_KB_REF = '[鏈湴涓撳埄]';
+export const PATENT_LOCAL_KB_REF = '[本地专利]';
 
 export const PATENT_SOURCE_LABEL_MAP = {
   uspto: 'USPTO',

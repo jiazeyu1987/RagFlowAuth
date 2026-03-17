@@ -11,10 +11,15 @@ import AgentsSearchResults from '../features/agents/components/AgentsSearchResul
 import useSearchHistory from '../features/agents/hooks/useSearchHistory';
 
 const SEARCH_HISTORY_LIMIT = 10;
+const MOBILE_BREAKPOINT = 768;
 
 const Agents = () => {
   const { user, canDownload } = useAuth();
   const canDownloadFiles = typeof canDownload === 'function' ? !!canDownload() : false;
+  const [isMobile, setIsMobile] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return window.innerWidth <= MOBILE_BREAKPOINT;
+  });
 
   const [datasets, setDatasets] = useState([]);
   const [selectedDatasetIds, setSelectedDatasetIds] = useState([]);
@@ -58,6 +63,15 @@ const Agents = () => {
 
   useEffect(() => {
     ensureTablePreviewStyles();
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+
+    const handleResize = () => setIsMobile(window.innerWidth <= MOBILE_BREAKPOINT);
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
   }, []);
 
   const closePreviewModal = useCallback(() => {
@@ -205,7 +219,7 @@ const Agents = () => {
       try {
         setError(null);
         const dataset = datasets.find((item) => item.id === datasetId);
-        const datasetName = dataset ? dataset.name || dataset.id : '展厅';
+        const datasetName = dataset ? dataset.name || dataset.id : '知识库';
         await documentClient.downloadToBrowser({
           source: DOCUMENT_SOURCE.RAGFLOW,
           docId,
@@ -224,7 +238,7 @@ const Agents = () => {
       try {
         setError(null);
         const dataset = datasets.find((item) => item.id === datasetId);
-        const datasetName = dataset ? dataset.name || dataset.id : '';
+        const datasetName = dataset ? dataset.name || dataset.id : '知识库';
         setPreviewTarget({
           source: DOCUMENT_SOURCE.RAGFLOW,
           docId,
@@ -240,7 +254,7 @@ const Agents = () => {
   );
 
   return (
-    <div style={{ height: 'calc(100vh - 120px)', display: 'flex', gap: '16px' }}>
+    <div style={{ height: isMobile ? 'auto' : 'calc(100vh - 120px)', minHeight: isMobile ? 'calc(100vh - 160px)' : undefined, display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: '16px' }}>
       <AgentsDatasetSidebar
         datasets={datasets}
         selectedDatasetIds={selectedDatasetIds}
@@ -258,6 +272,8 @@ const Agents = () => {
           display: 'flex',
           flexDirection: 'column',
           overflow: 'hidden',
+          minWidth: 0,
+          minHeight: isMobile ? '58vh' : 0,
         }}
       >
         <AgentsSearchControls
@@ -299,15 +315,16 @@ const Agents = () => {
           data-testid="agents-error"
           style={{
             position: 'fixed',
-            bottom: '20px',
-            right: '20px',
+            bottom: isMobile ? '12px' : '20px',
+            right: isMobile ? '12px' : '20px',
+            left: isMobile ? '12px' : 'auto',
             backgroundColor: '#fee2e2',
             color: '#991b1b',
             padding: '12px 16px',
             borderRadius: '4px',
             boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
             zIndex: 1000,
-            maxWidth: '400px',
+            maxWidth: isMobile ? 'none' : '400px',
           }}
         >
           {error}

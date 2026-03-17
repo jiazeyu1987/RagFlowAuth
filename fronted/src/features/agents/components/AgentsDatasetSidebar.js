@@ -1,4 +1,6 @@
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+
+const MOBILE_BREAKPOINT = 768;
 
 export default function AgentsDatasetSidebar({
   datasets,
@@ -8,16 +10,30 @@ export default function AgentsDatasetSidebar({
   onClearSelection,
 }) {
   const selectedSet = useMemo(() => new Set(selectedDatasetIds || []), [selectedDatasetIds]);
+  const [isMobile, setIsMobile] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return window.innerWidth <= MOBILE_BREAKPOINT;
+  });
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+
+    const handleResize = () => setIsMobile(window.innerWidth <= MOBILE_BREAKPOINT);
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   return (
-    <div data-testid="agents-dataset-sidebar" style={{ width: '280px', display: 'flex', flexDirection: 'column' }}>
+    <div data-testid="agents-dataset-sidebar" style={{ width: isMobile ? '100%' : '280px', display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
       <div
         style={{
           backgroundColor: 'white',
-          borderRadius: '8px',
-          padding: '16px',
+          borderRadius: isMobile ? '12px' : '8px',
+          padding: isMobile ? '14px' : '16px',
           boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
-          height: '100%',
+          height: isMobile ? 'auto' : '100%',
+          maxHeight: isMobile ? '38vh' : 'none',
           overflowY: 'auto',
         }}
       >

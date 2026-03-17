@@ -36,7 +36,11 @@ export function useDocumentReviewActions({
     try {
       const conflict = await reviewApi.getConflict(docId);
       if (conflict?.conflict && conflict?.existing) {
-        setOverwritePrompt({ newDocId: docId, oldDoc: conflict.existing, normalized: conflict.normalized_name });
+        setOverwritePrompt({
+          newDocId: docId,
+          oldDoc: conflict.existing,
+          normalized: conflict.normalized_name,
+        });
         return;
       }
 
@@ -54,7 +58,7 @@ export function useDocumentReviewActions({
     if (!overwritePrompt) return;
     const { newDocId, oldDoc } = overwritePrompt;
     const ok = window.confirm(
-      `确定用新文档覆盖旧文档吗？\n\n旧文档：${oldDoc.filename}\n新文档：${activeDocMap.get(newDocId)?.filename || ''}\n\n该操作会将旧文档替换为新文档，并通过当前待审核文档。`
+      `确定用新文档覆盖旧文档吗？\n\n旧文档：${oldDoc.filename}\n新文档：${activeDocMap.get(newDocId)?.filename || ''}\n\n该操作会将旧文档替换为新文档，并通过当前待审核文档。`,
     );
     if (!ok) return;
 
@@ -192,9 +196,7 @@ export function useDocumentReviewActions({
             failed_items: [],
           }),
         );
-        setError(
-          `批量审批未执行：冲突 ${conflicted.length}，检查失败 ${conflictCheckFailed.length}${firstConflict ? `。首个文档：${firstConflict}` : ''}`,
-        );
+        setError(`批量审批未执行：冲突 ${conflicted.length}，检查失败 ${conflictCheckFailed.length}${firstConflict ? `。首个文档：${firstConflict}` : ''}`);
         return;
       }
 
@@ -202,12 +204,11 @@ export function useDocumentReviewActions({
       setBatchReviewSummary(buildApproveBatchSummary(conflictChecks, result));
       await refreshDocuments();
       setSelectedDocIds(new Set());
+
       if (result.failed_count > 0 || conflicted.length > 0 || conflictCheckFailed.length > 0) {
         const firstFailure = result.failed_items?.[0];
         const firstConflict = conflicted[0]?.doc?.filename || conflictCheckFailed[0]?.doc?.filename || '';
-        setError(
-          `批量审批完成：成功 ${result.success_count}，失败 ${result.failed_count}，冲突跳过 ${conflicted.length}，检查失败 ${conflictCheckFailed.length}${firstFailure ? `。首个失败：${firstFailure.doc_id} - ${firstFailure.detail}` : firstConflict ? `。首个跳过：${firstConflict}` : ''}`,
-        );
+        setError(`批量审批完成：成功 ${result.success_count}，失败 ${result.failed_count}，冲突跳过 ${conflicted.length}，检查失败 ${conflictCheckFailed.length}${firstFailure ? `。首个失败：${firstFailure.doc_id} - ${firstFailure.detail}` : firstConflict ? `。首个跳过：${firstConflict}` : ''}`);
       }
     } catch (err) {
       setError(err.message);
@@ -221,6 +222,7 @@ export function useDocumentReviewActions({
       setError('当前没有待审核文档。');
       return;
     }
+
     const notes = window.prompt('请输入批量驳回原因（可选）');
     if (notes === null) return;
     if (!window.confirm(`确定要一键驳回当前列表中的 ${documents.length} 个待审核文档吗？`)) return;

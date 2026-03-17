@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import UserFiltersPanel from '../features/users/components/UserFiltersPanel';
 import DepartmentCards from '../features/users/components/DepartmentCards';
 import UsersTable from '../features/users/components/UsersTable';
@@ -8,7 +8,14 @@ import PolicyModal from '../features/users/components/modals/PolicyModal';
 import GroupModal from '../features/users/components/modals/GroupModal';
 import { useUserManagement } from '../features/users/hooks/useUserManagement';
 
+const MOBILE_BREAKPOINT = 768;
+
 const UserManagement = () => {
+  const [isMobile, setIsMobile] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return window.innerWidth <= MOBILE_BREAKPOINT;
+  });
+
   const {
     loading,
     error,
@@ -60,15 +67,34 @@ const UserManagement = () => {
     handleResetFilters,
   } = useUserManagement();
 
-  if (loading) return <div>Loading...</div>;
-  if (error) return <div>Error: {error}</div>;
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+
+    const handleResize = () => setIsMobile(window.innerWidth <= MOBILE_BREAKPOINT);
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  if (loading) return <div>加载中...</div>;
+  if (error) return <div>错误: {error}</div>;
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-        <h2 style={{ margin: 0 }}>{'用户管理'}</h2>
-        {canManageUsers && (
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: isMobile ? 'stretch' : 'center',
+          flexDirection: isMobile ? 'column' : 'row',
+          gap: isMobile ? '12px' : 0,
+          marginBottom: '24px',
+        }}
+      >
+        <h2 style={{ margin: 0 }}>用户管理</h2>
+        {canManageUsers ? (
           <button
+            type="button"
             onClick={handleOpenCreateModal}
             data-testid="users-create-open"
             style={{
@@ -78,11 +104,12 @@ const UserManagement = () => {
               border: 'none',
               borderRadius: '4px',
               cursor: 'pointer',
+              width: isMobile ? '100%' : 'auto',
             }}
           >
-            {'新建用户'}
+            新建用户
           </button>
-        )}
+        ) : null}
       </div>
 
       <UserFiltersPanel
@@ -136,7 +163,7 @@ const UserManagement = () => {
         onSave={handleSavePolicy}
       />
 
-      {canManageUsers && (
+      {canManageUsers ? (
         <CreateUserModal
           open={showCreateModal}
           newUser={newUser}
@@ -148,7 +175,7 @@ const UserManagement = () => {
           onFieldChange={setNewUserField}
           onToggleGroup={toggleNewUserGroup}
         />
-      )}
+      ) : null}
 
       <GroupModal
         open={showGroupModal}

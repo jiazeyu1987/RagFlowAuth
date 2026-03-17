@@ -1,13 +1,27 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 
 export default function DepartmentCards({ filteredUsers, groupedUsers, filters, setFilters }) {
+  const [isMobile, setIsMobile] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return window.innerWidth <= 768;
+  });
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+
+    const handleResize = () => setIsMobile(window.innerWidth <= 768);
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
   return (
     <div
       style={{
         backgroundColor: 'white',
         borderRadius: '8px',
         boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
-        padding: '16px',
+        padding: isMobile ? '12px' : '16px',
         marginBottom: '16px',
       }}
     >
@@ -15,7 +29,8 @@ export default function DepartmentCards({ filteredUsers, groupedUsers, filters, 
         style={{
           display: 'flex',
           justifyContent: 'space-between',
-          alignItems: 'center',
+          alignItems: isMobile ? 'stretch' : 'center',
+          flexDirection: isMobile ? 'column' : 'row',
           marginBottom: '12px',
           gap: '12px',
           flexWrap: 'wrap',
@@ -38,6 +53,7 @@ export default function DepartmentCards({ filteredUsers, groupedUsers, filters, 
               border: 'none',
               borderRadius: '6px',
               cursor: 'pointer',
+              width: isMobile ? '100%' : 'auto',
             }}
           >
             {'清除部门筛选'}
@@ -45,7 +61,7 @@ export default function DepartmentCards({ filteredUsers, groupedUsers, filters, 
         )}
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '12px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(auto-fit, minmax(240px, 1fr))', gap: '12px' }}>
         {groupedUsers.map((group) => (
           <div
             key={group.key}
@@ -60,7 +76,7 @@ export default function DepartmentCards({ filteredUsers, groupedUsers, filters, 
                   : '#f9fafb',
             }}
           >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: isMobile ? 'flex-start' : 'center', flexDirection: isMobile ? 'column' : 'row', gap: '8px', marginBottom: '8px' }}>
               <div style={{ fontWeight: 600, color: '#111827' }}>{group.departmentName}</div>
               <div style={{ fontSize: '0.85rem', color: '#6b7280' }}>{`${group.users.length} 人`}</div>
             </div>

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 
 export default function UserFiltersPanel({
   filters,
@@ -8,41 +8,70 @@ export default function UserFiltersPanel({
   availableGroups,
   onResetFilters,
 }) {
+  const [isMobile, setIsMobile] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return window.innerWidth <= 768;
+  });
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+
+    const handleResize = () => setIsMobile(window.innerWidth <= 768);
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  const fieldWrapStyle = (minWidth) => ({
+    minWidth: isMobile ? '100%' : minWidth,
+    width: isMobile ? '100%' : 'auto',
+  });
+
+  const inputStyle = {
+    width: '100%',
+    padding: '8px',
+    border: '1px solid #d1d5db',
+    borderRadius: '6px',
+    boxSizing: 'border-box',
+  };
+
   return (
     <div
       style={{
         backgroundColor: 'white',
         borderRadius: '8px',
         boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
-        padding: '16px',
+        padding: isMobile ? '12px' : '16px',
         marginBottom: '16px',
       }}
     >
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', alignItems: 'flex-end' }}>
-        <div style={{ minWidth: '220px' }}>
+      <div
+        style={{
+          display: 'flex',
+          flexWrap: 'wrap',
+          gap: '12px',
+          alignItems: isMobile ? 'stretch' : 'flex-end',
+          flexDirection: isMobile ? 'column' : 'row',
+        }}
+      >
+        <div style={fieldWrapStyle('220px')}>
           <label style={{ display: 'block', marginBottom: '6px', fontWeight: 500 }}>{'搜索用户名'}</label>
           <input
             value={filters.q}
             onChange={(e) => setFilters({ ...filters, q: e.target.value })}
             placeholder={'支持模糊搜索'}
             data-testid="users-filter-q"
-            style={{
-              width: '100%',
-              padding: '8px',
-              border: '1px solid #d1d5db',
-              borderRadius: '6px',
-              boxSizing: 'border-box',
-            }}
+            style={inputStyle}
           />
         </div>
 
-        <div style={{ minWidth: '180px' }}>
+        <div style={fieldWrapStyle('180px')}>
           <label style={{ display: 'block', marginBottom: '6px', fontWeight: 500 }}>{'公司'}</label>
           <select
             value={filters.company_id}
             onChange={(e) => setFilters({ ...filters, company_id: e.target.value })}
             data-testid="users-filter-company"
-            style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '6px' }}
+            style={inputStyle}
           >
             <option value="">{'全部'}</option>
             {companies.map((c) => (
@@ -53,13 +82,13 @@ export default function UserFiltersPanel({
           </select>
         </div>
 
-        <div style={{ minWidth: '180px' }}>
+        <div style={fieldWrapStyle('180px')}>
           <label style={{ display: 'block', marginBottom: '6px', fontWeight: 500 }}>{'部门'}</label>
           <select
             value={filters.department_id}
             onChange={(e) => setFilters({ ...filters, department_id: e.target.value })}
             data-testid="users-filter-department"
-            style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '6px' }}
+            style={inputStyle}
           >
             <option value="">{'全部'}</option>
             {departments.map((d) => (
@@ -70,13 +99,13 @@ export default function UserFiltersPanel({
           </select>
         </div>
 
-        <div style={{ minWidth: '140px' }}>
+        <div style={fieldWrapStyle('140px')}>
           <label style={{ display: 'block', marginBottom: '6px', fontWeight: 500 }}>{'状态'}</label>
           <select
             value={filters.status}
             onChange={(e) => setFilters({ ...filters, status: e.target.value })}
             data-testid="users-filter-status"
-            style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '6px' }}
+            style={inputStyle}
           >
             <option value="">{'全部'}</option>
             <option value="active">{'激活'}</option>
@@ -84,13 +113,13 @@ export default function UserFiltersPanel({
           </select>
         </div>
 
-        <div style={{ minWidth: '180px' }}>
+        <div style={fieldWrapStyle('180px')}>
           <label style={{ display: 'block', marginBottom: '6px', fontWeight: 500 }}>{'权限组'}</label>
           <select
             value={filters.group_id}
             onChange={(e) => setFilters({ ...filters, group_id: e.target.value })}
             data-testid="users-filter-group"
-            style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '6px' }}
+            style={inputStyle}
           >
             <option value="">{'全部'}</option>
             {availableGroups.map((g) => (
@@ -101,25 +130,25 @@ export default function UserFiltersPanel({
           </select>
         </div>
 
-        <div>
+        <div style={fieldWrapStyle('180px')}>
           <label style={{ display: 'block', marginBottom: '6px', fontWeight: 500 }}>{'创建时间(从)'}</label>
           <input
             type="date"
             value={filters.created_from}
             onChange={(e) => setFilters({ ...filters, created_from: e.target.value })}
             data-testid="users-filter-created-from"
-            style={{ padding: '8px', border: '1px solid #d1d5db', borderRadius: '6px' }}
+            style={inputStyle}
           />
         </div>
 
-        <div>
+        <div style={fieldWrapStyle('180px')}>
           <label style={{ display: 'block', marginBottom: '6px', fontWeight: 500 }}>{'创建时间(到)'}</label>
           <input
             type="date"
             value={filters.created_to}
             onChange={(e) => setFilters({ ...filters, created_to: e.target.value })}
             data-testid="users-filter-created-to"
-            style={{ padding: '8px', border: '1px solid #d1d5db', borderRadius: '6px' }}
+            style={inputStyle}
           />
         </div>
 
@@ -134,6 +163,7 @@ export default function UserFiltersPanel({
             border: 'none',
             borderRadius: '6px',
             cursor: 'pointer',
+            width: isMobile ? '100%' : 'auto',
           }}
         >
           {'重置'}

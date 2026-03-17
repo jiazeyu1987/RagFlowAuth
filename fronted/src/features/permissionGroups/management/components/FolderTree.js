@@ -78,7 +78,7 @@ export default function FolderTree({
             {hasChildren ? (isExpanded ? '-' : '+') : ''}
           </button>
           <RowButton onClick={() => onOpenFolder(id)} title={folder.path || folder.name}>
-            [Folder] {folder.name || '(Unnamed folder)'}
+            [文件夹] {folder.name || '(未命名文件夹)'}
           </RowButton>
         </div>
         {isExpanded && children.map((child) => renderFolder(child, depth + 1))}
@@ -106,10 +106,10 @@ export default function FolderTree({
         onDrop={(event) => onDropFolder(event, ROOT)}
         onDragLeave={(event) => onDragLeaveFolder(event, ROOT)}
       >
-        <RowButton onClick={() => onOpenFolder(ROOT)}>[Root]</RowButton>
+        <RowButton onClick={() => onOpenFolder(ROOT)}>[根目录]</RowButton>
       </div>
       {roots.map((folder) => renderFolder(folder, 0))}
-      {!roots.length && <div style={{ color: '#6b7280', fontSize: 13 }}>No folders</div>}
+      {!roots.length && <div style={{ color: '#6b7280', fontSize: 13 }}>暂无文件夹</div>}
     </div>
   );
 }

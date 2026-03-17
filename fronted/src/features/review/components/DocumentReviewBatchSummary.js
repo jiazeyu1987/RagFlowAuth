@@ -5,6 +5,7 @@ export function DocumentReviewBatchSummary({
   batchSummaryCopied,
   batchSummaryExpanded,
   handleCopyBatchSummary,
+  isMobile,
   setBatchSummaryExpanded,
   setOverwritePrompt,
 }) {
@@ -21,11 +22,28 @@ export function DocumentReviewBatchSummary({
         marginBottom: '20px',
       }}
     >
-      <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', alignItems: 'center', marginBottom: '8px' }}>
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          gap: '12px',
+          alignItems: isMobile ? 'stretch' : 'center',
+          flexDirection: isMobile ? 'column' : 'row',
+          marginBottom: '8px',
+        }}
+      >
         <div style={{ fontWeight: 600 }}>
           {batchReviewSummary.mode === 'approve' ? '批量审批结果' : '批量驳回结果'}
         </div>
-        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+        <div
+          style={{
+            display: 'flex',
+            gap: '8px',
+            alignItems: isMobile ? 'stretch' : 'center',
+            flexDirection: isMobile ? 'column' : 'row',
+            width: isMobile ? '100%' : 'auto',
+          }}
+        >
           <button
             type="button"
             onClick={() => setBatchSummaryExpanded((prev) => !prev)}
@@ -37,6 +55,7 @@ export function DocumentReviewBatchSummary({
               color: '#1d4ed8',
               cursor: 'pointer',
               fontSize: '0.85rem',
+              width: isMobile ? '100%' : 'auto',
             }}
           >
             {batchSummaryExpanded ? '收起' : '展开全部'}
@@ -52,63 +71,89 @@ export function DocumentReviewBatchSummary({
               color: '#1d4ed8',
               cursor: 'pointer',
               fontSize: '0.85rem',
+              width: isMobile ? '100%' : 'auto',
             }}
           >
             {batchSummaryCopied ? '已复制' : '复制明细'}
           </button>
         </div>
       </div>
+
       <div style={{ fontSize: '0.95rem', marginBottom: '8px' }}>
         {`成功 ${batchReviewSummary.successCount}，失败 ${batchReviewSummary.failedCount}，冲突跳过 ${batchReviewSummary.conflicted.length}，检查失败 ${batchReviewSummary.checkFailed.length}`}
       </div>
+
       {batchReviewSummary.failedItems.length > 0 && (
         <div style={{ marginBottom: '8px' }}>
           <div style={{ fontWeight: 600, color: '#991b1b' }}>失败项</div>
-          {batchReviewSummary.failedItems.slice(0, batchSummaryExpanded ? batchReviewSummary.failedItems.length : 10).map((item) => (
-            <div key={`failed-${item.doc_id}`} style={{ fontSize: '0.9rem', color: '#374151' }}>
-              {`${item.doc_id}: ${item.detail}`}
-            </div>
-          ))}
+          {batchReviewSummary.failedItems
+            .slice(0, batchSummaryExpanded ? batchReviewSummary.failedItems.length : 10)
+            .map((item) => (
+              <div key={`failed-${item.doc_id}`} style={{ fontSize: '0.9rem', color: '#374151' }}>
+                {`${item.doc_id}: ${item.detail}`}
+              </div>
+            ))}
         </div>
       )}
+
       {batchReviewSummary.conflicted.length > 0 && (
         <div style={{ marginBottom: '8px' }}>
           <div style={{ fontWeight: 600, color: '#92400e' }}>冲突跳过</div>
-          {batchReviewSummary.conflicted.slice(0, batchSummaryExpanded ? batchReviewSummary.conflicted.length : 10).map((item) => (
-            <div
-              key={`conflict-${item.docId}`}
-              style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.9rem', color: '#374151', marginBottom: '4px' }}
-            >
-              <span style={{ flex: 1 }}>{`${item.filename}: ${item.detail}`}</span>
-              {item.existing && (
-                <button
-                  type="button"
-                  onClick={() => setOverwritePrompt({ newDocId: item.docId, oldDoc: item.existing, normalized: item.normalized || '' })}
-                  style={{
-                    padding: '4px 10px',
-                    borderRadius: '6px',
-                    border: '1px solid #d97706',
-                    background: '#fff7ed',
-                    color: '#9a3412',
-                    cursor: 'pointer',
-                    fontSize: '0.85rem',
-                  }}
-                >
-                  处理
-                </button>
-              )}
-            </div>
-          ))}
+          {batchReviewSummary.conflicted
+            .slice(0, batchSummaryExpanded ? batchReviewSummary.conflicted.length : 10)
+            .map((item) => (
+              <div
+                key={`conflict-${item.docId}`}
+                style={{
+                  display: 'flex',
+                  alignItems: isMobile ? 'stretch' : 'center',
+                  flexDirection: isMobile ? 'column' : 'row',
+                  gap: '8px',
+                  fontSize: '0.9rem',
+                  color: '#374151',
+                  marginBottom: '4px',
+                }}
+              >
+                <span style={{ flex: 1, width: '100%' }}>{`${item.filename}: ${item.detail}`}</span>
+                {item.existing && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setOverwritePrompt({
+                        newDocId: item.docId,
+                        oldDoc: item.existing,
+                        normalized: item.normalized || '',
+                      })
+                    }
+                    style={{
+                      padding: '4px 10px',
+                      borderRadius: '6px',
+                      border: '1px solid #d97706',
+                      background: '#fff7ed',
+                      color: '#9a3412',
+                      cursor: 'pointer',
+                      fontSize: '0.85rem',
+                      width: isMobile ? '100%' : 'auto',
+                    }}
+                  >
+                    去处理
+                  </button>
+                )}
+              </div>
+            ))}
         </div>
       )}
+
       {batchReviewSummary.checkFailed.length > 0 && (
         <div>
           <div style={{ fontWeight: 600, color: '#7c2d12' }}>检查失败</div>
-          {batchReviewSummary.checkFailed.slice(0, batchSummaryExpanded ? batchReviewSummary.checkFailed.length : 10).map((item) => (
-            <div key={`check-${item.docId}`} style={{ fontSize: '0.9rem', color: '#374151' }}>
-              {`${item.filename}: ${item.detail}`}
-            </div>
-          ))}
+          {batchReviewSummary.checkFailed
+            .slice(0, batchSummaryExpanded ? batchReviewSummary.checkFailed.length : 10)
+            .map((item) => (
+              <div key={`check-${item.docId}`} style={{ fontSize: '0.9rem', color: '#374151' }}>
+                {`${item.filename}: ${item.detail}`}
+              </div>
+            ))}
         </div>
       )}
     </div>

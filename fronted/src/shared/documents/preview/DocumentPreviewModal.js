@@ -17,6 +17,8 @@ import {
   rowsToHtmlTable,
 } from './previewUtils';
 
+const MOBILE_BREAKPOINT = 768;
+
 export const DocumentPreviewModal = ({ open, target, onClose, canDownloadFiles = false }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -29,7 +31,20 @@ export const DocumentPreviewModal = ({ open, target, onClose, canDownloadFiles =
   const [pdfRendering, setPdfRendering] = useState(false);
   const [pdfRenderingMessage, setPdfRenderingMessage] = useState('');
   const [isMaximized, setIsMaximized] = useState(false);
+  const [isMobile, setIsMobile] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return window.innerWidth <= MOBILE_BREAKPOINT;
+  });
   const lastUrlRef = useRef('');
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+
+    const handleResize = () => setIsMobile(window.innerWidth <= MOBILE_BREAKPOINT);
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   const close = useCallback(() => {
     setPayload(null);
@@ -150,7 +165,6 @@ export const DocumentPreviewModal = ({ open, target, onClose, canDownloadFiles =
         setEffectiveName(name);
         setPayload(data || null);
 
-        // Cleanup old URL
         if (lastUrlRef.current) {
           try {
             window.URL.revokeObjectURL(lastUrlRef.current);
@@ -196,7 +210,11 @@ export const DocumentPreviewModal = ({ open, target, onClose, canDownloadFiles =
               }
 
               if (!cancelled) setPdfPageImages(pages);
-              previewTrace('pdf:render:done', { ...traceContext, pages: pages.length, elapsedMs: Math.round(nowMs() - pdfStart) });
+              previewTrace('pdf:render:done', {
+                ...traceContext,
+                pages: pages.length,
+                elapsedMs: Math.round(nowMs() - pdfStart),
+              });
             } catch (pdfError) {
               if (!cancelled) setError(pdfError?.message || 'PDF 预览失败');
               previewTrace('pdf:render:failed', { ...traceContext, error: pdfError?.message || String(pdfError) });
@@ -254,7 +272,7 @@ export const DocumentPreviewModal = ({ open, target, onClose, canDownloadFiles =
 
   const excelRenderHint = useMemo(() => {
     if (payload?.type !== 'excel') return '';
-    return '如果 Excel 里包含流程图/形状，表格模式可能看不到；可点“原样预览(HTML)”查看。';
+    return '如果 Excel 中包含流程图或形状，表格模式可能无法完整显示；可点击“原样预览 (HTML)”查看。';
   }, [payload?.type]);
 
   const openOriginalHtml = useCallback(async () => {
@@ -272,7 +290,7 @@ export const DocumentPreviewModal = ({ open, target, onClose, canDownloadFiles =
             : undefined,
         render: 'html',
       });
-      if (data?.type !== 'html' || !data?.content) throw new Error(data?.message || '此文件类型不支持原样预览(HTML)');
+      if (data?.type !== 'html' || !data?.content) throw new Error(data?.message || '此文件类型不支持原样预览 (HTML)');
 
       const name = String(data?.filename || effectiveName || '');
       setEffectiveName(name);
@@ -305,6 +323,8 @@ export const DocumentPreviewModal = ({ open, target, onClose, canDownloadFiles =
 
   if (!open) return null;
 
+  const viewerHeight = isMobile ? '64vh' : '78vh';
+
   return (
     <div
       onClick={close}
@@ -320,17 +340,17 @@ export const DocumentPreviewModal = ({ open, target, onClose, canDownloadFiles =
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        padding: isMaximized ? 0 : '16px',
+        padding: isMaximized ? 0 : isMobile ? '8px' : '16px',
       }}
     >
       <div
         onClick={(e) => e.stopPropagation()}
         style={{
           backgroundColor: 'white',
-          borderRadius: isMaximized ? 0 : '10px',
-          width: isMaximized ? '100vw' : '95vw',
-          maxWidth: isMaximized ? '100vw' : '1200px',
-          height: isMaximized ? '100vh' : '90vh',
+          borderRadius: isMaximized ? 0 : isMobile ? '14px' : '10px',
+          width: isMaximized ? '100vw' : isMobile ? '100%' : '95vw',
+          maxWidth: isMaximized ? '100vw' : isMobile ? '100%' : '1200px',
+          height: isMaximized ? '100vh' : isMobile ? 'calc(100vh - 16px)' : '90vh',
           display: 'flex',
           flexDirection: 'column',
           boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)',
@@ -338,18 +358,31 @@ export const DocumentPreviewModal = ({ open, target, onClose, canDownloadFiles =
       >
         <div
           style={{
-            padding: '14px 18px',
+            padding: isMobile ? '12px 14px' : '14px 18px',
             borderBottom: '1px solid #e5e7eb',
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
             gap: '10px',
+            flexWrap: isMobile ? 'wrap' : 'nowrap',
           }}
         >
-          <div style={{ fontWeight: 700, fontSize: '1.05rem', color: '#111827', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          <div
+            style={{
+              fontWeight: 700,
+              fontSize: isMobile ? '0.98rem' : '1.05rem',
+              color: '#111827',
+              minWidth: 0,
+              flex: 1,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: isMobile ? 'normal' : 'nowrap',
+              wordBreak: 'break-word',
+            }}
+          >
             {effectiveName || target?.filename || target?.title || '文档预览'}
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0, marginLeft: 'auto' }}>
             {payload?.type === 'onlyoffice' ? (
               <button
                 type="button"
@@ -391,9 +424,9 @@ export const DocumentPreviewModal = ({ open, target, onClose, canDownloadFiles =
           </div>
         </div>
 
-        <div style={{ flex: 1, overflow: 'auto', padding: '18px' }}>
+        <div style={{ flex: 1, overflow: 'auto', padding: isMobile ? '12px' : '18px' }}>
           {loading ? (
-            <div style={{ color: '#6b7280' }}>加载中…</div>
+            <div style={{ color: '#6b7280' }}>加载中...</div>
           ) : error ? (
             <div style={{ color: '#991b1b' }}>{error}</div>
           ) : payload ? (
@@ -407,7 +440,8 @@ export const DocumentPreviewModal = ({ open, target, onClose, canDownloadFiles =
                     <div
                       style={{
                         display: 'flex',
-                        alignItems: 'center',
+                        alignItems: isMobile ? 'stretch' : 'center',
+                        flexDirection: isMobile ? 'column' : 'row',
                         gap: '10px',
                         padding: '10px 12px',
                         backgroundColor: '#eff6ff',
@@ -423,6 +457,7 @@ export const DocumentPreviewModal = ({ open, target, onClose, canDownloadFiles =
                         type="button"
                         onClick={openOriginalHtml}
                         style={{
+                          width: isMobile ? '100%' : 'auto',
                           padding: '8px 12px',
                           backgroundColor: '#3b82f6',
                           color: 'white',
@@ -433,7 +468,7 @@ export const DocumentPreviewModal = ({ open, target, onClose, canDownloadFiles =
                           whiteSpace: 'nowrap',
                         }}
                       >
-                        原样预览(HTML)
+                        原样预览 (HTML)
                       </button>
                     </div>
 
@@ -488,7 +523,7 @@ export const DocumentPreviewModal = ({ open, target, onClose, canDownloadFiles =
               }
 
               if (p.type === 'html' && objectUrl) {
-                return <iframe title="html-preview" src={objectUrl} style={{ width: '100%', height: '78vh', border: '1px solid #e5e7eb', borderRadius: '10px' }} />;
+                return <iframe title="html-preview" src={objectUrl} style={{ width: '100%', height: viewerHeight, border: '1px solid #e5e7eb', borderRadius: '10px' }} />;
               }
 
               if (p.type === 'onlyoffice' && onlyOfficeServerUrl && onlyOfficeConfig) {
@@ -496,13 +531,14 @@ export const DocumentPreviewModal = ({ open, target, onClose, canDownloadFiles =
                   <OnlyOfficeViewer
                     serverUrl={onlyOfficeServerUrl}
                     config={onlyOfficeConfig}
+                    height={viewerHeight}
                     traceContext={{ source: target?.source, docId: target?.docId, filename: effectiveName }}
                   />
                 );
               }
 
               if (p.type === 'pdf' && objectUrl) {
-                return <iframe title="pdf-preview" src={objectUrl} style={{ width: '100%', height: '78vh', border: '1px solid #e5e7eb', borderRadius: '10px' }} />;
+                return <iframe title="pdf-preview" src={objectUrl} style={{ width: '100%', height: viewerHeight, border: '1px solid #e5e7eb', borderRadius: '10px' }} />;
               }
 
               if (p.type === 'pdf' && !canDownloadFiles) {
@@ -510,7 +546,7 @@ export const DocumentPreviewModal = ({ open, target, onClose, canDownloadFiles =
                 if (pdfPageImages.length > 0) {
                   return (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                      <div style={{ color: '#6b7280', fontSize: '0.88rem' }}>仅预览，不可下载/打印</div>
+                      <div style={{ color: '#6b7280', fontSize: '0.88rem' }}>仅预览，不可下载或打印。</div>
                       {pdfPageImages.map((imgSrc, index) => (
                         <img
                           key={`pdf-page-${index + 1}`}
@@ -533,12 +569,12 @@ export const DocumentPreviewModal = ({ open, target, onClose, canDownloadFiles =
               if (p.type === 'image' && objectUrl) {
                 return (
                   <div style={{ textAlign: 'center' }}>
-                    <img alt={effectiveName || 'image'} src={objectUrl} style={{ maxWidth: '100%', maxHeight: '78vh', borderRadius: '10px' }} />
+                    <img alt={effectiveName || 'image'} src={objectUrl} style={{ maxWidth: '100%', maxHeight: viewerHeight, borderRadius: '10px' }} />
                   </div>
                 );
               }
 
-              return <div style={{ color: '#6b7280' }}>{p.message || '不支持预览，请下载查看。'}</div>;
+              return <div style={{ color: '#6b7280' }}>{p.message || '暂不支持预览，请下载后查看。'}</div>;
             })()
           ) : (
             <div style={{ color: '#6b7280' }}>暂无内容</div>

@@ -2,6 +2,8 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { auditApi } from '../features/audit/api';
 import { orgDirectoryApi } from '../features/orgDirectory/api';
 
+const MOBILE_BREAKPOINT = 768;
+
 const parseDateTimeLocalToMs = (value) => {
   if (!value) return null;
   const ms = Date.parse(value);
@@ -18,59 +20,59 @@ const formatMs = (ms) => {
 };
 
 const ACTION_LABELS = {
-  auth_login: '\u767b\u5f55',
-  auth_logout: '\u9000\u51fa\u767b\u5f55',
-  document_preview: '\u67e5\u770b/\u9884\u89c8\u6587\u6863',
-  document_upload: '\u4e0a\u4f20\u6587\u6863',
-  document_download: '\u4e0b\u8f7d\u6587\u6863',
-  document_delete: '\u5220\u9664\u6587\u6863',
-  patent_kb_add: '\u4e13\u5229\u6dfb\u52a0\u5230\u672c\u5730\u4e13\u5229',
-  patent_kb_add_all: '\u4e13\u5229\u6279\u91cf\u6dfb\u52a0\u5230\u672c\u5730\u4e13\u5229',
-  patent_item_delete: '\u5220\u9664\u4e13\u5229\u6761\u76ee',
-  patent_session_delete: '\u5220\u9664\u4e13\u5229\u4f1a\u8bdd',
-  paper_kb_add: '\u8bba\u6587\u6dfb\u52a0\u5230\u672c\u5730\u8bba\u6587',
-  paper_kb_add_all: '\u8bba\u6587\u6279\u91cf\u6dfb\u52a0\u5230\u672c\u5730\u8bba\u6587',
-  paper_item_delete: '\u5220\u9664\u8bba\u6587\u6761\u76ee',
-  paper_session_delete: '\u5220\u9664\u8bba\u6587\u4f1a\u8bdd',
-  datasets_create: '\u65b0\u5efa\u77e5\u8bc6\u5e93',
-  datasets_update: '\u4fee\u6539\u77e5\u8bc6\u5e93',
-  datasets_delete: '\u5220\u9664\u77e5\u8bc6\u5e93',
-  overwrite: '\u8986\u76d6\u5165\u5e93',
+  auth_login: '登录',
+  auth_logout: '退出登录',
+  document_preview: '查看/预览文档',
+  document_upload: '上传文档',
+  document_download: '下载文档',
+  document_delete: '删除文档',
+  patent_kb_add: '专利添加到本地专利',
+  patent_kb_add_all: '专利批量添加到本地专利',
+  patent_item_delete: '删除专利条目',
+  patent_session_delete: '删除专利会话',
+  paper_kb_add: '论文添加到本地论文',
+  paper_kb_add_all: '论文批量添加到本地论文',
+  paper_item_delete: '删除论文条目',
+  paper_session_delete: '删除论文会话',
+  datasets_create: '新建知识库',
+  datasets_update: '修改知识库',
+  datasets_delete: '删除知识库',
+  overwrite: '覆盖入库',
 };
 
 const SOURCE_LABELS = {
-  auth: '\u8ba4\u8bc1',
-  knowledge: '\u672c\u5730\u77e5\u8bc6\u5e93',
+  auth: '认证',
+  knowledge: '本地知识库',
   ragflow: 'RAGFlow',
-  patent_download: '\u4e13\u5229\u4e0b\u8f7d',
-  paper_download: '\u8bba\u6587\u4e0b\u8f7d',
-  patent: '\u4e13\u5229',
-  paper: '\u8bba\u6587',
+  patent_download: '专利下载',
+  paper_download: '论文下载',
+  patent: '专利',
+  paper: '论文',
 };
 
 const actionLabel = (value) => ACTION_LABELS[String(value || '').trim()] || String(value || '');
 const sourceLabel = (value) => SOURCE_LABELS[String(value || '').trim()] || String(value || '');
 
 const ACTION_OPTIONS = [
-  { value: '', label: '\u5168\u90e8' },
-  { value: 'auth_login', label: '\u767b\u5f55' },
-  { value: 'auth_logout', label: '\u9000\u51fa\u767b\u5f55' },
-  { value: 'document_preview', label: '\u67e5\u770b/\u9884\u89c8\u6587\u6863' },
-  { value: 'document_upload', label: '\u4e0a\u4f20\u6587\u6863' },
-  { value: 'document_download', label: '\u4e0b\u8f7d\u6587\u6863' },
-  { value: 'document_delete', label: '\u5220\u9664\u6587\u6863' },
-  { value: 'patent_kb_add', label: '\u4e13\u5229\u6dfb\u52a0\u5230\u672c\u5730\u4e13\u5229' },
-  { value: 'patent_kb_add_all', label: '\u4e13\u5229\u6279\u91cf\u6dfb\u52a0\u5230\u672c\u5730\u4e13\u5229' },
-  { value: 'patent_item_delete', label: '\u5220\u9664\u4e13\u5229\u6761\u76ee' },
-  { value: 'patent_session_delete', label: '\u5220\u9664\u4e13\u5229\u4f1a\u8bdd' },
-  { value: 'paper_kb_add', label: '\u8bba\u6587\u6dfb\u52a0\u5230\u672c\u5730\u8bba\u6587' },
-  { value: 'paper_kb_add_all', label: '\u8bba\u6587\u6279\u91cf\u6dfb\u52a0\u5230\u672c\u5730\u8bba\u6587' },
-  { value: 'paper_item_delete', label: '\u5220\u9664\u8bba\u6587\u6761\u76ee' },
-  { value: 'paper_session_delete', label: '\u5220\u9664\u8bba\u6587\u4f1a\u8bdd' },
-  { value: 'datasets_create', label: '\u65b0\u5efa\u77e5\u8bc6\u5e93' },
-  { value: 'datasets_update', label: '\u4fee\u6539\u77e5\u8bc6\u5e93' },
-  { value: 'datasets_delete', label: '\u5220\u9664\u77e5\u8bc6\u5e93' },
-  { value: 'overwrite', label: '\u8986\u76d6\u5165\u5e93' },
+  { value: '', label: '全部' },
+  { value: 'auth_login', label: '登录' },
+  { value: 'auth_logout', label: '退出登录' },
+  { value: 'document_preview', label: '查看/预览文档' },
+  { value: 'document_upload', label: '上传文档' },
+  { value: 'document_download', label: '下载文档' },
+  { value: 'document_delete', label: '删除文档' },
+  { value: 'patent_kb_add', label: '专利添加到本地专利' },
+  { value: 'patent_kb_add_all', label: '专利批量添加到本地专利' },
+  { value: 'patent_item_delete', label: '删除专利条目' },
+  { value: 'patent_session_delete', label: '删除专利会话' },
+  { value: 'paper_kb_add', label: '论文添加到本地论文' },
+  { value: 'paper_kb_add_all', label: '论文批量添加到本地论文' },
+  { value: 'paper_item_delete', label: '删除论文条目' },
+  { value: 'paper_session_delete', label: '删除论文会话' },
+  { value: 'datasets_create', label: '新建知识库' },
+  { value: 'datasets_update', label: '修改知识库' },
+  { value: 'datasets_delete', label: '删除知识库' },
+  { value: 'overwrite', label: '覆盖入库' },
 ];
 
 const tableStyle = {
@@ -95,6 +97,10 @@ const tdStyle = {
 };
 
 const AuditLogs = () => {
+  const [isMobile, setIsMobile] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return window.innerWidth <= MOBILE_BREAKPOINT;
+  });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -164,6 +170,15 @@ const AuditLogs = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+
+    const handleResize = () => setIsMobile(window.innerWidth <= MOBILE_BREAKPOINT);
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
   const rows = useMemo(() => result.items || [], [result.items]);
 
   const onApply = async () => {
@@ -187,7 +202,7 @@ const AuditLogs = () => {
   };
 
   return (
-    <div data-testid="audit-logs-page">
+    <div data-testid="audit-logs-page" style={{ padding: isMobile ? '0 0 12px' : 0 }}>
       <h2 style={{ margin: '0 0 12px 0' }}>操作日志</h2>
 
       <div
@@ -203,7 +218,7 @@ const AuditLogs = () => {
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(6, minmax(0, 1fr))',
+            gridTemplateColumns: isMobile ? '1fr' : 'repeat(6, minmax(0, 1fr))',
             gap: '10px',
             alignItems: 'end',
           }}
@@ -263,7 +278,7 @@ const AuditLogs = () => {
             <input
               value={filters.username}
               onChange={(e) => setFilters((s) => ({ ...s, username: e.target.value }))}
-              placeholder="username 精确匹配"
+              placeholder="用户名精确匹配"
               style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: 6 }}
               data-testid="audit-filter-username"
             />
@@ -292,11 +307,11 @@ const AuditLogs = () => {
           </div>
         </div>
 
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 10 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: isMobile ? 'stretch' : 'center', flexDirection: isMobile ? 'column' : 'row', gap: 10, marginTop: 10 }}>
           <div style={{ color: '#6b7280', fontSize: '0.9rem' }}>
             总条数: <span data-testid="audit-total" style={{ fontWeight: 700, color: '#111827' }}>{result.total}</span>
           </div>
-          <div style={{ display: 'flex', gap: 8 }}>
+          <div style={{ display: 'flex', gap: 8, flexDirection: isMobile ? 'column' : 'row', width: isMobile ? '100%' : 'auto' }}>
             <button
               type="button"
               onClick={onApply}
@@ -309,6 +324,7 @@ const AuditLogs = () => {
                 borderRadius: 6,
                 cursor: 'pointer',
                 opacity: loading ? 0.6 : 1,
+                width: isMobile ? '100%' : 'auto',
               }}
               data-testid="audit-apply"
             >
@@ -325,6 +341,7 @@ const AuditLogs = () => {
                 border: '1px solid #e5e7eb',
                 borderRadius: 6,
                 cursor: 'pointer',
+                width: isMobile ? '100%' : 'auto',
               }}
               data-testid="audit-prev"
             >
@@ -341,6 +358,7 @@ const AuditLogs = () => {
                 border: '1px solid #e5e7eb',
                 borderRadius: 6,
                 cursor: 'pointer',
+                width: isMobile ? '100%' : 'auto',
               }}
               data-testid="audit-next"
             >
@@ -350,7 +368,7 @@ const AuditLogs = () => {
         </div>
       </div>
 
-      {error && <div style={{ color: '#ef4444', marginBottom: 12 }}>Error: {error}</div>}
+      {error && <div style={{ color: '#ef4444', marginBottom: 12 }}>错误：{error}</div>}
 
       <div
         style={{
@@ -361,47 +379,49 @@ const AuditLogs = () => {
           boxShadow: '0 1px 3px rgba(0, 0, 0, 0.08)',
         }}
       >
-        <table style={tableStyle} data-testid="audit-table">
-          <thead>
-            <tr>
-              <th style={thStyle}>时间</th>
-              <th style={thStyle}>类型</th>
-              <th style={thStyle}>账号</th>
-              <th style={thStyle}>公司</th>
-              <th style={thStyle}>部门</th>
-              <th style={thStyle}>来源</th>
-              <th style={thStyle}>知识库</th>
-              <th style={thStyle}>文件</th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading && (
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ ...tableStyle, minWidth: isMobile ? '900px' : '100%' }} data-testid="audit-table">
+            <thead>
               <tr>
-                <td style={tdStyle} colSpan={8}>Loading...</td>
+                <th style={thStyle}>时间</th>
+                <th style={thStyle}>类型</th>
+                <th style={thStyle}>账号</th>
+                <th style={thStyle}>公司</th>
+                <th style={thStyle}>部门</th>
+                <th style={thStyle}>来源</th>
+                <th style={thStyle}>知识库</th>
+                <th style={thStyle}>文件</th>
               </tr>
-            )}
-            {!loading && rows.length === 0 && (
-              <tr>
-                <td style={tdStyle} colSpan={8}>暂无日志</td>
-              </tr>
-            )}
-            {!loading && rows.map((r) => (
-              <tr key={r.id}>
-                <td style={tdStyle}>{formatMs(r.created_at_ms)}</td>
-                <td style={tdStyle}>{actionLabel(r.action)}</td>
-                <td style={tdStyle}>{r.username || r.actor}</td>
-                <td style={tdStyle}>{r.company_name || (r.company_id != null ? String(r.company_id) : '')}</td>
-                <td style={tdStyle}>{r.department_name || (r.department_id != null ? String(r.department_id) : '')}</td>
-                <td style={tdStyle}>{sourceLabel(r.source)}</td>
-                <td style={tdStyle}>{r.kb_name || r.kb_id || ''}</td>
-                <td style={tdStyle}>
-                  <div style={{ fontWeight: 600 }}>{r.filename || ''}</div>
-                  <div style={{ color: '#6b7280', fontSize: '0.8rem' }}>{r.doc_id || ''}</div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {loading && (
+                <tr>
+                  <td style={tdStyle} colSpan={8}>加载中...</td>
+                </tr>
+              )}
+              {!loading && rows.length === 0 && (
+                <tr>
+                  <td style={tdStyle} colSpan={8}>暂无日志</td>
+                </tr>
+              )}
+              {!loading && rows.map((r) => (
+                <tr key={r.id}>
+                  <td style={tdStyle}>{formatMs(r.created_at_ms)}</td>
+                  <td style={tdStyle}>{actionLabel(r.action)}</td>
+                  <td style={tdStyle}>{r.username || r.actor}</td>
+                  <td style={tdStyle}>{r.company_name || (r.company_id != null ? String(r.company_id) : '')}</td>
+                  <td style={tdStyle}>{r.department_name || (r.department_id != null ? String(r.department_id) : '')}</td>
+                  <td style={tdStyle}>{sourceLabel(r.source)}</td>
+                  <td style={tdStyle}>{r.kb_name || r.kb_id || ''}</td>
+                  <td style={tdStyle}>
+                    <div style={{ fontWeight: 600 }}>{r.filename || ''}</div>
+                    <div style={{ color: '#6b7280', fontSize: '0.8rem' }}>{r.doc_id || ''}</div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );

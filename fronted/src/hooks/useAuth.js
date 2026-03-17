@@ -13,24 +13,24 @@ export const useAuth = () => {
   return context;
 };
 
-// 应用版本号，每次更新权限相关代码时递增
-const APP_VERSION = '6';  // 强制清除所有缓存
+// 应用版本号。权限或文案更新后递增，用于强制清理旧缓存。
+const APP_VERSION = '7';
 
 const mapLoginErrorMessage = (message) => {
   const code = String(message || '').trim();
   if (code === 'account_inactive' || code === 'account_disabled') {
-    return '该账户已被禁用，请联系管理员';
+    return '该账号已被禁用，请联系管理员';
   }
   return code || '登录失败';
 };
 
 export const AuthProvider = ({ children }) => {
-  // 使用新的令牌名称
-  const [user, setUser] = useState(null);  // 初始为null，等待checkAuth完成
+  // 使用当前登录用户信息，等待 checkAuth 完成后再落定。
+  const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [accessibleKbs, setAccessibleKbs] = useState([]);  // 用户可访问的知识库列表
-  const [permissions, setPermissions] = useState({  // 权限组操作权限
+  const [accessibleKbs, setAccessibleKbs] = useState([]);
+  const [permissions, setPermissions] = useState({
     can_upload: false,
     can_review: false,
     can_download: false,
@@ -55,20 +55,20 @@ export const AuthProvider = ({ children }) => {
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        // 迁移/清理旧 key，避免跨账号角色缓存干扰
+        // 迁移或清理旧 key，避免跨账号角色缓存相互污染。
         localStorage.removeItem('lastUserRole');
-        localStorage.removeItem(STORAGE_KEYS.AUTH_TOKEN);  // 清除旧令牌
+        localStorage.removeItem(STORAGE_KEYS.AUTH_TOKEN);
 
-        // 检查应用版本
+        // 检查应用版本。
         const lastVersion = localStorage.getItem(STORAGE_KEYS.APP_VERSION);
         if (lastVersion !== APP_VERSION) {
           console.log(`[App Version Update] ${lastVersion} -> ${APP_VERSION}, clearing all caches`);
           localStorage.setItem(STORAGE_KEYS.APP_VERSION, APP_VERSION);
 
-          // 清除所有认证相关的localStorage数据
+          // 清除所有认证相关的 localStorage 数据。
           tokenStore.clearAuth();
 
-          // 清除Cache Storage
+          // 清除 Cache Storage。
           if ('caches' in window) {
             try {
               const names = await caches.keys();
@@ -79,25 +79,25 @@ export const AuthProvider = ({ children }) => {
           }
         }
 
-        // 检查是否有新的访问令牌
+        // 检查是否已有可用令牌。
         if (authClient.accessToken) {
           try {
             const currentUser = await authClient.getCurrentUser();
-            // 更新用户信息
+            // 更新当前用户信息。
             authClient.setAuth(authClient.accessToken, authClient.refreshToken, currentUser);
             setUser(currentUser);
-            // 更新权限组操作权限
+            // 更新权限组操作权限。
             if (currentUser.permissions) {
               setPermissions(currentUser.permissions);
             }
           } catch (err) {
-            // 令牌可能已过期，尝试刷新
+            // 令牌可能已过期，尝试刷新。
             if (authClient.refreshToken) {
               try {
                 await authClient.refreshAccessToken();
                 const currentUser = await authClient.getCurrentUser();
                 setUser(currentUser);
-                // 更新权限组操作权限
+                // 更新权限组操作权限。
                 if (currentUser.permissions) {
                   setPermissions(currentUser.permissions);
                 }
@@ -162,7 +162,7 @@ export const AuthProvider = ({ children }) => {
     };
   }, [currentUserId, currentIdleTimeoutMinutes, invalidateAuth]);
 
-  // 加载用户的知识库权限
+  // 加载用户可访问的知识库列表。
   useEffect(() => {
     const fetchAccessibleKbs = async () => {
       if (user) {
@@ -185,10 +185,10 @@ export const AuthProvider = ({ children }) => {
     try {
       setError(null);
       const data = await authClient.login(username, password);
-      // 新后端的 login 方法已经在内部调用了 /me 并设置 user
+      // 新后端的 login 已在内部调用 /me 并写入 user。
       console.log('[Login] Logged in user:', data.user);
       setUser(data.user);
-      // 更新权限组操作权限
+      // 更新权限组操作权限。
       if (data.user.permissions) {
         setPermissions(data.user.permissions);
       }
@@ -223,8 +223,8 @@ export const AuthProvider = ({ children }) => {
   const isOperator = () => user?.role === 'admin' || permissions.can_upload || permissions.can_review;
 
   /**
-   * 前端 UI 权限检查（同步）
-   * 后端以权限组/resolver 为准；这里只用于 UI 显示控制。
+   * 前端 UI 权限检查。
+   * 后端以权限组 resolver 为准，这里只用于 UI 显示控制。
    */
   const can = useCallback((resource, action) => {
     if (!user) return false;
@@ -247,8 +247,8 @@ export const AuthProvider = ({ children }) => {
 
     if (resource === 'ragflow_documents') {
       // 说明：查看/预览不等于下载。
-      // 目标：无下载权限的用户也可以“查看/预览”，但不能“下载”。
-      // 后端仍会做最终权限校验（下载接口需要 can_download）。
+      // 目标：没有下载权限的用户也可以查看预览，但不能直接下载。
+      // 后端仍会在下载接口做最终权限校验。
       if (action === 'view' || action === 'preview') return accessibleKbs.length > 0;
       if (action === 'download') return !!ops.can_download;
       if (action === 'delete') return !!ops.can_delete;
@@ -259,13 +259,13 @@ export const AuthProvider = ({ children }) => {
   }, [user, permissions, accessibleKbs]);
 
   /**
-   * 检查用户是否有某个知识库的访问权限
-   * @param {string} kbId - 知识库ID
+   * 检查用户是否有某个知识库的访问权限。
+   * @param {string} kbId - 知识库 ID
    * @returns {boolean} 是否有权限
    */
   const canAccessKb = useCallback((kbId) => {
     if (!user) return false;
-    if (user.role === 'admin') return true;  // 管理员自动拥有所有权限
+    if (user.role === 'admin') return true;
     return accessibleKbs.includes(kbId);
   }, [user, accessibleKbs]);
 
@@ -280,9 +280,9 @@ export const AuthProvider = ({ children }) => {
     isReviewer,
     isOperator,
     can,
-    accessibleKbs,      // 用户可访问的知识库列表
-    canAccessKb,        // 知识库权限检查方法
-    permissions,        // 权限组操作权限
+    accessibleKbs,
+    canAccessKb,
+    permissions,
     canUpload: () => user?.role === 'admin' || permissions.can_upload,
     canReview: () => user?.role === 'admin' || permissions.can_review,
     canDownload: () => user?.role === 'admin' || permissions.can_download,

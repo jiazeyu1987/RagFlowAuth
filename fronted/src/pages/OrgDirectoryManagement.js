@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { orgDirectoryApi } from '../features/orgDirectory/api';
 
+const MOBILE_BREAKPOINT = 768;
+
 const tabButtonStyle = (active) => ({
   padding: '10px 16px',
   border: '1px solid #e5e7eb',
@@ -30,7 +32,11 @@ const tdStyle = {
 };
 
 const OrgDirectoryManagement = () => {
-  const [tab, setTab] = useState('companies'); // companies | departments | audit
+  const [isMobile, setIsMobile] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return window.innerWidth <= MOBILE_BREAKPOINT;
+  });
+  const [tab, setTab] = useState('companies');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [auditError, setAuditError] = useState(null);
@@ -89,6 +95,15 @@ const OrgDirectoryManagement = () => {
     loadAll();
   }, []);
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+
+    const handleResize = () => setIsMobile(window.innerWidth <= MOBILE_BREAKPOINT);
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
   const refreshAudit = async () => {
     setAuditError(null);
     const params = {
@@ -123,7 +138,7 @@ const OrgDirectoryManagement = () => {
   };
 
   const handleEditCompany = async (company) => {
-    const name = window.prompt('修改公司名', company.name);
+    const name = window.prompt('修改公司名称', company.name);
     if (name == null) return;
     try {
       await orgDirectoryApi.updateCompany(company.id, name);
@@ -144,7 +159,7 @@ const OrgDirectoryManagement = () => {
   };
 
   const handleEditDepartment = async (dept) => {
-    const name = window.prompt('修改部门名', dept.name);
+    const name = window.prompt('修改部门名称', dept.name);
     if (name == null) return;
     try {
       await orgDirectoryApi.updateDepartment(dept.id, name);
@@ -166,7 +181,7 @@ const OrgDirectoryManagement = () => {
 
   const auditRows = useMemo(() => auditLogs || [], [auditLogs]);
 
-  if (loading) return <div>Loading...</div>;
+  if (loading) return <div>加载中...</div>;
 
   return (
     <div data-testid="org-page">
@@ -184,11 +199,11 @@ const OrgDirectoryManagement = () => {
             marginBottom: 12,
           }}
         >
-          Error: {error}
+          错误: {error}
         </div>
       ) : null}
 
-      <div style={{ display: 'flex', gap: '8px', marginBottom: 0 }}>
+      <div style={{ display: 'flex', gap: '8px', marginBottom: 0, flexWrap: 'wrap' }}>
         <button type="button" data-testid="org-tab-companies" onClick={() => setTab('companies')} style={tabButtonStyle(tab === 'companies')}>
           公司
         </button>
@@ -204,19 +219,20 @@ const OrgDirectoryManagement = () => {
         backgroundColor: 'white',
         border: '1px solid #e5e7eb',
         borderRadius: '8px',
-        padding: '16px',
+        padding: isMobile ? '12px' : '16px',
         boxShadow: '0 1px 3px rgba(0, 0, 0, 0.08)',
       }}>
         {tab === 'companies' && (
           <div>
-            <form onSubmit={handleCreateCompany} style={{ display: 'flex', gap: '12px', marginBottom: '16px' }}>
+            <form onSubmit={handleCreateCompany} style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: '12px', marginBottom: '16px' }}>
               <input
                 value={newCompanyName}
                 onChange={(e) => setNewCompanyName(e.target.value)}
                 data-testid="org-company-name"
-                placeholder="新增公司名"
+                placeholder="新增公司名称"
                 style={{
                   flex: 1,
+                  width: isMobile ? '100%' : 'auto',
                   padding: '10px',
                   border: '1px solid #d1d5db',
                   borderRadius: '6px',
@@ -232,80 +248,84 @@ const OrgDirectoryManagement = () => {
                   border: 'none',
                   borderRadius: '6px',
                   cursor: 'pointer',
+                  width: isMobile ? '100%' : 'auto',
                 }}
               >
                 添加
               </button>
             </form>
 
-            <table style={tableStyle}>
-              <thead>
-                <tr>
-                  <th style={thStyle}>公司名</th>
-                  <th style={{ ...thStyle, width: '220px' }}>更新时间</th>
-                  <th style={{ ...thStyle, width: '160px', textAlign: 'right' }}>操作</th>
-                </tr>
-              </thead>
-              <tbody>
-                {companies.map((c) => (
-                  <tr key={c.id} data-testid={`org-company-row-${c.id}`}>
-                    <td style={tdStyle}>{c.name}</td>
-                    <td style={{ ...tdStyle, color: '#6b7280' }}>{new Date(c.updated_at_ms).toLocaleString('zh-CN')}</td>
-                    <td style={{ ...tdStyle, textAlign: 'right' }}>
-                      <button
-                        type="button"
-                        data-testid={`org-company-edit-${c.id}`}
-                        onClick={() => handleEditCompany(c)}
-                        style={{
-                          padding: '6px 12px',
-                          backgroundColor: '#8b5cf6',
-                          color: 'white',
-                          border: 'none',
-                          borderRadius: '4px',
-                          cursor: 'pointer',
-                          marginRight: '8px',
-                        }}
-                      >
-                        修改
-                      </button>
-                      <button
-                        type="button"
-                        data-testid={`org-company-delete-${c.id}`}
-                        onClick={() => handleDeleteCompany(c)}
-                        style={{
-                          padding: '6px 12px',
-                          backgroundColor: '#ef4444',
-                          color: 'white',
-                          border: 'none',
-                          borderRadius: '4px',
-                          cursor: 'pointer',
-                        }}
-                      >
-                        删除
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-                {companies.length === 0 && (
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ ...tableStyle, minWidth: isMobile ? '560px' : '100%' }}>
+                <thead>
                   <tr>
-                    <td style={{ ...tdStyle, color: '#6b7280' }} colSpan={3}>暂无公司</td>
+                    <th style={thStyle}>公司名称</th>
+                    <th style={{ ...thStyle, width: '220px' }}>更新时间</th>
+                    <th style={{ ...thStyle, width: '160px', textAlign: 'right' }}>操作</th>
                   </tr>
-                )}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {companies.map((c) => (
+                    <tr key={c.id} data-testid={`org-company-row-${c.id}`}>
+                      <td style={tdStyle}>{c.name}</td>
+                      <td style={{ ...tdStyle, color: '#6b7280' }}>{new Date(c.updated_at_ms).toLocaleString('zh-CN')}</td>
+                      <td style={{ ...tdStyle, textAlign: 'right' }}>
+                        <button
+                          type="button"
+                          data-testid={`org-company-edit-${c.id}`}
+                          onClick={() => handleEditCompany(c)}
+                          style={{
+                            padding: '6px 12px',
+                            backgroundColor: '#8b5cf6',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '4px',
+                            cursor: 'pointer',
+                            marginRight: '8px',
+                          }}
+                        >
+                          修改
+                        </button>
+                        <button
+                          type="button"
+                          data-testid={`org-company-delete-${c.id}`}
+                          onClick={() => handleDeleteCompany(c)}
+                          style={{
+                            padding: '6px 12px',
+                            backgroundColor: '#ef4444',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '4px',
+                            cursor: 'pointer',
+                          }}
+                        >
+                          删除
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                  {companies.length === 0 && (
+                    <tr>
+                      <td style={{ ...tdStyle, color: '#6b7280' }} colSpan={3}>暂无公司</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
 
         {tab === 'departments' && (
           <div>
-            <form onSubmit={handleCreateDepartment} style={{ display: 'flex', gap: '12px', marginBottom: '16px' }}>
+            <form onSubmit={handleCreateDepartment} style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: '12px', marginBottom: '16px' }}>
               <input
                 value={newDepartmentName}
                 onChange={(e) => setNewDepartmentName(e.target.value)}
                 data-testid="org-department-name"
-                placeholder="新增部门名"
+                placeholder="新增部门名称"
                 style={{
                   flex: 1,
+                  width: isMobile ? '100%' : 'auto',
                   padding: '10px',
                   border: '1px solid #d1d5db',
                   borderRadius: '6px',
@@ -321,67 +341,70 @@ const OrgDirectoryManagement = () => {
                   border: 'none',
                   borderRadius: '6px',
                   cursor: 'pointer',
+                  width: isMobile ? '100%' : 'auto',
                 }}
               >
                 添加
               </button>
             </form>
 
-            <table style={tableStyle}>
-              <thead>
-                <tr>
-                  <th style={thStyle}>部门名</th>
-                  <th style={{ ...thStyle, width: '220px' }}>更新时间</th>
-                  <th style={{ ...thStyle, width: '160px', textAlign: 'right' }}>操作</th>
-                </tr>
-              </thead>
-              <tbody>
-                {departments.map((d) => (
-                  <tr key={d.id} data-testid={`org-department-row-${d.id}`}>
-                    <td style={tdStyle}>{d.name}</td>
-                    <td style={{ ...tdStyle, color: '#6b7280' }}>{new Date(d.updated_at_ms).toLocaleString('zh-CN')}</td>
-                    <td style={{ ...tdStyle, textAlign: 'right' }}>
-                      <button
-                        type="button"
-                        data-testid={`org-department-edit-${d.id}`}
-                        onClick={() => handleEditDepartment(d)}
-                        style={{
-                          padding: '6px 12px',
-                          backgroundColor: '#8b5cf6',
-                          color: 'white',
-                          border: 'none',
-                          borderRadius: '4px',
-                          cursor: 'pointer',
-                          marginRight: '8px',
-                        }}
-                      >
-                        修改
-                      </button>
-                      <button
-                        type="button"
-                        data-testid={`org-department-delete-${d.id}`}
-                        onClick={() => handleDeleteDepartment(d)}
-                        style={{
-                          padding: '6px 12px',
-                          backgroundColor: '#ef4444',
-                          color: 'white',
-                          border: 'none',
-                          borderRadius: '4px',
-                          cursor: 'pointer',
-                        }}
-                      >
-                        删除
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-                {departments.length === 0 && (
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ ...tableStyle, minWidth: isMobile ? '560px' : '100%' }}>
+                <thead>
                   <tr>
-                    <td style={{ ...tdStyle, color: '#6b7280' }} colSpan={3}>暂无部门</td>
+                    <th style={thStyle}>部门名称</th>
+                    <th style={{ ...thStyle, width: '220px' }}>更新时间</th>
+                    <th style={{ ...thStyle, width: '160px', textAlign: 'right' }}>操作</th>
                   </tr>
-                )}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {departments.map((d) => (
+                    <tr key={d.id} data-testid={`org-department-row-${d.id}`}>
+                      <td style={tdStyle}>{d.name}</td>
+                      <td style={{ ...tdStyle, color: '#6b7280' }}>{new Date(d.updated_at_ms).toLocaleString('zh-CN')}</td>
+                      <td style={{ ...tdStyle, textAlign: 'right' }}>
+                        <button
+                          type="button"
+                          data-testid={`org-department-edit-${d.id}`}
+                          onClick={() => handleEditDepartment(d)}
+                          style={{
+                            padding: '6px 12px',
+                            backgroundColor: '#8b5cf6',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '4px',
+                            cursor: 'pointer',
+                            marginRight: '8px',
+                          }}
+                        >
+                          修改
+                        </button>
+                        <button
+                          type="button"
+                          data-testid={`org-department-delete-${d.id}`}
+                          onClick={() => handleDeleteDepartment(d)}
+                          style={{
+                            padding: '6px 12px',
+                            backgroundColor: '#ef4444',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '4px',
+                            cursor: 'pointer',
+                          }}
+                        >
+                          删除
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                  {departments.length === 0 && (
+                    <tr>
+                      <td style={{ ...tdStyle, color: '#6b7280' }} colSpan={3}>暂无部门</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
 
@@ -399,17 +422,17 @@ const OrgDirectoryManagement = () => {
                   marginBottom: 12,
                 }}
               >
-                Error: {auditError}
+                错误: {auditError}
               </div>
             ) : null}
-            <div style={{ display: 'flex', gap: '12px', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', gap: '12px', alignItems: isMobile ? 'stretch' : 'center', flexDirection: isMobile ? 'column' : 'row', marginBottom: '16px', flexWrap: 'wrap' }}>
               <div>
                 <div style={{ fontSize: '0.85rem', color: '#6b7280', marginBottom: '6px' }}>类型</div>
                 <select
                   value={auditFilter.entity_type}
                   onChange={(e) => setAuditFilter({ ...auditFilter, entity_type: e.target.value })}
                   data-testid="org-audit-entity-type"
-                  style={{ padding: '8px', borderRadius: '6px', border: '1px solid #d1d5db' }}
+                  style={{ padding: '8px', borderRadius: '6px', border: '1px solid #d1d5db', width: isMobile ? '100%' : 'auto' }}
                 >
                   <option value="">全部</option>
                   <option value="company">公司</option>
@@ -422,7 +445,7 @@ const OrgDirectoryManagement = () => {
                   value={auditFilter.action}
                   onChange={(e) => setAuditFilter({ ...auditFilter, action: e.target.value })}
                   data-testid="org-audit-action"
-                  style={{ padding: '8px', borderRadius: '6px', border: '1px solid #d1d5db' }}
+                  style={{ padding: '8px', borderRadius: '6px', border: '1px solid #d1d5db', width: isMobile ? '100%' : 'auto' }}
                 >
                   <option value="">全部</option>
                   <option value="create">新增</option>
@@ -436,7 +459,7 @@ const OrgDirectoryManagement = () => {
                   value={String(auditFilter.limit)}
                   onChange={(e) => setAuditFilter({ ...auditFilter, limit: Number(e.target.value) })}
                   data-testid="org-audit-limit"
-                  style={{ padding: '8px', borderRadius: '6px', border: '1px solid #d1d5db' }}
+                  style={{ padding: '8px', borderRadius: '6px', border: '1px solid #d1d5db', width: isMobile ? '100%' : 'auto' }}
                 >
                   <option value="50">50</option>
                   <option value="200">200</option>
@@ -461,50 +484,53 @@ const OrgDirectoryManagement = () => {
                   borderRadius: '6px',
                   cursor: 'pointer',
                   height: '40px',
-                  marginTop: '22px',
+                  marginTop: isMobile ? 0 : '22px',
+                  width: isMobile ? '100%' : 'auto',
                 }}
               >
                 刷新
               </button>
             </div>
 
-            <table style={tableStyle}>
-              <thead>
-                <tr>
-                  <th style={thStyle}>时间</th>
-                  <th style={thStyle}>类型</th>
-                  <th style={thStyle}>动作</th>
-                  <th style={thStyle}>变更</th>
-                  <th style={thStyle}>操作人</th>
-                </tr>
-              </thead>
-              <tbody>
-                {auditRows.map((l) => (
-                  <tr key={l.id} data-testid={`org-audit-row-${l.id}`}>
-                    <td style={{ ...tdStyle, color: '#6b7280', width: '220px' }}>
-                      {new Date(l.created_at_ms).toLocaleString('zh-CN')}
-                    </td>
-                    <td style={tdStyle} data-testid={`org-audit-entity-${l.id}`}>
-                      {l.entity_type === 'company' ? '公司' : l.entity_type === 'department' ? '部门' : l.entity_type}
-                    </td>
-                    <td style={tdStyle} data-testid={`org-audit-action-${l.id}`}>
-                      {l.action === 'create' ? '新增' : l.action === 'update' ? '修改' : l.action === 'delete' ? '删除' : l.action}
-                    </td>
-                    <td style={tdStyle} data-testid={`org-audit-change-${l.id}`}>
-                      {l.action === 'create' && <span>新增：{l.after_name}</span>}
-                      {l.action === 'update' && <span>{l.before_name} → {l.after_name}</span>}
-                      {l.action === 'delete' && <span>删除：{l.before_name}</span>}
-                    </td>
-                    <td style={tdStyle} data-testid={`org-audit-actor-${l.id}`}>{l.actor_username || l.actor_user_id}</td>
-                  </tr>
-                ))}
-                {auditRows.length === 0 && (
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ ...tableStyle, minWidth: isMobile ? '760px' : '100%' }}>
+                <thead>
                   <tr>
-                    <td style={{ ...tdStyle, color: '#6b7280' }} colSpan={5}>暂无记录</td>
+                    <th style={thStyle}>时间</th>
+                    <th style={thStyle}>类型</th>
+                    <th style={thStyle}>动作</th>
+                    <th style={thStyle}>变更</th>
+                    <th style={thStyle}>操作人</th>
                   </tr>
-                )}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {auditRows.map((l) => (
+                    <tr key={l.id} data-testid={`org-audit-row-${l.id}`}>
+                      <td style={{ ...tdStyle, color: '#6b7280', width: '220px' }}>
+                        {new Date(l.created_at_ms).toLocaleString('zh-CN')}
+                      </td>
+                      <td style={tdStyle} data-testid={`org-audit-entity-${l.id}`}>
+                        {l.entity_type === 'company' ? '公司' : l.entity_type === 'department' ? '部门' : l.entity_type}
+                      </td>
+                      <td style={tdStyle} data-testid={`org-audit-action-${l.id}`}>
+                        {l.action === 'create' ? '新增' : l.action === 'update' ? '修改' : l.action === 'delete' ? '删除' : l.action}
+                      </td>
+                      <td style={tdStyle} data-testid={`org-audit-change-${l.id}`}>
+                        {l.action === 'create' && <span>新增：{l.after_name}</span>}
+                        {l.action === 'update' && <span>{l.before_name} {'->'} {l.after_name}</span>}
+                        {l.action === 'delete' && <span>删除：{l.before_name}</span>}
+                      </td>
+                      <td style={tdStyle} data-testid={`org-audit-actor-${l.id}`}>{l.actor_username || l.actor_user_id}</td>
+                    </tr>
+                  ))}
+                  {auditRows.length === 0 && (
+                    <tr>
+                      <td style={{ ...tdStyle, color: '#6b7280' }} colSpan={5}>暂无记录</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
       </div>

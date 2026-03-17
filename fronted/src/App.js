@@ -33,7 +33,7 @@ const DocumentAudit = lazy(() => import('./pages/DocumentAudit'));
 
 
 function RouteLoadingFallback() {
-  return <div style={{ padding: 16 }}>Loading...</div>;
+  return <div style={{ padding: 16 }}>加载中...</div>;
 }
 
 function App() {

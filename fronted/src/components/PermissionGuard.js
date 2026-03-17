@@ -21,7 +21,7 @@ const PermissionGuard = ({ children, allowedRoles, permission, permissions, fall
   }, [user, requiredPermissions, can]);
 
   if (loading) {
-    return <div>Loading...</div>;
+    return <div>加载中...</div>;
   }
 
   if (!user) {

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { toolbarButtonStyle } from '../features/knowledge/documentBrowser/styles';
 import { TEXT } from '../features/knowledge/documentBrowser/constants';
 import BatchTransferProgress from '../features/knowledge/documentBrowser/components/BatchTransferProgress';
@@ -8,7 +8,23 @@ import TransferDialog from '../features/knowledge/documentBrowser/components/Tra
 import useDocumentBrowserPage from '../features/knowledge/documentBrowser/useDocumentBrowserPage';
 import { DocumentPreviewModal } from '../shared/documents/preview/DocumentPreviewModal';
 
+const MOBILE_BREAKPOINT = 768;
+
 export default function DocumentBrowser() {
+  const [isMobile, setIsMobile] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return window.innerWidth <= MOBILE_BREAKPOINT;
+  });
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+
+    const handleResize = () => setIsMobile(window.innerWidth <= MOBILE_BREAKPOINT);
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
   const {
     canDownload,
     datasetsWithFolders,
@@ -118,8 +134,8 @@ export default function DocumentBrowser() {
         ) : null}
       </div>
 
-      <div style={{ background: '#f9fafb', padding: 16, borderRadius: 8, marginBottom: 16 }}>
-        <div style={{ display: 'flex', gap: 32, flexWrap: 'wrap' }}>
+      <div style={{ background: '#f9fafb', padding: isMobile ? 14 : 16, borderRadius: 8, marginBottom: 16 }}>
+        <div style={{ display: 'flex', gap: isMobile ? 12 : 32, flexWrap: 'wrap' }}>
           <div>
             {TEXT.datasets}: <strong>{visibleDatasets.length}{visibleDatasets.length !== datasetsWithFolders.length ? ` / ${datasetsWithFolders.length}` : ''}</strong>
           </div>
@@ -129,9 +145,9 @@ export default function DocumentBrowser() {
         </div>
       </div>
 
-      <div style={{ background: '#fff', padding: 16, borderRadius: 8, border: '1px solid #e5e7eb', marginBottom: 16 }}>
+      <div style={{ background: '#fff', padding: isMobile ? 14 : 16, borderRadius: 8, border: '1px solid #e5e7eb', marginBottom: 16 }}>
         <div style={{ marginBottom: 6, color: '#6b7280', fontSize: '0.85rem' }}>{TEXT.filter}</div>
-        <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: 12, alignItems: isMobile ? 'stretch' : 'center', flexDirection: isMobile ? 'column' : 'row' }}>
           <input
             value={datasetFilterKeyword}
             onChange={(event) => setDatasetFilterKeyword(event.target.value)}
@@ -142,9 +158,9 @@ export default function DocumentBrowser() {
             placeholder={TEXT.filterPlaceholder}
             data-testid="browser-dataset-filter"
             list="browser-dataset-filter-recent"
-            style={{ flex: 1, padding: '10px 12px', borderRadius: 6, border: '1px solid #d1d5db' }}
+            style={{ flex: 1, width: '100%', padding: '10px 12px', borderRadius: 6, border: '1px solid #d1d5db', boxSizing: 'border-box' }}
           />
-          <button onClick={() => setDatasetFilterKeyword('')} data-testid="browser-dataset-filter-clear" style={toolbarButtonStyle('neutral')}>
+          <button onClick={() => setDatasetFilterKeyword('')} data-testid="browser-dataset-filter-clear" style={{ ...toolbarButtonStyle('neutral'), width: isMobile ? '100%' : 'auto' }}>
             {TEXT.clear}
           </button>
         </div>
@@ -187,8 +203,8 @@ export default function DocumentBrowser() {
       ) : null}
 
       {datasetsWithFolders.length && visibleDatasets.length ? (
-        <div style={{ display: 'grid', gridTemplateColumns: '260px minmax(0, 1fr)', gap: 16, alignItems: 'start' }}>
-          <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, padding: 12, position: 'sticky', top: 12 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '260px minmax(0, 1fr)', gap: 16, alignItems: 'start' }}>
+          <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, padding: 12, position: isMobile ? 'relative' : 'sticky', top: isMobile ? 'auto' : 12 }}>
             <FolderTree
               indexes={indexes}
               currentFolderId={currentFolderId}

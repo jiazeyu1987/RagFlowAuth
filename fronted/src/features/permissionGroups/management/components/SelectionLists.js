@@ -44,9 +44,9 @@ export function FolderSelectionList({ title, items, selected, onToggle, emptyTex
 export function ChatSelection({ chatAgents, selected, onToggle }) {
   return (
     <div style={{ marginBottom: 12 }}>
-      <div style={{ fontWeight: 700, marginBottom: 8 }}>Chat Access</div>
+      <div style={{ fontWeight: 700, marginBottom: 8 }}>对话权限</div>
       {!chatAgents.length ? (
-        <div style={{ color: '#6b7280', fontSize: 13 }}>No chats</div>
+        <div style={{ color: '#6b7280', fontSize: 13 }}>暂无对话</div>
       ) : (
         <div
           style={{
@@ -74,7 +74,7 @@ export function ChatSelection({ chatAgents, selected, onToggle }) {
                 onChange={() => onToggle(chat.id)}
               />
               <span>
-                {chat.name} ({chat.type || 'chat'})
+                {chat.name} ({chat.type || '对话'})
               </span>
             </label>
           ))}

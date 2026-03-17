@@ -52,7 +52,7 @@ export const useUserManagement = () => {
       setAllUsers(Array.isArray(data) ? data : []);
       setError(null);
     } catch (err) {
-      setError(err?.message || String(err || 'Failed to load users'));
+      setError(err?.message || String(err || '加载用户失败'));
     } finally {
       setLoading(false);
     }
@@ -115,57 +115,49 @@ export const useUserManagement = () => {
     });
   }, []);
 
-  const handleCreateUser = useCallback(
-    async (e) => {
-      e.preventDefault();
-      try {
-        const payload = {
-          ...newUser,
-          company_id: newUser.company_id ? Number(newUser.company_id) : null,
-          department_id: newUser.department_id ? Number(newUser.department_id) : null,
-          max_login_sessions: Number(newUser.max_login_sessions),
-          idle_timeout_minutes: Number(newUser.idle_timeout_minutes),
-        };
-        await usersApi.create(payload);
-        handleCloseCreateModal();
-        fetchUsers();
-      } catch (err) {
-        setError(err?.message || String(err || 'Create user failed'));
-      }
-    },
-    [fetchUsers, handleCloseCreateModal, newUser]
-  );
+  const handleCreateUser = useCallback(async (e) => {
+    e.preventDefault();
+    try {
+      const payload = {
+        ...newUser,
+        company_id: newUser.company_id ? Number(newUser.company_id) : null,
+        department_id: newUser.department_id ? Number(newUser.department_id) : null,
+        max_login_sessions: Number(newUser.max_login_sessions),
+        idle_timeout_minutes: Number(newUser.idle_timeout_minutes),
+      };
+      await usersApi.create(payload);
+      handleCloseCreateModal();
+      fetchUsers();
+    } catch (err) {
+      setError(err?.message || String(err || '创建用户失败'));
+    }
+  }, [fetchUsers, handleCloseCreateModal, newUser]);
 
-  const handleDeleteUser = useCallback(
-    async (userId) => {
-      if (!window.confirm('确定要删除该用户吗？')) return;
-      try {
-        await usersApi.remove(userId);
-        fetchUsers();
-      } catch (err) {
-        setError(err?.message || String(err || 'Delete user failed'));
-      }
-    },
-    [fetchUsers]
-  );
+  const handleDeleteUser = useCallback(async (userId) => {
+    if (!window.confirm('确定要删除该用户吗？')) return;
+    try {
+      await usersApi.remove(userId);
+      fetchUsers();
+    } catch (err) {
+      setError(err?.message || String(err || '删除用户失败'));
+    }
+  }, [fetchUsers]);
 
-  const handleToggleUserStatus = useCallback(
-    async (user) => {
-      if (!user?.user_id) return;
-      if (String(user?.username || '').toLowerCase() === 'admin') return;
-      const nextStatus = user.status === 'active' ? 'inactive' : 'active';
-      try {
-        setStatusUpdatingUserId(user.user_id);
-        await usersApi.update(user.user_id, { status: nextStatus });
-        await fetchUsers();
-      } catch (err) {
-        setError(err?.message || String(err || 'Toggle user status failed'));
-      } finally {
-        setStatusUpdatingUserId(null);
-      }
-    },
-    [fetchUsers]
-  );
+  const handleToggleUserStatus = useCallback(async (user) => {
+    if (!user?.user_id) return;
+    if (String(user?.username || '').toLowerCase() === 'admin') return;
+
+    const nextStatus = user.status === 'active' ? 'inactive' : 'active';
+    try {
+      setStatusUpdatingUserId(user.user_id);
+      await usersApi.update(user.user_id, { status: nextStatus });
+      await fetchUsers();
+    } catch (err) {
+      setError(err?.message || String(err || '切换用户状态失败'));
+    } finally {
+      setStatusUpdatingUserId(null);
+    }
+  }, [fetchUsers]);
 
   const handleOpenResetPassword = useCallback((user) => {
     setResetPasswordUser(user);
@@ -233,11 +225,11 @@ export const useUserManagement = () => {
     const idleMinutes = Number(policyForm.idle_timeout_minutes);
 
     if (!Number.isInteger(maxSessions) || maxSessions < 1 || maxSessions > 1000) {
-      setPolicyError('可登录个数需为 1-1000 的整数');
+      setPolicyError('可登录会话数需为 1-1000 的整数');
       return;
     }
     if (!Number.isInteger(idleMinutes) || idleMinutes < 1 || idleMinutes > 43200) {
-      setPolicyError('闲置超时需为 1-43200 分钟的整数');
+      setPolicyError('空闲超时需为 1-43200 分钟的整数');
       return;
     }
 
@@ -288,7 +280,7 @@ export const useUserManagement = () => {
       handleCloseGroupModal();
       fetchUsers();
     } catch (err) {
-      setError(err?.message || String(err || 'Save group failed'));
+      setError(err?.message || String(err || '保存权限组失败'));
     }
   }, [editingGroupUser, fetchUsers, handleCloseGroupModal, selectedGroupIds]);
 

@@ -18,10 +18,16 @@ import {
   writeStoredFolderImportTaskId,
 } from '../features/knowledge/nasBrowser/utils';
 
+const MOBILE_BREAKPOINT = 768;
+
 export default function NasBrowser() {
   const navigate = useNavigate();
   const { isAdmin } = useAuth();
   const pollTimerRef = useRef(null);
+  const [isMobile, setIsMobile] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return window.innerWidth <= MOBILE_BREAKPOINT;
+  });
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -115,6 +121,15 @@ export default function NasBrowser() {
   }, [loadPath]);
 
   useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+
+    const handleResize = () => setIsMobile(window.innerWidth <= MOBILE_BREAKPOINT);
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  useEffect(() => {
     const loadDatasets = async () => {
       try {
         const data = await knowledgeApi.listRagflowDatasets();
@@ -204,24 +219,40 @@ export default function NasBrowser() {
 
   return (
     <div style={PAGE_STYLE} data-testid="nas-browser-page">
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px' }}>
+      <div
+        style={{
+          display: 'flex',
+          flexDirection: isMobile ? 'column' : 'row',
+          justifyContent: 'space-between',
+          alignItems: isMobile ? 'stretch' : 'center',
+          gap: '12px',
+        }}
+      >
         <div>
           <h2 style={{ margin: 0, fontSize: '1.4rem', color: '#111827' }}>NAS 云盘</h2>
           <div style={{ marginTop: '6px', color: '#6b7280', fontSize: '0.95rem' }}>
             NAS: `172.30.30.4` / 共享目录: `it共享`
           </div>
         </div>
-        <div style={{ display: 'flex', gap: '8px' }}>
-          <button type="button" onClick={() => navigate('/tools')} style={BUTTON_STYLES.neutral}>
+        <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: '8px', width: isMobile ? '100%' : 'auto' }}>
+          <button
+            type="button"
+            onClick={() => navigate('/tools')}
+            style={{ ...BUTTON_STYLES.neutral, width: isMobile ? '100%' : 'auto' }}
+          >
             返回实用工具
           </button>
-          <button type="button" onClick={() => loadPath(currentPath)} style={BUTTON_STYLES.primary}>
+          <button
+            type="button"
+            onClick={() => loadPath(currentPath)}
+            style={{ ...BUTTON_STYLES.primary, width: isMobile ? '100%' : 'auto' }}
+          >
             刷新
           </button>
         </div>
       </div>
 
-      <div style={{ ...CARD_STYLE, marginTop: '16px', padding: '14px 16px' }}>
+      <div style={{ ...CARD_STYLE, marginTop: '16px', padding: isMobile ? '14px' : '14px 16px' }}>
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
           {breadcrumbs.map((segment, index) => (
             <React.Fragment key={segment.path || 'root'}>
@@ -243,7 +274,7 @@ export default function NasBrowser() {
             </React.Fragment>
           ))}
         </div>
-        <div style={{ marginTop: '12px', display: 'flex', gap: '8px' }}>
+        <div style={{ marginTop: '12px', display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: '8px' }}>
           <button
             type="button"
             onClick={() => loadPath(parentPath || '')}
@@ -253,6 +284,7 @@ export default function NasBrowser() {
               background: parentPath === null ? '#f3f4f6' : '#fff',
               color: parentPath === null ? '#9ca3af' : '#111827',
               cursor: parentPath === null ? 'not-allowed' : 'pointer',
+              width: isMobile ? '100%' : 'auto',
             }}
           >
             上一级
@@ -261,8 +293,16 @@ export default function NasBrowser() {
       </div>
 
       {folderImportProgress && (
-        <div style={{ ...CARD_STYLE, marginTop: '16px', padding: '16px 18px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', alignItems: 'center' }}>
+        <div style={{ ...CARD_STYLE, marginTop: '16px', padding: isMobile ? '14px' : '16px 18px' }}>
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: isMobile ? 'column' : 'row',
+              justifyContent: 'space-between',
+              gap: '12px',
+              alignItems: isMobile ? 'stretch' : 'center',
+            }}
+          >
             <div>
               <div style={{ fontSize: '1rem', fontWeight: 800, color: '#111827' }}>文件夹上传进度</div>
               <div style={{ marginTop: '4px', color: '#475569' }}>路径: {folderImportProgress.folder_path}</div>
@@ -278,6 +318,7 @@ export default function NasBrowser() {
                   folderImportProgress.status === 'running' || folderImportProgress.status === 'pending'
                     ? 'not-allowed'
                     : 'pointer',
+                width: isMobile ? '100%' : 'auto',
               }}
             >
               关闭
@@ -365,49 +406,53 @@ export default function NasBrowser() {
         ) : items.length === 0 ? (
           <div style={{ padding: '32px', color: '#6b7280' }}>当前目录为空</div>
         ) : (
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead style={{ background: '#f8fafc' }}>
-              <tr>
-                <th style={{ padding: '14px 16px', textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>名称</th>
-                <th style={{ padding: '14px 16px', textAlign: 'left', borderBottom: '1px solid #e5e7eb', width: '120px' }}>类型</th>
-                <th style={{ padding: '14px 16px', textAlign: 'right', borderBottom: '1px solid #e5e7eb', width: '140px' }}>大小</th>
-                <th style={{ padding: '14px 16px', textAlign: 'left', borderBottom: '1px solid #e5e7eb', width: '220px' }}>修改时间</th>
-                <th style={{ padding: '14px 16px', textAlign: 'right', borderBottom: '1px solid #e5e7eb', width: '280px' }}>操作</th>
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((item) => (
-                <tr key={item.path} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                  <td style={{ padding: '14px 16px' }}>
-                    {item.is_dir ? (
-                      <button
-                        type="button"
-                        onClick={() => loadPath(item.path)}
-                        style={{ border: 'none', background: 'transparent', padding: 0, cursor: 'pointer', color: '#1d4ed8', fontWeight: 700 }}
-                      >
-                        {`[目录] ${item.name}`}
-                      </button>
-                    ) : (
-                      <span style={{ color: '#111827' }}>{`[文件] ${item.name}`}</span>
-                    )}
-                  </td>
-                  <td style={{ padding: '14px 16px', color: '#475569' }}>{item.is_dir ? '文件夹' : '文件'}</td>
-                  <td style={{ padding: '14px 16px', textAlign: 'right', color: '#475569' }}>{item.is_dir ? '-' : formatFileSize(item.size)}</td>
-                  <td style={{ padding: '14px 16px', color: '#475569' }}>{formatTime(item.modified_at)}</td>
-                  <td style={{ padding: '14px 16px', textAlign: 'right' }}>
-                    <button
-                      type="button"
-                      onClick={() => openImportDialog(item)}
-                      data-testid={`nas-import-btn-${String(item.path || item.name || 'item').replace(/[^a-zA-Z0-9_-]/g, '_')}`}
-                      style={item.is_dir ? BUTTON_STYLES.primary : BUTTON_STYLES.success}
-                    >
-                      {item.is_dir ? '上传文件夹到知识库' : '上传文件到知识库'}
-                    </button>
-                  </td>
+          <div style={{ width: '100%', overflowX: 'auto' }}>
+            <table style={{ width: '100%', minWidth: isMobile ? '760px' : '100%', borderCollapse: 'collapse' }}>
+              <thead style={{ background: '#f8fafc' }}>
+                <tr>
+                  <th style={{ padding: '14px 16px', textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>名称</th>
+                  <th style={{ padding: '14px 16px', textAlign: 'left', borderBottom: '1px solid #e5e7eb', width: isMobile ? '96px' : '120px' }}>类型</th>
+                  <th style={{ padding: '14px 16px', textAlign: 'right', borderBottom: '1px solid #e5e7eb', width: isMobile ? '110px' : '140px' }}>大小</th>
+                  <th style={{ padding: '14px 16px', textAlign: 'left', borderBottom: '1px solid #e5e7eb', width: isMobile ? '180px' : '220px' }}>修改时间</th>
+                  <th style={{ padding: '14px 16px', textAlign: 'right', borderBottom: '1px solid #e5e7eb', width: isMobile ? '220px' : '280px' }}>操作</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {items.map((item) => (
+                  <tr key={item.path} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                    <td style={{ padding: '14px 16px', wordBreak: 'break-word' }}>
+                      {item.is_dir ? (
+                        <button
+                          type="button"
+                          onClick={() => loadPath(item.path)}
+                          style={{ border: 'none', background: 'transparent', padding: 0, cursor: 'pointer', color: '#1d4ed8', fontWeight: 700, textAlign: 'left' }}
+                        >
+                          {`[目录] ${item.name}`}
+                        </button>
+                      ) : (
+                        <span style={{ color: '#111827', wordBreak: 'break-word' }}>{`[文件] ${item.name}`}</span>
+                      )}
+                    </td>
+                    <td style={{ padding: '14px 16px', color: '#475569' }}>{item.is_dir ? '文件夹' : '文件'}</td>
+                    <td style={{ padding: '14px 16px', textAlign: 'right', color: '#475569' }}>{item.is_dir ? '-' : formatFileSize(item.size)}</td>
+                    <td style={{ padding: '14px 16px', color: '#475569', whiteSpace: 'nowrap' }}>{formatTime(item.modified_at)}</td>
+                    <td style={{ padding: '14px 16px', textAlign: isMobile ? 'left' : 'right' }}>
+                      <div style={{ display: 'flex', justifyContent: isMobile ? 'flex-start' : 'flex-end', flexWrap: 'wrap', gap: '8px' }}>
+                        <button
+                          type="button"
+                          onClick={() => openImportDialog(item)}
+                          data-testid={`nas-import-btn-${String(item.path || item.name || 'item').replace(/[^a-zA-Z0-9_-]/g, '_')}`}
+                          style={{ ...(item.is_dir ? BUTTON_STYLES.primary : BUTTON_STYLES.success), maxWidth: '100%' }}
+                        >
+                          {item.is_dir ? '上传文件夹到知识库' : '上传文件到知识库'}
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
 
@@ -418,16 +463,24 @@ export default function NasBrowser() {
             inset: 0,
             background: 'rgba(15, 23, 42, 0.45)',
             display: 'flex',
-            alignItems: 'center',
+            alignItems: isMobile ? 'flex-end' : 'center',
             justifyContent: 'center',
-            padding: '24px',
+            padding: isMobile ? '16px' : '24px',
             zIndex: 50,
           }}
           onClick={closeImportDialog}
         >
           <div
             data-testid="nas-import-dialog"
-            style={{ width: 'min(520px, 100%)', background: '#fff', borderRadius: '16px', padding: '20px', border: '1px solid #e5e7eb' }}
+            style={{
+              width: 'min(520px, 100%)',
+              maxHeight: '90vh',
+              overflowY: 'auto',
+              background: '#fff',
+              borderRadius: isMobile ? '14px' : '16px',
+              padding: isMobile ? '16px' : '20px',
+              border: '1px solid #e5e7eb',
+            }}
             onClick={(e) => e.stopPropagation()}
           >
             <div style={{ fontSize: '1.15rem', fontWeight: 800, color: '#111827' }}>
@@ -457,7 +510,15 @@ export default function NasBrowser() {
                 ))}
               </select>
             </div>
-            <div style={{ marginTop: '18px', display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+            <div
+              style={{
+                marginTop: '18px',
+                display: 'flex',
+                flexDirection: isMobile ? 'column' : 'row',
+                justifyContent: 'flex-end',
+                gap: '10px',
+              }}
+            >
               <button
                 type="button"
                 onClick={closeImportDialog}
@@ -466,6 +527,7 @@ export default function NasBrowser() {
                 style={{
                   ...BUTTON_STYLES.neutral,
                   cursor: importLoading ? 'not-allowed' : 'pointer',
+                  width: isMobile ? '100%' : 'auto',
                 }}
               >
                 取消
@@ -481,6 +543,7 @@ export default function NasBrowser() {
                   background: importLoading || !selectedKb ? '#94a3b8' : '#2563eb',
                   color: '#fff',
                   cursor: importLoading || !selectedKb ? 'not-allowed' : 'pointer',
+                  width: isMobile ? '100%' : 'auto',
                 }}
               >
                 {importLoading ? '处理中...' : '开始上传'}

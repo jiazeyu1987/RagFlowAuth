@@ -64,7 +64,7 @@ export default function DatasetPanel({
           {loadingDocs ? <div style={{ color: '#6b7280', textAlign: 'center', padding: 20 }}>{TEXT.loadingDocs}</div> : null}
           {!loadingDocs && datasetError ? (
             <div style={{ color: '#dc2626', textAlign: 'center', padding: 20 }}>
-              <div style={{ marginBottom: 10 }}>Load failed: {datasetError}</div>
+              <div style={{ marginBottom: 10 }}>加载失败: {datasetError}</div>
               <button type="button" onClick={() => fetchDocumentsForDataset(dataset.name)}>{TEXT.retry}</button>
             </div>
           ) : null}
@@ -73,7 +73,8 @@ export default function DatasetPanel({
           ) : null}
 
           {!loadingDocs && !datasetError && datasetDocs.length > 0 ? (
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <div style={{ width: '100%', overflowX: 'auto' }}>
+              <table style={{ width: '100%', minWidth: 760, borderCollapse: 'collapse' }}>
               <thead>
                 <tr style={{ borderBottom: '2px solid #e5e7eb' }}>
                   <th style={{ width: 40, textAlign: 'left', padding: '12px 8px' }}>
@@ -103,7 +104,7 @@ export default function DatasetPanel({
                       </td>
                       <td style={{ padding: '12px 8px', fontWeight: 500, color: '#111827' }}>{doc.name}</td>
                       <td style={{ padding: '12px 8px', textAlign: 'right' }}>
-                        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
                           <button
                             type="button"
                             onClick={() => handleView(doc.id, dataset.name)}
@@ -168,7 +169,8 @@ export default function DatasetPanel({
                   );
                 })}
               </tbody>
-            </table>
+              </table>
+            </div>
           ) : null}
         </div>
       ) : null}

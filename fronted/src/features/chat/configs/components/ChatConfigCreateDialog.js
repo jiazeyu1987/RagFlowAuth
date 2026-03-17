@@ -3,6 +3,7 @@ import React from 'react';
 export default function ChatConfigCreateDialog({
   open,
   onClose,
+  isMobile,
   createName,
   onCreateNameChange,
   createFromId,
@@ -28,97 +29,40 @@ export default function ChatConfigCreateDialog({
         inset: 0,
         background: 'rgba(17, 24, 39, 0.55)',
         display: 'flex',
-        alignItems: 'center',
+        alignItems: isMobile ? 'stretch' : 'center',
         justifyContent: 'center',
-        padding: '20px',
+        padding: isMobile ? '12px' : '20px',
         zIndex: 1000,
       }}
     >
-      <div
-        style={{
-          width: 'min(980px, 96vw)',
-          background: 'white',
-          borderRadius: '14px',
-          border: '1px solid #e5e7eb',
-          overflow: 'hidden',
-          boxShadow: '0 20px 50px rgba(0,0,0,0.35)',
-        }}
-      >
-        <div style={{ padding: '14px 16px', borderBottom: '1px solid #e5e7eb', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div style={{ fontWeight: 950, color: '#111827' }}>æ–°å»ºå¯¹è¯</div>
-          <button
-            type="button"
-            onClick={onClose}
-            data-testid="chat-config-create-close"
-            style={{ border: '1px solid #e5e7eb', background: '#ffffff', borderRadius: '10px', padding: '8px 10px', cursor: 'pointer', fontWeight: 900 }}
-          >
-            å…³é—­
-          </button>
+      <div style={{ width: 'min(980px, 96vw)', maxHeight: isMobile ? '100%' : '90vh', background: 'white', borderRadius: '14px', border: '1px solid #e5e7eb', overflow: 'hidden', boxShadow: '0 20px 50px rgba(0,0,0,0.35)', display: 'flex', flexDirection: 'column', margin: isMobile ? 'auto 0' : 0 }}>
+        <div style={{ padding: '14px 16px', borderBottom: '1px solid #e5e7eb', display: 'flex', justifyContent: 'space-between', alignItems: isMobile ? 'stretch' : 'center', flexDirection: isMobile ? 'column' : 'row', gap: '10px' }}>
+          <div style={{ fontWeight: 950, color: '#111827' }}>ĞÂ½¨¶Ô»°</div>
+          <button type="button" onClick={onClose} data-testid="chat-config-create-close" style={{ border: '1px solid #e5e7eb', background: '#ffffff', borderRadius: '10px', padding: '8px 10px', cursor: 'pointer', fontWeight: 900, alignSelf: isMobile ? 'flex-end' : 'auto' }}>¹Ø±Õ</button>
         </div>
 
-        <div style={{ padding: '14px 16px' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '160px 1fr', gap: '10px', alignItems: 'center' }}>
-            <div style={{ fontWeight: 900, color: '#111827' }}>åç§°</div>
-            <input
-              value={createName}
-              onChange={(event) => onCreateNameChange && onCreateNameChange(event.target.value)}
-              placeholder="è¾“å…¥æ–°å¯¹è¯åç§°"
-              data-testid="chat-config-create-name"
-              style={{ width: '100%', padding: '10px 12px', borderRadius: '10px', border: '1px solid #e5e7eb', outline: 'none' }}
-            />
+        <div style={{ padding: '14px 16px', overflowY: 'auto' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '160px 1fr', gap: '10px', alignItems: 'center' }}>
+            <div style={{ fontWeight: 900, color: '#111827' }}>Ãû³Æ</div>
+            <input value={createName} onChange={(event) => onCreateNameChange && onCreateNameChange(event.target.value)} placeholder="ÊäÈëĞÂ¶Ô»°Ãû³Æ" data-testid="chat-config-create-name" style={{ width: '100%', padding: '10px 12px', borderRadius: '10px', border: '1px solid #e5e7eb', outline: 'none', boxSizing: 'border-box' }} />
           </div>
 
-          <div style={{ marginTop: '12px', display: 'grid', gridTemplateColumns: '160px 1fr', gap: '10px' }}>
-            <div style={{ fontWeight: 900, color: '#111827' }}>å¤åˆ¶é…ç½®</div>
-            <select
-              value={createFromId}
-              onChange={(event) => onCreateFromIdChange && onCreateFromIdChange(event.target.value)}
-              data-testid="chat-config-create-from"
-              style={{ padding: '10px 12px', borderRadius: '10px', border: '1px solid #e5e7eb' }}
-              disabled={!chatList.length}
-            >
+          <div style={{ marginTop: '12px', display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '160px 1fr', gap: '10px', alignItems: 'center' }}>
+            <div style={{ fontWeight: 900, color: '#111827' }}>¸´ÖÆÅäÖÃ</div>
+            <select value={createFromId} onChange={(event) => onCreateFromIdChange && onCreateFromIdChange(event.target.value)} data-testid="chat-config-create-from" style={{ padding: '10px 12px', borderRadius: '10px', border: '1px solid #e5e7eb', width: '100%', boxSizing: 'border-box' }} disabled={!chatList.length}>
               {chatList.map((chat) => (
-                <option key={String(chat?.id || '')} value={String(chat?.id || '')}>
-                  {String(chat?.name || chat?.id || '')}
-                </option>
+                <option key={String(chat?.id || '')} value={String(chat?.id || '')}>{String(chat?.name || chat?.id || '')}</option>
               ))}
             </select>
           </div>
-          {!chatList.length ? <div style={{ marginTop: '8px', color: '#6b7280' }}>æš‚æ— å¯å¤åˆ¶æ¥æºå¯¹è¯</div> : null}
+          {!chatList.length ? <div style={{ marginTop: '8px', color: '#6b7280' }}>ÔİÎŞ¿É¸´ÖÆµÄ¶Ô»°À´Ô´</div> : null}
 
-          {createError ? (
-            <div data-testid="chat-config-create-error" style={{ marginTop: '10px', color: '#b91c1c' }}>
-              {createError}
-            </div>
-          ) : null}
+          {createError ? <div data-testid="chat-config-create-error" style={{ marginTop: '10px', color: '#b91c1c' }}>{createError}</div> : null}
         </div>
 
-        <div style={{ padding: '14px 16px', borderTop: '1px solid #e5e7eb', display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
-          <button
-            type="button"
-            onClick={onClose}
-            data-testid="chat-config-create-cancel"
-            style={{ padding: '10px 14px', borderRadius: '12px', border: '1px solid #e5e7eb', background: '#ffffff', cursor: 'pointer', fontWeight: 900 }}
-          >
-            å–æ¶ˆ
-          </button>
-          <button
-            type="button"
-            onClick={onCreate}
-            disabled={!isAdmin || busy}
-            data-testid="chat-config-create-confirm"
-            style={{
-              padding: '10px 14px',
-              borderRadius: '12px',
-              border: '1px solid #1d4ed8',
-              background: busy ? '#93c5fd' : '#2563eb',
-              color: '#ffffff',
-              cursor: busy ? 'not-allowed' : 'pointer',
-              fontWeight: 950,
-            }}
-          >
-            åˆ›å»º
-          </button>
+        <div style={{ padding: '14px 16px', borderTop: '1px solid #e5e7eb', display: 'flex', justifyContent: 'flex-end', gap: '10px', flexDirection: isMobile ? 'column' : 'row' }}>
+          <button type="button" onClick={onClose} data-testid="chat-config-create-cancel" style={{ padding: '10px 14px', borderRadius: '12px', border: '1px solid #e5e7eb', background: '#ffffff', cursor: 'pointer', fontWeight: 900, width: isMobile ? '100%' : 'auto' }}>È¡Ïû</button>
+          <button type="button" onClick={onCreate} disabled={!isAdmin || busy} data-testid="chat-config-create-confirm" style={{ padding: '10px 14px', borderRadius: '12px', border: '1px solid #1d4ed8', background: busy ? '#93c5fd' : '#2563eb', color: '#ffffff', cursor: busy ? 'not-allowed' : 'pointer', fontWeight: 950, width: isMobile ? '100%' : 'auto' }}>´´½¨</button>
         </div>
       </div>
     </div>

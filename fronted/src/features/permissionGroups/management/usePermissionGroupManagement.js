@@ -46,7 +46,7 @@ export default function usePermissionGroupManagement() {
 
   const folderPath = useMemo(
     () => [
-      { id: ROOT, name: 'Root' },
+      { id: ROOT, name: '根目录' },
       ...pathFolders(currentFolderId, folderIndexes.byId).map((folder) => ({
         id: folder.id,
         name: folder.name || '(Unnamed folder)',
@@ -66,16 +66,16 @@ export default function usePermissionGroupManagement() {
       rows.push({
         kind: 'folder',
         id: folder.id,
-        name: folder.name || '(Unnamed folder)',
-        type: 'Folder',
+          name: folder.name || '（未命名文件夹）',
+          type: '文件夹',
       });
     });
     groupsInCurrentFolder.forEach((group) => {
       rows.push({
         kind: 'group',
         id: group.group_id,
-        name: group.group_name || '(Unnamed group)',
-        type: 'Group',
+        name: group.group_name || '（未命名权限组）',
+        type: '权限组',
       });
     });
     return rows;
@@ -100,7 +100,7 @@ export default function usePermissionGroupManagement() {
     () =>
       (knowledgeTree?.nodes || []).map((node) => ({
         id: node.id,
-        name: `${node.name || '(Unnamed folder)'} (${node.path || '/'})`,
+        name: `${node.name || '（未命名文件夹）'} (${node.path || '/'})`,
       })),
     [knowledgeTree?.nodes]
   );
@@ -109,7 +109,7 @@ export default function usePermissionGroupManagement() {
     () =>
       (knowledgeTree?.datasets || []).map((dataset) => ({
         id: dataset.id,
-        name: `${dataset.name || '(Unnamed knowledge base)'}${
+          name: `${dataset.name || '（未命名知识库）'}${
           dataset.node_path && dataset.node_path !== '/' ? ` (${dataset.node_path})` : ''
         }`,
       })),
@@ -182,7 +182,7 @@ export default function usePermissionGroupManagement() {
       setChatAgents(visibleChats);
       return normalizedGroups;
     } catch (requestError) {
-      setError(requestError?.message || 'Failed to load permission groups');
+        setError(requestError?.message || '加载权限组失败');
       return [];
     } finally {
       setLoading(false);
@@ -210,7 +210,7 @@ export default function usePermissionGroupManagement() {
           const created = nextGroups.find((group) => group.group_id === newId) || null;
           if (created) {
             startEditGroup(created);
-            setHint('Permission group created');
+            setHint('权限组已创建');
           }
         } else if (mode === 'edit' && editingGroupId != null) {
           await permissionGroupsApi.update(editingGroupId, formData);
@@ -219,11 +219,11 @@ export default function usePermissionGroupManagement() {
             nextGroups.find((group) => group.group_id === editingGroupId) || null;
           if (updated) {
             startEditGroup(updated);
-            setHint('Permission group saved');
+            setHint('权限组已保存');
           }
         }
       } catch (saveError) {
-        setError(saveError?.message || 'Failed to save permission group');
+        setError(saveError?.message || '保存权限组失败');
       } finally {
         setSaving(false);
       }
@@ -242,7 +242,7 @@ export default function usePermissionGroupManagement() {
   const removeGroup = useCallback(
     async (group) => {
       if (!group?.group_id) return;
-      if (!window.confirm(`Delete permission group "${group.group_name}"?`)) return;
+      if (!window.confirm(`确认删除权限组“${group.group_name}”？`)) return;
       setError('');
       setHint('');
       try {
@@ -252,16 +252,16 @@ export default function usePermissionGroupManagement() {
           if (nextGroups.length) startEditGroup(nextGroups[0]);
           else startCreateGroup();
         }
-        setHint('Permission group deleted');
+        setHint('权限组已删除');
       } catch (removeError) {
-        setError(removeError?.message || 'Failed to delete permission group');
+        setError(removeError?.message || '删除权限组失败');
       }
     },
     [editingGroupId, fetchAll, startCreateGroup, startEditGroup]
   );
 
   const createFolder = useCallback(async () => {
-    const name = window.prompt('Enter folder name');
+    const name = window.prompt('请输入文件夹名称');
     if (!name || !name.trim()) return;
     setError('');
     setHint('');
@@ -276,9 +276,9 @@ export default function usePermissionGroupManagement() {
         openFolder(newId);
         setSelectedItem({ kind: 'folder', id: newId });
       }
-      setHint('Folder created');
+      setHint('文件夹已创建');
     } catch (createError) {
-      setError(createError?.message || 'Failed to create folder');
+      setError(createError?.message || '创建文件夹失败');
     }
   }, [currentFolderId, fetchAll, openFolder]);
 
@@ -286,7 +286,7 @@ export default function usePermissionGroupManagement() {
     const targetId = selectedFolderId || ROOT;
     if (!targetId || targetId === ROOT) return;
     const folder = folderIndexes.byId.get(targetId);
-    const next = window.prompt('Enter folder name', folder?.name || '');
+    const next = window.prompt('请输入文件夹名称', folder?.name || '');
     if (!next || !next.trim()) return;
     setError('');
     setHint('');
@@ -294,9 +294,9 @@ export default function usePermissionGroupManagement() {
       await permissionGroupsApi.updateFolder(targetId, { name: next.trim() });
       await fetchAll();
       ensureFolderExpanded(targetId);
-      setHint('Folder renamed');
+      setHint('文件夹已重命名');
     } catch (renameError) {
-      setError(renameError?.message || 'Failed to rename folder');
+      setError(renameError?.message || '重命名文件夹失败');
     }
   }, [ensureFolderExpanded, fetchAll, folderIndexes.byId, selectedFolderId]);
 
@@ -306,7 +306,7 @@ export default function usePermissionGroupManagement() {
     const folder = folderIndexes.byId.get(targetId);
     if (
       !window.confirm(
-        `Delete folder "${folder?.name || targetId}"?\nIt must be empty first.`
+        `确认删除文件夹“${folder?.name || targetId}”？\n请先确保该文件夹为空。`
       )
     ) {
       return;
@@ -319,9 +319,9 @@ export default function usePermissionGroupManagement() {
       openFolder(parent);
       setSelectedItem(null);
       await fetchAll();
-      setHint('Folder deleted');
+      setHint('文件夹已删除');
     } catch (deleteError) {
-      setError(deleteError?.message || 'Failed to delete folder');
+      setError(deleteError?.message || '删除文件夹失败');
     }
   }, [fetchAll, folderIndexes.byId, openFolder, selectedFolderId]);
 
@@ -358,9 +358,9 @@ export default function usePermissionGroupManagement() {
         if (editingGroupId === groupId && moved) {
           setFormData((previous) => ({ ...previous, folder_id: moved.folder_id || null }));
         }
-        setHint('Permission group moved');
+        setHint('权限组已移动');
       } catch (moveError) {
-        setError(moveError?.message || 'Failed to move permission group');
+        setError(moveError?.message || '移动权限组失败');
       }
     },
     [editingGroupId, fetchAll]

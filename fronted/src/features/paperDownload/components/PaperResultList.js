@@ -37,7 +37,7 @@ function renderPaperAnalysis(item) {
         padding: '8px',
       }}
     >
-      <strong>Analysis:</strong> {item.analysis_text}
+      <strong>解析结果:</strong> {item.analysis_text}
     </div>
   ) : null;
 }
@@ -55,7 +55,7 @@ export default function PaperResultList({
     <DownloadResultList
       items={items}
       sessionId={sessionId}
-      emptyText="No papers found"
+      emptyText="暂无论文结果"
       addingItemId={addingItemId}
       deletingItemId={deletingItemId}
       isAddDisabled={(item, { adding }) =>
@@ -64,7 +64,7 @@ export default function PaperResultList({
       onView={onView}
       onAdd={onAdd}
       onDelete={onDelete}
-      getTitle={(item) => item.title || item.filename || `paper_${item.item_id}`}
+      getTitle={(item) => item.title || item.filename || `论文_${item.item_id}`}
       renderMeta={renderPaperMeta}
       renderAnalysis={renderPaperAnalysis}
     />

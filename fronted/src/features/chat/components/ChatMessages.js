@@ -1,6 +1,8 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+
+const MOBILE_BREAKPOINT = 768;
 
 export default function ChatMessages({
   messagesEndRef,
@@ -18,20 +20,34 @@ export default function ChatMessages({
   canDownloadFiles,
   setError,
 }) {
+  const [isMobile, setIsMobile] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return window.innerWidth <= MOBILE_BREAKPOINT;
+  });
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+
+    const handleResize = () => setIsMobile(window.innerWidth <= MOBILE_BREAKPOINT);
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
   return (
-    <div data-testid="chat-messages" style={{ flex: 1, overflowY: 'auto', padding: '16px' }}>
+    <div data-testid="chat-messages" style={{ flex: 1, overflowY: 'auto', padding: isMobile ? '12px' : '16px' }}>
       {!selectedChatId ? (
         <div style={{ color: '#6b7280' }}>请先选择聊天助手</div>
       ) : !selectedSessionId ? (
         <div style={{ color: '#6b7280' }}>
-          当前没有会话页签，请先新建一个会话。
+          当前没有会话，请先新建一个会话。
           <div style={{ marginTop: '12px' }}>
             <button
               onClick={onCreateSession}
               data-testid="chat-create-session-empty"
               style={{
                 padding: '10px 14px',
-                borderRadius: '6px',
+                borderRadius: '8px',
                 border: 'none',
                 backgroundColor: '#3b82f6',
                 color: 'white',
@@ -51,20 +67,21 @@ export default function ChatMessages({
             key={idx}
             data-testid={`chat-message-${idx}-${m.role}`}
             style={{
-              marginBottom: '12px',
+              marginBottom: isMobile ? '10px' : '12px',
               display: 'flex',
               justifyContent: m.role === 'user' ? 'flex-end' : 'flex-start',
             }}
           >
             <div
               style={{
-                maxWidth: '75%',
-                padding: '10px 12px',
-                borderRadius: '10px',
+                maxWidth: isMobile ? (m.role === 'user' ? '88%' : '94%') : '75%',
+                padding: isMobile ? '9px 11px' : '10px 12px',
+                borderRadius: isMobile ? '12px' : '10px',
                 backgroundColor: m.role === 'user' ? '#3b82f6' : '#f3f4f6',
                 color: m.role === 'user' ? 'white' : '#111827',
-                lineHeight: 1.5,
+                lineHeight: 1.55,
                 overflowX: 'auto',
+                boxSizing: 'border-box',
               }}
             >
               {(() => {
@@ -107,11 +124,12 @@ export default function ChatMessages({
                     <pre
                       style={{
                         margin: '0 0 10px 0',
-                        padding: '10px 12px',
+                        padding: isMobile ? '8px 10px' : '10px 12px',
                         background: m.role === 'user' ? 'rgba(255,255,255,0.12)' : '#111827',
                         color: m.role === 'user' ? 'white' : '#f9fafb',
                         borderRadius: '8px',
                         overflowX: 'auto',
+                        fontSize: isMobile ? '0.85rem' : '0.92rem',
                       }}
                       {...props}
                     />
@@ -151,7 +169,7 @@ export default function ChatMessages({
                           style={{
                             display: 'inline-block',
                             padding: '0 6px',
-                            margin: '0 2px',
+                            margin: '0 2px 4px 0',
                             borderRadius: '999px',
                             background: '#e5e7eb',
                             color: '#111827',
@@ -160,7 +178,7 @@ export default function ChatMessages({
                             cursor: 'pointer',
                             userSelect: 'none',
                           }}
-                          title="点击查看chunk"
+                          title="点击查看引用片段"
                         >
                           {children}
                         </span>
@@ -192,7 +210,7 @@ export default function ChatMessages({
                                 key={`think-${segIdx}`}
                                 style={{
                                   color: '#6b7280',
-                                  fontSize: '0.9em',
+                                  fontSize: isMobile ? '0.82rem' : '0.9em',
                                   whiteSpace: 'pre-wrap',
                                   borderLeft: '3px solid #d1d5db',
                                   paddingLeft: '10px',
@@ -230,29 +248,30 @@ export default function ChatMessages({
                               key={id}
                               style={{
                                 display: 'flex',
-                                alignItems: 'center',
+                                flexDirection: isMobile ? 'column' : 'row',
+                                alignItems: isMobile ? 'stretch' : 'center',
                                 justifyContent: 'space-between',
                                 gap: '10px',
-                                padding: '6px 8px',
-                                borderRadius: '6px',
+                                padding: '8px',
+                                borderRadius: '8px',
                                 background: '#ffffff',
                                 border: '1px solid #e5e7eb',
                                 marginBottom: '6px',
                               }}
                             >
                               <div style={{ minWidth: 0, flex: 1 }}>
-                                <div style={{ fontSize: '0.9rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                <div style={{ fontSize: '0.9rem', whiteSpace: isMobile ? 'normal' : 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', wordBreak: 'break-word' }}>
                                   {src ? src.title : '未知文件'}
                                 </div>
                               </div>
-                              <div style={{ display: 'flex', gap: '8px' }}>
+                              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: isMobile ? 'flex-end' : 'flex-start' }}>
                                 <button
                                   disabled={!canOpen}
                                   onClick={() => openSourcePreview(item)}
                                   data-testid={`chat-source-view-${id}`}
                                   style={{
                                     padding: '6px 10px',
-                                    borderRadius: '6px',
+                                    borderRadius: '8px',
                                     border: '1px solid #d1d5db',
                                     background: canOpen ? '#ffffff' : '#f3f4f6',
                                     color: canOpen ? '#111827' : '#9ca3af',
@@ -269,7 +288,7 @@ export default function ChatMessages({
                                     }}
                                     style={{
                                       padding: '6px 10px',
-                                      borderRadius: '6px',
+                                      borderRadius: '8px',
                                       border: 'none',
                                       background: canOpen ? '#3b82f6' : '#9ca3af',
                                       color: 'white',

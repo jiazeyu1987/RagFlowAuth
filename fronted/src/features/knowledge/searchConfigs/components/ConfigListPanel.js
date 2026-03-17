@@ -1,7 +1,7 @@
 import React from 'react';
 
-const headerButtonStyle = {
-  flex: '1 1 120px',
+const headerButtonStyle = (isMobile) => ({
+  flex: isMobile ? '1 1 100%' : '1 1 120px',
   padding: '10px 12px',
   borderRadius: '10px',
   border: '1px solid #e5e7eb',
@@ -9,9 +9,10 @@ const headerButtonStyle = {
   color: '#111827',
   cursor: 'pointer',
   fontWeight: 800,
-};
+  width: isMobile ? '100%' : 'auto',
+});
 
-const listItemStyle = (active) => ({
+const listItemStyle = (active, isMobile) => ({
   padding: '12px 12px',
   borderRadius: '12px',
   border: `1px solid ${active ? '#2563eb' : '#e5e7eb'}`,
@@ -19,7 +20,7 @@ const listItemStyle = (active) => ({
   cursor: 'pointer',
   marginBottom: '10px',
   display: 'grid',
-  gridTemplateColumns: '1fr 56px',
+  gridTemplateColumns: isMobile ? '1fr' : '1fr 56px',
   gap: '10px',
   alignItems: 'center',
 });
@@ -33,6 +34,7 @@ export default function ConfigListPanel({
   error,
   busy,
   isAdmin,
+  isMobile,
   onChangeFilter,
   onOpenCreate,
   onRefresh,
@@ -40,34 +42,13 @@ export default function ConfigListPanel({
   onDelete,
 }) {
   return (
-    <div
-      style={{
-        background: '#ffffff',
-        border: '1px solid #e5e7eb',
-        borderRadius: '12px',
-        overflow: 'hidden',
-        boxShadow: '0 6px 18px rgba(15, 23, 42, 0.06)',
-      }}
-    >
+    <div style={{ background: '#ffffff', border: '1px solid #e5e7eb', borderRadius: '12px', overflow: 'hidden', boxShadow: '0 6px 18px rgba(15, 23, 42, 0.06)' }}>
       <div style={{ padding: '14px 14px 10px', borderBottom: '1px solid #e5e7eb' }}>
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: '10px',
-          }}
-        >
-          <div style={{ fontWeight: 900, fontSize: '15px', color: '#111827' }}>
-            Search Configs <span style={{ color: '#6b7280' }}>({list.length})</span>
-          </div>
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <button onClick={onOpenCreate} disabled={!isAdmin} style={headerButtonStyle}>
-              New
-            </button>
-            <button onClick={onRefresh} disabled={loading} style={headerButtonStyle}>
-              Refresh
-            </button>
+        <div style={{ display: 'flex', alignItems: isMobile ? 'stretch' : 'center', justifyContent: 'space-between', gap: '10px', flexDirection: isMobile ? 'column' : 'row' }}>
+          <div style={{ fontWeight: 900, fontSize: '15px', color: '#111827' }}>搜索配置 <span style={{ color: '#6b7280' }}>({list.length})</span></div>
+          <div style={{ display: 'flex', gap: '8px', width: isMobile ? '100%' : 'auto', flexDirection: isMobile ? 'column' : 'row' }}>
+            <button onClick={onOpenCreate} disabled={!isAdmin} style={headerButtonStyle(isMobile)}>新建</button>
+            <button onClick={onRefresh} disabled={loading} style={headerButtonStyle(isMobile)}>刷新</button>
           </div>
         </div>
 
@@ -75,45 +56,24 @@ export default function ConfigListPanel({
           <input
             value={filter}
             onChange={(event) => onChangeFilter(event.target.value)}
-            placeholder="Filter by name or id"
-            style={{
-              width: '100%',
-              padding: '10px 12px',
-              borderRadius: '12px',
-              border: '1px solid #e5e7eb',
-              outline: 'none',
-              fontWeight: 700,
-            }}
+            placeholder="按名称或 ID 筛选"
+            style={{ width: '100%', padding: '10px 12px', borderRadius: '12px', border: '1px solid #e5e7eb', outline: 'none', fontWeight: 700, boxSizing: 'border-box' }}
           />
         </div>
-        {error ? (
-          <div style={{ marginTop: '10px', color: '#b91c1c', fontWeight: 800 }}>{error}</div>
-        ) : null}
-        {loading ? <div style={{ marginTop: '10px', color: '#6b7280' }}>Loading...</div> : null}
+        {error ? <div style={{ marginTop: '10px', color: '#b91c1c', fontWeight: 800 }}>{error}</div> : null}
+        {loading ? <div style={{ marginTop: '10px', color: '#6b7280' }}>加载中...</div> : null}
       </div>
 
       <div style={{ padding: '14px', maxHeight: '72vh', overflow: 'auto' }}>
         {filteredList.map((item) => {
           const active = selectedId === item.id;
           return (
-            <div key={item.id} style={listItemStyle(active)} onClick={() => onSelect(item.id)}>
+            <div key={item.id} style={listItemStyle(active, isMobile)} onClick={() => onSelect(item.id)}>
               <div style={{ minWidth: 0 }}>
-                <div
-                  style={{
-                    fontWeight: 900,
-                    color: '#111827',
-                    whiteSpace: 'nowrap',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                  }}
-                >
-                  {item.name || '(Unnamed)'}
-                </div>
-                <div style={{ marginTop: '4px', color: '#6b7280', fontSize: '12px' }}>
-                  ID: {item.id}
-                </div>
+                <div style={{ fontWeight: 900, color: '#111827', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.name || '(未命名配置)'}</div>
+                <div style={{ marginTop: '4px', color: '#6b7280', fontSize: '12px' }}>ID: {item.id}</div>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <div style={{ display: 'flex', justifyContent: isMobile ? 'stretch' : 'flex-end' }}>
                 {isAdmin ? (
                   <button
                     onClick={(event) => {
@@ -122,26 +82,17 @@ export default function ConfigListPanel({
                       onDelete(item);
                     }}
                     disabled={busy}
-                    title="Delete"
-                    style={{
-                      width: '44px',
-                      height: '36px',
-                      borderRadius: '10px',
-                      border: '1px solid #fecaca',
-                      background: busy ? '#fee2e2' : '#ffffff',
-                      color: '#b91c1c',
-                      cursor: busy ? 'not-allowed' : 'pointer',
-                      fontWeight: 900,
-                    }}
+                    title="删除"
+                    style={{ width: isMobile ? '100%' : '44px', height: isMobile ? '40px' : '36px', borderRadius: '10px', border: '1px solid #fecaca', background: busy ? '#fee2e2' : '#ffffff', color: '#b91c1c', cursor: busy ? 'not-allowed' : 'pointer', fontWeight: 900 }}
                   >
-                    Del
+                    删
                   </button>
                 ) : null}
               </div>
             </div>
           );
         })}
-        {!filteredList.length ? <div style={{ color: '#6b7280' }}>No configs</div> : null}
+        {!filteredList.length ? <div style={{ color: '#6b7280' }}>暂无配置</div> : null}
       </div>
     </div>
   );

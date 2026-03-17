@@ -26,6 +26,8 @@ import {
 import { useChatSessions } from '../features/chat/hooks/useChatSessions';
 import { useChatStream } from '../features/chat/hooks/useChatStream';
 
+const MOBILE_BREAKPOINT = 768;
+
 const Chat = () => {
   const { canDownload } = useAuth();
   const canDownloadFiles = typeof canDownload === 'function' ? !!canDownload() : false;
@@ -34,8 +36,24 @@ const Chat = () => {
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewTarget, setPreviewTarget] = useState(null);
   const [citationHover, setCitationHover] = useState(null);
+  const [isMobile, setIsMobile] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return window.innerWidth <= MOBILE_BREAKPOINT;
+  });
 
   const messagesEndRef = useRef(null);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+
+    const handleResize = () => {
+      setIsMobile(window.innerWidth <= MOBILE_BREAKPOINT);
+    };
+
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   const closePreview = useCallback(() => {
     setPreviewOpen(false);
@@ -171,7 +189,16 @@ const Chat = () => {
   );
 
   return (
-    <div data-testid="chat-page" style={{ height: 'calc(100vh - 120px)', display: 'flex', gap: '16px' }}>
+    <div
+      data-testid="chat-page"
+      style={{
+        height: isMobile ? 'auto' : 'calc(100vh - 120px)',
+        minHeight: isMobile ? 'calc(100vh - 160px)' : undefined,
+        display: 'flex',
+        flexDirection: isMobile ? 'column' : 'row',
+        gap: isMobile ? '12px' : '16px',
+      }}
+    >
       <ChatSidebar
         loading={loading}
         chats={chats}
@@ -195,15 +222,25 @@ const Chat = () => {
         data-testid="chat-panel"
         style={{
           backgroundColor: 'white',
-          borderRadius: '8px',
+          borderRadius: isMobile ? '12px' : '8px',
           boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
           flex: 1,
+          minWidth: 0,
           display: 'flex',
           flexDirection: 'column',
           overflow: 'hidden',
+          minHeight: isMobile ? '58vh' : 0,
         }}
       >
-        <div data-testid="chat-header" style={{ padding: '14px 16px', borderBottom: '1px solid #e5e7eb', fontWeight: 600 }}>
+        <div
+          data-testid="chat-header"
+          style={{
+            padding: isMobile ? '12px 14px' : '14px 16px',
+            borderBottom: '1px solid #e5e7eb',
+            fontWeight: 600,
+            fontSize: isMobile ? '0.95rem' : '1rem',
+          }}
+        >
           {selectedChatId ? '对话' : '请选择聊天助手开始对话'}
         </div>
 

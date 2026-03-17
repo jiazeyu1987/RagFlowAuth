@@ -1,5 +1,7 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import ReactDiffViewer from 'react-diff-viewer-continued';
+
+const MOBILE_BREAKPOINT = 768;
 
 export function DocumentReviewDiffModal({
   diffLoading,
@@ -11,6 +13,19 @@ export function DocumentReviewDiffModal({
   onClose,
   onDiffOnlyChange,
 }) {
+  const [isMobile, setIsMobile] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return window.innerWidth <= MOBILE_BREAKPOINT;
+  });
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+    const handleResize = () => setIsMobile(window.innerWidth <= MOBILE_BREAKPOINT);
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
   if (!diffOpen) return null;
 
   return (
@@ -20,7 +35,7 @@ export function DocumentReviewDiffModal({
         inset: 0,
         background: 'rgba(0,0,0,0.35)',
         display: 'flex',
-        alignItems: 'center',
+        alignItems: isMobile ? 'stretch' : 'center',
         justifyContent: 'center',
         zIndex: 70,
         padding: '16px',
@@ -34,24 +49,50 @@ export function DocumentReviewDiffModal({
           borderRadius: '12px',
           border: '1px solid #e5e7eb',
           padding: '16px',
-          height: '82vh',
+          height: isMobile ? '100%' : '82vh',
           display: 'flex',
           flexDirection: 'column',
+          margin: isMobile ? 'auto 0' : 0,
         }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div style={{ display: 'flex', justifyContent: 'space-between', gap: '10px', alignItems: 'center' }}>
-          <div style={{ fontWeight: 700, fontSize: '1.05rem' }}>{diffTitle || '文档差异对比'}</div>
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            gap: '10px',
+            alignItems: isMobile ? 'stretch' : 'center',
+            flexDirection: isMobile ? 'column' : 'row',
+          }}
+        >
+          <div style={{ fontWeight: 700, fontSize: '1.05rem', wordBreak: 'break-word' }}>
+            {diffTitle || '文档差异对比'}
+          </div>
           <button
             type="button"
             onClick={onClose}
-            style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontSize: '1.2rem' }}
+            style={{
+              border: 'none',
+              background: 'transparent',
+              cursor: 'pointer',
+              fontSize: '1.2rem',
+              alignSelf: isMobile ? 'flex-end' : 'auto',
+            }}
           >
             ×
           </button>
         </div>
 
-        <div style={{ marginTop: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div
+          style={{
+            marginTop: '10px',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: isMobile ? 'stretch' : 'center',
+            flexDirection: isMobile ? 'column' : 'row',
+            gap: '10px',
+          }}
+        >
           <label style={{ display: 'flex', gap: '8px', alignItems: 'center', color: '#374151' }}>
             <input type="checkbox" checked={diffOnly} onChange={(e) => onDiffOnlyChange(e.target.checked)} />
             只看差异
@@ -63,11 +104,11 @@ export function DocumentReviewDiffModal({
           {diffLoading ? (
             <div style={{ padding: '24px', color: '#6b7280' }}>正在加载差异...</div>
           ) : (
-            <div style={{ padding: '12px' }}>
+            <div style={{ padding: '12px', minWidth: isMobile ? '720px' : 'auto' }}>
               <ReactDiffViewer
                 oldValue={diffOldText || ''}
                 newValue={diffNewText || ''}
-                splitView={true}
+                splitView
                 showDiffOnly={diffOnly}
                 disableWordDiff={false}
                 compareMethod="diffLines"
@@ -85,7 +126,10 @@ export function DocumentReviewDiffModal({
                     },
                   },
                   contentText: { fontSize: 12 },
-                  line: { fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace" },
+                  line: {
+                    fontFamily:
+                      "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace",
+                  },
                 }}
               />
             </div>

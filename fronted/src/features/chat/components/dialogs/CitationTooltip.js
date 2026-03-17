@@ -1,11 +1,35 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
 import rehypeSanitize from 'rehype-sanitize';
 
+const MOBILE_BREAKPOINT = 768;
+
 export default function CitationTooltip({ citationHover, onMouseLeave }) {
+  const [isMobile, setIsMobile] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return window.innerWidth <= MOBILE_BREAKPOINT;
+  });
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+
+    const handleResize = () => setIsMobile(window.innerWidth <= MOBILE_BREAKPOINT);
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
   if (!citationHover) return null;
+
+  const tooltipWidth = isMobile ? Math.min(window.innerWidth - 24, 360) : 440;
+  const left = isMobile
+    ? 12
+    : Math.min(Math.max(10, (citationHover.x || 0) - 220), window.innerWidth - tooltipWidth - 10);
+  const top = isMobile
+    ? Math.min(window.innerHeight - 220, Math.max(16, window.innerHeight * 0.18))
+    : Math.min(Math.max(10, (citationHover.y || 0) - 10), window.innerHeight - 300);
 
   return (
     <div
@@ -13,17 +37,17 @@ export default function CitationTooltip({ citationHover, onMouseLeave }) {
       onMouseLeave={onMouseLeave}
       style={{
         position: 'fixed',
-        left: Math.min(Math.max(10, (citationHover.x || 0) - 220), window.innerWidth - 450),
-        top: Math.min(Math.max(10, (citationHover.y || 0) - 10), window.innerHeight - 300),
-        width: '440px',
-        maxWidth: 'calc(100vw - 20px)',
-        maxHeight: '280px',
+        left,
+        top,
+        width: tooltipWidth,
+        maxWidth: 'calc(100vw - 24px)',
+        maxHeight: isMobile ? '50vh' : '280px',
         overflow: 'auto',
         background: '#111827',
         color: '#f9fafb',
         border: '1px solid rgba(255,255,255,0.12)',
-        borderRadius: '10px',
-        padding: '10px 12px',
+        borderRadius: isMobile ? '14px' : '10px',
+        padding: isMobile ? '12px' : '10px 12px',
         zIndex: 900,
         boxShadow: '0 10px 25px rgba(0,0,0,0.25)',
         whiteSpace: 'pre-wrap',

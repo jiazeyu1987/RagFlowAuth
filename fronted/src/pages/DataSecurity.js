@@ -3,6 +3,8 @@ import { useLocation } from 'react-router-dom';
 import { dataSecurityApi } from '../features/dataSecurity/api';
 import { cronToSchedule, formatSchedule } from '../features/dataSecurity/scheduleUtils';
 
+const MOBILE_BREAKPOINT = 768;
+
 const formatTime = (ms) => {
   if (!ms) return '';
   const d = new Date(ms);
@@ -34,6 +36,10 @@ const Card = ({ title, children }) => (
 
 const DataSecurity = () => {
   const location = useLocation();
+  const [isMobile, setIsMobile] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return window.innerWidth <= MOBILE_BREAKPOINT;
+  });
   const [loading, setLoading] = useState(true);
   const [running, setRunning] = useState(false);
   const [error, setError] = useState(null);
@@ -124,6 +130,15 @@ const DataSecurity = () => {
   };
 
   useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+
+    const handleResize = () => setIsMobile(window.innerWidth <= MOBILE_BREAKPOINT);
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  useEffect(() => {
     loadAll();
     return () => {
       if (pollTimer.current) clearInterval(pollTimer.current);
@@ -163,10 +178,18 @@ const DataSecurity = () => {
   if (loading) return <div style={{ padding: '12px' }}>加载中…</div>;
 
   return (
-    <div style={{ maxWidth: '980px' }} data-testid="data-security-page">
-      <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', alignItems: 'center' }}>
+    <div style={{ maxWidth: '980px', width: '100%' }} data-testid="data-security-page">
+      <div
+        style={{
+          display: 'flex',
+          flexDirection: isMobile ? 'column' : 'row',
+          justifyContent: 'space-between',
+          gap: '12px',
+          alignItems: isMobile ? 'stretch' : 'center',
+        }}
+      >
         <h2 style={{ margin: 0 }}>数据安全</h2>
-        <div style={{ display: 'flex', gap: '10px' }}>
+        <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: '10px', width: isMobile ? '100%' : 'auto' }}>
           <button
             onClick={runNow}
             disabled={running}
@@ -178,6 +201,7 @@ const DataSecurity = () => {
               cursor: running ? 'not-allowed' : 'pointer',
               background: running ? '#9ca3af' : '#3b82f6',
               color: 'white',
+              width: isMobile ? '100%' : 'auto',
             }}
           >
             {running ? '备份中…' : '立即备份'}
@@ -193,6 +217,7 @@ const DataSecurity = () => {
               cursor: running ? 'not-allowed' : 'pointer',
               background: running ? '#9ca3af' : '#8b5cf6',
               color: 'white',
+              width: isMobile ? '100%' : 'auto',
             }}
           >
             {running ? '备份中…' : '全量备份'}
@@ -208,7 +233,15 @@ const DataSecurity = () => {
 
       <Card title="备份保留策略">
         <div style={{ display: 'grid', gap: '12px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: isMobile ? 'column' : 'row',
+              justifyContent: 'space-between',
+              gap: '12px',
+              flexWrap: 'wrap',
+            }}
+          >
             <div style={{ color: '#6b7280' }}>
               备份路径： <span style={{ color: '#111827' }}>{settings?.backup_target_path || targetPreview || '-'}</span>
             </div>
@@ -217,8 +250,23 @@ const DataSecurity = () => {
             </div>
           </div>
 
-          <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
-            <label style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: isMobile ? 'column' : 'row',
+              gap: '10px',
+              alignItems: isMobile ? 'stretch' : 'center',
+              flexWrap: 'wrap',
+            }}
+          >
+            <label
+              style={{
+                display: 'flex',
+                flexDirection: isMobile ? 'column' : 'row',
+                gap: '10px',
+                alignItems: isMobile ? 'stretch' : 'center',
+              }}
+            >
               保留最多备份至
               <input
                 type="number"
@@ -231,7 +279,7 @@ const DataSecurity = () => {
                   const v = Math.max(1, Math.min(100, Number.isFinite(raw) ? raw : 30));
                   setSettings((p) => ({ ...(p || {}), backup_retention_max: v }));
                 }}
-                style={{ width: '90px', padding: '8px', border: '1px solid #d1d5db', borderRadius: '8px' }}
+                style={{ width: isMobile ? '100%' : '90px', padding: '8px', border: '1px solid #d1d5db', borderRadius: '8px', boxSizing: 'border-box' }}
               />
               个（1~100）
             </label>
@@ -247,6 +295,7 @@ const DataSecurity = () => {
                 cursor: savingRetention ? 'not-allowed' : 'pointer',
                 background: savingRetention ? '#9ca3af' : '#111827',
                 color: 'white',
+                width: isMobile ? '100%' : 'auto',
               }}
             >
               {savingRetention ? '保存中…' : '保存'}
@@ -262,7 +311,7 @@ const DataSecurity = () => {
       {showAdvanced && (
       <Card title="备份设置">
         <div style={{ display: 'grid', gap: '12px' }}>
-          <label style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+          <label style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
             <input
               type="checkbox"
               checked={!!settings?.enabled}
@@ -278,7 +327,7 @@ const DataSecurity = () => {
             {/* 增量备份时间 */}
             <label style={{ display: 'block', marginBottom: '16px' }}>
               <div style={{ fontWeight: 600, marginBottom: '8px' }}>增量备份时间</div>
-              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: '8px', alignItems: isMobile ? 'stretch' : 'center' }}>
                 <span>每天</span>
                 <input
                   type="time"
@@ -298,7 +347,7 @@ const DataSecurity = () => {
             {/* 全量备份时间 */}
             <label style={{ display: 'block', marginBottom: '12px' }}>
               <div style={{ fontWeight: 600, marginBottom: '8px' }}>全量备份时间</div>
-              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: '8px', alignItems: isMobile ? 'stretch' : 'center' }}>
                 <span>每周</span>
                 <select
                   value={fullBackupSchedule.weekday}
@@ -335,7 +384,7 @@ const DataSecurity = () => {
             </div>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '12px' }}>
             <label>
               目标类型
               <select
@@ -365,7 +414,7 @@ const DataSecurity = () => {
               />
             </label>
           ) : (
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr 1fr', gap: '12px' }}>
               <label>
                 目标电脑 IP
                 <input
@@ -396,7 +445,7 @@ const DataSecurity = () => {
                   style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '8px', marginTop: '6px' }}
                 />
               </label>
-              <div data-testid="ds-target-preview" style={{ gridColumn: '1 / -1', color: '#6b7280', fontSize: '0.9rem' }}>
+              <div data-testid="ds-target-preview" style={{ gridColumn: isMobile ? 'auto' : '1 / -1', color: '#6b7280', fontSize: '0.9rem' }}>
                 预览：{targetPreview || '（未完整填写）'}
               </div>
             </div>
@@ -424,7 +473,7 @@ const DataSecurity = () => {
             </div>
           </label>
 
-          <label style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+          <label style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
             <input
               type="checkbox"
               checked={!!settings?.ragflow_stop_services}
@@ -434,7 +483,7 @@ const DataSecurity = () => {
             备份前停止 RAGFlow 服务（更一致，但会短暂停机）
           </label>
 
-          <label style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+          <label style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
             <input
               type="checkbox"
               checked={!!settings?.full_backup_include_images}
@@ -465,7 +514,16 @@ const DataSecurity = () => {
       <Card title="备份进度">
         {activeJob ? (
           <>
-            <div data-testid="ds-active-job" style={{ display: 'flex', justifyContent: 'space-between', gap: '10px', alignItems: 'center' }}>
+            <div
+              data-testid="ds-active-job"
+              style={{
+                display: 'flex',
+                flexDirection: isMobile ? 'column' : 'row',
+                justifyContent: 'space-between',
+                gap: '10px',
+                alignItems: isMobile ? 'stretch' : 'center',
+              }}
+            >
               <div>
                 <div data-testid="ds-active-job-status" style={{ fontWeight: 600 }}>
                   #{activeJob.id} {activeJob.status}
@@ -474,7 +532,7 @@ const DataSecurity = () => {
                   {activeJob.message || ''} {activeJob.output_dir ? `（输出：${activeJob.output_dir}）` : ''}
                 </div>
               </div>
-              <div style={{ minWidth: '140px', textAlign: 'right', color: '#6b7280' }}>
+              <div style={{ minWidth: isMobile ? 'auto' : '140px', textAlign: isMobile ? 'left' : 'right', color: '#6b7280' }}>
                 {activeJob.started_at_ms ? formatTime(activeJob.started_at_ms) : ''}
               </div>
             </div>
@@ -504,8 +562,9 @@ const DataSecurity = () => {
                 data-testid={`ds-job-row-${j.id}`}
                 style={{
                   display: 'flex',
+                  flexDirection: isMobile ? 'column' : 'row',
                   justifyContent: 'space-between',
-                  alignItems: 'center',
+                  alignItems: isMobile ? 'stretch' : 'center',
                   padding: '10px 12px',
                   border: '1px solid #e5e7eb',
                   borderRadius: '10px',
@@ -520,14 +579,14 @@ const DataSecurity = () => {
                   }
                 }}
               >
-                <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: '10px', alignItems: isMobile ? 'flex-start' : 'center' }}>
                   <div style={{ fontWeight: 700 }}>#{j.id}</div>
                   <div style={{ color: j.status === 'success' ? '#059669' : j.status === 'failed' ? '#dc2626' : '#6b7280' }}>
                     {j.status}
                   </div>
                   <div style={{ color: '#6b7280' }}>{j.message || ''}</div>
                 </div>
-                <div style={{ color: '#6b7280', fontSize: '0.9rem' }}>{formatTime(j.created_at_ms)}</div>
+                <div style={{ color: '#6b7280', fontSize: '0.9rem', textAlign: isMobile ? 'left' : 'right' }}>{formatTime(j.created_at_ms)}</div>
               </div>
             ))}
           </div>

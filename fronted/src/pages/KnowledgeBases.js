@@ -19,10 +19,16 @@ import { useAuth } from '../hooks/useAuth';
 import { knowledgeApi } from '../features/knowledge/api';
 import { ChatConfigsPanel } from './ChatConfigsPanel';
 
+const MOBILE_BREAKPOINT = 768;
+
 export default function KnowledgeBases() {
   const { user } = useAuth();
   const isAdmin = (user?.role || '') === 'admin';
   const [subtab, setSubtab] = useState('kbs');
+  const [isMobile, setIsMobile] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return window.innerWidth <= MOBILE_BREAKPOINT;
+  });
 
   const [kbList, setKbList] = useState([]);
   const [directoryTree, setDirectoryTree] = useState({ nodes: [], datasets: [] });
@@ -50,6 +56,15 @@ export default function KnowledgeBases() {
   const [createDirId, setCreateDirId] = useState(ROOT);
   const [createError, setCreateError] = useState('');
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+
+    const handleResize = () => setIsMobile(window.innerWidth <= MOBILE_BREAKPOINT);
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
   const indexes = useMemo(() => buildIndexes(directoryTree), [directoryTree]);
   const datasetsByNode = useMemo(() => buildDatasetsByNode(directoryTree), [directoryTree]);
   const datasetNodeMap = useMemo(() => {
@@ -65,11 +80,11 @@ export default function KnowledgeBases() {
     return m;
   }, [kbList]);
   const breadcrumb = useMemo(
-    () => [{ id: ROOT, name: '根目录' }, ...pathNodes(currentDirId, indexes.byId).map((n) => ({ id: n.id, name: n.name || '(未命名目录)' }))],
+    () => [{ id: ROOT, name: '\u6839\u76ee\u5f55' }, ...pathNodes(currentDirId, indexes.byId).map((n) => ({ id: n.id, name: n.name || '(\u672a\u547d\u540d\u76ee\u5f55)' }))],
     [currentDirId, indexes.byId]
   );
   const dirOptions = useMemo(() => {
-    const opts = [{ id: ROOT, label: '(挂载到根目录)' }];
+    const opts = [{ id: ROOT, label: '(\u6302\u8f7d\u5230\u6839\u76ee\u5f55)' }];
     const nodes = [...(directoryTree?.nodes || [])].sort((a, b) => String(a.path || '').localeCompare(String(b.path || ''), 'zh-Hans-CN'));
     nodes.forEach((n) => opts.push({ id: n.id, label: n.path || n.name || n.id }));
     return opts;
@@ -77,8 +92,8 @@ export default function KnowledgeBases() {
 
   const rows = useMemo(() => {
     const out = [];
-    (indexes.childrenByParent.get(currentDirId) || []).forEach((n) => out.push({ kind: 'dir', id: n.id, name: n.name || '(未命名目录)', modified: fmtTime(n.updated_at_ms), type: '文件夹' }));
-    (datasetsByNode.get(currentDirId) || []).forEach((d) => out.push({ kind: 'dataset', id: d.id, name: d.name || '(未命名知识库)', modified: '-', type: '知识库' }));
+    (indexes.childrenByParent.get(currentDirId) || []).forEach((n) => out.push({ kind: 'dir', id: n.id, name: n.name || '(\u672a\u547d\u540d\u76ee\u5f55)', modified: fmtTime(n.updated_at_ms), type: '\u6587\u4ef6\u5939' }));
+    (datasetsByNode.get(currentDirId) || []).forEach((d) => out.push({ kind: 'dataset', id: d.id, name: d.name || '(\u672a\u547d\u540d\u77e5\u8bc6\u5e93)', modified: '-', type: '\u77e5\u8bc6\u5e93' }));
     return out;
   }, [currentDirId, indexes.childrenByParent, datasetsByNode]);
 
@@ -122,7 +137,7 @@ export default function KnowledgeBases() {
       if (selectedNodeId && selectedNodeId !== ROOT && !validIds.has(selectedNodeId)) setSelectedNodeId(ROOT);
       setExpanded((prev) => prev.filter((id) => validIds.has(id)));
     } catch (e) {
-      setTreeError(e?.message || '加载目录失败');
+      setTreeError(e?.message || '\u52a0\u8f7d\u76ee\u5f55\u6811\u5931\u8d25');
     }
   }
 
@@ -138,7 +153,7 @@ export default function KnowledgeBases() {
       setDatasetDirId(nodeId);
     } catch (e) {
       setKbSelected(null);
-      setKbError(e?.message || '加载知识库详情失败');
+      setKbError(e?.message || '\u52a0\u8f7d\u77e5\u8bc6\u5e93\u8be6\u60c5\u5931\u8d25');
     }
   }
 
@@ -146,7 +161,7 @@ export default function KnowledgeBases() {
     try {
       await Promise.all([fetchKbList(), fetchTree()]);
     } catch (e) {
-      setKbError(e?.message || '刷新失败');
+      setKbError(e?.message || '\u5237\u65b0\u5931\u8d25');
     }
   }
 
@@ -162,17 +177,17 @@ export default function KnowledgeBases() {
     setKbSaveStatus('');
     try {
       const name = String(kbNameText || '').trim();
-      if (!name) throw new Error('知识库名称不能为空');
+      if (!name) throw new Error('\u77e5\u8bc6\u5e93\u540d\u79f0\u4e0d\u80fd\u4e3a\u7a7a');
       const updates = { ...pickAllowed(kbSelected, DATASET_UPDATE_ALLOWED_KEYS), name };
       const updated = await knowledgeApi.updateRagflowDataset(kbSelected.id, updates);
-      if (!updated?.id) throw new Error('保存成功但未返回知识库信息');
+      if (!updated?.id) throw new Error('\u77e5\u8bc6\u5e93\u66f4\u65b0\u5931\u8d25');
       await knowledgeApi.assignDatasetDirectory(updated.id, datasetDirId || null);
       setKbSelected(updated);
       setKbNameText(String(updated.name || name));
-      setKbSaveStatus('已保存');
+      setKbSaveStatus('\u4fdd\u5b58\u6210\u529f');
       await refreshAll();
     } catch (e) {
-      setKbError(e?.message || '保存失败');
+      setKbError(e?.message || '\u4fdd\u5b58\u77e5\u8bc6\u5e93\u5931\u8d25');
     } finally {
       setKbBusy(false);
     }
@@ -181,10 +196,10 @@ export default function KnowledgeBases() {
   async function deleteKb(ds) {
     if (!isAdmin || !ds?.id) return;
     if (!datasetEmpty(ds)) {
-      setKbError('仅允许删除空知识库');
+      setKbError('\u77e5\u8bc6\u5e93\u975e\u7a7a\uff0c\u65e0\u6cd5\u5220\u9664');
       return;
     }
-    if (!window.confirm(`确认删除空知识库「${ds.name || ds.id}」吗？`)) return;
+    if (!window.confirm(`\u786e\u8ba4\u5220\u9664\u77e5\u8bc6\u5e93\u201c${ds.name || ds.id}\u201d\uff1f`)) return;
     setKbBusy(true);
     setKbError('');
     try {
@@ -193,7 +208,7 @@ export default function KnowledgeBases() {
       if (selectedItem?.kind === 'dataset' && selectedItem.id === ds.id) setSelectedItem(null);
       await refreshAll();
     } catch (e) {
-      setKbError(e?.message || '删除失败');
+      setKbError(e?.message || '\u5220\u9664\u77e5\u8bc6\u5e93\u5931\u8d25');
     } finally {
       setKbBusy(false);
     }
@@ -207,13 +222,13 @@ export default function KnowledgeBases() {
     setKbError('');
     try {
       await knowledgeApi.assignDatasetDirectory(datasetId, nextNodeId || null);
-      setKbSaveStatus(`已移动知识库 ${datasetId} 到 ${nextNodeId ? '目标目录' : '根目录'}`);
+      setKbSaveStatus(`\u5df2\u5c06\u77e5\u8bc6\u5e93 ${datasetId} \u79fb\u52a8\u5230${nextNodeId ? '\u76ee\u6807\u76ee\u5f55' : '\u6839\u76ee\u5f55'}`);
       await fetchTree();
       if (kbSelected?.id === datasetId) {
         setDatasetDirId(nextNodeId);
       }
     } catch (e) {
-      setKbError(e?.message || '拖拽移动失败');
+      setKbError(e?.message || '\u79fb\u52a8\u77e5\u8bc6\u5e93\u5931\u8d25');
     }
   }
 
@@ -242,7 +257,7 @@ export default function KnowledgeBases() {
 
   async function createDirectory() {
     if (!isAdmin) return;
-    const name = window.prompt('请输入新目录名称');
+    const name = window.prompt('\u8bf7\u8f93\u5165\u65b0\u76ee\u5f55\u540d\u79f0');
     if (!name || !name.trim()) return;
     try {
       const res = await knowledgeApi.createKnowledgeDirectory({ name: name.trim(), parent_id: currentDirId || null });
@@ -253,27 +268,27 @@ export default function KnowledgeBases() {
         setSelectedItem({ kind: 'dir', id: newId });
       }
     } catch (e) {
-      setTreeError(e?.message || '创建目录失败');
+      setTreeError(e?.message || '\u521b\u5efa\u76ee\u5f55\u5931\u8d25');
     }
   }
 
   async function renameDirectory() {
     if (!isAdmin || !selectedNodeId || selectedNodeId === ROOT) return;
     const node = indexes.byId.get(selectedNodeId);
-    const next = window.prompt('请输入新目录名称', node?.name || '');
+    const next = window.prompt('\u8bf7\u8f93\u5165\u65b0\u7684\u76ee\u5f55\u540d\u79f0', node?.name || '');
     if (!next || !next.trim()) return;
     try {
       await knowledgeApi.updateKnowledgeDirectory(selectedNodeId, { name: next.trim() });
       await fetchTree();
     } catch (e) {
-      setTreeError(e?.message || '重命名目录失败');
+      setTreeError(e?.message || '\u91cd\u547d\u540d\u76ee\u5f55\u5931\u8d25');
     }
   }
 
   async function deleteDirectory() {
     if (!isAdmin || !selectedNodeId || selectedNodeId === ROOT) return;
     const node = indexes.byId.get(selectedNodeId);
-    if (!window.confirm(`确认删除目录「${node?.name || selectedNodeId}」吗？\n目录下有子目录或知识库时会失败。`)) return;
+    if (!window.confirm(`\u786e\u8ba4\u5220\u9664\u76ee\u5f55\u201c${node?.name || selectedNodeId}\u201d\uff1f\u5220\u9664\u540e\u5b50\u76ee\u5f55\u4e5f\u4f1a\u4e00\u5e76\u79fb\u9664\u3002`)) return;
     try {
       const parent = node?.parent_id || ROOT;
       await knowledgeApi.deleteKnowledgeDirectory(selectedNodeId);
@@ -282,7 +297,7 @@ export default function KnowledgeBases() {
       setSelectedItem(null);
       await fetchTree();
     } catch (e) {
-      setTreeError(e?.message || '删除目录失败');
+      setTreeError(e?.message || '\u5220\u9664\u76ee\u5f55\u5931\u8d25');
     }
   }
 
@@ -300,12 +315,12 @@ export default function KnowledgeBases() {
     if (!sourceId) return;
     try {
       const src = await knowledgeApi.getRagflowDataset(sourceId);
-      if (!src?.id) throw new Error('未读取到源知识库配置');
+      if (!src?.id) throw new Error('\u8bf7\u9009\u62e9\u8981\u590d\u5236\u7684\u77e5\u8bc6\u5e93');
       setCreatePayload(pickAllowed(src, DATASET_CREATE_ALLOWED_KEYS));
       setCreateError('');
     } catch (e) {
       setCreatePayload({});
-      setCreateError(e?.message || '读取源配置失败');
+      setCreateError(e?.message || '\u521b\u5efa\u5931\u8d25');
     }
   }
 
@@ -314,16 +329,16 @@ export default function KnowledgeBases() {
     setKbBusy(true);
     try {
       const name = String(createName || '').trim();
-      if (!name) throw new Error('请输入知识库名称');
+      if (!name) throw new Error('\u8bf7\u8f93\u5165\u77e5\u8bc6\u5e93\u540d\u79f0');
       const created = await knowledgeApi.createRagflowDataset({ name, ...pickAllowed(createPayload, DATASET_CREATE_ALLOWED_KEYS) });
-      if (!created?.id) throw new Error('创建成功但未返回知识库信息');
+      if (!created?.id) throw new Error('\u77e5\u8bc6\u5e93\u521b\u5efa\u5931\u8d25');
       await knowledgeApi.assignDatasetDirectory(created.id, createDirId || null);
       setCreateOpen(false);
       await refreshAll();
       await loadKbDetail(created.id);
       setSelectedItem({ kind: 'dataset', id: created.id });
     } catch (e) {
-      setCreateError(e?.message || '创建失败');
+      setCreateError(e?.message || '\u521b\u5efa\u5931\u8d25');
     } finally {
       setKbBusy(false);
     }
@@ -340,17 +355,17 @@ export default function KnowledgeBases() {
   });
 
   return (
-    <div style={{ padding: 14 }}>
-      <div style={{ marginBottom: 10, display: 'flex', gap: 8 }}>
-        <button data-testid="kbs-subtab-kbs" onClick={() => setSubtab('kbs')} style={subtabBtn(subtab === 'kbs')}>知识配置</button>
-        <button data-testid="kbs-subtab-chats" onClick={() => setSubtab('chats')} style={subtabBtn(subtab === 'chats')}>对话配置</button>
+    <div style={{ padding: isMobile ? 10 : 14 }}>
+      <div style={{ marginBottom: 10, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        <button data-testid="kbs-subtab-kbs" onClick={() => setSubtab('kbs')} style={subtabBtn(subtab === 'kbs')}>{'\u77e5\u8bc6\u914d\u7f6e'}</button>
+        <button data-testid="kbs-subtab-chats" onClick={() => setSubtab('chats')} style={subtabBtn(subtab === 'chats')}>{'\u5bf9\u8bdd\u914d\u7f6e'}</button>
       </div>
 
       {subtab === 'kbs' ? (
-        <div style={{ display: 'grid', gridTemplateColumns: '320px 1fr', gap: 14 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '320px 1fr', gap: 14 }}>
           <section style={{ border: '1px solid #e5e7eb', borderRadius: 12, background: '#fff' }}>
-            <div style={{ padding: '10px 12px', borderBottom: '1px solid #e5e7eb', fontWeight: 800 }}>目录树</div>
-            <div style={{ padding: 12, maxHeight: 720, overflowY: 'auto' }}>
+            <div style={{ padding: '10px 12px', borderBottom: '1px solid #e5e7eb', fontWeight: 800 }}>{'\u76ee\u5f55\u6811'}</div>
+            <div style={{ padding: 12, maxHeight: isMobile ? 280 : 720, overflowY: 'auto' }}>
               {treeError && <div style={{ color: '#b91c1c', marginBottom: 8 }}>{treeError}</div>}
               <DirectoryTreeView
                 indexes={indexes}
@@ -373,20 +388,20 @@ export default function KnowledgeBases() {
           <section style={{ border: '1px solid #e5e7eb', borderRadius: 12, background: '#fff' }}>
             <div style={{ padding: '10px 12px', borderBottom: '1px solid #e5e7eb' }}>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
-                <button data-testid="kbs-refresh-all" onClick={refreshAll} style={{ border: '1px solid #d1d5db', borderRadius: 8, background: '#fff', cursor: 'pointer', padding: '6px 9px' }}>刷新</button>
-                <button data-testid="kbs-go-parent" onClick={() => openDir(indexes.byId.get(currentDirId)?.parent_id || ROOT)} disabled={currentDirId === ROOT} style={{ border: '1px solid #d1d5db', borderRadius: 8, background: currentDirId === ROOT ? '#f3f4f6' : '#fff', cursor: currentDirId === ROOT ? 'not-allowed' : 'pointer', padding: '6px 9px' }}>返回上级</button>
+                <button data-testid="kbs-refresh-all" onClick={refreshAll} style={{ border: '1px solid #d1d5db', borderRadius: 8, background: '#fff', cursor: 'pointer', padding: '6px 9px' }}>{'\u5237\u65b0'}</button>
+                <button data-testid="kbs-go-parent" onClick={() => openDir(indexes.byId.get(currentDirId)?.parent_id || ROOT)} disabled={currentDirId === ROOT} style={{ border: '1px solid #d1d5db', borderRadius: 8, background: currentDirId === ROOT ? '#f3f4f6' : '#fff', cursor: currentDirId === ROOT ? 'not-allowed' : 'pointer', padding: '6px 9px' }}>{'\u8fd4\u56de\u4e0a\u7ea7'}</button>
                 {isAdmin && (
                   <>
-                    <button data-testid="kbs-create-dir" onClick={createDirectory} style={{ border: '1px solid #2563eb', borderRadius: 8, background: '#2563eb', color: '#fff', cursor: 'pointer', padding: '6px 9px' }}>新建目录</button>
-                    <button data-testid="kbs-rename-dir" onClick={renameDirectory} disabled={!selectedNodeId || selectedNodeId === ROOT} style={{ border: '1px solid #f59e0b', borderRadius: 8, background: !selectedNodeId || selectedNodeId === ROOT ? '#fde68a' : '#f59e0b', color: '#fff', cursor: !selectedNodeId || selectedNodeId === ROOT ? 'not-allowed' : 'pointer', padding: '6px 9px' }}>重命名目录</button>
-                    <button data-testid="kbs-delete-dir" onClick={deleteDirectory} disabled={!selectedNodeId || selectedNodeId === ROOT} style={{ border: '1px solid #ef4444', borderRadius: 8, background: !selectedNodeId || selectedNodeId === ROOT ? '#fecaca' : '#ef4444', color: '#fff', cursor: !selectedNodeId || selectedNodeId === ROOT ? 'not-allowed' : 'pointer', padding: '6px 9px' }}>删除目录</button>
-                    <button data-testid="kbs-create-kb" onClick={openCreateKb} style={{ border: '1px solid #059669', borderRadius: 8, background: '#10b981', color: '#fff', cursor: 'pointer', padding: '6px 9px' }}>新建知识库</button>
+                    <button data-testid="kbs-create-dir" onClick={createDirectory} style={{ border: '1px solid #2563eb', borderRadius: 8, background: '#2563eb', color: '#fff', cursor: 'pointer', padding: '6px 9px' }}>{'\u65b0\u5efa\u76ee\u5f55'}</button>
+                    <button data-testid="kbs-rename-dir" onClick={renameDirectory} disabled={!selectedNodeId || selectedNodeId === ROOT} style={{ border: '1px solid #f59e0b', borderRadius: 8, background: !selectedNodeId || selectedNodeId === ROOT ? '#fde68a' : '#f59e0b', color: '#fff', cursor: !selectedNodeId || selectedNodeId === ROOT ? 'not-allowed' : 'pointer', padding: '6px 9px' }}>{'\u91cd\u547d\u540d\u76ee\u5f55'}</button>
+                    <button data-testid="kbs-delete-dir" onClick={deleteDirectory} disabled={!selectedNodeId || selectedNodeId === ROOT} style={{ border: '1px solid #ef4444', borderRadius: 8, background: !selectedNodeId || selectedNodeId === ROOT ? '#fecaca' : '#ef4444', color: '#fff', cursor: !selectedNodeId || selectedNodeId === ROOT ? 'not-allowed' : 'pointer', padding: '6px 9px' }}>{'\u5220\u9664\u76ee\u5f55'}</button>
+                    <button data-testid="kbs-create-kb" onClick={openCreateKb} style={{ border: '1px solid #059669', borderRadius: 8, background: '#10b981', color: '#fff', cursor: 'pointer', padding: '6px 9px' }}>{'\u65b0\u5efa\u77e5\u8bc6\u5e93'}</button>
                   </>
                 )}
               </div>
 
               <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
-                <span style={{ color: '#6b7280', fontSize: 13 }}>路径:</span>
+                <span style={{ color: '#6b7280', fontSize: 13 }}>{'\u8def\u5f84:'}</span>
                 {breadcrumb.map((b, i) => (
                   <React.Fragment key={b.id || '__root__'}>
                     <button type="button" onClick={() => openDir(b.id)} style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: currentDirId === b.id ? '#1d4ed8' : '#374151', fontWeight: currentDirId === b.id ? 700 : 500, padding: 0 }}>{b.name}</button>
@@ -395,21 +410,21 @@ export default function KnowledgeBases() {
                 ))}
               </div>
 
-              <input value={keyword} onChange={(e) => setKeyword(e.target.value)} placeholder="筛选当前目录内容" style={{ width: 320, maxWidth: '100%', border: '1px solid #d1d5db', borderRadius: 8, padding: '8px 10px' }} />
+              <input value={keyword} onChange={(e) => setKeyword(e.target.value)} placeholder="\u7b5b\u9009\u5f53\u524d\u76ee\u5f55\u5185\u5bb9" style={{ width: isMobile ? '100%' : 320, maxWidth: '100%', border: '1px solid #d1d5db', borderRadius: 8, padding: '8px 10px', boxSizing: 'border-box' }} />
               <div style={{ marginTop: 6, color: '#6b7280', fontSize: 12 }}>
-                支持拖拽：将右侧“知识库”行拖到左侧任意目录，可快速移动挂载位置。
+                {'\u652f\u6301\u62d6\u62fd\uff1a\u5c06\u53f3\u4fa7\u201c\u77e5\u8bc6\u5e93\u201d\u884c\u62d6\u5230\u5de6\u4fa7\u4efb\u610f\u76ee\u5f55\uff0c\u53ef\u5feb\u901f\u79fb\u52a8\u6302\u8f7d\u4f4d\u7f6e\u3002'}
               </div>
               {kbError && <div style={{ color: '#b91c1c', marginTop: 8 }}>{kbError}</div>}
               {kbSaveStatus && <div style={{ color: '#047857', marginTop: 8 }}>{kbSaveStatus}</div>}
             </div>
 
-            <div style={{ maxHeight: 420, overflowY: 'auto' }}>
+            <div style={{ maxHeight: 420, overflowY: 'auto', overflowX: 'auto' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead>
                   <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e5e7eb' }}>
-                    <th style={{ textAlign: 'left', padding: '8px 10px' }}>名称</th>
-                    <th style={{ textAlign: 'left', padding: '8px 10px' }}>修改日期</th>
-                    <th style={{ textAlign: 'left', padding: '8px 10px' }}>类型</th>
+                    <th style={{ textAlign: 'left', padding: '8px 10px' }}>{'\u540d\u79f0'}</th>
+                    <th style={{ textAlign: 'left', padding: '8px 10px' }}>{'\u4fee\u6539\u65e5\u671f'}</th>
+                    <th style={{ textAlign: 'left', padding: '8px 10px' }}>{'\u7c7b\u578b'}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -455,21 +470,21 @@ export default function KnowledgeBases() {
                       </tr>
                     );
                   })}
-                  {!filteredRows.length && <tr><td colSpan={3} style={{ padding: 18, color: '#6b7280', textAlign: 'center' }}>当前目录为空</td></tr>}
+                  {!filteredRows.length && <tr><td colSpan={3} style={{ padding: 18, color: '#6b7280', textAlign: 'center' }}>{'\u5f53\u524d\u76ee\u5f55\u4e3a\u7a7a'}</td></tr>}
                 </tbody>
               </table>
             </div>
 
             {selectedItem?.kind === 'dataset' && kbSelected?.id === selectedItem.id && (
               <div style={{ borderTop: '1px solid #e5e7eb', padding: 12 }}>
-                <div style={{ fontWeight: 700, marginBottom: 8 }}>知识库属性</div>
-                <div style={{ display: 'grid', gridTemplateColumns: '100px 1fr 130px', gap: 8, alignItems: 'center', marginBottom: 8 }}>
-                  <label>名称</label>
+                <div style={{ fontWeight: 700, marginBottom: 8 }}>{'\u77e5\u8bc6\u5e93\u5c5e\u6027'}</div>
+                <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '100px 1fr 130px', gap: 8, alignItems: 'center', marginBottom: 8 }}>
+                  <label>{'\u540d\u79f0'}</label>
                   <input value={kbNameText} onChange={(e) => setKbNameText(e.target.value)} disabled={!isAdmin} style={{ border: '1px solid #d1d5db', borderRadius: 8, padding: '8px 10px', background: isAdmin ? '#fff' : '#f9fafb' }} />
-                  {isAdmin && <button onClick={saveKb} disabled={kbBusy} style={{ border: '1px solid #059669', borderRadius: 8, background: kbBusy ? '#6ee7b7' : '#10b981', color: '#fff', cursor: kbBusy ? 'not-allowed' : 'pointer', padding: '8px 10px' }}>保存</button>}
+                  {isAdmin && <button onClick={saveKb} disabled={kbBusy} style={{ border: '1px solid #059669', borderRadius: 8, background: kbBusy ? '#6ee7b7' : '#10b981', color: '#fff', cursor: kbBusy ? 'not-allowed' : 'pointer', padding: '8px 10px', width: isMobile ? '100%' : 'auto' }}>{'\u4fdd\u5b58'}</button>}
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '100px 1fr 130px', gap: 8, alignItems: 'center' }}>
-                  <label>挂载目录</label>
+                <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '100px 1fr 130px', gap: 8, alignItems: 'center' }}>
+                  <label>{'\u6302\u8f7d\u76ee\u5f55'}</label>
                   <select value={datasetDirId} onChange={(e) => setDatasetDirId(e.target.value)} disabled={!isAdmin} style={{ border: '1px solid #d1d5db', borderRadius: 8, padding: '8px 10px', background: isAdmin ? '#fff' : '#f9fafb' }}>
                     {dirOptions.map((o) => <option key={o.id || '__root__'} value={o.id}>{o.label}</option>)}
                   </select>
@@ -477,9 +492,9 @@ export default function KnowledgeBases() {
                     <button
                       onClick={() => deleteKb(kbById.get(kbSelected.id))}
                       disabled={kbBusy || !datasetEmpty(kbById.get(kbSelected.id))}
-                      style={{ border: '1px solid #ef4444', borderRadius: 8, background: kbBusy || !datasetEmpty(kbById.get(kbSelected.id)) ? '#fecaca' : '#ef4444', color: '#fff', cursor: kbBusy || !datasetEmpty(kbById.get(kbSelected.id)) ? 'not-allowed' : 'pointer', padding: '8px 10px' }}
+                      style={{ border: '1px solid #ef4444', borderRadius: 8, background: kbBusy || !datasetEmpty(kbById.get(kbSelected.id)) ? '#fecaca' : '#ef4444', color: '#fff', cursor: kbBusy || !datasetEmpty(kbById.get(kbSelected.id)) ? 'not-allowed' : 'pointer', padding: '8px 10px', width: isMobile ? '100%' : 'auto' }}
                     >
-                      删除知识库
+                      {'\u5220\u9664\u77e5\u8bc6\u5e93'}
                     </button>
                   )}
                 </div>
