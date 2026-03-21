@@ -31,18 +31,18 @@ export const authApiMethods = {
       skipRefresh: true,
       body: JSON.stringify({ username, password }),
     });
-  
+
     const user = await httpClient.requestJson(authBackendUrl('/api/auth/me'), {
-      headers: { 'Authorization': `Bearer ${data.access_token}` },
+      headers: { Authorization: `Bearer ${data.access_token}` },
       skipRefresh: true,
     });
-  
-    // 瀛樺偍涓ょ浠ょ墝
+
+    // 存储两种令牌
     this.setAuth(data.access_token, data.refresh_token, user);
-  
+
     return {
       ...data,
-      user  // 涓轰簡鍏煎鏃т唬鐮?
+      user, // 为了兼容旧代码
     };
   },
 
@@ -63,23 +63,20 @@ export const authApiMethods = {
     const response = await this.fetchWithAuth(authBackendUrl('/api/auth/me'), {
       method: 'GET',
     });
-  
+
     if (!response.ok) {
       throw new Error('Failed to get current user');
     }
-  
+
     return response.json();
   },
 
   async changePassword(oldPassword, newPassword) {
-    const response = await this.fetchWithAuth(
-      authBackendUrl('/api/auth/password'),
-      {
-        method: 'PUT',
-        body: JSON.stringify({ old_password: oldPassword, new_password: newPassword }),
-      }
-    );
-  
+    const response = await this.fetchWithAuth(authBackendUrl('/api/auth/password'), {
+      method: 'PUT',
+      body: JSON.stringify({ old_password: oldPassword, new_password: newPassword }),
+    });
+
     if (!response.ok) {
       let errorMessage = 'Failed to change password';
       try {
@@ -90,7 +87,7 @@ export const authApiMethods = {
       }
       throw new Error(errorMessage);
     }
-  
+
     return response.json();
   },
 };

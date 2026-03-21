@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { permissionGroupsApi } from '../api';
 import { HIDDEN_CHAT_NAMES, emptyForm, ROOT } from './constants';
 import { buildFolderIndexes, normalizeGroups, pathFolders, toggleInArray } from './utils';
@@ -16,7 +16,22 @@ function fillFormFromGroup(group) {
     can_review: !!group?.can_review,
     can_download: group?.can_download !== false,
     can_delete: !!group?.can_delete,
+    can_manage_kb_directory: !!group?.can_manage_kb_directory,
+    can_view_kb_config: group?.can_view_kb_config !== false,
+    can_view_tools: group?.can_view_tools !== false,
   };
+}
+
+function normalizeKnowledgeTreeResponse(knowledgeRes, knowledgeBasesRes) {
+  if (knowledgeRes?.data && Array.isArray(knowledgeRes.data.datasets)) {
+    return knowledgeRes.data;
+  }
+  const datasets = (knowledgeBasesRes?.data || []).map((item) => ({
+    id: item.id,
+    name: item.name,
+    node_path: '/',
+  }));
+  return { nodes: [], datasets };
 }
 
 export default function usePermissionGroupManagement() {
@@ -41,6 +56,7 @@ export default function usePermissionGroupManagement() {
   const [mode, setMode] = useState('');
   const [editingGroupId, setEditingGroupId] = useState(null);
   const [formData, setFormData] = useState({ ...emptyForm });
+  const modeRef = useRef(mode);
 
   const folderIndexes = useMemo(() => buildFolderIndexes(groupFolders), [groupFolders]);
 
@@ -66,15 +82,15 @@ export default function usePermissionGroupManagement() {
       rows.push({
         kind: 'folder',
         id: folder.id,
-          name: folder.name || '（未命名文件夹）',
-          type: '文件夹',
+        name: folder.name || '(未命名文件夹)',
+        type: '文件夹',
       });
     });
     groupsInCurrentFolder.forEach((group) => {
       rows.push({
         kind: 'group',
         id: group.group_id,
-        name: group.group_name || '（未命名权限组）',
+        name: group.group_name || '(未命名权限组)',
         type: '权限组',
       });
     });
@@ -100,7 +116,7 @@ export default function usePermissionGroupManagement() {
     () =>
       (knowledgeTree?.nodes || []).map((node) => ({
         id: node.id,
-        name: `${node.name || '（未命名文件夹）'} (${node.path || '/'})`,
+        name: `${node.name || '(未命名文件夹)'} (${node.path || '/'})`,
       })),
     [knowledgeTree?.nodes]
   );
@@ -109,7 +125,7 @@ export default function usePermissionGroupManagement() {
     () =>
       (knowledgeTree?.datasets || []).map((dataset) => ({
         id: dataset.id,
-          name: `${dataset.name || '（未命名知识库）'}${
+        name: `${dataset.name || '(未命名知识库)'}${
           dataset.node_path && dataset.node_path !== '/' ? ` (${dataset.node_path})` : ''
         }`,
       })),
@@ -152,37 +168,42 @@ export default function usePermissionGroupManagement() {
     setFormData(fillFormFromGroup(group));
   }, []);
 
+  useEffect(() => {
+    modeRef.current = mode;
+  }, [mode]);
+
   const fetchAll = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
-      const [groupsRes, folderRes, knowledgeRes, chatsRes] = await Promise.all([
-        permissionGroupsApi.list(),
-        permissionGroupsApi.listGroupFolders(),
-        permissionGroupsApi.listKnowledgeTree(),
-        permissionGroupsApi.listChats(),
+      const groupsRes = await permissionGroupsApi.list();
+      const [folderRes, knowledgeTreeRes, knowledgeBasesRes, chatsRes] = await Promise.all([
+        permissionGroupsApi.listGroupFolders().catch(() => null),
+        permissionGroupsApi.listKnowledgeTree().catch(() => null),
+        permissionGroupsApi.listKnowledgeBases().catch(() => null),
+        permissionGroupsApi.listChats().catch(() => ({ ok: true, data: [] })),
       ]);
+
       const folderData = folderRes?.data || {
         folders: [],
         group_bindings: {},
         root_group_count: 0,
       };
-      const normalizedGroups = normalizeGroups(
-        groupsRes?.data || [],
-        folderData.group_bindings || {}
-      );
+      const normalizedGroups = normalizeGroups(groupsRes?.data || [], folderData.group_bindings || {});
       const visibleChats = (chatsRes?.data || []).filter((chat) => {
         const rawName = String(chat?.name || '').trim();
         const normalized = rawName.replace(/^\[|\]$/g, '').trim();
         return !HIDDEN_CHAT_NAMES.has(rawName) && !HIDDEN_CHAT_NAMES.has(normalized);
       });
+      const nextKnowledgeTree = normalizeKnowledgeTreeResponse(knowledgeTreeRes, knowledgeBasesRes);
+
       setGroups(normalizedGroups);
       setGroupFolders(folderData.folders || []);
-      setKnowledgeTree(knowledgeRes?.data || { nodes: [], datasets: [] });
+      setKnowledgeTree(nextKnowledgeTree);
       setChatAgents(visibleChats);
       return normalizedGroups;
     } catch (requestError) {
-        setError(requestError?.message || '加载权限组失败');
+      setError(requestError?.message || '加载权限组失败');
       return [];
     } finally {
       setLoading(false);
@@ -190,10 +211,16 @@ export default function usePermissionGroupManagement() {
   }, []);
 
   useEffect(() => {
+    let active = true;
     fetchAll().then((list) => {
+      if (!active) return;
+      if (modeRef.current === 'create' || modeRef.current === 'edit') return;
       if (list.length) startEditGroup(list[0]);
       else startCreateGroup();
     });
+    return () => {
+      active = false;
+    };
   }, [fetchAll, startCreateGroup, startEditGroup]);
 
   const saveForm = useCallback(
@@ -215,8 +242,7 @@ export default function usePermissionGroupManagement() {
         } else if (mode === 'edit' && editingGroupId != null) {
           await permissionGroupsApi.update(editingGroupId, formData);
           const nextGroups = await fetchAll();
-          const updated =
-            nextGroups.find((group) => group.group_id === editingGroupId) || null;
+          const updated = nextGroups.find((group) => group.group_id === editingGroupId) || null;
           if (updated) {
             startEditGroup(updated);
             setHint('权限组已保存');
@@ -240,9 +266,13 @@ export default function usePermissionGroupManagement() {
   }, [editingGroup, mode, startCreateGroup]);
 
   const removeGroup = useCallback(
-    async (group) => {
+    async (group, options = {}) => {
       if (!group?.group_id) return;
-      if (!window.confirm(`确认删除权限组“${group.group_name}”？`)) return;
+      const skipConfirm = options?.skipConfirm === true;
+      if (!skipConfirm) {
+        const ok = window.confirm(`确认删除权限组“${group.group_name || group.group_id}”？`);
+        if (!ok) return;
+      }
       setError('');
       setHint('');
       try {
@@ -304,13 +334,10 @@ export default function usePermissionGroupManagement() {
     const targetId = selectedFolderId || ROOT;
     if (!targetId || targetId === ROOT) return;
     const folder = folderIndexes.byId.get(targetId);
-    if (
-      !window.confirm(
-        `确认删除文件夹“${folder?.name || targetId}”？\n请先确保该文件夹为空。`
-      )
-    ) {
-      return;
-    }
+    const ok = window.confirm(
+      `确认删除文件夹“${folder?.name || targetId}”？\n请先确保该文件夹为空。`
+    );
+    if (!ok) return;
     setError('');
     setHint('');
     try {

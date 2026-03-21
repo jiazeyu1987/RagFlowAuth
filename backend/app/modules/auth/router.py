@@ -67,6 +67,9 @@ async def change_password(
     deps = ctx.deps
     user = ctx.user
 
+    if not bool(getattr(user, "can_change_password", True)):
+        raise HTTPException(status_code=403, detail="password_change_disabled")
+
     # Verify old password
     if hash_password(request_data.old_password) != user.password_hash:
         raise HTTPException(status_code=400, detail="旧密码错误")

@@ -28,7 +28,7 @@ class KbStore:
         file_size: int,
         mime_type: str,
         uploaded_by: str,
-        kb_id: str = "灞曞巺",
+        kb_id: str = "展厅",
         kb_dataset_id: Optional[str] = None,
         kb_name: Optional[str] = None,
         status: str = "pending",
@@ -109,10 +109,10 @@ class KbStore:
     def get_document_by_ragflow_id(
         self,
         ragflow_doc_id: str,
-        kb_id: str = "灞曞巺",
+        kb_id: str = "展厅",
         kb_refs: Optional[List[str]] = None,
     ) -> Optional[KbDocument]:
-        """閫氳繃RAGFlow鐨刣oc_id鏌ユ壘鏈湴鏂囨。璁板綍"""
+        """通过 RAGFlow 的 doc_id 查找本地文档记录"""
         refs = kb_refs or ([kb_id] if kb_id else [])
         conn = self._get_connection()
         cursor = conn.cursor()

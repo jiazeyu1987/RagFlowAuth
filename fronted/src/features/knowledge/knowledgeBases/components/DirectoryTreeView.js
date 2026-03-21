@@ -12,6 +12,7 @@ export default function DirectoryTreeView({
   onDragOverNode,
   onDropNode,
   onDragLeaveNode,
+  allowDatasetDrop = true,
 }) {
   const renderNode = (node, depth) => {
     const id = String(node?.id || '');
@@ -27,15 +28,21 @@ export default function DirectoryTreeView({
             marginLeft: depth * 16,
             borderRadius: 6,
             background:
-              dropTargetNodeId === id ? '#dcfce7' : currentDirId === id ? '#dbeafe' : selectedNodeId === id ? '#eff6ff' : 'transparent',
+              allowDatasetDrop && dropTargetNodeId === id
+                ? '#dcfce7'
+                : currentDirId === id
+                  ? '#dbeafe'
+                  : selectedNodeId === id
+                    ? '#eff6ff'
+                    : 'transparent',
             display: 'flex',
             alignItems: 'center',
             gap: 6,
             padding: '3px 6px',
           }}
-          onDragOver={(event) => onDragOverNode(event, id)}
-          onDrop={(event) => onDropNode(event, id)}
-          onDragLeave={(event) => onDragLeaveNode(event, id)}
+          onDragOver={allowDatasetDrop ? (event) => onDragOverNode(event, id) : undefined}
+          onDrop={allowDatasetDrop ? (event) => onDropNode(event, id) : undefined}
+          onDragLeave={allowDatasetDrop ? (event) => onDragLeaveNode(event, id) : undefined}
         >
           <button
             type="button"
@@ -75,13 +82,18 @@ export default function DirectoryTreeView({
       <div
         style={{
           borderRadius: 6,
-          background: dropTargetNodeId === ROOT ? '#dcfce7' : currentDirId === ROOT ? '#dbeafe' : 'transparent',
+          background:
+            allowDatasetDrop && dropTargetNodeId === ROOT
+              ? '#dcfce7'
+              : currentDirId === ROOT
+                ? '#dbeafe'
+                : 'transparent',
           padding: '3px 6px',
           marginBottom: 6,
         }}
-        onDragOver={(event) => onDragOverNode(event, ROOT)}
-        onDrop={(event) => onDropNode(event, ROOT)}
-        onDragLeave={(event) => onDragLeaveNode(event, ROOT)}
+        onDragOver={allowDatasetDrop ? (event) => onDragOverNode(event, ROOT) : undefined}
+        onDrop={allowDatasetDrop ? (event) => onDropNode(event, ROOT) : undefined}
+        onDragLeave={allowDatasetDrop ? (event) => onDragLeaveNode(event, ROOT) : undefined}
       >
         <button
           type="button"

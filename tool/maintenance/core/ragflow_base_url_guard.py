@@ -20,6 +20,7 @@ from tool.maintenance.core.ssh_executor import SSHExecutor
 REPO_ROOT = TOOL_DIR.parents[1]
 LOCAL_RAGFLOW_CONFIG_PATH = REPO_ROOT / "ragflow_config.json"
 DEFAULT_REMOTE_APP_DIR = "/opt/ragflowauth"
+BASE_URL_RE = re.compile(r"https?://[^\\s\"']+")
 
 
 @dataclass(frozen=True)
@@ -59,6 +60,18 @@ def _parse_local_base_url(text: str) -> str:
     except Exception:
         m = re.search(r'"base_url"\s*:\s*"([^"]+)"', text)
         return (m.group(1).strip() if m else "")
+
+
+def _extract_base_url_from_output(text: str) -> str:
+    lines = (text or "").splitlines()
+    for line in reversed(lines):
+        line = (line or "").strip()
+        if not line:
+            continue
+        m = BASE_URL_RE.search(line)
+        if m:
+            return m.group(0).strip()
+    return ""
 
 
 def read_local_base_url(path: Path = LOCAL_RAGFLOW_CONFIG_PATH) -> tuple[bool, str]:
@@ -128,11 +141,13 @@ def read_remote_base_url(
         f"sed -n 's/.*\"base_url\"[[:space:]]*:[[:space:]]*\"\\([^\\\"]*\\)\".*/\\1/p' {cfg_path} | head -n 1"
     )
     ok, out = SSHExecutor(server_ip, user).execute(cmd, timeout_seconds=timeout_seconds)
-    text = (out or "").strip().splitlines()[-1].strip() if (out or "").strip() else ""
+    raw = (out or "").strip()
+    lines = [line.strip() for line in raw.splitlines() if line.strip()]
     if not ok:
-        return False, (out or "").strip()
-    if text == "MISSING":
+        return False, raw
+    if any(line == "MISSING" for line in lines):
         return False, f"missing {cfg_path}"
+    text = _extract_base_url_from_output(raw)
     if not text:
         return False, f"unable to parse base_url from {cfg_path}"
     return True, text
@@ -174,7 +189,7 @@ def ensure_remote_base_url(
         f"sed -n 's/.*\"base_url\"[[:space:]]*:[[:space:]]*\"\\([^\\\"]*\\)\".*/\\1/p' {cfg_path} | head -n 1"
     )
     ok2, out2 = SSHExecutor(server_ip, user).execute(fix_cmd, timeout_seconds=900)
-    after = (out2 or "").strip().splitlines()[-1].strip() if (out2 or "").strip() else ""
+    after = _extract_base_url_from_output((out2 or "").strip())
     if (not ok2) or (desired not in after):
         return BaseUrlFixResult(ok=False, before=before, after=after, changed=True, error=(out2 or "").strip())
 

@@ -17,6 +17,9 @@ class UserCreate(BaseModel):
     # Per-account login policy.
     max_login_sessions: int = 3
     idle_timeout_minutes: int = 120
+    can_change_password: bool = True
+    disable_login_enabled: bool = False
+    disable_login_until_ms: Optional[int] = None
 
 
 class UserUpdate(BaseModel):
@@ -29,6 +32,9 @@ class UserUpdate(BaseModel):
     status: Optional[str] = None
     max_login_sessions: Optional[int] = None
     idle_timeout_minutes: Optional[int] = None
+    can_change_password: Optional[bool] = None
+    disable_login_enabled: Optional[bool] = None
+    disable_login_until_ms: Optional[int] = None
 
 
 class UserResponse(BaseModel):
@@ -45,6 +51,10 @@ class UserResponse(BaseModel):
     permission_groups: List[dict] = Field(default_factory=list)
     role: str
     status: str
+    can_change_password: bool = True
+    disable_login_enabled: bool = False
+    disable_login_until_ms: Optional[int] = None
+    login_disabled: bool = False
     max_login_sessions: int
     idle_timeout_minutes: int
     active_session_count: int = 0

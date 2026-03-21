@@ -500,7 +500,7 @@ ssh root@172.30.30.57 "docker ps --format '{{.Image}}' | grep ragflowauth"
 # 如果看到 ragflowauth-backend:local，说明使用了错误的标签
 ```
 
-### 错�误 3: Docker 构建很快但代码没更新
+### 错误 3: Docker 构建很快但代码没更新
 
 **原因**: Docker 使用了缓存层
 

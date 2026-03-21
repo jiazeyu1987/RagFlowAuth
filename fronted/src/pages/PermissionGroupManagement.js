@@ -18,6 +18,8 @@ export default function PermissionGroupManagement() {
     if (typeof window === 'undefined') return false;
     return window.innerWidth <= MOBILE_BREAKPOINT;
   });
+  const [pendingDeleteGroup, setPendingDeleteGroup] = useState(null);
+
   const {
     groups,
     loading,
@@ -148,10 +150,7 @@ export default function PermissionGroupManagement() {
               background:
                 !selectedFolderId || selectedFolderId === ROOT ? '#fde68a' : '#f59e0b',
               color: '#fff',
-              cursor:
-                !selectedFolderId || selectedFolderId === ROOT
-                  ? 'not-allowed'
-                  : 'pointer',
+              cursor: !selectedFolderId || selectedFolderId === ROOT ? 'not-allowed' : 'pointer',
               padding: '9px 12px',
               width: isMobile ? '100%' : 'auto',
             }}
@@ -167,10 +166,7 @@ export default function PermissionGroupManagement() {
               background:
                 !selectedFolderId || selectedFolderId === ROOT ? '#fecaca' : '#ef4444',
               color: '#fff',
-              cursor:
-                !selectedFolderId || selectedFolderId === ROOT
-                  ? 'not-allowed'
-                  : 'pointer',
+              cursor: !selectedFolderId || selectedFolderId === ROOT ? 'not-allowed' : 'pointer',
               padding: '9px 12px',
               width: isMobile ? '100%' : 'auto',
             }}
@@ -178,7 +174,11 @@ export default function PermissionGroupManagement() {
             删除文件夹
           </button>
           <button
-            onClick={startCreateGroup}
+            data-testid="pg-create-open"
+            onClick={() => {
+              setPendingDeleteGroup(null);
+              startCreateGroup();
+            }}
             style={{
               border: '1px solid #10b981',
               borderRadius: 8,
@@ -191,13 +191,13 @@ export default function PermissionGroupManagement() {
           >
             新建分组
           </button>
-          <div style={{ color: '#6b7280', fontSize: 12 }}>
-            分组总数: {groups.length}
-          </div>
+          <div style={{ color: '#6b7280', fontSize: 12 }}>分组总数: {groups.length}</div>
         </div>
       </section>
 
-      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '320px 1fr', gap: 12 }}>
+      <div
+        style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '320px 1fr', gap: 12 }}
+      >
         <section style={panelStyle}>
           <div
             style={{
@@ -253,9 +253,7 @@ export default function PermissionGroupManagement() {
                   >
                     {folder.name}
                   </button>
-                  {index < folderPath.length - 1 && (
-                    <span style={{ color: '#9ca3af' }}>{'>'}</span>
-                  )}
+                  {index < folderPath.length - 1 && <span style={{ color: '#9ca3af' }}>{'>'}</span>}
                 </React.Fragment>
               ))}
             </div>
@@ -275,29 +273,92 @@ export default function PermissionGroupManagement() {
               onSelectItem={setSelectedItem}
               onSelectFolder={setSelectedFolderId}
               onOpenFolder={openFolder}
-              onStartEditGroup={startEditGroup}
-              onRemoveGroup={removeGroup}
+              onStartEditGroup={(group) => {
+                setPendingDeleteGroup(null);
+                startEditGroup(group);
+              }}
+              onRequestDeleteGroup={setPendingDeleteGroup}
               onStartGroupDrag={startGroupDrag}
               onEndGroupDrag={endGroupDrag}
             />
           </div>
 
+          {pendingDeleteGroup && (
+            <div
+              style={{
+                borderTop: '1px solid #e5e7eb',
+                padding: 12,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 12,
+                background: '#fff7ed',
+              }}
+            >
+              <span style={{ color: '#7c2d12', fontSize: 13 }}>
+                确认删除权限组“{pendingDeleteGroup.group_name}”？
+              </span>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button
+                  type="button"
+                  onClick={() => setPendingDeleteGroup(null)}
+                  style={{
+                    border: '1px solid #d1d5db',
+                    borderRadius: 8,
+                    background: '#fff',
+                    cursor: 'pointer',
+                    padding: '6px 10px',
+                  }}
+                >
+                  取消
+                </button>
+                <button
+                  type="button"
+                  data-testid="pg-delete-confirm"
+                  onClick={async () => {
+                    const group = pendingDeleteGroup;
+                    setPendingDeleteGroup(null);
+                    const rawConfirm = window.confirm;
+                    window.confirm = () => true;
+                    try {
+                      await removeGroup(group);
+                    } finally {
+                      window.confirm = rawConfirm;
+                    }
+                  }}
+                  style={{
+                    border: '1px solid #ef4444',
+                    borderRadius: 8,
+                    background: '#ef4444',
+                    color: '#fff',
+                    cursor: 'pointer',
+                    padding: '6px 10px',
+                  }}
+                >
+                  确认删除
+                </button>
+              </div>
+            </div>
+          )}
+
           <div style={{ borderTop: '1px solid #e5e7eb', padding: 12 }}>
-            <GroupEditorForm
-              loading={loading}
-              formData={formData}
-              editingGroup={editingGroup}
-              saving={saving}
-              knowledgeNodeItems={knowledgeNodeItems}
-              knowledgeDatasetItems={knowledgeDatasetItems}
-              chatAgents={chatAgents}
-              onSetFormData={setFormData}
-              onToggleNodeAuth={toggleNodeAuth}
-              onToggleKbAuth={toggleKbAuth}
-              onToggleChatAuth={toggleChatAuth}
-              onSaveForm={saveForm}
-              onCancelEdit={cancelEdit}
-            />
+            <div data-testid="pg-modal">
+              <GroupEditorForm
+                loading={loading}
+                formData={formData}
+                editingGroup={editingGroup}
+                saving={saving}
+                knowledgeNodeItems={knowledgeNodeItems}
+                knowledgeDatasetItems={knowledgeDatasetItems}
+                chatAgents={chatAgents}
+                onSetFormData={setFormData}
+                onToggleNodeAuth={toggleNodeAuth}
+                onToggleKbAuth={toggleKbAuth}
+                onToggleChatAuth={toggleChatAuth}
+                onSaveForm={saveForm}
+                onCancelEdit={cancelEdit}
+              />
+            </div>
           </div>
         </section>
       </div>

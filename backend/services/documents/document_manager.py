@@ -98,7 +98,7 @@ class DocumentManager:
         except DocumentNotFound as e:
             raise HTTPException(status_code=404, detail=str(e))
         except DocumentSourceError as e:
-            raise HTTPException(status_code=500, detail=f"濞戞挸顑堝ù鍥ㄥ緞鏉堫偉袝: {str(e)}")
+            raise HTTPException(status_code=500, detail=f"下载文档失败: {str(e)}")
 
         final_filename = filename or doc_bytes.filename or f"document_{doc_id}"
 

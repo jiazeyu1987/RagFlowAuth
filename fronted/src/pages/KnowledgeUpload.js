@@ -7,7 +7,6 @@ import UploadExtensionsPanel from '../features/knowledge/upload/components/Uploa
 import {
   DEFAULT_ACCEPTED_EXTENSIONS,
   DEFAULT_KB_NAME,
-  MAX_FILE_SIZE_BYTES,
   uploadPanelStyle,
 } from '../features/knowledge/upload/constants';
 import {
@@ -19,6 +18,18 @@ import {
 import { useAuth } from '../hooks/useAuth';
 
 const MOBILE_BREAKPOINT = 768;
+
+const getDatasetValue = (dataset) => dataset?.name || dataset?.id || '';
+
+const buildDatasetOptionLabel = (dataset, nodePathById) => {
+  const name = dataset?.name || dataset?.id || '';
+  if (!name) return '';
+  const nodePath = typeof nodePathById?.[dataset?.id] === 'string' ? nodePathById[dataset.id].trim() : '';
+  if (!nodePath) return name;
+  if (nodePath === '/') return `/${name}`;
+  const basePath = nodePath.endsWith('/') ? nodePath.slice(0, -1) : nodePath;
+  return `${basePath}/${name}`;
+};
 
 const KnowledgeUpload = () => {
   const navigate = useNavigate();
@@ -32,6 +43,7 @@ const KnowledgeUpload = () => {
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [kbId, setKbId] = useState(DEFAULT_KB_NAME);
   const [datasets, setDatasets] = useState([]);
+  const [datasetNodePathById, setDatasetNodePathById] = useState({});
   const [loadingDatasets, setLoadingDatasets] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(null);
@@ -53,7 +65,18 @@ const KnowledgeUpload = () => {
   }, [allowedExtensions]);
 
   const extensionSet = useMemo(() => new Set(allowedExtensions), [allowedExtensions]);
-  const maxFileSizeMB = Math.floor(MAX_FILE_SIZE_BYTES / (1024 * 1024));
+  const datasetOptions = useMemo(
+    () =>
+      (datasets || [])
+        .map((dataset) => ({
+          key: dataset?.id || getDatasetValue(dataset),
+          value: getDatasetValue(dataset),
+          label: buildDatasetOptionLabel(dataset, datasetNodePathById),
+        }))
+        .filter((option) => option.value && option.label)
+        .sort((left, right) => String(left.label || '').localeCompare(String(right.label || ''), 'zh-Hans-CN')),
+    [datasets, datasetNodePathById]
+  );
 
   useEffect(() => {
     if (typeof window === 'undefined') return undefined;
@@ -69,9 +92,29 @@ const KnowledgeUpload = () => {
         setLoadingDatasets(true);
         const data = await knowledgeApi.listRagflowDatasets();
         const list = data.datasets || [];
+        const datasetValues = new Set(
+          list
+            .map((dataset) => getDatasetValue(dataset))
+            .filter(Boolean)
+        );
+
+        try {
+          const tree = await knowledgeApi.listKnowledgeDirectories();
+          const map = {};
+          (tree?.datasets || []).forEach((dataset) => {
+            const id = dataset?.id;
+            if (!id || typeof dataset?.node_path !== 'string') return;
+            map[id] = dataset.node_path;
+          });
+          setDatasetNodePathById(map);
+        } catch {
+          setDatasetNodePathById({});
+        }
+
         setDatasets(list);
         if (list.length > 0) {
-          setKbId((current) => current || list[0].name || list[0].id || DEFAULT_KB_NAME);
+          const fallback = getDatasetValue(list[0]) || DEFAULT_KB_NAME;
+          setKbId((current) => (current && datasetValues.has(current) ? current : fallback));
           setError(null);
         } else {
           setKbId(DEFAULT_KB_NAME);
@@ -79,6 +122,7 @@ const KnowledgeUpload = () => {
         }
       } catch (err) {
         setDatasets([]);
+        setDatasetNodePathById({});
         setError(err.message || '无法加载知识库列表，请检查网络连接');
       } finally {
         setLoadingDatasets(false);
@@ -117,10 +161,6 @@ const KnowledgeUpload = () => {
         rejected.push({ file, reason: 'unsupported' });
         continue;
       }
-      if (file.size > MAX_FILE_SIZE_BYTES) {
-        rejected.push({ file, reason: 'too_large' });
-        continue;
-      }
       valid.push(file);
     }
 
@@ -133,12 +173,10 @@ const KnowledgeUpload = () => {
     });
 
     if (rejected.length > 0) {
-      const tooLarge = rejected.filter((item) => item.reason === 'too_large').length;
       const unsupported = rejected.filter((item) => item.reason === 'unsupported').length;
       const parts = [];
-      if (tooLarge) parts.push(`${tooLarge} 个文件过大（超过 ${maxFileSizeMB}MB）`);
       if (unsupported) parts.push(`${unsupported} 个文件后缀不在允许列表中`);
-      setError(`部分文件未加入上传队列：${parts.join('，')}`);
+      setError(`部分文件未加入上传队列：${parts.join('；')}`);
     } else {
       setError(null);
     }
@@ -323,10 +361,10 @@ const KnowledgeUpload = () => {
             >
               {loadingDatasets ? (
                 <option>加载知识库中...</option>
-              ) : datasets.length > 0 ? (
-                datasets.map((dataset) => (
-                  <option key={dataset.id} value={dataset.name || dataset.id}>
-                    {dataset.name || dataset.id}
+              ) : datasetOptions.length > 0 ? (
+                datasetOptions.map((option) => (
+                  <option key={option.key} value={option.value}>
+                    {option.label}
                   </option>
                 ))
               ) : (
@@ -370,7 +408,7 @@ const KnowledgeUpload = () => {
           />
 
           <div style={{ marginTop: '8px', fontSize: '0.85rem', color: '#6b7280', lineHeight: 1.6 }}>
-            {`支持后缀：${acceptAttr}（单文件最大 ${maxFileSizeMB}MB；文件夹上传会递归处理）`}
+            {`支持后缀：${acceptAttr}（文件夹上传会递归处理）`}
           </div>
 
           <button
@@ -408,7 +446,7 @@ const KnowledgeUpload = () => {
           <ol style={{ margin: 0, paddingLeft: '20px' }}>
             <li>选择知识库并上传文件</li>
             <li>文档进入“待审核”状态</li>
-            <li>审核通过后自动同步到 RAGFlow 知识库</li>
+            <li>审核通过后自动同步到知识库</li>
           </ol>
         </div>
       </div>

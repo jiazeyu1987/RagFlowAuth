@@ -24,7 +24,7 @@ export const policyKnowledgeApiMethods = {
     return response.json();
   },
 
-  async uploadDocument(file, kbId = '灞曞巺') {
+  async uploadDocument(file, kbId = '展厅') {
     console.log('[authClient] Step 6 - uploadDocument called');
     console.log('[authClient] Step 7 - Parameters:', {
       fileName: file.name,

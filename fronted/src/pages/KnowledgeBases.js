@@ -22,8 +22,9 @@ import { ChatConfigsPanel } from './ChatConfigsPanel';
 const MOBILE_BREAKPOINT = 768;
 
 export default function KnowledgeBases() {
-  const { user } = useAuth();
+  const { user, canManageKbDirectory } = useAuth();
   const isAdmin = (user?.role || '') === 'admin';
+  const canManageDirectory = canManageKbDirectory();
   const [subtab, setSubtab] = useState('kbs');
   const [isMobile, setIsMobile] = useState(() => {
     if (typeof window === 'undefined') return false;
@@ -215,6 +216,7 @@ export default function KnowledgeBases() {
   }
 
   async function moveDatasetToNode(datasetId, targetNodeId) {
+    if (!canManageDirectory) return;
     if (!datasetId) return;
     const fromNodeId = datasetNodeMap.get(datasetId) || ROOT;
     const nextNodeId = targetNodeId || ROOT;
@@ -233,6 +235,7 @@ export default function KnowledgeBases() {
   }
 
   function handleTreeDragOver(e, nodeId) {
+    if (!canManageDirectory) return;
     if (!dragDatasetId) return;
     e.preventDefault();
     if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
@@ -240,6 +243,7 @@ export default function KnowledgeBases() {
   }
 
   async function handleTreeDrop(e, nodeId) {
+    if (!canManageDirectory) return;
     if (!dragDatasetId) return;
     e.preventDefault();
     const datasetId = e.dataTransfer?.getData('application/x-kb-id') || dragDatasetId;
@@ -249,6 +253,7 @@ export default function KnowledgeBases() {
   }
 
   function handleTreeDragLeave(e, nodeId) {
+    if (!canManageDirectory) return;
     if (!dragDatasetId) return;
     const rel = e.relatedTarget;
     if (rel && e.currentTarget.contains(rel)) return;
@@ -256,7 +261,7 @@ export default function KnowledgeBases() {
   }
 
   async function createDirectory() {
-    if (!isAdmin) return;
+    if (!canManageDirectory) return;
     const name = window.prompt('\u8bf7\u8f93\u5165\u65b0\u76ee\u5f55\u540d\u79f0');
     if (!name || !name.trim()) return;
     try {
@@ -273,7 +278,7 @@ export default function KnowledgeBases() {
   }
 
   async function renameDirectory() {
-    if (!isAdmin || !selectedNodeId || selectedNodeId === ROOT) return;
+    if (!canManageDirectory || !selectedNodeId || selectedNodeId === ROOT) return;
     const node = indexes.byId.get(selectedNodeId);
     const next = window.prompt('\u8bf7\u8f93\u5165\u65b0\u7684\u76ee\u5f55\u540d\u79f0', node?.name || '');
     if (!next || !next.trim()) return;
@@ -286,7 +291,7 @@ export default function KnowledgeBases() {
   }
 
   async function deleteDirectory() {
-    if (!isAdmin || !selectedNodeId || selectedNodeId === ROOT) return;
+    if (!canManageDirectory || !selectedNodeId || selectedNodeId === ROOT) return;
     const node = indexes.byId.get(selectedNodeId);
     if (!window.confirm(`\u786e\u8ba4\u5220\u9664\u76ee\u5f55\u201c${node?.name || selectedNodeId}\u201d\uff1f\u5220\u9664\u540e\u5b50\u76ee\u5f55\u4e5f\u4f1a\u4e00\u5e76\u79fb\u9664\u3002`)) return;
     try {
@@ -377,10 +382,11 @@ export default function KnowledgeBases() {
                   openDir(id);
                   setSelectedItem(id ? { kind: 'dir', id } : null);
                 }}
-                dropTargetNodeId={dropTargetNodeId}
+                dropTargetNodeId={canManageDirectory ? dropTargetNodeId : null}
                 onDragOverNode={handleTreeDragOver}
                 onDropNode={handleTreeDrop}
                 onDragLeaveNode={handleTreeDragLeave}
+                allowDatasetDrop={canManageDirectory}
               />
             </div>
           </section>
@@ -390,13 +396,15 @@ export default function KnowledgeBases() {
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
                 <button data-testid="kbs-refresh-all" onClick={refreshAll} style={{ border: '1px solid #d1d5db', borderRadius: 8, background: '#fff', cursor: 'pointer', padding: '6px 9px' }}>{'\u5237\u65b0'}</button>
                 <button data-testid="kbs-go-parent" onClick={() => openDir(indexes.byId.get(currentDirId)?.parent_id || ROOT)} disabled={currentDirId === ROOT} style={{ border: '1px solid #d1d5db', borderRadius: 8, background: currentDirId === ROOT ? '#f3f4f6' : '#fff', cursor: currentDirId === ROOT ? 'not-allowed' : 'pointer', padding: '6px 9px' }}>{'\u8fd4\u56de\u4e0a\u7ea7'}</button>
-                {isAdmin && (
+                {canManageDirectory && (
                   <>
                     <button data-testid="kbs-create-dir" onClick={createDirectory} style={{ border: '1px solid #2563eb', borderRadius: 8, background: '#2563eb', color: '#fff', cursor: 'pointer', padding: '6px 9px' }}>{'\u65b0\u5efa\u76ee\u5f55'}</button>
                     <button data-testid="kbs-rename-dir" onClick={renameDirectory} disabled={!selectedNodeId || selectedNodeId === ROOT} style={{ border: '1px solid #f59e0b', borderRadius: 8, background: !selectedNodeId || selectedNodeId === ROOT ? '#fde68a' : '#f59e0b', color: '#fff', cursor: !selectedNodeId || selectedNodeId === ROOT ? 'not-allowed' : 'pointer', padding: '6px 9px' }}>{'\u91cd\u547d\u540d\u76ee\u5f55'}</button>
                     <button data-testid="kbs-delete-dir" onClick={deleteDirectory} disabled={!selectedNodeId || selectedNodeId === ROOT} style={{ border: '1px solid #ef4444', borderRadius: 8, background: !selectedNodeId || selectedNodeId === ROOT ? '#fecaca' : '#ef4444', color: '#fff', cursor: !selectedNodeId || selectedNodeId === ROOT ? 'not-allowed' : 'pointer', padding: '6px 9px' }}>{'\u5220\u9664\u76ee\u5f55'}</button>
-                    <button data-testid="kbs-create-kb" onClick={openCreateKb} style={{ border: '1px solid #059669', borderRadius: 8, background: '#10b981', color: '#fff', cursor: 'pointer', padding: '6px 9px' }}>{'\u65b0\u5efa\u77e5\u8bc6\u5e93'}</button>
                   </>
+                )}
+                {isAdmin && (
+                  <button data-testid="kbs-create-kb" onClick={openCreateKb} style={{ border: '1px solid #059669', borderRadius: 8, background: '#10b981', color: '#fff', cursor: 'pointer', padding: '6px 9px' }}>{'\u65b0\u5efa\u77e5\u8bc6\u5e93'}</button>
                 )}
               </div>
 
@@ -411,9 +419,11 @@ export default function KnowledgeBases() {
               </div>
 
               <input value={keyword} onChange={(e) => setKeyword(e.target.value)} placeholder="\u7b5b\u9009\u5f53\u524d\u76ee\u5f55\u5185\u5bb9" style={{ width: isMobile ? '100%' : 320, maxWidth: '100%', border: '1px solid #d1d5db', borderRadius: 8, padding: '8px 10px', boxSizing: 'border-box' }} />
-              <div style={{ marginTop: 6, color: '#6b7280', fontSize: 12 }}>
-                {'\u652f\u6301\u62d6\u62fd\uff1a\u5c06\u53f3\u4fa7\u201c\u77e5\u8bc6\u5e93\u201d\u884c\u62d6\u5230\u5de6\u4fa7\u4efb\u610f\u76ee\u5f55\uff0c\u53ef\u5feb\u901f\u79fb\u52a8\u6302\u8f7d\u4f4d\u7f6e\u3002'}
-              </div>
+              {canManageDirectory && (
+                <div data-testid="kbs-drag-tip" style={{ marginTop: 6, color: '#6b7280', fontSize: 12 }}>
+                  {'\u652f\u6301\u62d6\u62fd\uff1a\u5c06\u53f3\u4fa7\u201c\u77e5\u8bc6\u5e93\u201d\u884c\u62d6\u5230\u5de6\u4fa7\u4efb\u610f\u76ee\u5f55\uff0c\u53ef\u5feb\u901f\u79fb\u52a8\u6302\u8f7d\u4f4d\u7f6e\u3002'}
+                </div>
+              )}
               {kbError && <div style={{ color: '#b91c1c', marginTop: 8 }}>{kbError}</div>}
               {kbSaveStatus && <div style={{ color: '#047857', marginTop: 8 }}>{kbSaveStatus}</div>}
             </div>
@@ -435,9 +445,9 @@ export default function KnowledgeBases() {
                       <tr
                         key={`${r.kind}_${r.id}`}
                         data-testid={`kbs-row-${r.kind}-${safeRowId}`}
-                        draggable={r.kind === 'dataset'}
+                        draggable={canManageDirectory && r.kind === 'dataset'}
                         onDragStart={(e) => {
-                          if (r.kind !== 'dataset') return;
+                          if (!canManageDirectory || r.kind !== 'dataset') return;
                           e.dataTransfer.setData('application/x-kb-id', r.id);
                           e.dataTransfer.setData('text/plain', r.id);
                           e.dataTransfer.effectAllowed = 'move';
@@ -460,7 +470,7 @@ export default function KnowledgeBases() {
                         style={{
                           borderBottom: '1px solid #f1f5f9',
                           background: selected ? '#eff6ff' : '#fff',
-                          cursor: r.kind === 'dataset' ? 'grab' : 'pointer',
+                          cursor: canManageDirectory && r.kind === 'dataset' ? 'grab' : 'pointer',
                           opacity: dragDatasetId && r.kind === 'dataset' && dragDatasetId === r.id ? 0.5 : 1,
                         }}
                       >

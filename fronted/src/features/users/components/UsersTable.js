@@ -1,5 +1,17 @@
 import React from 'react';
 
+const isUserDisabled = (user) => {
+  if (!user) return false;
+  if (user.login_disabled === true) return true;
+  const status = String(user.status || '').toLowerCase();
+  if (status && status !== 'active') return true;
+  const disableEnabled = user.disable_login_enabled === true;
+  if (!disableEnabled) return false;
+  const untilMs = Number(user.disable_login_until_ms || 0);
+  if (!Number.isFinite(untilMs) || untilMs <= 0) return true;
+  return Date.now() < untilMs;
+};
+
 export default function UsersTable({
   filteredUsers,
   canManageUsers,
@@ -23,23 +35,44 @@ export default function UsersTable({
         <table style={{ width: '100%', minWidth: '1100px', borderCollapse: 'collapse' }}>
           <thead style={{ backgroundColor: '#f9fafb' }}>
             <tr>
-              <th style={{ padding: '12px 16px', textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>姓名 / 账号</th>
-              <th style={{ padding: '12px 16px', textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>公司</th>
-              <th style={{ padding: '12px 16px', textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>部门</th>
-              <th style={{ padding: '12px 16px', textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>状态</th>
-              <th style={{ padding: '12px 16px', textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>登录策略</th>
-              <th style={{ padding: '12px 16px', textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>权限组</th>
-              <th style={{ padding: '12px 16px', textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>创建时间</th>
-              <th style={{ padding: '12px 16px', textAlign: 'right', borderBottom: '1px solid #e5e7eb' }}>操作</th>
+              <th style={{ padding: '12px 16px', textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>
+                姓名 / 账号
+              </th>
+              <th style={{ padding: '12px 16px', textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>
+                公司
+              </th>
+              <th style={{ padding: '12px 16px', textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>
+                部门
+              </th>
+              <th style={{ padding: '12px 16px', textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>
+                状态
+              </th>
+              <th style={{ padding: '12px 16px', textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>
+                登录策略
+              </th>
+              <th style={{ padding: '12px 16px', textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>
+                权限组
+              </th>
+              <th style={{ padding: '12px 16px', textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>
+                创建时间
+              </th>
+              <th style={{ padding: '12px 16px', textAlign: 'right', borderBottom: '1px solid #e5e7eb' }}>
+                操作
+              </th>
             </tr>
           </thead>
           <tbody>
             {filteredUsers.map((user) => {
               const isProtectedAdmin = String(user?.username || '').toLowerCase() === 'admin';
               const displayName = String(user?.email || '').trim();
+              const disabledNow = isUserDisabled(user);
 
               return (
-                <tr key={user.user_id} data-testid={`users-row-${user.user_id}`} style={{ borderBottom: '1px solid #e5e7eb' }}>
+                <tr
+                  key={user.user_id}
+                  data-testid={`users-row-${user.user_id}`}
+                  style={{ borderBottom: '1px solid #e5e7eb' }}
+                >
                   <td style={{ padding: '12px 16px' }}>
                     <div style={{ color: '#111827', fontWeight: 500 }}>{displayName || user.username}</div>
                     {displayName ? (
@@ -49,20 +82,19 @@ export default function UsersTable({
                   <td style={{ padding: '12px 16px', color: '#6b7280' }}>{user.company_name || '-'}</td>
                   <td style={{ padding: '12px 16px', color: '#6b7280' }}>{user.department_name || '-'}</td>
                   <td style={{ padding: '12px 16px' }}>
-                    <span style={{ color: user.status === 'active' ? '#10b981' : '#ef4444' }}>
-                      {user.status === 'active' ? '激活' : '停用'}
+                    <span style={{ color: disabledNow ? '#ef4444' : '#10b981' }}>
+                      {disabledNow ? '停用' : '激活'}
                     </span>
                   </td>
                   <td style={{ padding: '12px 16px', color: '#4b5563', fontSize: '0.9rem' }}>
                     <div>最大登录数: {Number(user.max_login_sessions || 3)}</div>
                     <div>空闲超时: {Number(user.idle_timeout_minutes || 120)} 分钟</div>
                     <div>当前在线: {Number(user.active_session_count || 0)}</div>
-                    <div>
-                      最近活跃:{' '}
-                      {user.active_session_last_activity_at_ms
-                        ? new Date(user.active_session_last_activity_at_ms).toLocaleString('zh-CN')
-                        : '-'}
-                    </div>
+                    {user.disable_login_enabled && user.disable_login_until_ms ? (
+                      <div>
+                        禁用到期: {new Date(user.disable_login_until_ms).toLocaleString('zh-CN')}
+                      </div>
+                    ) : null}
                   </td>
                   <td style={{ padding: '12px 16px' }}>
                     {user.permission_groups && user.permission_groups.length > 0 ? (
@@ -159,7 +191,7 @@ export default function UsersTable({
                         disabled={statusUpdatingUserId === user.user_id}
                         style={{
                           padding: '6px 12px',
-                          backgroundColor: user.status === 'active' ? '#f59e0b' : '#10b981',
+                          backgroundColor: disabledNow ? '#10b981' : '#f59e0b',
                           color: 'white',
                           border: 'none',
                           borderRadius: '4px',
@@ -170,8 +202,12 @@ export default function UsersTable({
                         }}
                       >
                         {statusUpdatingUserId === user.user_id
-                          ? (user.status === 'active' ? '停用中...' : '启用中...')
-                          : (user.status === 'active' ? '停用' : '启用')}
+                          ? disabledNow
+                            ? '解禁中...'
+                            : '禁用中...'
+                          : disabledNow
+                            ? '解禁'
+                            : '禁用'}
                       </button>
                     ) : null}
 

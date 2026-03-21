@@ -3,6 +3,8 @@ from __future__ import annotations
 import time
 from typing import Callable
 
+from tool.maintenance.core.ssh_executor import build_scp_argv
+
 
 def run_publish_data_pipeline(
     *,
@@ -110,20 +112,11 @@ done
         workdir_test = None
 
         log("[5/7] Transfer data tar TEST -> PROD (scp -3)")
-        scp_cmd = [
-            "scp",
-            "-3",
-            "-o",
-            "BatchMode=yes",
-            "-o",
-            "ConnectTimeout=10",
-            "-o",
-            "StrictHostKeyChecking=no",
-            "-o",
-            "UserKnownHostsFile=/dev/null",
+        scp_cmd = build_scp_argv(
             f"{default_server_user}@{test_ip}:{tar_test}",
             f"{default_server_user}@{prod_ip}:{tar_prod}",
-        ]
+            through_local=True,
+        )
         ok, out = run_local_fn(scp_cmd)
         if not ok:
             log(f"[ERROR] scp -3 failed: {out}")

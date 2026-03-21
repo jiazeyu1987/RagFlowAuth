@@ -13,4 +13,7 @@ export const emptyForm = {
   can_review: false,
   can_download: true,
   can_delete: false,
+  can_manage_kb_directory: false,
+  can_view_kb_config: true,
+  can_view_tools: true,
 };

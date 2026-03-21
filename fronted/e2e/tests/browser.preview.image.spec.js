@@ -8,7 +8,7 @@ adminTest('document browser previews an image (mock) @regression @browser', asyn
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify({ datasets: [{ id: 'ds1', name: '灞曞巺' }], count: 1 }),
+      body: JSON.stringify({ datasets: [{ id: 'ds1', name: '展厅' }], count: 1 }),
     });
   });
 

@@ -27,7 +27,8 @@ class UserStore:
             cursor.execute(
                 """
                 SELECT user_id, username, password_hash, email, role, group_id, company_id, department_id, status,
-                       max_login_sessions, idle_timeout_minutes,
+                       max_login_sessions, idle_timeout_minutes, can_change_password,
+                       disable_login_enabled, disable_login_until_ms,
                        created_at_ms, last_login_at_ms, created_by
                 FROM users WHERE username = ?
                 """,
@@ -47,9 +48,12 @@ class UserStore:
                     status=row[8],
                     max_login_sessions=int(row[9] or 3),
                     idle_timeout_minutes=int(row[10] or 120),
-                    created_at_ms=row[11],
-                    last_login_at_ms=row[12],
-                    created_by=row[13],
+                    can_change_password=bool(row[11]) if row[11] is not None else True,
+                    disable_login_enabled=bool(row[12]) if row[12] is not None else False,
+                    disable_login_until_ms=int(row[13]) if row[13] is not None else None,
+                    created_at_ms=row[14],
+                    last_login_at_ms=row[15],
+                    created_by=row[16],
                 )
                 user.group_ids = self._get_user_group_ids(user.user_id, conn)
                 user.group_id = user.group_ids[0] if user.group_ids else None
@@ -65,7 +69,8 @@ class UserStore:
             cursor.execute(
                 """
                 SELECT user_id, username, password_hash, email, role, group_id, company_id, department_id, status,
-                       max_login_sessions, idle_timeout_minutes,
+                       max_login_sessions, idle_timeout_minutes, can_change_password,
+                       disable_login_enabled, disable_login_until_ms,
                        created_at_ms, last_login_at_ms, created_by
                 FROM users WHERE user_id = ?
                 """,
@@ -85,9 +90,12 @@ class UserStore:
                     status=row[8],
                     max_login_sessions=int(row[9] or 3),
                     idle_timeout_minutes=int(row[10] or 120),
-                    created_at_ms=row[11],
-                    last_login_at_ms=row[12],
-                    created_by=row[13],
+                    can_change_password=bool(row[11]) if row[11] is not None else True,
+                    disable_login_enabled=bool(row[12]) if row[12] is not None else False,
+                    disable_login_until_ms=int(row[13]) if row[13] is not None else None,
+                    created_at_ms=row[14],
+                    last_login_at_ms=row[15],
+                    created_by=row[16],
                 )
                 user.group_ids = self._get_user_group_ids(user.user_id, conn)
                 user.group_id = user.group_ids[0] if user.group_ids else None
@@ -144,6 +152,9 @@ class UserStore:
         status: str = "active",
         max_login_sessions: int = 3,
         idle_timeout_minutes: int = 120,
+        can_change_password: bool = True,
+        disable_login_enabled: bool = False,
+        disable_login_until_ms: Optional[int] = None,
         created_by: Optional[str] = None,
     ) -> User:
         # Deprecated: users.group_id is no longer the source of truth (use user_permission_groups).
@@ -161,8 +172,9 @@ class UserStore:
                 INSERT INTO users (
                     user_id, username, password_hash, email, role, group_id, company_id, department_id,
                     max_login_sessions, idle_timeout_minutes, status,
+                    can_change_password, disable_login_enabled, disable_login_until_ms,
                     created_at_ms, created_by
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     user_id,
@@ -176,6 +188,9 @@ class UserStore:
                     int(max_login_sessions),
                     int(idle_timeout_minutes),
                     status,
+                    1 if can_change_password else 0,
+                    1 if disable_login_enabled else 0,
+                    int(disable_login_until_ms) if disable_login_until_ms is not None else None,
                     now_ms,
                     created_by,
                 ),
@@ -193,6 +208,9 @@ class UserStore:
                 max_login_sessions=int(max_login_sessions),
                 idle_timeout_minutes=int(idle_timeout_minutes),
                 status=status,
+                can_change_password=bool(can_change_password),
+                disable_login_enabled=bool(disable_login_enabled),
+                disable_login_until_ms=int(disable_login_until_ms) if disable_login_until_ms is not None else None,
                 created_at_ms=now_ms,
                 created_by=created_by,
             )
@@ -212,6 +230,9 @@ class UserStore:
         status: Optional[str] = None,
         max_login_sessions: Optional[int] = None,
         idle_timeout_minutes: Optional[int] = None,
+        can_change_password: Optional[bool] = None,
+        disable_login_enabled: Optional[bool] = None,
+        disable_login_until_ms: Optional[int] = None,
     ) -> Optional[User]:
         updates = []
         params = []
@@ -234,6 +255,17 @@ class UserStore:
         if idle_timeout_minutes is not None:
             updates.append("idle_timeout_minutes = ?")
             params.append(int(idle_timeout_minutes))
+        if can_change_password is not None:
+            updates.append("can_change_password = ?")
+            params.append(1 if can_change_password else 0)
+        if disable_login_enabled is not None:
+            updates.append("disable_login_enabled = ?")
+            params.append(1 if disable_login_enabled else 0)
+        if disable_login_until_ms is not None:
+            updates.append("disable_login_until_ms = ?")
+            params.append(int(disable_login_until_ms))
+        elif disable_login_enabled is not None and not disable_login_enabled:
+            updates.append("disable_login_until_ms = NULL")
         # Deprecated: users.group_id is no longer updated (use user_permission_groups).
         if status is not None:
             updates.append("status = ?")
@@ -291,7 +323,8 @@ class UserStore:
         try:
             base_query = """
                 SELECT user_id, username, password_hash, email, role, group_id, company_id, department_id, status,
-                       max_login_sessions, idle_timeout_minutes,
+                       max_login_sessions, idle_timeout_minutes, can_change_password,
+                       disable_login_enabled, disable_login_until_ms,
                        created_at_ms, last_login_at_ms, created_by
                 FROM users
                 WHERE 1=1
@@ -353,9 +386,12 @@ class UserStore:
                     status=row[8],
                     max_login_sessions=int(row[9] or 3),
                     idle_timeout_minutes=int(row[10] or 120),
-                    created_at_ms=row[11],
-                    last_login_at_ms=row[12],
-                    created_by=row[13],
+                    can_change_password=bool(row[11]) if row[11] is not None else True,
+                    disable_login_enabled=bool(row[12]) if row[12] is not None else False,
+                    disable_login_until_ms=int(row[13]) if row[13] is not None else None,
+                    created_at_ms=row[14],
+                    last_login_at_ms=row[15],
+                    created_by=row[16],
                 )
                 user.group_ids = self._get_user_group_ids(user.user_id, conn)
                 user.group_id = user.group_ids[0] if user.group_ids else None

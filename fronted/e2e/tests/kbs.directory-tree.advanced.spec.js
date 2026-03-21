@@ -1,6 +1,6 @@
 // @ts-check
 const { expect } = require('@playwright/test');
-const { adminTest } = require('../helpers/auth');
+const { adminTest, viewerTest } = require('../helpers/auth');
 
 adminTest('kbs directory tree: create, rename, delete directory flow @regression @kbs', async ({ page }) => {
   const treeState = {
@@ -119,4 +119,114 @@ adminTest('kbs directory tree: drag dataset to folder failure shows error @regre
 
   await page.getByTestId('kbs-row-dataset-ds_move').dragTo(page.getByTestId('kbs-tree-node-n_target'));
   await expect(page.getByText('move_failed_test')).toBeVisible();
+});
+
+viewerTest('kbs directory tree: viewer without directory-manage permission is view-only @regression @kbs @rbac', async ({ page }) => {
+  await page.route('**/api/datasets', async (route) => {
+    if (route.request().method() !== 'GET') return route.fallback();
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        datasets: [{ id: 'ds_readonly', name: 'KB ReadOnly', document_count: 0, chunk_count: 0 }],
+      }),
+    });
+  });
+
+  await page.route('**/api/knowledge/directories', async (route) => {
+    if (route.request().method() !== 'GET') return route.fallback();
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        nodes: [{ id: 'n_readonly', name: 'Readonly Folder', path: 'Readonly Folder', parent_id: '', updated_at_ms: 1700000000 }],
+        datasets: [{ id: 'ds_readonly', node_id: '' }],
+      }),
+    });
+  });
+
+  await page.goto('/kbs');
+  await expect(page.getByTestId('kbs-row-dataset-ds_readonly')).toBeVisible();
+  await expect(page.getByTestId('kbs-create-dir')).toHaveCount(0);
+  await expect(page.getByTestId('kbs-rename-dir')).toHaveCount(0);
+  await expect(page.getByTestId('kbs-delete-dir')).toHaveCount(0);
+  await expect(page.getByTestId('kbs-drag-tip')).toHaveCount(0);
+  await expect(page.getByTestId('kbs-row-dataset-ds_readonly')).toHaveJSProperty('draggable', false);
+});
+
+viewerTest('kbs directory tree: viewer with directory-manage permission can operate folders and move dataset @regression @kbs @rbac', async ({ page }) => {
+  await page.unroute('**/api/auth/me');
+  await page.route('**/api/auth/me', async (route) => {
+    if (route.request().method() !== 'GET') return route.fallback();
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        user_id: 'u_viewer_manage_dir',
+        username: 'viewer_manage_dir',
+        role: 'viewer',
+        status: 'active',
+        permissions: {
+          can_upload: false,
+          can_review: false,
+          can_download: true,
+          can_delete: false,
+          can_manage_kb_directory: true,
+        },
+        accessible_kbs: [],
+        accessible_kb_ids: [],
+        accessible_chats: [],
+      }),
+    });
+  });
+
+  const treeState = {
+    nodes: [{ id: 'n_manage', name: 'Manage Folder', path: 'Manage Folder', parent_id: '', updated_at_ms: 1700000000 }],
+    datasets: [{ id: 'ds_manage', node_id: '' }],
+  };
+  let assignCalls = 0;
+
+  await page.route('**/api/datasets', async (route) => {
+    if (route.request().method() !== 'GET') return route.fallback();
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        datasets: [{ id: 'ds_manage', name: 'KB Manage', document_count: 0, chunk_count: 0 }],
+      }),
+    });
+  });
+
+  await page.route('**/api/knowledge/directories', async (route) => {
+    if (route.request().method() !== 'GET') return route.fallback();
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(treeState),
+    });
+  });
+
+  await page.route('**/api/knowledge/directories/datasets/ds_manage/node', async (route) => {
+    if (route.request().method() !== 'PUT') return route.fallback();
+    assignCalls += 1;
+    const body = route.request().postDataJSON();
+    treeState.datasets = [{ id: 'ds_manage', node_id: String(body?.node_id || '') }];
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ ok: true }),
+    });
+  });
+
+  await page.goto('/kbs');
+
+  await expect(page.getByTestId('kbs-create-dir')).toBeVisible();
+  await expect(page.getByTestId('kbs-rename-dir')).toBeVisible();
+  await expect(page.getByTestId('kbs-delete-dir')).toBeVisible();
+  await expect(page.getByTestId('kbs-create-kb')).toHaveCount(0);
+  await expect(page.getByTestId('kbs-drag-tip')).toBeVisible();
+  await expect(page.getByTestId('kbs-row-dataset-ds_manage')).toHaveJSProperty('draggable', true);
+
+  await page.getByTestId('kbs-row-dataset-ds_manage').dragTo(page.getByTestId('kbs-tree-node-n_manage'));
+  expect(assignCalls).toBe(1);
 });

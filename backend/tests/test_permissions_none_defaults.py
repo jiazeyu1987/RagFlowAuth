@@ -88,7 +88,18 @@ class TestNoneDefaults(unittest.TestCase):
 
         self.assertEqual(resp.status_code, 200)
         body = resp.json()
-        self.assertEqual(body["permissions"], {"can_upload": False, "can_review": False, "can_download": False, "can_delete": False})
+        self.assertEqual(
+            body["permissions"],
+            {
+                "can_upload": False,
+                "can_review": False,
+                "can_download": False,
+                "can_delete": False,
+                "can_manage_kb_directory": False,
+                "can_view_kb_config": False,
+                "can_view_tools": False,
+            },
+        )
         self.assertEqual(body["accessible_kbs"], [])
         self.assertEqual(body["accessible_chats"], [])
 

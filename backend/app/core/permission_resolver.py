@@ -22,6 +22,9 @@ class PermissionSnapshot:
     can_review: bool
     can_download: bool
     can_delete: bool
+    can_manage_kb_directory: bool
+    can_view_kb_config: bool
+    can_view_tools: bool
     kb_scope: ResourceScope
     kb_names: frozenset[str]
     chat_scope: ResourceScope
@@ -33,6 +36,9 @@ class PermissionSnapshot:
             "can_review": self.can_review,
             "can_download": self.can_download,
             "can_delete": self.can_delete,
+            "can_manage_kb_directory": self.can_manage_kb_directory,
+            "can_view_kb_config": self.can_view_kb_config,
+            "can_view_tools": self.can_view_tools,
         }
 
 
@@ -78,6 +84,9 @@ def resolve_permissions(deps: AppDependencies, user: Any) -> PermissionSnapshot:
             can_review=True,
             can_download=True,
             can_delete=True,
+            can_manage_kb_directory=True,
+            can_view_kb_config=True,
+            can_view_tools=True,
             kb_scope=ResourceScope.ALL,
             kb_names=frozenset(),
             chat_scope=ResourceScope.ALL,
@@ -88,6 +97,9 @@ def resolve_permissions(deps: AppDependencies, user: Any) -> PermissionSnapshot:
     can_review = False
     can_download = False
     can_delete = False
+    can_manage_kb_directory = False
+    can_view_kb_config = False
+    can_view_tools = False
     kb_names: set[str] = set()
     kb_node_ids: set[str] = set()
     chat_ids: set[str] = set()
@@ -112,6 +124,9 @@ def resolve_permissions(deps: AppDependencies, user: Any) -> PermissionSnapshot:
         can_review = can_review or bool(group.get("can_review", False))
         can_download = can_download or bool(group.get("can_download", False))
         can_delete = can_delete or bool(group.get("can_delete", False))
+        can_manage_kb_directory = can_manage_kb_directory or bool(group.get("can_manage_kb_directory", False))
+        can_view_kb_config = can_view_kb_config or bool(group.get("can_view_kb_config", True))
+        can_view_tools = can_view_tools or bool(group.get("can_view_tools", True))
 
         for name in _safe_list(group.get("accessible_kbs")):
             if isinstance(name, str) and name:
@@ -161,6 +176,9 @@ def resolve_permissions(deps: AppDependencies, user: Any) -> PermissionSnapshot:
         can_review=can_review,
         can_download=can_download,
         can_delete=can_delete,
+        can_manage_kb_directory=can_manage_kb_directory,
+        can_view_kb_config=can_view_kb_config,
+        can_view_tools=can_view_tools,
         kb_scope=kb_scope,
         kb_names=frozenset(kb_names),
         chat_scope=chat_scope,
@@ -229,6 +247,27 @@ def assert_can_delete(snapshot: PermissionSnapshot) -> None:
         return
     if not snapshot.can_delete:
         raise HTTPException(status_code=403, detail="no_delete_permission")
+
+
+def assert_can_manage_kb_directory(snapshot: PermissionSnapshot) -> None:
+    if snapshot.is_admin:
+        return
+    if not snapshot.can_manage_kb_directory:
+        raise HTTPException(status_code=403, detail="no_kb_directory_manage_permission")
+
+
+def assert_can_view_kb_config(snapshot: PermissionSnapshot) -> None:
+    if snapshot.is_admin:
+        return
+    if not snapshot.can_view_kb_config:
+        raise HTTPException(status_code=403, detail="no_kb_config_view_permission")
+
+
+def assert_can_view_tools(snapshot: PermissionSnapshot) -> None:
+    if snapshot.is_admin:
+        return
+    if not snapshot.can_view_tools:
+        raise HTTPException(status_code=403, detail="no_tools_view_permission")
 
 
 def assert_kb_allowed(snapshot: PermissionSnapshot, kb_name: str | Iterable[str]) -> None:

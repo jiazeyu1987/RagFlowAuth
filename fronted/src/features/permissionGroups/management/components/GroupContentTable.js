@@ -9,7 +9,7 @@ export default function GroupContentTable({
   onSelectFolder,
   onOpenFolder,
   onStartEditGroup,
-  onRemoveGroup,
+  onRequestDeleteGroup,
   onStartGroupDrag,
   onEndGroupDrag,
 }) {
@@ -20,13 +20,12 @@ export default function GroupContentTable({
           <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e5e7eb' }}>
             <th style={{ textAlign: 'left', padding: '8px 10px' }}>名称</th>
             <th style={{ textAlign: 'left', padding: '8px 10px', width: 90 }}>类型</th>
-            <th style={{ textAlign: 'left', padding: '8px 10px', width: 120 }}>操作</th>
+            <th style={{ textAlign: 'left', padding: '8px 10px', width: 140 }}>操作</th>
           </tr>
         </thead>
         <tbody>
           {rows.map((row) => {
-            const selected =
-              selectedItem?.kind === row.kind && selectedItem?.id === row.id;
+            const selected = selectedItem?.kind === row.kind && selectedItem?.id === row.id;
             return (
               <tr
                 key={`${row.kind}_${row.id}`}
@@ -52,21 +51,17 @@ export default function GroupContentTable({
                   background: selected ? '#eff6ff' : '#fff',
                   cursor: row.kind === 'group' ? 'grab' : 'pointer',
                   opacity:
-                    dragGroupId && row.kind === 'group' && dragGroupId === row.id
-                      ? 0.5
-                      : 1,
+                    dragGroupId && row.kind === 'group' && dragGroupId === row.id ? 0.5 : 1,
                 }}
               >
-                <td style={{ padding: '8px 10px' }}>
-                  {row.kind === 'folder' ? '[文件夹] ' : '[分组] '}
-                  {row.name}
-                </td>
+                <td style={{ padding: '8px 10px' }}>{row.name}</td>
                 <td style={{ padding: '8px 10px', color: '#4b5563' }}>{row.type}</td>
                 <td style={{ padding: '8px 10px' }}>
                   {row.kind === 'group' && (
                     <>
                       <button
                         type="button"
+                        data-testid={`pg-edit-${row.id}`}
                         onClick={(event) => {
                           event.stopPropagation();
                           const group = groups.find((item) => item.group_id === row.id);
@@ -87,10 +82,11 @@ export default function GroupContentTable({
                       </button>
                       <button
                         type="button"
+                        data-testid={`pg-delete-${row.id}`}
                         onClick={(event) => {
                           event.stopPropagation();
                           const group = groups.find((item) => item.group_id === row.id);
-                          if (group) onRemoveGroup(group);
+                          if (group) onRequestDeleteGroup(group);
                         }}
                         style={{
                           border: '1px solid #ef4444',
@@ -113,7 +109,7 @@ export default function GroupContentTable({
           {!rows.length && (
             <tr>
               <td colSpan={3} style={{ padding: 18, color: '#6b7280', textAlign: 'center' }}>
-                当前文件夹为空
+                当前目录为空
               </td>
             </tr>
           )}

@@ -22,4 +22,8 @@ export const DEFAULT_NEW_USER = {
 export const DEFAULT_POLICY_FORM = {
   max_login_sessions: 3,
   idle_timeout_minutes: 120,
+  can_change_password: true,
+  disable_account: false,
+  disable_mode: 'immediate',
+  disable_until_date: '',
 };

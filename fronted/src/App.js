@@ -156,7 +156,7 @@ function App() {
             <Route
               path="/tools"
               element={
-                <PermissionGuard>
+                <PermissionGuard permission={{ resource: 'tools', action: 'view' }}>
                   <Layout>
                     <Tools />
                   </Layout>
@@ -166,7 +166,7 @@ function App() {
             <Route
               path="/tools/patent-download"
               element={
-                <PermissionGuard>
+                <PermissionGuard permission={{ resource: 'tools', action: 'view' }}>
                   <Layout>
                     <PatentDownload />
                   </Layout>
@@ -176,7 +176,7 @@ function App() {
             <Route
               path="/tools/paper-download"
               element={
-                <PermissionGuard>
+                <PermissionGuard permission={{ resource: 'tools', action: 'view' }}>
                   <Layout>
                     <PaperDownload />
                   </Layout>
@@ -186,7 +186,7 @@ function App() {
             <Route
               path="/tools/nas-browser"
               element={
-                <PermissionGuard allowedRoles={['admin']}>
+                <PermissionGuard allowedRoles={['admin']} permission={{ resource: 'tools', action: 'view' }}>
                   <Layout>
                     <NasBrowser />
                   </Layout>
@@ -196,7 +196,7 @@ function App() {
             <Route
               path="/tools/drug-admin"
               element={
-                <PermissionGuard>
+                <PermissionGuard permission={{ resource: 'tools', action: 'view' }}>
                   <Layout>
                     <DrugAdminNavigator />
                   </Layout>
@@ -206,7 +206,7 @@ function App() {
             <Route
               path="/tools/nmpa"
               element={
-                <PermissionGuard>
+                <PermissionGuard permission={{ resource: 'tools', action: 'view' }}>
                   <Layout>
                     <NMPATool />
                   </Layout>
@@ -216,7 +216,7 @@ function App() {
             <Route
               path="/kbs"
               element={
-                <PermissionGuard>
+                <PermissionGuard permission={{ resource: 'kbs_config', action: 'view' }}>
                   <Layout>
                     <KnowledgeBases />
                   </Layout>

@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
+from tool.maintenance.core.ssh_executor import build_scp_argv
+
 
 def _dedupe_images(images: list[str]) -> list[str]:
     uniq: list[str] = []
@@ -69,20 +71,11 @@ def run_image_transfer_pipeline(
     log("[3/6] Transfer images TEST -> PROD (scp -3)")
     log(f"scp tar: {default_server_user}@{test_ip}:{tar_on_test} -> {default_server_user}@{prod_ip}:{tar_on_prod}")
     ok, out = run_local(
-        [
-            "scp",
-            "-3",
-            "-o",
-            "BatchMode=yes",
-            "-o",
-            "ConnectTimeout=10",
-            "-o",
-            "StrictHostKeyChecking=no",
-            "-o",
-            "UserKnownHostsFile=/dev/null",
+        build_scp_argv(
             f"{default_server_user}@{test_ip}:{tar_on_test}",
             f"{default_server_user}@{prod_ip}:{tar_on_prod}",
-        ]
+            through_local=True,
+        )
     )
     if not ok:
         return False, f"scp tar failed: {out}"

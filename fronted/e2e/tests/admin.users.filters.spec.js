@@ -19,9 +19,9 @@ adminTest('users list client-side filters work @regression @admin', async ({ pag
       username: 'alice',
       email: 'alice@example.com',
       company_id: 1,
-      company_name: 'E2E鍏徃A',
+      company_name: 'E2E公司A',
       department_id: 10,
-      department_name: 'E2E閮ㄩ棬10',
+      department_name: 'E2E部门10',
       role: 'viewer',
       status: 'active',
       group_id: null,
@@ -36,9 +36,9 @@ adminTest('users list client-side filters work @regression @admin', async ({ pag
       username: 'bob',
       email: 'bob@example.com',
       company_id: 2,
-      company_name: 'E2E鍏徃B',
+      company_name: 'E2E公司B',
       department_id: 20,
-      department_name: 'E2E閮ㄩ棬20',
+      department_name: 'E2E部门20',
       role: 'viewer',
       status: 'inactive',
       group_id: null,
@@ -53,9 +53,9 @@ adminTest('users list client-side filters work @regression @admin', async ({ pag
       username: 'carol',
       email: 'carol@example.com',
       company_id: 1,
-      company_name: 'E2E鍏徃A',
+      company_name: 'E2E公司A',
       department_id: 20,
-      department_name: 'E2E閮ㄩ棬20',
+      department_name: 'E2E部门20',
       role: 'viewer',
       status: 'active',
       group_id: null,
@@ -74,12 +74,12 @@ adminTest('users list client-side filters work @regression @admin', async ({ pag
 
   await mockJson(page, '**/api/permission-groups', { ok: true, data: groups });
   await mockJson(page, '**/api/org/companies', [
-    { id: 1, name: 'E2E鍏徃A' },
-    { id: 2, name: 'E2E鍏徃B' },
+    { id: 1, name: 'E2E公司A' },
+    { id: 2, name: 'E2E公司B' },
   ]);
   await mockJson(page, '**/api/org/departments', [
-    { id: 10, name: 'E2E閮ㄩ棬10' },
-    { id: 20, name: 'E2E閮ㄩ棬20' },
+    { id: 10, name: 'E2E部门10' },
+    { id: 20, name: 'E2E部门20' },
   ]);
 
   await page.goto('/users');
@@ -126,4 +126,3 @@ adminTest('users list client-side filters work @regression @admin', async ({ pag
   await expect(page.getByTestId('users-row-u_a')).toBeVisible();
   await expect(page.getByTestId('users-row-u_b')).toBeVisible();
 });
-

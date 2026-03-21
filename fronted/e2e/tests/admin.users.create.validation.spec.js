@@ -10,8 +10,8 @@ adminTest('user create requires company/department @regression @admin', async ({
   });
 
   await mockJson(page, '**/api/permission-groups', { ok: true, data: [] });
-  await mockJson(page, '**/api/org/companies', [{ id: 1, name: 'E2E鍏徃' }]);
-  await mockJson(page, '**/api/org/departments', [{ id: 10, name: 'E2E閮ㄩ棬' }]);
+  await mockJson(page, '**/api/org/companies', [{ id: 1, name: 'E2E公司' }]);
+  await mockJson(page, '**/api/org/departments', [{ id: 10, name: 'E2E部门' }]);
 
   let capturedCreateBody = null;
   await page.route('**/api/users', async (route) => {
@@ -34,4 +34,3 @@ adminTest('user create requires company/department @regression @admin', async ({
   expect(capturedCreateBody).toBeNull();
   await expect(page.getByTestId('users-create-form')).toBeVisible();
 });
-

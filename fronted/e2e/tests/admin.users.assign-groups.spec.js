@@ -15,9 +15,9 @@ adminTest('admin can assign permission groups to user via UI @regression @admin'
       username: 'alice',
       email: 'alice@example.com',
       company_id: 1,
-      company_name: 'E2E鍏徃',
+      company_name: 'E2E公司',
       department_id: 10,
-      department_name: 'E2E閮ㄩ棬',
+      department_name: 'E2E部门',
       role: 'viewer',
       status: 'active',
       group_id: null,
@@ -39,8 +39,8 @@ adminTest('admin can assign permission groups to user via UI @regression @admin'
   });
 
   await mockJson(page, '**/api/permission-groups', { ok: true, data: groups });
-  await mockJson(page, '**/api/org/companies', [{ id: 1, name: 'E2E鍏徃' }]);
-  await mockJson(page, '**/api/org/departments', [{ id: 10, name: 'E2E閮ㄩ棬' }]);
+  await mockJson(page, '**/api/org/companies', [{ id: 1, name: 'E2E公司' }]);
+  await mockJson(page, '**/api/org/departments', [{ id: 10, name: 'E2E部门' }]);
 
   let capturedUpdate = null;
   await page.route('**/api/users/*', async (route) => {

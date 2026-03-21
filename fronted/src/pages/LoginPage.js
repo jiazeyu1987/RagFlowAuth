@@ -49,7 +49,7 @@ const LoginPage = () => {
       <div style={{ position: 'relative', minHeight: '100vh', display: 'flex', alignItems: 'center', padding: isMobile ? '24px 12px' : '48px 20px' }}>
         <div style={{ width: '100%', maxWidth: 1120, margin: '0 auto', display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1.25fr 0.85fr', gap: isMobile ? 18 : 28, alignItems: 'center' }}>
           <div style={{ color: 'white', padding: isMobile ? '0' : '10px 8px' }}>
-            <div style={{ fontSize: isMobile ? 24 : 28, fontWeight: 800, letterSpacing: '0.04em', marginBottom: 10, textShadow: '0 10px 30px rgba(0,0,0,0.45)' }}>瑞泰知识库</div>
+            <div style={{ fontSize: isMobile ? 24 : 28, fontWeight: 800, letterSpacing: '0.04em', marginBottom: 10, textShadow: '0 10px 30px rgba(0,0,0,0.45)' }}>瑛泰知识库</div>
             <div style={{ letterSpacing: '0.14em', textTransform: 'uppercase', opacity: 0.9, fontSize: 12 }}>Knowledge Security Governance</div>
             <h1 style={{ margin: '14px 0 10px 0', fontSize: isMobile ? 30 : 44, lineHeight: 1.1, fontWeight: 800, textShadow: '0 10px 30px rgba(0,0,0,0.45)' }}>
               智能对话与知识管理

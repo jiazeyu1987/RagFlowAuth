@@ -1,7 +1,22 @@
 from __future__ import annotations
 
 import json
+import re
 from typing import Callable
+
+BASE_URL_RE = re.compile(r"https?://[^\\s\"']+")
+
+
+def _extract_base_url_from_output(text: str) -> str:
+    lines = (text or "").splitlines()
+    for line in reversed(lines):
+        line = (line or "").strip()
+        if not line:
+            continue
+        m = BASE_URL_RE.search(line)
+        if m:
+            return m.group(0).strip()
+    return ""
 
 
 def read_ragflow_base_url(*, ssh_cmd: Callable[[str, str], tuple[bool, str]], server_ip: str, app_dir: str) -> tuple[bool, str]:
@@ -15,11 +30,13 @@ def read_ragflow_base_url(*, ssh_cmd: Callable[[str, str], tuple[bool, str]], se
         f"sed -n 's/.*\"base_url\"[[:space:]]*:[[:space:]]*\"\\([^\\\"]*\\)\".*/\\1/p' {cfg_path} | head -n 1"
     )
     ok, out = ssh_cmd(server_ip, cmd)
-    text = (out or "").strip().splitlines()[-1].strip() if (out or "").strip() else ""
-    if text == "MISSING":
+    raw = (out or "").strip()
+    lines = [line.strip() for line in raw.splitlines() if line.strip()]
+    if any(line == "MISSING" for line in lines):
         return False, f"missing {cfg_path}"
     if not ok:
-        return False, (out or "").strip()
+        return False, raw
+    text = _extract_base_url_from_output(raw)
     if not text:
         return False, f"unable to parse base_url from {cfg_path}"
     return True, text

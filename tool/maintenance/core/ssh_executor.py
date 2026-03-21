@@ -1,9 +1,54 @@
 from __future__ import annotations
 
+import os
 import subprocess
 import time
 
 from .logging_setup import log_to_file
+
+
+def common_ssh_options() -> list[str]:
+    options = [
+        "-o",
+        "BatchMode=yes",
+        "-o",
+        "NumberOfPasswordPrompts=0",
+        "-o",
+        "LogLevel=ERROR",
+        "-o",
+        "StrictHostKeyChecking=no",
+        "-o",
+        "ConnectTimeout=10",
+        "-o",
+        "ControlMaster=no",
+    ]
+    if os.name == "nt":
+        options = ["-F", "NUL"] + options + [
+            "-o",
+            "UserKnownHostsFile=NUL",
+            "-o",
+            "GlobalKnownHostsFile=NUL",
+        ]
+    else:
+        options = options + [
+            "-o",
+            "UserKnownHostsFile=/dev/null",
+            "-o",
+            "GlobalKnownHostsFile=/dev/null",
+        ]
+    return options
+
+
+def build_ssh_argv(*, user: str, ip: str, command: str) -> list[str]:
+    return ["ssh", *common_ssh_options(), f"{user}@{ip}", command]
+
+
+def build_scp_argv(*args: str, through_local: bool = False) -> list[str]:
+    argv = ["scp", *common_ssh_options()]
+    if through_local:
+        argv.append("-3")
+    argv.extend(args)
+    return argv
 
 
 class SSHExecutor:
@@ -22,6 +67,7 @@ class SSHExecutor:
         if not output:
             return ""
         noise_prefixes = (
+            "Warning: Permanently added '",
             "close - IO is still pending on closed socket.",
         )
         lines = [line for line in output.splitlines() if not line.startswith(noise_prefixes)]
@@ -34,21 +80,7 @@ class SSHExecutor:
         Important: use argv list (NOT shell=True) to avoid Windows cmd.exe quote/escape issues
         for nested quotes (e.g. docker exec python -c "...").
         """
-        ssh_argv = [
-            "ssh",
-            "-o",
-            "BatchMode=yes",
-            "-o",
-            "NumberOfPasswordPrompts=0",
-            "-o",
-            "StrictHostKeyChecking=no",
-            "-o",
-            "ConnectTimeout=10",
-            "-o",
-            "ControlMaster=no",
-            f"{self.user}@{self.ip}",
-            command,
-        ]
+        ssh_argv = build_ssh_argv(user=self.user, ip=self.ip, command=command)
 
         log_to_file(f"[SSH] Execute: {command}", "DEBUG")
 

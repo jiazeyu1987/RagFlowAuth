@@ -24,6 +24,7 @@ class _PermissionGroupStore:
             "can_review": False,
             "can_download": True,
             "can_delete": False,
+            "can_manage_kb_directory": True,
             "accessible_kbs": [],
             "accessible_kb_nodes": [self._node_id],
             "accessible_chats": [],
@@ -82,6 +83,7 @@ class TestKnowledgeDirectoryAndResolverUnit(unittest.TestCase):
         snapshot = resolve_permissions(deps, _User())
 
         self.assertEqual(snapshot.kb_scope, ResourceScope.SET)
+        self.assertTrue(snapshot.can_manage_kb_directory)
         self.assertIn("ds_1", snapshot.kb_names)
         self.assertIn("ds_2", snapshot.kb_names)
         self.assertIn("KB-1", snapshot.kb_names)

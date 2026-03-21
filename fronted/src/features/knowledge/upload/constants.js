@@ -1,5 +1,3 @@
-export const MAX_FILE_SIZE_BYTES = 16 * 1024 * 1024;
-
 export const DEFAULT_ACCEPTED_EXTENSIONS = [
   '.txt',
   '.pdf',

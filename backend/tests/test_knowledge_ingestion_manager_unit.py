@@ -87,6 +87,9 @@ class TestKnowledgeIngestionManagerUnit(unittest.IsolatedAsyncioTestCase):
                 can_review=True,
                 can_download=True,
                 can_delete=True,
+                can_manage_kb_directory=True,
+                can_view_kb_config=True,
+                can_view_tools=True,
                 kb_scope=ResourceScope.ALL,
                 kb_names=frozenset(),
                 chat_scope=ResourceScope.NONE,
@@ -139,6 +142,17 @@ class TestKnowledgeIngestionManagerUnit(unittest.IsolatedAsyncioTestCase):
             self.assertIn(".xyz", self.deps.upload_settings_store.get().allowed_extensions)
         finally:
             settings.ALLOWED_EXTENSIONS = old_allowed
+
+    async def test_stage_upload_ignores_max_file_size_setting(self):
+        old_max = settings.MAX_FILE_SIZE
+        try:
+            settings.MAX_FILE_SIZE = 1
+            upload = _UploadFile(filename="x.txt", content=b"abc", content_type=None)
+            doc = await self.manager.stage_upload_knowledge(kb_ref="kb1", upload_file=upload, ctx=self.ctx)
+            self.assertEqual(doc.filename, "x.txt")
+            self.assertEqual(doc.file_size, 3)
+        finally:
+            settings.MAX_FILE_SIZE = old_max
 
 
 if __name__ == "__main__":

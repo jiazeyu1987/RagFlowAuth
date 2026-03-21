@@ -6,7 +6,14 @@ import PermissionGuard from './PermissionGuard';
 const MOBILE_BREAKPOINT = 768;
 
 const Layout = ({ children }) => {
-  const { user, logout, canUpload, canReview } = useAuth();
+  const {
+    user,
+    logout,
+    canUpload,
+    canReview,
+    canViewKbConfig,
+    canViewTools,
+  } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [isMobile, setIsMobile] = useState(() => {
@@ -20,7 +27,6 @@ const Layout = ({ children }) => {
 
   useEffect(() => {
     if (typeof window === 'undefined') return undefined;
-
     const handleResize = () => {
       const mobile = window.innerWidth <= MOBILE_BREAKPOINT;
       setIsMobile(mobile);
@@ -29,7 +35,6 @@ const Layout = ({ children }) => {
         return prev === false ? true : prev;
       });
     };
-
     handleResize();
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
@@ -62,12 +67,12 @@ const Layout = ({ children }) => {
   const navigation = [
     { name: '智能对话', path: '/chat', icon: '💬' },
     { name: '全库搜索', path: '/agents', icon: '🔎' },
-    { name: '知识配置', path: '/kbs', icon: '📚' },
+    { name: '知识配置', path: '/kbs', icon: '📚', show: canViewKbConfig },
     { name: '文档浏览', path: '/browser', icon: '📄' },
     { name: '文档审核', path: '/documents', icon: '✅', show: canReview },
-    { name: '文档上传', path: '/upload', icon: '⤴️', show: canUpload },
-    { name: '修改密码', path: '/change-password', icon: '🔑' },
-    { name: '实用工具', path: '/tools', icon: '🧰' },
+    { name: '文档上传', path: '/upload', icon: '📤', show: canUpload },
+    { name: '修改密码', path: '/change-password', icon: '🔐' },
+    { name: '实用工具', path: '/tools', icon: '🧰', show: canViewTools },
     { name: '用户管理', path: '/users', icon: '👤', allowedRoles: ['admin'] },
     { name: '组织管理', path: '/org-directory', icon: '🏢', allowedRoles: ['admin'] },
     { name: '权限分组', path: '/permission-groups', icon: '🛡️', allowedRoles: ['admin'] },

@@ -34,7 +34,10 @@ export const AuthProvider = ({ children }) => {
     can_upload: false,
     can_review: false,
     can_download: false,
-    can_delete: false
+    can_delete: false,
+    can_manage_kb_directory: false,
+    can_view_kb_config: false,
+    can_view_tools: false
   });
   const idleRedirectingRef = useRef(false);
   const currentUserId = user?.user_id;
@@ -48,7 +51,10 @@ export const AuthProvider = ({ children }) => {
       can_upload: false,
       can_review: false,
       can_download: false,
-      can_delete: false
+      can_delete: false,
+      can_manage_kb_directory: false,
+      can_view_kb_config: false,
+      can_view_tools: false
     });
   }, []);
 
@@ -255,6 +261,21 @@ export const AuthProvider = ({ children }) => {
       return false;
     }
 
+    if (resource === 'kb_directory') {
+      if (action === 'manage') return !!ops.can_manage_kb_directory;
+      return false;
+    }
+
+    if (resource === 'kbs_config') {
+      if (action === 'view') return ops.can_view_kb_config !== false;
+      return false;
+    }
+
+    if (resource === 'tools') {
+      if (action === 'view') return ops.can_view_tools !== false;
+      return false;
+    }
+
     return false;
   }, [user, permissions, accessibleKbs]);
 
@@ -287,6 +308,9 @@ export const AuthProvider = ({ children }) => {
     canReview: () => user?.role === 'admin' || permissions.can_review,
     canDownload: () => user?.role === 'admin' || permissions.can_download,
     canDelete: () => user?.role === 'admin' || permissions.can_delete,
+    canManageKbDirectory: () => user?.role === 'admin' || !!permissions.can_manage_kb_directory,
+    canViewKbConfig: () => user?.role === 'admin' || permissions.can_view_kb_config !== false,
+    canViewTools: () => user?.role === 'admin' || permissions.can_view_tools !== false,
     isAuthenticated: !!user,
   };
 

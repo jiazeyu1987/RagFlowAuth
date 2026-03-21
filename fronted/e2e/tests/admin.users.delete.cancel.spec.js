@@ -10,9 +10,9 @@ adminTest('users delete confirm can be cancelled @regression @admin', async ({ p
       username: 'bob',
       email: 'bob@example.com',
       company_id: 1,
-      company_name: 'E2E鍏徃',
+      company_name: 'E2E公司',
       department_id: 10,
-      department_name: 'E2E閮ㄩ棬',
+      department_name: 'E2E部门',
       role: 'viewer',
       status: 'active',
       group_id: null,
@@ -30,8 +30,8 @@ adminTest('users delete confirm can be cancelled @regression @admin', async ({ p
   });
 
   await mockJson(page, '**/api/permission-groups', { ok: true, data: [] });
-  await mockJson(page, '**/api/org/companies', [{ id: 1, name: 'E2E鍏徃' }]);
-  await mockJson(page, '**/api/org/departments', [{ id: 10, name: 'E2E閮ㄩ棬' }]);
+  await mockJson(page, '**/api/org/companies', [{ id: 1, name: 'E2E公司' }]);
+  await mockJson(page, '**/api/org/departments', [{ id: 10, name: 'E2E部门' }]);
 
   let deleteCalled = false;
   await page.route('**/api/users/*', async (route) => {
@@ -53,4 +53,3 @@ adminTest('users delete confirm can be cancelled @regression @admin', async ({ p
   expect(deleteCalled).toBeFalsy();
   await expect(page.getByTestId('users-row-u_1')).toBeVisible();
 });
-

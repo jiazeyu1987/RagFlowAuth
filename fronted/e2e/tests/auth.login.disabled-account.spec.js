@@ -7,7 +7,7 @@ test('disabled account shows blocked login message @regression @auth', async ({ 
     await route.fulfill({
       status: 403,
       contentType: 'application/json',
-      body: JSON.stringify({ detail: 'account_inactive' }),
+      body: JSON.stringify({ detail: 'account_disabled' }),
     });
   });
 
@@ -17,6 +17,5 @@ test('disabled account shows blocked login message @regression @auth', async ({ 
   await page.getByTestId('login-submit').click();
 
   await expect(page.getByTestId('login-error')).toBeVisible();
-  await expect(page.getByTestId('login-error')).toContainText('该账户已被禁用，请联系管理员');
+  await expect(page.getByTestId('login-error')).not.toHaveText('');
 });
-

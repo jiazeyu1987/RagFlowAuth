@@ -9,6 +9,7 @@ from backend.core.security import auth
 from backend.app.dependencies import AppDependencies
 from backend.services.auth_flow_service import payload_sid, resolve_request_token
 from backend.services.auth_session import AuthSessionError
+from backend.services.users import resolve_login_block
 
 
 def get_deps(request: Request) -> AppDependencies:
@@ -50,8 +51,9 @@ async def get_current_payload(request: Request) -> TokenPayload:
     user = user_store.get_by_user_id(payload.sub)
     if not user:
         raise HTTPException(status_code=401, detail="User not found")
-    if str(getattr(user, "status", "") or "").lower() != "active":
-        raise HTTPException(status_code=403, detail="account_inactive")
+    blocked, code = resolve_login_block(user)
+    if blocked:
+        raise HTTPException(status_code=403, detail=code or "account_disabled")
 
     sid = payload_sid(payload)
     if not sid:

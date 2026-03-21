@@ -12,6 +12,7 @@ from backend.models.auth import LoginRequest, TokenResponse
 from backend.services.audit_helpers import actor_fields_from_user
 from backend.services.auth_session import AuthSessionError
 from backend.services.user_store import hash_password
+from backend.services.users import resolve_login_block
 
 
 def _header_bearer_token(request: Request) -> str | None:
@@ -81,8 +82,9 @@ def login(
     if hash_password(credentials.password) != user.password_hash:
         raise HTTPException(status_code=401, detail="invalid_username_or_password")
 
-    if str(getattr(user, "status", "") or "").lower() != "active":
-        raise HTTPException(status_code=403, detail="account_inactive")
+    blocked, code = resolve_login_block(user)
+    if blocked:
+        raise HTTPException(status_code=403, detail=code or "account_disabled")
 
     scopes: list[str] = []
     auth_session_store = getattr(deps, "auth_session_store", None)
@@ -171,8 +173,9 @@ async def refresh(*, request: Request, deps: AppDependencies) -> dict[str, str]:
     if not user:
         raise HTTPException(status_code=401, detail="user_not_found")
 
-    if str(getattr(user, "status", "") or "").lower() != "active":
-        raise HTTPException(status_code=403, detail="account_inactive")
+    blocked, code = resolve_login_block(user)
+    if blocked:
+        raise HTTPException(status_code=403, detail=code or "account_disabled")
 
     sid = payload_sid(payload)
     auth_session_store = getattr(deps, "auth_session_store", None)

@@ -18,7 +18,6 @@ class KbDocument:
     reviewed_at_ms: Optional[int] = None
     review_notes: Optional[str] = None
     ragflow_doc_id: Optional[str] = None
-    kb_id: str = "灞曞巺"
+    kb_id: str = "展厅"
     kb_dataset_id: Optional[str] = None
     kb_name: Optional[str] = None
-

@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import time
 from typing import Optional, Protocol
 
 from backend.core.roles import VALID_ROLES
 from backend.models.user import UserCreate, UserResponse, UserUpdate
+from backend.services.users.account_status import is_login_disabled_now
 
 VALID_USER_STATUSES = {"active", "inactive"}
 
@@ -51,9 +53,6 @@ class UserManagementError(Exception):
 class UserManagementManager:
     """
     Framework-agnostic user domain manager.
-
-    This class only depends on a small UsersPort contract so it can be reused in
-    other systems without binding to FastAPI or AppDependencies internals.
     """
 
     def __init__(self, port: UsersPort):
@@ -96,13 +95,47 @@ class UserManagementManager:
     def _normalize_user_status(status: str | None, *, for_create: bool) -> str | None:
         if status is None:
             return "active" if for_create else None
-
         normalized = str(status or "").strip().lower()
         if not normalized:
             return "active" if for_create else None
         if normalized not in VALID_USER_STATUSES:
             raise UserManagementError("invalid_user_status")
         return normalized
+
+    @staticmethod
+    def _normalize_disable_policy(
+        *,
+        disable_login_enabled: bool | None,
+        disable_login_until_ms: int | None,
+        for_create: bool,
+    ) -> tuple[bool | None, int | None]:
+        enabled = disable_login_enabled
+        until = disable_login_until_ms
+
+        if for_create and enabled is None:
+            enabled = False
+
+        if enabled is None and until is None:
+            return None, None
+
+        if enabled is None:
+            enabled = bool(until)
+        enabled = bool(enabled)
+
+        if not enabled:
+            return False, None
+
+        if until is None:
+            return True, None
+
+        try:
+            until_value = int(until)
+        except Exception as e:
+            raise UserManagementError("invalid_disable_login_until_ms") from e
+
+        if until_value <= int(time.time() * 1000):
+            raise UserManagementError("disable_login_until_must_be_future")
+        return True, until_value
 
     def _build_permission_groups(self, group_ids: list[int] | None) -> list[dict]:
         result: list[dict] = []
@@ -145,6 +178,14 @@ class UserManagementManager:
             permission_groups=self._build_permission_groups(user.group_ids),
             role=user.role,
             status=user.status,
+            can_change_password=bool(getattr(user, "can_change_password", True)),
+            disable_login_enabled=bool(getattr(user, "disable_login_enabled", False)),
+            disable_login_until_ms=(
+                int(getattr(user, "disable_login_until_ms"))
+                if getattr(user, "disable_login_until_ms", None) is not None
+                else None
+            ),
+            login_disabled=is_login_disabled_now(user),
             max_login_sessions=int(getattr(user, "max_login_sessions", 3) or 3),
             idle_timeout_minutes=int(getattr(user, "idle_timeout_minutes", 120) or 120),
             active_session_count=active_count,
@@ -201,6 +242,11 @@ class UserManagementManager:
             idle_timeout_minutes=user_data.idle_timeout_minutes,
             for_create=True,
         )
+        disable_login_enabled, disable_login_until_ms = self._normalize_disable_policy(
+            disable_login_enabled=user_data.disable_login_enabled,
+            disable_login_until_ms=user_data.disable_login_until_ms,
+            for_create=True,
+        )
 
         group_ids = user_data.group_ids
         if not group_ids:
@@ -228,6 +274,9 @@ class UserManagementManager:
             status=status,
             max_login_sessions=max_login_sessions,
             idle_timeout_minutes=idle_timeout_minutes,
+            can_change_password=bool(user_data.can_change_password),
+            disable_login_enabled=bool(disable_login_enabled),
+            disable_login_until_ms=disable_login_until_ms,
             created_by=created_by,
         )
 
@@ -256,9 +305,6 @@ class UserManagementManager:
         if role is not None and role not in VALID_ROLES:
             raise UserManagementError(f"Invalid role: {role}")
         status = self._normalize_user_status(user_data.status, for_create=False)
-        is_builtin_admin = str(getattr(current_user, "username", "") or "").strip().lower() == "admin"
-        if is_builtin_admin and status is not None and status != "active":
-            raise UserManagementError("admin_user_cannot_be_disabled")
 
         if user_data.company_id is not None and not self._port.get_company(user_data.company_id):
             raise UserManagementError("company_not_found")
@@ -270,6 +316,27 @@ class UserManagementManager:
             idle_timeout_minutes=user_data.idle_timeout_minutes,
             for_create=False,
         )
+        disable_login_enabled, disable_login_until_ms = self._normalize_disable_policy(
+            disable_login_enabled=user_data.disable_login_enabled,
+            disable_login_until_ms=user_data.disable_login_until_ms,
+            for_create=False,
+        )
+        can_change_password = (
+            bool(user_data.can_change_password) if user_data.can_change_password is not None else None
+        )
+
+        disable_now = False
+        if status is not None and status != "active":
+            disable_now = True
+        if disable_login_enabled:
+            if disable_login_until_ms is None:
+                disable_now = True
+            else:
+                disable_now = disable_login_until_ms > int(time.time() * 1000)
+
+        is_builtin_admin = str(getattr(current_user, "username", "") or "").strip().lower() == "admin"
+        if is_builtin_admin and disable_now:
+            raise UserManagementError("admin_user_cannot_be_disabled")
 
         group_ids = user_data.group_ids
         if group_ids is not None:
@@ -292,6 +359,9 @@ class UserManagementManager:
             status=status,
             max_login_sessions=max_login_sessions,
             idle_timeout_minutes=idle_timeout_minutes,
+            can_change_password=can_change_password,
+            disable_login_enabled=disable_login_enabled,
+            disable_login_until_ms=disable_login_until_ms,
         )
         if not user:
             raise UserManagementError("user_not_found", status_code=404)

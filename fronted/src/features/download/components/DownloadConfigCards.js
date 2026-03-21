@@ -31,8 +31,8 @@ const defaultTagStyle = {
 
 export function DownloadKeywordConfigCard({
   boxStyle,
-  title = '¹Ø¼ü´ÊÉèÖÃ',
-  keywordLabel = '¹Ø¼ü´Ê',
+  title = 'å…³é”®è¯è®¾ç½®',
+  keywordLabel = 'å…³é”®è¯',
   keywordText = '',
   onKeywordChange,
   placeholder = '',
@@ -40,10 +40,10 @@ export function DownloadKeywordConfigCard({
   useAnd = true,
   onUseAndChange,
   useAndId = 'download-use-and',
-  useAndLabel = 'Ê¹ÓÃ AND',
-  parsedTitle = '½âÎöºóµÄ¹Ø¼ü´Ê',
+  useAndLabel = 'ä½¿ç”¨ AND',
+  parsedTitle = 'è§£æåçš„å…³é”®è¯',
   parsedKeywords = [],
-  emptyParsedText = 'ÔİÎŞ',
+  emptyParsedText = 'æš‚æ— ',
   titleStyle,
   labelStyle,
   tagStyle,
@@ -73,7 +73,7 @@ export function DownloadKeywordConfigCard({
 
 export function DownloadSourceConfigCard({
   boxStyle,
-  title = 'À´Ô´ÉèÖÃ',
+  title = 'æ¥æºè®¾ç½®',
   sourceLabelMap = {},
   sources = {},
   onUpdateSource,
@@ -82,10 +82,10 @@ export function DownloadSourceConfigCard({
   onAutoAnalyzeChange,
   onRunDownload,
   loading = false,
-  autoAnalyzeLabel = '×Ô¶¯½âÎö',
-  runText = '¿ªÊ¼ÏÂÔØ',
-  runLoadingText = 'ÏÂÔØÖĞ...',
-  limitLabel = 'ÊıÁ¿ÉÏÏŞ',
+  autoAnalyzeLabel = 'è‡ªåŠ¨è§£æ',
+  runText = 'å¼€å§‹ä¸‹è½½',
+  runLoadingText = 'ä¸‹è½½ä¸­...',
+  limitLabel = 'æ•°é‡ä¸Šé™',
   titleStyle,
   children,
 }) {

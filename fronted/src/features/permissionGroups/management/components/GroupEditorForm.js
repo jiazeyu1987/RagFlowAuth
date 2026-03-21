@@ -31,6 +31,7 @@ export default function GroupEditorForm({
       >
         <label>权限组名称</label>
         <input
+          data-testid="pg-form-group-name"
           value={formData.group_name}
           onChange={(event) =>
             onSetFormData((previous) => ({
@@ -59,6 +60,7 @@ export default function GroupEditorForm({
       >
         <label>描述</label>
         <textarea
+          data-testid="pg-form-description"
           value={formData.description}
           onChange={(event) =>
             onSetFormData((previous) => ({
@@ -76,11 +78,12 @@ export default function GroupEditorForm({
       </div>
 
       <FolderSelectionList
-        title="知识文件夹权限"
+        title="知识目录权限"
         items={knowledgeNodeItems}
         selected={formData.accessible_kb_nodes || []}
         onToggle={onToggleNodeAuth}
-        emptyText="暂无知识文件夹"
+        emptyText="暂无知识目录"
+        itemTestIdPrefix="pg-form-kb-node"
       />
       <FolderSelectionList
         title="知识库权限"
@@ -88,6 +91,8 @@ export default function GroupEditorForm({
         selected={formData.accessible_kbs || []}
         onToggle={onToggleKbAuth}
         emptyText="暂无知识库"
+        itemTestIdPrefix="pg-form-kb"
+        emptyTestId="pg-form-kb-empty"
       />
       <ChatSelection
         chatAgents={chatAgents || []}
@@ -101,7 +106,8 @@ export default function GroupEditorForm({
           <label>
             <input
               type="checkbox"
-              checked={formData.can_upload}
+              data-testid="pg-form-can-upload"
+              checked={!!formData.can_upload}
               onChange={(event) =>
                 onSetFormData((previous) => ({
                   ...previous,
@@ -114,7 +120,8 @@ export default function GroupEditorForm({
           <label>
             <input
               type="checkbox"
-              checked={formData.can_review}
+              data-testid="pg-form-can-review"
+              checked={!!formData.can_review}
               onChange={(event) =>
                 onSetFormData((previous) => ({
                   ...previous,
@@ -127,7 +134,8 @@ export default function GroupEditorForm({
           <label>
             <input
               type="checkbox"
-              checked={formData.can_download}
+              data-testid="pg-form-can-download"
+              checked={!!formData.can_download}
               onChange={(event) =>
                 onSetFormData((previous) => ({
                   ...previous,
@@ -140,7 +148,8 @@ export default function GroupEditorForm({
           <label>
             <input
               type="checkbox"
-              checked={formData.can_delete}
+              data-testid="pg-form-can-delete"
+              checked={!!formData.can_delete}
               onChange={(event) =>
                 onSetFormData((previous) => ({
                   ...previous,
@@ -150,12 +159,55 @@ export default function GroupEditorForm({
             />{' '}
             删除
           </label>
+          <label>
+            <input
+              type="checkbox"
+              data-testid="pg-form-can-manage-kb-directory"
+              checked={!!formData.can_manage_kb_directory}
+              onChange={(event) =>
+                onSetFormData((previous) => ({
+                  ...previous,
+                  can_manage_kb_directory: event.target.checked,
+                }))
+              }
+            />{' '}
+            目录操作与文件移动
+          </label>
+          <label>
+            <input
+              type="checkbox"
+              data-testid="pg-form-can-view-kb-config"
+              checked={formData.can_view_kb_config !== false}
+              onChange={(event) =>
+                onSetFormData((previous) => ({
+                  ...previous,
+                  can_view_kb_config: event.target.checked,
+                }))
+              }
+            />{' '}
+            可查看知识配置
+          </label>
+          <label>
+            <input
+              type="checkbox"
+              data-testid="pg-form-can-view-tools"
+              checked={formData.can_view_tools !== false}
+              onChange={(event) =>
+                onSetFormData((previous) => ({
+                  ...previous,
+                  can_view_tools: event.target.checked,
+                }))
+              }
+            />{' '}
+            可查看实用工具
+          </label>
         </div>
       </div>
 
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
         <button
           type="button"
+          data-testid="pg-form-cancel"
           onClick={onCancelEdit}
           style={{
             border: '1px solid #d1d5db',
@@ -169,6 +221,7 @@ export default function GroupEditorForm({
         </button>
         <button
           type="submit"
+          data-testid="pg-form-submit"
           disabled={saving}
           style={{
             border: '1px solid #2563eb',

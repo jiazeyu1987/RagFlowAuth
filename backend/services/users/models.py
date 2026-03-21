@@ -18,6 +18,9 @@ class User:
     # Per-account login policy.
     max_login_sessions: int = 3
     idle_timeout_minutes: int = 120
+    can_change_password: bool = True
+    disable_login_enabled: bool = False
+    disable_login_until_ms: Optional[int] = None
     # Source of truth permission groups.
     group_ids: List[int] | None = None
     status: str = "active"

@@ -13,3 +13,8 @@ fronted/build/
 **/*.log
 **/.DS_Store
 **/Thumbs.db
+
+backend/tests/_tmp/
+backend/tests/_tmp/**
+tmp_test/
+tmp_test/**

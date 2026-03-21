@@ -90,6 +90,13 @@ def build_auth_me_payload(*, deps: Any, user: Any, snapshot: Any) -> dict[str, A
         "permissions": permissions,
         "max_login_sessions": int(getattr(user, "max_login_sessions", 3) or 3),
         "idle_timeout_minutes": int(getattr(user, "idle_timeout_minutes", 120) or 120),
+        "can_change_password": bool(getattr(user, "can_change_password", True)),
+        "disable_login_enabled": bool(getattr(user, "disable_login_enabled", False)),
+        "disable_login_until_ms": (
+            int(getattr(user, "disable_login_until_ms"))
+            if getattr(user, "disable_login_until_ms", None) is not None
+            else None
+        ),
         # Legacy field: dataset names (for display).
         "accessible_kbs": sorted(accessible_kb_names_set),
         # New field: dataset ids (for API operations / stage-3 migration).

@@ -5,7 +5,7 @@ import os
 import time
 import zipfile
 
-from fastapi import APIRouter, HTTPException, Request, UploadFile, File
+from fastapi import APIRouter, File, HTTPException, Request, UploadFile
 from fastapi.responses import Response
 
 from backend.app.core.authz import AuthContextDep
@@ -124,7 +124,7 @@ async def batch_download_documents_unified(
             valid_docs.append(doc)
 
         if not valid_docs:
-            raise HTTPException(status_code=404, detail="娌℃湁鎵惧埌鍙笅杞界殑鏂囨。")
+            raise HTTPException(status_code=404, detail="没有找到可下载的文档")
 
         zip_buffer = io.BytesIO()
         created_at_ms = int(time.time() * 1000)
@@ -165,17 +165,17 @@ async def batch_download_documents_unified(
             raise HTTPException(status_code=400, detail="no_documents_selected")
 
         for doc_info in documents_info:
-            dataset = doc_info.get("dataset", "灞曞巺")
+            dataset = doc_info.get("dataset", "展厅")
             assert_kb_allowed(snapshot, dataset)
 
         zip_content, filename = deps.ragflow_service.batch_download_documents(documents_info)
         if zip_content is None:
-            raise HTTPException(status_code=500, detail="鎵归噺涓嬭浇澶辫触")
+            raise HTTPException(status_code=500, detail="批量下载失败")
 
         for doc_info in documents_info:
             doc_id = doc_info.get("doc_id") or doc_info.get("id")
             doc_name = doc_info.get("name", "unknown")
-            dataset = doc_info.get("dataset", "灞曞巺")
+            dataset = doc_info.get("dataset", "展厅")
             kb_info = resolve_kb_ref(deps, dataset)
             deps.download_log_store.log_download(
                 doc_id=doc_id,

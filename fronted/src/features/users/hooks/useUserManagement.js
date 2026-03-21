@@ -6,6 +6,36 @@ import { orgDirectoryApi } from '../../orgDirectory/api';
 import { DEFAULT_FILTERS, DEFAULT_NEW_USER, DEFAULT_POLICY_FORM } from '../utils/constants';
 import { buildListParams, filterUsers, groupUsersByDepartment } from '../utils/userFilters';
 
+const isUserLoginDisabled = (user) => {
+  if (!user) return false;
+  if (user.login_disabled === true) return true;
+  const status = String(user.status || '').toLowerCase();
+  if (status && status !== 'active') return true;
+  const disableEnabled = user.disable_login_enabled === true;
+  if (!disableEnabled) return false;
+  const untilMs = Number(user.disable_login_until_ms || 0);
+  if (!Number.isFinite(untilMs) || untilMs <= 0) return true;
+  return Date.now() < untilMs;
+};
+
+const formatDateForInput = (ms) => {
+  if (!ms) return '';
+  const date = new Date(Number(ms));
+  if (!Number.isFinite(date.getTime())) return '';
+  const y = date.getFullYear();
+  const m = `${date.getMonth() + 1}`.padStart(2, '0');
+  const d = `${date.getDate()}`.padStart(2, '0');
+  return `${y}-${m}-${d}`;
+};
+
+const parseDisableUntilDate = (dateText) => {
+  const raw = String(dateText || '').trim();
+  if (!raw) return null;
+  const date = new Date(`${raw}T23:59:59`);
+  const ms = date.getTime();
+  return Number.isFinite(ms) ? ms : null;
+};
+
 export const useUserManagement = () => {
   const { can } = useAuth();
 
@@ -115,49 +145,61 @@ export const useUserManagement = () => {
     });
   }, []);
 
-  const handleCreateUser = useCallback(async (e) => {
-    e.preventDefault();
-    try {
-      const payload = {
-        ...newUser,
-        company_id: newUser.company_id ? Number(newUser.company_id) : null,
-        department_id: newUser.department_id ? Number(newUser.department_id) : null,
-        max_login_sessions: Number(newUser.max_login_sessions),
-        idle_timeout_minutes: Number(newUser.idle_timeout_minutes),
-      };
-      await usersApi.create(payload);
-      handleCloseCreateModal();
-      fetchUsers();
-    } catch (err) {
-      setError(err?.message || String(err || '创建用户失败'));
-    }
-  }, [fetchUsers, handleCloseCreateModal, newUser]);
+  const handleCreateUser = useCallback(
+    async (e) => {
+      e.preventDefault();
+      try {
+        const payload = {
+          ...newUser,
+          company_id: newUser.company_id ? Number(newUser.company_id) : null,
+          department_id: newUser.department_id ? Number(newUser.department_id) : null,
+          max_login_sessions: Number(newUser.max_login_sessions),
+          idle_timeout_minutes: Number(newUser.idle_timeout_minutes),
+        };
+        await usersApi.create(payload);
+        handleCloseCreateModal();
+        fetchUsers();
+      } catch (err) {
+        setError(err?.message || String(err || '创建用户失败'));
+      }
+    },
+    [fetchUsers, handleCloseCreateModal, newUser]
+  );
 
-  const handleDeleteUser = useCallback(async (userId) => {
-    if (!window.confirm('确定要删除该用户吗？')) return;
-    try {
-      await usersApi.remove(userId);
-      fetchUsers();
-    } catch (err) {
-      setError(err?.message || String(err || '删除用户失败'));
-    }
-  }, [fetchUsers]);
+  const handleDeleteUser = useCallback(
+    async (userId) => {
+      if (!window.confirm('确定要删除该用户吗？')) return;
+      try {
+        await usersApi.remove(userId);
+        fetchUsers();
+      } catch (err) {
+        setError(err?.message || String(err || '删除用户失败'));
+      }
+    },
+    [fetchUsers]
+  );
 
-  const handleToggleUserStatus = useCallback(async (user) => {
-    if (!user?.user_id) return;
-    if (String(user?.username || '').toLowerCase() === 'admin') return;
+  const handleToggleUserStatus = useCallback(
+    async (user) => {
+      if (!user?.user_id) return;
+      if (String(user?.username || '').toLowerCase() === 'admin') return;
 
-    const nextStatus = user.status === 'active' ? 'inactive' : 'active';
-    try {
-      setStatusUpdatingUserId(user.user_id);
-      await usersApi.update(user.user_id, { status: nextStatus });
-      await fetchUsers();
-    } catch (err) {
-      setError(err?.message || String(err || '切换用户状态失败'));
-    } finally {
-      setStatusUpdatingUserId(null);
-    }
-  }, [fetchUsers]);
+      const disabledNow = isUserLoginDisabled(user);
+      const payload = disabledNow
+        ? { status: 'active', disable_login_enabled: false, disable_login_until_ms: null }
+        : { status: 'inactive', disable_login_enabled: false, disable_login_until_ms: null };
+      try {
+        setStatusUpdatingUserId(user.user_id);
+        await usersApi.update(user.user_id, payload);
+        await fetchUsers();
+      } catch (err) {
+        setError(err?.message || String(err || '切换用户状态失败'));
+      } finally {
+        setStatusUpdatingUserId(null);
+      }
+    },
+    [fetchUsers]
+  );
 
   const handleOpenResetPassword = useCallback((user) => {
     setResetPasswordUser(user);
@@ -200,11 +242,19 @@ export const useUserManagement = () => {
   }, [handleCloseResetPassword, resetPasswordConfirm, resetPasswordUser, resetPasswordValue]);
 
   const handleOpenPolicyModal = useCallback((user) => {
+    const disabledNow = isUserLoginDisabled(user);
+    const disableUntilMs = Number(user?.disable_login_until_ms || 0);
+    const hasFutureUntil = Number.isFinite(disableUntilMs) && disableUntilMs > Date.now();
+
     setPolicyUser(user);
     setPolicyError(null);
     setPolicyForm({
       max_login_sessions: Number(user?.max_login_sessions || 3),
       idle_timeout_minutes: Number(user?.idle_timeout_minutes || 120),
+      can_change_password: user?.can_change_password !== false,
+      disable_account: disabledNow,
+      disable_mode: hasFutureUntil ? 'until' : 'immediate',
+      disable_until_date: hasFutureUntil ? formatDateForInput(disableUntilMs) : '',
     });
     setShowPolicyModal(true);
   }, []);
@@ -233,12 +283,38 @@ export const useUserManagement = () => {
       return;
     }
 
+    const payload = {
+      max_login_sessions: maxSessions,
+      idle_timeout_minutes: idleMinutes,
+      can_change_password: !!policyForm.can_change_password,
+    };
+
+    if (!policyForm.disable_account) {
+      payload.status = 'active';
+      payload.disable_login_enabled = false;
+      payload.disable_login_until_ms = null;
+    } else if (policyForm.disable_mode === 'until') {
+      const untilMs = parseDisableUntilDate(policyForm.disable_until_date);
+      if (!untilMs) {
+        setPolicyError('请选择禁用到期日期');
+        return;
+      }
+      if (untilMs <= Date.now()) {
+        setPolicyError('禁用到期时间必须晚于当前时间');
+        return;
+      }
+      payload.status = 'active';
+      payload.disable_login_enabled = true;
+      payload.disable_login_until_ms = untilMs;
+    } else {
+      payload.status = 'inactive';
+      payload.disable_login_enabled = false;
+      payload.disable_login_until_ms = null;
+    }
+
     try {
       setPolicySubmitting(true);
-      await usersApi.update(policyUser.user_id, {
-        max_login_sessions: maxSessions,
-        idle_timeout_minutes: idleMinutes,
-      });
+      await usersApi.update(policyUser.user_id, payload);
       handleClosePolicyModal();
       fetchUsers();
     } catch (err) {

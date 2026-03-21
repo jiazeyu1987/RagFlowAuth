@@ -78,7 +78,15 @@ class TestAuthMeAdmin(unittest.TestCase):
         self.assertEqual(body["role"], "admin")
         self.assertEqual(
             body["permissions"],
-            {"can_upload": True, "can_review": True, "can_download": True, "can_delete": True},
+            {
+                "can_upload": True,
+                "can_review": True,
+                "can_download": True,
+                "can_delete": True,
+                "can_manage_kb_directory": True,
+                "can_view_kb_config": True,
+                "can_view_tools": True,
+            },
         )
         self.assertEqual(body["accessible_kbs"], ["kb_a", "kb_b"])
         self.assertEqual(body["accessible_kb_ids"], ["id_a", "id_b"])

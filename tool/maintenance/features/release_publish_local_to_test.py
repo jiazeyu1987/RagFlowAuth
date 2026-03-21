@@ -6,6 +6,7 @@ from pathlib import Path
 
 from tool.maintenance.core.constants import DEFAULT_SERVER_USER, TEST_SERVER_IP
 from tool.maintenance.core.remote_staging import RemoteStagingManager
+from tool.maintenance.core.ssh_executor import build_scp_argv, build_ssh_argv
 from tool.maintenance.core.tempdir import cleanup_dir, make_temp_dir
 from tool.maintenance.features.release_publish import (
     DEFAULT_REMOTE_APP_DIR,
@@ -41,12 +42,21 @@ def _run_local(command: str, *, cwd: Path | None = None, timeout_s: int = 3600) 
 
 
 def _ssh(server_ip: str, command: str, *, timeout_s: int = 60) -> tuple[bool, str]:
-    # Keep it simple: rely on OpenSSH on the local machine.
-    # Note: command must be a single shell string executed remotely.
-    return _run_local(
-        f'ssh -o BatchMode=yes -o ConnectTimeout=10 {DEFAULT_SERVER_USER}@{server_ip} "{command}"',
-        timeout_s=timeout_s,
+    proc = subprocess.run(
+        build_ssh_argv(user=DEFAULT_SERVER_USER, ip=server_ip, command=command),
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=timeout_s,
     )
+    out = (proc.stdout or "") + (proc.stderr or "")
+    out = "\n".join(
+        line
+        for line in out.splitlines()
+        if not line.startswith("close - IO is still pending on closed socket.")
+    )
+    return (proc.returncode == 0), out.strip()
 
 
 def publish_from_local_to_test(
@@ -130,7 +140,16 @@ def publish_from_local_to_test(
     log(f"[STAGING] remote tar path: {tar_on_test}")
     log("[3/6] Transfer images to TEST (scp)")
     log(f"scp tar: {tar_local} -> {DEFAULT_SERVER_USER}@{test_ip}:{tar_on_test}")
-    ok, out = _run_local(f'scp "{tar_local}" {DEFAULT_SERVER_USER}@{test_ip}:{tar_on_test}', timeout_s=7200)
+    proc = subprocess.run(
+        build_scp_argv(str(tar_local), f"{DEFAULT_SERVER_USER}@{test_ip}:{tar_on_test}"),
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=7200,
+    )
+    out = ((proc.stdout or "") + (proc.stderr or "")).strip()
+    ok = proc.returncode == 0
     if not ok:
         log(f"[ERROR] scp failed:\n{out}")
         return finish(False, before, None)

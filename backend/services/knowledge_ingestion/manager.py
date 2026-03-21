@@ -101,8 +101,6 @@ class KnowledgeIngestionManager:
         assert_kb_allowed(snapshot, kb_ref)
 
         content = await upload_file.read()
-        if len(content) > settings.MAX_FILE_SIZE:
-            raise KnowledgeIngestionError("file_too_large", status_code=400)
 
         display_name, relative_path = self._normalize_relative_upload_path(upload_file.filename)
         file_ext = Path(display_name).suffix.lower()

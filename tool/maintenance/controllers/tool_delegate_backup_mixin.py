@@ -1,15 +1,15 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 
 class RagflowAuthToolBackupDelegateMixin:
     def create_logs_tab(self):
-        """鏃ュ織鏌ョ湅椤电 UI锛堟媶鍒嗗埌鐙珛妯″潡锛夈€?"""
+        """日志查看页签 UI（拆分到独立模块）。"""
         from tool.maintenance.ui.logs_tab import build_logs_tab
 
         build_logs_tab(self)
 
     def create_nas_tab(self):
-        """NAS 浜戠洏椤电 UI锛堜粎绠＄悊鍛樺彲瑙侊級銆?"""
+        """NAS 云盘页签 UI（仅管理员可见）。"""
         from tool.maintenance.ui.nas_tab import build_nas_tab
 
         build_nas_tab(self)
@@ -24,13 +24,13 @@ class RagflowAuthToolBackupDelegateMixin:
         return refresh_admin_tabs_impl(self)
 
     def create_backup_files_tab(self):
-        """澶囦唤鏂囦欢椤电 UI锛堟媶鍒嗗埌鐙珛妯″潡锛夈€?"""
+        """备份文件页签 UI（拆分到独立模块）。"""
         from tool.maintenance.ui.backup_files_tab import build_backup_files_tab
 
         build_backup_files_tab(self)
 
     def create_replica_backups_tab(self):
-        """鍏变韩澶囦唤椤电锛氭煡鐪?鍒犻櫎涓ゅ彴鏈嶅姟鍣ㄦ湰鍦?/opt/ragflowauth/data/backups 涓嬬殑澶囦唤鐩綍锛堟祴璇?姝ｅ紡锛夈€?"""
+        """共享备份页签：查看/删除两台服务器本地 /opt/ragflowauth/data/backups 下的备份目录（测试/正式）。"""
         from tool.maintenance.ui.replica_backups_tab import build_replica_backups_tab
 
         build_replica_backups_tab(self)
@@ -44,7 +44,6 @@ class RagflowAuthToolBackupDelegateMixin:
         from tool.maintenance.controllers.backup_controller import refresh_backup_files_impl as controller_refresh_backup_files_impl
 
         return controller_refresh_backup_files_impl(self)
-    
 
     def refresh_replica_backups(self, *args, **kwargs):
         from tool.maintenance.controllers.backup_controller import refresh_replica_backups as controller_refresh_replica_backups
@@ -55,7 +54,6 @@ class RagflowAuthToolBackupDelegateMixin:
         from tool.maintenance.controllers.backup_controller import refresh_replica_backups_impl as controller_refresh_replica_backups_impl
 
         return controller_refresh_replica_backups_impl(self)
-    
 
     def delete_selected_replica_backup(self, *args, **kwargs):
         from tool.maintenance.controllers.backup_controller import delete_selected_replica_backup as controller_delete_selected_replica_backup
@@ -66,7 +64,6 @@ class RagflowAuthToolBackupDelegateMixin:
         from tool.maintenance.controllers.backup_controller import delete_selected_replica_backup_impl as controller_delete_selected_replica_backup_impl
 
         return controller_delete_selected_replica_backup_impl(self, which)
-    
 
     def _get_backup_files(self, directory):
         from tool.maintenance.controllers.backup_view_controller import get_backup_files_impl
@@ -97,7 +94,6 @@ class RagflowAuthToolBackupDelegateMixin:
         from tool.maintenance.controllers.backup_controller import delete_selected_backup_files_impl as controller_delete_selected_backup_files_impl
 
         return controller_delete_selected_backup_files_impl(self)
-    
 
     def _delete_complete(self, deleted, failed):
         from tool.maintenance.controllers.backup_view_controller import delete_complete_impl

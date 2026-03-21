@@ -148,7 +148,7 @@ class TestDownloadManagersDelegationUnit(unittest.TestCase):
         self.assertEqual(mgr._pipeline_manager.calls[0]["candidate_type"].__name__, "DownloadCandidate")
 
         ctx = SimpleNamespace(payload=SimpleNamespace(sub="u1"), snapshot=None, deps=deps)
-        result = mgr.add_all_to_local_kb(session_id="s1", ctx=ctx, kb_ref="[鏈湴涓撳埄]")
+        result = mgr.add_all_to_local_kb(session_id="s1", ctx=ctx, kb_ref="[本地专利]")
         self.assertEqual(result["success"], 0)
         self.assertEqual(result["items"][0]["already_added"], True)
         self.assertEqual(deps.audit_log_manager.calls[0]["action"], "patent_kb_add_all")
@@ -185,7 +185,7 @@ class TestDownloadManagersDelegationUnit(unittest.TestCase):
         self.assertEqual(mgr._pipeline_manager.calls[0]["candidate_type"].__name__, "DownloadCandidate")
 
         ctx = SimpleNamespace(payload=SimpleNamespace(sub="u1"), snapshot=None, deps=deps)
-        result = mgr.add_all_to_local_kb(session_id="s1", ctx=ctx, kb_ref="[鏈湴璁烘枃]")
+        result = mgr.add_all_to_local_kb(session_id="s1", ctx=ctx, kb_ref="[本地论文]")
         self.assertEqual(result["success"], 0)
         self.assertEqual(result["items"][0]["already_added"], True)
         self.assertEqual(deps.audit_log_manager.calls[0]["action"], "paper_kb_add_all")

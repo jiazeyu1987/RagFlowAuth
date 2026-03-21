@@ -13,14 +13,14 @@ export default function DownloadHistorySidebar({
   onSelectKey,
   onAdd,
   onDelete,
-  title = 'ÀúÊ·¹Ø¼ü´Ê',
-  refreshText = 'Ë¢ĞÂ',
-  loadingText = '¼ÓÔØÖĞ...',
-  emptyText = 'ÔİÎŞÀúÊ·¹Ø¼ü´Ê',
-  addText = '¼ÓÈëÖªÊ¶¿â',
-  addingText = '¼ÓÈëÖĞ...',
-  deleteText = 'É¾³ı',
-  deletingText = 'É¾³ıÖĞ...',
+  title = 'å†å²å…³é”®è¯',
+  refreshText = 'åˆ·æ–°',
+  loadingText = 'åŠ è½½ä¸­...',
+  emptyText = 'æš‚æ— å†å²å…³é”®è¯',
+  addText = 'åŠ å…¥çŸ¥è¯†åº“',
+  addingText = 'åŠ å…¥ä¸­...',
+  deleteText = 'åˆ é™¤',
+  deletingText = 'åˆ é™¤ä¸­...',
   getRowKey = (row) => String(row?.history_key || ''),
   getRowTitle = (row) => row?.keyword_display || '-',
 }) {
@@ -69,7 +69,7 @@ export default function DownloadHistorySidebar({
             <div key={key} data-testid={`download-history-row-${safeKey}`} style={{ border: active ? '1px solid #60a5fa' : '1px solid #e5e7eb', background: active ? '#eff6ff' : '#fff', borderRadius: '8px', padding: '8px', display: 'grid', gap: '6px' }}>
               <button type="button" onClick={() => onSelectKey && onSelectKey(key, row)} style={{ textAlign: 'left', border: 'none', background: 'transparent', padding: 0, cursor: 'pointer' }}>
                 <div style={{ fontWeight: 700, color: '#111827', fontSize: '0.88rem', wordBreak: 'break-word' }}>{getRowTitle(row)}</div>
-                <div style={{ fontSize: '0.78rem', color: '#6b7280', marginTop: '4px', lineHeight: 1.5 }}>ÒÑÏÂÔØ {downloadedCount}£¬ÒÑ½âÎö {analyzedCount}£¬ÒÑ¼ÓÈë {addedCount}</div>
+                <div style={{ fontSize: '0.78rem', color: '#6b7280', marginTop: '4px', lineHeight: 1.5 }}>å·²ä¸‹è½½ {downloadedCount}ï¼Œå·²è§£æ {analyzedCount}ï¼Œå·²åŠ å…¥ {addedCount}</div>
               </button>
 
               <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', flexDirection: isMobile ? 'column' : 'row' }}>
