@@ -25,6 +25,7 @@ class PermissionGroupsRepo:
         payload["accessible_kbs"] = self._normalize_accessible_kbs(payload.get("accessible_kbs"))
         payload["accessible_kb_nodes"] = self._normalize_accessible_kb_nodes(payload.get("accessible_kb_nodes"))
         payload["accessible_chats"] = self._normalize_accessible_chats(payload.get("accessible_chats"))
+        payload["accessible_tools"] = self._normalize_accessible_tools(payload.get("accessible_tools"))
         return self._deps.permission_group_store.create_group(**payload)
 
     def update_group(self, group_id: int, payload: dict[str, Any]) -> bool:
@@ -37,6 +38,8 @@ class PermissionGroupsRepo:
             payload["accessible_kb_nodes"] = self._normalize_accessible_kb_nodes(payload.get("accessible_kb_nodes"))
         if "accessible_chats" in payload:
             payload["accessible_chats"] = self._normalize_accessible_chats(payload.get("accessible_chats"))
+        if "accessible_tools" in payload:
+            payload["accessible_tools"] = self._normalize_accessible_tools(payload.get("accessible_tools"))
         return bool(self._deps.permission_group_store.update_group(group_id=group_id, **payload))
 
     def delete_group(self, group_id: int) -> bool:
@@ -114,6 +117,27 @@ class PermissionGroupsRepo:
             if loaded and node_id not in valid_node_ids:
                 continue
             normalized.append(node_id)
+        seen: set[str] = set()
+        deduped: list[str] = []
+        for ref in normalized:
+            if ref in seen:
+                continue
+            seen.add(ref)
+            deduped.append(ref)
+        return deduped
+
+    def _normalize_accessible_tools(self, raw: Any) -> list[str] | None:
+        if raw is None:
+            return None
+        if not isinstance(raw, list):
+            return []
+        normalized: list[str] = []
+        for ref in raw:
+            if not isinstance(ref, str):
+                continue
+            value = ref.strip()
+            if value:
+                normalized.append(value)
         seen: set[str] = set()
         deduped: list[str] = []
         for ref in normalized:

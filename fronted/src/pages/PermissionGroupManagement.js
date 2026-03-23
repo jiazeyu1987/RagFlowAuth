@@ -38,7 +38,7 @@ export default function PermissionGroupManagement() {
     folderIndexes,
     folderPath,
     filteredRows,
-    knowledgeNodeItems,
+    knowledgeNodeTreeNodes,
     knowledgeDatasetItems,
     chatAgents,
     setSearchKeyword,
@@ -58,6 +58,7 @@ export default function PermissionGroupManagement() {
     toggleNodeAuth,
     toggleKbAuth,
     toggleChatAuth,
+    toggleToolAuth,
     openFolder,
     onDragOverFolder,
     onDropFolder,
@@ -348,13 +349,14 @@ export default function PermissionGroupManagement() {
                 formData={formData}
                 editingGroup={editingGroup}
                 saving={saving}
-                knowledgeNodeItems={knowledgeNodeItems}
+                knowledgeNodeTreeNodes={knowledgeNodeTreeNodes}
                 knowledgeDatasetItems={knowledgeDatasetItems}
                 chatAgents={chatAgents}
                 onSetFormData={setFormData}
                 onToggleNodeAuth={toggleNodeAuth}
                 onToggleKbAuth={toggleKbAuth}
                 onToggleChatAuth={toggleChatAuth}
+                onToggleToolAuth={toggleToolAuth}
                 onSaveForm={saveForm}
                 onCancelEdit={cancelEdit}
               />

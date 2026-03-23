@@ -59,6 +59,8 @@ class TestAuthMeServiceUnit(unittest.TestCase):
             kb_names=frozenset(),
             chat_scope=ResourceScope.ALL,
             chat_ids=frozenset(),
+            tool_scope=ResourceScope.ALL,
+            tool_ids=frozenset(),
         )
 
         payload = build_auth_me_payload(deps=deps, user=user, snapshot=snapshot)
@@ -97,6 +99,8 @@ class TestAuthMeServiceUnit(unittest.TestCase):
             kb_names=frozenset({"kb-k1"}),
             chat_scope=ResourceScope.SET,
             chat_ids=frozenset({"chat-c2"}),
+            tool_scope=ResourceScope.NONE,
+            tool_ids=frozenset(),
         )
 
         payload = build_auth_me_payload(deps=deps, user=user, snapshot=snapshot)

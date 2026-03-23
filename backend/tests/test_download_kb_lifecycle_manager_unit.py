@@ -150,6 +150,8 @@ class TestDownloadKbLifecycleManagerUnit(unittest.TestCase):
                     kb_names=frozenset(),
                     chat_scope=ResourceScope.NONE,
                     chat_ids=frozenset(),
+                    tool_scope=ResourceScope.ALL,
+                    tool_ids=frozenset(),
                 ),
             )
 

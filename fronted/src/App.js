@@ -166,7 +166,7 @@ function App() {
             <Route
               path="/tools/patent-download"
               element={
-                <PermissionGuard permission={{ resource: 'tools', action: 'view' }}>
+                <PermissionGuard permission={{ resource: 'tools', action: 'view', target: 'patent_download' }}>
                   <Layout>
                     <PatentDownload />
                   </Layout>
@@ -176,7 +176,7 @@ function App() {
             <Route
               path="/tools/paper-download"
               element={
-                <PermissionGuard permission={{ resource: 'tools', action: 'view' }}>
+                <PermissionGuard permission={{ resource: 'tools', action: 'view', target: 'paper_download' }}>
                   <Layout>
                     <PaperDownload />
                   </Layout>
@@ -186,7 +186,7 @@ function App() {
             <Route
               path="/tools/nas-browser"
               element={
-                <PermissionGuard allowedRoles={['admin']} permission={{ resource: 'tools', action: 'view' }}>
+                <PermissionGuard allowedRoles={['admin']} permission={{ resource: 'tools', action: 'view', target: 'nas_browser' }}>
                   <Layout>
                     <NasBrowser />
                   </Layout>
@@ -196,7 +196,7 @@ function App() {
             <Route
               path="/tools/drug-admin"
               element={
-                <PermissionGuard permission={{ resource: 'tools', action: 'view' }}>
+                <PermissionGuard permission={{ resource: 'tools', action: 'view', target: 'drug_admin' }}>
                   <Layout>
                     <DrugAdminNavigator />
                   </Layout>
@@ -206,7 +206,7 @@ function App() {
             <Route
               path="/tools/nmpa"
               element={
-                <PermissionGuard permission={{ resource: 'tools', action: 'view' }}>
+                <PermissionGuard permission={{ resource: 'tools', action: 'view', target: 'nmpa' }}>
                   <Layout>
                     <NMPATool />
                   </Layout>

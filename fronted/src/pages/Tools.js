@@ -73,7 +73,7 @@ const ToolCard = ({ id, name, description, onClick, disabled, background, isMobi
 
 const Tools = () => {
   const navigate = useNavigate();
-  const { isAdmin } = useAuth();
+  const { isAdmin, canAccessTool } = useAuth();
   const [page, setPage] = useState(1);
   const [isMobile, setIsMobile] = useState(() => {
     if (typeof window === 'undefined') return false;
@@ -147,12 +147,18 @@ const Tools = () => {
     return list;
   }, [isAdmin]);
 
-  const pageCount = Math.max(1, Math.ceil(tools.length / PAGE_SIZE));
+  const visibleTools = useMemo(
+    () => tools.filter((tool) => canAccessTool(tool.id)),
+    [tools, canAccessTool]
+  );
+
+  const pageCount = Math.max(1, Math.ceil(visibleTools.length / PAGE_SIZE));
   const safePage = Math.min(Math.max(1, page), pageCount);
   const start = (safePage - 1) * PAGE_SIZE;
-  const pageItems = tools.slice(start, start + PAGE_SIZE);
+  const pageItems = visibleTools.slice(start, start + PAGE_SIZE);
 
   const openTool = (tool) => {
+    if (!canAccessTool(tool.id)) return;
     if (tool.route) {
       navigate(tool.route);
       return;
@@ -230,6 +236,9 @@ const Tools = () => {
           gap: isMobile ? '12px' : '20px',
         }}
       >
+        {!pageItems.length ? (
+          <div style={{ gridColumn: '1 / -1', color: '#6b7280', padding: 8 }}>暂无可访问的实用工具</div>
+        ) : null}
         {pageItems.map((tool, idx) => (
           <ToolCard
             key={tool.id}

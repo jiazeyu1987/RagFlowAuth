@@ -67,6 +67,11 @@ export const useUserManagement = () => {
   const [policyError, setPolicyError] = useState(null);
   const [policyForm, setPolicyForm] = useState(DEFAULT_POLICY_FORM);
   const [statusUpdatingUserId, setStatusUpdatingUserId] = useState(null);
+  const [showDisableUserModal, setShowDisableUserModal] = useState(false);
+  const [disableTargetUser, setDisableTargetUser] = useState(null);
+  const [disableMode, setDisableMode] = useState('immediate');
+  const [disableUntilDate, setDisableUntilDate] = useState('');
+  const [disableUserError, setDisableUserError] = useState(null);
 
   const [companies, setCompanies] = useState([]);
   const [departments, setDepartments] = useState([]);
@@ -179,15 +184,83 @@ export const useUserManagement = () => {
     [fetchUsers]
   );
 
+  const handleCloseDisableUserModal = useCallback(() => {
+    setShowDisableUserModal(false);
+    setDisableTargetUser(null);
+    setDisableMode('immediate');
+    setDisableUntilDate('');
+    setDisableUserError(null);
+  }, []);
+
+  const handleChangeDisableMode = useCallback((mode) => {
+    const nextMode = mode === 'until' ? 'until' : 'immediate';
+    setDisableMode(nextMode);
+    if (nextMode !== 'until') {
+      setDisableUntilDate('');
+    }
+    setDisableUserError(null);
+  }, []);
+
+  const handleChangeDisableUntilDate = useCallback((value) => {
+    setDisableUntilDate(String(value || ''));
+    setDisableUserError(null);
+  }, []);
+
+  const handleConfirmDisableUser = useCallback(async () => {
+    if (!disableTargetUser?.user_id) return;
+    setDisableUserError(null);
+
+    let payload = {
+      status: 'inactive',
+      disable_login_enabled: false,
+      disable_login_until_ms: null,
+    };
+
+    if (disableMode === 'until') {
+      const untilMs = parseDisableUntilDate(disableUntilDate);
+      if (!untilMs) {
+        setDisableUserError('请选择禁用到期日期');
+        return;
+      }
+      if (untilMs <= Date.now()) {
+        setDisableUserError('禁用到期时间必须晚于当前时间');
+        return;
+      }
+      payload = {
+        status: 'active',
+        disable_login_enabled: true,
+        disable_login_until_ms: untilMs,
+      };
+    }
+
+    try {
+      setStatusUpdatingUserId(disableTargetUser.user_id);
+      await usersApi.update(disableTargetUser.user_id, payload);
+      handleCloseDisableUserModal();
+      await fetchUsers();
+    } catch (err) {
+      setDisableUserError(err?.message || '禁用用户失败');
+    } finally {
+      setStatusUpdatingUserId(null);
+    }
+  }, [disableMode, disableTargetUser, disableUntilDate, fetchUsers, handleCloseDisableUserModal]);
+
   const handleToggleUserStatus = useCallback(
     async (user) => {
       if (!user?.user_id) return;
       if (String(user?.username || '').toLowerCase() === 'admin') return;
 
       const disabledNow = isUserLoginDisabled(user);
-      const payload = disabledNow
-        ? { status: 'active', disable_login_enabled: false, disable_login_until_ms: null }
-        : { status: 'inactive', disable_login_enabled: false, disable_login_until_ms: null };
+      if (!disabledNow) {
+        setDisableTargetUser(user);
+        setDisableMode('immediate');
+        setDisableUntilDate('');
+        setDisableUserError(null);
+        setShowDisableUserModal(true);
+        return;
+      }
+
+      const payload = { status: 'active', disable_login_enabled: false, disable_login_until_ms: null };
       try {
         setStatusUpdatingUserId(user.user_id);
         await usersApi.update(user.user_id, payload);
@@ -388,6 +461,11 @@ export const useUserManagement = () => {
     policyError,
     policyForm,
     statusUpdatingUserId,
+    showDisableUserModal,
+    disableTargetUser,
+    disableMode,
+    disableUntilDate,
+    disableUserError,
     companies,
     departments,
     filteredUsers,
@@ -409,6 +487,10 @@ export const useUserManagement = () => {
     handleOpenPolicyModal,
     handleClosePolicyModal,
     handleSavePolicy,
+    handleCloseDisableUserModal,
+    handleChangeDisableMode,
+    handleChangeDisableUntilDate,
+    handleConfirmDisableUser,
     handleAssignGroup,
     handleCloseGroupModal,
     toggleSelectedGroup,

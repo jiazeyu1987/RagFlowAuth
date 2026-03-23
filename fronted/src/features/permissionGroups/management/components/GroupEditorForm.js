@@ -1,18 +1,20 @@
 import React from 'react';
-import { ChatSelection, FolderSelectionList } from './SelectionLists';
+import { ChatSelection, FolderSelectionList, KnowledgeNodeTreeSelection } from './SelectionLists';
+import { TOOL_PERMISSION_ITEMS } from '../constants';
 
 export default function GroupEditorForm({
   loading,
   formData,
   editingGroup,
   saving,
-  knowledgeNodeItems,
+  knowledgeNodeTreeNodes,
   knowledgeDatasetItems,
   chatAgents,
   onSetFormData,
   onToggleNodeAuth,
   onToggleKbAuth,
   onToggleChatAuth,
+  onToggleToolAuth,
   onSaveForm,
   onCancelEdit,
 }) {
@@ -77,9 +79,9 @@ export default function GroupEditorForm({
         />
       </div>
 
-      <FolderSelectionList
+      <KnowledgeNodeTreeSelection
         title="知识目录权限"
-        items={knowledgeNodeItems}
+        nodes={knowledgeNodeTreeNodes}
         selected={formData.accessible_kb_nodes || []}
         onToggle={onToggleNodeAuth}
         emptyText="暂无知识目录"
@@ -99,6 +101,18 @@ export default function GroupEditorForm({
         selected={formData.accessible_chats || []}
         onToggle={onToggleChatAuth}
       />
+      <FolderSelectionList
+        title="实用工具权限"
+        items={TOOL_PERMISSION_ITEMS}
+        selected={formData.accessible_tools || []}
+        onToggle={onToggleToolAuth}
+        emptyText="暂无工具"
+        itemTestIdPrefix="pg-form-tool"
+        emptyTestId="pg-form-tool-empty"
+      />
+      <div style={{ marginTop: '-4px', marginBottom: 10, color: '#6b7280', fontSize: 12 }}>
+        留空表示可访问全部实用工具；勾选后仅可访问所选工具。
+      </div>
 
       <div style={{ marginBottom: 12 }}>
         <div style={{ fontWeight: 700, marginBottom: 8 }}>操作权限</div>

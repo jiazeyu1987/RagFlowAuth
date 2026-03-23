@@ -10,6 +10,7 @@ class PermissionGroupCreate(BaseModel):
     accessible_kbs: Optional[List[str]] = Field(default_factory=list)
     accessible_kb_nodes: Optional[List[str]] = Field(default_factory=list)
     accessible_chats: Optional[List[str]] = Field(default_factory=list)
+    accessible_tools: Optional[List[str]] = Field(default_factory=list)
     can_upload: bool = False
     can_review: bool = False
     can_download: bool = True
@@ -26,6 +27,7 @@ class PermissionGroupUpdate(BaseModel):
     accessible_kbs: Optional[List[str]] = None
     accessible_kb_nodes: Optional[List[str]] = None
     accessible_chats: Optional[List[str]] = None
+    accessible_tools: Optional[List[str]] = None
     can_upload: Optional[bool] = None
     can_review: Optional[bool] = None
     can_download: Optional[bool] = None

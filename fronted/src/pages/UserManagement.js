@@ -6,6 +6,7 @@ import CreateUserModal from '../features/users/components/modals/CreateUserModal
 import ResetPasswordModal from '../features/users/components/modals/ResetPasswordModal';
 import PolicyModal from '../features/users/components/modals/PolicyModal';
 import GroupModal from '../features/users/components/modals/GroupModal';
+import DisableUserModal from '../features/users/components/modals/DisableUserModal';
 import { useUserManagement } from '../features/users/hooks/useUserManagement';
 
 const MOBILE_BREAKPOINT = 768;
@@ -39,6 +40,11 @@ const UserManagement = () => {
     policyError,
     policyForm,
     statusUpdatingUserId,
+    showDisableUserModal,
+    disableTargetUser,
+    disableMode,
+    disableUntilDate,
+    disableUserError,
     companies,
     departments,
     filteredUsers,
@@ -60,6 +66,10 @@ const UserManagement = () => {
     handleOpenPolicyModal,
     handleClosePolicyModal,
     handleSavePolicy,
+    handleCloseDisableUserModal,
+    handleChangeDisableMode,
+    handleChangeDisableUntilDate,
+    handleConfirmDisableUser,
     handleAssignGroup,
     handleCloseGroupModal,
     toggleSelectedGroup,
@@ -161,6 +171,19 @@ const UserManagement = () => {
         onChangePolicyForm={setPolicyForm}
         onCancel={handleClosePolicyModal}
         onSave={handleSavePolicy}
+      />
+
+      <DisableUserModal
+        open={showDisableUserModal}
+        user={disableTargetUser}
+        mode={disableMode}
+        untilDate={disableUntilDate}
+        error={disableUserError}
+        submitting={!!statusUpdatingUserId}
+        onChangeMode={handleChangeDisableMode}
+        onChangeUntilDate={handleChangeDisableUntilDate}
+        onCancel={handleCloseDisableUserModal}
+        onConfirm={handleConfirmDisableUser}
       />
 
       {canManageUsers ? (

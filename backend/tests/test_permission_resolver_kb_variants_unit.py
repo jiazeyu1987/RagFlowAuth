@@ -20,6 +20,8 @@ class TestPermissionResolverKbVariantsUnit(unittest.TestCase):
             kb_names=frozenset({"c1521554db2d11f0ab20d6899ff928cb"}),
             chat_scope=ResourceScope.NONE,
             chat_ids=frozenset(),
+            tool_scope=ResourceScope.NONE,
+            tool_ids=frozenset(),
         )
 
         assert_kb_allowed(snapshot, ("展厅", "c1521554db2d11f0ab20d6899ff928cb"))
@@ -38,6 +40,8 @@ class TestPermissionResolverKbVariantsUnit(unittest.TestCase):
             kb_names=frozenset({"other-id"}),
             chat_scope=ResourceScope.NONE,
             chat_ids=frozenset(),
+            tool_scope=ResourceScope.NONE,
+            tool_ids=frozenset(),
         )
 
         with self.assertRaises(HTTPException) as ctx:

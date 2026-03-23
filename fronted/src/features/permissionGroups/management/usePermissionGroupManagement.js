@@ -12,6 +12,7 @@ function fillFormFromGroup(group) {
     accessible_kbs: group?.accessible_kbs || [],
     accessible_kb_nodes: group?.accessible_kb_nodes || [],
     accessible_chats: group?.accessible_chats || [],
+    accessible_tools: group?.accessible_tools || [],
     can_upload: !!group?.can_upload,
     can_review: !!group?.can_review,
     can_download: group?.can_download !== false,
@@ -32,6 +33,13 @@ function normalizeKnowledgeTreeResponse(knowledgeRes, knowledgeBasesRes) {
     node_path: '/',
   }));
   return { nodes: [], datasets };
+}
+
+function pathSegmentCount(pathValue) {
+  return String(pathValue || '')
+    .split('/')
+    .map((segment) => segment.trim())
+    .filter((segment) => !!segment).length;
 }
 
 export default function usePermissionGroupManagement() {
@@ -112,25 +120,41 @@ export default function usePermissionGroupManagement() {
     [groups, editingGroupId]
   );
 
-  const knowledgeNodeItems = useMemo(
-    () =>
-      (knowledgeTree?.nodes || []).map((node) => ({
+  const knowledgeNodeTreeNodes = useMemo(() => {
+    const items = (knowledgeTree?.nodes || []).map((node) => {
+      return {
         id: node.id,
-        name: `${node.name || '(未命名文件夹)'} (${node.path || '/'})`,
-      })),
-    [knowledgeTree?.nodes]
-  );
+        name: node.name || '(未命名文件夹)',
+        parent_id: node.parent_id || ROOT,
+        sortPath: String(node.path || ''),
+        path: String(node.path || ''),
+      };
+    });
+    items.sort((a, b) => {
+      const byPath = a.sortPath.localeCompare(b.sortPath, 'zh-Hans-CN');
+      if (byPath !== 0) return byPath;
+      return String(a.name || '').localeCompare(String(b.name || ''), 'zh-Hans-CN');
+    });
+    return items;
+  }, [knowledgeTree?.nodes]);
 
-  const knowledgeDatasetItems = useMemo(
-    () =>
-      (knowledgeTree?.datasets || []).map((dataset) => ({
+  const knowledgeDatasetItems = useMemo(() => {
+    const items = (knowledgeTree?.datasets || []).map((dataset) => {
+      const depth = Math.max(0, pathSegmentCount(dataset.node_path));
+      return {
         id: dataset.id,
-        name: `${dataset.name || '(未命名知识库)'}${
-          dataset.node_path && dataset.node_path !== '/' ? ` (${dataset.node_path})` : ''
-        }`,
-      })),
-    [knowledgeTree?.datasets]
-  );
+        name: dataset.name || '(未命名知识库)',
+        depth,
+        sortPath: String(dataset.node_path || '/'),
+      };
+    });
+    items.sort((a, b) => {
+      const byPath = a.sortPath.localeCompare(b.sortPath, 'zh-Hans-CN');
+      if (byPath !== 0) return byPath;
+      return String(a.name || '').localeCompare(String(b.name || ''), 'zh-Hans-CN');
+    });
+    return items;
+  }, [knowledgeTree?.datasets]);
 
   const ensureFolderExpanded = useCallback(
     (folderId) => {
@@ -373,6 +397,13 @@ export default function usePermissionGroupManagement() {
     }));
   }, []);
 
+  const toggleToolAuth = useCallback((toolId) => {
+    setFormData((previous) => ({
+      ...previous,
+      accessible_tools: toggleInArray(previous.accessible_tools, toolId),
+    }));
+  }, []);
+
   const moveGroupToFolder = useCallback(
     async (groupId, folderId) => {
       if (!groupId) return;
@@ -457,7 +488,7 @@ export default function usePermissionGroupManagement() {
     folderIndexes,
     folderPath,
     filteredRows,
-    knowledgeNodeItems,
+    knowledgeNodeTreeNodes,
     knowledgeDatasetItems,
     chatAgents,
     setSearchKeyword,
@@ -477,6 +508,7 @@ export default function usePermissionGroupManagement() {
     toggleNodeAuth,
     toggleKbAuth,
     toggleChatAuth,
+    toggleToolAuth,
     openFolder,
     onDragOverFolder,
     onDropFolder,

@@ -37,7 +37,8 @@ export const AuthProvider = ({ children }) => {
     can_delete: false,
     can_manage_kb_directory: false,
     can_view_kb_config: false,
-    can_view_tools: false
+    can_view_tools: false,
+    accessible_tools: []
   });
   const idleRedirectingRef = useRef(false);
   const currentUserId = user?.user_id;
@@ -54,7 +55,8 @@ export const AuthProvider = ({ children }) => {
       can_delete: false,
       can_manage_kb_directory: false,
       can_view_kb_config: false,
-      can_view_tools: false
+      can_view_tools: false,
+      accessible_tools: []
     });
   }, []);
 
@@ -232,7 +234,7 @@ export const AuthProvider = ({ children }) => {
    * 前端 UI 权限检查。
    * 后端以权限组 resolver 为准，这里只用于 UI 显示控制。
    */
-  const can = useCallback((resource, action) => {
+  const can = useCallback((resource, action, target = null) => {
     if (!user) return false;
     if (user.role === 'admin') return true;
 
@@ -272,8 +274,16 @@ export const AuthProvider = ({ children }) => {
     }
 
     if (resource === 'tools') {
-      if (action === 'view') return ops.can_view_tools !== false;
-      return false;
+      if (action !== 'view') return false;
+      if (ops.can_view_tools === false) return false;
+      const allowedTools = Array.isArray(ops.accessible_tools)
+        ? ops.accessible_tools
+            .map((item) => String(item || '').trim())
+            .filter((item) => !!item)
+        : [];
+      if (!target) return true;
+      if (allowedTools.length === 0) return true;
+      return allowedTools.includes(String(target));
     }
 
     return false;
@@ -311,6 +321,7 @@ export const AuthProvider = ({ children }) => {
     canManageKbDirectory: () => user?.role === 'admin' || !!permissions.can_manage_kb_directory,
     canViewKbConfig: () => user?.role === 'admin' || permissions.can_view_kb_config !== false,
     canViewTools: () => user?.role === 'admin' || permissions.can_view_tools !== false,
+    canAccessTool: (toolId) => user?.role === 'admin' || can('tools', 'view', toolId),
     isAuthenticated: !!user,
   };
 

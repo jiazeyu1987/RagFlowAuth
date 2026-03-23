@@ -42,6 +42,7 @@ class PermissionGroupStore:
         accessible_kbs: List[str] = None,
         accessible_kb_nodes: List[str] = None,
         accessible_chats: List[str] = None,
+        accessible_tools: List[str] = None,
         can_upload: bool = False,
         can_review: bool = False,
         can_download: bool = True,
@@ -63,10 +64,10 @@ class PermissionGroupStore:
                     """
                     INSERT INTO permission_groups (
                         group_name, description, folder_id, is_system,
-                        accessible_kbs, accessible_kb_nodes, accessible_chats,
+                        accessible_kbs, accessible_kb_nodes, accessible_chats, accessible_tools,
                         can_upload, can_review, can_download, can_delete, can_manage_kb_directory,
                         can_view_kb_config, can_view_tools
-                    ) VALUES (?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ) VALUES (?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         group_name,
@@ -75,6 +76,7 @@ class PermissionGroupStore:
                         json.dumps(accessible_kbs or []),
                         json.dumps(accessible_kb_nodes or []),
                         json.dumps(accessible_chats or []),
+                        json.dumps(accessible_tools or []),
                         1 if can_upload else 0,
                         1 if can_review else 0,
                         1 if can_download else 0,
@@ -103,7 +105,7 @@ class PermissionGroupStore:
                     """
                     SELECT group_id, group_name, description, is_system,
                            folder_id,
-                           accessible_kbs, accessible_kb_nodes, accessible_chats,
+                           accessible_kbs, accessible_kb_nodes, accessible_chats, accessible_tools,
                            can_upload, can_review, can_download, can_delete, can_manage_kb_directory,
                            can_view_kb_config, can_view_tools,
                            created_at, updated_at
@@ -121,6 +123,7 @@ class PermissionGroupStore:
                 group["accessible_kbs"] = json.loads(group["accessible_kbs"] or "[]")
                 group["accessible_kb_nodes"] = json.loads(group.get("accessible_kb_nodes") or "[]")
                 group["accessible_chats"] = json.loads(group["accessible_chats"] or "[]")
+                group["accessible_tools"] = json.loads(group.get("accessible_tools") or "[]")
 
                 group["can_upload"] = bool(group["can_upload"])
                 group["can_review"] = bool(group["can_review"])
@@ -146,7 +149,7 @@ class PermissionGroupStore:
                     """
                     SELECT group_id, group_name, description, is_system,
                            folder_id,
-                           accessible_kbs, accessible_kb_nodes, accessible_chats,
+                           accessible_kbs, accessible_kb_nodes, accessible_chats, accessible_tools,
                            can_upload, can_review, can_download, can_delete, can_manage_kb_directory,
                            can_view_kb_config, can_view_tools,
                            created_at, updated_at
@@ -164,6 +167,7 @@ class PermissionGroupStore:
                 group["accessible_kbs"] = json.loads(group["accessible_kbs"] or "[]")
                 group["accessible_kb_nodes"] = json.loads(group.get("accessible_kb_nodes") or "[]")
                 group["accessible_chats"] = json.loads(group["accessible_chats"] or "[]")
+                group["accessible_tools"] = json.loads(group.get("accessible_tools") or "[]")
                 group["can_upload"] = bool(group["can_upload"])
                 group["can_review"] = bool(group["can_review"])
                 group["can_download"] = bool(group["can_download"])
@@ -188,7 +192,7 @@ class PermissionGroupStore:
                     """
                     SELECT group_id, group_name, description, is_system,
                            folder_id,
-                           accessible_kbs, accessible_kb_nodes, accessible_chats,
+                           accessible_kbs, accessible_kb_nodes, accessible_chats, accessible_tools,
                            can_upload, can_review, can_download, can_delete, can_manage_kb_directory,
                            can_view_kb_config, can_view_tools,
                            created_at, updated_at
@@ -203,6 +207,7 @@ class PermissionGroupStore:
                     group["accessible_kbs"] = json.loads(group["accessible_kbs"] or "[]")
                     group["accessible_kb_nodes"] = json.loads(group.get("accessible_kb_nodes") or "[]")
                     group["accessible_chats"] = json.loads(group["accessible_chats"] or "[]")
+                    group["accessible_tools"] = json.loads(group.get("accessible_tools") or "[]")
                     group["can_upload"] = bool(group["can_upload"])
                     group["can_review"] = bool(group["can_review"])
                     group["can_download"] = bool(group["can_download"])
@@ -229,6 +234,7 @@ class PermissionGroupStore:
         accessible_kbs: List[str] = None,
         accessible_kb_nodes: List[str] = None,
         accessible_chats: List[str] = None,
+        accessible_tools: List[str] = None,
         can_upload: bool = None,
         can_review: bool = None,
         can_download: bool = None,
@@ -267,6 +273,9 @@ class PermissionGroupStore:
                 if accessible_chats is not None:
                     updates.append("accessible_chats = ?")
                     params.append(json.dumps(accessible_chats))
+                if accessible_tools is not None:
+                    updates.append("accessible_tools = ?")
+                    params.append(json.dumps(accessible_tools))
                 if can_upload is not None:
                     updates.append("can_upload = ?")
                     params.append(1 if can_upload else 0)

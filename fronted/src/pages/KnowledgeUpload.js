@@ -21,20 +21,26 @@ const MOBILE_BREAKPOINT = 768;
 
 const getDatasetValue = (dataset) => dataset?.name || dataset?.id || '';
 
-const buildDatasetOptionLabel = (dataset, nodePathById) => {
-  const name = dataset?.name || dataset?.id || '';
-  if (!name) return '';
-  const nodePath = typeof nodePathById?.[dataset?.id] === 'string' ? nodePathById[dataset.id].trim() : '';
-  if (!nodePath) return name;
-  if (nodePath === '/') return `/${name}`;
-  const basePath = nodePath.endsWith('/') ? nodePath.slice(0, -1) : nodePath;
-  return `${basePath}/${name}`;
+const getDatasetLabel = (dataset) => String(dataset?.name || dataset?.id || '').trim();
+
+const normalizeKbRef = (value) => String(value || '').trim();
+
+const filterDatasetsByVisibility = (allDatasets, visibleKbRefs, isAdminUser) => {
+  const list = Array.isArray(allDatasets) ? allDatasets : [];
+  if (isAdminUser) return list;
+  if (visibleKbRefs.size === 0) return [];
+
+  return list.filter((dataset) => {
+    const id = normalizeKbRef(dataset?.id);
+    const name = normalizeKbRef(dataset?.name);
+    return (id && visibleKbRefs.has(id)) || (name && visibleKbRefs.has(name));
+  });
 };
 
 const KnowledgeUpload = () => {
   const navigate = useNavigate();
-  const auth = useAuth();
-  const canManageExtensions = auth.isAdmin();
+  const { user, accessibleKbs, loading: authLoading } = useAuth();
+  const canManageExtensions = user?.role === 'admin';
   const [isMobile, setIsMobile] = useState(() => {
     if (typeof window === 'undefined') return false;
     return window.innerWidth <= MOBILE_BREAKPOINT;
@@ -42,8 +48,8 @@ const KnowledgeUpload = () => {
 
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [kbId, setKbId] = useState(DEFAULT_KB_NAME);
+  const [kbSearchKeyword, setKbSearchKeyword] = useState('');
   const [datasets, setDatasets] = useState([]);
-  const [datasetNodePathById, setDatasetNodePathById] = useState({});
   const [loadingDatasets, setLoadingDatasets] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(null);
@@ -71,12 +77,29 @@ const KnowledgeUpload = () => {
         .map((dataset) => ({
           key: dataset?.id || getDatasetValue(dataset),
           value: getDatasetValue(dataset),
-          label: buildDatasetOptionLabel(dataset, datasetNodePathById),
+          label: getDatasetLabel(dataset),
         }))
         .filter((option) => option.value && option.label)
         .sort((left, right) => String(left.label || '').localeCompare(String(right.label || ''), 'zh-Hans-CN')),
-    [datasets, datasetNodePathById]
+    [datasets]
   );
+  const filteredDatasetOptions = useMemo(() => {
+    const keyword = String(kbSearchKeyword || '').trim().toLowerCase();
+    if (!keyword) return datasetOptions;
+
+    return datasetOptions.filter((option) => {
+      const label = String(option?.label || '').toLowerCase();
+      const value = String(option?.value || '').toLowerCase();
+      return label.includes(keyword) || value.includes(keyword);
+    });
+  }, [datasetOptions, kbSearchKeyword]);
+
+  useEffect(() => {
+    if (loadingDatasets) return;
+    if (filteredDatasetOptions.length === 0) return;
+    if (filteredDatasetOptions.some((option) => option.value === kbId)) return;
+    setKbId(filteredDatasetOptions[0].value);
+  }, [filteredDatasetOptions, kbId, loadingDatasets]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return undefined;
@@ -88,28 +111,23 @@ const KnowledgeUpload = () => {
 
   useEffect(() => {
     const fetchDatasets = async () => {
+      if (authLoading) return;
+
       try {
         setLoadingDatasets(true);
         const data = await knowledgeApi.listRagflowDatasets();
-        const list = data.datasets || [];
+        const allDatasets = Array.isArray(data?.datasets) ? data.datasets : [];
+        const visibleKbRefs = new Set(
+          (Array.isArray(accessibleKbs) ? accessibleKbs : [])
+            .map(normalizeKbRef)
+            .filter(Boolean)
+        );
+        const list = filterDatasetsByVisibility(allDatasets, visibleKbRefs, user?.role === 'admin');
         const datasetValues = new Set(
           list
             .map((dataset) => getDatasetValue(dataset))
             .filter(Boolean)
         );
-
-        try {
-          const tree = await knowledgeApi.listKnowledgeDirectories();
-          const map = {};
-          (tree?.datasets || []).forEach((dataset) => {
-            const id = dataset?.id;
-            if (!id || typeof dataset?.node_path !== 'string') return;
-            map[id] = dataset.node_path;
-          });
-          setDatasetNodePathById(map);
-        } catch {
-          setDatasetNodePathById({});
-        }
 
         setDatasets(list);
         if (list.length > 0) {
@@ -122,13 +140,16 @@ const KnowledgeUpload = () => {
         }
       } catch (err) {
         setDatasets([]);
-        setDatasetNodePathById({});
         setError(err.message || '无法加载知识库列表，请检查网络连接');
       } finally {
         setLoadingDatasets(false);
       }
     };
 
+    fetchDatasets();
+  }, [accessibleKbs, authLoading, user?.role, user?.user_id]);
+
+  useEffect(() => {
     const fetchAllowedExtensions = async () => {
       try {
         setLoadingExtensions(true);
@@ -145,7 +166,6 @@ const KnowledgeUpload = () => {
       }
     };
 
-    fetchDatasets();
     fetchAllowedExtensions();
   }, []);
 
@@ -344,10 +364,31 @@ const KnowledgeUpload = () => {
             <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', color: '#374151' }}>
               知识库
             </label>
+            <input
+              type="text"
+              value={kbSearchKeyword}
+              onChange={(event) => setKbSearchKeyword(event.target.value)}
+              data-testid="upload-kb-search"
+              placeholder="输入知识库名称进行模糊匹配"
+              style={{
+                width: '100%',
+                padding: '10px',
+                border: '1px solid #d1d5db',
+                borderRadius: '4px',
+                fontSize: '0.95rem',
+                boxSizing: 'border-box',
+                marginBottom: '8px',
+              }}
+            />
+            {!loadingDatasets ? (
+              <div style={{ marginBottom: '8px', fontSize: '0.85rem', color: '#6b7280' }}>
+                {`匹配 ${filteredDatasetOptions.length} / ${datasetOptions.length} 个知识库`}
+              </div>
+            ) : null}
             <select
-              value={kbId}
+              value={!loadingDatasets && filteredDatasetOptions.length === 0 ? '' : kbId}
               onChange={(event) => setKbId(event.target.value)}
-              disabled={loadingDatasets}
+              disabled={loadingDatasets || filteredDatasetOptions.length === 0}
               data-testid="upload-kb-select"
               style={{
                 width: '100%',
@@ -361,12 +402,14 @@ const KnowledgeUpload = () => {
             >
               {loadingDatasets ? (
                 <option>加载知识库中...</option>
-              ) : datasetOptions.length > 0 ? (
-                datasetOptions.map((option) => (
+              ) : filteredDatasetOptions.length > 0 ? (
+                filteredDatasetOptions.map((option) => (
                   <option key={option.key} value={option.value}>
                     {option.label}
                   </option>
                 ))
+              ) : datasetOptions.length > 0 ? (
+                <option value="">没有匹配到知识库，请调整搜索关键词</option>
               ) : (
                 <option value={DEFAULT_KB_NAME}>{DEFAULT_KB_NAME}</option>
               )}

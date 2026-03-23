@@ -94,6 +94,8 @@ class TestKnowledgeIngestionManagerUnit(unittest.IsolatedAsyncioTestCase):
                 kb_names=frozenset(),
                 chat_scope=ResourceScope.NONE,
                 chat_ids=frozenset(),
+                tool_scope=ResourceScope.ALL,
+                tool_ids=frozenset(),
             ),
         )
         self.manager = KnowledgeIngestionManager(self.deps)

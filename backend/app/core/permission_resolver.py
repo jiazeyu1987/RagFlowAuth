@@ -29,8 +29,10 @@ class PermissionSnapshot:
     kb_names: frozenset[str]
     chat_scope: ResourceScope
     chat_ids: frozenset[str]
+    tool_scope: ResourceScope
+    tool_ids: frozenset[str]
 
-    def permissions_dict(self) -> dict[str, bool]:
+    def permissions_dict(self) -> dict[str, Any]:
         return {
             "can_upload": self.can_upload,
             "can_review": self.can_review,
@@ -39,6 +41,11 @@ class PermissionSnapshot:
             "can_manage_kb_directory": self.can_manage_kb_directory,
             "can_view_kb_config": self.can_view_kb_config,
             "can_view_tools": self.can_view_tools,
+            # Backward-compatible semantics:
+            # - can_view_tools=false => no tools
+            # - can_view_tools=true + accessible_tools=[] => all tools
+            # - can_view_tools=true + accessible_tools=[...] => whitelisted tools
+            "accessible_tools": sorted(self.tool_ids) if self.tool_scope == ResourceScope.SET else [],
         }
 
 
@@ -91,6 +98,8 @@ def resolve_permissions(deps: AppDependencies, user: Any) -> PermissionSnapshot:
             kb_names=frozenset(),
             chat_scope=ResourceScope.ALL,
             chat_ids=frozenset(),
+            tool_scope=ResourceScope.ALL,
+            tool_ids=frozenset(),
         )
 
     can_upload = False
@@ -103,6 +112,9 @@ def resolve_permissions(deps: AppDependencies, user: Any) -> PermissionSnapshot:
     kb_names: set[str] = set()
     kb_node_ids: set[str] = set()
     chat_ids: set[str] = set()
+    tool_ids: set[str] = set()
+    tool_has_global_access = False
+    tool_has_scoped_access = False
 
     dataset_index: dict[str, dict[str, str]] | None = None
     ragflow_service = getattr(deps, "ragflow_service", None)
@@ -127,6 +139,19 @@ def resolve_permissions(deps: AppDependencies, user: Any) -> PermissionSnapshot:
         can_manage_kb_directory = can_manage_kb_directory or bool(group.get("can_manage_kb_directory", False))
         can_view_kb_config = can_view_kb_config or bool(group.get("can_view_kb_config", True))
         can_view_tools = can_view_tools or bool(group.get("can_view_tools", True))
+
+        if bool(group.get("can_view_tools", True)):
+            group_tools = _safe_list(group.get("accessible_tools"))
+            if group_tools:
+                tool_has_scoped_access = True
+                for tid in group_tools:
+                    if isinstance(tid, str):
+                        value = tid.strip()
+                        if value:
+                            tool_ids.add(value)
+            else:
+                # Legacy groups without tool-level restriction keep full tools visibility.
+                tool_has_global_access = True
 
         for name in _safe_list(group.get("accessible_kbs")):
             if isinstance(name, str) and name:
@@ -169,6 +194,12 @@ def resolve_permissions(deps: AppDependencies, user: Any) -> PermissionSnapshot:
 
     kb_scope = ResourceScope.SET if kb_names else ResourceScope.NONE
     chat_scope = ResourceScope.SET if chat_ids else ResourceScope.NONE
+    if not can_view_tools:
+        tool_scope = ResourceScope.NONE
+    elif tool_has_global_access or not tool_has_scoped_access:
+        tool_scope = ResourceScope.ALL
+    else:
+        tool_scope = ResourceScope.SET
 
     return PermissionSnapshot(
         is_admin=False,
@@ -183,6 +214,8 @@ def resolve_permissions(deps: AppDependencies, user: Any) -> PermissionSnapshot:
         kb_names=frozenset(kb_names),
         chat_scope=chat_scope,
         chat_ids=frozenset(chat_ids),
+        tool_scope=tool_scope,
+        tool_ids=frozenset(tool_ids),
     )
 
 

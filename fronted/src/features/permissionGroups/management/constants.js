@@ -2,6 +2,15 @@ export const ROOT = '';
 
 export const HIDDEN_CHAT_NAMES = new Set(['\u5927\u6a21\u578b', '\u5c0f\u6a21\u578b', '\u95ee\u9898\u6bd4\u5bf9']);
 
+export const TOOL_PERMISSION_ITEMS = [
+  { id: 'paper_download', name: '论文下载分析' },
+  { id: 'patent_download', name: '专利下载分析' },
+  { id: 'nhsa_code_search', name: '医保编码查询工具' },
+  { id: 'shanghai_tax', name: '上海电子税务局' },
+  { id: 'drug_admin', name: '药监导航' },
+  { id: 'nmpa', name: 'NMPA' },
+];
+
 export const emptyForm = {
   group_name: '',
   description: '',
@@ -9,6 +18,7 @@ export const emptyForm = {
   accessible_kbs: [],
   accessible_kb_nodes: [],
   accessible_chats: [],
+  accessible_tools: [],
   can_upload: false,
   can_review: false,
   can_download: true,
