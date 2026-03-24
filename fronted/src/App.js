@@ -26,6 +26,7 @@ const KnowledgeBases = lazy(() => import('./pages/KnowledgeBases'));
 const NasBrowser = lazy(() => import('./pages/NasBrowser'));
 const DrugAdminNavigator = lazy(() => import('./pages/DrugAdminNavigator'));
 const NMPATool = lazy(() => import('./pages/NMPATool'));
+const PackageDrawingTool = lazy(() => import('./pages/PackageDrawingTool'));
 const SearchConfigsPanel = lazy(() => import('./pages/SearchConfigsPanel'));
 const ChatConfigsPanel = lazy(() => import('./pages/ChatConfigsPanel'));
 const DocumentReview = lazy(() => import('./pages/DocumentReview'));
@@ -209,6 +210,16 @@ function App() {
                 <PermissionGuard permission={{ resource: 'tools', action: 'view', target: 'nmpa' }}>
                   <Layout>
                     <NMPATool />
+                  </Layout>
+                </PermissionGuard>
+              }
+            />
+            <Route
+              path="/tools/package-drawing"
+              element={
+                <PermissionGuard permission={{ resource: 'tools', action: 'view', target: 'package_drawing' }}>
+                  <Layout>
+                    <PackageDrawingTool />
                   </Layout>
                 </PermissionGuard>
               }

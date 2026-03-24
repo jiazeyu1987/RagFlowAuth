@@ -32,6 +32,7 @@ from .data_security import (
 from .kb_documents import ensure_kb_documents_table
 from .patent_downloads import ensure_patent_download_tables
 from .paper_downloads import ensure_paper_download_tables
+from .package_drawings import ensure_package_drawing_tables
 from .org_directory import (
     ensure_companies_table,
     ensure_departments_table,
@@ -52,6 +53,7 @@ from .permission_group_folders import (
 )
 from .users import (
     ensure_org_columns_on_users,
+    ensure_user_full_name_column,
     ensure_user_login_policy_columns,
     ensure_users_group_id_column,
     ensure_users_table,
@@ -72,6 +74,7 @@ def ensure_schema(db_path: str | Path) -> None:
         # Core tables
         ensure_users_table(conn)
         ensure_user_login_policy_columns(conn)
+        ensure_user_full_name_column(conn)
         ensure_auth_login_sessions_table(conn)
         ensure_kb_documents_table(conn)
         ensure_chat_sessions_table(conn)
@@ -81,6 +84,7 @@ def ensure_schema(db_path: str | Path) -> None:
         ensure_kb_directory_tables(conn)
         ensure_patent_download_tables(conn)
         ensure_paper_download_tables(conn)
+        ensure_package_drawing_tables(conn)
 
         # Permission groups (authorization model)
         ensure_permission_groups_table(conn)

@@ -5,6 +5,7 @@ export const HIDDEN_CHAT_NAMES = new Set(['\u5927\u6a21\u578b', '\u5c0f\u6a21\u5
 export const TOOL_PERMISSION_ITEMS = [
   { id: 'paper_download', name: '论文下载分析' },
   { id: 'patent_download', name: '专利下载分析' },
+  { id: 'package_drawing', name: '包装图纸' },
   { id: 'nhsa_code_search', name: '医保编码查询工具' },
   { id: 'shanghai_tax', name: '上海电子税务局' },
   { id: 'drug_admin', name: '药监导航' },

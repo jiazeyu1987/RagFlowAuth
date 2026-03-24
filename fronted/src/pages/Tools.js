@@ -111,6 +111,12 @@ const Tools = () => {
         route: '/tools/patent-download',
       },
       {
+        id: 'package_drawing',
+        name: '包装图纸',
+        description: '按型号查询包装图纸信息，支持通过 Excel 录入型号、条形码、产品参数和示意图。',
+        route: '/tools/package-drawing',
+      },
+      {
         id: 'nhsa_code_search',
         name: '医保编码查询工具',
         description: '打开国家医保服务平台：医保编码查询（新窗口）。',

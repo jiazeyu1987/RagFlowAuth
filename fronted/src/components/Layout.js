@@ -86,6 +86,7 @@ const Layout = ({ children }) => {
     '/tools/nas-browser': 'NAS云盘',
     '/tools/drug-admin': '药监导航',
     '/tools/nmpa': 'NMPA',
+    '/tools/package-drawing': '包装图纸',
   };
 
   const currentTitle = pageTitleOverrides[location.pathname]

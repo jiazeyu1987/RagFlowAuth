@@ -303,6 +303,19 @@ def assert_can_view_tools(snapshot: PermissionSnapshot) -> None:
         raise HTTPException(status_code=403, detail="no_tools_view_permission")
 
 
+def assert_tool_allowed(snapshot: PermissionSnapshot, tool_id: str) -> None:
+    if snapshot.is_admin:
+        return
+    assert_can_view_tools(snapshot)
+    if snapshot.tool_scope == ResourceScope.ALL:
+        return
+    if snapshot.tool_scope == ResourceScope.NONE:
+        raise HTTPException(status_code=403, detail="tool_not_allowed")
+    clean_tool_id = str(tool_id or "").strip()
+    if not clean_tool_id or clean_tool_id not in snapshot.tool_ids:
+        raise HTTPException(status_code=403, detail="tool_not_allowed")
+
+
 def assert_kb_allowed(snapshot: PermissionSnapshot, kb_name: str | Iterable[str]) -> None:
     if snapshot.kb_scope == ResourceScope.ALL:
         return

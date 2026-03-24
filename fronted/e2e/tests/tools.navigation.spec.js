@@ -46,6 +46,15 @@ adminTest('tools navigation: key cards route to target pages @regression @tools'
     });
   });
 
+  await page.route('**/api/package-drawing/by-model**', async (route) => {
+    if (route.request().method() !== 'GET') return route.fallback();
+    await route.fulfill({
+      status: 404,
+      contentType: 'application/json',
+      body: JSON.stringify({ detail: 'model_not_found' }),
+    });
+  });
+
   await page.goto('/tools');
 
   await expect(page.getByTestId('tool-card-paper_download')).toBeVisible();
@@ -53,6 +62,7 @@ adminTest('tools navigation: key cards route to target pages @regression @tools'
   await expect(page.getByTestId('tool-card-nas_browser')).toBeVisible();
   await expect(page.getByTestId('tool-card-drug_admin')).toBeVisible();
   await expect(page.getByTestId('tool-card-nmpa')).toBeVisible();
+  await expect(page.getByTestId('tool-card-package_drawing')).toBeVisible();
 
   await page.getByTestId('tool-card-paper_download').click();
   await expect(page).toHaveURL(/\/tools\/paper-download$/);
@@ -77,4 +87,9 @@ adminTest('tools navigation: key cards route to target pages @regression @tools'
   await page.getByTestId('tool-card-nmpa').click();
   await expect(page).toHaveURL(/\/tools\/nmpa$/);
   await expect(page.getByTestId('layout-header-title')).toHaveText('NMPA');
+
+  await page.goto('/tools');
+  await page.getByTestId('tool-card-package_drawing').click();
+  await expect(page).toHaveURL(/\/tools\/package-drawing$/);
+  await expect(page.getByTestId('package-drawing-page')).toBeVisible();
 });

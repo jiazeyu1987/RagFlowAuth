@@ -99,6 +99,7 @@ def create_app() -> FastAPI:
         onlyoffice,
         org_directory,
         paper_download,
+        package_drawing,
         patent_download,
         permission_groups,
         preview,
@@ -127,6 +128,7 @@ def create_app() -> FastAPI:
     app.include_router(org_directory.router, prefix="/api", tags=["Org Directory"])
     app.include_router(patent_download.router, prefix="/api", tags=["Patent Download"])
     app.include_router(paper_download.router, prefix="/api", tags=["Paper Download"])
+    app.include_router(package_drawing.router, prefix="/api", tags=["Package Drawing"])
     app.include_router(drug_admin.router, prefix="/api", tags=["Drug Admin"])
     app.include_router(diagnostics.router, prefix="/api", tags=["Diagnostics"])
 
