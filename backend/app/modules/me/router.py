@@ -9,7 +9,7 @@ router = APIRouter()
 
 
 @router.get("/me/kbs")
-async def get_my_kbs(ctx: AuthContextDep):
+def get_my_kbs(ctx: AuthContextDep):
     """
     Compatibility endpoint for older frontend calls.
 
@@ -51,4 +51,3 @@ async def get_my_kbs(ctx: AuthContextDep):
     )
 
     return {"kb_ids": sorted(set([x for x in kb_ids if isinstance(x, str) and x])), "kb_names": sorted(set([x for x in kb_names if isinstance(x, str) and x]))}
-

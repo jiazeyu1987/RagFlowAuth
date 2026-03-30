@@ -30,7 +30,7 @@ def _to_document_response(updated_doc) -> DocumentResponse:
     )
 
 
-async def _reject_document_impl(doc_id: str, ctx: AuthContextDep, review_data: DocumentReviewRequest | None = None) -> DocumentResponse:
+def _reject_document_impl(doc_id: str, ctx: AuthContextDep, review_data: DocumentReviewRequest | None = None) -> DocumentResponse:
     deps = ctx.deps
     snapshot = ctx.snapshot
     assert_can_review(snapshot)
@@ -54,14 +54,14 @@ async def _reject_document_impl(doc_id: str, ctx: AuthContextDep, review_data: D
 
 
 @router.post('/documents/batch/reject', response_model=BatchDocumentReviewResponse)
-async def reject_documents_batch(body: BatchDocumentReviewRequest, ctx: AuthContextDep):
+def reject_documents_batch(body: BatchDocumentReviewRequest, ctx: AuthContextDep):
     review_data = DocumentReviewRequest(review_notes=body.review_notes)
     succeeded_doc_ids = []
     failed_items = []
 
     for doc_id in body.doc_ids:
         try:
-            await _reject_document_impl(doc_id, ctx, review_data)
+            _reject_document_impl(doc_id, ctx, review_data)
             succeeded_doc_ids.append(doc_id)
         except HTTPException as exc:
             failed_items.append({'doc_id': doc_id, 'detail': exc.detail, 'status_code': exc.status_code})
@@ -78,5 +78,5 @@ async def reject_documents_batch(body: BatchDocumentReviewRequest, ctx: AuthCont
 
 
 @router.post('/documents/{doc_id}/reject', response_model=DocumentResponse)
-async def reject_document(doc_id: str, ctx: AuthContextDep, review_data: DocumentReviewRequest | None = None):
-    return await _reject_document_impl(doc_id, ctx, review_data)
+def reject_document(doc_id: str, ctx: AuthContextDep, review_data: DocumentReviewRequest | None = None):
+    return _reject_document_impl(doc_id, ctx, review_data)

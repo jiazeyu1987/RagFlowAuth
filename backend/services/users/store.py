@@ -29,7 +29,7 @@ class UserStore:
                 SELECT user_id, username, password_hash, email, role, group_id, company_id, department_id, status,
                        max_login_sessions, idle_timeout_minutes, can_change_password,
                        disable_login_enabled, disable_login_until_ms,
-                       created_at_ms, last_login_at_ms, created_by
+                       created_at_ms, last_login_at_ms, created_by, full_name
                 FROM users WHERE username = ?
                 """,
                 (username,),
@@ -41,6 +41,7 @@ class UserStore:
                     username=row[1],
                     password_hash=row[2],
                     email=row[3],
+                    full_name=row[17],
                     role=row[4],
                     group_id=row[5],
                     company_id=row[6],
@@ -71,7 +72,7 @@ class UserStore:
                 SELECT user_id, username, password_hash, email, role, group_id, company_id, department_id, status,
                        max_login_sessions, idle_timeout_minutes, can_change_password,
                        disable_login_enabled, disable_login_until_ms,
-                       created_at_ms, last_login_at_ms, created_by
+                       created_at_ms, last_login_at_ms, created_by, full_name
                 FROM users WHERE user_id = ?
                 """,
                 (user_id,),
@@ -83,6 +84,7 @@ class UserStore:
                     username=row[1],
                     password_hash=row[2],
                     email=row[3],
+                    full_name=row[17],
                     role=row[4],
                     group_id=row[5],
                     company_id=row[6],
@@ -144,6 +146,7 @@ class UserStore:
         self,
         username: str,
         password: str,
+        full_name: Optional[str] = None,
         email: Optional[str] = None,
         company_id: Optional[int] = None,
         department_id: Optional[int] = None,
@@ -173,8 +176,8 @@ class UserStore:
                     user_id, username, password_hash, email, role, group_id, company_id, department_id,
                     max_login_sessions, idle_timeout_minutes, status,
                     can_change_password, disable_login_enabled, disable_login_until_ms,
-                    created_at_ms, created_by
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    created_at_ms, created_by, full_name
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     user_id,
@@ -193,6 +196,7 @@ class UserStore:
                     int(disable_login_until_ms) if disable_login_until_ms is not None else None,
                     now_ms,
                     created_by,
+                    full_name,
                 ),
             )
             conn.commit()
@@ -201,6 +205,7 @@ class UserStore:
                 username=username,
                 password_hash=password_hash_value,
                 email=email,
+                full_name=full_name,
                 role=role,
                 group_id=group_id,
                 company_id=company_id,
@@ -222,6 +227,7 @@ class UserStore:
     def update_user(
         self,
         user_id: str,
+        full_name: Optional[str] = None,
         email: Optional[str] = None,
         company_id: Optional[int] = None,
         department_id: Optional[int] = None,
@@ -237,6 +243,9 @@ class UserStore:
         updates = []
         params = []
 
+        if full_name is not None:
+            updates.append("full_name = ?")
+            params.append(full_name)
         if email is not None:
             updates.append("email = ?")
             params.append(email)
@@ -325,7 +334,7 @@ class UserStore:
                 SELECT user_id, username, password_hash, email, role, group_id, company_id, department_id, status,
                        max_login_sessions, idle_timeout_minutes, can_change_password,
                        disable_login_enabled, disable_login_until_ms,
-                       created_at_ms, last_login_at_ms, created_by
+                       created_at_ms, last_login_at_ms, created_by, full_name
                 FROM users
                 WHERE 1=1
             """
@@ -344,7 +353,8 @@ class UserStore:
                 base_query += " AND department_id = ?"
                 base_params.append(department_id)
             if q:
-                base_query += " AND username LIKE ?"
+                base_query += " AND (username LIKE ? OR full_name LIKE ?)"
+                base_params.append(f"%{q}%")
                 base_params.append(f"%{q}%")
             if created_from_ms is not None:
                 base_query += " AND created_at_ms >= ?"
@@ -379,6 +389,7 @@ class UserStore:
                     username=row[1],
                     password_hash=row[2],
                     email=row[3],
+                    full_name=row[17],
                     role=row[4],
                     group_id=row[5],
                     company_id=row[6],

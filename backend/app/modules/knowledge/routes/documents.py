@@ -14,7 +14,7 @@ router = APIRouter()
 
 
 @router.get("/documents")
-async def list_documents(
+def list_documents(
     ctx: AuthContextDep,
     status: Optional[str] = None,
     kb_id: Optional[str] = None,
@@ -110,7 +110,7 @@ async def list_documents(
 
 
 @router.get("/documents/{doc_id}")
-async def get_document(
+def get_document(
     doc_id: str,
     ctx: AuthContextDep,
 ):
@@ -136,4 +136,3 @@ async def get_document(
         "ragflow_doc_id": doc.ragflow_doc_id,
         "kb_id": (doc.kb_name or doc.kb_id),
     }
-

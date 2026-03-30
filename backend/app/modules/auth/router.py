@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 
 @router.post("/login", response_model=TokenResponse)
-async def login(
+def login(
     credentials: LoginRequest,
     response: Response,
     deps: AppDependencies = Depends(get_deps),
@@ -46,14 +46,14 @@ async def logout(request: Request, response: Response, deps: AppDependencies = D
 
 
 @router.get("/me")
-async def get_current_user(
+def get_current_user(
     ctx: AuthContextDep,
 ):
     return build_auth_me_payload(deps=ctx.deps, user=ctx.user, snapshot=ctx.snapshot)
 
 
 @router.put("/password")
-async def change_password(
+def change_password(
     request_data: ChangePasswordRequest,
     ctx: AuthContextDep,
 ):

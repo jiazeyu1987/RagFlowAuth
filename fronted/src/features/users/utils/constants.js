@@ -9,6 +9,7 @@ export const DEFAULT_FILTERS = {
 };
 
 export const DEFAULT_NEW_USER = {
+  full_name: '',
   username: '',
   password: '',
   email: '',
@@ -20,6 +21,7 @@ export const DEFAULT_NEW_USER = {
 };
 
 export const DEFAULT_POLICY_FORM = {
+  full_name: '',
   max_login_sessions: 3,
   idle_timeout_minutes: 120,
   can_change_password: true,

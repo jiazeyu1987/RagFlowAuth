@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 
 @router.post("/chats/{chat_id}/sessions")
-async def create_session(
+def create_session(
     chat_id: str,
     ctx: AuthContextDep,
     name: str = "新会话",
@@ -41,7 +41,7 @@ async def create_session(
 
 
 @router.get("/chats/{chat_id}/sessions")
-async def list_sessions(
+def list_sessions(
     chat_id: str,
     ctx: AuthContextDep,
 ):
@@ -113,7 +113,7 @@ async def list_sessions(
 
 
 @router.put("/chats/{chat_id}/sessions/{session_id}")
-async def rename_session(
+def rename_session(
     chat_id: str,
     session_id: str,
     ctx: AuthContextDep,
@@ -149,7 +149,7 @@ async def rename_session(
 
 
 @router.delete("/chats/{chat_id}/sessions")
-async def delete_sessions(
+def delete_sessions(
     chat_id: str,
     ctx: AuthContextDep,
     body: DeleteSessionsRequest = None,
@@ -182,4 +182,3 @@ async def delete_sessions(
         raise HTTPException(status_code=500, detail="delete_sessions_failed")
 
     return {"message": "sessions_deleted"}
-

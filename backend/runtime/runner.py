@@ -168,22 +168,40 @@ def migrate_data_dir(*, db_path: str | Path | None = None) -> None:
         print_paths(db_path=db_path)
 
 
-def run_server(*, host: str | None = None, port: int | None = None, reload: bool = False) -> None:
+def run_server(
+    *,
+    host: str | None = None,
+    port: int | None = None,
+    reload: bool = False,
+    workers: int | None = None,
+) -> None:
     try:
         import uvicorn
     except Exception as exc:  # pragma: no cover
         raise SystemExit(f"缺少 uvicorn，无法启动服务: {exc}")
 
-    # Import app directly to ensure lifespan events fire correctly
-    from backend.app.main import app
+    resolved_workers = int(workers or settings.UVICORN_WORKERS or 1)
+    if resolved_workers < 1:
+        resolved_workers = 1
+    if reload and resolved_workers > 1:
+        logger.warning("reload mode does not support multiple workers; forcing workers=1")
+        resolved_workers = 1
 
-    uvicorn.run(
-        app,
-        host=host or settings.HOST,
-        port=port or settings.PORT,
-        reload=reload,
-        log_level="info",
-    )
+    uvicorn_kwargs = {
+        "host": host or settings.HOST,
+        "port": port or settings.PORT,
+        "reload": reload,
+        "workers": resolved_workers,
+        "log_level": "info",
+    }
+
+    # workers/reload requires import-string target.
+    if reload or resolved_workers > 1:
+        uvicorn.run("backend.app.main:app", **uvicorn_kwargs)
+        return
+
+    from backend.app.main import app
+    uvicorn.run(app, **uvicorn_kwargs)
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -198,6 +216,7 @@ def main(argv: list[str] | None = None) -> None:
     p_run = sub.add_parser("run", help="启动后端服务")
     p_run.add_argument("--host", default=None)
     p_run.add_argument("--port", type=int, default=None)
+    p_run.add_argument("--workers", type=int, default=None, help="uvicorn worker process count (default from UVICORN_WORKERS)")
     p_run.add_argument("--reload", action="store_true", help="开发模式：热重载")
 
     p_init = sub.add_parser("init-db", help="初始化数据库（含默认管理员）")
@@ -250,7 +269,7 @@ def main(argv: list[str] | None = None) -> None:
     args = parser.parse_args(argv)
 
     if args.cmd == "run":
-        run_server(host=args.host, port=args.port, reload=bool(args.reload))
+        run_server(host=args.host, port=args.port, reload=bool(args.reload), workers=args.workers)
         return
 
     if args.cmd == "init-db":

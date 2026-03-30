@@ -17,7 +17,7 @@ router = APIRouter()
 
 
 @router.get("/documents/{source}/{doc_id}/download")
-async def download_document_unified(
+def download_document_unified(
     source: str,
     doc_id: str,
     ctx: AuthContextDep,
@@ -39,7 +39,7 @@ async def download_document_unified(
 
 
 @router.delete("/documents/{source}/{doc_id}")
-async def delete_document_unified(
+def delete_document_unified(
     source: str,
     doc_id: str,
     ctx: AuthContextDep,
@@ -93,9 +93,9 @@ async def upload_knowledge_unified(
 
 
 @router.post("/documents/{source}/batch/download")
-async def batch_download_documents_unified(
+def batch_download_documents_unified(
     source: str,
-    request: Request,
+    body: dict,
     ctx: AuthContextDep,
 ):
     """
@@ -109,7 +109,7 @@ async def batch_download_documents_unified(
     assert_can_download(snapshot)
 
     src = (source or "").strip().lower()
-    data = await request.json()
+    data = body or {}
 
     if src == "knowledge":
         doc_ids = data.get("doc_ids", [])

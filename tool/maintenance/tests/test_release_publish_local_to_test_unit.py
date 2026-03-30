@@ -69,10 +69,12 @@ class TestReleasePublishLocalToTestUnit(unittest.TestCase):
         cleanup_dir(tmp_root)
 
         # Verify build commands use the unified tag
+        self.assertTrue(any(c.startswith("docker pull python:3.12-slim") for c in calls), calls)
+        self.assertTrue(any(c.startswith("docker pull node:20-alpine") for c in calls), calls)
+        self.assertTrue(any(c.startswith("docker pull nginx:1.27-alpine") for c in calls), calls)
         self.assertTrue(any("docker build" in c and "ragflowauth-backend:v123" in c for c in calls), calls)
         self.assertTrue(any("docker build" in c and "ragflowauth-frontend:v123" in c for c in calls), calls)
         self.assertTrue(any("docker save" in c and "ragflowauth-backend:v123" in c and "ragflowauth-frontend:v123" in c for c in calls), calls)
-        self.assertTrue(any(c.startswith("scp ") and f"root@{TEST_SERVER_IP}:" in c for c in calls), calls)
 
         mock_recreate.assert_called()
 

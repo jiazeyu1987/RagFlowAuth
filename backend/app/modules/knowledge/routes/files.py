@@ -8,7 +8,6 @@ import io
 from backend.app.core.authz import AuthContextDep
 from backend.app.core.permission_resolver import (
     assert_can_download,
-    assert_can_review,
     assert_kb_allowed,
 )
 from backend.services.documents.document_manager import DocumentManager
@@ -18,7 +17,7 @@ router = APIRouter()
 
 
 @router.get("/documents/{doc_id}/download")
-async def download_document(
+def download_document(
     doc_id: str,
     ctx: AuthContextDep,
 ):
@@ -27,7 +26,7 @@ async def download_document(
 
 
 @router.get("/documents/{doc_id}/preview")
-async def preview_document(
+def preview_document(
     request: Request,
     doc_id: str,
     ctx: AuthContextDep,
@@ -105,8 +104,7 @@ async def preview_document(
 
 
 @router.post("/documents/batch/download")
-async def batch_download_documents(
-    request: Request,
+def batch_download_documents(
     body: dict,
     ctx: AuthContextDep,
 ):

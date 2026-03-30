@@ -9,6 +9,7 @@ class User:
     user_id: str
     username: str
     password_hash: str
+    full_name: Optional[str] = None
     email: Optional[str] = None
     role: str = "viewer"
     # Deprecated: single group id, kept for compatibility.

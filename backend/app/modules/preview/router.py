@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 
 @router.get("/preview/documents/{source}/{doc_id}/preview")
-async def preview_gateway(
+def preview_gateway(
     source: str,
     doc_id: str,
     request: Request,

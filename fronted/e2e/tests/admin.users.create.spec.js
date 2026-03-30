@@ -30,6 +30,7 @@ adminTest('admin can create user via UI @regression @admin', async ({ page }) =>
     const created = {
       user_id: `u_${Date.now()}`,
       username: capturedCreateBody.username,
+      full_name: capturedCreateBody.full_name || null,
       email: capturedCreateBody.email || null,
       company_id: capturedCreateBody.company_id,
       company_name: 'E2E公司',
@@ -58,6 +59,8 @@ adminTest('admin can create user via UI @regression @admin', async ({ page }) =>
   await page.getByTestId('users-create-open').click();
 
   const username = `e2e_user_${Date.now()}`;
+  const fullName = 'E2E User';
+  await page.getByTestId('users-create-full-name').fill(fullName);
   await page.getByTestId('users-create-username').fill(username);
   await page.getByTestId('users-create-password').fill('Passw0rd!123');
   await page.getByTestId('users-create-email').fill('e2e@example.com');
@@ -68,9 +71,10 @@ adminTest('admin can create user via UI @regression @admin', async ({ page }) =>
 
   expect(capturedCreateBody).toBeTruthy();
   expect(capturedCreateBody.username).toBe(username);
+  expect(capturedCreateBody.full_name).toBe(fullName);
   expect(capturedCreateBody.company_id).toBe(1);
   expect(capturedCreateBody.department_id).toBe(10);
   expect(capturedCreateBody.group_ids).toEqual([101]);
 
-  await expect(page.getByText(username, { exact: true })).toBeVisible();
+  await expect(page.getByText(`账号: ${username}`)).toBeVisible();
 });

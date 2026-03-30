@@ -80,6 +80,7 @@ def build_auth_me_payload(*, deps: Any, user: Any, snapshot: Any) -> dict[str, A
     return {
         "user_id": user.user_id,
         "username": user.username,
+        "full_name": getattr(user, "full_name", None),
         "email": user.email,
         "role": user.role,
         "status": user.status,

@@ -55,7 +55,7 @@ def _encode_onlyoffice_token(payload: dict[str, Any]) -> str:
 
 
 @router.post("/onlyoffice/editor-config")
-async def build_editor_config(body: dict, request: Request, ctx: AuthContextDep):
+def build_editor_config(body: dict, request: Request, ctx: AuthContextDep):
     t0 = time.perf_counter()
     request_id = getattr(getattr(request, "state", None), "request_id", "") or "-"
     source = str(body.get("source") or "").strip().lower()
@@ -161,7 +161,7 @@ async def build_editor_config(body: dict, request: Request, ctx: AuthContextDep)
 
 
 @router.get("/onlyoffice/file")
-async def serve_file_by_token(token: str, request: Request):
+def serve_file_by_token(token: str, request: Request):
     t0 = time.perf_counter()
     request_id = getattr(getattr(request, "state", None), "request_id", "") or "-"
     logger.info("onlyoffice_file_start request_id=%s", request_id)

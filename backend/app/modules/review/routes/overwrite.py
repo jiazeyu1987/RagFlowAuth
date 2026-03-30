@@ -11,7 +11,7 @@ router = APIRouter()
 
 
 @router.post("/documents/{doc_id}/approve-overwrite", response_model=DocumentResponse)
-async def approve_document_overwrite(doc_id: str, ctx: AuthContextDep, body: dict | None = None):
+def approve_document_overwrite(doc_id: str, ctx: AuthContextDep, body: dict | None = None):
     import logging
 
     logger = logging.getLogger(__name__)

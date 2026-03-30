@@ -31,7 +31,7 @@ def _tree_manager(deps) -> Any:
 
 
 @router.get("/directories")
-async def list_knowledge_directories(ctx: AuthContextDep):
+def list_knowledge_directories(ctx: AuthContextDep):
     assert_can_view_kb_config(ctx.snapshot)
     deps = ctx.deps
     manager = _tree_manager(deps)
@@ -46,7 +46,7 @@ async def list_knowledge_directories(ctx: AuthContextDep):
 
 
 @router.post("/directories")
-async def create_knowledge_directory(payload: DirectoryCreateRequest, ctx: AuthContextDep):
+def create_knowledge_directory(payload: DirectoryCreateRequest, ctx: AuthContextDep):
     assert_can_manage_kb_directory(ctx.snapshot)
     manager = _tree_manager(ctx.deps)
     try:
@@ -58,7 +58,7 @@ async def create_knowledge_directory(payload: DirectoryCreateRequest, ctx: AuthC
 
 
 @router.put("/directories/{node_id}")
-async def update_knowledge_directory(node_id: str, payload: DirectoryUpdateRequest, ctx: AuthContextDep):
+def update_knowledge_directory(node_id: str, payload: DirectoryUpdateRequest, ctx: AuthContextDep):
     assert_can_manage_kb_directory(ctx.snapshot)
     fields_set = set(getattr(payload, "model_fields_set", set()) or set())
     if not fields_set:
@@ -78,7 +78,7 @@ async def update_knowledge_directory(node_id: str, payload: DirectoryUpdateReque
 
 
 @router.delete("/directories/{node_id}")
-async def delete_knowledge_directory(node_id: str, ctx: AuthContextDep):
+def delete_knowledge_directory(node_id: str, ctx: AuthContextDep):
     assert_can_manage_kb_directory(ctx.snapshot)
     manager = _tree_manager(ctx.deps)
     try:
@@ -90,7 +90,7 @@ async def delete_knowledge_directory(node_id: str, ctx: AuthContextDep):
 
 
 @router.put("/directories/datasets/{dataset_ref}/node")
-async def assign_dataset_directory(dataset_ref: str, payload: DatasetDirectoryAssignRequest, ctx: AuthContextDep):
+def assign_dataset_directory(dataset_ref: str, payload: DatasetDirectoryAssignRequest, ctx: AuthContextDep):
     assert_can_manage_kb_directory(ctx.snapshot)
     normalize_dataset_id = getattr(ctx.deps.ragflow_service, "normalize_dataset_id", None)
     dataset_id = normalize_dataset_id(dataset_ref) if callable(normalize_dataset_id) else None

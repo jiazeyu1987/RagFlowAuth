@@ -1,12 +1,24 @@
 from __future__ import annotations
 
 import base64
+import os
 import re
 import tempfile
 from pathlib import Path
 
 from backend.services.office_to_pdf import ensure_soffice_available
 import subprocess
+
+
+def _office_convert_timeout_s() -> int:
+    raw = str(os.getenv("RAGFLOWAUTH_OFFICE_CONVERT_TIMEOUT_S", "") or "").strip()
+    if not raw:
+        return 120
+    try:
+        val = int(float(raw))
+        return max(10, min(3600, val))
+    except Exception:
+        return 120
 
 
 def _run_soffice_convert_to_html(input_path: Path, outdir: Path) -> Path:
@@ -22,7 +34,16 @@ def _run_soffice_convert_to_html(input_path: Path, outdir: Path) -> Path:
         str(outdir),
         str(input_path),
     ]
-    proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    try:
+        proc = subprocess.run(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            timeout=_office_convert_timeout_s(),
+        )
+    except subprocess.TimeoutExpired as e:
+        raise RuntimeError(f"soffice convert timeout after {_office_convert_timeout_s()}s: {e}") from e
     if proc.returncode != 0:
         raise RuntimeError(f"soffice convert failed: {proc.stderr.strip() or proc.stdout.strip()}")
 
@@ -129,4 +150,3 @@ def convert_office_bytes_to_html_bytes(content: bytes, *, filename: str = "input
         html = _ensure_html_utf8(html_path.read_bytes())
         html = _inline_rel_resources(html, html_path.parent)
         return html.encode("utf-8")
-

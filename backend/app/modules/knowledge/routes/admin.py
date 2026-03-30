@@ -16,7 +16,7 @@ router = APIRouter()
 
 
 @router.get("/stats")
-async def get_stats(ctx: AuthContextDep):
+def get_stats(ctx: AuthContextDep):
     deps = ctx.deps
     snapshot = ctx.snapshot
 
@@ -46,14 +46,14 @@ async def get_stats(ctx: AuthContextDep):
 
 
 @router.delete("/documents/{doc_id}")
-async def delete_document(doc_id: str, ctx: AuthContextDep):
+def delete_document(doc_id: str, ctx: AuthContextDep):
     mgr = DocumentManager(ctx.deps)
     result = mgr.delete_knowledge_document(doc_id=doc_id, ctx=ctx)
     return {"message": result.message or "文档已删除"}
 
 
 @router.get("/deletions")
-async def list_deletions(
+def list_deletions(
     ctx: AuthContextDep,
     kb_id: Optional[str] = None,
     limit: int = 100,

@@ -7,6 +7,7 @@ from uuid import uuid4
 
 from backend.database.paths import resolve_auth_db_path
 from backend.database.sqlite import connect_sqlite
+from backend.services.mount_utils import is_cifs_mounted
 
 from .models import BackupJob, DataSecuritySettings
 
@@ -19,6 +20,11 @@ class DataSecurityStore:
 
     def _conn(self):
         return connect_sqlite(self.db_path)
+
+    @staticmethod
+    def _has_standard_replica_mount() -> bool:
+        # Avoid touching /mnt/replica directly (stat can block on broken CIFS).
+        return is_cifs_mounted("/mnt/replica")
 
     def _acquire_lock(self, *, name: str, job_id: int | None, ttl_ms: int) -> bool:
         """
@@ -123,7 +129,7 @@ class DataSecurityStore:
 
             # If the standard mount is present (Linux server / Docker), keep key backup paths fixed.
             # This prevents "environment drift" caused by UI edits and avoids writing large backups to `/`.
-            if Path("/mnt/replica").exists():
+            if self._has_standard_replica_mount():
                 target_mode = "local"
                 target_local_dir = "/mnt/replica/RagflowAuth"
                 target_ip = None
@@ -204,7 +210,7 @@ class DataSecurityStore:
 
         # If the standard mount is present (Linux server / Docker), keep key backup paths fixed.
         # This prevents UI mistakes from writing huge backups to `/` and avoids cross-env drift.
-        if Path("/mnt/replica").exists():
+        if self._has_standard_replica_mount():
             fields["target_mode"] = "local"
             fields["target_local_dir"] = "/mnt/replica/RagflowAuth"
             fields["replica_target_path"] = "/mnt/replica/RagflowAuth"

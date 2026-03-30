@@ -1,8 +1,22 @@
 from __future__ import annotations
 
+import os
 import subprocess
 import time
 from pathlib import Path
+
+
+def _timeout_from_env(var_name: str, default_s: float | None) -> float | None:
+    raw = str(os.getenv(var_name, "") or "").strip()
+    if not raw:
+        return default_s
+    try:
+        val = float(raw)
+        if val <= 0:
+            return None
+        return max(1.0, min(24 * 60 * 60.0, val))
+    except Exception:
+        return default_s
 
 
 def timestamp() -> str:
@@ -16,8 +30,20 @@ def ensure_dir(path: Path) -> None:
     path.mkdir(parents=True, exist_ok=True)
 
 
-def run_cmd(cmd: list[str], *, cwd: Path | None = None) -> tuple[int, str]:
-    proc = subprocess.run(cmd, cwd=str(cwd) if cwd else None, capture_output=True, text=True, shell=False)
+def run_cmd(cmd: list[str], *, cwd: Path | None = None, timeout_s: float | None = None) -> tuple[int, str]:
+    effective_timeout_s = timeout_s if timeout_s is not None else _timeout_from_env("RAGFLOWAUTH_CMD_TIMEOUT_S", 120.0)
+    try:
+        proc = subprocess.run(
+            cmd,
+            cwd=str(cwd) if cwd else None,
+            capture_output=True,
+            text=True,
+            shell=False,
+            timeout=effective_timeout_s,
+        )
+    except subprocess.TimeoutExpired as e:
+        out = (getattr(e, "stdout", "") or "") + (getattr(e, "stderr", "") or "")
+        return 124, (out or f"[timeout] command exceeded {effective_timeout_s}s").strip()
     out = (proc.stdout or "") + (proc.stderr or "")
     return proc.returncode, out.strip()
 
@@ -36,8 +62,10 @@ def run_cmd_live(
 
     Used for long-running operations (docker save / tar) so the UI doesn't look stuck.
     """
-    import os
     import selectors
+
+    if timeout_s is None:
+        timeout_s = _timeout_from_env("RAGFLOWAUTH_CMD_LIVE_TIMEOUT_S", 1800.0)
 
     start = time.time()
     last_hb = start

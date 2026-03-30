@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     # Server
     HOST: str = "0.0.0.0"
     PORT: int = 8001
+    UVICORN_WORKERS: int = 1
 
     # AuthX JWT
     JWT_SECRET_KEY: str = "your-secret-key-change-in-production"
@@ -53,6 +54,10 @@ class Settings(BaseSettings):
 
     # CORS
     CORS_ORIGINS: list[str] = ["*"]
+
+    # Data security resilience switches
+    BACKUP_SCHEDULER_ENABLED: bool = True
+    DATA_SECURITY_SCAN_MOUNT_STATS: bool = False
 
     @field_validator("DEBUG", mode="before")
     @classmethod

@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field
 class UserCreate(BaseModel):
     username: str
     password: str
+    full_name: Optional[str] = None
     email: Optional[str] = None
     company_id: Optional[int] = None
     department_id: Optional[int] = None
@@ -23,6 +24,7 @@ class UserCreate(BaseModel):
 
 
 class UserUpdate(BaseModel):
+    full_name: Optional[str] = None
     email: Optional[str] = None
     company_id: Optional[int] = None
     department_id: Optional[int] = None
@@ -40,6 +42,7 @@ class UserUpdate(BaseModel):
 class UserResponse(BaseModel):
     user_id: str
     username: str
+    full_name: Optional[str] = None
     email: Optional[str] = None
     company_id: Optional[int] = None
     company_name: Optional[str] = None

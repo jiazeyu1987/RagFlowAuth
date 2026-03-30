@@ -40,6 +40,7 @@ EXPOSE 8001
 # Default config (override via env or compose)
 ENV HOST=0.0.0.0 \
     PORT=8001 \
+    UVICORN_WORKERS=2 \
     DATABASE_PATH=data/auth.db \
     UPLOAD_DIR=data/uploads \
     PERMDBG_ENABLED=false

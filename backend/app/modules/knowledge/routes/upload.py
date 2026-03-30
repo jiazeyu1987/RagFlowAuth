@@ -23,12 +23,12 @@ def _get_allowed_extensions_payload(ctx: AuthContextDep) -> dict:
 
 
 @router.get("/settings/allowed-extensions")
-async def get_allowed_extensions(ctx: AuthContextDep):
+def get_allowed_extensions(ctx: AuthContextDep):
     return _get_allowed_extensions_payload(ctx)
 
 
 @router.put("/settings/allowed-extensions")
-async def update_allowed_extensions(ctx: AuthContextDep, body: dict):
+def update_allowed_extensions(ctx: AuthContextDep, body: dict):
     if not ctx.snapshot.is_admin:
         raise HTTPException(status_code=403, detail="admin_required")
     extensions = body.get("allowed_extensions")

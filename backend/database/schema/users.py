@@ -36,7 +36,8 @@ def ensure_users_table(conn: sqlite3.Connection) -> None:
             disable_login_until_ms INTEGER,
             created_at_ms INTEGER NOT NULL,
             last_login_at_ms INTEGER,
-            created_by TEXT
+            created_by TEXT,
+            full_name TEXT
         )
         """
     )
@@ -64,3 +65,9 @@ def ensure_user_login_policy_columns(conn: sqlite3.Connection) -> None:
     add_column_if_missing(conn, "users", "can_change_password INTEGER NOT NULL DEFAULT 1")
     add_column_if_missing(conn, "users", "disable_login_enabled INTEGER NOT NULL DEFAULT 0")
     add_column_if_missing(conn, "users", "disable_login_until_ms INTEGER")
+
+
+def ensure_user_full_name_column(conn: sqlite3.Connection) -> None:
+    if not table_exists(conn, "users"):
+        return
+    add_column_if_missing(conn, "users", "full_name TEXT")

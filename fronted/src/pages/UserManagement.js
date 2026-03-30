@@ -23,6 +23,7 @@ const UserManagement = () => {
     canManageUsers,
     showCreateModal,
     newUser,
+    createUserError,
     filters,
     availableGroups,
     editingGroupUser,
@@ -190,6 +191,7 @@ const UserManagement = () => {
         <CreateUserModal
           open={showCreateModal}
           newUser={newUser}
+          error={createUserError}
           availableGroups={availableGroups}
           companies={companies}
           departments={departments}

@@ -10,7 +10,7 @@ router = APIRouter()
 
 
 @router.get("/downloads")
-async def list_downloads(
+def list_downloads(
     ctx: AuthContextDep,
     kb_id: Optional[str] = None,
     downloaded_by: Optional[str] = None,
@@ -44,4 +44,3 @@ async def list_downloads(
         ],
         "count": len(downloads),
     }
-

@@ -45,18 +45,22 @@ async def lifespan(app: FastAPI):
         pass
 
     try:
-        deps = app.state.deps
-        scheduler = init_scheduler_v2(store=deps.data_security_store)
-        scheduler.start()
-        logger.info("Backup scheduler V2 started")
+        if settings.BACKUP_SCHEDULER_ENABLED:
+            deps = app.state.deps
+            scheduler = init_scheduler_v2(store=deps.data_security_store)
+            scheduler.start()
+            logger.info("Backup scheduler V2 started")
+        else:
+            logger.info("Backup scheduler V2 disabled by BACKUP_SCHEDULER_ENABLED=false")
     except Exception as e:
         logger.error(f"Failed to start improved backup scheduler V2: {e}", exc_info=True)
         raise
 
     yield
     try:
-        stop_scheduler_v2()
-        logger.info("Backup scheduler V2 stopped")
+        if settings.BACKUP_SCHEDULER_ENABLED:
+            stop_scheduler_v2()
+            logger.info("Backup scheduler V2 stopped")
     except Exception as e:
         logger.error(f"Error stopping scheduler V2: {e}", exc_info=True)
 

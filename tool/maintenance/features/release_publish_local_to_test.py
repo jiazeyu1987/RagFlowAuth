@@ -19,6 +19,12 @@ from tool.maintenance.features.release_publish import (
     recreate_server_containers_from_inspect,
 )
 
+_BUILD_BASE_IMAGES: tuple[str, ...] = (
+    "python:3.12-slim",
+    "node:20-alpine",
+    "nginx:1.27-alpine",
+)
+
 
 def _run_local(command: str, *, cwd: Path | None = None, timeout_s: int = 3600) -> tuple[bool, str]:
     proc = subprocess.run(
@@ -57,6 +63,27 @@ def _ssh(server_ip: str, command: str, *, timeout_s: int = 60) -> tuple[bool, st
         if not line.startswith("close - IO is still pending on closed socket.")
     )
     return (proc.returncode == 0), out.strip()
+
+
+def _pull_base_images_with_retries(*, images: tuple[str, ...], log, retries: int = 3, delay_s: int = 3) -> tuple[bool, str]:
+    """
+    Pull docker base images with bounded retries.
+    We still fail fast when all retries are exhausted (no offline fallback).
+    """
+    for image in images:
+        last_out = ""
+        for attempt in range(1, retries + 1):
+            ok, out = _run_local(f"docker pull {image}", timeout_s=1800)
+            last_out = out
+            if ok:
+                log(f"[1/6] base image ready: {image}")
+                break
+            if attempt < retries:
+                log(f"[WARN] pull base image failed ({image}) attempt {attempt}/{retries}, retrying...")
+                time.sleep(delay_s)
+        else:
+            return False, f"pull base image failed ({image}) after {retries} attempts:\n{last_out}"
+    return True, "OK"
 
 
 def publish_from_local_to_test(
@@ -111,6 +138,12 @@ def publish_from_local_to_test(
         return finish(False, before, None)
 
     log("[1/6] Build images locally")
+    log("[1/6] Pre-pull docker base images (retry up to 3 times)")
+    ok, out = _pull_base_images_with_retries(images=_BUILD_BASE_IMAGES, log=log, retries=3, delay_s=3)
+    if not ok:
+        log(f"[ERROR] {out}")
+        return finish(False, before, None)
+
     ok, out = _run_local(f'docker build -f backend/Dockerfile -t {backend_image} .', cwd=repo_root, timeout_s=7200)
     if not ok:
         log(f"[ERROR] build backend failed:\n{out}")

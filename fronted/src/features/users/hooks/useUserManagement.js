@@ -46,6 +46,7 @@ export const useUserManagement = () => {
 
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newUser, setNewUser] = useState(DEFAULT_NEW_USER);
+  const [createUserError, setCreateUserError] = useState(null);
 
   const [filters, setFilters] = useState(DEFAULT_FILTERS);
 
@@ -127,19 +128,23 @@ export const useUserManagement = () => {
   const groupedUsers = useMemo(() => groupUsersByDepartment(filteredUsers), [filteredUsers]);
 
   const handleOpenCreateModal = useCallback(() => {
+    setCreateUserError(null);
     setShowCreateModal(true);
   }, []);
 
   const handleCloseCreateModal = useCallback(() => {
     setShowCreateModal(false);
     setNewUser(DEFAULT_NEW_USER);
+    setCreateUserError(null);
   }, []);
 
   const setNewUserField = useCallback((field, value) => {
+    setCreateUserError(null);
     setNewUser((prev) => ({ ...prev, [field]: value }));
   }, []);
 
   const toggleNewUserGroup = useCallback((groupId, checked) => {
+    setCreateUserError(null);
     setNewUser((prev) => {
       const groupIds = Array.isArray(prev.group_ids) ? prev.group_ids : [];
       if (checked) {
@@ -153,9 +158,11 @@ export const useUserManagement = () => {
   const handleCreateUser = useCallback(
     async (e) => {
       e.preventDefault();
+      setCreateUserError(null);
       try {
         const payload = {
           ...newUser,
+          full_name: String(newUser.full_name || '').trim() || null,
           company_id: newUser.company_id ? Number(newUser.company_id) : null,
           department_id: newUser.department_id ? Number(newUser.department_id) : null,
           max_login_sessions: Number(newUser.max_login_sessions),
@@ -165,7 +172,12 @@ export const useUserManagement = () => {
         handleCloseCreateModal();
         fetchUsers();
       } catch (err) {
-        setError(err?.message || String(err || '创建用户失败'));
+        const code = String(err?.message || '').trim();
+        if (code === 'username_already_exists') {
+          setCreateUserError('用户名已存在');
+          return;
+        }
+        setCreateUserError(code || String(err || '创建用户失败'));
       }
     },
     [fetchUsers, handleCloseCreateModal, newUser]
@@ -322,6 +334,7 @@ export const useUserManagement = () => {
     setPolicyUser(user);
     setPolicyError(null);
     setPolicyForm({
+      full_name: String(user?.full_name || ''),
       max_login_sessions: Number(user?.max_login_sessions || 3),
       idle_timeout_minutes: Number(user?.idle_timeout_minutes || 120),
       can_change_password: user?.can_change_password !== false,
@@ -357,6 +370,7 @@ export const useUserManagement = () => {
     }
 
     const payload = {
+      full_name: String(policyForm.full_name || '').trim(),
       max_login_sessions: maxSessions,
       idle_timeout_minutes: idleMinutes,
       can_change_password: !!policyForm.can_change_password,
@@ -444,6 +458,7 @@ export const useUserManagement = () => {
     canManageUsers,
     showCreateModal,
     newUser,
+    createUserError,
     filters,
     availableGroups,
     editingGroupUser,
@@ -498,3 +513,4 @@ export const useUserManagement = () => {
     handleResetFilters,
   };
 };
+

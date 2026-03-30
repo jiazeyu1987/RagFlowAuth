@@ -64,7 +64,9 @@ export default function UsersTable({
           <tbody>
             {filteredUsers.map((user) => {
               const isProtectedAdmin = String(user?.username || '').toLowerCase() === 'admin';
-              const displayName = String(user?.email || '').trim();
+              const fullName = String(user?.full_name || '').trim();
+              const fallbackName = String(user?.email || '').trim();
+              const displayName = fullName || fallbackName;
               const disabledNow = isUserDisabled(user);
 
               return (

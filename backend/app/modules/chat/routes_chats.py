@@ -43,7 +43,7 @@ def _coerce_chat_list(value: object, *, source: str) -> list[dict]:
 
 
 @router.post("/chats/{chat_id}/clear-parsed-files")
-async def clear_parsed_files(
+def clear_parsed_files(
     chat_id: str,
     ctx: AuthContextDep,
 ):
@@ -71,7 +71,7 @@ async def clear_parsed_files(
 
 
 @router.post("/chats")
-async def create_chat(
+def create_chat(
     ctx: AuthContextDep,
     body: object = Body(...),
 ):
@@ -114,7 +114,7 @@ async def create_chat(
 
 
 @router.put("/chats/{chat_id}")
-async def update_chat(
+def update_chat(
     chat_id: str,
     ctx: AuthContextDep,
     updates: object = Body(...),
@@ -152,7 +152,7 @@ async def update_chat(
 
 
 @router.delete("/chats/{chat_id}")
-async def delete_chat(
+def delete_chat(
     chat_id: str,
     ctx: AuthContextDep,
 ):
@@ -177,7 +177,7 @@ async def delete_chat(
 
 
 @router.get("/chats")
-async def list_chats(
+def list_chats(
     ctx: AuthContextDep,
     page: int = 1,
     page_size: int = 30,
@@ -209,7 +209,7 @@ async def list_chats(
 
 
 @router.get("/chats/my")
-async def get_my_chats(
+def get_my_chats(
     ctx: AuthContextDep,
 ):
     deps = ctx.deps
@@ -234,7 +234,7 @@ async def get_my_chats(
 
 
 @router.get("/chats/{chat_id}")
-async def get_chat(
+def get_chat(
     chat_id: str,
     ctx: AuthContextDep,
 ):

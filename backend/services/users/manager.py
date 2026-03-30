@@ -137,6 +137,15 @@ class UserManagementManager:
             raise UserManagementError("disable_login_until_must_be_future")
         return True, until_value
 
+    @staticmethod
+    def _normalize_full_name(full_name: str | None, *, for_create: bool) -> str | None:
+        if full_name is None:
+            return None
+        normalized = str(full_name).strip()
+        if normalized:
+            return normalized
+        return None if for_create else ""
+
     def _build_permission_groups(self, group_ids: list[int] | None) -> list[dict]:
         result: list[dict] = []
         for gid in group_ids or []:
@@ -167,6 +176,7 @@ class UserManagementManager:
         return UserResponse(
             user_id=user.user_id,
             username=user.username,
+            full_name=getattr(user, "full_name", None),
             email=user.email,
             company_id=getattr(user, "company_id", None),
             company_name=company.name if company else None,
@@ -247,6 +257,7 @@ class UserManagementManager:
             disable_login_until_ms=user_data.disable_login_until_ms,
             for_create=True,
         )
+        full_name = self._normalize_full_name(user_data.full_name, for_create=True)
 
         group_ids = user_data.group_ids
         if not group_ids:
@@ -263,22 +274,29 @@ class UserManagementManager:
             if not self._port.get_permission_group(gid):
                 raise UserManagementError(f"permission_group_not_found:{gid}")
 
-        user = self._port.create_user(
-            username=user_data.username,
-            password=user_data.password,
-            email=user_data.email,
-            company_id=user_data.company_id,
-            department_id=user_data.department_id,
-            role=role,
-            group_id=None,
-            status=status,
-            max_login_sessions=max_login_sessions,
-            idle_timeout_minutes=idle_timeout_minutes,
-            can_change_password=bool(user_data.can_change_password),
-            disable_login_enabled=bool(disable_login_enabled),
-            disable_login_until_ms=disable_login_until_ms,
-            created_by=created_by,
-        )
+        try:
+            user = self._port.create_user(
+                username=user_data.username,
+                password=user_data.password,
+                full_name=full_name,
+                email=user_data.email,
+                company_id=user_data.company_id,
+                department_id=user_data.department_id,
+                role=role,
+                group_id=None,
+                status=status,
+                max_login_sessions=max_login_sessions,
+                idle_timeout_minutes=idle_timeout_minutes,
+                can_change_password=bool(user_data.can_change_password),
+                disable_login_enabled=bool(disable_login_enabled),
+                disable_login_until_ms=disable_login_until_ms,
+                created_by=created_by,
+            )
+        except ValueError as e:
+            message = str(e).lower()
+            if "already exists" in message:
+                raise UserManagementError("username_already_exists", status_code=409) from e
+            raise UserManagementError("user_create_failed") from e
 
         if group_ids:
             self._port.set_user_permission_groups(user.user_id, group_ids)
@@ -324,6 +342,7 @@ class UserManagementManager:
         can_change_password = (
             bool(user_data.can_change_password) if user_data.can_change_password is not None else None
         )
+        full_name = self._normalize_full_name(user_data.full_name, for_create=False)
 
         disable_now = False
         if status is not None and status != "active":
@@ -351,6 +370,7 @@ class UserManagementManager:
 
         user = self._port.update_user(
             user_id=user_id,
+            full_name=full_name,
             email=user_data.email,
             company_id=user_data.company_id,
             department_id=user_data.department_id,

@@ -9,7 +9,7 @@ router = APIRouter()
 
 
 @router.get("/documents/{doc_id}/conflict")
-async def get_document_conflict(doc_id: str, ctx: AuthContextDep) -> dict:
+def get_document_conflict(doc_id: str, ctx: AuthContextDep) -> dict:
     deps = ctx.deps
     snapshot = ctx.snapshot
     assert_can_review(snapshot)
@@ -60,4 +60,3 @@ async def get_document_conflict(doc_id: str, ctx: AuthContextDep) -> dict:
             "kb_id": existing.kb_name or existing.kb_id,
         },
     }
-

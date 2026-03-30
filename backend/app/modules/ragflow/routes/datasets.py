@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 
 @router.get("/datasets")
-async def list_datasets(
+def list_datasets(
     ctx: AuthContextDep,
     response: FastAPIResponse,
 ):
@@ -43,4 +43,3 @@ async def list_datasets(
     except Exception:
         pass
     return {"datasets": filtered}
-

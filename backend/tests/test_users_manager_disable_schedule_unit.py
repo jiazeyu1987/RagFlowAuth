@@ -61,6 +61,7 @@ class _FakePort:
         self,
         *,
         user_id: str,
+        full_name=None,
         email=None,
         company_id=None,
         department_id=None,
@@ -76,6 +77,8 @@ class _FakePort:
         user = self.users.get(user_id)
         if not user:
             return None
+        if full_name is not None:
+            user.full_name = full_name
         if email is not None:
             user.email = email
         if company_id is not None:

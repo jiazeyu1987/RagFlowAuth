@@ -59,6 +59,27 @@ export default function PolicyModal({
         <h3 style={{ margin: '0 0 24px 0' }}>登录策略 - {user.username}</h3>
 
         <div style={{ marginBottom: 16 }}>
+          <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>姓名</label>
+          <input
+            type="text"
+            value={policyForm.full_name || ''}
+            onChange={(e) =>
+              onChangePolicyForm({
+                ...policyForm,
+                full_name: e.target.value,
+              })
+            }
+            data-testid="users-policy-full-name"
+            style={{
+              width: '100%',
+              padding: '10px 12px',
+              border: '1px solid #d1d5db',
+              borderRadius: '4px',
+              boxSizing: 'border-box',
+            }}
+          />
+        </div>
+        <div style={{ marginBottom: 16 }}>
           <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>
             最大登录会话数 (1-1000)
           </label>

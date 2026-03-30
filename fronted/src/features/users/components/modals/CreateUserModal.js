@@ -5,6 +5,7 @@ const MOBILE_BREAKPOINT = 768;
 export default function CreateUserModal({
   open,
   newUser,
+  error,
   availableGroups,
   companies,
   departments,
@@ -66,6 +67,10 @@ export default function CreateUserModal({
       >
         <h3 style={{ margin: '0 0 24px 0' }}>新建用户</h3>
         <form onSubmit={onSubmit} data-testid="users-create-form">
+          <div style={{ marginBottom: '16px' }}>
+            <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500' }}>姓名</label>
+            <input type="text" value={newUser.full_name || ''} onChange={(e) => onFieldChange('full_name', e.target.value)} data-testid="users-create-full-name" style={inputStyle} />
+          </div>
           <div style={{ marginBottom: '16px' }}>
             <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500' }}>用户名</label>
             <input type="text" required value={newUser.username} onChange={(e) => onFieldChange('username', e.target.value)} data-testid="users-create-username" style={inputStyle} />
@@ -130,6 +135,12 @@ export default function CreateUserModal({
             </div>
             {newUser.group_ids && newUser.group_ids.length > 0 ? <div style={{ marginTop: '8px', fontSize: '0.85rem', color: '#6b7280' }}>已选择 {newUser.group_ids.length} 个权限组</div> : null}
           </div>
+
+          {error ? (
+            <div style={{ marginBottom: '16px', color: '#ef4444' }} data-testid="users-create-error">
+              {error}
+            </div>
+          ) : null}
 
           <div style={{ display: 'flex', gap: '12px', flexDirection: isMobile ? 'column' : 'row' }}>
             <button type="submit" data-testid="users-create-submit" style={{ flex: 1, padding: '10px', backgroundColor: '#3b82f6', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', width: isMobile ? '100%' : 'auto' }}>创建</button>

@@ -1,7 +1,6 @@
 import logging
-from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException
 from fastapi.responses import Response
 from pydantic import BaseModel
 
@@ -102,7 +101,7 @@ def _transfer_one_document(*, doc_id: str, source_dataset: str, target_dataset: 
 
 
 @router.get("/documents")
-async def list_ragflow_documents(
+def list_ragflow_documents(
     ctx: AuthContextDep,
     dataset_name: str = "展厅",
 ):
@@ -114,7 +113,7 @@ async def list_ragflow_documents(
 
 
 @router.get("/documents/{doc_id}/status")
-async def get_document_status(
+def get_document_status(
     doc_id: str,
     ctx: AuthContextDep,
     dataset_name: str = "展厅",
@@ -129,7 +128,7 @@ async def get_document_status(
 
 
 @router.get("/documents/{doc_id}")
-async def get_document_detail(
+def get_document_detail(
     doc_id: str,
     ctx: AuthContextDep,
     dataset_name: str = "展厅",
@@ -144,7 +143,7 @@ async def get_document_detail(
 
 
 @router.get("/documents/{doc_id}/download")
-async def download_document(
+def download_document(
     doc_id: str,
     ctx: AuthContextDep,
     dataset: str = "展厅",
@@ -156,7 +155,7 @@ async def download_document(
 
 
 @router.get("/documents/{doc_id}/preview")
-async def preview_document(
+def preview_document(
     doc_id: str,
     ctx: AuthContextDep,
     dataset: str = "展厅",
@@ -170,7 +169,7 @@ async def preview_document(
 
 
 @router.delete("/documents/{doc_id}")
-async def delete_ragflow_document(
+def delete_ragflow_document(
     doc_id: str,
     ctx: AuthContextDep,
     dataset_name: str = "展厅",
@@ -182,7 +181,7 @@ async def delete_ragflow_document(
 
 
 @router.post("/documents/{doc_id}/transfer")
-async def transfer_ragflow_document(
+def transfer_ragflow_document(
     doc_id: str,
     body: RagflowDocumentTransferRequest,
     ctx: AuthContextDep,
@@ -201,7 +200,7 @@ async def transfer_ragflow_document(
 
 
 @router.post("/documents/transfer/batch")
-async def transfer_ragflow_documents_batch(
+def transfer_ragflow_documents_batch(
     body: RagflowBatchTransferRequest,
     ctx: AuthContextDep,
 ):
@@ -263,12 +262,12 @@ async def transfer_ragflow_documents_batch(
 
 
 @router.post("/documents/batch/download")
-async def batch_download_documents(
-    request: Request,
+def batch_download_documents(
+    body: dict,
     ctx: AuthContextDep,
 ):
     deps = ctx.deps
-    data = await request.json()
+    data = body or {}
     documents_info = data.get("documents", [])
     logger.info("[BATCH DOWNLOAD] count=%s user=%s", len(documents_info), ctx.payload.sub)
 

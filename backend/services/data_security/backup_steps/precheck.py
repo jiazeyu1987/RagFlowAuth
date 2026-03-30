@@ -4,6 +4,7 @@ import logging
 from pathlib import Path
 
 from backend.app.core.paths import repo_root
+from backend.services.mount_utils import mount_fstype
 
 from ..common import ensure_dir, timestamp
 from ..docker_utils import docker_ok
@@ -12,31 +13,6 @@ from .context import BackupContext
 
 def _norm_path(s: str) -> str:
     return str(s).replace("\\", "/")
-
-
-def _mount_fstype(mountpoint: str) -> str | None:
-    """
-    Best-effort: detect filesystem type for a mountpoint inside the backend container.
-
-    Used to ensure `/mnt/replica` is a real CIFS mount when target is under that path.
-    """
-    mp = _norm_path(mountpoint).rstrip("/") or "/"
-    try:
-        data = Path("/proc/mounts").read_text(encoding="utf-8", errors="ignore")
-    except Exception:
-        return None
-
-    best: tuple[str, str] | None = None  # (mnt, fstype)
-    for line in data.splitlines():
-        parts = line.split()
-        if len(parts) < 3:
-            continue
-        mnt = parts[1]
-        fstype = parts[2]
-        if mnt == mp or mp.startswith(mnt.rstrip("/") + "/"):
-            if best is None or len(mnt) > len(best[0]):
-                best = (mnt, fstype)
-    return best[1] if best else None
 
 
 def backup_precheck_and_prepare(ctx: BackupContext) -> None:
@@ -57,7 +33,7 @@ def backup_precheck_and_prepare(ctx: BackupContext) -> None:
         logger = logging.getLogger(__name__)
         ctx.update(message="Precheck: 验证 /mnt/replica 为 CIFS 且可写", progress=2)
 
-        fstype = _mount_fstype("/mnt/replica")
+        fstype = mount_fstype("/mnt/replica")
         logger.info(f"[Backup] /mnt/replica fstype={fstype!r} target={target_norm}")
         if fstype != "cifs":
             raise RuntimeError(

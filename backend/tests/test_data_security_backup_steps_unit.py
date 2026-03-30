@@ -38,7 +38,7 @@ class TestDataSecurityBackupStepsUnit(unittest.TestCase):
         ctx = BackupContext(store=store, job_id=1, settings=settings, include_images=False)
 
         with patch.object(precheck, "docker_ok", return_value=(True, "")), patch.object(
-            precheck, "_mount_fstype", return_value="ext4"
+            precheck, "mount_fstype", return_value="ext4"
         ):
             # Message text is localized; assert the key invariant.
             with self.assertRaisesRegex(RuntimeError, "CIFS"):
