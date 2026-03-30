@@ -3,6 +3,8 @@ from __future__ import annotations
 import time
 from typing import Callable
 
+DEFAULT_UVICORN_WORKERS = "2"
+
 
 def sh_single_quote(value: str) -> str:
     # Wrap in single quotes, escape any embedded single quote.
@@ -64,10 +66,21 @@ def build_recreate_from_inspect(
                 parts += ["-v", bind.strip()]
 
     envs = cfg.get("Env") or []
+    has_uvicorn_workers = False
+    enforce_uvicorn_workers_default = container_name == "ragflowauth-backend"
     if isinstance(envs, list):
         for env in envs:
-            if isinstance(env, str) and env and "=" in env:
-                parts += ["-e", env]
+            if not (isinstance(env, str) and env and "=" in env):
+                continue
+            key, value = env.split("=", 1)
+            if enforce_uvicorn_workers_default and key == "UVICORN_WORKERS":
+                resolved = value.strip() or DEFAULT_UVICORN_WORKERS
+                parts += ["-e", f"UVICORN_WORKERS={resolved}"]
+                has_uvicorn_workers = True
+                continue
+            parts += ["-e", env]
+    if enforce_uvicorn_workers_default and not has_uvicorn_workers:
+        parts += ["-e", f"UVICORN_WORKERS={DEFAULT_UVICORN_WORKERS}"]
 
     cmd = " ".join(
         sh_single_quote_fn(p) if any(ch in p for ch in (" ", "\t", "$", "`", "\"", "'")) else p
@@ -282,6 +295,7 @@ def bootstrap_server_containers_impl(
         "-e TZ=Asia/Shanghai "
         "-e HOST=0.0.0.0 "
         f"-e PORT={backend_port} "
+        f"-e UVICORN_WORKERS={DEFAULT_UVICORN_WORKERS} "
         "-e DATABASE_PATH=data/auth.db "
         "-e UPLOAD_DIR=data/uploads "
         f"-v {app_dir}/data:/app/data "

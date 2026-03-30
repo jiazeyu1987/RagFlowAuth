@@ -114,7 +114,17 @@ def build_editor_config(body: dict, request: Request, ctx: AuthContextDep):
     )
     api_base = _build_public_api_base(request)
     file_url = f"{api_base}/api/onlyoffice/file?token={quote(file_token, safe='')}"
-    key_seed = f"{source}:{doc_id}:{dataset}:{filename}"
+    can_download = bool(ctx.snapshot.is_admin or ctx.snapshot.can_download)
+    can_print = can_download
+    can_copy = False
+    # IMPORTANT:
+    # ONLYOFFICE reuses cached sessions by `document.key`. If key stays stable while
+    # permission policy changes, old permission behavior can appear to "stick".
+    # Bind the key to user + permission profile + a policy version to force refresh.
+    key_seed = (
+        f"preview-v2:{source}:{doc_id}:{dataset}:{filename}:"
+        f"{ctx.payload.sub or ''}:d{int(can_download)}:p{int(can_print)}:c{int(can_copy)}"
+    )
     doc_key = hashlib.sha256(key_seed.encode("utf-8")).hexdigest()[:64]
 
     config: dict[str, Any] = {
@@ -127,9 +137,10 @@ def build_editor_config(body: dict, request: Request, ctx: AuthContextDep):
             "key": doc_key,
             "permissions": {
                 "edit": False,
-                "download": bool(ctx.snapshot.is_admin or ctx.snapshot.can_download),
-                "print": bool(ctx.snapshot.is_admin or ctx.snapshot.can_download),
-                "copy": bool(ctx.snapshot.is_admin or ctx.snapshot.can_download),
+                "download": can_download,
+                "print": can_print,
+                # Always disable in-editor copy for preview mode.
+                "copy": can_copy,
             },
         },
         "editorConfig": {
@@ -149,12 +160,16 @@ def build_editor_config(body: dict, request: Request, ctx: AuthContextDep):
 
     elapsed_ms = (time.perf_counter() - t0) * 1000
     logger.info(
-        "onlyoffice_editor_config_done request_id=%s source=%s doc_id=%s dataset=%s ext=%s elapsed_ms=%.2f",
+        "onlyoffice_editor_config_done request_id=%s source=%s doc_id=%s dataset=%s ext=%s perms=d%s/p%s/c%s key=%s elapsed_ms=%.2f",
         request_id,
         source,
         doc_id,
         dataset,
         ext,
+        int(can_download),
+        int(can_print),
+        int(can_copy),
+        doc_key[:12],
         elapsed_ms,
     )
     return {"server_url": server_url, "filename": filename, "config": config}

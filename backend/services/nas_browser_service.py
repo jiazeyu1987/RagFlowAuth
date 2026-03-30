@@ -8,6 +8,7 @@ from typing import Any
 
 from backend.app.core.authz import AuthContext
 from backend.app.core.config import settings
+from backend.services.nas_import_task_store import NasImportTaskStore
 
 
 NAS_SERVER_IP = "172.30.30.4"
@@ -15,8 +16,7 @@ NAS_SHARE_NAME = "it共享"
 NAS_USERNAME = "ceshi"
 NAS_PASSWORD = "Kdlyx123"
 
-_FOLDER_IMPORT_TASKS: dict[str, "NasFolderImportTask"] = {}
-_TASK_LOCK = asyncio.Lock()
+_TASK_STORE = NasImportTaskStore()
 
 
 @dataclass(frozen=True)
@@ -58,6 +58,7 @@ class NasFolderImportTask:
 class NasBrowserService:
     def __init__(self, config: NasConfig | None = None) -> None:
         self.config = config or NasConfig()
+        self._task_store = _TASK_STORE
 
     def _get_smbclient(self):
         try:
@@ -229,8 +230,16 @@ class NasBrowserService:
             status="completed" if not supported_files else "pending",
         )
 
-        async with _TASK_LOCK:
-            _FOLDER_IMPORT_TASKS[task.task_id] = task
+        await asyncio.to_thread(
+            self._task_store.create_task,
+            task_id=task.task_id,
+            folder_path=task.folder_path,
+            kb_ref=task.kb_ref,
+            total_files=task.total_files,
+            skipped_count=task.skipped_count,
+            skipped=task.skipped,
+            status=task.status,
+        )
 
         if supported_files:
             ctx_copy = AuthContext(deps=ctx.deps, payload=ctx.payload, user=ctx.user, snapshot=ctx.snapshot)
@@ -245,14 +254,16 @@ class NasBrowserService:
                 )
             )
 
-        return task.to_dict()
+        created = await asyncio.to_thread(self._task_store.get_task, task.task_id)
+        if created is None:
+            raise RuntimeError("nas_task_create_failed")
+        return created
 
     async def get_folder_import_task(self, task_id: str) -> dict[str, Any]:
-        async with _TASK_LOCK:
-            task = _FOLDER_IMPORT_TASKS.get(task_id)
+        task = await asyncio.to_thread(self._task_store.get_task, task_id)
         if task is None:
             raise RuntimeError("NAS 上传任务不存在")
-        return task.to_dict()
+        return task
 
     async def import_file_to_kb(self, *, relative_path: str, kb_ref: str, deps, ctx) -> dict[str, Any]:
         normalized = self._normalize_relative_path(relative_path)
@@ -283,11 +294,10 @@ class NasBrowserService:
     async def _run_folder_import_task(self, *, task_id: str, folder_path: str, kb_ref: str, files: list[dict[str, str]], deps, ctx: AuthContext) -> None:
         folder_name = PurePosixPath(folder_path).name or folder_path
 
-        async with _TASK_LOCK:
-            task = _FOLDER_IMPORT_TASKS.get(task_id)
-            if task is None:
-                return
-            task.status = "running"
+        task = await asyncio.to_thread(self._task_store.get_task, task_id)
+        if task is None:
+            return
+        await asyncio.to_thread(self._task_store.mark_running, task_id)
 
         try:
             for item in files:
@@ -308,45 +318,21 @@ class NasBrowserService:
             await self._fail_task(task_id, str(exc))
 
     async def _update_task(self, task_id: str, *, current_file: str) -> None:
-        async with _TASK_LOCK:
-            task = _FOLDER_IMPORT_TASKS.get(task_id)
-            if task is not None:
-                task.current_file = current_file
+        await asyncio.to_thread(self._task_store.set_current_file, task_id, current_file)
 
     async def _apply_outcome(self, task_id: str, outcome: dict[str, Any]) -> None:
-        async with _TASK_LOCK:
-            task = _FOLDER_IMPORT_TASKS.get(task_id)
-            if task is None:
-                return
-            task.processed_files += 1
-            task.current_file = ""
-            if outcome["status"] == "imported":
-                task.imported_count += 1
-                if len(task.imported) < 50:
-                    task.imported.append(outcome["payload"])
-            elif outcome["status"] == "skipped":
-                task.skipped_count += 1
-                if len(task.skipped) < 50:
-                    task.skipped.append(outcome["payload"])
-            else:
-                task.failed_count += 1
-                if len(task.failed) < 50:
-                    task.failed.append(outcome["payload"])
+        await asyncio.to_thread(
+            self._task_store.apply_outcome,
+            task_id,
+            status=str(outcome.get("status") or ""),
+            payload=outcome.get("payload") if isinstance(outcome.get("payload"), dict) else {},
+        )
 
     async def _complete_task(self, task_id: str) -> None:
-        async with _TASK_LOCK:
-            task = _FOLDER_IMPORT_TASKS.get(task_id)
-            if task is not None:
-                task.status = "completed"
-                task.current_file = ""
+        await asyncio.to_thread(self._task_store.mark_completed, task_id)
 
     async def _fail_task(self, task_id: str, error: str) -> None:
-        async with _TASK_LOCK:
-            task = _FOLDER_IMPORT_TASKS.get(task_id)
-            if task is not None:
-                task.status = "failed"
-                task.error = error
-                task.current_file = ""
+        await asyncio.to_thread(self._task_store.mark_failed, task_id, error)
 
     def _build_folder_target_filename(self, source_path: str, folder_path: str, folder_name: str) -> str:
         rel_inside_folder = str(PurePosixPath(source_path).relative_to(PurePosixPath(folder_path)))

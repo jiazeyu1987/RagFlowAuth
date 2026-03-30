@@ -20,6 +20,7 @@ import {
 const MOBILE_BREAKPOINT = 768;
 
 export const DocumentPreviewModal = ({ open, target, onClose, canDownloadFiles = false }) => {
+  const preventCopyInPreview = true;
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [payload, setPayload] = useState(null);
@@ -270,6 +271,29 @@ export const DocumentPreviewModal = ({ open, target, onClose, canDownloadFiles =
     };
   }, [open]);
 
+  const blockCopyInteraction = useCallback((event) => {
+    if (!preventCopyInPreview) return;
+    event.preventDefault();
+    event.stopPropagation();
+  }, [preventCopyInPreview]);
+
+  useEffect(() => {
+    if (!open || !preventCopyInPreview) return undefined;
+
+    const onKeyDown = (event) => {
+      const key = String(event?.key || '').toLowerCase();
+      const withCtrlOrMeta = Boolean(event.ctrlKey || event.metaKey);
+      const isCopyLike = withCtrlOrMeta && (key === 'c' || key === 'x' || key === 'a' || key === 's' || key === 'p');
+      const isShiftInsert = Boolean(event.shiftKey) && key === 'insert';
+      if (!isCopyLike && !isShiftInsert) return;
+      event.preventDefault();
+      event.stopPropagation();
+    };
+
+    window.addEventListener('keydown', onKeyDown, true);
+    return () => window.removeEventListener('keydown', onKeyDown, true);
+  }, [open, preventCopyInPreview]);
+
   const excelRenderHint = useMemo(() => {
     if (payload?.type !== 'excel') return '';
     return '如果 Excel 中包含流程图或形状，表格模式可能无法完整显示；可点击“原样预览 (HTML)”查看。';
@@ -424,7 +448,23 @@ export const DocumentPreviewModal = ({ open, target, onClose, canDownloadFiles =
           </div>
         </div>
 
-        <div style={{ flex: 1, overflow: 'auto', padding: isMobile ? '12px' : '18px' }}>
+        <div
+          onCopy={blockCopyInteraction}
+          onCut={blockCopyInteraction}
+          onPaste={blockCopyInteraction}
+          onContextMenu={blockCopyInteraction}
+          onDragStart={blockCopyInteraction}
+          onSelectStart={blockCopyInteraction}
+          style={{
+            flex: 1,
+            overflow: 'auto',
+            padding: isMobile ? '12px' : '18px',
+            userSelect: preventCopyInPreview ? 'none' : 'auto',
+            WebkitUserSelect: preventCopyInPreview ? 'none' : 'auto',
+            MozUserSelect: preventCopyInPreview ? 'none' : 'auto',
+            msUserSelect: preventCopyInPreview ? 'none' : 'auto',
+          }}
+        >
           {loading ? (
             <div style={{ color: '#6b7280' }}>加载中...</div>
           ) : error ? (

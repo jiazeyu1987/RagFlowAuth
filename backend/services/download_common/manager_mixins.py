@@ -212,7 +212,14 @@ class DownloadManagerDelegationMixin:
         return self._execution_manager.request_stop(session_id=session_id)
 
     def _is_stop_requested(self, session_id: str) -> bool:
-        return self._execution_manager.is_stop_requested(session_id=session_id)
+        if self._execution_manager.is_stop_requested(session_id=session_id):
+            return True
+        try:
+            session = self.store.get_session(session_id)
+        except Exception:
+            session = None
+        status = str(getattr(session, "status", "") or "")
+        return status in {"stopping", "stopped"}
 
     def _finish_job(self, session_id: str) -> None:
         self._execution_manager.finish_job(session_id=session_id)
@@ -275,8 +282,10 @@ class DownloadManagerDelegationMixin:
             self.store.update_session_runtime(session_id=session_id, status="stopping")
             return {"ok": True, "already_finished": False, "status": "stopping", "session_id": session_id}
 
-        self.store.update_session_runtime(session_id=session_id, status="stopped")
-        return {"ok": True, "already_finished": False, "status": "stopped", "session_id": session_id}
+        # Multi-worker fallback: current process may not own the worker thread.
+        # Persisting "stopping" lets the active worker cooperate and exit.
+        self.store.update_session_runtime(session_id=session_id, status="stopping")
+        return {"ok": True, "already_finished": False, "status": "stopping", "session_id": session_id}
 
     @classmethod
     def _build_summary(cls, items: list[Any], status: str | None) -> dict[str, Any]:
