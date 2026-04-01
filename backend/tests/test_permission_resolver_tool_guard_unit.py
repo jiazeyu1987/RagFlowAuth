@@ -16,6 +16,7 @@ class TestPermissionResolverToolGuardUnit(unittest.TestCase):
             can_upload=False,
             can_review=False,
             can_download=False,
+            can_copy=False,
             can_delete=False,
             can_manage_kb_directory=False,
             can_view_kb_config=False,

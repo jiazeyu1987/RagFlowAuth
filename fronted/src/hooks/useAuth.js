@@ -34,6 +34,7 @@ export const AuthProvider = ({ children }) => {
     can_upload: false,
     can_review: false,
     can_download: false,
+    can_copy: false,
     can_delete: false,
     can_manage_kb_directory: false,
     can_view_kb_config: false,
@@ -52,6 +53,7 @@ export const AuthProvider = ({ children }) => {
       can_upload: false,
       can_review: false,
       can_download: false,
+      can_copy: false,
       can_delete: false,
       can_manage_kb_directory: false,
       can_view_kb_config: false,
@@ -250,6 +252,7 @@ export const AuthProvider = ({ children }) => {
       if (action === 'review' || action === 'approve' || action === 'reject') return !!ops.can_review;
       if (action === 'delete') return !!ops.can_delete;
       if (action === 'download') return !!ops.can_download;
+      if (action === 'copy') return !!ops.can_copy;
       return false;
     }
 
@@ -259,6 +262,7 @@ export const AuthProvider = ({ children }) => {
       // 后端仍会在下载接口做最终权限校验。
       if (action === 'view' || action === 'preview') return accessibleKbs.length > 0;
       if (action === 'download') return !!ops.can_download;
+      if (action === 'copy') return !!ops.can_copy;
       if (action === 'delete') return !!ops.can_delete;
       return false;
     }
@@ -317,6 +321,7 @@ export const AuthProvider = ({ children }) => {
     canUpload: () => user?.role === 'admin' || permissions.can_upload,
     canReview: () => user?.role === 'admin' || permissions.can_review,
     canDownload: () => user?.role === 'admin' || permissions.can_download,
+    canCopy: () => user?.role === 'admin' || permissions.can_copy,
     canDelete: () => user?.role === 'admin' || permissions.can_delete,
     canManageKbDirectory: () => user?.role === 'admin' || !!permissions.can_manage_kb_directory,
     canViewKbConfig: () => user?.role === 'admin' || permissions.can_view_kb_config !== false,

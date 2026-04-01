@@ -162,6 +162,20 @@ export default function GroupEditorForm({
           <label>
             <input
               type="checkbox"
+              data-testid="pg-form-can-copy"
+              checked={!!formData.can_copy}
+              onChange={(event) =>
+                onSetFormData((previous) => ({
+                  ...previous,
+                  can_copy: event.target.checked,
+                }))
+              }
+            />{' '}
+            {"\u590d\u5236"}
+          </label>
+          <label>
+            <input
+              type="checkbox"
               data-testid="pg-form-can-delete"
               checked={!!formData.can_delete}
               onChange={(event) =>

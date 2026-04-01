@@ -46,6 +46,7 @@ class PermissionGroupStore:
         can_upload: bool = False,
         can_review: bool = False,
         can_download: bool = True,
+        can_copy: bool = False,
         can_delete: bool = False,
         can_manage_kb_directory: bool = False,
         can_view_kb_config: bool = True,
@@ -65,9 +66,9 @@ class PermissionGroupStore:
                     INSERT INTO permission_groups (
                         group_name, description, folder_id, is_system,
                         accessible_kbs, accessible_kb_nodes, accessible_chats, accessible_tools,
-                        can_upload, can_review, can_download, can_delete, can_manage_kb_directory,
+                        can_upload, can_review, can_download, can_copy, can_delete, can_manage_kb_directory,
                         can_view_kb_config, can_view_tools
-                    ) VALUES (?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ) VALUES (?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         group_name,
@@ -80,6 +81,7 @@ class PermissionGroupStore:
                         1 if can_upload else 0,
                         1 if can_review else 0,
                         1 if can_download else 0,
+                        1 if can_copy else 0,
                         1 if can_delete else 0,
                         1 if can_manage_kb_directory else 0,
                         1 if can_view_kb_config else 0,
@@ -106,7 +108,7 @@ class PermissionGroupStore:
                     SELECT group_id, group_name, description, is_system,
                            folder_id,
                            accessible_kbs, accessible_kb_nodes, accessible_chats, accessible_tools,
-                           can_upload, can_review, can_download, can_delete, can_manage_kb_directory,
+                           can_upload, can_review, can_download, can_copy, can_delete, can_manage_kb_directory,
                            can_view_kb_config, can_view_tools,
                            created_at, updated_at
                     FROM permission_groups
@@ -128,6 +130,7 @@ class PermissionGroupStore:
                 group["can_upload"] = bool(group["can_upload"])
                 group["can_review"] = bool(group["can_review"])
                 group["can_download"] = bool(group["can_download"])
+                group["can_copy"] = bool(group.get("can_copy"))
                 group["can_delete"] = bool(group["can_delete"])
                 group["can_manage_kb_directory"] = bool(group.get("can_manage_kb_directory"))
                 group["can_view_kb_config"] = bool(group.get("can_view_kb_config"))
@@ -150,7 +153,7 @@ class PermissionGroupStore:
                     SELECT group_id, group_name, description, is_system,
                            folder_id,
                            accessible_kbs, accessible_kb_nodes, accessible_chats, accessible_tools,
-                           can_upload, can_review, can_download, can_delete, can_manage_kb_directory,
+                           can_upload, can_review, can_download, can_copy, can_delete, can_manage_kb_directory,
                            can_view_kb_config, can_view_tools,
                            created_at, updated_at
                     FROM permission_groups
@@ -171,6 +174,7 @@ class PermissionGroupStore:
                 group["can_upload"] = bool(group["can_upload"])
                 group["can_review"] = bool(group["can_review"])
                 group["can_download"] = bool(group["can_download"])
+                group["can_copy"] = bool(group.get("can_copy"))
                 group["can_delete"] = bool(group["can_delete"])
                 group["can_manage_kb_directory"] = bool(group.get("can_manage_kb_directory"))
                 group["can_view_kb_config"] = bool(group.get("can_view_kb_config"))
@@ -193,7 +197,7 @@ class PermissionGroupStore:
                     SELECT group_id, group_name, description, is_system,
                            folder_id,
                            accessible_kbs, accessible_kb_nodes, accessible_chats, accessible_tools,
-                           can_upload, can_review, can_download, can_delete, can_manage_kb_directory,
+                           can_upload, can_review, can_download, can_copy, can_delete, can_manage_kb_directory,
                            can_view_kb_config, can_view_tools,
                            created_at, updated_at
                     FROM permission_groups
@@ -211,6 +215,7 @@ class PermissionGroupStore:
                     group["can_upload"] = bool(group["can_upload"])
                     group["can_review"] = bool(group["can_review"])
                     group["can_download"] = bool(group["can_download"])
+                    group["can_copy"] = bool(group.get("can_copy"))
                     group["can_delete"] = bool(group["can_delete"])
                     group["can_manage_kb_directory"] = bool(group.get("can_manage_kb_directory"))
                     group["can_view_kb_config"] = bool(group.get("can_view_kb_config"))
@@ -238,6 +243,7 @@ class PermissionGroupStore:
         can_upload: bool = None,
         can_review: bool = None,
         can_download: bool = None,
+        can_copy: bool = None,
         can_delete: bool = None,
         can_manage_kb_directory: bool = None,
         can_view_kb_config: bool = None,
@@ -285,6 +291,9 @@ class PermissionGroupStore:
                 if can_download is not None:
                     updates.append("can_download = ?")
                     params.append(1 if can_download else 0)
+                if can_copy is not None:
+                    updates.append("can_copy = ?")
+                    params.append(1 if can_copy else 0)
                 if can_delete is not None:
                     updates.append("can_delete = ?")
                     params.append(1 if can_delete else 0)

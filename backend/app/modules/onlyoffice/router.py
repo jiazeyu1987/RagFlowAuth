@@ -116,7 +116,7 @@ def build_editor_config(body: dict, request: Request, ctx: AuthContextDep):
     file_url = f"{api_base}/api/onlyoffice/file?token={quote(file_token, safe='')}"
     can_download = bool(ctx.snapshot.is_admin or ctx.snapshot.can_download)
     can_print = can_download
-    can_copy = False
+    can_copy = bool(ctx.snapshot.is_admin or ctx.snapshot.can_copy)
     # IMPORTANT:
     # ONLYOFFICE reuses cached sessions by `document.key`. If key stays stable while
     # permission policy changes, old permission behavior can appear to "stick".
@@ -139,7 +139,6 @@ def build_editor_config(body: dict, request: Request, ctx: AuthContextDep):
                 "edit": False,
                 "download": can_download,
                 "print": can_print,
-                # Always disable in-editor copy for preview mode.
                 "copy": can_copy,
             },
         },

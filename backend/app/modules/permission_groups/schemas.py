@@ -14,6 +14,7 @@ class PermissionGroupCreate(BaseModel):
     can_upload: bool = False
     can_review: bool = False
     can_download: bool = True
+    can_copy: bool = False
     can_delete: bool = False
     can_manage_kb_directory: bool = False
     can_view_kb_config: bool = True
@@ -31,6 +32,7 @@ class PermissionGroupUpdate(BaseModel):
     can_upload: Optional[bool] = None
     can_review: Optional[bool] = None
     can_download: Optional[bool] = None
+    can_copy: Optional[bool] = None
     can_delete: Optional[bool] = None
     can_manage_kb_directory: Optional[bool] = None
     can_view_kb_config: Optional[bool] = None

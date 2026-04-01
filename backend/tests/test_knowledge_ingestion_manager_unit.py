@@ -86,6 +86,7 @@ class TestKnowledgeIngestionManagerUnit(unittest.IsolatedAsyncioTestCase):
                 can_upload=True,
                 can_review=True,
                 can_download=True,
+                can_copy=True,
                 can_delete=True,
                 can_manage_kb_directory=True,
                 can_view_kb_config=True,

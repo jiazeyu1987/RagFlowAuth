@@ -21,6 +21,7 @@ class PermissionSnapshot:
     can_upload: bool
     can_review: bool
     can_download: bool
+    can_copy: bool
     can_delete: bool
     can_manage_kb_directory: bool
     can_view_kb_config: bool
@@ -37,6 +38,7 @@ class PermissionSnapshot:
             "can_upload": self.can_upload,
             "can_review": self.can_review,
             "can_download": self.can_download,
+            "can_copy": self.can_copy,
             "can_delete": self.can_delete,
             "can_manage_kb_directory": self.can_manage_kb_directory,
             "can_view_kb_config": self.can_view_kb_config,
@@ -90,6 +92,7 @@ def resolve_permissions(deps: AppDependencies, user: Any) -> PermissionSnapshot:
             can_upload=True,
             can_review=True,
             can_download=True,
+            can_copy=True,
             can_delete=True,
             can_manage_kb_directory=True,
             can_view_kb_config=True,
@@ -105,6 +108,7 @@ def resolve_permissions(deps: AppDependencies, user: Any) -> PermissionSnapshot:
     can_upload = False
     can_review = False
     can_download = False
+    can_copy = False
     can_delete = False
     can_manage_kb_directory = False
     can_view_kb_config = False
@@ -135,6 +139,7 @@ def resolve_permissions(deps: AppDependencies, user: Any) -> PermissionSnapshot:
         can_upload = can_upload or bool(group.get("can_upload", False))
         can_review = can_review or bool(group.get("can_review", False))
         can_download = can_download or bool(group.get("can_download", False))
+        can_copy = can_copy or bool(group.get("can_copy", False))
         can_delete = can_delete or bool(group.get("can_delete", False))
         can_manage_kb_directory = can_manage_kb_directory or bool(group.get("can_manage_kb_directory", False))
         can_view_kb_config = can_view_kb_config or bool(group.get("can_view_kb_config", True))
@@ -206,6 +211,7 @@ def resolve_permissions(deps: AppDependencies, user: Any) -> PermissionSnapshot:
         can_upload=can_upload,
         can_review=can_review,
         can_download=can_download,
+        can_copy=can_copy,
         can_delete=can_delete,
         can_manage_kb_directory=can_manage_kb_directory,
         can_view_kb_config=can_view_kb_config,

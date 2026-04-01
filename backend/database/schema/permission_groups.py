@@ -24,6 +24,7 @@ def ensure_permission_groups_table(conn: sqlite3.Connection) -> None:
             can_upload INTEGER DEFAULT 0,
             can_review INTEGER DEFAULT 0,
             can_download INTEGER DEFAULT 1,
+            can_copy INTEGER DEFAULT 0,
             can_delete INTEGER DEFAULT 0,
             can_manage_kb_directory INTEGER DEFAULT 0,
             can_view_kb_config INTEGER DEFAULT 1,
@@ -45,6 +46,7 @@ def ensure_permission_groups_columns(conn: sqlite3.Connection) -> None:
     add_column_if_missing(conn, "permission_groups", "can_manage_kb_directory INTEGER DEFAULT 0")
     add_column_if_missing(conn, "permission_groups", "can_view_kb_config INTEGER DEFAULT 1")
     add_column_if_missing(conn, "permission_groups", "can_view_tools INTEGER DEFAULT 1")
+    add_column_if_missing(conn, "permission_groups", "can_copy INTEGER DEFAULT 0")
 
 
 def ensure_user_permission_groups_table(conn: sqlite3.Connection) -> None:
@@ -78,17 +80,17 @@ def seed_default_permission_groups(conn: sqlite3.Connection) -> None:
         INSERT INTO permission_groups (
             group_name, description, is_system,
             accessible_kbs, accessible_chats, accessible_tools,
-            can_upload, can_review, can_download, can_delete, can_manage_kb_directory,
+            can_upload, can_review, can_download, can_copy, can_delete, can_manage_kb_directory,
             can_view_kb_config, can_view_tools,
             created_at, updated_at
-        ) VALUES (?, ?, ?, '[]', '[]', '[]', ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        ) VALUES (?, ?, ?, '[]', '[]', '[]', ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
         """,
         [
-            ("admin", "System administrator", 1, 1, 1, 1, 1, 1, 1, 1),
-            ("reviewer", "Document reviewer", 0, 0, 1, 1, 0, 0, 1, 1),
-            ("operator", "Uploader/operator", 0, 1, 0, 1, 1, 0, 1, 1),
-            ("viewer", "Viewer", 0, 0, 0, 1, 0, 0, 1, 1),
-            ("guest", "Guest", 0, 0, 0, 0, 0, 0, 1, 1),
+            ("admin", "System administrator", 1, 1, 1, 1, 1, 1, 1, 1, 1),
+            ("reviewer", "Document reviewer", 0, 0, 1, 1, 0, 0, 0, 1, 1),
+            ("operator", "Uploader/operator", 0, 1, 0, 1, 0, 1, 0, 1, 1),
+            ("viewer", "Viewer", 0, 0, 0, 1, 0, 0, 0, 1, 1),
+            ("guest", "Guest", 0, 0, 0, 0, 0, 0, 0, 1, 1),
         ],
     )
 

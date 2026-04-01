@@ -16,6 +16,7 @@ function fillFormFromGroup(group) {
     can_upload: !!group?.can_upload,
     can_review: !!group?.can_review,
     can_download: group?.can_download !== false,
+    can_copy: !!group?.can_copy,
     can_delete: !!group?.can_delete,
     can_manage_kb_directory: !!group?.can_manage_kb_directory,
     can_view_kb_config: group?.can_view_kb_config !== false,
