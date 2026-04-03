@@ -218,7 +218,7 @@ class AuthClient {
 **A**: 不会！使用迁移脚本：
 ```bash
 cd backend
-python migrate_db.py --old-db ../backend/data/auth.db
+python migrate_db.py --old-db ../data/auth.db
 ```
 
 ## 回滚方案

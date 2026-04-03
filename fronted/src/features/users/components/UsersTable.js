@@ -1,13 +1,19 @@
 import React from 'react';
 
+const formatManagerLabel = (user) => {
+  const fullName = String(user?.manager_full_name || '').trim();
+  const username = String(user?.manager_username || '').trim();
+  if (fullName && username) return `${fullName}(${username})`;
+  if (fullName) return fullName;
+  if (username) return username;
+  return String(user?.manager_user_id || '').trim() || '-';
+};
+
 const formatRole = (role) => {
   const value = String(role || '').trim();
   if (value === 'admin') return '管理员';
   if (value === 'sub_admin') return '子管理员';
-  if (value === 'reviewer') return '审核员';
-  if (value === 'operator') return '操作员';
-  if (value === 'guest') return '访客';
-  return '普通查看者';
+  return '普通用户';
 };
 
 const formatStatus = (user) => {
@@ -70,7 +76,7 @@ export default function UsersTable({
               <th style={{ padding: '12px 16px', fontWeight: 600 }}>用户</th>
               <th style={{ padding: '12px 16px', fontWeight: 600 }}>角色</th>
               <th style={{ padding: '12px 16px', fontWeight: 600 }}>公司/部门</th>
-              <th style={{ padding: '12px 16px', fontWeight: 600 }}>知识库管理目录</th>
+              <th style={{ padding: '12px 16px', fontWeight: 600 }}>归属/管理范围</th>
               <th style={{ padding: '12px 16px', fontWeight: 600 }}>状态</th>
               <th style={{ padding: '12px 16px', fontWeight: 600 }}>操作</th>
             </tr>
@@ -80,6 +86,10 @@ export default function UsersTable({
               const safeUserId = String(user?.user_id || '');
               const isBuiltInAdmin = String(user?.username || '').toLowerCase() === 'admin';
               const isActive = String(user?.status || '').toLowerCase() === 'active';
+              const canEditGroupsForUser =
+                canAssignGroups &&
+                String(user?.role || '') === 'viewer' &&
+                !isBuiltInAdmin;
 
               return (
                 <tr
@@ -92,9 +102,6 @@ export default function UsersTable({
                       {user?.full_name || user?.username || '-'}
                     </div>
                     <div style={{ fontSize: '0.85rem', color: '#6b7280' }}>{user?.username || '-'}</div>
-                    {user?.email ? (
-                      <div style={{ fontSize: '0.85rem', color: '#6b7280' }}>{user.email}</div>
-                    ) : null}
                   </td>
                   <td style={{ padding: '14px 16px', verticalAlign: 'top' }}>
                     <span
@@ -141,6 +148,28 @@ export default function UsersTable({
                           {user?.managed_kb_root_path || user?.managed_kb_root_node_id || '-'}
                         </div>
                       </div>
+                    ) : user?.role === 'viewer' ? (
+                      <div data-testid={`users-owned-by-${safeUserId}`}>
+                        <div
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            padding: '4px 8px',
+                            borderRadius: '999px',
+                            backgroundColor: '#fff7ed',
+                            border: '1px solid #fdba74',
+                            color: '#9a3412',
+                            fontSize: '0.78rem',
+                            fontWeight: 700,
+                            marginBottom: 6,
+                          }}
+                        >
+                          归属子管理员
+                        </div>
+                        <div style={{ fontSize: '0.9rem', color: '#111827', wordBreak: 'break-all' }}>
+                          {formatManagerLabel(user)}
+                        </div>
+                      </div>
                     ) : (
                       <div style={{ color: '#9ca3af' }}>-</div>
                     )}
@@ -164,7 +193,7 @@ export default function UsersTable({
                           用户配置
                         </button>
                       ) : null}
-                      {canAssignGroups ? (
+                      {canEditGroupsForUser ? (
                         <button
                           type="button"
                           onClick={() => onAssignGroup?.(user)}

@@ -36,9 +36,7 @@ Initialize DB (creates default admin `admin/admin123` if missing):
 
 `python -m backend init-db`
 
-If upgrading from an old layout that stored data under `backend/data/`, migrate once:
-
-`python -m backend migrate-data-dir`
+The only supported auth DB location is `data/auth.db` at the repo root. Do not use `backend/data/auth.db`.
 
 Run server:
 
@@ -137,7 +135,7 @@ The unified `python -m backend` CLI provides multiple commands:
 - `python -m backend init-db` - Initialize database with default admin
 - `python -m backend ensure-schema` - Ensure schema without admin creation
 - `python -m backend paths` - Show resolved paths
-- `python -m backend migrate-data-dir` - Migrate legacy data locations
+- `python -m backend migrate-data-dir` - Retired legacy command that now fails fast
 - `python -m backend init-backup` - Create backup config
 - `python -m backend backup` - Run backup immediately
 

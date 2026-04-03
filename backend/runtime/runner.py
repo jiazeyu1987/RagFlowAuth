@@ -6,10 +6,9 @@ import sys
 import time
 import uuid
 from pathlib import Path
-from shutil import copy2, move
 
 from backend.app.core.config import settings
-from backend.app.core.paths import backend_root, repo_root, resolve_repo_path
+from backend.app.core.paths import repo_root, resolve_repo_path
 from backend.runtime.backup import run_backup, write_default_backup_config
 from backend.database.paths import resolve_auth_db_path
 from backend.database.schema_migrations import ensure_schema
@@ -101,71 +100,13 @@ def print_paths(*, db_path: str | Path | None = None) -> None:
 
 def migrate_data_dir(*, db_path: str | Path | None = None) -> None:
     """
-    One-time migration helper:
-    - Move auth DB from legacy backend/data/ -> repo_root/data/
-    - Move uploads from legacy backend/data/uploads -> repo_root/data/uploads
+    Legacy command kept only to fail fast when outdated operating guides are used.
     """
-    raw_db = db_path if db_path is not None else settings.DATABASE_PATH
-    raw_uploads = settings.UPLOAD_DIR
-
-    legacy_db = backend_root() / Path(raw_db)
-    new_db = repo_root() / Path(raw_db)
-
-    legacy_uploads = backend_root() / Path(raw_uploads)
-    new_uploads = repo_root() / Path(raw_uploads)
-
-    changed = False
-
-    if legacy_db.exists() and not new_db.exists():
-        new_db.parent.mkdir(parents=True, exist_ok=True)
-        copy2(legacy_db, new_db)
-        legacy_marker = legacy_db.with_suffix(legacy_db.suffix + ".legacy")
-        try:
-            move(str(legacy_db), str(legacy_marker))
-        except Exception:
-            # If rename fails (e.g. locked), keep original; new DB is still created.
-            legacy_marker = legacy_db
-        print(f"[OK] 数据库迁移完成: {legacy_marker} -> {new_db}")
-        changed = True
-    elif legacy_db.exists() and new_db.exists():
-        print(f"[SKIP] 新数据库已存在，未迁移: {new_db}")
-    elif not legacy_db.exists() and new_db.exists():
-        print(f"[OK] 已使用项目根数据库: {new_db}")
-    else:
-        print(f"[WARN] 未找到数据库: legacy={legacy_db} new={new_db}")
-
-    if legacy_uploads.exists() and not new_uploads.exists():
-        new_uploads.parent.mkdir(parents=True, exist_ok=True)
-        try:
-            move(str(legacy_uploads), str(new_uploads))
-            print(f"[OK] 上传目录迁移完成: {legacy_uploads} -> {new_uploads}")
-        except Exception:
-            print(f"[WARN] 上传目录迁移失败（请手动移动）: {legacy_uploads} -> {new_uploads}")
-        changed = True
-    elif legacy_uploads.exists() and new_uploads.exists():
-        # Best-effort merge without overwriting.
-        moved_files = 0
-        new_uploads.mkdir(parents=True, exist_ok=True)
-        for src in legacy_uploads.glob("*"):
-            if not src.is_file():
-                continue
-            dst = new_uploads / src.name
-            if dst.exists():
-                continue
-            try:
-                move(str(src), str(dst))
-                moved_files += 1
-            except Exception:
-                continue
-        print(f"[OK] 上传目录合并完成: moved_files={moved_files} -> {new_uploads}")
-        changed = changed or (moved_files > 0)
-    elif not legacy_uploads.exists() and new_uploads.exists():
-        print(f"[OK] 已使用项目根上传目录: {new_uploads}")
-    else:
-        print(f"[WARN] 未找到上传目录: legacy={legacy_uploads} new={new_uploads}")
-
-    if changed:
-        print_paths(db_path=db_path)
+    resolved = resolve_auth_db_path(db_path)
+    raise SystemExit(
+        "legacy_data_dir_migration_removed: only repo-root data/auth.db is supported now; "
+        f"current target={resolved}"
+    )
 
 
 def run_server(
@@ -240,7 +181,7 @@ def main(argv: list[str] | None = None) -> None:
         help="数据库路径（相对路径按项目根目录解析；默认使用 settings.DATABASE_PATH）",
     )
 
-    p_migrate = sub.add_parser("migrate-data-dir", help="把历史数据目录迁移到项目根 data/（一次性）")
+    p_migrate = sub.add_parser("migrate-data-dir", help="已停用的旧数据目录迁移命令（现在会直接报错）")
     p_migrate.add_argument(
         "--db-path",
         default=None,

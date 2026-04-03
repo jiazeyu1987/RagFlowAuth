@@ -28,11 +28,7 @@ python -m backend init-db
 python -m backend
 ```
 
-如果你之前使用过旧版本（数据在 `backend/data/`），先执行一次迁移：
-
-```bash
-python -m backend migrate-data-dir
-```
+认证库现在只支持项目根目录下的 `data/auth.db`。如果本地还保留 `backend/data/auth.db`，请停止使用旧路径，并确保服务配置指向新库。
 
 ## 备份（推荐）
 
