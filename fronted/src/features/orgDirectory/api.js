@@ -2,6 +2,23 @@ import { authBackendUrl } from '../../config/backend';
 import { httpClient } from '../../shared/http/httpClient';
 
 export const orgDirectoryApi = {
+  getTree() {
+    return httpClient.requestJson(authBackendUrl('/api/org/tree'), { method: 'GET' });
+  },
+
+  rebuildFromExcel(file) {
+    if (!file) {
+      throw new Error('org_structure_excel_file_required');
+    }
+    const formData = new FormData();
+    formData.append('excel_file', file);
+    return httpClient.requestJson(authBackendUrl('/api/org/rebuild-from-excel'), {
+      method: 'POST',
+      body: formData,
+      includeContentType: false,
+    });
+  },
+
   listCompanies() {
     return httpClient.requestJson(authBackendUrl('/api/org/companies'), { method: 'GET' });
   },
@@ -56,4 +73,3 @@ export const orgDirectoryApi = {
     return httpClient.requestJson(authBackendUrl(path), { method: 'GET' });
   },
 };
-
