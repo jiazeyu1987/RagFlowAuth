@@ -1,8 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 
 import { nowMs, previewTrace } from './previewUtils';
+import { WatermarkOverlay } from './watermarkOverlay';
 
-export default function OnlyOfficeViewer({ serverUrl, config, traceContext, height = '78vh' }) {
+export default function OnlyOfficeViewer({ serverUrl, config, traceContext, watermark, height = '78vh' }) {
   const containerId = useMemo(
     () => `onlyoffice-doc-editor-${Math.random().toString(36).slice(2)}`,
     []
@@ -110,5 +111,19 @@ export default function OnlyOfficeViewer({ serverUrl, config, traceContext, heig
   }, [serverUrl, config, containerId, traceSource, traceDocId, traceFilename]);
 
   if (viewerError) return <div style={{ color: '#991b1b' }}>{viewerError}</div>;
-  return <div id={containerId} style={{ width: '100%', height, border: '1px solid #e5e7eb', borderRadius: '10px' }} />;
+  return (
+    <div
+      style={{
+        position: 'relative',
+        width: '100%',
+        height,
+        border: '1px solid #e5e7eb',
+        borderRadius: '10px',
+        overflow: 'hidden',
+      }}
+    >
+      <div id={containerId} style={{ width: '100%', height: '100%' }} />
+      <WatermarkOverlay watermark={watermark} />
+    </div>
+  );
 }

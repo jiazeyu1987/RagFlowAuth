@@ -20,5 +20,12 @@ export const dataSecurityApi = {
   listJobs: async (limit = 30) =>
     httpClient.requestJson(`/api/admin/data-security/backup/jobs?limit=${encodeURIComponent(limit)}`),
   getJob: async (jobId) => httpClient.requestJson(`/api/admin/data-security/backup/jobs/${jobId}`),
+  listRestoreDrills: async (limit = 30) =>
+    httpClient.requestJson(`/api/admin/data-security/restore-drills?limit=${encodeURIComponent(limit)}`),
+  createRestoreDrill: async (payload) =>
+    httpClient.requestJson('/api/admin/data-security/restore-drills', {
+      method: 'POST',
+      body: JSON.stringify(payload || {}),
+    }),
 };
 

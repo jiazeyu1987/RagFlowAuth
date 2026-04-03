@@ -11,14 +11,17 @@ from urllib.parse import quote
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import Response
 
+from backend.app.core.tenant import company_id_from_payload
 from backend.app.core.authz import AuthContextDep
 from backend.app.core.config import settings
 from backend.app.core.kb_refs import resolve_kb_ref
 from backend.app.core.permission_resolver import assert_kb_allowed
+from backend.app.dependencies import get_tenant_dependencies
 from backend.services.documents.models import DocumentRef
 from backend.services.documents.sources.knowledge_source import KnowledgeDocumentSource
 from backend.services.documents.sources.ragflow_source import RagflowDocumentSource
 from backend.services.onlyoffice_security import create_file_access_token, parse_file_access_token
+from backend.services.watermarking import DocumentWatermarkService
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -102,6 +105,18 @@ def build_editor_config(body: dict, request: Request, ctx: AuthContextDep):
     if ext not in SUPPORTED_EXTENSIONS:
         raise HTTPException(status_code=400, detail=f"onlyoffice_extension_not_supported:{ext}")
 
+    watermark = DocumentWatermarkService(
+        store=getattr(deps, "watermark_policy_store", None),
+        org_directory_store=getattr(deps, "org_directory_store", None),
+    ).build_watermark(
+        user=getattr(ctx, "user", None),
+        payload_sub=getattr(ctx.payload, "sub", None),
+        purpose="preview",
+        doc_id=doc_id,
+        filename=filename,
+        source=source,
+    )
+
     file_token = create_file_access_token(
         {
             "source": source,
@@ -109,6 +124,10 @@ def build_editor_config(body: dict, request: Request, ctx: AuthContextDep):
             "dataset": dataset,
             "filename": filename,
             "sub": str(ctx.payload.sub or ""),
+            "cid": getattr(getattr(ctx, "user", None), "company_id", None),
+            "watermark_policy_id": watermark.get("policy_id"),
+            "watermark_text": watermark.get("text"),
+            "watermark_purpose": watermark.get("purpose"),
         },
         ttl_seconds=int(getattr(settings, "ONLYOFFICE_FILE_TOKEN_TTL_SECONDS", 300) or 300),
     )
@@ -123,7 +142,8 @@ def build_editor_config(body: dict, request: Request, ctx: AuthContextDep):
     # Bind the key to user + permission profile + a policy version to force refresh.
     key_seed = (
         f"preview-v2:{source}:{doc_id}:{dataset}:{filename}:"
-        f"{ctx.payload.sub or ''}:d{int(can_download)}:p{int(can_print)}:c{int(can_copy)}"
+        f"{ctx.payload.sub or ''}:d{int(can_download)}:p{int(can_print)}:c{int(can_copy)}:"
+        f"w{str(watermark.get('policy_id') or '')}"
     )
     doc_key = hashlib.sha256(key_seed.encode("utf-8")).hexdigest()[:64]
 
@@ -145,6 +165,7 @@ def build_editor_config(body: dict, request: Request, ctx: AuthContextDep):
         "editorConfig": {
             "mode": "view",
             "lang": "zh-CN",
+            "watermark": watermark,
             "customization": {
                 "autosave": False,
                 "forcesave": False,
@@ -171,7 +192,14 @@ def build_editor_config(body: dict, request: Request, ctx: AuthContextDep):
         doc_key[:12],
         elapsed_ms,
     )
-    return {"server_url": server_url, "filename": filename, "config": config}
+    return {
+        "server_url": server_url,
+        "filename": filename,
+        "watermark": watermark,
+        "watermark_text": watermark.get("text"),
+        "watermark_policy_id": watermark.get("policy_id"),
+        "config": config,
+    }
 
 
 @router.get("/onlyoffice/file")
@@ -191,7 +219,15 @@ def serve_file_by_token(token: str, request: Request):
     if not source or not doc_id:
         raise HTTPException(status_code=400, detail="invalid_file_token_payload")
 
-    deps = request.app.state.deps
+    try:
+        company_id = company_id_from_payload(claims)
+    except ValueError as e:
+        raise HTTPException(status_code=401, detail=f"invalid_file_token_company_id:{e}") from e
+
+    if company_id is None:
+        deps = request.app.state.deps
+    else:
+        deps = get_tenant_dependencies(request.app, company_id=company_id)
     content: bytes
     if source == "knowledge":
         kb_source = KnowledgeDocumentSource(deps)
@@ -227,5 +263,6 @@ def serve_file_by_token(token: str, request: Request):
         headers={
             "Content-Disposition": f"inline; filename*=UTF-8''{quoted}",
             "Cache-Control": "no-store",
+            "X-Watermark-Policy-Id": str(claims.get("watermark_policy_id") or ""),
         },
     )

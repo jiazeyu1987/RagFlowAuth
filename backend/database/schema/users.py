@@ -34,6 +34,10 @@ def ensure_users_table(conn: sqlite3.Connection) -> None:
             can_change_password INTEGER NOT NULL DEFAULT 1,
             disable_login_enabled INTEGER NOT NULL DEFAULT 0,
             disable_login_until_ms INTEGER,
+            password_changed_at_ms INTEGER,
+            credential_fail_count INTEGER NOT NULL DEFAULT 0,
+            credential_fail_window_started_at_ms INTEGER,
+            credential_locked_until_ms INTEGER,
             created_at_ms INTEGER NOT NULL,
             last_login_at_ms INTEGER,
             created_by TEXT,
@@ -71,3 +75,35 @@ def ensure_user_full_name_column(conn: sqlite3.Connection) -> None:
     if not table_exists(conn, "users"):
         return
     add_column_if_missing(conn, "users", "full_name TEXT")
+
+
+def ensure_user_managed_kb_root_column(conn: sqlite3.Connection) -> None:
+    if not table_exists(conn, "users"):
+        return
+    add_column_if_missing(conn, "users", "managed_kb_root_node_id TEXT")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_users_managed_kb_root_node_id ON users(managed_kb_root_node_id)")
+
+
+def ensure_user_password_security_columns(conn: sqlite3.Connection) -> None:
+    if not table_exists(conn, "users"):
+        return
+    add_column_if_missing(conn, "users", "password_changed_at_ms INTEGER")
+    add_column_if_missing(conn, "users", "credential_fail_count INTEGER NOT NULL DEFAULT 0")
+    add_column_if_missing(conn, "users", "credential_fail_window_started_at_ms INTEGER")
+    add_column_if_missing(conn, "users", "credential_locked_until_ms INTEGER")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_users_credential_locked_until_ms ON users(credential_locked_until_ms)")
+
+
+def ensure_password_history_table(conn: sqlite3.Connection) -> None:
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS password_history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id TEXT NOT NULL,
+            password_hash TEXT NOT NULL,
+            created_at_ms INTEGER NOT NULL,
+            FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
+        )
+        """
+    )
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_password_history_user_created ON password_history(user_id, created_at_ms DESC)")

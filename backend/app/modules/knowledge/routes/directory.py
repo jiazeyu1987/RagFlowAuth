@@ -6,8 +6,8 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from backend.app.core.authz import AuthContextDep
-from backend.app.core.permission_resolver import assert_can_manage_kb_directory, assert_can_view_kb_config
 from backend.app.core.datasets import list_accessible_datasets
+from backend.app.core.permission_resolver import assert_can_manage_kb_directory
 
 router = APIRouter()
 
@@ -30,10 +30,23 @@ def _tree_manager(deps) -> Any:
     return getattr(deps, "knowledge_tree_manager", None) or getattr(deps, "knowledge_directory_manager")
 
 
+def _management_manager(deps) -> Any:
+    return getattr(deps, "knowledge_management_manager", None)
+
+
 @router.get("/directories")
 def list_knowledge_directories(ctx: AuthContextDep):
-    assert_can_view_kb_config(ctx.snapshot)
     deps = ctx.deps
+    management_manager = _management_manager(deps)
+    if management_manager is not None:
+        try:
+            scope = management_manager.get_management_scope(ctx.user)
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        if getattr(scope, "can_manage", False):
+            return management_manager.list_visible_tree(ctx.user)
+    if not ctx.snapshot.can_view_kb_config:
+        raise HTTPException(status_code=403, detail="no_kb_config_view_permission")
     manager = _tree_manager(deps)
     if ctx.snapshot.is_admin:
         datasets = deps.ragflow_service.list_all_datasets() if hasattr(deps.ragflow_service, "list_all_datasets") else deps.ragflow_service.list_datasets()
@@ -47,11 +60,22 @@ def list_knowledge_directories(ctx: AuthContextDep):
 
 @router.post("/directories")
 def create_knowledge_directory(payload: DirectoryCreateRequest, ctx: AuthContextDep):
-    assert_can_manage_kb_directory(ctx.snapshot)
-    manager = _tree_manager(ctx.deps)
+    management_manager = _management_manager(ctx.deps)
+    manager = management_manager or _tree_manager(ctx.deps)
     try:
-        node = manager.create_node(name=payload.name, parent_id=payload.parent_id, created_by=ctx.payload.sub)
+        if management_manager is not None:
+            node = manager.create_directory(
+                user=ctx.user,
+                name=payload.name,
+                parent_id=payload.parent_id,
+                created_by=ctx.payload.sub,
+            )
+        else:
+            assert_can_manage_kb_directory(ctx.snapshot)
+            node = manager.create_node(name=payload.name, parent_id=payload.parent_id, created_by=ctx.payload.sub)
         return {"node": node}
+    except HTTPException:
+        raise
     except Exception as exc:
         status = int(getattr(exc, "status_code", 400) or 400)
         raise HTTPException(status_code=status, detail=str(exc)) from exc
@@ -59,7 +83,6 @@ def create_knowledge_directory(payload: DirectoryCreateRequest, ctx: AuthContext
 
 @router.put("/directories/{node_id}")
 def update_knowledge_directory(node_id: str, payload: DirectoryUpdateRequest, ctx: AuthContextDep):
-    assert_can_manage_kb_directory(ctx.snapshot)
     fields_set = set(getattr(payload, "model_fields_set", set()) or set())
     if not fields_set:
         raise HTTPException(status_code=400, detail="missing_updates")
@@ -68,10 +91,17 @@ def update_knowledge_directory(node_id: str, payload: DirectoryUpdateRequest, ct
         updates["name"] = payload.name
     if "parent_id" in fields_set:
         updates["parent_id"] = payload.parent_id
-    manager = _tree_manager(ctx.deps)
+    management_manager = _management_manager(ctx.deps)
+    manager = management_manager or _tree_manager(ctx.deps)
     try:
-        node = manager.update_node(node_id=node_id, payload=updates)
+        if management_manager is not None:
+            node = manager.update_directory(user=ctx.user, node_id=node_id, payload=updates)
+        else:
+            assert_can_manage_kb_directory(ctx.snapshot)
+            node = manager.update_node(node_id=node_id, payload=updates)
         return {"node": node}
+    except HTTPException:
+        raise
     except Exception as exc:
         status = int(getattr(exc, "status_code", 400) or 400)
         raise HTTPException(status_code=status, detail=str(exc)) from exc
@@ -79,11 +109,17 @@ def update_knowledge_directory(node_id: str, payload: DirectoryUpdateRequest, ct
 
 @router.delete("/directories/{node_id}")
 def delete_knowledge_directory(node_id: str, ctx: AuthContextDep):
-    assert_can_manage_kb_directory(ctx.snapshot)
-    manager = _tree_manager(ctx.deps)
+    management_manager = _management_manager(ctx.deps)
+    manager = management_manager or _tree_manager(ctx.deps)
     try:
-        ok = manager.delete_node(node_id)
+        if management_manager is not None:
+            ok = manager.delete_directory(user=ctx.user, node_id=node_id)
+        else:
+            assert_can_manage_kb_directory(ctx.snapshot)
+            ok = manager.delete_node(node_id)
         return {"ok": bool(ok)}
+    except HTTPException:
+        raise
     except Exception as exc:
         status = int(getattr(exc, "status_code", 400) or 400)
         raise HTTPException(status_code=status, detail=str(exc)) from exc
@@ -91,7 +127,6 @@ def delete_knowledge_directory(node_id: str, ctx: AuthContextDep):
 
 @router.put("/directories/datasets/{dataset_ref}/node")
 def assign_dataset_directory(dataset_ref: str, payload: DatasetDirectoryAssignRequest, ctx: AuthContextDep):
-    assert_can_manage_kb_directory(ctx.snapshot)
     normalize_dataset_id = getattr(ctx.deps.ragflow_service, "normalize_dataset_id", None)
     dataset_id = normalize_dataset_id(dataset_ref) if callable(normalize_dataset_id) else None
     if not dataset_id and isinstance(dataset_ref, str) and dataset_ref:
@@ -112,10 +147,17 @@ def assign_dataset_directory(dataset_ref: str, payload: DatasetDirectoryAssignRe
         dataset_id = dataset_ref if isinstance(dataset_ref, str) and dataset_ref else None
     if not dataset_id:
         raise HTTPException(status_code=400, detail="invalid_dataset_ref")
-    manager = _tree_manager(ctx.deps)
+    management_manager = _management_manager(ctx.deps)
+    manager = management_manager or _tree_manager(ctx.deps)
     try:
+        if management_manager is not None:
+            dataset_id, node_id = manager.assign_dataset(user=ctx.user, dataset_ref=dataset_id, node_id=payload.node_id)
+            return {"ok": True, "dataset_id": dataset_id, "node_id": node_id}
+        assert_can_manage_kb_directory(ctx.snapshot)
         manager.assign_dataset(dataset_id=dataset_id, node_id=payload.node_id)
         return {"ok": True, "dataset_id": dataset_id, "node_id": payload.node_id}
+    except HTTPException:
+        raise
     except Exception as exc:
         status = int(getattr(exc, "status_code", 400) or 400)
         raise HTTPException(status_code=status, detail=str(exc)) from exc

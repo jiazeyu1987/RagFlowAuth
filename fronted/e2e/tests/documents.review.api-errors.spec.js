@@ -1,27 +1,15 @@
 // @ts-check
 const { expect } = require('@playwright/test');
-const { adminTest } = require('../helpers/auth');
+const { reviewerTest } = require('../helpers/auth');
+const { submitReviewSignature } = require('../helpers/reviewSignature');
 
 async function expectErrorVisible(page, message) {
-  const byTestId = page.getByTestId('docs-error');
-  if ((await byTestId.count()) > 0) {
-    await expect(byTestId).toContainText(message);
-    return;
-  }
-  await expect(page.getByText(message, { exact: false })).toBeVisible();
+  await expect(page.getByTestId('docs-error')).toContainText(message);
 }
 
-async function expectEmptyVisible(page) {
-  const byTestId = page.getByTestId('docs-empty');
-  if ((await byTestId.count()) > 0) {
-    await expect(byTestId).toBeVisible();
-    return;
-  }
-  // Fallback for older UI without testid.
-  await expect(page.getByText(/暂无待审核文档|请选择知识库/)).toBeVisible();
-}
+const REVIEWER_PASSWORD = process.env.E2E_REVIEWER_PASS || process.env.E2E_ADMIN_PASS || 'admin123';
 
-adminTest('documents pending list 500 shows error banner (mock) @regression @documents', async ({ page }) => {
+reviewerTest('documents pending list 500 shows error banner @regression @documents', async ({ page }) => {
   await page.route('**/api/datasets', async (route) => {
     if (route.request().method() !== 'GET') return route.fallback();
     await route.fulfill({
@@ -46,7 +34,7 @@ adminTest('documents pending list 500 shows error banner (mock) @regression @doc
   await expectErrorVisible(page, 'server exploded');
 });
 
-adminTest('documents pending list 504 shows error banner (mock) @regression @documents', async ({ page }) => {
+reviewerTest('documents pending list 504 shows error banner @regression @documents', async ({ page }) => {
   await page.route('**/api/datasets', async (route) => {
     if (route.request().method() !== 'GET') return route.fallback();
     await route.fulfill({
@@ -71,7 +59,7 @@ adminTest('documents pending list 504 shows error banner (mock) @regression @doc
   await expectErrorVisible(page, 'gateway timeout');
 });
 
-adminTest('documents empty pending list shows empty state (mock) @regression @documents', async ({ page }) => {
+reviewerTest('documents empty pending list shows empty state @regression @documents', async ({ page }) => {
   await page.route('**/api/datasets', async (route) => {
     if (route.request().method() !== 'GET') return route.fallback();
     await route.fulfill({
@@ -89,12 +77,11 @@ adminTest('documents empty pending list shows empty state (mock) @regression @do
   });
 
   await page.goto('/documents');
-  await expectEmptyVisible(page);
+  await expect(page.getByTestId('docs-empty')).toBeVisible({ timeout: 30000 });
 });
 
-adminTest('documents approve 403 shows error and keeps row (mock) @regression @documents', async ({ page }) => {
-  const filename = `e2e_pending_${Date.now()}.txt`;
-  const docs = [{ doc_id: 'd1', filename, status: 'pending', kb_id: 'kb1', uploaded_at_ms: Date.now() }];
+reviewerTest('documents approve 403 shows error and keeps row @regression @documents', async ({ page }) => {
+  const docs = [{ doc_id: 'd1', filename: 'e2e_pending.txt', status: 'pending', kb_id: 'kb1', uploaded_at_ms: Date.now() }];
 
   await page.route('**/api/datasets', async (route) => {
     if (route.request().method() !== 'GET') return route.fallback();
@@ -127,11 +114,17 @@ adminTest('documents approve 403 shows error and keeps row (mock) @regression @d
   });
 
   await page.goto('/documents');
-  await expect(page.locator('tr', { hasText: filename })).toBeVisible();
+  await expect(page.getByTestId('docs-approve-d1')).toBeVisible();
 
-  page.once('dialog', async (dialog) => dialog.accept());
+  const approveRequest = page.waitForRequest('**/api/knowledge/documents/d1/approve');
   await page.getByTestId('docs-approve-d1').click();
+  await submitReviewSignature(page, {
+    password: REVIEWER_PASSWORD,
+    meaning: 'Approve document',
+    reason: 'Expect backend to reject this request',
+  });
+  await approveRequest;
 
   await expectErrorVisible(page, 'forbidden');
-  await expect(page.locator('tr', { hasText: filename })).toBeVisible();
+  await expect(page.getByTestId('docs-approve-d1')).toBeVisible();
 });

@@ -35,12 +35,16 @@ export async function loadReviewDatasets(knowledgeApi) {
   return data?.datasets || [];
 }
 
-export async function loadPendingReviewDocuments(knowledgeApi, selectedDataset) {
+export async function loadPendingReviewDocuments(knowledgeApi, selectedDataset, assignedToMeOnly = false) {
+  const params = { status: 'pending' };
+  if (assignedToMeOnly) {
+    params.assigned_to_me = 'true';
+  }
   if (selectedDataset === '') {
-    const data = await knowledgeApi.listLocalDocuments({ status: 'pending' });
+    const data = await knowledgeApi.listLocalDocuments(params);
     return data?.documents || [];
   }
-  const data = await knowledgeApi.listLocalDocuments({ status: 'pending', kb_id: selectedDataset });
+  const data = await knowledgeApi.listLocalDocuments({ ...params, kb_id: selectedDataset });
   return data?.documents || [];
 }
 

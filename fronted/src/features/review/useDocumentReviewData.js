@@ -6,7 +6,8 @@ export function useDocumentReviewData(setError) {
   const [documents, setDocuments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [datasets, setDatasets] = useState([]);
-  const [selectedDataset, setSelectedDataset] = useState(null);
+  const [selectedDataset, setSelectedDataset] = useState('');
+  const [assignedToMeOnly, setAssignedToMeOnly] = useState(true);
   const [loadingDatasets, setLoadingDatasets] = useState(true);
 
   useEffect(() => {
@@ -16,14 +17,14 @@ export function useDocumentReviewData(setError) {
         const nextDatasets = await loadReviewDatasets(knowledgeApi);
         setDatasets(nextDatasets);
 
-        if (nextDatasets.length > 0) {
-          setSelectedDataset('');
-        } else {
+        if (nextDatasets.length === 0) {
           setError('您没有被分配任何知识库权限，请联系管理员');
         }
-      } catch (err) {
+      } catch (_err) {
         setError('加载知识库列表失败');
         setDatasets([]);
+        setDocuments([]);
+        setLoading(false);
       } finally {
         setLoadingDatasets(false);
       }
@@ -33,18 +34,17 @@ export function useDocumentReviewData(setError) {
   }, [setError]);
 
   const refreshDocuments = useCallback(async () => {
-    if (selectedDataset === null) return;
-
     try {
       setLoading(true);
-      const nextDocuments = await loadPendingReviewDocuments(knowledgeApi, selectedDataset);
+      const nextDocuments = await loadPendingReviewDocuments(knowledgeApi, selectedDataset, assignedToMeOnly);
       setDocuments(nextDocuments);
     } catch (err) {
-      setError(err.message);
+      setError(err?.message || '加载待审文档失败');
+      setDocuments([]);
     } finally {
       setLoading(false);
     }
-  }, [selectedDataset, setError]);
+  }, [assignedToMeOnly, selectedDataset, setError]);
 
   useEffect(() => {
     refreshDocuments();
@@ -56,7 +56,9 @@ export function useDocumentReviewData(setError) {
     loading,
     loadingDatasets,
     refreshDocuments,
+    assignedToMeOnly,
     selectedDataset,
+    setAssignedToMeOnly,
     setSelectedDataset,
   };
 }

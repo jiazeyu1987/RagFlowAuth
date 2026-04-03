@@ -1,43 +1,53 @@
 import { authBackendUrl } from '../../config/backend';
 import { httpClient } from '../../shared/http/httpClient';
 
+function buildSignedReviewBody(signaturePayload = {}, extraBody = {}) {
+  return JSON.stringify({
+    ...extraBody,
+    sign_token: signaturePayload.sign_token,
+    signature_meaning: signaturePayload.signature_meaning,
+    signature_reason: signaturePayload.signature_reason,
+    review_notes: signaturePayload.review_notes ?? signaturePayload.signature_reason ?? null,
+  });
+}
+
 export const reviewApi = {
   getConflict(docId) {
     return httpClient.requestJson(authBackendUrl(`/api/knowledge/documents/${docId}/conflict`), { method: 'GET' });
   },
 
-  approve(docId, reviewNotes = null) {
+  approve(docId, signaturePayload) {
     return httpClient.requestJson(authBackendUrl(`/api/knowledge/documents/${docId}/approve`), {
       method: 'POST',
-      body: JSON.stringify({ review_notes: reviewNotes }),
+      body: buildSignedReviewBody(signaturePayload),
     });
   },
 
-  approveBatch(docIds, reviewNotes = null) {
+  approveBatch(docIds, signaturePayload) {
     return httpClient.requestJson(authBackendUrl('/api/knowledge/documents/batch/approve'), {
       method: 'POST',
-      body: JSON.stringify({ doc_ids: docIds, review_notes: reviewNotes }),
+      body: buildSignedReviewBody(signaturePayload, { doc_ids: docIds }),
     });
   },
 
-  approveOverwrite(docId, replaceDocId, reviewNotes = null) {
+  approveOverwrite(docId, replaceDocId, signaturePayload) {
     return httpClient.requestJson(authBackendUrl(`/api/knowledge/documents/${docId}/approve-overwrite`), {
       method: 'POST',
-      body: JSON.stringify({ replace_doc_id: replaceDocId, review_notes: reviewNotes }),
+      body: buildSignedReviewBody(signaturePayload, { replace_doc_id: replaceDocId }),
     });
   },
 
-  reject(docId, reviewNotes = null) {
+  reject(docId, signaturePayload) {
     return httpClient.requestJson(authBackendUrl(`/api/knowledge/documents/${docId}/reject`), {
       method: 'POST',
-      body: JSON.stringify({ review_notes: reviewNotes }),
+      body: buildSignedReviewBody(signaturePayload),
     });
   },
 
-  rejectBatch(docIds, reviewNotes = null) {
+  rejectBatch(docIds, signaturePayload) {
     return httpClient.requestJson(authBackendUrl('/api/knowledge/documents/batch/reject'), {
       method: 'POST',
-      body: JSON.stringify({ doc_ids: docIds, review_notes: reviewNotes }),
+      body: buildSignedReviewBody(signaturePayload, { doc_ids: docIds }),
     });
   },
 };

@@ -21,6 +21,12 @@ const UserManagement = () => {
     loading,
     error,
     canManageUsers,
+    canCreateUsers,
+    canEditUserPolicy,
+    canResetPasswords,
+    canToggleUserStatus,
+    canDeleteUsers,
+    canAssignGroups,
     showCreateModal,
     newUser,
     createUserError,
@@ -103,7 +109,7 @@ const UserManagement = () => {
         }}
       >
         <h2 style={{ margin: 0 }}>用户管理</h2>
-        {canManageUsers ? (
+        {canCreateUsers ? (
           <button
             type="button"
             onClick={handleOpenCreateModal}
@@ -142,6 +148,11 @@ const UserManagement = () => {
       <UsersTable
         filteredUsers={filteredUsers}
         canManageUsers={canManageUsers}
+        canEditUserPolicy={canEditUserPolicy}
+        canAssignGroups={canAssignGroups}
+        canResetPasswords={canResetPasswords}
+        canToggleUserStatus={canToggleUserStatus}
+        canDeleteUsers={canDeleteUsers}
         onOpenPolicyModal={handleOpenPolicyModal}
         onAssignGroup={handleAssignGroup}
         onOpenResetPassword={handleOpenResetPassword}
@@ -187,7 +198,7 @@ const UserManagement = () => {
         onConfirm={handleConfirmDisableUser}
       />
 
-      {canManageUsers ? (
+      {canCreateUsers ? (
         <CreateUserModal
           open={showCreateModal}
           newUser={newUser}

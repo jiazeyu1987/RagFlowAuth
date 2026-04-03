@@ -9,7 +9,12 @@ from backend.database.paths import resolve_auth_db_path
 from backend.database.sqlite import connect_sqlite
 
 from .models import User
-from .password import hash_password
+from .password import hash_password, verify_password
+
+
+DEFAULT_CREDENTIAL_FAILURE_LIMIT = 5
+DEFAULT_CREDENTIAL_FAILURE_WINDOW_MS = 15 * 60 * 1000
+DEFAULT_CREDENTIAL_LOCKOUT_MS = 15 * 60 * 1000
 
 
 class UserStore:
@@ -29,7 +34,9 @@ class UserStore:
                 SELECT user_id, username, password_hash, email, role, group_id, company_id, department_id, status,
                        max_login_sessions, idle_timeout_minutes, can_change_password,
                        disable_login_enabled, disable_login_until_ms,
-                       created_at_ms, last_login_at_ms, created_by, full_name
+                       created_at_ms, last_login_at_ms, created_by, full_name, managed_kb_root_node_id,
+                       password_changed_at_ms, credential_fail_count, credential_fail_window_started_at_ms,
+                       credential_locked_until_ms
                 FROM users WHERE username = ?
                 """,
                 (username,),
@@ -55,6 +62,11 @@ class UserStore:
                     created_at_ms=row[14],
                     last_login_at_ms=row[15],
                     created_by=row[16],
+                    managed_kb_root_node_id=row[18],
+                    password_changed_at_ms=(int(row[19]) if row[19] is not None else None),
+                    credential_fail_count=int(row[20] or 0),
+                    credential_fail_window_started_at_ms=(int(row[21]) if row[21] is not None else None),
+                    credential_locked_until_ms=(int(row[22]) if row[22] is not None else None),
                 )
                 user.group_ids = self._get_user_group_ids(user.user_id, conn)
                 user.group_id = user.group_ids[0] if user.group_ids else None
@@ -72,7 +84,9 @@ class UserStore:
                 SELECT user_id, username, password_hash, email, role, group_id, company_id, department_id, status,
                        max_login_sessions, idle_timeout_minutes, can_change_password,
                        disable_login_enabled, disable_login_until_ms,
-                       created_at_ms, last_login_at_ms, created_by, full_name
+                       created_at_ms, last_login_at_ms, created_by, full_name, managed_kb_root_node_id,
+                       password_changed_at_ms, credential_fail_count, credential_fail_window_started_at_ms,
+                       credential_locked_until_ms
                 FROM users WHERE user_id = ?
                 """,
                 (user_id,),
@@ -98,6 +112,11 @@ class UserStore:
                     created_at_ms=row[14],
                     last_login_at_ms=row[15],
                     created_by=row[16],
+                    managed_kb_root_node_id=row[18],
+                    password_changed_at_ms=(int(row[19]) if row[19] is not None else None),
+                    credential_fail_count=int(row[20] or 0),
+                    credential_fail_window_started_at_ms=(int(row[21]) if row[21] is not None else None),
+                    credential_locked_until_ms=(int(row[22]) if row[22] is not None else None),
                 )
                 user.group_ids = self._get_user_group_ids(user.user_id, conn)
                 user.group_id = user.group_ids[0] if user.group_ids else None
@@ -159,6 +178,7 @@ class UserStore:
         disable_login_enabled: bool = False,
         disable_login_until_ms: Optional[int] = None,
         created_by: Optional[str] = None,
+        managed_kb_root_node_id: Optional[str] = None,
     ) -> User:
         # Deprecated: users.group_id is no longer the source of truth (use user_permission_groups).
         group_id = None
@@ -176,8 +196,10 @@ class UserStore:
                     user_id, username, password_hash, email, role, group_id, company_id, department_id,
                     max_login_sessions, idle_timeout_minutes, status,
                     can_change_password, disable_login_enabled, disable_login_until_ms,
-                    created_at_ms, created_by, full_name
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    password_changed_at_ms,
+                    credential_fail_count, credential_fail_window_started_at_ms, credential_locked_until_ms,
+                    created_at_ms, created_by, full_name, managed_kb_root_node_id
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     user_id,
@@ -195,8 +217,13 @@ class UserStore:
                     1 if disable_login_enabled else 0,
                     int(disable_login_until_ms) if disable_login_until_ms is not None else None,
                     now_ms,
+                    0,
+                    None,
+                    None,
+                    now_ms,
                     created_by,
                     full_name,
+                    managed_kb_root_node_id,
                 ),
             )
             conn.commit()
@@ -216,8 +243,13 @@ class UserStore:
                 can_change_password=bool(can_change_password),
                 disable_login_enabled=bool(disable_login_enabled),
                 disable_login_until_ms=int(disable_login_until_ms) if disable_login_until_ms is not None else None,
+                password_changed_at_ms=now_ms,
+                credential_fail_count=0,
+                credential_fail_window_started_at_ms=None,
+                credential_locked_until_ms=None,
                 created_at_ms=now_ms,
                 created_by=created_by,
+                managed_kb_root_node_id=managed_kb_root_node_id,
             )
         except sqlite3.IntegrityError:
             raise ValueError(f"Username '{username}' already exists")
@@ -239,6 +271,7 @@ class UserStore:
         can_change_password: Optional[bool] = None,
         disable_login_enabled: Optional[bool] = None,
         disable_login_until_ms: Optional[int] = None,
+        managed_kb_root_node_id: Optional[str] = None,
     ) -> Optional[User]:
         updates = []
         params = []
@@ -275,6 +308,9 @@ class UserStore:
             params.append(int(disable_login_until_ms))
         elif disable_login_enabled is not None and not disable_login_enabled:
             updates.append("disable_login_until_ms = NULL")
+        if managed_kb_root_node_id is not None:
+            updates.append("managed_kb_root_node_id = ?")
+            params.append(str(managed_kb_root_node_id).strip() or None)
         # Deprecated: users.group_id is no longer updated (use user_permission_groups).
         if status is not None:
             updates.append("status = ?")
@@ -307,13 +343,144 @@ class UserStore:
 
     def update_password(self, user_id: str, new_password: str):
         password_hash_value = hash_password(new_password)
+        self.update_password_hash(user_id, password_hash_value)
+
+    def update_password_hash(self, user_id: str, password_hash_value: str):
+        now_ms = int(time.time() * 1000)
         conn = self._get_connection()
         cursor = conn.cursor()
         try:
-            cursor.execute("UPDATE users SET password_hash = ? WHERE user_id = ?", (password_hash_value, user_id))
+            cursor.execute("SELECT password_hash FROM users WHERE user_id = ?", (user_id,))
+            row = cursor.fetchone()
+            if row and row[0]:
+                cursor.execute(
+                    """
+                    INSERT INTO password_history (user_id, password_hash, created_at_ms)
+                    VALUES (?, ?, ?)
+                    """,
+                    (user_id, str(row[0]), now_ms),
+                )
+            cursor.execute(
+                """
+                UPDATE users
+                SET password_hash = ?,
+                    password_changed_at_ms = ?,
+                    credential_fail_count = 0,
+                    credential_fail_window_started_at_ms = NULL,
+                    credential_locked_until_ms = NULL
+                WHERE user_id = ?
+                """,
+                (password_hash_value, now_ms, user_id),
+            )
             conn.commit()
         finally:
             conn.close()
+
+    def clear_credential_failures(self, user_id: str) -> None:
+        conn = self._get_connection()
+        try:
+            conn.execute(
+                """
+                UPDATE users
+                SET credential_fail_count = 0,
+                    credential_fail_window_started_at_ms = NULL,
+                    credential_locked_until_ms = NULL
+                WHERE user_id = ?
+                """,
+                (user_id,),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+    def record_credential_failure(
+        self,
+        user_id: str,
+        *,
+        now_ms: int | None = None,
+        max_failures: int = DEFAULT_CREDENTIAL_FAILURE_LIMIT,
+        window_ms: int = DEFAULT_CREDENTIAL_FAILURE_WINDOW_MS,
+        lockout_ms: int = DEFAULT_CREDENTIAL_LOCKOUT_MS,
+    ) -> int | None:
+        current_ms = int(time.time() * 1000) if now_ms is None else int(now_ms)
+        conn = self._get_connection()
+        try:
+            conn.execute("BEGIN IMMEDIATE")
+            row = conn.execute(
+                """
+                SELECT credential_fail_count, credential_fail_window_started_at_ms, credential_locked_until_ms
+                FROM users
+                WHERE user_id = ?
+                """,
+                (user_id,),
+            ).fetchone()
+            if row is None:
+                conn.commit()
+                return None
+
+            previous_count = int(row[0] or 0)
+            previous_window_start = int(row[1]) if row[1] is not None else None
+            previous_locked_until = int(row[2]) if row[2] is not None else None
+
+            if previous_locked_until is not None and current_ms < previous_locked_until:
+                conn.commit()
+                return previous_locked_until
+
+            if previous_window_start is None or current_ms - previous_window_start > int(window_ms):
+                next_count = 1
+                next_window_start = current_ms
+            else:
+                next_count = previous_count + 1
+                next_window_start = previous_window_start
+
+            next_locked_until = None
+            if next_count >= int(max_failures):
+                next_locked_until = current_ms + int(lockout_ms)
+
+            conn.execute(
+                """
+                UPDATE users
+                SET credential_fail_count = ?,
+                    credential_fail_window_started_at_ms = ?,
+                    credential_locked_until_ms = ?
+                WHERE user_id = ?
+                """,
+                (next_count, next_window_start, next_locked_until, user_id),
+            )
+            conn.commit()
+            return next_locked_until
+        finally:
+            conn.close()
+
+    def password_matches_recent_history(self, user_id: str, password: str, *, limit: int = 5) -> bool:
+        user = self.get_by_user_id(user_id)
+        if user is None:
+            return False
+        ok, _ = verify_password(password, user.password_hash)
+        if ok:
+            return True
+
+        conn = self._get_connection()
+        try:
+            rows = conn.execute(
+                """
+                SELECT password_hash
+                FROM password_history
+                WHERE user_id = ?
+                ORDER BY created_at_ms DESC, id DESC
+                LIMIT ?
+                """,
+                (user_id, int(max(1, limit))),
+            ).fetchall()
+        finally:
+            conn.close()
+
+        for row in rows:
+            stored_hash = str(row[0] or "")
+            matched, _ = verify_password(password, stored_hash)
+            if matched:
+                return True
+        return False
 
     def list_users(
         self,
@@ -334,7 +501,9 @@ class UserStore:
                 SELECT user_id, username, password_hash, email, role, group_id, company_id, department_id, status,
                        max_login_sessions, idle_timeout_minutes, can_change_password,
                        disable_login_enabled, disable_login_until_ms,
-                       created_at_ms, last_login_at_ms, created_by, full_name
+                       created_at_ms, last_login_at_ms, created_by, full_name, managed_kb_root_node_id,
+                       password_changed_at_ms, credential_fail_count, credential_fail_window_started_at_ms,
+                       credential_locked_until_ms
                 FROM users
                 WHERE 1=1
             """
@@ -403,6 +572,11 @@ class UserStore:
                     created_at_ms=row[14],
                     last_login_at_ms=row[15],
                     created_by=row[16],
+                    managed_kb_root_node_id=row[18],
+                    password_changed_at_ms=(int(row[19]) if row[19] is not None else None),
+                    credential_fail_count=int(row[20] or 0),
+                    credential_fail_window_started_at_ms=(int(row[21]) if row[21] is not None else None),
+                    credential_locked_until_ms=(int(row[22]) if row[22] is not None else None),
                 )
                 user.group_ids = self._get_user_group_ids(user.user_id, conn)
                 user.group_id = user.group_ids[0] if user.group_ids else None

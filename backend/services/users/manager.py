@@ -202,6 +202,7 @@ class UserManagementManager:
             active_session_last_activity_at_ms=active_last,
             created_at_ms=user.created_at_ms,
             last_login_at_ms=user.last_login_at_ms,
+            managed_kb_root_node_id=getattr(user, "managed_kb_root_node_id", None),
         )
 
     def list_users(
@@ -275,7 +276,7 @@ class UserManagementManager:
                 raise UserManagementError(f"permission_group_not_found:{gid}")
 
         try:
-            user = self._port.create_user(
+            create_kwargs = dict(
                 username=user_data.username,
                 password=user_data.password,
                 full_name=full_name,
@@ -292,6 +293,9 @@ class UserManagementManager:
                 disable_login_until_ms=disable_login_until_ms,
                 created_by=created_by,
             )
+            if user_data.managed_kb_root_node_id is not None:
+                create_kwargs["managed_kb_root_node_id"] = user_data.managed_kb_root_node_id
+            user = self._port.create_user(**create_kwargs)
         except ValueError as e:
             message = str(e).lower()
             if "already exists" in message:
@@ -368,7 +372,7 @@ class UserManagementManager:
                 raise UserManagementError("permission_group_not_found")
             group_ids = [user_data.group_id]
 
-        user = self._port.update_user(
+        update_kwargs = dict(
             user_id=user_id,
             full_name=full_name,
             email=user_data.email,
@@ -383,6 +387,9 @@ class UserManagementManager:
             disable_login_enabled=disable_login_enabled,
             disable_login_until_ms=disable_login_until_ms,
         )
+        if user_data.managed_kb_root_node_id is not None:
+            update_kwargs["managed_kb_root_node_id"] = user_data.managed_kb_root_node_id
+        user = self._port.update_user(**update_kwargs)
         if not user:
             raise UserManagementError("user_not_found", status_code=404)
 

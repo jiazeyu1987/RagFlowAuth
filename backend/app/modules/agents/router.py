@@ -31,6 +31,7 @@ class SearchRequest(BaseModel):
 
 class DatasetCreateBody(BaseModel):
     name: Any = None
+    node_id: str | None = None
 
     class Config:
         extra = "allow"
@@ -105,6 +106,13 @@ async def list_available_datasets(
 ):
     deps = ctx.deps
     snapshot = ctx.snapshot
+    management_manager = getattr(deps, "knowledge_management_manager", None)
+    if str(getattr(ctx.user, "role", "") or "") == "sub_admin" and management_manager is not None:
+        try:
+            datasets = management_manager.list_manageable_datasets(ctx.user)
+        except Exception as exc:
+            raise HTTPException(status_code=int(getattr(exc, "status_code", 400) or 400), detail=str(exc)) from exc
+        return {"datasets": datasets, "count": len(datasets)}
     datasets = list_accessible_datasets(deps, snapshot)
     if snapshot.is_admin:
         return {"datasets": datasets, "count": len(datasets)}
@@ -131,8 +139,15 @@ async def get_dataset_detail(
 ):
     deps = ctx.deps
     snapshot = ctx.snapshot
+    management_manager = getattr(deps, "knowledge_management_manager", None)
 
-    assert_kb_allowed(snapshot, dataset_ref)
+    if str(getattr(ctx.user, "role", "") or "") == "sub_admin" and management_manager is not None:
+        try:
+            management_manager.assert_dataset_manageable(ctx.user, dataset_ref)
+        except Exception as exc:
+            raise HTTPException(status_code=int(getattr(exc, "status_code", 400) or 400), detail=str(exc)) from exc
+    else:
+        assert_kb_allowed(snapshot, dataset_ref)
 
     detail = None
     try:
@@ -155,11 +170,17 @@ async def update_dataset_detail(
 ):
     deps = ctx.deps
     snapshot = ctx.snapshot
+    management_manager = getattr(deps, "knowledge_management_manager", None)
 
-    if not snapshot.is_admin:
+    if snapshot.is_admin:
+        assert_kb_allowed(snapshot, dataset_ref)
+    elif str(getattr(ctx.user, "role", "") or "") == "sub_admin" and management_manager is not None:
+        try:
+            management_manager.assert_dataset_manageable(ctx.user, dataset_ref)
+        except Exception as exc:
+            raise HTTPException(status_code=int(getattr(exc, "status_code", 400) or 400), detail=str(exc)) from exc
+    else:
         raise HTTPException(status_code=403, detail="admin_required")
-
-    assert_kb_allowed(snapshot, dataset_ref)
 
     if not isinstance(updates, dict):
         raise HTTPException(status_code=400, detail="invalid_updates")
@@ -173,15 +194,20 @@ async def update_dataset_detail(
     updates.pop("id", None)
     updates.pop("dataset_id", None)
 
-    updated = None
-    try:
-        updated = deps.ragflow_service.update_dataset(dataset_ref, updates)
-    except Exception as exc:
-        logger.error("[datasets.update] error: %s", exc, exc_info=True)
-        raise HTTPException(status_code=502, detail=str(exc) or "dataset_update_failed")
-
-    if not updated:
-        raise HTTPException(status_code=500, detail="dataset_update_failed")
+    if snapshot.is_admin or management_manager is None:
+        updated = None
+        try:
+            updated = deps.ragflow_service.update_dataset(dataset_ref, updates)
+        except Exception as exc:
+            logger.error("[datasets.update] error: %s", exc, exc_info=True)
+            raise HTTPException(status_code=502, detail=str(exc) or "dataset_update_failed")
+        if not updated:
+            raise HTTPException(status_code=500, detail="dataset_update_failed")
+    else:
+        try:
+            updated = management_manager.update_dataset(user=ctx.user, dataset_ref=dataset_ref, updates=updates)
+        except Exception as exc:
+            raise HTTPException(status_code=int(getattr(exc, "status_code", 400) or 400), detail=str(exc)) from exc
 
     audit = getattr(deps, "audit_log_store", None)
     if audit:
@@ -201,15 +227,16 @@ async def update_dataset_detail(
     return {"dataset": updated}
 
 
-@router.post("/datasets")
+@router.post("/datasets", status_code=202)
 async def create_dataset(
     ctx: AuthContextDep,
     body: object = Body(...),
 ):
     deps = ctx.deps
     snapshot = ctx.snapshot
+    management_manager = getattr(deps, "knowledge_management_manager", None)
 
-    if not snapshot.is_admin:
+    if not snapshot.is_admin and str(getattr(ctx.user, "role", "") or "") != "sub_admin":
         raise HTTPException(status_code=403, detail="admin_required")
 
     if not isinstance(body, dict):
@@ -228,74 +255,44 @@ async def create_dataset(
     body["name"] = name
     body.pop("id", None)
     body.pop("dataset_id", None)
-
-    created = None
+    service = getattr(deps, "operation_approval_service", None)
+    if service is None:
+        raise HTTPException(status_code=500, detail="operation_approval_service_unavailable")
     try:
-        created = deps.ragflow_service.create_dataset(body)
+        return await service.create_request(
+            operation_type="knowledge_base_create",
+            ctx=ctx,
+            body=body,
+        )
     except Exception as exc:
-        logger.error("[datasets.create] error: %s", exc, exc_info=True)
-        raise HTTPException(status_code=502, detail=str(exc) or "dataset_create_failed")
-
-    if not created:
-        raise HTTPException(status_code=500, detail="dataset_create_failed")
-
-    audit = getattr(deps, "audit_log_store", None)
-    if audit:
-        try:
-            audit.log_event(
-                action="datasets_create",
-                actor=ctx.payload.sub,
-                source="ragflow",
-                kb_id=str(created.get("id") or ""),
-                kb_name=str(created.get("name") or name),
-                meta={"keys": sorted([k for k in body.keys() if isinstance(k, str)])[:100]},
-                **actor_fields_from_ctx(deps, ctx),
-            )
-        except Exception:
-            pass
-
-    return {"dataset": created}
+        raise HTTPException(
+            status_code=int(getattr(exc, "status_code", 400) or 400),
+            detail=getattr(exc, "code", None) or str(exc) or "operation_approval_create_failed",
+        ) from exc
 
 
-@router.delete("/datasets/{dataset_ref}")
+@router.delete("/datasets/{dataset_ref}", status_code=202)
 async def delete_dataset(
     dataset_ref: str,
     ctx: AuthContextDep,
 ):
     deps = ctx.deps
     snapshot = ctx.snapshot
+    management_manager = getattr(deps, "knowledge_management_manager", None)
 
-    if not snapshot.is_admin:
+    if not snapshot.is_admin and str(getattr(ctx.user, "role", "") or "") != "sub_admin":
         raise HTTPException(status_code=403, detail="admin_required")
-
-    assert_kb_allowed(snapshot, dataset_ref)
-
+    service = getattr(deps, "operation_approval_service", None)
+    if service is None:
+        raise HTTPException(status_code=500, detail="operation_approval_service_unavailable")
     try:
-        deps.ragflow_service.delete_dataset_if_empty(dataset_ref)
-    except ValueError as exc:
-        code = str(exc) or "delete_failed"
-        if code == "dataset_not_found":
-            raise HTTPException(status_code=404, detail="dataset_not_found")
-        if code == "dataset_not_empty":
-            raise HTTPException(status_code=409, detail="dataset_not_empty")
-        raise HTTPException(status_code=400, detail=code)
+        return await service.create_request(
+            operation_type="knowledge_base_delete",
+            ctx=ctx,
+            dataset_ref=dataset_ref,
+        )
     except Exception as exc:
-        logger.error("[datasets.delete] error: %s", exc, exc_info=True)
-        raise HTTPException(status_code=502, detail=str(exc) or "dataset_delete_failed")
-
-    audit = getattr(deps, "audit_log_store", None)
-    if audit:
-        try:
-            audit.log_event(
-                action="datasets_delete",
-                actor=ctx.payload.sub,
-                source="ragflow",
-                kb_id=str(dataset_ref),
-                kb_name=str(dataset_ref),
-                meta={},
-                **actor_fields_from_ctx(deps, ctx),
-            )
-        except Exception:
-            pass
-
-    return {"ok": True}
+        raise HTTPException(
+            status_code=int(getattr(exc, "status_code", 400) or 400),
+            detail=getattr(exc, "code", None) or str(exc) or "operation_approval_create_failed",
+        ) from exc

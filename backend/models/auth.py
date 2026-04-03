@@ -19,3 +19,12 @@ class ChangePasswordRequest(BaseModel):
     """Change password request model"""
     old_password: str
     new_password: str
+
+
+class SignatureChallengeRequest(BaseModel):
+    password: str
+
+
+class SignatureChallengeResponse(BaseModel):
+    sign_token: str
+    expires_at_ms: int

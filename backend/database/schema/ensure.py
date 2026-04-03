@@ -16,9 +16,11 @@ from .chat_sessions import ensure_chat_sessions_table
 from .chat_message_sources import ensure_chat_message_sources_table
 from .search_configs import ensure_search_configs_table
 from .upload_settings import ensure_upload_settings_table
+from .config_change_logs import ensure_config_change_logs_table
 from .kb_directory import ensure_kb_directory_tables
 from .data_security import (
     add_cron_schedule_columns_to_data_security,
+    add_backup_verification_columns_to_backup_jobs,
     add_backup_job_kind_column,
     add_cancel_columns_to_backup_jobs,
     add_full_backup_columns_to_data_security,
@@ -29,6 +31,7 @@ from .data_security import (
     ensure_backup_locks_table,
     ensure_data_security_settings_table,
 )
+from .restore_drills import ensure_restore_drills_table
 from .kb_documents import ensure_kb_documents_table
 from .patent_downloads import ensure_patent_download_tables
 from .paper_downloads import ensure_paper_download_tables
@@ -47,14 +50,25 @@ from .permission_groups import (
     seed_default_permission_groups,
 )
 from .auth_sessions import ensure_auth_login_sessions_table
+from .approval_workflow import ensure_approval_workflow_tables
+from .electronic_signatures import ensure_electronic_signature_tables
+from .emergency_changes import ensure_emergency_change_tables
+from .notification import ensure_notification_tables
+from .supplier_qualification import ensure_supplier_qualification_tables
+from .training_compliance import ensure_training_compliance_tables
+from .watermark_policy import ensure_watermark_policy_tables
+from .operation_approval import ensure_operation_approval_tables, ensure_user_inbox_tables
 from .permission_group_folders import (
     ensure_permission_group_folders_table,
     ensure_permission_groups_folder_column,
 )
 from .users import (
+    ensure_password_history_table,
     ensure_org_columns_on_users,
     ensure_user_full_name_column,
     ensure_user_login_policy_columns,
+    ensure_user_managed_kb_root_column,
+    ensure_user_password_security_columns,
     ensure_users_group_id_column,
     ensure_users_table,
 )
@@ -75,12 +89,16 @@ def ensure_schema(db_path: str | Path) -> None:
         ensure_users_table(conn)
         ensure_user_login_policy_columns(conn)
         ensure_user_full_name_column(conn)
+        ensure_user_managed_kb_root_column(conn)
+        ensure_user_password_security_columns(conn)
+        ensure_password_history_table(conn)
         ensure_auth_login_sessions_table(conn)
         ensure_kb_documents_table(conn)
         ensure_chat_sessions_table(conn)
         ensure_chat_message_sources_table(conn)
         ensure_search_configs_table(conn)
         ensure_upload_settings_table(conn)
+        ensure_config_change_logs_table(conn)
         ensure_kb_directory_tables(conn)
         ensure_patent_download_tables(conn)
         ensure_paper_download_tables(conn)
@@ -101,11 +119,13 @@ def ensure_schema(db_path: str | Path) -> None:
         ensure_backup_locks_table(conn)
         add_backup_job_kind_column(conn)
         add_cancel_columns_to_backup_jobs(conn)
+        add_backup_verification_columns_to_backup_jobs(conn)
         add_full_backup_columns_to_data_security(conn)
         add_backup_retention_columns_to_data_security(conn)
         add_cron_schedule_columns_to_data_security(conn)
         add_last_backup_time_columns_to_data_security(conn)
         add_replica_columns_to_data_security(conn)
+        ensure_restore_drills_table(conn)
 
         # Org directory (companies/departments) + audit
         ensure_companies_table(conn)
@@ -119,6 +139,15 @@ def ensure_schema(db_path: str | Path) -> None:
         ensure_download_logs_table(conn)
         ensure_deletion_logs_table(conn)
         ensure_audit_events_table(conn)
+        ensure_approval_workflow_tables(conn)
+        ensure_electronic_signature_tables(conn)
+        ensure_emergency_change_tables(conn)
+        ensure_notification_tables(conn)
+        ensure_operation_approval_tables(conn)
+        ensure_user_inbox_tables(conn)
+        ensure_supplier_qualification_tables(conn)
+        ensure_training_compliance_tables(conn)
+        ensure_watermark_policy_tables(conn)
 
         # Cross-table KB reference columns & indexes
         ensure_kb_ref_columns(conn)

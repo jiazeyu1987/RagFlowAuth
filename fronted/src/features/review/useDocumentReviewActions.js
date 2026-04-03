@@ -1,4 +1,5 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
+import authClient from '../../api/authClient';
 import documentClient, { DOCUMENT_SOURCE } from '../../shared/documents/documentClient';
 import { reviewApi } from './api';
 import {
@@ -7,6 +8,8 @@ import {
   buildRejectBatchSummary,
   collectConflictChecks,
 } from './documentReviewUtils';
+
+const SIGNATURE_CANCELLED = '__signature_cancelled__';
 
 export function useDocumentReviewActions({
   activeDocMap,
@@ -23,12 +26,84 @@ export function useDocumentReviewActions({
   const [batchSummaryExpanded, setBatchSummaryExpanded] = useState(false);
   const [batchSummaryCopied, setBatchSummaryCopied] = useState(false);
   const [overwritePrompt, setOverwritePrompt] = useState(null);
+  const [signaturePrompt, setSignaturePrompt] = useState(null);
+  const [signatureSubmitting, setSignatureSubmitting] = useState(false);
+  const [signatureError, setSignatureError] = useState(null);
+  const signatureResolverRef = useRef(null);
 
   const resetBatchFeedback = useCallback(() => {
     setBatchReviewSummary(null);
     setBatchSummaryExpanded(false);
     setBatchSummaryCopied(false);
   }, []);
+
+  const resetSignaturePrompt = useCallback(() => {
+    setSignaturePrompt(null);
+    setSignatureSubmitting(false);
+    setSignatureError(null);
+  }, []);
+
+  const requestSignature = useCallback((prompt) => new Promise((resolve, reject) => {
+    signatureResolverRef.current = { resolve, reject };
+    setSignatureError(null);
+    setSignatureSubmitting(false);
+    setSignaturePrompt(prompt);
+  }), []);
+
+  const closeSignaturePrompt = useCallback(() => {
+    const resolver = signatureResolverRef.current;
+    signatureResolverRef.current = null;
+    resetSignaturePrompt();
+    if (resolver) {
+      resolver.reject(new Error(SIGNATURE_CANCELLED));
+    }
+  }, [resetSignaturePrompt]);
+
+  const submitSignaturePrompt = useCallback(async ({ password, signatureMeaning, signatureReason }) => {
+    const resolver = signatureResolverRef.current;
+    if (!resolver) {
+      return;
+    }
+
+    setSignatureSubmitting(true);
+    setSignatureError(null);
+    try {
+      const challenge = await authClient.requestSignatureChallenge(password);
+      signatureResolverRef.current = null;
+      resetSignaturePrompt();
+      resolver.resolve({
+        sign_token: challenge.sign_token,
+        signature_meaning: signatureMeaning,
+        signature_reason: signatureReason,
+        review_notes: signatureReason,
+      });
+    } catch (err) {
+      setSignatureSubmitting(false);
+      setSignatureError(err.message);
+    }
+  }, [resetSignaturePrompt]);
+
+  const promptSignature = useCallback(async (prompt) => {
+    try {
+      return await requestSignature(prompt);
+    } catch (err) {
+      if (err?.message === SIGNATURE_CANCELLED) {
+        return null;
+      }
+      throw err;
+    }
+  }, [requestSignature]);
+
+  const buildPromptForDoc = useCallback((docId, options) => {
+    const filename = activeDocMap.get(docId)?.filename || docId;
+    return {
+      title: options.title,
+      description: `${options.descriptionPrefix}: ${filename}`,
+      confirmLabel: options.confirmLabel,
+      defaultMeaning: options.defaultMeaning,
+      defaultReason: options.defaultReason,
+    };
+  }, [activeDocMap]);
 
   const handleApprove = useCallback(async (docId) => {
     setError(null);
@@ -44,28 +119,41 @@ export function useDocumentReviewActions({
         return;
       }
 
-      if (!window.confirm('确定要通过这个文档吗？')) return;
-      await reviewApi.approve(docId);
+      const signaturePayload = await promptSignature(buildPromptForDoc(docId, {
+        title: 'Electronic Signature',
+        descriptionPrefix: 'Approve document',
+        confirmLabel: 'Sign and approve',
+        defaultMeaning: 'Document approval',
+        defaultReason: 'Approved after review',
+      }));
+      if (!signaturePayload) return;
+
+      await reviewApi.approve(docId, signaturePayload);
       await refreshDocuments();
     } catch (err) {
       setError(err.message);
     } finally {
       setActionLoading(null);
     }
-  }, [refreshDocuments, setError]);
+  }, [buildPromptForDoc, promptSignature, refreshDocuments, setError]);
 
   const handleOverwriteUseNew = useCallback(async () => {
     if (!overwritePrompt) return;
     const { newDocId, oldDoc } = overwritePrompt;
-    const ok = window.confirm(
-      `确定用新文档覆盖旧文档吗？\n\n旧文档：${oldDoc.filename}\n新文档：${activeDocMap.get(newDocId)?.filename || ''}\n\n该操作会将旧文档替换为新文档，并通过当前待审核文档。`,
-    );
-    if (!ok) return;
+
+    const signaturePayload = await promptSignature({
+      title: 'Electronic Signature',
+      description: `Approve overwrite: replace ${oldDoc.filename} with ${activeDocMap.get(newDocId)?.filename || newDocId}`,
+      confirmLabel: 'Sign and overwrite',
+      defaultMeaning: 'Document supersede approval',
+      defaultReason: `Approve overwrite for ${oldDoc.filename}`,
+    });
+    if (!signaturePayload) return;
 
     setActionLoading(newDocId);
     setError(null);
     try {
-      await reviewApi.approveOverwrite(newDocId, oldDoc.doc_id);
+      await reviewApi.approveOverwrite(newDocId, oldDoc.doc_id, signaturePayload);
       setOverwritePrompt(null);
       await refreshDocuments();
     } catch (err) {
@@ -73,18 +161,25 @@ export function useDocumentReviewActions({
     } finally {
       setActionLoading(null);
     }
-  }, [activeDocMap, overwritePrompt, refreshDocuments, setError]);
+  }, [activeDocMap, overwritePrompt, promptSignature, refreshDocuments, setError]);
 
   const handleOverwriteKeepOld = useCallback(async () => {
     if (!overwritePrompt) return;
     const { newDocId, oldDoc } = overwritePrompt;
-    const ok = window.confirm(`确定保留旧文档 ${oldDoc.filename} 并驳回新文档吗？`);
-    if (!ok) return;
+
+    const signaturePayload = await promptSignature({
+      title: 'Electronic Signature',
+      description: `Reject new upload and keep approved document ${oldDoc.filename}`,
+      confirmLabel: 'Sign and reject',
+      defaultMeaning: 'Document rejection',
+      defaultReason: 'Keep approved document and reject conflicting upload',
+    });
+    if (!signaturePayload) return;
 
     setActionLoading(newDocId);
     setError(null);
     try {
-      await reviewApi.reject(newDocId, '存在重名旧文档，保留旧版本');
+      await reviewApi.reject(newDocId, signaturePayload);
       setOverwritePrompt(null);
       await refreshDocuments();
     } catch (err) {
@@ -92,30 +187,37 @@ export function useDocumentReviewActions({
     } finally {
       setActionLoading(null);
     }
-  }, [overwritePrompt, refreshDocuments, setError]);
+  }, [overwritePrompt, promptSignature, refreshDocuments, setError]);
 
   const handleReject = useCallback(async (docId) => {
-    const notes = window.prompt('请输入驳回原因');
-    if (notes === null) return;
+    const signaturePayload = await promptSignature(buildPromptForDoc(docId, {
+      title: 'Electronic Signature',
+      descriptionPrefix: 'Reject document',
+      confirmLabel: 'Sign and reject',
+      defaultMeaning: 'Document rejection',
+      defaultReason: 'Rejected during review',
+    }));
+    if (!signaturePayload) return;
 
     setActionLoading(docId);
     try {
-      await reviewApi.reject(docId, notes);
+      await reviewApi.reject(docId, signaturePayload);
       await refreshDocuments();
     } catch (err) {
       setError(err.message);
     } finally {
       setActionLoading(null);
     }
-  }, [refreshDocuments, setError]);
+  }, [buildPromptForDoc, promptSignature, refreshDocuments, setError]);
 
   const handleDelete = useCallback(async (docId) => {
-    if (!window.confirm('确定要删除这个文档吗？删除后不可恢复。')) return;
+    if (!window.confirm('Delete this document permanently?')) return;
 
     setActionLoading(docId);
     try {
-      await documentClient.delete({ source: DOCUMENT_SOURCE.KNOWLEDGE, docId });
+      const request = await documentClient.delete({ source: DOCUMENT_SOURCE.KNOWLEDGE, docId });
       await refreshDocuments();
+      window.alert(`删除申请已提交${request?.request_id ? `：${request.request_id}` : ''}`);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -154,7 +256,7 @@ export function useDocumentReviewActions({
 
   const handleBatchDownload = useCallback(async () => {
     if (selectedDocIds.size === 0) {
-      setError('请先选择要下载的文档。');
+      setError('Select at least one document to download.');
       return;
     }
 
@@ -171,10 +273,9 @@ export function useDocumentReviewActions({
 
   const handleBatchApproveAll = useCallback(async () => {
     if (documents.length === 0) {
-      setError('当前没有待审核文档。');
+      setError('No pending documents to approve.');
       return;
     }
-    if (!window.confirm(`确定要一键通过当前列表中的 ${documents.length} 个待审核文档吗？`)) return;
 
     setBatchReviewLoading('approve');
     resetBatchFeedback();
@@ -196,11 +297,23 @@ export function useDocumentReviewActions({
             failed_items: [],
           }),
         );
-        setError(`批量审批未执行：冲突 ${conflicted.length}，检查失败 ${conflictCheckFailed.length}${firstConflict ? `。首个文档：${firstConflict}` : ''}`);
+        setError(`Batch approve skipped. conflicts=${conflicted.length}, conflict_checks_failed=${conflictCheckFailed.length}${firstConflict ? `, first=${firstConflict}` : ''}`);
         return;
       }
 
-      const result = await reviewApi.approveBatch(approvableDocs.map((doc) => doc.doc_id));
+      const signaturePayload = await promptSignature({
+        title: 'Electronic Signature',
+        description: `Approve ${approvableDocs.length} documents in batch`,
+        confirmLabel: 'Sign and approve batch',
+        defaultMeaning: 'Batch document approval',
+        defaultReason: `Approved ${approvableDocs.length} documents in batch`,
+      });
+      if (!signaturePayload) return;
+
+      const result = await reviewApi.approveBatch(
+        approvableDocs.map((doc) => doc.doc_id),
+        signaturePayload,
+      );
       setBatchReviewSummary(buildApproveBatchSummary(conflictChecks, result));
       await refreshDocuments();
       setSelectedDocIds(new Set());
@@ -208,43 +321,51 @@ export function useDocumentReviewActions({
       if (result.failed_count > 0 || conflicted.length > 0 || conflictCheckFailed.length > 0) {
         const firstFailure = result.failed_items?.[0];
         const firstConflict = conflicted[0]?.doc?.filename || conflictCheckFailed[0]?.doc?.filename || '';
-        setError(`批量审批完成：成功 ${result.success_count}，失败 ${result.failed_count}，冲突跳过 ${conflicted.length}，检查失败 ${conflictCheckFailed.length}${firstFailure ? `。首个失败：${firstFailure.doc_id} - ${firstFailure.detail}` : firstConflict ? `。首个跳过：${firstConflict}` : ''}`);
+        setError(`Batch approve completed. success=${result.success_count}, failed=${result.failed_count}, conflicts=${conflicted.length}, conflict_checks_failed=${conflictCheckFailed.length}${firstFailure ? `, first_failure=${firstFailure.doc_id}:${firstFailure.detail}` : firstConflict ? `, first_conflict=${firstConflict}` : ''}`);
       }
     } catch (err) {
       setError(err.message);
     } finally {
       setBatchReviewLoading(null);
     }
-  }, [documents, refreshDocuments, resetBatchFeedback, setError]);
+  }, [documents, promptSignature, refreshDocuments, resetBatchFeedback, setError]);
 
   const handleBatchRejectAll = useCallback(async () => {
     if (documents.length === 0) {
-      setError('当前没有待审核文档。');
+      setError('No pending documents to reject.');
       return;
     }
-
-    const notes = window.prompt('请输入批量驳回原因（可选）');
-    if (notes === null) return;
-    if (!window.confirm(`确定要一键驳回当前列表中的 ${documents.length} 个待审核文档吗？`)) return;
 
     setBatchReviewLoading('reject');
     resetBatchFeedback();
     setError(null);
     try {
-      const result = await reviewApi.rejectBatch(documents.map((doc) => doc.doc_id), notes);
+      const signaturePayload = await promptSignature({
+        title: 'Electronic Signature',
+        description: `Reject ${documents.length} documents in batch`,
+        confirmLabel: 'Sign and reject batch',
+        defaultMeaning: 'Batch document rejection',
+        defaultReason: `Rejected ${documents.length} documents in batch`,
+      });
+      if (!signaturePayload) return;
+
+      const result = await reviewApi.rejectBatch(
+        documents.map((doc) => doc.doc_id),
+        signaturePayload,
+      );
       setBatchReviewSummary(buildRejectBatchSummary(result));
       await refreshDocuments();
       setSelectedDocIds(new Set());
       if (result.failed_count > 0) {
         const firstFailure = result.failed_items?.[0];
-        setError(`批量驳回完成：成功 ${result.success_count}，失败 ${result.failed_count}${firstFailure ? `。首个失败：${firstFailure.doc_id} - ${firstFailure.detail}` : ''}`);
+        setError(`Batch reject completed. success=${result.success_count}, failed=${result.failed_count}${firstFailure ? `, first_failure=${firstFailure.doc_id}:${firstFailure.detail}` : ''}`);
       }
     } catch (err) {
       setError(err.message);
     } finally {
       setBatchReviewLoading(null);
     }
-  }, [documents, refreshDocuments, resetBatchFeedback, setError]);
+  }, [documents, promptSignature, refreshDocuments, resetBatchFeedback, setError]);
 
   const handleCopyBatchSummary = useCallback(async () => {
     try {
@@ -252,7 +373,7 @@ export function useDocumentReviewActions({
       setBatchSummaryCopied(true);
       window.setTimeout(() => setBatchSummaryCopied(false), 1500);
     } catch (err) {
-      setError(err.message || '复制失败');
+      setError(err.message || 'Failed to copy summary.');
     }
   }, [batchReviewSummary, setError]);
 
@@ -263,6 +384,7 @@ export function useDocumentReviewActions({
     batchReviewSummary,
     batchSummaryCopied,
     batchSummaryExpanded,
+    closeSignaturePrompt,
     downloadLoading,
     handleApprove,
     handleBatchApproveAll,
@@ -280,5 +402,9 @@ export function useDocumentReviewActions({
     selectedDocIds,
     setBatchSummaryExpanded,
     setOverwritePrompt,
+    signatureError,
+    signaturePrompt,
+    signatureSubmitting,
+    submitSignaturePrompt,
   };
 }

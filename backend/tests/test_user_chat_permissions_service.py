@@ -64,7 +64,7 @@ class TestUserChatPermissionsResolver(unittest.TestCase):
         snapshot = resolve_permissions(deps, _User(role="viewer", group_ids=[1, 2]))
         self.assertEqual(sorted(snapshot.chat_ids), ["agent_a1", "chat_c1"])
 
-    def test_admin_gets_all_scope(self):
+    def test_admin_has_no_default_chat_scope(self):
         deps = _Deps(groups={}, user_chat_grants=[])
         snapshot = resolve_permissions(deps, _User(role="admin"))
-        self.assertEqual(snapshot.chat_scope, ResourceScope.ALL)
+        self.assertEqual(snapshot.chat_scope, ResourceScope.NONE)

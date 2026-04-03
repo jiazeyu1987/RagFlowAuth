@@ -16,12 +16,37 @@ const STATUS_STYLES = {
   rejected: { backgroundColor: '#ef4444' },
 };
 
+const EFFECTIVE_STATUS_LABELS = {
+  approved: '当前生效',
+  pending: '待审版本',
+  rejected: '已驳回',
+  superseded: '历史版本',
+  archived: '归档版本',
+};
+
 const baseHeaderCell = {
   padding: '12px 16px',
   textAlign: 'left',
   borderBottom: '1px solid #e5e7eb',
   fontSize: '0.85rem',
   fontWeight: '600',
+};
+
+const manifestLabelStyle = {
+  color: '#6b7280',
+  fontSize: '0.8rem',
+};
+
+const manifestValueStyle = {
+  color: '#111827',
+  fontSize: '0.85rem',
+  wordBreak: 'break-word',
+};
+
+const VERIFIED_TEXT = {
+  yes: '\u901a\u8fc7',
+  no: '\u5931\u8d25',
+  unknown: '-',
 };
 
 const formatTime = (timestampMs) => {
@@ -33,6 +58,55 @@ const formatTime = (timestampMs) => {
     hour: '2-digit',
     minute: '2-digit',
   });
+};
+
+const renderSignatureManifestation = (item) => {
+  if (!item?.signature_id) {
+    return <span style={{ color: '#9ca3af', fontSize: '0.85rem' }}>-</span>;
+  }
+
+  return (
+    <div style={{ display: 'grid', gap: '6px' }}>
+      <div>
+        <div style={manifestLabelStyle}>{'\u7b7e\u540d\u4eba'}</div>
+        <div style={manifestValueStyle}>{item.signed_by_username || item.reviewed_by_name || item.reviewed_by || '-'}</div>
+      </div>
+      <div>
+        <div style={manifestLabelStyle}>{'\u7b7e\u540d\u65f6\u95f4'}</div>
+        <div style={manifestValueStyle}>{formatTime(item.signed_at_ms)}</div>
+      </div>
+      <div>
+        <div style={manifestLabelStyle}>{'\u7b7e\u540d\u542b\u4e49'}</div>
+        <div style={manifestValueStyle}>{item.signature_meaning || '-'}</div>
+      </div>
+      <div>
+        <div style={manifestLabelStyle}>{'\u7b7e\u7f72\u539f\u56e0'}</div>
+        <div style={manifestValueStyle}>{item.signature_reason || '-'}</div>
+      </div>
+      <div>
+        <div style={manifestLabelStyle}>{'\u7b7e\u540d ID'}</div>
+        <div style={{ ...manifestValueStyle, fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace" }}>
+          {item.signature_id}
+        </div>
+      </div>
+      <div>
+        <div style={manifestLabelStyle}>{'\u9a8c\u7b7e\u7ed3\u679c'}</div>
+        <div
+          style={{
+            ...manifestValueStyle,
+            color: item.signature_verified === true ? '#166534' : item.signature_verified === false ? '#b91c1c' : manifestValueStyle.color,
+            fontWeight: 600,
+          }}
+        >
+          {item.signature_verified === true
+            ? VERIFIED_TEXT.yes
+            : item.signature_verified === false
+              ? VERIFIED_TEXT.no
+              : VERIFIED_TEXT.unknown}
+        </div>
+      </div>
+    </div>
+  );
 };
 
 const DocumentAudit = ({ embedded = false }) => {
@@ -50,6 +124,15 @@ const DocumentAudit = ({ embedded = false }) => {
   const [activeTab, setActiveTab] = useState('documents');
   const [filterKb, setFilterKb] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
+  const [versionsDialog, setVersionsDialog] = useState({
+    open: false,
+    loading: false,
+    error: '',
+    doc: null,
+    items: [],
+    currentDocId: '',
+    logicalDocId: '',
+  });
 
   useEffect(() => {
     const fetchData = async () => {
@@ -106,6 +189,48 @@ const DocumentAudit = ({ embedded = false }) => {
     if (ref && userMap.has(ref)) return userMap.get(ref);
     if (ref && currentUsername && (ref === currentUserId || ref === currentUsername)) return currentUsername;
     return ref || '\u5176\u4ed6';
+  };
+
+  const closeVersionsDialog = () => {
+    setVersionsDialog({
+      open: false,
+      loading: false,
+      error: '',
+      doc: null,
+      items: [],
+      currentDocId: '',
+      logicalDocId: '',
+    });
+  };
+
+  const openVersionsDialog = async (doc) => {
+    setVersionsDialog({
+      open: true,
+      loading: true,
+      error: '',
+      doc,
+      items: [],
+      currentDocId: '',
+      logicalDocId: '',
+    });
+    try {
+      const payload = await authClient.listDocumentVersions(doc.doc_id);
+      setVersionsDialog({
+        open: true,
+        loading: false,
+        error: '',
+        doc,
+        items: Array.isArray(payload?.versions) ? payload.versions : [],
+        currentDocId: payload?.current_doc_id || '',
+        logicalDocId: payload?.logical_doc_id || '',
+      });
+    } catch (err) {
+      setVersionsDialog((prev) => ({
+        ...prev,
+        loading: false,
+        error: err?.message || '加载版本历史失败',
+      }));
+    }
   };
 
   const knowledgeBases = useMemo(() => {
@@ -284,16 +409,19 @@ const DocumentAudit = ({ embedded = false }) => {
       {activeTab === 'documents' ? (
         <>
           <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '900px' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '1380px' }}>
               <thead style={{ backgroundColor: '#f9fafb' }}>
                 <tr>
                   <th style={{ ...baseHeaderCell, color: '#374151' }}>{'\u77e5\u8bc6\u5e93'}</th>
                   <th style={{ ...baseHeaderCell, color: '#374151' }}>{'\u6587\u4ef6\u540d'}</th>
+                  <th style={{ ...baseHeaderCell, color: '#374151' }}>{'\u7248\u672c'}</th>
                   <th style={{ ...baseHeaderCell, color: '#374151' }}>{'\u4e0a\u4f20\u8005'}</th>
                   <th style={{ ...baseHeaderCell, color: '#374151' }}>{'\u5ba1\u6838\u8005'}</th>
                   <th style={{ ...baseHeaderCell, color: '#374151' }}>{'\u72b6\u6001'}</th>
                   <th style={{ ...baseHeaderCell, color: '#374151' }}>{'\u4e0a\u4f20\u65f6\u95f4'}</th>
                   <th style={{ ...baseHeaderCell, color: '#374151' }}>{'\u5ba1\u6838\u65f6\u95f4'}</th>
+                  <th style={{ ...baseHeaderCell, color: '#374151' }}>{'\u7535\u5b50\u7b7e\u540d'}</th>
+                  <th style={{ ...baseHeaderCell, color: '#374151' }}>{'\u7248\u672c\u5386\u53f2'}</th>
                 </tr>
               </thead>
               <tbody>
@@ -308,6 +436,12 @@ const DocumentAudit = ({ embedded = false }) => {
                   >
                     <td style={{ padding: '12px 16px', fontSize: '0.9rem' }}>{doc.kb_id}</td>
                     <td style={{ padding: '12px 16px', fontSize: '0.9rem' }}>{doc.filename}</td>
+                    <td style={{ padding: '12px 16px', fontSize: '0.9rem' }}>
+                      <div style={{ fontWeight: 600 }}>v{doc.version_no || 1}</div>
+                      <div style={{ color: '#6b7280', fontSize: '0.8rem', marginTop: 4 }}>
+                        {doc.is_current === false ? '历史版本' : '当前记录'}
+                      </div>
+                    </td>
                     <td style={{ padding: '12px 16px', fontSize: '0.9rem', color: '#6b7280' }}>
                       {resolveDisplayName(doc.uploaded_by, doc.uploaded_by_name)}
                     </td>
@@ -328,6 +462,26 @@ const DocumentAudit = ({ embedded = false }) => {
                     </td>
                     <td style={{ padding: '12px 16px', fontSize: '0.9rem', color: '#6b7280' }}>{formatTime(doc.uploaded_at_ms)}</td>
                     <td style={{ padding: '12px 16px', fontSize: '0.9rem', color: '#6b7280' }}>{doc.reviewed_at_ms ? formatTime(doc.reviewed_at_ms) : '-'}</td>
+                    <td style={{ padding: '12px 16px', minWidth: '260px' }}>
+                      {renderSignatureManifestation(doc)}
+                    </td>
+                    <td style={{ padding: '12px 16px', fontSize: '0.9rem' }}>
+                      <button
+                        type="button"
+                        onClick={() => openVersionsDialog(doc)}
+                        data-testid={`audit-doc-versions-${doc.doc_id}`}
+                        style={{
+                          padding: '6px 12px',
+                          backgroundColor: '#eff6ff',
+                          color: '#1d4ed8',
+                          border: '1px solid #bfdbfe',
+                          borderRadius: '6px',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        查看版本历史
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -442,6 +596,126 @@ const DocumentAudit = ({ embedded = false }) => {
           )}
         </>
       )}
+
+      {versionsDialog.open ? (
+        <div
+          data-testid="audit-versions-modal"
+          style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'rgba(17, 24, 39, 0.42)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '16px',
+            zIndex: 60,
+          }}
+          onClick={closeVersionsDialog}
+        >
+          <div
+            style={{
+              width: 'min(1100px, 100%)',
+              maxHeight: '88vh',
+              backgroundColor: 'white',
+              borderRadius: '12px',
+              border: '1px solid #e5e7eb',
+              padding: '16px',
+              overflow: 'auto',
+            }}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start', marginBottom: 12 }}>
+              <div>
+                <div style={{ fontWeight: 700, fontSize: '1.05rem' }}>
+                  版本历史: {versionsDialog.doc?.filename || '-'}
+                </div>
+                <div style={{ color: '#6b7280', fontSize: '0.9rem', marginTop: 6 }}>
+                  逻辑文档 ID: {versionsDialog.logicalDocId || '-'}
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={closeVersionsDialog}
+                style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontSize: '1.2rem' }}
+              >
+                ×
+              </button>
+            </div>
+
+            {versionsDialog.loading ? (
+              <div style={{ padding: '24px 8px', color: '#6b7280' }}>加载版本历史中...</div>
+            ) : versionsDialog.error ? (
+              <div data-testid="audit-versions-error" style={{ padding: '12px 14px', background: '#fee2e2', color: '#991b1b', borderRadius: 8 }}>
+                {versionsDialog.error}
+              </div>
+            ) : versionsDialog.items.length === 0 ? (
+              <div style={{ padding: '24px 8px', color: '#6b7280' }}>暂无版本历史</div>
+            ) : (
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '1260px' }}>
+                  <thead style={{ backgroundColor: '#f9fafb' }}>
+                    <tr>
+                      <th style={{ ...baseHeaderCell, color: '#374151' }}>{'\u7248\u672c'}</th>
+                      <th style={{ ...baseHeaderCell, color: '#374151' }}>{'\u6587\u4ef6\u540d'}</th>
+                      <th style={{ ...baseHeaderCell, color: '#374151' }}>{'\u751f\u6548\u72b6\u6001'}</th>
+                      <th style={{ ...baseHeaderCell, color: '#374151' }}>{'\u4e0a\u4f20\u8005'}</th>
+                      <th style={{ ...baseHeaderCell, color: '#374151' }}>{'\u4e0a\u4f20\u65f6\u95f4'}</th>
+                      <th style={{ ...baseHeaderCell, color: '#374151' }}>{'\u5f52\u6863\u65f6\u95f4'}</th>
+                      <th style={{ ...baseHeaderCell, color: '#374151' }}>{'\u7535\u5b50\u7b7e\u540d'}</th>
+                      <th style={{ ...baseHeaderCell, color: '#374151' }}>{'SHA256'}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {versionsDialog.items.map((item, index) => {
+                      const effectiveLabel = item.is_current
+                        ? '当前生效'
+                        : (EFFECTIVE_STATUS_LABELS[item.effective_status] || item.effective_status || '历史版本');
+                      return (
+                        <tr
+                          key={item.doc_id}
+                          data-testid={`audit-version-row-${item.doc_id}`}
+                          style={{
+                            borderBottom: '1px solid #e5e7eb',
+                            backgroundColor: index % 2 === 0 ? 'white' : '#f9fafb',
+                          }}
+                        >
+                          <td style={{ padding: '12px 16px', fontWeight: 600 }}>v{item.version_no || 1}</td>
+                          <td style={{ padding: '12px 16px', fontSize: '0.9rem' }}>{item.filename}</td>
+                          <td style={{ padding: '12px 16px' }}>
+                            <span
+                              style={{
+                                display: 'inline-block',
+                                padding: '4px 8px',
+                                borderRadius: '999px',
+                                backgroundColor: item.doc_id === versionsDialog.currentDocId ? '#dcfce7' : '#f3f4f6',
+                                color: item.doc_id === versionsDialog.currentDocId ? '#166534' : '#374151',
+                                fontSize: '0.85rem',
+                              }}
+                            >
+                              {effectiveLabel}
+                            </span>
+                          </td>
+                          <td style={{ padding: '12px 16px', color: '#6b7280' }}>
+                            {resolveDisplayName(item.uploaded_by, item.uploaded_by_name)}
+                          </td>
+                          <td style={{ padding: '12px 16px', color: '#6b7280' }}>{formatTime(item.uploaded_at_ms)}</td>
+                          <td style={{ padding: '12px 16px', color: '#6b7280' }}>{formatTime(item.archived_at_ms)}</td>
+                          <td style={{ padding: '12px 16px', minWidth: '260px' }}>
+                            {renderSignatureManifestation(item)}
+                          </td>
+                          <td style={{ padding: '12px 16px', fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace", fontSize: '0.82rem', wordBreak: 'break-all' }}>
+                            {item.file_sha256 || '-'}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 };

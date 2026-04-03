@@ -1,0 +1,34 @@
+{
+  "metadata": {
+    "archived_at_ms": 1775185430586,
+    "package_filename": "retired_record_0cf154b3-9cd7-480d-ad34-00e01f2a1baa_v1.zip",
+    "retention_until_ms": 4102444800000,
+    "retired_by": "reviewer-1",
+    "retired_by_username": "reviewer-1",
+    "retirement_reason": "archive test"
+  },
+  "package": {
+    "filename": "retired_record_0cf154b3-9cd7-480d-ad34-00e01f2a1baa_v1.zip",
+    "sha256": "5b1d49c78591467ab167c65b0861c523b6e5b90f6940ea4f8183c7b0bfce1eee",
+    "size_bytes": 1336
+  },
+  "record": {
+    "archived_file_path": "D:\\ProjectPackage\\RagflowAuth\\data\\retired_documents\\0cf154b3-9cd7-480d-ad34-00e01f2a1baa\\1775185430586_0cf154b3-9cd7-480d-ad34-00e01f2a1baa\\retire_me.txt",
+    "doc_id": "0cf154b3-9cd7-480d-ad34-00e01f2a1baa",
+    "file_sha256": "4ada270823da62b58047cc9b9a29b6848e08b4fd2e18ad920fedf3c2d7f04c2a",
+    "filename": "retire_me.txt",
+    "kb_dataset_id": "ds-a",
+    "kb_id": "kb-a",
+    "kb_name": "kb-a",
+    "logical_doc_id": "0cf154b3-9cd7-480d-ad34-00e01f2a1baa",
+    "review_notes": "approved",
+    "reviewed_at_ms": 1775185430557,
+    "reviewed_by": "reviewer-1",
+    "source_file_path": "C:\\Users\\BJB110\\AppData\\Local\\Temp\\ragflowauth_retired_records\\c14431d29e78406eb54d4f45bfb317ca\\retire_me.txt",
+    "status": "approved",
+    "uploaded_at_ms": 1775185430542,
+    "uploaded_by": "reviewer-1",
+    "version_no": 1
+  },
+  "schema_version": "gbz03.v1"
+}

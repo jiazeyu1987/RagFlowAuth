@@ -8,4 +8,6 @@
 覆盖点：
 - `GET /api/knowledge/stats` 正常/500/空返回
 - 不同角色（admin/viewer）下按钮显示/隐藏与跳转
+关联需求 ID: `R1`, `R2`  
+关联门禁: `T-P1-1`, `T-P1-2`
 

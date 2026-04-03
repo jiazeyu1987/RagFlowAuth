@@ -41,6 +41,7 @@ def preview_gateway(
             payload = mgr.preview_payload(
                 DocumentRef(source="ragflow", doc_id=doc_id, dataset_name=dataset),
                 render=render,
+                ctx=ctx,
             )
             audit = getattr(deps, "audit_log_store", None)
             if audit:
@@ -66,7 +67,7 @@ def preview_gateway(
             if not doc:
                 raise HTTPException(status_code=404, detail="document_not_found")
             assert_kb_allowed(snapshot, doc.kb_id)
-            payload = mgr.preview_payload(DocumentRef(source="knowledge", doc_id=doc_id), render=render)
+            payload = mgr.preview_payload(DocumentRef(source="knowledge", doc_id=doc_id), render=render, ctx=ctx)
             audit = getattr(deps, "audit_log_store", None)
             if audit:
                 try:

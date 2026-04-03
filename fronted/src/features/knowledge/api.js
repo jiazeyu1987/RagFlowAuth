@@ -36,11 +36,10 @@ export const knowledgeApi = {
   },
 
   async createRagflowDataset(payload) {
-    const res = await httpClient.requestJson(authBackendUrl('/api/datasets'), {
+    return httpClient.requestJson(authBackendUrl('/api/datasets'), {
       method: 'POST',
       body: JSON.stringify(payload || {}),
     });
-    return unwrapEnvelope(res);
   },
 
   deleteRagflowDataset(datasetRef) {
@@ -165,10 +164,13 @@ export const knowledgeApi = {
     return httpClient.requestJson(authBackendUrl('/api/knowledge/settings/allowed-extensions'), { method: 'GET' });
   },
 
-  updateAllowedUploadExtensions(allowedExtensions) {
+  updateAllowedUploadExtensions(allowedExtensions, changeReason) {
     return httpClient.requestJson(authBackendUrl('/api/knowledge/settings/allowed-extensions'), {
       method: 'PUT',
-      body: JSON.stringify({ allowed_extensions: allowedExtensions || [] }),
+      body: JSON.stringify({
+        allowed_extensions: allowedExtensions || [],
+        change_reason: changeReason,
+      }),
     });
   },
   uploadDocument(file, kbId = '展厅') {

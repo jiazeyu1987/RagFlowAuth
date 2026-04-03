@@ -1,15 +1,13 @@
-from fastapi import APIRouter, HTTPException
 from typing import Optional
-import os
+
+from fastapi import APIRouter, HTTPException
 
 from backend.app.core.authz import AuthContextDep
 from backend.app.core.kb_refs import resolve_kb_ref
 from backend.app.core.permission_resolver import (
     ResourceScope,
-    assert_can_delete,
     assert_kb_allowed,
 )
-from backend.services.documents.document_manager import DocumentManager
 
 
 router = APIRouter()
@@ -45,11 +43,21 @@ def get_stats(ctx: AuthContextDep):
     }
 
 
-@router.delete("/documents/{doc_id}")
-def delete_document(doc_id: str, ctx: AuthContextDep):
-    mgr = DocumentManager(ctx.deps)
-    result = mgr.delete_knowledge_document(doc_id=doc_id, ctx=ctx)
-    return {"message": result.message or "文档已删除"}
+@router.delete("/documents/{doc_id}", status_code=202)
+async def delete_document(doc_id: str, ctx: AuthContextDep):
+    service = getattr(ctx.deps, "operation_approval_service", None)
+    if service is None:
+        raise HTTPException(status_code=500, detail="operation_approval_service_unavailable")
+    try:
+        return await service.create_request(
+            operation_type="knowledge_file_delete",
+            ctx=ctx,
+            doc_id=doc_id,
+        )
+    except Exception as e:
+        detail = getattr(e, "code", None) or str(e) or "operation_approval_create_failed"
+        status_code = getattr(e, "status_code", 400)
+        raise HTTPException(status_code=status_code, detail=detail) from e
 
 
 @router.get("/deletions")
@@ -93,5 +101,5 @@ def list_deletions(
             }
             for d in deletions
         ],
-        "count": len(deletions)
+        "count": len(deletions),
     }

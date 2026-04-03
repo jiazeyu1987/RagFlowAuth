@@ -2,6 +2,14 @@ from pydantic import field_validator
 from pydantic_settings import BaseSettings
 
 
+DEFAULT_CORS_ORIGINS = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://localhost:3001",
+    "http://127.0.0.1:3001",
+]
+
+
 class Settings(BaseSettings):
     # Application
     APP_NAME: str = "Auth Backend - FastAPI"
@@ -52,8 +60,19 @@ class Settings(BaseSettings):
     ONLYOFFICE_FILE_TOKEN_TTL_SECONDS: int = 300
     ONLYOFFICE_FILE_TOKEN_SECRET: str = ""
 
+    # Notification
+    SMTP_HOST: str = ""
+    SMTP_PORT: int = 587
+    SMTP_USERNAME: str = ""
+    SMTP_PASSWORD: str = ""
+    SMTP_USE_TLS: bool = True
+    SMTP_FROM_EMAIL: str = ""
+    SMTP_TO_EMAILS: str = ""
+    DINGTALK_WEBHOOK_URL: str = ""
+    NOTIFICATION_RETRY_INTERVAL_SECONDS: int = 60
+
     # CORS
-    CORS_ORIGINS: list[str] = ["*"]
+    CORS_ORIGINS: list[str] = DEFAULT_CORS_ORIGINS.copy()
 
     # Data security resilience switches
     BACKUP_SCHEDULER_ENABLED: bool = True

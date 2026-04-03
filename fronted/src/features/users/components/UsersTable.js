@@ -15,6 +15,11 @@ const isUserDisabled = (user) => {
 export default function UsersTable({
   filteredUsers,
   canManageUsers,
+  canEditUserPolicy,
+  canAssignGroups,
+  canResetPasswords,
+  canToggleUserStatus,
+  canDeleteUsers,
   onOpenPolicyModal,
   onAssignGroup,
   onOpenResetPassword,
@@ -125,7 +130,7 @@ export default function UsersTable({
                     {new Date(user.created_at_ms).toLocaleString('zh-CN')}
                   </td>
                   <td style={{ padding: '12px 16px', textAlign: 'right' }}>
-                    {canManageUsers && !isProtectedAdmin ? (
+                    {canEditUserPolicy && !isProtectedAdmin ? (
                       <button
                         type="button"
                         onClick={() => onOpenPolicyModal(user)}
@@ -145,7 +150,7 @@ export default function UsersTable({
                       </button>
                     ) : null}
 
-                    {canManageUsers && !isProtectedAdmin ? (
+                    {canAssignGroups && !isProtectedAdmin ? (
                       <button
                         type="button"
                         onClick={() => onAssignGroup(user)}
@@ -165,7 +170,7 @@ export default function UsersTable({
                       </button>
                     ) : null}
 
-                    {canManageUsers ? (
+                    {canResetPasswords ? (
                       <button
                         type="button"
                         onClick={() => onOpenResetPassword(user)}
@@ -185,7 +190,7 @@ export default function UsersTable({
                       </button>
                     ) : null}
 
-                    {canManageUsers && !isProtectedAdmin ? (
+                    {canToggleUserStatus && !isProtectedAdmin ? (
                       <button
                         type="button"
                         onClick={() => onToggleUserStatus(user)}
@@ -213,7 +218,7 @@ export default function UsersTable({
                       </button>
                     ) : null}
 
-                    {canManageUsers && !isProtectedAdmin ? (
+                    {canDeleteUsers && !isProtectedAdmin ? (
                       <button
                         type="button"
                         onClick={() => onDeleteUser(user.user_id)}

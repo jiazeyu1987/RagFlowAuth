@@ -4,9 +4,10 @@ import logging
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from backend.app.core.auth import get_deps
+from backend.app.core.auth import get_global_deps
 from backend.app.core.authz import AdminOnly
 from backend.app.dependencies import AppDependencies
+from backend.database.tenant_paths import resolve_tenant_auth_db_path
 from backend.models.org_directory import (
     OrgDirectoryAuditLogResponse,
     OrgDirectoryCreateRequest,
@@ -19,17 +20,25 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
-def _deps(deps: AppDependencies = Depends(get_deps)) -> AppDependencies:
+def _deps(deps: AppDependencies = Depends(get_global_deps)) -> AppDependencies:
     return deps
+
+
+def _company_item(c) -> OrgDirectoryItem:
+    tenant_db_path = str(resolve_tenant_auth_db_path(c.company_id))
+    return OrgDirectoryItem(
+        id=c.company_id,
+        name=c.name,
+        created_at_ms=c.created_at_ms,
+        updated_at_ms=c.updated_at_ms,
+        tenant_db_path=tenant_db_path,
+    )
 
 
 @router.get("/org/companies", response_model=list[OrgDirectoryItem])
 async def list_companies(_: AdminOnly, deps: AppDependencies = Depends(_deps)):
     companies = deps.org_directory_store.list_companies()
-    return [
-        OrgDirectoryItem(id=c.company_id, name=c.name, created_at_ms=c.created_at_ms, updated_at_ms=c.updated_at_ms)
-        for c in companies
-    ]
+    return [_company_item(c) for c in companies]
 
 
 @router.post("/org/companies", response_model=OrgDirectoryItem, status_code=201)
@@ -41,7 +50,7 @@ async def create_company(payload: AdminOnly, body: OrgDirectoryCreateRequest, de
     except Exception as e:
         # Likely unique constraint
         raise HTTPException(status_code=400, detail=str(e))
-    return OrgDirectoryItem(id=c.company_id, name=c.name, created_at_ms=c.created_at_ms, updated_at_ms=c.updated_at_ms)
+    return _company_item(c)
 
 
 @router.put("/org/companies/{company_id}", response_model=OrgDirectoryItem)
@@ -59,7 +68,7 @@ async def update_company(
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
-    return OrgDirectoryItem(id=c.company_id, name=c.name, created_at_ms=c.created_at_ms, updated_at_ms=c.updated_at_ms)
+    return _company_item(c)
 
 
 @router.delete("/org/companies/{company_id}")

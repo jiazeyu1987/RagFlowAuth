@@ -12,7 +12,7 @@ from fastapi.testclient import TestClient
 
 from backend.app.modules.auth.router import router as auth_router
 from backend.app.core import auth as auth_module
-from backend.services.users import User, hash_password
+from backend.services.users import User, hash_password, verify_password
 
 
 class _FakeUser:
@@ -32,6 +32,7 @@ class _FakeUserStore:
         self.user = _FakeUser()
         self.update_called = False
         self.update_password_hash = None
+        self.password_reused = False
 
     def get_by_user_id(self, user_id: str):
         return self.user
@@ -39,6 +40,9 @@ class _FakeUserStore:
     def update_password(self, user_id: str, new_password: str) -> None:
         self.update_called = True
         self.update_password_hash = hash_password(new_password)
+
+    def password_matches_recent_history(self, user_id: str, password: str, *, limit: int = 5) -> bool:  # noqa: ARG002
+        return self.password_reused
 
 
 class _FakeDeps:
@@ -81,8 +85,7 @@ class TestPasswordChangeAPI(unittest.TestCase):
 
         # Verify password was updated in store
         self.assertTrue(self.deps.user_store.update_called)
-        expected_new_hash = hash_password("NewPass456")
-        self.assertEqual(self.deps.user_store.update_password_hash, expected_new_hash)
+        self.assertTrue(verify_password("NewPass456", self.deps.user_store.update_password_hash)[0])
 
     def test_change_password_wrong_old_password(self):
         """Reject password change when old password is incorrect"""
@@ -183,6 +186,22 @@ class TestPasswordChangeAPI(unittest.TestCase):
                 json={"old_password": "OldPass123"}
             )
             self.assertEqual(resp.status_code, 422)  # Validation error
+
+    def test_change_password_rejects_recent_password_reuse(self):
+        self.deps.user_store.password_reused = True
+
+        with TestClient(self.app) as client:
+            resp = client.put(
+                "/api/auth/password",
+                json={
+                    "old_password": "OldPass123",
+                    "new_password": "NewPass456"
+                }
+            )
+
+        self.assertEqual(resp.status_code, 400)
+        self.assertEqual(resp.json()["detail"], "new_password_reused_from_recent_history")
+        self.assertFalse(self.deps.user_store.update_called)
 
     def test_change_password_unauthenticated(self):
         """Reject password change when user is not authenticated"""

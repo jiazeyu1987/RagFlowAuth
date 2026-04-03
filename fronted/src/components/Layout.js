@@ -1,9 +1,44 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
+import operationApprovalApi from '../features/operationApproval/api';
 import { useAuth } from '../hooks/useAuth';
 import PermissionGuard from './PermissionGuard';
 
 const MOBILE_BREAKPOINT = 768;
+
+const TEXT = {
+  appName: '\u77e5\u8bc6\u5e93\u7cfb\u7edf',
+  home: '\u9996\u9875',
+  logout: '\u9000\u51fa',
+  nav: {
+    chat: '\u667a\u80fd\u5bf9\u8bdd',
+    agents: '\u5168\u5e93\u641c\u7d22',
+    kbs: '\u77e5\u8bc6\u5e93\u914d\u7f6e',
+    browser: '\u6587\u6863\u6d4f\u89c8',
+    documents: '\u6587\u6863\u5ba1\u6838',
+    upload: '\u6587\u6863\u4e0a\u4f20',
+    approvalCenter: '\u5ba1\u6279\u4e2d\u5fc3',
+    approvalConfig: '\u5ba1\u6279\u914d\u7f6e',
+    inbox: '\u7ad9\u5185\u4fe1',
+    changePassword: '\u4fee\u6539\u5bc6\u7801',
+    tools: '\u5b9e\u7528\u5de5\u5177',
+    users: '\u7528\u6237\u7ba1\u7406',
+    orgDirectory: '\u7ec4\u7ec7\u7ba1\u7406',
+    permissionGroups: '\u6743\u9650\u5206\u7ec4',
+    dataSecurity: '\u6570\u636e\u5b89\u5168',
+    logs: '\u65e5\u5fd7\u5ba1\u8ba1',
+    messages: '\u6d88\u606f\u4e2d\u5fc3',
+    notificationSettings: '\u901a\u77e5\u8bbe\u7f6e',
+    electronicSignatures: '\u7535\u5b50\u7b7e\u540d\u7ba1\u7406',
+  },
+  toolTitles: {
+    patentDownload: '\u4e13\u5229\u4e0b\u8f7d',
+    paperDownload: '\u8bba\u6587\u4e0b\u8f7d',
+    nasBrowser: 'NAS\u4e91\u76d8',
+    drugAdmin: '\u836f\u76d1\u5bfc\u822a',
+    packageDrawing: '\u5305\u88c5\u56fe\u7eb8',
+  },
+};
 
 const Layout = ({ children }) => {
   const {
@@ -24,6 +59,7 @@ const Layout = ({ children }) => {
     if (typeof window === 'undefined') return true;
     return window.innerWidth > MOBILE_BREAKPOINT;
   });
+  const [inboxUnreadCount, setInboxUnreadCount] = useState(0);
 
   useEffect(() => {
     if (typeof window === 'undefined') return undefined;
@@ -39,6 +75,36 @@ const Layout = ({ children }) => {
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    let timerId = null;
+
+    const loadInboxUnreadCount = async () => {
+      if (!user?.user_id) {
+        if (!cancelled) setInboxUnreadCount(0);
+        return;
+      }
+      try {
+        const response = await operationApprovalApi.listInbox({ limit: 1 });
+        if (!cancelled) {
+          setInboxUnreadCount(Number(response?.unread_count || 0));
+        }
+      } catch {
+        if (!cancelled) {
+          setInboxUnreadCount(0);
+        }
+      }
+    };
+
+    loadInboxUnreadCount();
+    timerId = window.setInterval(loadInboxUnreadCount, 30000);
+
+    return () => {
+      cancelled = true;
+      if (timerId) window.clearInterval(timerId);
+    };
+  }, [user?.user_id]);
 
   const permissionGroupLabel = (() => {
     const groups = (user?.permission_groups || [])
@@ -65,33 +131,51 @@ const Layout = ({ children }) => {
   };
 
   const navigation = [
-    { name: '智能对话', path: '/chat', icon: '💬' },
-    { name: '全库搜索', path: '/agents', icon: '🔎' },
-    { name: '知识配置', path: '/kbs', icon: '📚', show: canViewKbConfig },
-    { name: '文档浏览', path: '/browser', icon: '📄' },
-    { name: '文档审核', path: '/documents', icon: '✅', show: canReview },
-    { name: '文档上传', path: '/upload', icon: '📤', show: canUpload },
-    { name: '修改密码', path: '/change-password', icon: '🔐' },
-    { name: '实用工具', path: '/tools', icon: '🧰', show: canViewTools },
-    { name: '用户管理', path: '/users', icon: '👤', allowedRoles: ['admin'] },
-    { name: '组织管理', path: '/org-directory', icon: '🏢', allowedRoles: ['admin'] },
-    { name: '权限分组', path: '/permission-groups', icon: '🛡️', allowedRoles: ['admin'] },
-    { name: '数据安全', path: '/data-security', icon: '🔒', allowedRoles: ['admin'] },
-    { name: '日志审计', path: '/logs', icon: '🧾', allowedRoles: ['admin'] },
+    { name: TEXT.nav.chat, path: '/chat', icon: '\ud83d\udcac' },
+    { name: TEXT.nav.agents, path: '/agents', icon: '\ud83d\udd0d' },
+    { name: TEXT.nav.kbs, path: '/kbs', icon: '\ud83d\udcd6', show: canViewKbConfig },
+    { name: TEXT.nav.browser, path: '/browser', icon: '\ud83d\udcc4' },
+    { name: TEXT.nav.documents, path: '/documents', icon: '\u2705', show: canReview },
+    { name: TEXT.nav.upload, path: '/upload', icon: '\ud83d\udce4', show: canUpload },
+    { name: TEXT.nav.approvalCenter, path: '/approvals', icon: '\ud83d\udccb' },
+    { name: TEXT.nav.inbox, path: '/inbox', icon: '\ud83d\udcec' },
+    { name: TEXT.nav.approvalConfig, path: '/approval-config', icon: '\ud83d\udd27', allowedRoles: ['admin'] },
+    { name: TEXT.nav.changePassword, path: '/change-password', icon: '\ud83d\udd11' },
+    { name: TEXT.nav.tools, path: '/tools', icon: '\ud83e\uddf0', show: canViewTools },
+    { name: TEXT.nav.users, path: '/users', icon: '\ud83d\udc65', allowedRoles: ['admin', 'sub_admin'] },
+    { name: TEXT.nav.orgDirectory, path: '/org-directory', icon: '\ud83c\udfe2', allowedRoles: ['admin'] },
+    { name: TEXT.nav.permissionGroups, path: '/permission-groups', icon: '\ud83d\udee1\ufe0f', allowedRoles: ['admin', 'sub_admin'] },
+    { name: TEXT.nav.dataSecurity, path: '/data-security', icon: '\ud83d\udd12', allowedRoles: ['admin'] },
+    { name: TEXT.nav.notificationSettings, path: '/notification-settings', icon: '\ud83d\udd14', allowedRoles: ['admin', 'sub_admin'] },
+    { name: TEXT.nav.electronicSignatures, path: '/electronic-signatures', icon: '\u270d\ufe0f', allowedRoles: ['admin', 'sub_admin'] },
+    { name: TEXT.nav.logs, path: '/logs', icon: '\ud83d\udccb', allowedRoles: ['admin'] },
   ];
 
+  const adminHiddenPaths = new Set(['/chat', '/agents', '/kbs', '/browser', '/documents', '/upload', '/tools']);
+  navigation.forEach((item) => {
+    if (adminHiddenPaths.has(item.path)) {
+      item.hiddenRoles = ['admin'];
+    }
+  });
+
   const pageTitleOverrides = {
-    '/tools/patent-download': '专利下载',
-    '/tools/paper-download': '论文下载',
-    '/tools/nas-browser': 'NAS云盘',
-    '/tools/drug-admin': '药监导航',
+    '/tools/patent-download': TEXT.toolTitles.patentDownload,
+    '/tools/paper-download': TEXT.toolTitles.paperDownload,
+    '/tools/nas-browser': TEXT.toolTitles.nasBrowser,
+    '/tools/drug-admin': TEXT.toolTitles.drugAdmin,
     '/tools/nmpa': 'NMPA',
-    '/tools/package-drawing': '包装图纸',
+    '/tools/package-drawing': TEXT.toolTitles.packageDrawing,
+    '/electronic-signatures': TEXT.nav.electronicSignatures,
+    '/approvals': TEXT.nav.approvalCenter,
+    '/approval-center': TEXT.nav.approvalCenter,
+    '/approval-config': TEXT.nav.approvalConfig,
+    '/inbox': TEXT.nav.inbox,
+    '/messages': TEXT.nav.inbox,
   };
 
   const currentTitle = pageTitleOverrides[location.pathname]
     || navigation.find((item) => item.path === location.pathname)?.name
-    || '首页';
+    || TEXT.home;
 
   const sidebarWidth = isMobile ? 'min(78vw, 280px)' : (sidebarOpen ? '250px' : '60px');
   const headerPadding = isMobile ? '14px 16px' : '16px 24px';
@@ -144,7 +228,7 @@ const Layout = ({ children }) => {
           }}
         >
           <h2 style={{ margin: 0, fontSize: sidebarOpen ? (isMobile ? '1.2rem' : '1.5rem') : '0.9rem' }}>
-            {sidebarOpen ? '知识库系统' : 'KB'}
+            {sidebarOpen ? TEXT.appName : 'KB'}
           </h2>
           <button
             type="button"
@@ -159,6 +243,7 @@ const Layout = ({ children }) => {
 
         <nav style={{ flex: 1, padding: '10px 0', overflowY: 'auto' }}>
           {navigation.map((item) => {
+            if (item.hiddenRoles && item.hiddenRoles.includes(user?.role)) return null;
             if (item.show !== undefined && !item.show()) return null;
 
             return (
@@ -200,7 +285,31 @@ const Layout = ({ children }) => {
                   >
                     {item.icon || '-'}
                   </span>
-                  {sidebarOpen ? <span style={{ flex: 1 }}>{item.name}</span> : null}
+                  {sidebarOpen ? (
+                    <>
+                      <span style={{ flex: 1 }}>{item.name}</span>
+                      {item.path === '/inbox' && inboxUnreadCount > 0 ? (
+                        <span
+                          data-testid="layout-inbox-unread"
+                          style={{
+                            minWidth: '24px',
+                            height: '24px',
+                            borderRadius: '999px',
+                            background: '#2563eb',
+                            color: '#ffffff',
+                            fontSize: '0.75rem',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            padding: '0 6px',
+                            flexShrink: 0,
+                          }}
+                        >
+                          {inboxUnreadCount > 99 ? '99+' : String(inboxUnreadCount)}
+                        </span>
+                      ) : null}
+                    </>
+                  ) : null}
                 </Link>
               </PermissionGuard>
             );
@@ -226,7 +335,7 @@ const Layout = ({ children }) => {
               e.currentTarget.style.backgroundColor = '#ef4444';
             }}
           >
-            {sidebarOpen ? '退出' : 'X'}
+            {sidebarOpen ? TEXT.logout : 'X'}
           </button>
         </div>
       </aside>
@@ -261,7 +370,7 @@ const Layout = ({ children }) => {
               }}
               aria-label="open sidebar"
             >
-              ☰
+              \u2630
             </button>
           ) : null}
           <h1

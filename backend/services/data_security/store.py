@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from dataclasses import asdict
+import json
 import time
 from pathlib import Path
 from typing import Any
@@ -7,9 +9,10 @@ from uuid import uuid4
 
 from backend.database.paths import resolve_auth_db_path
 from backend.database.sqlite import connect_sqlite
+from backend.services.config_change_log_store import ConfigChangeLogStore
 from backend.services.mount_utils import is_cifs_mounted
 
-from .models import BackupJob, DataSecuritySettings
+from .models import BackupJob, DataSecuritySettings, RestoreDrill
 
 
 class DataSecurityStore:
@@ -176,8 +179,16 @@ class DataSecurityStore:
         finally:
             conn.close()
 
-    def update_settings(self, updates: dict[str, Any]) -> DataSecuritySettings:
+    def update_settings(
+        self,
+        updates: dict[str, Any],
+        *,
+        changed_by: str | None = None,
+        change_reason: str | None = None,
+        approved_by: str | None = None,
+    ) -> DataSecuritySettings:
         now_ms = int(time.time() * 1000)
+        before = self.get_settings()
         allowed = {
             "enabled",
             "interval_minutes",
@@ -200,6 +211,8 @@ class DataSecurityStore:
             "replica_subdir_format",
         }
         fields = {k: updates.get(k) for k in allowed if k in updates}
+        if not fields:
+            raise ValueError("no_settings_changes")
 
         if "backup_retention_max" in fields:
             try:
@@ -227,7 +240,23 @@ class DataSecurityStore:
             conn.commit()
         finally:
             conn.close()
-        return self.get_settings()
+        updated = self.get_settings()
+
+        if changed_by is not None or change_reason is not None or approved_by is not None:
+            if not str(changed_by or "").strip():
+                raise ValueError("changed_by_required")
+            if not str(change_reason or "").strip():
+                raise ValueError("change_reason_required")
+            ConfigChangeLogStore(db_path=self.db_path).log_change(
+                config_domain="data_security_settings",
+                before=asdict(before),
+                after=asdict(updated),
+                changed_by=str(changed_by).strip(),
+                change_reason=str(change_reason).strip(),
+                approved_by=(str(approved_by).strip() or None) if approved_by is not None else None,
+            )
+
+        return updated
 
     def touch_last_run(self, when_ms: int | None = None) -> None:
         now_ms = int(time.time() * 1000) if when_ms is None else int(when_ms)
@@ -311,6 +340,15 @@ class DataSecurityStore:
         message: str | None = None,
         detail: str | None = None,
         output_dir: str | None = None,
+        package_hash: str | None = None,
+        verified_by: str | None = None,
+        verified_at_ms: int | None = None,
+        replication_status: str | None = None,
+        replication_error: str | None = None,
+        replica_path: str | None = None,
+        verification_status: str | None = None,
+        verification_detail: str | None = None,
+        last_restore_drill_id: str | None = None,
         started_at_ms: int | None = None,
         finished_at_ms: int | None = None,
     ) -> BackupJob:
@@ -325,6 +363,24 @@ class DataSecurityStore:
             fields["detail"] = detail
         if output_dir is not None:
             fields["output_dir"] = output_dir
+        if package_hash is not None:
+            fields["package_hash"] = str(package_hash)
+        if verified_by is not None:
+            fields["verified_by"] = str(verified_by)
+        if verified_at_ms is not None:
+            fields["verified_at_ms"] = int(verified_at_ms)
+        if replication_status is not None:
+            fields["replication_status"] = str(replication_status)
+        if replication_error is not None:
+            fields["replication_error"] = str(replication_error)
+        if replica_path is not None:
+            fields["replica_path"] = str(replica_path)
+        if verification_status is not None:
+            fields["verification_status"] = str(verification_status)
+        if verification_detail is not None:
+            fields["verification_detail"] = str(verification_detail)
+        if last_restore_drill_id is not None:
+            fields["last_restore_drill_id"] = str(last_restore_drill_id)
         if started_at_ms is not None:
             fields["started_at_ms"] = int(started_at_ms)
         if finished_at_ms is not None:
@@ -436,9 +492,18 @@ class DataSecurityStore:
                 message=row["message"],
                 detail=row["detail"],
                 output_dir=row["output_dir"],
+                package_hash=get_col("package_hash"),
+                verified_by=get_col("verified_by"),
+                verified_at_ms=(int(get_col("verified_at_ms")) if get_col("verified_at_ms") is not None else None),
                 created_at_ms=int(row["created_at_ms"] or 0),
                 started_at_ms=int(row["started_at_ms"]) if row["started_at_ms"] is not None else None,
                 finished_at_ms=int(row["finished_at_ms"]) if row["finished_at_ms"] is not None else None,
+                replication_status=get_col("replication_status"),
+                replication_error=get_col("replication_error"),
+                replica_path=get_col("replica_path"),
+                verification_status=get_col("verification_status"),
+                verification_detail=get_col("verification_detail"),
+                last_restore_drill_id=get_col("last_restore_drill_id"),
                 cancel_requested_at_ms=(
                     int(get_col("cancel_requested_at_ms")) if get_col("cancel_requested_at_ms") is not None else None
                 ),
@@ -465,9 +530,20 @@ class DataSecurityStore:
                     message=r["message"],
                     detail=r["detail"],
                     output_dir=r["output_dir"],
+                    package_hash=(r["package_hash"] if "package_hash" in r.keys() else None),
+                    verified_by=(r["verified_by"] if "verified_by" in r.keys() else None),
+                    verified_at_ms=(
+                        int(r["verified_at_ms"]) if "verified_at_ms" in r.keys() and r["verified_at_ms"] is not None else None
+                    ),
                     created_at_ms=int(r["created_at_ms"] or 0),
                     started_at_ms=int(r["started_at_ms"]) if r["started_at_ms"] is not None else None,
                     finished_at_ms=int(r["finished_at_ms"]) if r["finished_at_ms"] is not None else None,
+                    replication_status=(r["replication_status"] if "replication_status" in r.keys() else None),
+                    replication_error=(r["replication_error"] if "replication_error" in r.keys() else None),
+                    replica_path=(r["replica_path"] if "replica_path" in r.keys() else None),
+                    verification_status=(r["verification_status"] if "verification_status" in r.keys() else None),
+                    verification_detail=(r["verification_detail"] if "verification_detail" in r.keys() else None),
+                    last_restore_drill_id=(r["last_restore_drill_id"] if "last_restore_drill_id" in r.keys() else None),
                     cancel_requested_at_ms=(
                         int(r["cancel_requested_at_ms"]) if "cancel_requested_at_ms" in r.keys() and r["cancel_requested_at_ms"] is not None else None
                     ),
@@ -478,5 +554,195 @@ class DataSecurityStore:
                 )
                 for r in rows
             ]
+        finally:
+            conn.close()
+
+    @staticmethod
+    def _restore_drill_from_row(row) -> RestoreDrill:
+        report = row["verification_report_json"] if "verification_report_json" in row.keys() else None
+        parsed_report = json.loads(report) if report else {}
+        return RestoreDrill(
+            drill_id=str(row["drill_id"]),
+            job_id=int(row["job_id"]),
+            backup_path=str(row["backup_path"]),
+            backup_hash=str(row["backup_hash"]),
+            actual_backup_hash=(str(row["actual_backup_hash"]) if row["actual_backup_hash"] is not None else None),
+            hash_match=bool(int(row["hash_match"] or 0)),
+            restore_target=str(row["restore_target"]),
+            restored_auth_db_path=(
+                str(row["restored_auth_db_path"]) if row["restored_auth_db_path"] is not None else None
+            ),
+            restored_auth_db_hash=(
+                str(row["restored_auth_db_hash"]) if row["restored_auth_db_hash"] is not None else None
+            ),
+            compare_match=bool(int(row["compare_match"] or 0)),
+            package_validation_status=(
+                str(row["package_validation_status"]) if row["package_validation_status"] is not None else None
+            ),
+            acceptance_status=(str(row["acceptance_status"]) if row["acceptance_status"] is not None else None),
+            executed_by=str(row["executed_by"]),
+            executed_at_ms=int(row["executed_at_ms"] or 0),
+            result=str(row["result"]),
+            verification_notes=row["verification_notes"],
+            verification_report=parsed_report,
+        )
+
+    def create_restore_drill(
+        self,
+        *,
+        job_id: int,
+        backup_path: str,
+        backup_hash: str,
+        actual_backup_hash: str | None,
+        hash_match: bool,
+        restore_target: str,
+        restored_auth_db_path: str | None,
+        restored_auth_db_hash: str | None,
+        compare_match: bool,
+        package_validation_status: str,
+        acceptance_status: str,
+        executed_by: str,
+        executed_at_ms: int | None = None,
+        result: str,
+        verification_notes: str | None = None,
+        verification_report: dict[str, Any] | None = None,
+    ) -> RestoreDrill:
+        job_id = int(job_id)
+        self.get_job(job_id)
+
+        backup_path = str(backup_path or "").strip()
+        backup_hash = str(backup_hash or "").strip()
+        restore_target = str(restore_target or "").strip()
+        executed_by = str(executed_by or "").strip()
+        result = str(result or "").strip().lower()
+
+        if not backup_path:
+            raise ValueError("backup_path_required")
+        if not backup_hash:
+            raise ValueError("backup_hash_required")
+        if not restore_target:
+            raise ValueError("restore_target_required")
+        if not executed_by:
+            raise ValueError("executed_by_required")
+        if result not in ("success", "failed"):
+            raise ValueError("invalid_restore_result")
+        if package_validation_status not in ("passed", "failed", "blocked"):
+            raise ValueError("invalid_package_validation_status")
+        if acceptance_status not in ("passed", "failed", "blocked"):
+            raise ValueError("invalid_acceptance_status")
+
+        when_ms = int(time.time() * 1000) if executed_at_ms is None else int(executed_at_ms)
+        drill_id = f"restore_drill_{uuid4().hex}"
+        report_json = json.dumps(verification_report or {}, ensure_ascii=False, sort_keys=True)
+
+        conn = self._conn()
+        try:
+            conn.execute(
+                """
+                INSERT INTO restore_drills (
+                    drill_id,
+                    job_id,
+                    backup_path,
+                    backup_hash,
+                    actual_backup_hash,
+                    hash_match,
+                    restore_target,
+                    restored_auth_db_path,
+                    restored_auth_db_hash,
+                    compare_match,
+                    package_validation_status,
+                    acceptance_status,
+                    executed_by,
+                    executed_at_ms,
+                    result,
+                    verification_notes,
+                    verification_report_json
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    drill_id,
+                    job_id,
+                    backup_path,
+                    backup_hash,
+                    actual_backup_hash,
+                    1 if hash_match else 0,
+                    restore_target,
+                    restored_auth_db_path,
+                    restored_auth_db_hash,
+                    1 if compare_match else 0,
+                    package_validation_status,
+                    acceptance_status,
+                    executed_by,
+                    when_ms,
+                    result,
+                    verification_notes,
+                    report_json,
+                ),
+            )
+            if acceptance_status == "passed":
+                conn.execute(
+                    """
+                    UPDATE backup_jobs
+                    SET
+                        verified_by = ?,
+                        verified_at_ms = ?,
+                        verification_status = 'passed',
+                        verification_detail = ?,
+                        last_restore_drill_id = ?
+                    WHERE id = ?
+                    """,
+                    (
+                        executed_by,
+                        when_ms,
+                        str(verification_notes or ""),
+                        drill_id,
+                        job_id,
+                    ),
+                )
+            else:
+                conn.execute(
+                    """
+                    UPDATE backup_jobs
+                    SET
+                        verification_status = ?,
+                        verification_detail = ?,
+                        last_restore_drill_id = ?
+                    WHERE id = ?
+                    """,
+                    (
+                        acceptance_status,
+                        str(verification_notes or ""),
+                        drill_id,
+                        job_id,
+                    ),
+                )
+            conn.commit()
+        finally:
+            conn.close()
+
+        conn = self._conn()
+        try:
+            row = conn.execute("SELECT * FROM restore_drills WHERE drill_id = ?", (drill_id,)).fetchone()
+            if not row:
+                raise RuntimeError("restore_drill_not_found_after_create")
+            return self._restore_drill_from_row(row)
+        finally:
+            conn.close()
+
+    def list_restore_drills(self, *, limit: int = 30) -> list[RestoreDrill]:
+        limit = int(max(1, min(200, limit)))
+        conn = self._conn()
+        try:
+            rows = conn.execute(
+                """
+                SELECT *
+                FROM restore_drills
+                ORDER BY executed_at_ms DESC, id DESC
+                LIMIT ?
+                """,
+                (limit,),
+            ).fetchall()
+            return [self._restore_drill_from_row(row) for row in rows]
         finally:
             conn.close()

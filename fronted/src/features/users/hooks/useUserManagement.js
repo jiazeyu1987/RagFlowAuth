@@ -37,7 +37,9 @@ const parseDisableUntilDate = (dateText) => {
 };
 
 export const useUserManagement = () => {
-  const { can } = useAuth();
+  const { can, user } = useAuth();
+  const isAdminUser = String(user?.role || '') === 'admin';
+  const isSubAdminUser = String(user?.role || '') === 'sub_admin';
 
   const [allUsers, setAllUsers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -456,6 +458,12 @@ export const useUserManagement = () => {
     loading,
     error,
     canManageUsers,
+    canCreateUsers: isAdminUser,
+    canEditUserPolicy: isAdminUser,
+    canResetPasswords: isAdminUser,
+    canToggleUserStatus: isAdminUser,
+    canDeleteUsers: isAdminUser,
+    canAssignGroups: isAdminUser || isSubAdminUser,
     showCreateModal,
     newUser,
     createUserError,

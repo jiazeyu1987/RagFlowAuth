@@ -56,15 +56,6 @@ class _UploadSettingsStore:
     def get(self):
         return SimpleNamespace(allowed_extensions=list(self._values), updated_at_ms=0)
 
-    def add_allowed_extension_if_missing(self, extension: str):
-        ext = str(extension or "").strip().lower()
-        if not ext.startswith("."):
-            ext = f".{ext}"
-        if ext not in self._values:
-            self._values.append(ext)
-        self._values = sorted(set(self._values))
-        return self.get()
-
 
 class TestKnowledgeIngestionManagerUnit(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
@@ -131,18 +122,17 @@ class TestKnowledgeIngestionManagerUnit(unittest.IsolatedAsyncioTestCase):
             await self.manager.stage_upload_knowledge(kb_ref="kb1", upload_file=upload, ctx=self.ctx)
         self.assertEqual(cm.exception.code, "invalid_filename")
 
-    async def test_stage_upload_auto_adds_missing_extension_without_admin_step(self):
+    async def test_stage_upload_rejects_missing_extension_without_auto_heal(self):
         old_allowed = set(settings.ALLOWED_EXTENSIONS)
         try:
-            # Simulate a suffix unknown to backend static baseline and DB list.
             settings.ALLOWED_EXTENSIONS = {x for x in old_allowed if x != ".xyz"}
             self.deps.upload_settings_store = _UploadSettingsStore(
                 [x for x in old_allowed if x != ".xyz"]
             )
             upload = _UploadFile(filename="sample.xyz", content=b"abc", content_type=None)
-            doc = await self.manager.stage_upload_knowledge(kb_ref="kb1", upload_file=upload, ctx=self.ctx)
-            self.assertEqual(doc.filename, "sample.xyz")
-            self.assertIn(".xyz", self.deps.upload_settings_store.get().allowed_extensions)
+            with self.assertRaises(KnowledgeIngestionError) as cm:
+                await self.manager.stage_upload_knowledge(kb_ref="kb1", upload_file=upload, ctx=self.ctx)
+            self.assertEqual(cm.exception.code, "unsupported_file_type")
         finally:
             settings.ALLOWED_EXTENSIONS = old_allowed
 

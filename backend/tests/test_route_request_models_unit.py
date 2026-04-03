@@ -191,8 +191,8 @@ class TestDatasetRequestModelsUnit(unittest.TestCase):
             self.assertEqual(r1.json().get("detail"), "invalid_body")
 
             r2 = client.put("/api/datasets/d1", json="invalid")
-            self.assertEqual(r2.status_code, 400)
-            self.assertEqual(r2.json().get("detail"), "invalid_updates")
+            self.assertEqual(r2.status_code, 403)
+            self.assertEqual(r2.json().get("detail"), "kb_not_allowed")
 
             r3 = client.post("/api/datasets", json={"name": ""})
             self.assertEqual(r3.status_code, 400)
@@ -205,10 +205,8 @@ class TestDatasetRequestModelsUnit(unittest.TestCase):
             self.assertEqual(ragflow.created[0].get("foo"), "bar")
 
             r5 = client.put("/api/datasets/d1", json={"name": "kb2", "id": "xx", "dataset_id": "xx"})
-            self.assertEqual(r5.status_code, 200)
-            self.assertEqual(ragflow.updated[0][0], "d1")
-            self.assertEqual(ragflow.updated[0][1].get("id"), None)
-            self.assertEqual(ragflow.updated[0][1].get("dataset_id"), None)
+            self.assertEqual(r5.status_code, 403)
+            self.assertEqual(r5.json().get("detail"), "kb_not_allowed")
 
 
 class TestSearchChunksUnit(unittest.TestCase):
@@ -252,9 +250,19 @@ class TestSearchChunksUnit(unittest.TestCase):
         self.assertEqual(resp.json().get("detail"), "dataset_not_allowed")
 
     def test_search_returns_stable_error_when_retrieve_fails(self):
+        groups = {
+            1: {
+                "can_upload": False,
+                "can_review": False,
+                "can_download": False,
+                "can_delete": False,
+                "accessible_kbs": ["dataset:d1"],
+                "accessible_chats": [],
+            }
+        }
         deps = SimpleNamespace(
-            user_store=_FakeUserStore(role="admin"),
-            permission_group_store=_FakePermissionGroupStore(),
+            user_store=_FakeUserStore(role="user", group_ids=[1]),
+            permission_group_store=_FakePermissionGroupStore(groups=groups),
             ragflow_service=_FakeRagflowService(),
             ragflow_chat_service=_FakeSearchChatService(raise_error=True),
         )

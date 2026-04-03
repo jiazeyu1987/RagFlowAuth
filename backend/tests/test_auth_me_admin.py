@@ -60,7 +60,7 @@ class _FakeDeps:
 
 
 class TestAuthMeAdmin(unittest.TestCase):
-    def test_admin_gets_all_permissions_and_kbs(self):
+    def test_admin_gets_permission_admin_scope_without_file_ops(self):
         app = FastAPI()
         app.state.deps = _FakeDeps()
         app.include_router(auth_router, prefix="/api/auth")

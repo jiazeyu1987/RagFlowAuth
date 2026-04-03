@@ -1,0 +1,40 @@
+{
+  "run_id": "20260403T073650Z-98a4d5",
+  "cwd": "D:/ProjectPackage/RagflowAuth",
+  "goal": "验证知识库子管理员目录授权改造：1.后端验证 2.前端验证 3.检查是否合适地拆成独立模块",
+  "status": "completed",
+  "phase": "wave-1-complete",
+  "active_wave": 1,
+  "requested_workers": 3,
+  "validation_contract": {
+    "source_type": "script",
+    "source_path": "fronted/node_modules/.bin/esvalidate.cmd",
+    "commands": [
+      "fronted/node_modules/.bin/esvalidate.cmd"
+    ],
+    "reason": "Validation-like script name: esvalidate.cmd"
+  },
+  "started_at": "2026-04-03T07:36:50Z",
+  "updated_at": "2026-04-03T08:01:10Z",
+  "last_error": "",
+  "workers": [
+    {
+      "worker_id": "worker-01",
+      "path": ".super/runs/20260403T073650Z-98a4d5/workers/worker-01",
+      "agent_id": "019d5247-92eb-7bd1-b89f-3c40e54992c2",
+      "status": "passed"
+    },
+    {
+      "worker_id": "worker-02",
+      "path": ".super/runs/20260403T073650Z-98a4d5/workers/worker-02",
+      "agent_id": "019d5247-a709-77b2-a515-2bd087a73bbe",
+      "status": "passed"
+    },
+    {
+      "worker_id": "worker-03",
+      "path": ".super/runs/20260403T073650Z-98a4d5/workers/worker-03",
+      "agent_id": "019d5247-bb1a-7d60-98fc-b4b9b279b5b4",
+      "status": "passed"
+    }
+  ]
+}

@@ -58,5 +58,9 @@ def get_document_conflict(doc_id: str, ctx: AuthContextDep) -> dict:
             "reviewed_at_ms": existing.reviewed_at_ms,
             "ragflow_doc_id": existing.ragflow_doc_id,
             "kb_id": existing.kb_name or existing.kb_id,
+            "logical_doc_id": getattr(existing, "logical_doc_id", None),
+            "version_no": getattr(existing, "version_no", 1),
+            "is_current": getattr(existing, "is_current", True),
+            "effective_status": getattr(existing, "effective_status", None),
         },
     }

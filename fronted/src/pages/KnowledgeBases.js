@@ -22,9 +22,9 @@ import { ChatConfigsPanel } from './ChatConfigsPanel';
 const MOBILE_BREAKPOINT = 768;
 
 export default function KnowledgeBases() {
-  const { user, canManageKbDirectory } = useAuth();
-  const isAdmin = (user?.role || '') === 'admin';
+  const { canManageKbDirectory, canManageKnowledgeTree } = useAuth();
   const canManageDirectory = canManageKbDirectory();
+  const canManageDatasets = canManageKnowledgeTree();
   const [subtab, setSubtab] = useState('kbs');
   const [isMobile, setIsMobile] = useState(() => {
     if (typeof window === 'undefined') return false;
@@ -172,7 +172,7 @@ export default function KnowledgeBases() {
   }, []);
 
   async function saveKb() {
-    if (!isAdmin || !kbSelected?.id) return;
+    if (!canManageDatasets || !kbSelected?.id) return;
     setKbBusy(true);
     setKbError('');
     setKbSaveStatus('');
@@ -195,7 +195,7 @@ export default function KnowledgeBases() {
   }
 
   async function deleteKb(ds) {
-    if (!isAdmin || !ds?.id) return;
+    if (!canManageDatasets || !ds?.id) return;
     if (!datasetEmpty(ds)) {
       setKbError('\u77e5\u8bc6\u5e93\u975e\u7a7a\uff0c\u65e0\u6cd5\u5220\u9664');
       return;
@@ -204,9 +204,8 @@ export default function KnowledgeBases() {
     setKbBusy(true);
     setKbError('');
     try {
-      await knowledgeApi.deleteRagflowDataset(ds.id);
-      if (kbSelected?.id === ds.id) setKbSelected(null);
-      if (selectedItem?.kind === 'dataset' && selectedItem.id === ds.id) setSelectedItem(null);
+      const request = await knowledgeApi.deleteRagflowDataset(ds.id);
+      setKbSaveStatus(`删除申请已提交${request?.request_id ? `：${request.request_id}` : ''}`);
       await refreshAll();
     } catch (e) {
       setKbError(e?.message || '\u5220\u9664\u77e5\u8bc6\u5e93\u5931\u8d25');
@@ -330,18 +329,19 @@ export default function KnowledgeBases() {
   }
 
   async function createKb() {
-    if (!isAdmin) return;
+    if (!canManageDatasets) return;
     setKbBusy(true);
     try {
       const name = String(createName || '').trim();
       if (!name) throw new Error('\u8bf7\u8f93\u5165\u77e5\u8bc6\u5e93\u540d\u79f0');
-      const created = await knowledgeApi.createRagflowDataset({ name, ...pickAllowed(createPayload, DATASET_CREATE_ALLOWED_KEYS) });
-      if (!created?.id) throw new Error('\u77e5\u8bc6\u5e93\u521b\u5efa\u5931\u8d25');
-      await knowledgeApi.assignDatasetDirectory(created.id, createDirId || null);
+      const request = await knowledgeApi.createRagflowDataset({
+        name,
+        node_id: createDirId || null,
+        ...pickAllowed(createPayload, DATASET_CREATE_ALLOWED_KEYS),
+      });
       setCreateOpen(false);
+      setKbSaveStatus(`新建申请已提交${request?.request_id ? `：${request.request_id}` : ''}`);
       await refreshAll();
-      await loadKbDetail(created.id);
-      setSelectedItem({ kind: 'dataset', id: created.id });
     } catch (e) {
       setCreateError(e?.message || '\u521b\u5efa\u5931\u8d25');
     } finally {
@@ -403,7 +403,7 @@ export default function KnowledgeBases() {
                     <button data-testid="kbs-delete-dir" onClick={deleteDirectory} disabled={!selectedNodeId || selectedNodeId === ROOT} style={{ border: '1px solid #ef4444', borderRadius: 8, background: !selectedNodeId || selectedNodeId === ROOT ? '#fecaca' : '#ef4444', color: '#fff', cursor: !selectedNodeId || selectedNodeId === ROOT ? 'not-allowed' : 'pointer', padding: '6px 9px' }}>{'\u5220\u9664\u76ee\u5f55'}</button>
                   </>
                 )}
-                {isAdmin && (
+                {canManageDatasets && (
                   <button data-testid="kbs-create-kb" onClick={openCreateKb} style={{ border: '1px solid #059669', borderRadius: 8, background: '#10b981', color: '#fff', cursor: 'pointer', padding: '6px 9px' }}>{'\u65b0\u5efa\u77e5\u8bc6\u5e93'}</button>
                 )}
               </div>
@@ -490,15 +490,15 @@ export default function KnowledgeBases() {
                 <div style={{ fontWeight: 700, marginBottom: 8 }}>{'\u77e5\u8bc6\u5e93\u5c5e\u6027'}</div>
                 <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '100px 1fr 130px', gap: 8, alignItems: 'center', marginBottom: 8 }}>
                   <label>{'\u540d\u79f0'}</label>
-                  <input value={kbNameText} onChange={(e) => setKbNameText(e.target.value)} disabled={!isAdmin} style={{ border: '1px solid #d1d5db', borderRadius: 8, padding: '8px 10px', background: isAdmin ? '#fff' : '#f9fafb' }} />
-                  {isAdmin && <button onClick={saveKb} disabled={kbBusy} style={{ border: '1px solid #059669', borderRadius: 8, background: kbBusy ? '#6ee7b7' : '#10b981', color: '#fff', cursor: kbBusy ? 'not-allowed' : 'pointer', padding: '8px 10px', width: isMobile ? '100%' : 'auto' }}>{'\u4fdd\u5b58'}</button>}
+                  <input value={kbNameText} onChange={(e) => setKbNameText(e.target.value)} disabled={!canManageDatasets} style={{ border: '1px solid #d1d5db', borderRadius: 8, padding: '8px 10px', background: canManageDatasets ? '#fff' : '#f9fafb' }} />
+                  {canManageDatasets && <button onClick={saveKb} disabled={kbBusy} style={{ border: '1px solid #059669', borderRadius: 8, background: kbBusy ? '#6ee7b7' : '#10b981', color: '#fff', cursor: kbBusy ? 'not-allowed' : 'pointer', padding: '8px 10px', width: isMobile ? '100%' : 'auto' }}>{'\u4fdd\u5b58'}</button>}
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '100px 1fr 130px', gap: 8, alignItems: 'center' }}>
                   <label>{'\u6302\u8f7d\u76ee\u5f55'}</label>
-                  <select value={datasetDirId} onChange={(e) => setDatasetDirId(e.target.value)} disabled={!isAdmin} style={{ border: '1px solid #d1d5db', borderRadius: 8, padding: '8px 10px', background: isAdmin ? '#fff' : '#f9fafb' }}>
+                  <select value={datasetDirId} onChange={(e) => setDatasetDirId(e.target.value)} disabled={!canManageDatasets} style={{ border: '1px solid #d1d5db', borderRadius: 8, padding: '8px 10px', background: canManageDatasets ? '#fff' : '#f9fafb' }}>
                     {dirOptions.map((o) => <option key={o.id || '__root__'} value={o.id}>{o.label}</option>)}
                   </select>
-                  {isAdmin && (
+                  {canManageDatasets && (
                     <button
                       onClick={() => deleteKb(kbById.get(kbSelected.id))}
                       disabled={kbBusy || !datasetEmpty(kbById.get(kbSelected.id))}
@@ -532,7 +532,7 @@ export default function KnowledgeBases() {
         dirOptions={dirOptions}
         createError={createError}
         onCreate={createKb}
-        isAdmin={isAdmin}
+        isAdmin={canManageDatasets}
         kbBusy={kbBusy}
       />
     </div>

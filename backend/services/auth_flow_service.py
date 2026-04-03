@@ -11,8 +11,7 @@ from backend.core.security import auth
 from backend.models.auth import LoginRequest, TokenResponse
 from backend.services.audit_helpers import actor_fields_from_user
 from backend.services.auth_session import AuthSessionError
-from backend.services.user_store import hash_password
-from backend.services.users import resolve_login_block
+from backend.services.users import resolve_login_block, verify_password
 
 
 def _header_bearer_token(request: Request) -> str | None:
@@ -69,6 +68,16 @@ def payload_exp(payload: object):
     return exp
 
 
+def _token_data_for_user(*, user: object, sid: str | None = None) -> dict[str, object] | None:
+    data: dict[str, object] = {}
+    if sid:
+        data["sid"] = sid
+    company_id = getattr(user, "company_id", None)
+    if company_id is not None and str(company_id).strip() != "":
+        data["cid"] = int(company_id)
+    return data or None
+
+
 def login(
     *,
     credentials: LoginRequest,
@@ -79,12 +88,24 @@ def login(
     if not user:
         raise HTTPException(status_code=401, detail="invalid_username_or_password")
 
-    if hash_password(credentials.password) != user.password_hash:
-        raise HTTPException(status_code=401, detail="invalid_username_or_password")
-
     blocked, code = resolve_login_block(user)
     if blocked:
-        raise HTTPException(status_code=403, detail=code or "account_disabled")
+        status_code = 423 if code == "credentials_locked" else 403
+        raise HTTPException(status_code=status_code, detail=code or "account_disabled")
+
+    password_ok, needs_rehash = verify_password(credentials.password, user.password_hash)
+    if not password_ok:
+        locked_until_ms = deps.user_store.record_credential_failure(user.user_id)
+        if locked_until_ms is not None:
+            raise HTTPException(status_code=423, detail="credentials_locked")
+        raise HTTPException(status_code=401, detail="invalid_username_or_password")
+
+    deps.user_store.clear_credential_failures(user.user_id)
+    if needs_rehash:
+        deps.user_store.update_password(user.user_id, credentials.password)
+        refreshed_user = deps.user_store.get_by_user_id(user.user_id)
+        if refreshed_user is not None:
+            user = refreshed_user
 
     scopes: list[str] = []
     auth_session_store = getattr(deps, "auth_session_store", None)
@@ -100,11 +121,12 @@ def login(
             )
         except AuthSessionError as e:
             raise HTTPException(status_code=e.status_code, detail=e.code) from e
-        refresh_token = auth.create_refresh_token(uid=user.user_id, data={"sid": sid})
+        token_data = _token_data_for_user(user=user, sid=sid)
+        refresh_token = auth.create_refresh_token(uid=user.user_id, data=token_data)
         refresh_request_token = RequestToken(token=refresh_token, type="refresh", location="headers")
         refresh_payload = auth.verify_token(refresh_request_token, verify_type=True)
 
-        access_token = auth.create_access_token(uid=user.user_id, scopes=scopes, data={"sid": sid})
+        access_token = auth.create_access_token(uid=user.user_id, scopes=scopes, data=token_data)
         auth_session_manager.bind_refresh_session(
             session_id=sid,
             user_id=user.user_id,
@@ -120,10 +142,11 @@ def login(
             reason="session_limit_exceeded",
         )
         sid = str(uuid.uuid4())
-        refresh_token = auth.create_refresh_token(uid=user.user_id, data={"sid": sid})
+        token_data = _token_data_for_user(user=user, sid=sid)
+        refresh_token = auth.create_refresh_token(uid=user.user_id, data=token_data)
         refresh_request_token = RequestToken(token=refresh_token, type="refresh", location="headers")
         refresh_payload = auth.verify_token(refresh_request_token, verify_type=True)
-        access_token = auth.create_access_token(uid=user.user_id, scopes=scopes, data={"sid": sid})
+        access_token = auth.create_access_token(uid=user.user_id, scopes=scopes, data=token_data)
         auth_session_store.create_session(
             session_id=sid,
             user_id=user.user_id,
@@ -131,8 +154,9 @@ def login(
             expires_at=payload_exp(refresh_payload),
         )
     else:
-        access_token = auth.create_access_token(uid=user.user_id, scopes=scopes)
-        refresh_token = auth.create_refresh_token(uid=user.user_id)
+        token_data = _token_data_for_user(user=user, sid=None)
+        access_token = auth.create_access_token(uid=user.user_id, scopes=scopes, data=token_data)
+        refresh_token = auth.create_refresh_token(uid=user.user_id, data=token_data)
 
     auth.set_access_cookies(access_token, response)
     auth.set_refresh_cookies(refresh_token, response)
@@ -207,10 +231,11 @@ async def refresh(*, request: Request, deps: AppDependencies) -> dict[str, str]:
             raise HTTPException(status_code=401, detail=f"session_invalid:{reason}")
 
     scopes: list[str] = []
+    token_data = _token_data_for_user(user=user, sid=(sid or None))
     access_token = auth.create_access_token(
         uid=payload.sub,
         scopes=scopes,
-        data=({"sid": sid} if sid else None),
+        data=token_data,
     )
     return {"access_token": access_token, "token_type": "bearer"}
 

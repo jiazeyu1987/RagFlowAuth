@@ -44,6 +44,9 @@ def ensure_backup_jobs_table(conn: sqlite3.Connection) -> None:
             message TEXT,
             detail TEXT,
             output_dir TEXT,
+            package_hash TEXT,
+            verified_by TEXT,
+            verified_at_ms INTEGER,
             created_at_ms INTEGER NOT NULL,
             started_at_ms INTEGER,
             finished_at_ms INTEGER
@@ -130,3 +133,17 @@ def add_cancel_columns_to_backup_jobs(conn: sqlite3.Connection) -> None:
     add_column_if_missing(conn, "backup_jobs", "cancel_requested_at_ms INTEGER")
     add_column_if_missing(conn, "backup_jobs", "cancel_reason TEXT")
     add_column_if_missing(conn, "backup_jobs", "canceled_at_ms INTEGER")
+
+
+def add_backup_verification_columns_to_backup_jobs(conn: sqlite3.Connection) -> None:
+    if not table_exists(conn, "backup_jobs"):
+        return
+    add_column_if_missing(conn, "backup_jobs", "package_hash TEXT")
+    add_column_if_missing(conn, "backup_jobs", "verified_by TEXT")
+    add_column_if_missing(conn, "backup_jobs", "verified_at_ms INTEGER")
+    add_column_if_missing(conn, "backup_jobs", "replication_status TEXT")
+    add_column_if_missing(conn, "backup_jobs", "replication_error TEXT")
+    add_column_if_missing(conn, "backup_jobs", "replica_path TEXT")
+    add_column_if_missing(conn, "backup_jobs", "verification_status TEXT")
+    add_column_if_missing(conn, "backup_jobs", "verification_detail TEXT")
+    add_column_if_missing(conn, "backup_jobs", "last_restore_drill_id TEXT")

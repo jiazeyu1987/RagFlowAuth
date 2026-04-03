@@ -15,8 +15,8 @@ def start_data_security_scheduler(*, stop_event: threading.Event, poll_seconds: 
     Periodically checks settings and schedules backups.
 
     Notes:
-    - Uses the `data_security_settings.last_run_at_ms` field to prevent repeated triggering.
-    - If enabled and `last_run_at_ms` is NULL, it triggers a backup once (soon after startup).
+    - Uses `data_security_settings.last_run_at_ms` to prevent repeated triggering.
+    - If enabled and `last_run_at_ms` is NULL, it triggers a backup soon after startup.
     """
 
     def loop() -> None:
@@ -24,16 +24,16 @@ def start_data_security_scheduler(*, stop_event: threading.Event, poll_seconds: 
         store = DataSecurityStore()
         while not stop_event.is_set():
             try:
-                s = store.get_settings()
-                if s.enabled:
-                    interval_minutes = max(1, int(s.interval_minutes or 1440))
+                settings = store.get_settings()
+                if settings.enabled:
+                    interval_minutes = max(1, int(settings.interval_minutes or 1440))
                     interval_ms = interval_minutes * 60 * 1000
                     now_ms = int(time.time() * 1000)
-                    last_ms = s.last_run_at_ms
+                    last_ms = settings.last_run_at_ms
                     due = last_ms is None or (now_ms - last_ms) >= interval_ms
                     if due:
                         store.touch_last_run(now_ms)
-                        job_id = start_job_if_idle(reason="定时")
+                        job_id = start_job_if_idle(reason="scheduled", store=store)
                         logger.info("DataSecurity scheduled backup job=%s", job_id)
             except Exception:
                 logger.exception("DataSecurity scheduler tick failed")
@@ -42,7 +42,6 @@ def start_data_security_scheduler(*, stop_event: threading.Event, poll_seconds: 
 
         logger.info("DataSecurity scheduler stopped")
 
-    t = threading.Thread(target=loop, daemon=True)
-    t.start()
-    return t
-
+    thread = threading.Thread(target=loop, daemon=True)
+    thread.start()
+    return thread

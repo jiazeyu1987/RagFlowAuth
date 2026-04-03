@@ -24,16 +24,11 @@ function fillFormFromGroup(group) {
   };
 }
 
-function normalizeKnowledgeTreeResponse(knowledgeRes, knowledgeBasesRes) {
+function normalizeKnowledgeTreeResponse(knowledgeRes) {
   if (knowledgeRes?.data && Array.isArray(knowledgeRes.data.datasets)) {
     return knowledgeRes.data;
   }
-  const datasets = (knowledgeBasesRes?.data || []).map((item) => ({
-    id: item.id,
-    name: item.name,
-    node_path: '/',
-  }));
-  return { nodes: [], datasets };
+  return { nodes: [], datasets: [], bindings: {} };
 }
 
 function pathSegmentCount(pathValue) {
@@ -202,10 +197,9 @@ export default function usePermissionGroupManagement() {
     setError('');
     try {
       const groupsRes = await permissionGroupsApi.list();
-      const [folderRes, knowledgeTreeRes, knowledgeBasesRes, chatsRes] = await Promise.all([
+      const [folderRes, knowledgeTreeRes, chatsRes] = await Promise.all([
         permissionGroupsApi.listGroupFolders().catch(() => null),
         permissionGroupsApi.listKnowledgeTree().catch(() => null),
-        permissionGroupsApi.listKnowledgeBases().catch(() => null),
         permissionGroupsApi.listChats().catch(() => ({ ok: true, data: [] })),
       ]);
 
@@ -220,7 +214,7 @@ export default function usePermissionGroupManagement() {
         const normalized = rawName.replace(/^\[|\]$/g, '').trim();
         return !HIDDEN_CHAT_NAMES.has(rawName) && !HIDDEN_CHAT_NAMES.has(normalized);
       });
-      const nextKnowledgeTree = normalizeKnowledgeTreeResponse(knowledgeTreeRes, knowledgeBasesRes);
+      const nextKnowledgeTree = normalizeKnowledgeTreeResponse(knowledgeTreeRes);
 
       setGroups(normalizedGroups);
       setGroupFolders(folderData.folders || []);

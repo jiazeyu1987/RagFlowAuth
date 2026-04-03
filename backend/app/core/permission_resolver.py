@@ -3,10 +3,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Iterable
+from typing import TYPE_CHECKING
 
 from fastapi import HTTPException
 
-from backend.app.dependencies import AppDependencies
+if TYPE_CHECKING:
+    from backend.app.dependencies import AppDependencies
 
 
 class ResourceScope(str, Enum):
@@ -84,8 +86,9 @@ def _add_kb_ref(kb_names: set[str], ref: str, dataset_index: dict[str, dict[str,
         kb_names.add(by_name[ref])
 
 
-def resolve_permissions(deps: AppDependencies, user: Any) -> PermissionSnapshot:
-    is_admin = getattr(user, "role", None) == "admin"
+def resolve_permissions(deps: "AppDependencies", user: Any) -> PermissionSnapshot:
+    role = str(getattr(user, "role", "") or "")
+    is_admin = role == "admin"
     if is_admin:
         return PermissionSnapshot(
             is_admin=True,
@@ -206,6 +209,17 @@ def resolve_permissions(deps: AppDependencies, user: Any) -> PermissionSnapshot:
     else:
         tool_scope = ResourceScope.SET
 
+    if role == "sub_admin":
+        management_manager = getattr(deps, "knowledge_management_manager", None)
+        if management_manager is not None:
+            try:
+                scope = management_manager.get_management_scope(user)
+            except Exception:
+                scope = None
+            if scope is not None and getattr(scope, "can_manage", False):
+                can_manage_kb_directory = True
+                can_view_kb_config = True
+
     return PermissionSnapshot(
         is_admin=False,
         can_upload=can_upload,
@@ -261,57 +275,41 @@ def allowed_dataset_ids(snapshot: PermissionSnapshot, datasets: Iterable[dict[st
 
 
 def assert_can_upload(snapshot: PermissionSnapshot) -> None:
-    if snapshot.is_admin:
-        return
     if not snapshot.can_upload:
         raise HTTPException(status_code=403, detail="no_upload_permission")
 
 
 def assert_can_review(snapshot: PermissionSnapshot) -> None:
-    if snapshot.is_admin:
-        return
     if not snapshot.can_review:
         raise HTTPException(status_code=403, detail="no_review_permission")
 
 
 def assert_can_download(snapshot: PermissionSnapshot) -> None:
-    if snapshot.is_admin:
-        return
     if not snapshot.can_download:
         raise HTTPException(status_code=403, detail="no_download_permission")
 
 
 def assert_can_delete(snapshot: PermissionSnapshot) -> None:
-    if snapshot.is_admin:
-        return
     if not snapshot.can_delete:
         raise HTTPException(status_code=403, detail="no_delete_permission")
 
 
 def assert_can_manage_kb_directory(snapshot: PermissionSnapshot) -> None:
-    if snapshot.is_admin:
-        return
     if not snapshot.can_manage_kb_directory:
         raise HTTPException(status_code=403, detail="no_kb_directory_manage_permission")
 
 
 def assert_can_view_kb_config(snapshot: PermissionSnapshot) -> None:
-    if snapshot.is_admin:
-        return
     if not snapshot.can_view_kb_config:
         raise HTTPException(status_code=403, detail="no_kb_config_view_permission")
 
 
 def assert_can_view_tools(snapshot: PermissionSnapshot) -> None:
-    if snapshot.is_admin:
-        return
     if not snapshot.can_view_tools:
         raise HTTPException(status_code=403, detail="no_tools_view_permission")
 
 
 def assert_tool_allowed(snapshot: PermissionSnapshot, tool_id: str) -> None:
-    if snapshot.is_admin:
-        return
     assert_can_view_tools(snapshot)
     if snapshot.tool_scope == ResourceScope.ALL:
         return

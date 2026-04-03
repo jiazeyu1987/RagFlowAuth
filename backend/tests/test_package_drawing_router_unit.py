@@ -91,8 +91,9 @@ class TestPackageDrawingRouterUnit(unittest.TestCase):
 
     def test_query_returns_not_found_when_model_absent(self):
         deps = _Deps(
-            user=_User(role="admin", group_ids=[]),
+            user=_User(role="viewer", group_ids=[1]),
             package_drawing_store=self.store,
+            groups={1: {"can_view_tools": True, "accessible_tools": ["package_drawing"]}},
         )
         with self._make_client(deps) as client:
             resp = client.get("/api/package-drawing/by-model", params={"model": "NOPE"})

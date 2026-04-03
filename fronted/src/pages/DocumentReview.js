@@ -10,6 +10,7 @@ import { useDocumentReviewActions } from '../features/review/useDocumentReviewAc
 import { DocumentReviewBatchSummary } from '../features/review/components/DocumentReviewBatchSummary';
 import { DocumentReviewDiffModal } from '../features/review/components/DocumentReviewDiffModal';
 import { DocumentReviewOverwriteModal } from '../features/review/components/DocumentReviewOverwriteModal';
+import { SignatureConfirmModal } from '../features/review/components/SignatureConfirmModal';
 import { DocumentReviewTable } from '../features/review/components/DocumentReviewTable';
 import { DocumentReviewToolbar } from '../features/review/components/DocumentReviewToolbar';
 import { useEscapeClose } from '../shared/hooks/useEscapeClose';
@@ -43,12 +44,14 @@ const DocumentReview = ({ embedded = false }) => {
   }, []);
 
   const {
+    assignedToMeOnly,
     datasets,
     documents,
     loading,
     loadingDatasets,
     refreshDocuments,
     selectedDataset,
+    setAssignedToMeOnly,
     setSelectedDataset,
   } = useDocumentReviewData(setError);
 
@@ -67,6 +70,7 @@ const DocumentReview = ({ embedded = false }) => {
     batchReviewSummary,
     batchSummaryCopied,
     batchSummaryExpanded,
+    closeSignaturePrompt,
     downloadLoading,
     handleApprove,
     handleBatchApproveAll,
@@ -82,6 +86,10 @@ const DocumentReview = ({ embedded = false }) => {
     handleSelectDoc,
     overwritePrompt,
     selectedDocIds,
+    signatureError,
+    signaturePrompt,
+    signatureSubmitting,
+    submitSignaturePrompt,
     setBatchSummaryExpanded,
     setOverwritePrompt,
   } = useDocumentReviewActions({
@@ -103,7 +111,7 @@ const DocumentReview = ({ embedded = false }) => {
 
   const openDiff = useCallback(async (oldDocId, oldFilename, newDocId, newFilename) => {
     setError(null);
-    setDiffTitle(`文档对比: ${oldFilename} vs ${newFilename}`);
+    setDiffTitle(`版本对比: 当前生效版本 ${oldFilename} vs 新版本 ${newFilename}`);
     setDiffOpen(true);
     setDiffLoading(true);
     setDiffOldText('');
@@ -164,6 +172,14 @@ const DocumentReview = ({ embedded = false }) => {
         onDiffOnlyChange={setDiffOnly}
       />
 
+      <SignatureConfirmModal
+        prompt={signaturePrompt}
+        submitting={signatureSubmitting}
+        error={signatureError}
+        onClose={closeSignaturePrompt}
+        onSubmit={submitSignaturePrompt}
+      />
+
       <DocumentPreviewModal
         open={previewOpen}
         target={previewTarget}
@@ -172,6 +188,7 @@ const DocumentReview = ({ embedded = false }) => {
       />
 
       <DocumentReviewToolbar
+        assignedToMeOnly={assignedToMeOnly}
         batchDownloadLoading={batchDownloadLoading}
         batchReviewLoading={batchReviewLoading}
         canDownload={canDownloadFiles}
@@ -187,6 +204,7 @@ const DocumentReview = ({ embedded = false }) => {
         loadingDatasets={loadingDatasets}
         selectedDataset={selectedDataset}
         selectedDocIds={selectedDocIds}
+        setAssignedToMeOnly={setAssignedToMeOnly}
         setSelectedDataset={setSelectedDataset}
       />
 
@@ -233,6 +251,7 @@ const DocumentReview = ({ embedded = false }) => {
           isMobile={isMobile}
           isReviewer={isReviewer()}
           openLocalPreview={openLocalPreview}
+          assignedToMeOnly={assignedToMeOnly}
           selectedDataset={selectedDataset}
           selectedDocIds={selectedDocIds}
         />

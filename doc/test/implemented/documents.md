@@ -4,6 +4,8 @@
 - 通过流程：`fronted/e2e/tests/documents.review.approve.spec.js`
 - 冲突覆盖：use-new（approve-overwrite）：`fronted/e2e/tests/documents.review.conflict.spec.js`
 - 冲突分支：keep-old（驳回新文件）：`fronted/e2e/tests/documents.review.conflict.keep-old.spec.js`
+- 电子签名确认与签名载荷提交：`fronted/e2e/tests/review.signature.spec.js`
+- 版本历史查看、当前版本标记与覆盖后旧版保留：`fronted/e2e/tests/document.version-history.spec.js`
 - 列表/接口错误态（500/504/空数据/403）：`fronted/e2e/tests/documents.review.api-errors.spec.js`
 - 删除文档：`fronted/e2e/tests/documents.review.delete.spec.js`
 - 批量下载/全选：`fronted/e2e/tests/documents.review.batch-download.spec.js`
@@ -16,4 +18,5 @@
 冲突链路真实集成（integration）：
 - upload(old) → approve(old) → upload(new) → approve-overwrite：`fronted/e2e/tests/integration.documents.conflict.overwrite.spec.js`
 - upload(old) → approve(old) → upload(new) → close modal：`fronted/e2e/tests/integration.documents.conflict.cancel.spec.js`
-
+关联需求 ID: `R2`, `R4`, `R6`, `R7`, `R8`
+关联门禁: `T-P1-2`, `T-P1-4`, `T-P2-1`, `T-P3-2`

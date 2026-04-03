@@ -13,4 +13,6 @@
 - 新增 → 删除：`fronted/e2e/tests/integration.users.create-delete.spec.js`
 - 分配权限组：`fronted/e2e/tests/integration.users.assign-groups.spec.js`
 - 重置密码（新密码可登录）：`fronted/e2e/tests/integration.users.reset-password.spec.js`
+关联需求 ID: `R1`, `R2`, `R9`  
+关联门禁: `T-P1-1`, `T-P1-2`, `T-P4-1`
 

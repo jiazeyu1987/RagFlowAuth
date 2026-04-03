@@ -214,7 +214,11 @@ class BackupSchedulerV2:
             now_ms = int(time.time() * 1000)
             when_ms = int(scheduled_ms or now_ms)
             when_str = datetime.fromtimestamp(when_ms / 1000).strftime("%Y-%m-%d %H:%M")
-            job_id = start_job_if_idle(reason=f"定时增量备份@{when_str}", full_backup=False)
+            job_id = start_job_if_idle(
+                reason=f"scheduled_incremental@{when_str}",
+                store=self.store,
+                full_backup=False,
+            )
             logger.info(f"Started incremental backup job #{job_id}")
             self.store.touch_last_run(when_ms)
             if scheduled_ms is not None:
@@ -229,7 +233,11 @@ class BackupSchedulerV2:
             now_ms = int(time.time() * 1000)
             when_ms = int(scheduled_ms or now_ms)
             when_str = datetime.fromtimestamp(when_ms / 1000).strftime("%Y-%m-%d %H:%M")
-            job_id = start_job_if_idle(reason=f"定时全量备份@{when_str}", full_backup=True)
+            job_id = start_job_if_idle(
+                reason=f"scheduled_full@{when_str}",
+                store=self.store,
+                full_backup=True,
+            )
             logger.info(f"Started full backup job #{job_id}")
             self.store.touch_last_run(when_ms)
             if scheduled_ms is not None:

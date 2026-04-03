@@ -19,9 +19,12 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     from backend.app.dependencies import create_dependencies
+    from backend.database.paths import resolve_auth_db_path
     from backend.services.data_security_scheduler_v2 import init_scheduler_v2, stop_scheduler_v2
 
     app.state.deps = create_dependencies()
+    app.state.base_auth_db_path = str(resolve_auth_db_path())
+    app.state.tenant_deps_cache = {}
     logger.info("Dependencies initialized")
 
     # Help diagnose "stale code" / wrong interpreter issues on Windows.
@@ -89,6 +92,7 @@ def create_app() -> FastAPI:
     authx_auth.handle_errors(app)
 
     from backend.api import (
+        admin_notifications,
         audit,
         agents,
         auth,
@@ -97,10 +101,14 @@ def create_app() -> FastAPI:
         diagnostics,
         drug_admin,
         documents,
+        electronic_signature,
+        emergency_changes,
         knowledge,
+        inbox,
         me,
         nas,
         onlyoffice,
+        operation_approvals,
         org_directory,
         paper_download,
         package_drawing,
@@ -110,14 +118,23 @@ def create_app() -> FastAPI:
         ragflow,
         review,
         search_configs,
+        supplier_qualification,
+        training_compliance,
         users,
     )
 
     app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
+    app.include_router(electronic_signature.router, prefix="/api", tags=["Electronic Signature"])
     app.include_router(audit.router, prefix="/api", tags=["Audit"])
+    app.include_router(admin_notifications.router, prefix="/api", tags=["Admin Notifications"])
+    app.include_router(emergency_changes.router, prefix="/api", tags=["Emergency Changes"])
+    app.include_router(supplier_qualification.router, prefix="/api", tags=["Supplier Qualification"])
+    app.include_router(training_compliance.router, prefix="/api", tags=["Training Compliance"])
     app.include_router(users.router, prefix="/api/users", tags=["Users"])
     app.include_router(knowledge.router, prefix="/api/knowledge", tags=["Knowledge Base"])
     app.include_router(review.router, prefix="/api/knowledge", tags=["Document Review"])
+    app.include_router(operation_approvals.router, prefix="/api", tags=["Operation Approvals"])
+    app.include_router(inbox.router, prefix="/api", tags=["Inbox"])
     app.include_router(ragflow.router, prefix="/api/ragflow", tags=["RAGFlow Integration"])
     app.include_router(preview.router, prefix="/api", tags=["Preview Gateway"])
     app.include_router(documents.router, prefix="/api", tags=["Documents"])

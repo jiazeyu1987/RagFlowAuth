@@ -1,9 +1,9 @@
-import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
 from backend.app.modules.data_security import router
+from backend.tests._util_tempdir import cleanup_dir, make_temp_dir
 
 
 class _SettingsStub:
@@ -26,12 +26,15 @@ class TestDataSecurityRouterStats(unittest.TestCase):
         self.assertTrue(bool(data.get("backup_pack_count_skipped")))
 
     def test_backup_pack_stats_counts_local_packs(self):
-        with tempfile.TemporaryDirectory(prefix="ragflowauth_stats_") as td:
+        td = make_temp_dir(prefix="ragflowauth_stats")
+        try:
             base = Path(td)
             (base / "migration_pack_1").mkdir(parents=True, exist_ok=True)
             (base / "migration_pack_2").mkdir(parents=True, exist_ok=True)
             (base / "other").mkdir(parents=True, exist_ok=True)
             s = _SettingsStub(str(base))
             data = router._backup_pack_stats(s)
-        self.assertEqual(data.get("backup_target_path"), str(base))
-        self.assertEqual(data.get("backup_pack_count"), 2)
+            self.assertEqual(data.get("backup_target_path"), str(base))
+            self.assertEqual(data.get("backup_pack_count"), 2)
+        finally:
+            cleanup_dir(td)

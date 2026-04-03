@@ -19,10 +19,10 @@ class TestDataSecurityRunnerStaleLock(unittest.TestCase):
         fake_thread = mock.Mock()
         fake_thread.start.return_value = None
 
-        with mock.patch.object(runner, "DataSecurityStore", return_value=store), mock.patch.object(
-            runner, "DataSecurityBackupService"
-        ), mock.patch.object(runner.threading, "Thread", return_value=fake_thread):
-            job_id = runner.start_job_if_idle(reason="manual", full_backup=False)
+        with mock.patch.object(runner, "DataSecurityBackupService"), mock.patch.object(
+            runner.threading, "Thread", return_value=fake_thread
+        ):
+            job_id = runner.start_job_if_idle(reason="manual", store=store, full_backup=False)
 
         self.assertEqual(job_id, 123)
         store.release_backup_lock.assert_called_once()

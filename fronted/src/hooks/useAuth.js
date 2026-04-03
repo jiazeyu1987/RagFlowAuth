@@ -229,8 +229,10 @@ export const AuthProvider = ({ children }) => {
   };
 
   const isAdmin = () => user?.role === 'admin';
-  const isReviewer = () => user?.role === 'admin' || permissions.can_review;
-  const isOperator = () => user?.role === 'admin' || permissions.can_upload || permissions.can_review;
+  const isSubAdmin = () => user?.role === 'sub_admin';
+  const isReviewer = () => user?.role === 'admin' || !!permissions.can_review;
+  const isOperator = () => user?.role === 'admin' || !!permissions.can_upload || !!permissions.can_review;
+  const canManageKnowledgeTree = () => user?.role === 'admin' || !!permissions.can_manage_kb_directory;
 
   /**
    * 前端 UI 权限检查。
@@ -238,21 +240,20 @@ export const AuthProvider = ({ children }) => {
    */
   const can = useCallback((resource, action, target = null) => {
     if (!user) return false;
-    if (user.role === 'admin') return true;
 
     const ops = permissions || {};
 
     if (resource === 'users') {
-      return false;
+      return user.role === 'admin' || user.role === 'sub_admin';
     }
 
     if (resource === 'kb_documents') {
       if (action === 'view') return accessibleKbs.length > 0;
-      if (action === 'upload') return !!ops.can_upload;
-      if (action === 'review' || action === 'approve' || action === 'reject') return !!ops.can_review;
-      if (action === 'delete') return !!ops.can_delete;
-      if (action === 'download') return !!ops.can_download;
-      if (action === 'copy') return !!ops.can_copy;
+      if (action === 'upload') return user.role === 'admin' || !!ops.can_upload;
+      if (action === 'review' || action === 'approve' || action === 'reject') return user.role === 'admin' || !!ops.can_review;
+      if (action === 'delete') return user.role === 'admin' || !!ops.can_delete;
+      if (action === 'download') return user.role === 'admin' || !!ops.can_download;
+      if (action === 'copy') return user.role === 'admin' || !!ops.can_copy;
       return false;
     }
 
@@ -261,24 +262,25 @@ export const AuthProvider = ({ children }) => {
       // 目标：没有下载权限的用户也可以查看预览，但不能直接下载。
       // 后端仍会在下载接口做最终权限校验。
       if (action === 'view' || action === 'preview') return accessibleKbs.length > 0;
-      if (action === 'download') return !!ops.can_download;
-      if (action === 'copy') return !!ops.can_copy;
-      if (action === 'delete') return !!ops.can_delete;
+      if (action === 'download') return user.role === 'admin' || !!ops.can_download;
+      if (action === 'copy') return user.role === 'admin' || !!ops.can_copy;
+      if (action === 'delete') return user.role === 'admin' || !!ops.can_delete;
       return false;
     }
 
     if (resource === 'kb_directory') {
-      if (action === 'manage') return !!ops.can_manage_kb_directory;
+      if (action === 'manage') return user.role === 'admin' || !!ops.can_manage_kb_directory;
       return false;
     }
 
     if (resource === 'kbs_config') {
-      if (action === 'view') return ops.can_view_kb_config !== false;
+      if (action === 'view') return user.role === 'admin' || ops.can_view_kb_config !== false;
       return false;
     }
 
     if (resource === 'tools') {
       if (action !== 'view') return false;
+      if (user.role === 'admin') return true;
       if (ops.can_view_tools === false) return false;
       const allowedTools = Array.isArray(ops.accessible_tools)
         ? ops.accessible_tools
@@ -300,7 +302,6 @@ export const AuthProvider = ({ children }) => {
    */
   const canAccessKb = useCallback((kbId) => {
     if (!user) return false;
-    if (user.role === 'admin') return true;
     return accessibleKbs.includes(kbId);
   }, [user, accessibleKbs]);
 
@@ -312,21 +313,25 @@ export const AuthProvider = ({ children }) => {
     logout,
     hasRole,
     isAdmin,
+    isSubAdmin,
     isReviewer,
     isOperator,
+    canManageKnowledgeTree,
     can,
     accessibleKbs,
     canAccessKb,
     permissions,
-    canUpload: () => user?.role === 'admin' || permissions.can_upload,
-    canReview: () => user?.role === 'admin' || permissions.can_review,
-    canDownload: () => user?.role === 'admin' || permissions.can_download,
-    canCopy: () => user?.role === 'admin' || permissions.can_copy,
-    canDelete: () => user?.role === 'admin' || permissions.can_delete,
+    managedKbRootNodeId: user?.managed_kb_root_node_id || null,
+    managedKbRootPath: user?.managed_kb_root_path || null,
+    canUpload: () => user?.role === 'admin' || !!permissions.can_upload,
+    canReview: () => user?.role === 'admin' || !!permissions.can_review,
+    canDownload: () => user?.role === 'admin' || !!permissions.can_download,
+    canCopy: () => user?.role === 'admin' || !!permissions.can_copy,
+    canDelete: () => user?.role === 'admin' || !!permissions.can_delete,
     canManageKbDirectory: () => user?.role === 'admin' || !!permissions.can_manage_kb_directory,
     canViewKbConfig: () => user?.role === 'admin' || permissions.can_view_kb_config !== false,
     canViewTools: () => user?.role === 'admin' || permissions.can_view_tools !== false,
-    canAccessTool: (toolId) => user?.role === 'admin' || can('tools', 'view', toolId),
+    canAccessTool: (toolId) => can('tools', 'view', toolId),
     isAuthenticated: !!user,
   };
 

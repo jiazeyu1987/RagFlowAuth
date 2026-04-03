@@ -1,8 +1,10 @@
 import sqlite3
 import unittest
+from unittest.mock import patch
 
 from authx import TokenPayload
 from fastapi import HTTPException
+from starlette.requests import Request
 
 from backend.app.core.authz import get_auth_context
 
@@ -21,9 +23,10 @@ class TestAuthzDbUnavailable(unittest.TestCase):
     def test_get_auth_context_returns_503_when_db_unavailable(self):
         payload = TokenPayload(sub="u1")
         deps = _Deps()
+        request = Request({"type": "http", "headers": []})
 
-        with self.assertRaises(HTTPException) as ctx:
-            get_auth_context(payload=payload, deps=deps)  # type: ignore[arg-type]
+        with patch("backend.app.core.authz.resolve_scoped_deps", return_value=deps):
+            with self.assertRaises(HTTPException) as ctx:
+                get_auth_context(request=request, payload=payload)
 
         self.assertEqual(ctx.exception.status_code, 503)
-

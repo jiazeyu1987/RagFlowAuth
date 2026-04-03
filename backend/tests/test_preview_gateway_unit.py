@@ -11,14 +11,16 @@ from backend.tests._util_tempdir import cleanup_dir, make_temp_dir
 
 
 class _User:
-    def __init__(self, role: str = "admin"):
+    def __init__(self, role: str = "viewer", group_ids: list[int] | None = None):
         self.user_id = "u1"
         self.username = "u1"
+        self.full_name = "测试用户"
         self.email = "u1@example.com"
         self.role = role
         self.status = "active"
-        self.group_id = None
-        self.group_ids = []
+        self.company_id = 1
+        self.group_id = (group_ids or [None])[0]
+        self.group_ids = list(group_ids or [])
 
 
 class _UserStore:
@@ -56,11 +58,64 @@ class _RagflowService:
         return self._content, self._filename
 
 
+class _PermissionGroupStore:
+    def get_group(self, group_id: int):
+        if group_id == 1:
+            return {
+                "can_upload": False,
+                "can_review": False,
+                "can_download": True,
+                "can_copy": False,
+                "can_delete": False,
+                "can_manage_kb_directory": False,
+                "can_view_kb_config": False,
+                "can_view_tools": False,
+                "accessible_kbs": ["kb1"],
+                "accessible_chats": [],
+                "accessible_tools": [],
+            }
+        return None
+
+
+class _Company:
+    def __init__(self, name: str = "测试公司"):
+        self.name = name
+
+
+class _OrgDirectoryStore:
+    def get_company(self, company_id: int):
+        if company_id == 1:
+            return _Company()
+        return None
+
+
+class _WatermarkPolicy:
+    policy_id = "wm-default"
+    name = "默认水印策略"
+    text_template = "用户:{username} | 公司:{company} | 时间:{timestamp} | 用途:{purpose} | 文档ID:{doc_id}"
+    label_text = "受控预览"
+    text_color = "#6b7280"
+    opacity = 0.18
+    rotation_deg = -24
+    gap_x = 260
+    gap_y = 180
+    font_size = 18
+
+
+class _WatermarkPolicyStore:
+    def get_active_policy(self):
+        return _WatermarkPolicy()
+
+
 class _Deps:
     def __init__(self, kb_doc: _KbDoc):
-        self.user_store = _UserStore(_User(role="admin"))
+        self.user_store = _UserStore(_User(role="viewer", group_ids=[1]))
         self.kb_store = _KbStore(kb_doc)
         self.ragflow_service = _RagflowService(b"%PDF-1.4 test", "x.pdf")
+        self.permission_group_store = _PermissionGroupStore()
+        self.org_directory_store = _OrgDirectoryStore()
+        self.watermark_policy_store = _WatermarkPolicyStore()
+        self.knowledge_directory_manager = None
 
 
 def _override_get_current_payload(_: Request) -> TokenPayload:
@@ -118,6 +173,8 @@ class TestPreviewGatewayUnit(unittest.TestCase):
             self.assertEqual(data.get("type"), "text")
             self.assertEqual(data.get("filename"), "a.txt")
             self.assertIn("content", data)
+            self.assertEqual(data.get("watermark", {}).get("policy_id"), "wm-default")
+            self.assertIn("用途:预览", data.get("watermark", {}).get("text", ""))
         finally:
             cleanup_dir(td)
 
@@ -186,6 +243,7 @@ class TestPreviewGatewayUnit(unittest.TestCase):
         self.assertEqual(data.get("type"), "pdf")
         self.assertEqual(data.get("filename"), "x.pdf")
         self.assertIn("content", data)
+        self.assertIn("文档ID:r1", data.get("watermark", {}).get("text", ""))
 
     def test_gateway_knowledge_excel_default_is_table_mode(self):
         td = make_temp_dir(prefix="ragflowauth_preview_gateway")

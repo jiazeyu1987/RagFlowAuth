@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 from backend.app.core import auth as auth_module
 from backend.app.modules.audit.router import router as audit_router
 from backend.database.schema.ensure import ensure_schema
+from backend.services.audit import AuditLogManager
 from backend.services.audit_log_store import AuditLogStore
 from backend.tests._util_tempdir import cleanup_dir, make_temp_dir
 
@@ -55,6 +56,7 @@ class _Deps:
         self.user_kb_permission_store = _UserKbPermissionStore()
         self.user_chat_permission_store = _UserChatPermissionStore()
         self.audit_log_store = audit_log_store
+        self.audit_log_manager = AuditLogManager(store=audit_log_store)
 
 
 def _override_get_current_payload(_: Request) -> TokenPayload:
@@ -78,7 +80,14 @@ class TestAuditEventsApiUnit(unittest.TestCase):
                 source="knowledge",
                 doc_id="d1",
                 filename="a.md",
-                kb_id="展厅",
+                kb_id="kb-a",
+                kb_dataset_id="ds_1",
+                kb_name="kb-a",
+                resource_type="knowledge_document",
+                resource_id="d1",
+                event_type="preview",
+                request_id="rid-audit",
+                meta={"render": "default", "type": "markdown"},
             )
 
             app = FastAPI()
@@ -87,7 +96,16 @@ class TestAuditEventsApiUnit(unittest.TestCase):
             app.dependency_overrides[auth_module.get_current_payload] = _override_get_current_payload
 
             with TestClient(app) as client:
-                resp = client.get("/api/audit/events?limit=50&action=document_preview&username=alice&company_id=1")
+                resp = client.get(
+                    "/api/audit/events?limit=50"
+                    "&action=document_preview"
+                    "&username=alice"
+                    "&company_id=1"
+                    "&doc_id=d1"
+                    "&kb_dataset_id=ds_1"
+                    "&resource_type=knowledge_document"
+                    "&request_id=rid-audit"
+                )
 
             self.assertEqual(resp.status_code, 200)
             data = resp.json()
@@ -96,6 +114,10 @@ class TestAuditEventsApiUnit(unittest.TestCase):
             self.assertEqual(data["total"], 1)
             self.assertEqual(data["items"][0]["action"], "document_preview")
             self.assertEqual(data["items"][0]["filename"], "a.md")
+            self.assertEqual(data["items"][0]["doc_id"], "d1")
+            self.assertEqual(data["items"][0]["kb_dataset_id"], "ds_1")
+            self.assertEqual(data["items"][0]["resource_type"], "knowledge_document")
+            self.assertEqual(data["items"][0]["request_id"], "rid-audit")
+            self.assertEqual(data["items"][0]["meta"], {"render": "default", "type": "markdown"})
         finally:
             cleanup_dir(td)
-

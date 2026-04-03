@@ -7,6 +7,7 @@ class OrgDirectoryItem(BaseModel):
     name: str
     created_at_ms: int
     updated_at_ms: int
+    tenant_db_path: Optional[str] = None
 
 
 class OrgDirectoryCreateRequest(BaseModel):
@@ -27,4 +28,3 @@ class OrgDirectoryAuditLogResponse(BaseModel):
     actor_user_id: str
     actor_username: Optional[str] = None
     created_at_ms: int
-

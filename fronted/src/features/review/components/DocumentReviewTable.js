@@ -14,6 +14,7 @@ const wrapFilename = (filename, chunkSize = 20) => {
 
 export function DocumentReviewTable({
   actionLoading,
+  assignedToMeOnly,
   canDownload,
   documents,
   downloadLoading,
@@ -31,6 +32,9 @@ export function DocumentReviewTable({
   selectedDocIds,
 }) {
   const isAllSelected = documents.length > 0 && selectedDocIds.size === documents.length;
+  const emptyText = assignedToMeOnly
+    ? '当前没有分配给我的待审批文档'
+    : (selectedDataset ? '当前知识库下没有待审核文档' : '暂无待审核文档');
 
   if (documents.length === 0) {
     return (
@@ -43,7 +47,7 @@ export function DocumentReviewTable({
         }}
       >
         <div data-testid="docs-empty" style={{ padding: '48px', textAlign: 'center', color: '#6b7280' }}>
-          {selectedDataset ? '当前知识库下没有待审核文档' : '暂无待审核文档'}
+          {emptyText}
         </div>
       </div>
     );
@@ -59,7 +63,7 @@ export function DocumentReviewTable({
       }}
     >
       <div style={{ overflowX: 'auto' }}>
-        <table style={{ width: '100%', minWidth: isMobile ? '920px' : '100%', borderCollapse: 'collapse' }}>
+        <table style={{ width: '100%', minWidth: isMobile ? '1040px' : '100%', borderCollapse: 'collapse' }}>
           <thead style={{ backgroundColor: '#f9fafb' }}>
             <tr>
               <th style={{ padding: '12px 16px', textAlign: 'center', borderBottom: '1px solid #e5e7eb', width: '50px' }}>
@@ -73,6 +77,7 @@ export function DocumentReviewTable({
               </th>
               <th style={{ padding: '12px 16px', textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>文档名称</th>
               <th style={{ padding: '12px 16px', textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>状态</th>
+              <th style={{ padding: '12px 16px', textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>当前步骤</th>
               <th style={{ padding: '12px 16px', textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>知识库</th>
               <th style={{ padding: '12px 16px', textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>上传人</th>
               <th style={{ padding: '12px 16px', textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>上传时间</th>
@@ -83,9 +88,10 @@ export function DocumentReviewTable({
             {documents.map((doc) => {
               const isPending = doc.status === 'pending';
               const isLoading = actionLoading === doc.doc_id;
+              const canReviewCurrentStep = doc.can_review_current_step !== false;
               const statusLabel =
                 doc.status === 'pending'
-                  ? '待审核'
+                  ? '待审批'
                   : doc.status === 'approved'
                     ? '已通过'
                     : doc.status === 'rejected'
@@ -128,6 +134,7 @@ export function DocumentReviewTable({
                       {statusLabel}
                     </span>
                   </td>
+                  <td style={{ padding: '12px 16px', color: '#374151' }}>{doc.current_step_name || '-'}</td>
                   <td style={{ padding: '12px 16px', color: '#6b7280' }}>{doc.kb_id}</td>
                   <td style={{ padding: '12px 16px', color: '#6b7280' }}>{doc.uploaded_by_name || doc.uploaded_by}</td>
                   <td style={{ padding: '12px 16px', color: '#6b7280', fontSize: '0.9rem' }}>
@@ -176,7 +183,7 @@ export function DocumentReviewTable({
                           {downloadLoading === doc.doc_id ? '下载中...' : '下载'}
                         </button>
                       )}
-                      {isPending && isReviewer ? (
+                      {isPending && isReviewer && canReviewCurrentStep ? (
                         <>
                           <button
                             onClick={() => handleApprove(doc.doc_id)}
@@ -213,7 +220,9 @@ export function DocumentReviewTable({
                         </>
                       ) : (
                         <span style={{ color: '#9ca3af', fontSize: '0.85rem' }}>
-                          {doc.status === 'approved' ? '已处理' : '不可审核'}
+                          {doc.status === 'approved'
+                            ? '已处理'
+                            : (isPending && isReviewer ? '非当前审批人' : '不可审核')}
                         </span>
                       )}
                       {isAdmin && (

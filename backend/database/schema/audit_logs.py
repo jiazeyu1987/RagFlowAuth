@@ -97,6 +97,17 @@ def ensure_audit_events_table(conn: sqlite3.Connection) -> None:
                 department_id INTEGER,
                 department_name TEXT,
                 created_at_ms INTEGER NOT NULL,
+                resource_type TEXT,
+                resource_id TEXT,
+                event_type TEXT,
+                before_json TEXT,
+                after_json TEXT,
+                reason TEXT,
+                signature_id TEXT,
+                request_id TEXT,
+                client_ip TEXT,
+                prev_hash TEXT,
+                event_hash TEXT,
                 source TEXT,
                 doc_id TEXT,
                 filename TEXT,
@@ -113,6 +124,17 @@ def ensure_audit_events_table(conn: sqlite3.Connection) -> None:
     add_column_if_missing(conn, "audit_events", "company_name TEXT")
     add_column_if_missing(conn, "audit_events", "department_id INTEGER")
     add_column_if_missing(conn, "audit_events", "department_name TEXT")
+    add_column_if_missing(conn, "audit_events", "resource_type TEXT")
+    add_column_if_missing(conn, "audit_events", "resource_id TEXT")
+    add_column_if_missing(conn, "audit_events", "event_type TEXT")
+    add_column_if_missing(conn, "audit_events", "before_json TEXT")
+    add_column_if_missing(conn, "audit_events", "after_json TEXT")
+    add_column_if_missing(conn, "audit_events", "reason TEXT")
+    add_column_if_missing(conn, "audit_events", "signature_id TEXT")
+    add_column_if_missing(conn, "audit_events", "request_id TEXT")
+    add_column_if_missing(conn, "audit_events", "client_ip TEXT")
+    add_column_if_missing(conn, "audit_events", "prev_hash TEXT")
+    add_column_if_missing(conn, "audit_events", "event_hash TEXT")
 
     conn.execute("CREATE INDEX IF NOT EXISTS idx_audit_events_time ON audit_events(created_at_ms)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_audit_events_action ON audit_events(action)")
@@ -122,6 +144,12 @@ def ensure_audit_events_table(conn: sqlite3.Connection) -> None:
     conn.execute("CREATE INDEX IF NOT EXISTS idx_audit_events_department_id ON audit_events(department_id)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_audit_events_kb ON audit_events(kb_id)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_audit_events_kb_dataset_id ON audit_events(kb_dataset_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_audit_events_resource_type ON audit_events(resource_type)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_audit_events_resource_id ON audit_events(resource_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_audit_events_event_type ON audit_events(event_type)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_audit_events_signature_id ON audit_events(signature_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_audit_events_request_id ON audit_events(request_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_audit_events_event_hash ON audit_events(event_hash)")
 
     # Best-effort backfill from directory tables for existing rows (helps filtering immediately).
     try:

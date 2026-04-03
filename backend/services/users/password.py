@@ -1,8 +1,54 @@
+from __future__ import annotations
+
 import hashlib
+import hmac
+import secrets
+
+
+PASSWORD_HASH_SCHEME = "pbkdf2_sha256"
+PASSWORD_HASH_ITERATIONS = 600_000
+LEGACY_SHA256_HEX_LENGTH = 64
+
+
+def _pbkdf2_digest(password: str, *, salt: str, iterations: int) -> str:
+    return hashlib.pbkdf2_hmac(
+        "sha256",
+        password.encode("utf-8"),
+        salt.encode("utf-8"),
+        int(iterations),
+    ).hex()
 
 
 def hash_password(password: str) -> str:
-    return hashlib.sha256(password.encode()).hexdigest()
+    salt = secrets.token_hex(16)
+    digest = _pbkdf2_digest(password, salt=salt, iterations=PASSWORD_HASH_ITERATIONS)
+    return f"{PASSWORD_HASH_SCHEME}${PASSWORD_HASH_ITERATIONS}${salt}${digest}"
+
+
+def is_legacy_password_hash(password_hash: str | None) -> bool:
+    value = str(password_hash or "").strip().lower()
+    return len(value) == LEGACY_SHA256_HEX_LENGTH and all(ch in "0123456789abcdef" for ch in value)
+
+
+def verify_password(password: str, password_hash: str | None) -> tuple[bool, bool]:
+    stored = str(password_hash or "").strip()
+    if not stored:
+        return False, False
+
+    parts = stored.split("$")
+    if len(parts) == 4 and parts[0] == PASSWORD_HASH_SCHEME:
+        _, raw_iterations, salt, expected = parts
+        try:
+            iterations = int(raw_iterations)
+        except Exception:
+            return False, False
+        actual = _pbkdf2_digest(password, salt=salt, iterations=iterations)
+        return hmac.compare_digest(actual, expected), False
+
+    legacy = hashlib.sha256(password.encode("utf-8")).hexdigest()
+    if is_legacy_password_hash(stored) and hmac.compare_digest(legacy, stored.lower()):
+        return True, True
+    return False, False
 
 
 def validate_password_requirements(
@@ -52,4 +98,3 @@ def validate_password_requirements(
         return False
 
     return True
-

@@ -51,7 +51,7 @@ export const loadDocumentPreview = async ({ docId, dataset, title, getPreviewJso
     mark('excelDownload:done', { size: blob?.size });
     const { sheets } = await excelBlobToSheetsHtml(blob);
     mark('excelToHtml:done', { sheetCount: Object.keys(sheets || {}).length });
-    return { type: 'excel', filename: resolvedName, sheets, docId, dataset };
+    return { type: 'excel', filename: resolvedName, sheets, docId, dataset, watermark: data?.watermark || null };
   }
 
   if (isDocxFilename(resolvedName) && canUseDownload) {
@@ -61,7 +61,7 @@ export const loadDocumentPreview = async ({ docId, dataset, title, getPreviewJso
     const arrayBuffer = await blob.arrayBuffer();
     const result = await mammoth.convertToHtml({ arrayBuffer });
     mark('docxToHtml:done', { htmlLength: String(result?.value || '').length });
-    return { type: 'docx', filename: resolvedName, html: result.value || '', docId, dataset };
+    return { type: 'docx', filename: resolvedName, html: result.value || '', docId, dataset, watermark: data?.watermark || null };
   }
 
   mark('passthrough:done', { resolvedName, type: data?.type });

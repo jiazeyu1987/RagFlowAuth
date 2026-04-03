@@ -4,12 +4,16 @@ router = APIRouter()
 
 from .routes.upload import router as upload_router  # noqa: E402
 from .routes.documents import router as documents_router  # noqa: E402
+from .routes.retired import router as retired_router  # noqa: E402
+from .routes.versions import router as versions_router  # noqa: E402
 from .routes.files import router as files_router  # noqa: E402
 from .routes.admin import router as admin_router  # noqa: E402
 from .routes.directory import router as directory_router  # noqa: E402
 
 router.include_router(upload_router)
 router.include_router(documents_router)
+router.include_router(retired_router)
+router.include_router(versions_router)
 router.include_router(files_router)
 router.include_router(admin_router)
 router.include_router(directory_router)

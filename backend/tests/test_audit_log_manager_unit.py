@@ -16,11 +16,6 @@ class _User:
         self.department_id = 2
 
 
-class _UserStore:
-    def get_by_user_id(self, user_id):  # noqa: ARG002
-        return _User()
-
-
 class _Company:
     name = "Acme"
 
@@ -49,14 +44,35 @@ class TestAuditLogManagerUnit(unittest.TestCase):
             ctx = SimpleNamespace(
                 payload=SimpleNamespace(sub="u1"),
                 user=_User(),
-                deps=SimpleNamespace(user_store=_UserStore(), org_directory_store=_OrgStore()),
+                deps=SimpleNamespace(org_directory_store=_OrgStore()),
             )
-            mgr.log_ctx_event(ctx=ctx, action="paper_session_delete", source="paper_download", meta={"session_id": "s1"})
+            mgr.log_record_change(
+                ctx=ctx,
+                action="paper_session_delete",
+                source="paper_download",
+                resource_type="paper_session",
+                resource_id="s1",
+                event_type="delete",
+                before={"exists": True},
+                after={"exists": False},
+                reason="cleanup",
+                request_id="rid-1",
+                client_ip="127.0.0.1",
+                meta={"session_id": "s1"},
+            )
             data = mgr.list_events(action="paper_session_delete", limit=10)
 
             self.assertEqual(data["total"], 1)
-            self.assertEqual(data["items"][0]["action"], "paper_session_delete")
-            self.assertEqual(data["items"][0]["username"], "alice")
+            item = data["items"][0]
+            self.assertEqual(item["action"], "paper_session_delete")
+            self.assertEqual(item["username"], "alice")
+            self.assertEqual(item["resource_type"], "paper_session")
+            self.assertEqual(item["resource_id"], "s1")
+            self.assertEqual(item["request_id"], "rid-1")
+            self.assertEqual(item["before"], {"exists": True})
+            self.assertEqual(item["after"], {"exists": False})
+            self.assertEqual(item["meta"], {"session_id": "s1"})
+            self.assertIsNotNone(item["event_hash"])
         finally:
             cleanup_dir(td)
 

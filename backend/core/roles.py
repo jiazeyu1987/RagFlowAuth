@@ -1,2 +1,1 @@
-VALID_ROLES: set[str] = {"admin", "reviewer", "operator", "viewer", "guest"}
-
+VALID_ROLES: set[str] = {"admin", "sub_admin", "reviewer", "operator", "viewer", "guest"}

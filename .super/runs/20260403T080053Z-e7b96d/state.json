@@ -1,0 +1,40 @@
+{
+  "run_id": "20260403T080053Z-e7b96d",
+  "cwd": "D:/ProjectPackage/RagflowAuth",
+  "goal": "验证通知模块前端、后端实现完整性，并评估是否为独立模块",
+  "status": "completed",
+  "phase": "wave-1-complete",
+  "active_wave": 1,
+  "requested_workers": 3,
+  "validation_contract": {
+    "source_type": "script",
+    "source_path": "fronted/node_modules/.bin/esvalidate.cmd",
+    "commands": [
+      "fronted/node_modules/.bin/esvalidate.cmd"
+    ],
+    "reason": "Validation-like script name: esvalidate.cmd"
+  },
+  "started_at": "2026-04-03T08:00:53Z",
+  "updated_at": "2026-04-03T08:21:09Z",
+  "last_error": "",
+  "workers": [
+    {
+      "worker_id": "worker-01",
+      "path": ".super/runs/20260403T080053Z-e7b96d/workers/worker-01",
+      "agent_id": "019d5262-1485-75d0-a095-652adf3c6f41",
+      "status": "passed"
+    },
+    {
+      "worker_id": "worker-02",
+      "path": ".super/runs/20260403T080053Z-e7b96d/workers/worker-02",
+      "agent_id": "019d5262-14a5-7160-829e-d963b26a199b",
+      "status": "passed"
+    },
+    {
+      "worker_id": "worker-03",
+      "path": ".super/runs/20260403T080053Z-e7b96d/workers/worker-03",
+      "agent_id": "019d5262-15a4-7da1-a61f-fa187a259303",
+      "status": "passed"
+    }
+  ]
+}

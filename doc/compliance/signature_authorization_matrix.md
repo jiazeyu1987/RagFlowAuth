@@ -1,0 +1,34 @@
+# 电子签名责任与授权矩阵
+
+版本: v1.0  
+更新时间: 2026-04-02
+
+## 1. 目的
+
+定义 FDA-01 在仓库内的责任闭环: 谁可以签、何时可以签、系统如何阻断未授权签名、以及哪些证据仍需线下归档。
+
+## 2. 授权矩阵
+
+| 业务动作 | 路由/模块 | 允许签名人 | 关键系统校验 | 关键证据 |
+|---|---|---|---|---|
+| 审批步骤通过 | `backend/app/modules/review/routes/approve.py` | 当前步骤被授权审批人 | `approval_actor_not_assigned_to_step`、`signature_context_user_mismatch`、`signature_user_disabled`、`signature_user_inactive` | `backend.tests.test_review_assignment_integration_unit`, `backend.tests.test_review_signature_integration.py` |
+| 驳回 | `backend/app/modules/review/routes/reject.py` | 当前步骤被授权审批人 | `approval_actor_not_assigned_to_step`、`signature_user_disabled`、`signature_user_inactive` | `backend.tests.test_review_assignment_integration_unit` |
+| 覆盖审批 | `backend/app/modules/review/routes/overwrite.py` | 当前最终步骤被授权审批人 | `approval_actor_not_assigned_to_step`、`signature_user_disabled`、`signature_user_inactive` | `backend.tests.test_review_signature_integration.py` |
+
+## 3. 签名责任字段
+
+签名记录必须至少证明:
+
+- 签名人
+- 签名用户名
+- 签名时间
+- 目标动作
+- 签名含义
+- 签名原因
+- 业务对象与签名前后状态
+
+## 4. 仓库外残余项
+
+- 离岗/转岗签名权限回收的 HR/QA 线下记录
+- 账号唯一性与禁共用培训签收
+- 线下批准版责任矩阵

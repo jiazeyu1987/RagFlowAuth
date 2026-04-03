@@ -28,6 +28,11 @@ class User:
     created_at_ms: int = 0
     last_login_at_ms: Optional[int] = None
     created_by: Optional[str] = None
+    managed_kb_root_node_id: Optional[str] = None
+    password_changed_at_ms: Optional[int] = None
+    credential_fail_count: int = 0
+    credential_fail_window_started_at_ms: Optional[int] = None
+    credential_locked_until_ms: Optional[int] = None
 
     def __post_init__(self):
         if self.group_ids is None:

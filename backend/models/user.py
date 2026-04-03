@@ -21,6 +21,7 @@ class UserCreate(BaseModel):
     can_change_password: bool = True
     disable_login_enabled: bool = False
     disable_login_until_ms: Optional[int] = None
+    managed_kb_root_node_id: Optional[str] = None
 
 
 class UserUpdate(BaseModel):
@@ -37,6 +38,7 @@ class UserUpdate(BaseModel):
     can_change_password: Optional[bool] = None
     disable_login_enabled: Optional[bool] = None
     disable_login_until_ms: Optional[int] = None
+    managed_kb_root_node_id: Optional[str] = None
 
 
 class UserResponse(BaseModel):
@@ -64,3 +66,5 @@ class UserResponse(BaseModel):
     active_session_last_activity_at_ms: Optional[int] = None
     created_at_ms: int
     last_login_at_ms: Optional[int] = None
+    managed_kb_root_node_id: Optional[str] = None
+    managed_kb_root_path: Optional[str] = None

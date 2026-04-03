@@ -4,10 +4,10 @@ from dataclasses import dataclass
 from typing import Annotated, Any
 
 from authx import TokenPayload
-from fastapi import Depends, HTTPException
+from fastapi import Depends, HTTPException, Request
 import sqlite3
 
-from backend.app.core.auth import get_current_payload, get_deps
+from backend.app.core.auth import get_current_payload, resolve_scoped_deps
 from backend.app.core.permission_resolver import PermissionSnapshot, resolve_permissions
 from backend.app.dependencies import AppDependencies
 
@@ -21,9 +21,15 @@ class AuthContext:
 
 
 def get_auth_context(
+    request: Request,
     payload: TokenPayload = Depends(get_current_payload),
-    deps: AppDependencies = Depends(get_deps),
 ) -> AuthContext:
+    deps = resolve_scoped_deps(
+        request,
+        payload=payload,
+        user=getattr(getattr(request, "state", None), "authenticated_user", None),
+        force_tenant_scope=True,
+    )
     try:
         user = deps.user_store.get_by_user_id(payload.sub)
     except sqlite3.OperationalError as e:

@@ -39,15 +39,25 @@ adminTest('data security retention save persists and re-renders @regression @adm
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ jobs: [] }) });
   });
 
+  await page.route('**/api/admin/data-security/restore-drills**', async (route) => {
+    if (route.request().method() !== 'GET') return route.fallback();
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ items: [], count: 0 }) });
+  });
+
   await page.goto('/data-security');
 
   const retentionInput = page.getByRole('spinbutton').first();
   await expect(retentionInput).toHaveValue('30');
   await retentionInput.fill('42');
+  page.once('dialog', async (dialog) => {
+    expect(dialog.type()).toBe('prompt');
+    await dialog.accept('Adjust retention for audit requirement');
+  });
   await page.getByTestId('ds-retention-save').click();
 
   expect(capturedPut).toBeTruthy();
   expect(capturedPut.backup_retention_max).toBe(42);
+  expect(capturedPut.change_reason).toBe('Adjust retention for audit requirement');
 
   await page.reload();
   await expect(page.getByRole('spinbutton').first()).toHaveValue('42');

@@ -1,6 +1,7 @@
 import React from 'react';
 
 export function DocumentReviewToolbar({
+  assignedToMeOnly,
   batchDownloadLoading,
   batchReviewLoading,
   canDownload,
@@ -16,6 +17,7 @@ export function DocumentReviewToolbar({
   loadingDatasets,
   selectedDataset,
   selectedDocIds,
+  setAssignedToMeOnly,
   setSelectedDataset,
 }) {
   const allSelected = documents.length > 0 && selectedDocIds.size === documents.length;
@@ -152,6 +154,23 @@ export function DocumentReviewToolbar({
             </>
           )}
         </select>
+        <button
+          type="button"
+          data-testid="docs-assigned-filter"
+          onClick={() => setAssignedToMeOnly((previous) => !previous)}
+          style={{
+            padding: '8px 16px',
+            backgroundColor: assignedToMeOnly ? '#1d4ed8' : '#e5e7eb',
+            color: assignedToMeOnly ? 'white' : '#111827',
+            border: 'none',
+            borderRadius: '4px',
+            cursor: 'pointer',
+            fontSize: '0.9rem',
+            width: isMobile ? '100%' : 'auto',
+          }}
+        >
+          {assignedToMeOnly ? '待我审批' : '全部待审'}
+        </button>
       </div>
     </div>
   );

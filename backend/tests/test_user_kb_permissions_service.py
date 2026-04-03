@@ -64,7 +64,7 @@ class TestUserKbPermissionsResolver(unittest.TestCase):
         snapshot = resolve_permissions(deps, _User(role="viewer", group_ids=[1, 2]))
         self.assertEqual(sorted(snapshot.kb_names), ["kb_a", "kb_b"])
 
-    def test_admin_gets_all_scope(self):
+    def test_admin_has_no_default_kb_scope(self):
         deps = _Deps(groups={}, user_kb_grants=[])
         snapshot = resolve_permissions(deps, _User(role="admin"))
-        self.assertEqual(snapshot.kb_scope, ResourceScope.ALL)
+        self.assertEqual(snapshot.kb_scope, ResourceScope.NONE)

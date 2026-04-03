@@ -39,6 +39,14 @@ def _resolve_accessible_chats(*, deps: Any, snapshot: Any) -> set[str]:
 
 def build_auth_me_payload(*, deps: Any, user: Any, snapshot: Any) -> dict[str, Any]:
     permissions = snapshot.permissions_dict()
+    managed_kb_root_path = None
+    management_manager = getattr(deps, "knowledge_management_manager", None)
+    if management_manager is not None:
+        try:
+            scope = management_manager.get_management_scope(user)
+            managed_kb_root_path = getattr(scope, "root_node_path", None)
+        except Exception:
+            managed_kb_root_path = None
 
     # Debug: trace where KB visibility comes from (permission groups + per-user grants).
     try:
@@ -98,6 +106,8 @@ def build_auth_me_payload(*, deps: Any, user: Any, snapshot: Any) -> dict[str, A
             if getattr(user, "disable_login_until_ms", None) is not None
             else None
         ),
+        "managed_kb_root_node_id": getattr(user, "managed_kb_root_node_id", None),
+        "managed_kb_root_path": managed_kb_root_path,
         # Legacy field: dataset names (for display).
         "accessible_kbs": sorted(accessible_kb_names_set),
         # New field: dataset ids (for API operations / stage-3 migration).

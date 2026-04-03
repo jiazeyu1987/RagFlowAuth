@@ -31,6 +31,11 @@ adminTest('data security run-full displays backend validation error (mock) @regr
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ jobs: [] }) });
   });
 
+  await page.route('**/api/admin/data-security/restore-drills**', async (route) => {
+    if (route.request().method() !== 'GET') return route.fallback();
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ items: [], count: 0 }) });
+  });
+
   await page.route('**/api/admin/data-security/backup/run-full', async (route) => {
     if (route.request().method() !== 'POST') return route.fallback();
     await route.fulfill({

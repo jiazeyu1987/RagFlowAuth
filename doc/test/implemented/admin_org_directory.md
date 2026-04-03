@@ -1,4 +1,4 @@
-# 管理端 组织架构（/org-directory）（已实现）
+# 管理端组织架构（org-directory）（已实现）
 
 已实现 spec（mock）：
 - 审计：`fronted/e2e/tests/admin.org-directory.audit.spec.js`
@@ -7,8 +7,11 @@
 - 删除取消：`fronted/e2e/tests/admin.org-directory.delete.cancel.spec.js`
 - 编辑取消：`fronted/e2e/tests/admin.org-directory.edit.cancel.spec.js`
 - 审计刷新失败：`fronted/e2e/tests/admin.org-directory.audit.refresh.error.spec.js`
+- 公司维度数据隔离（mock 回归）：`fronted/e2e/tests/company.data-isolation.spec.js`
 
 已实现 spec（integration）：
-- 新增 → 审计可见：`fronted/e2e/tests/integration.org-directory.audit.spec.js`
+- 新增 -> 审计可见：`fronted/e2e/tests/integration.org-directory.audit.spec.js`
 - 编辑 + 删除：`fronted/e2e/tests/integration.org-directory.edit-delete.spec.js`
 
+关联需求 ID: `R9`
+关联门禁: `T-P4-1`

@@ -25,11 +25,10 @@ class TestUploadSettingsStoreUnit(unittest.TestCase):
         settings_obj = self.store.update_allowed_extensions(["PDF", ".txt", " jpg ", ".PDF"])
         self.assertEqual(settings_obj.allowed_extensions, [".jpg", ".pdf", ".txt"])
 
-    def test_add_allowed_extension_if_missing(self):
-        settings_obj = self.store.add_allowed_extension_if_missing(".ppt")
-        self.assertIn(".ppt", settings_obj.allowed_extensions)
-        again = self.store.add_allowed_extension_if_missing("ppt")
-        self.assertEqual(settings_obj.allowed_extensions, again.allowed_extensions)
+    def test_update_requires_change_reason_when_change_metadata_is_partial(self):
+        with self.assertRaises(ValueError) as cm:
+            self.store.update_allowed_extensions([".pdf", ".ppt"], changed_by="admin-1")
+        self.assertEqual(str(cm.exception), "change_reason_required")
 
 
 if __name__ == "__main__":

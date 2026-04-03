@@ -2,10 +2,10 @@ $ErrorActionPreference = 'Stop'
 
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $backendPort = 8001
-$frontendPort = 3000
-$openUrl = 'http://127.0.0.1:3000/chat'
+$frontendPort = 3001
+$openUrl = 'http://127.0.0.1:3001/chat'
 $backendHealthUrl = 'http://127.0.0.1:8001/health'
-$frontendHealthUrl = 'http://127.0.0.1:3000'
+$frontendHealthUrl = 'http://127.0.0.1:3001'
 
 function Get-PortPids {
     param([int]$Port)

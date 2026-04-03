@@ -24,6 +24,20 @@ export const policyKnowledgeApiMethods = {
     return response.json();
   },
 
+  async listDocumentVersions(docId) {
+    const response = await this.fetchWithAuth(
+      authBackendUrl(`/api/knowledge/documents/${encodeURIComponent(docId)}/versions`),
+      { method: 'GET' }
+    );
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(error.detail || 'Failed to list document versions');
+    }
+
+    return response.json();
+  },
+
   async uploadDocument(file, kbId = '展厅') {
     console.log('[authClient] Step 6 - uploadDocument called');
     console.log('[authClient] Step 7 - Parameters:', {

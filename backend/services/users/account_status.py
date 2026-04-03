@@ -16,6 +16,15 @@ def resolve_login_block(user: Any, *, now_ms: int | None = None) -> tuple[bool, 
     if status and status != "active":
         return True, "account_inactive"
 
+    raw_credential_locked_until = getattr(user, "credential_locked_until_ms", None)
+    if raw_credential_locked_until is not None:
+        try:
+            credential_locked_until_ms = int(raw_credential_locked_until)
+        except Exception:
+            credential_locked_until_ms = None
+        if credential_locked_until_ms is not None and now < credential_locked_until_ms:
+            return True, "credentials_locked"
+
     disable_enabled = bool(getattr(user, "disable_login_enabled", False))
     if not disable_enabled:
         return False, None

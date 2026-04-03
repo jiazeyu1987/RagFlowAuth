@@ -21,13 +21,43 @@ const MOBILE_BREAKPOINT = 768;
 
 const getDatasetValue = (dataset) => dataset?.name || dataset?.id || '';
 
-const getDatasetLabel = (dataset) => String(dataset?.name || dataset?.id || '').trim();
+const getDatasetLabel = (dataset) => {
+  const name = String(dataset?.name || dataset?.id || '').trim();
+  const nodePath = String(dataset?.node_path || '').trim();
+  if (!name) return '';
+  if (!nodePath || nodePath === '/') return name;
+  return `${nodePath}/${name}`;
+};
 
 const normalizeKbRef = (value) => String(value || '').trim();
 
-const filterDatasetsByVisibility = (allDatasets, visibleKbRefs, isAdminUser) => {
+const mergeDatasetDirectoryInfo = (datasetsPayload, directoryPayload) => {
+  const list = Array.isArray(datasetsPayload) ? datasetsPayload : [];
+  const directoryDatasets = Array.isArray(directoryPayload?.datasets) ? directoryPayload.datasets : [];
+  const byId = new Map();
+  const byName = new Map();
+
+  directoryDatasets.forEach((dataset) => {
+    const nodePath = String(dataset?.node_path || '').trim();
+    const id = normalizeKbRef(dataset?.id);
+    const name = normalizeKbRef(dataset?.name);
+    if (id) byId.set(id, nodePath);
+    if (name) byName.set(name, nodePath);
+  });
+
+  return list.map((dataset) => {
+    const id = normalizeKbRef(dataset?.id);
+    const name = normalizeKbRef(dataset?.name);
+    const nodePath = byId.get(id) || byName.get(name) || dataset?.node_path || '/';
+    return {
+      ...dataset,
+      node_path: nodePath,
+    };
+  });
+};
+
+const filterDatasetsByVisibility = (allDatasets, visibleKbRefs) => {
   const list = Array.isArray(allDatasets) ? allDatasets : [];
-  if (isAdminUser) return list;
   if (visibleKbRefs.size === 0) return [];
 
   return list.filter((dataset) => {
@@ -39,8 +69,8 @@ const filterDatasetsByVisibility = (allDatasets, visibleKbRefs, isAdminUser) => 
 
 const KnowledgeUpload = () => {
   const navigate = useNavigate();
-  const { user, accessibleKbs, loading: authLoading } = useAuth();
-  const canManageExtensions = user?.role === 'admin';
+  const { accessibleKbs, loading: authLoading, canViewKbConfig } = useAuth();
+  const canManageExtensions = canViewKbConfig();
   const [isMobile, setIsMobile] = useState(() => {
     if (typeof window === 'undefined') return false;
     return window.innerWidth <= MOBILE_BREAKPOINT;
@@ -115,14 +145,17 @@ const KnowledgeUpload = () => {
 
       try {
         setLoadingDatasets(true);
-        const data = await knowledgeApi.listRagflowDatasets();
-        const allDatasets = Array.isArray(data?.datasets) ? data.datasets : [];
+        const [data, directoryData] = await Promise.all([
+          knowledgeApi.listRagflowDatasets(),
+          knowledgeApi.listKnowledgeDirectories(),
+        ]);
+        const allDatasets = mergeDatasetDirectoryInfo(data?.datasets, directoryData);
         const visibleKbRefs = new Set(
           (Array.isArray(accessibleKbs) ? accessibleKbs : [])
             .map(normalizeKbRef)
             .filter(Boolean)
         );
-        const list = filterDatasetsByVisibility(allDatasets, visibleKbRefs, user?.role === 'admin');
+        const list = filterDatasetsByVisibility(allDatasets, visibleKbRefs);
         const datasetValues = new Set(
           list
             .map((dataset) => getDatasetValue(dataset))
@@ -147,7 +180,7 @@ const KnowledgeUpload = () => {
     };
 
     fetchDatasets();
-  }, [accessibleKbs, authLoading, user?.role, user?.user_id]);
+  }, [accessibleKbs, authLoading]);
 
   useEffect(() => {
     const fetchAllowedExtensions = async () => {
@@ -208,6 +241,10 @@ const KnowledgeUpload = () => {
       setError('请选择文件');
       return;
     }
+    if (selectedFiles.length === 0) {
+      setError('请选择文件');
+      return;
+    }
 
     setUploading(true);
     setUploadProgress(null);
@@ -225,7 +262,11 @@ const KnowledgeUpload = () => {
         });
         try {
           const result = await knowledgeApi.uploadDocument(file, kbId);
-          results.push({ ok: true, filename: result?.filename || getDisplayPath(file) });
+          results.push({
+            ok: true,
+            filename: getDisplayPath(file),
+            requestId: result?.request_id || '',
+          });
         } catch (err) {
           results.push({ ok: false, filename: getDisplayPath(file), error: err?.message || '上传失败' });
         }
@@ -234,11 +275,24 @@ const KnowledgeUpload = () => {
       const okCount = results.filter((item) => item.ok).length;
       const failCount = results.length - okCount;
       if (failCount === 0) {
+        const requestIds = results.map((item) => item.requestId).filter(Boolean);
+        setSuccess(`申请已提交：成功 ${okCount} 个${requestIds.length > 0 ? `，申请单 ${requestIds.join(', ')}` : ''}`);
+        setSelectedFiles([]);
+        setTimeout(() => navigate('/documents'), 1200);
+        return;
+        // eslint-disable-next-line no-unreachable
         setSuccess(`上传完成：成功 ${okCount} 个，等待审核`);
         setSelectedFiles([]);
         setTimeout(() => navigate('/documents'), 1200);
       } else {
         const firstFail = results.find((item) => !item.ok);
+        setError(
+          `申请提交完成：成功 ${okCount} 个，失败 ${failCount} 个${
+            firstFail ? `。例如 ${firstFail.filename}: ${firstFail.error}` : ''
+          }`
+        );
+        return;
+        // eslint-disable-next-line no-unreachable
         setError(`上传完成：成功 ${okCount} 个，失败 ${failCount} 个${firstFail ? `。（例如：${firstFail.filename}：${firstFail.error}）` : ''}`);
       }
     } catch (err) {
@@ -308,15 +362,24 @@ const KnowledgeUpload = () => {
       setExtensionsMessage({ type: 'error', text: '至少保留一个允许上传的后缀' });
       return;
     }
+    const changeReason = window.prompt('请输入本次上传后缀配置变更原因');
+    if (changeReason === null) {
+      return;
+    }
+    const trimmedReason = String(changeReason || '').trim();
+    if (!trimmedReason) {
+      setExtensionsMessage({ type: 'error', text: '变更原因不能为空' });
+      return;
+    }
     setSavingExtensions(true);
     setExtensionsMessage(null);
     try {
-      const payload = await knowledgeApi.updateAllowedUploadExtensions(allowedExtensions);
+      const payload = await knowledgeApi.updateAllowedUploadExtensions(allowedExtensions, trimmedReason);
       const next = Array.isArray(payload?.allowed_extensions)
         ? payload.allowed_extensions.map(normalizeExtension).filter(Boolean)
         : allowedExtensions;
       setAllowedExtensions(Array.from(new Set(next)).sort());
-      setExtensionsMessage({ type: 'success', text: '文件后缀配置已保存，后续上传立即生效' });
+      setExtensionsMessage({ type: 'success', text: '文件后缀配置已保存并记录变更原因，后续上传立即生效' });
     } catch (err) {
       setExtensionsMessage({ type: 'error', text: err.message || '保存文件后缀配置失败' });
     } finally {

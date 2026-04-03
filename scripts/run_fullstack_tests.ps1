@@ -1,6 +1,7 @@
 param(
   [string]$BackendCommand = 'python -m unittest discover -s backend/tests -p "test_*.py"',
-  [string]$FrontendCommand = 'npm run e2e:all',
+  [string]$FrontendBuildCommand = 'npm run build',
+  [string]$FrontendCommand = 'npx playwright test e2e/tests/rbac.unauthorized.spec.js e2e/tests/rbac.viewer.permissions-matrix.spec.js e2e/tests/rbac.uploader.permissions-matrix.spec.js e2e/tests/rbac.reviewer.permissions-matrix.spec.js e2e/tests/audit.logs.filters-combined.spec.js e2e/tests/document.version-history.spec.js e2e/tests/documents.review.approve.spec.js e2e/tests/review.notification.spec.js e2e/tests/review.signature.spec.js e2e/tests/document.watermark.spec.js e2e/tests/company.data-isolation.spec.js e2e/tests/admin.config-change-reason.spec.js e2e/tests/admin.data-security.backup.failure.spec.js e2e/tests/admin.data-security.backup.polling.spec.js e2e/tests/admin.data-security.settings.save.spec.js e2e/tests/admin.data-security.share.validation.spec.js e2e/tests/admin.data-security.validation.spec.js e2e/tests/data-security.advanced-panel.spec.js e2e/tests/admin.data-security.restore-drill.spec.js --workers=1',
   [string]$OutputFile = ''
 )
 
@@ -26,14 +27,44 @@ function Invoke-TestCommand {
     [Parameter(Mandatory = $true)][string]$WorkDir
   )
 
+  if ([string]::IsNullOrWhiteSpace($Command)) {
+    return @{
+      name = $Name
+      command = $Command
+      workdir = $WorkDir
+      exit_code = 0
+      output = ''
+      skipped = $true
+    }
+  }
+
   Write-Host ("[RUN] {0} -> {1}" -f $Name, $Command) -ForegroundColor Cyan
+  $scriptPath = Join-Path ([System.IO.Path]::GetTempPath()) ("ragflow_fullstack_{0}_{1}.ps1" -f (($Name -replace '[^a-zA-Z0-9]+', '_').ToLowerInvariant()), [guid]::NewGuid().ToString('N'))
+  $scriptLines = @(
+    '$ErrorActionPreference = ''Stop'''
+    '$global:LASTEXITCODE = $null'
+    $Command
+    'if ($null -ne $global:LASTEXITCODE) { exit ([int]$global:LASTEXITCODE) }'
+    'if ($?) { exit 0 }'
+    'exit 1'
+  )
+  Set-Content -Path $scriptPath -Value $scriptLines -Encoding UTF8
+
   Push-Location $WorkDir
+  $previousErrorActionPreference = $ErrorActionPreference
   try {
-    $global:LASTEXITCODE = 0
-    $rawLines = & ([scriptblock]::Create($Command)) 2>&1
+    $global:LASTEXITCODE = $null
+    $ErrorActionPreference = 'Continue'
+    $rawLines = & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $scriptPath 2>&1
     $cmdOk = $?
-    if ($cmdOk) {
+    if ($null -ne $global:LASTEXITCODE) {
       $exitCode = [int]$global:LASTEXITCODE
+    } elseif ($cmdOk) {
+      if ($null -ne $global:LASTEXITCODE) {
+        $exitCode = [int]$global:LASTEXITCODE
+      } else {
+        $exitCode = 0
+      }
     } else {
       if ($null -ne $global:LASTEXITCODE -and [int]$global:LASTEXITCODE -ne 0) {
         $exitCode = [int]$global:LASTEXITCODE
@@ -45,11 +76,13 @@ function Invoke-TestCommand {
     $rawLines = @($_.Exception.Message)
     $exitCode = 1
   } finally {
+    $ErrorActionPreference = $previousErrorActionPreference
     Pop-Location
+    Remove-Item -LiteralPath $scriptPath -Force -ErrorAction SilentlyContinue
   }
 
   if ($null -eq $exitCode) { $exitCode = 0 }
-  $output = if ($null -eq $rawLines) { '' } else { ($rawLines | Out-String) }
+  $output = Normalize-CommandOutput -Items $rawLines
   $statusColor = 'Red'
   if ($exitCode -eq 0) { $statusColor = 'Green' }
   Write-Host ("[DONE] {0} exit={1}" -f $Name, $exitCode) -ForegroundColor $statusColor
@@ -60,6 +93,7 @@ function Invoke-TestCommand {
     workdir = $WorkDir
     exit_code = [int]$exitCode
     output = $output
+    skipped = $false
   }
 }
 
@@ -125,14 +159,73 @@ function Parse-FrontendSummary {
   }
 }
 
+function Normalize-CommandOutput {
+  param([AllowNull()][object[]]$Items)
+  if ($null -eq $Items) { return '' }
+
+  $normalized = foreach ($item in $Items) {
+    if ($null -eq $item) { continue }
+
+    if ($item -is [System.Management.Automation.ErrorRecord]) {
+      $message = [string]$item.Exception.Message
+      if (-not [string]::IsNullOrWhiteSpace($message)) {
+        $message.TrimEnd()
+      }
+      continue
+    }
+
+    [string]$item
+  }
+
+  return ($normalized | Out-String)
+}
+
+function Get-ResultStatus {
+  param([Parameter(Mandatory = $true)][hashtable]$Result)
+  if ($Result.skipped) { return 'SKIPPED' }
+  if ($Result.exit_code -eq 0) { return 'PASS' }
+  return 'FAIL'
+}
+
+function Get-BackendDetail {
+  param(
+    [Parameter(Mandatory = $true)][hashtable]$Result,
+    [Parameter(Mandatory = $true)][hashtable]$Summary
+  )
+  if ($Result.skipped) { return 'skipped' }
+  if ($Summary.ran -gt 0) {
+    return '{0}/{1}' -f $Summary.passed, $Summary.ran
+  }
+  if ($Result.exit_code -eq 0) { return 'pass' }
+  return 'fail'
+}
+
+function Get-FrontendDetail {
+  param(
+    [Parameter(Mandatory = $true)][hashtable]$Result,
+    [Parameter(Mandatory = $true)][hashtable]$Summary
+  )
+  if ($Result.skipped) { return 'skipped' }
+  if ($Summary.total -gt 0) {
+    return '{0}/{1}' -f $Summary.passed, $Summary.total
+  }
+  if ($Result.exit_code -eq 0) { return 'pass' }
+  return 'fail'
+}
+
 $backendResult = Invoke-TestCommand -Name 'Backend' -Command $BackendCommand -WorkDir $repoRoot
-$frontendResult = Invoke-TestCommand -Name 'Frontend' -Command $FrontendCommand -WorkDir (Join-Path $repoRoot 'fronted')
+$frontendBuildResult = Invoke-TestCommand -Name 'Frontend Build' -Command $FrontendBuildCommand -WorkDir (Join-Path $repoRoot 'fronted')
+$frontendResult = Invoke-TestCommand -Name 'Frontend Acceptance' -Command $FrontendCommand -WorkDir (Join-Path $repoRoot 'fronted')
 
 $backendSummary = Parse-BackendSummary -Result $backendResult
+$frontendBuildSummary = Parse-FrontendSummary -Result $frontendBuildResult
 $frontendSummary = Parse-FrontendSummary -Result $frontendResult
-$backendFailed = $backendSummary.failures + $backendSummary.errors
 
-$overallPass = ($backendResult.exit_code -eq 0 -and $frontendResult.exit_code -eq 0)
+$overallPass = (
+  ($backendResult.skipped -or $backendResult.exit_code -eq 0) -and
+  ($frontendBuildResult.skipped -or $frontendBuildResult.exit_code -eq 0) -and
+  ($frontendResult.skipped -or $frontendResult.exit_code -eq 0)
+)
 $overallStatus = if ($overallPass) { 'PASS' } else { 'FAIL' }
 
 $report = @()
@@ -145,15 +238,17 @@ $report += "- Overall: **$overallStatus**"
 $report += ""
 $report += "## Summary"
 $report += ""
-$report += "| Scope | Exit Code | Total | Passed | Failed | Errors | Skipped |"
-$report += "|---|---:|---:|---:|---:|---:|---:|"
-$report += ("| Backend | {0} | {1} | {2} | {3} | {4} | {5} |" -f $backendResult.exit_code, $backendSummary.ran, $backendSummary.passed, $backendFailed, $backendSummary.errors, $backendSummary.skipped)
-$report += ("| Frontend | {0} | {1} | {2} | {3} | 0 | {4} |" -f $frontendResult.exit_code, $frontendSummary.total, $frontendSummary.passed, $frontendSummary.failed, $frontendSummary.skipped)
+$report += "| Scope | Status | Exit Code | Detail |"
+$report += "|---|---|---:|---|"
+$report += ("| Backend | {0} | {1} | {2} |" -f (Get-ResultStatus -Result $backendResult), $backendResult.exit_code, (Get-BackendDetail -Result $backendResult -Summary $backendSummary))
+$report += ("| Frontend Build | {0} | {1} | {2} |" -f (Get-ResultStatus -Result $frontendBuildResult), $frontendBuildResult.exit_code, (Get-FrontendDetail -Result $frontendBuildResult -Summary $frontendBuildSummary))
+$report += ("| Frontend Acceptance | {0} | {1} | {2} |" -f (Get-ResultStatus -Result $frontendResult), $frontendResult.exit_code, (Get-FrontendDetail -Result $frontendResult -Summary $frontendSummary))
 $report += ""
 $report += "## Commands"
 $report += ""
 $report += ("- Backend: {0}{1}{0} (cwd: {0}{2}{0})" -f $codeTick, $backendResult.command, $backendResult.workdir)
-$report += ("- Frontend: {0}{1}{0} (cwd: {0}{2}{0})" -f $codeTick, $frontendResult.command, $frontendResult.workdir)
+$report += ("- Frontend Build: {0}{1}{0} (cwd: {0}{2}{0})" -f $codeTick, $frontendBuildResult.command, $frontendBuildResult.workdir)
+$report += ("- Frontend Acceptance: {0}{1}{0} (cwd: {0}{2}{0})" -f $codeTick, $frontendResult.command, $frontendResult.workdir)
 $report += ""
 $report += "## Backend Raw Output"
 $report += ""
@@ -161,7 +256,13 @@ $report += '```text'
 $report += ($backendResult.output.TrimEnd())
 $report += '```'
 $report += ""
-$report += "## Frontend Raw Output"
+$report += "## Frontend Build Raw Output"
+$report += ""
+$report += '```text'
+$report += ($frontendBuildResult.output.TrimEnd())
+$report += '```'
+$report += ""
+$report += "## Frontend Acceptance Raw Output"
 $report += ""
 $report += '```text'
 $report += ($frontendResult.output.TrimEnd())

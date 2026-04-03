@@ -53,6 +53,11 @@ adminTest('data security run backup polls progress until done @regression @admin
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ jobs }) });
   });
 
+  await page.route('**/api/admin/data-security/restore-drills**', async (route) => {
+    if (route.request().method() !== 'GET') return route.fallback();
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ items: [], count: 0 }) });
+  });
+
   await page.route('**/api/admin/data-security/backup/jobs/1', async (route) => {
     if (route.request().method() !== 'GET') return route.fallback();
     jobGetCount += 1;
@@ -80,4 +85,3 @@ adminTest('data security run backup polls progress until done @regression @admin
   // After completion, list refresh should have occurred and history should include job row.
   await expect(page.getByTestId('ds-job-row-1')).toBeVisible();
 });
-

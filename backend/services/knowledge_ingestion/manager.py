@@ -109,22 +109,8 @@ class KnowledgeIngestionManager:
         if upload_settings_store is not None:
             try:
                 allowed_extensions = set(upload_settings_store.get().allowed_extensions)
-            except Exception:
-                allowed_extensions = set(settings.ALLOWED_EXTENSIONS)
-
-        # Auto-heal: append missing suffix to DB settings automatically so
-        # frontend changes do not require separate backend admin intervention.
-        if file_ext not in allowed_extensions and upload_settings_store is not None:
-            try:
-                refreshed = upload_settings_store.add_allowed_extension_if_missing(file_ext)
-                allowed_extensions = set(refreshed.allowed_extensions)
-                logger.info(
-                    "upload_settings_auto_extended ext=%s total=%s",
-                    file_ext,
-                    len(allowed_extensions),
-                )
             except Exception as e:
-                logger.warning("upload_settings_auto_extend_failed ext=%s err=%s", file_ext, e)
+                raise KnowledgeIngestionError(f"upload_settings_unavailable:{e}", status_code=500) from e
 
         if file_ext not in allowed_extensions:
             raise KnowledgeIngestionError("unsupported_file_type", status_code=400)
@@ -171,4 +157,15 @@ class KnowledgeIngestionManager:
                 )
             except Exception:
                 pass
+        workflow_service = getattr(deps, "approval_workflow_service", None)
+        if workflow_service is not None:
+            try:
+                workflow_service.notify_current_step(doc=doc, actor=ctx.payload.sub, notes=None)
+            except Exception:
+                logger.warning(
+                    "Failed to enqueue initial approval notification: doc_id=%s kb_id=%s",
+                    getattr(doc, "doc_id", None),
+                    getattr(doc, "kb_id", None),
+                    exc_info=True,
+                )
         return doc

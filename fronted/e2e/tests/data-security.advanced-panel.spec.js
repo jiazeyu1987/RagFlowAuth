@@ -31,6 +31,11 @@ adminTest('data security advanced settings are gated by query flag @regression @
     return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ jobs: [] }) });
   });
 
+  await page.route('**/api/admin/data-security/restore-drills**', async (route) => {
+    if (route.request().method() !== 'GET') return route.fallback();
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ items: [], count: 0 }) });
+  });
+
   await page.goto('/data-security');
   await expect(page.getByTestId('data-security-page')).toBeVisible();
   await expect(page.getByTestId('ds-target-mode')).toHaveCount(0);

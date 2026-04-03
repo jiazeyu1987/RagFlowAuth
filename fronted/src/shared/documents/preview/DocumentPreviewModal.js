@@ -5,6 +5,7 @@ import { isMarkdownFilename, MarkdownPreview } from '../../preview/markdownPrevi
 import { loadDocumentPreview } from '../../preview/ragflowPreviewManager';
 import documentClient, { DOCUMENT_SOURCE } from '../documentClient';
 import OnlyOfficeViewer from './OnlyOfficeViewer';
+import { ControlledPreviewBadge, WatermarkedPreviewFrame } from './watermarkOverlay';
 import {
   ONLYOFFICE_EXTENSIONS,
   base64ToBytes,
@@ -26,6 +27,8 @@ export const DocumentPreviewModal = ({ open, target, onClose, canDownloadFiles =
   const [payload, setPayload] = useState(null);
   const [effectiveName, setEffectiveName] = useState('');
   const [objectUrl, setObjectUrl] = useState('');
+  const [previewWatermark, setPreviewWatermark] = useState(null);
+  const [onlyOfficeWatermark, setOnlyOfficeWatermark] = useState(null);
   const [onlyOfficeServerUrl, setOnlyOfficeServerUrl] = useState('');
   const [onlyOfficeConfig, setOnlyOfficeConfig] = useState(null);
   const [pdfPageImages, setPdfPageImages] = useState([]);
@@ -53,6 +56,8 @@ export const DocumentPreviewModal = ({ open, target, onClose, canDownloadFiles =
     setEffectiveName('');
     setOnlyOfficeServerUrl('');
     setOnlyOfficeConfig(null);
+    setPreviewWatermark(null);
+    setOnlyOfficeWatermark(null);
     setIsMaximized(false);
     onClose?.();
   }, [onClose]);
@@ -80,6 +85,8 @@ export const DocumentPreviewModal = ({ open, target, onClose, canDownloadFiles =
       setLoading(true);
       setError('');
       setPayload(null);
+      setPreviewWatermark(null);
+      setOnlyOfficeWatermark(null);
       setOnlyOfficeServerUrl('');
       setOnlyOfficeConfig(null);
       setPdfPageImages([]);
@@ -121,6 +128,7 @@ export const DocumentPreviewModal = ({ open, target, onClose, canDownloadFiles =
           setEffectiveName(String(onlyOffice?.filename || title || ''));
           setOnlyOfficeServerUrl(String(onlyOffice?.server_url || ''));
           setOnlyOfficeConfig(onlyOffice?.config || null);
+          setOnlyOfficeWatermark(onlyOffice?.watermark || null);
           setPayload({ type: 'onlyoffice' });
           return;
         }
@@ -165,6 +173,7 @@ export const DocumentPreviewModal = ({ open, target, onClose, canDownloadFiles =
         const name = String(data?.filename || title || '');
         setEffectiveName(name);
         setPayload(data || null);
+        setPreviewWatermark(data?.watermark || null);
 
         if (lastUrlRef.current) {
           try {
@@ -319,8 +328,10 @@ export const DocumentPreviewModal = ({ open, target, onClose, canDownloadFiles =
       const name = String(data?.filename || effectiveName || '');
       setEffectiveName(name);
       setPayload(data);
+      setPreviewWatermark(data?.watermark || null);
       setOnlyOfficeServerUrl('');
       setOnlyOfficeConfig(null);
+      setOnlyOfficeWatermark(null);
       setPdfPageImages([]);
       setPdfRendering(false);
       setPdfRenderingMessage('');
@@ -348,6 +359,12 @@ export const DocumentPreviewModal = ({ open, target, onClose, canDownloadFiles =
   if (!open) return null;
 
   const viewerHeight = isMobile ? '64vh' : '78vh';
+  const activeWatermark = payload?.type === 'onlyoffice' ? onlyOfficeWatermark : previewWatermark;
+  const renderWithWatermark = (content, height = '100%') => (
+    <WatermarkedPreviewFrame watermark={previewWatermark} height={height}>
+      {content}
+    </WatermarkedPreviewFrame>
+  );
 
   return (
     <div
@@ -407,6 +424,7 @@ export const DocumentPreviewModal = ({ open, target, onClose, canDownloadFiles =
             {effectiveName || target?.filename || target?.title || '文档预览'}
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0, marginLeft: 'auto' }}>
+            <ControlledPreviewBadge watermark={activeWatermark} />
             {payload?.type === 'onlyoffice' ? (
               <button
                 type="button"
@@ -476,7 +494,8 @@ export const DocumentPreviewModal = ({ open, target, onClose, canDownloadFiles =
               if (p.type === 'excel' && p.sheets) {
                 const sheetNames = Object.keys(p.sheets || {});
                 return (
-                  <div className="table-preview" style={{ height: '100%', overflow: 'auto' }}>
+                  renderWithWatermark(
+                    <div className="table-preview" style={{ height: '100%', overflow: 'auto' }}>
                     <div
                       style={{
                         display: 'flex',
@@ -531,7 +550,8 @@ export const DocumentPreviewModal = ({ open, target, onClose, canDownloadFiles =
                         <div style={{ overflowX: 'auto' }} dangerouslySetInnerHTML={{ __html: p.sheets[sheetName] }} />
                       </div>
                     ))}
-                  </div>
+                    </div>
+                  )
                 );
               }
 
@@ -544,15 +564,15 @@ export const DocumentPreviewModal = ({ open, target, onClose, canDownloadFiles =
                   const delimiter = detectDelimiter(firstLine);
                   const rows = parseDelimited(text, delimiter);
                   const tableHtml = rowsToHtmlTable(rows);
-                  return <div className="table-preview" dangerouslySetInnerHTML={{ __html: tableHtml }} />;
+                  return renderWithWatermark(<div className="table-preview" dangerouslySetInnerHTML={{ __html: tableHtml }} />);
                 }
 
-                if (isMarkdownFilename(name)) return <MarkdownPreview content={text} />;
-                return <pre style={{ whiteSpace: 'pre-wrap', margin: 0 }}>{text}</pre>;
+                if (isMarkdownFilename(name)) return renderWithWatermark(<MarkdownPreview content={text} />);
+                return renderWithWatermark(<pre style={{ whiteSpace: 'pre-wrap', margin: 0 }}>{text}</pre>);
               }
 
               if (p.type === 'docx') {
-                return (
+                return renderWithWatermark(
                   <div className="table-preview" style={{ padding: '16px', border: '1px solid #e5e7eb', borderRadius: '10px' }}>
                     <div
                       style={{ fontSize: '0.95rem', lineHeight: '1.65', color: '#111827' }}
@@ -563,7 +583,10 @@ export const DocumentPreviewModal = ({ open, target, onClose, canDownloadFiles =
               }
 
               if (p.type === 'html' && objectUrl) {
-                return <iframe title="html-preview" src={objectUrl} style={{ width: '100%', height: viewerHeight, border: '1px solid #e5e7eb', borderRadius: '10px' }} />;
+                return renderWithWatermark(
+                  <iframe title="html-preview" src={objectUrl} style={{ width: '100%', height: viewerHeight, border: '1px solid #e5e7eb', borderRadius: '10px' }} />,
+                  viewerHeight
+                );
               }
 
               if (p.type === 'onlyoffice' && onlyOfficeServerUrl && onlyOfficeConfig) {
@@ -571,6 +594,7 @@ export const DocumentPreviewModal = ({ open, target, onClose, canDownloadFiles =
                   <OnlyOfficeViewer
                     serverUrl={onlyOfficeServerUrl}
                     config={onlyOfficeConfig}
+                    watermark={onlyOfficeWatermark}
                     height={viewerHeight}
                     traceContext={{ source: target?.source, docId: target?.docId, filename: effectiveName }}
                   />
@@ -578,13 +602,16 @@ export const DocumentPreviewModal = ({ open, target, onClose, canDownloadFiles =
               }
 
               if (p.type === 'pdf' && objectUrl) {
-                return <iframe title="pdf-preview" src={objectUrl} style={{ width: '100%', height: viewerHeight, border: '1px solid #e5e7eb', borderRadius: '10px' }} />;
+                return renderWithWatermark(
+                  <iframe title="pdf-preview" src={objectUrl} style={{ width: '100%', height: viewerHeight, border: '1px solid #e5e7eb', borderRadius: '10px' }} />,
+                  viewerHeight
+                );
               }
 
               if (p.type === 'pdf' && !canDownloadFiles) {
-                if (pdfRendering) return <div style={{ color: '#6b7280' }}>{pdfRenderingMessage || 'PDF 预览加载中...'}</div>;
+                if (pdfRendering) return renderWithWatermark(<div style={{ color: '#6b7280' }}>{pdfRenderingMessage || 'PDF 预览加载中...'}</div>, viewerHeight);
                 if (pdfPageImages.length > 0) {
-                  return (
+                  return renderWithWatermark(
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
                       <div style={{ color: '#6b7280', fontSize: '0.88rem' }}>仅预览，不可下载或打印。</div>
                       {pdfPageImages.map((imgSrc, index) => (
@@ -600,21 +627,23 @@ export const DocumentPreviewModal = ({ open, target, onClose, canDownloadFiles =
                           }}
                         />
                       ))}
-                    </div>
+                    </div>,
+                    viewerHeight
                   );
                 }
-                return <div style={{ color: '#6b7280' }}>PDF 预览不可用</div>;
+                return renderWithWatermark(<div style={{ color: '#6b7280' }}>PDF 预览不可用</div>, viewerHeight);
               }
 
               if (p.type === 'image' && objectUrl) {
-                return (
+                return renderWithWatermark(
                   <div style={{ textAlign: 'center' }}>
                     <img alt={effectiveName || 'image'} src={objectUrl} style={{ maxWidth: '100%', maxHeight: viewerHeight, borderRadius: '10px' }} />
-                  </div>
+                  </div>,
+                  viewerHeight
                 );
               }
 
-              return <div style={{ color: '#6b7280' }}>{p.message || '暂不支持预览，请下载后查看。'}</div>;
+              return renderWithWatermark(<div style={{ color: '#6b7280' }}>{p.message || '暂不支持预览，请下载后查看。'}</div>);
             })()
           ) : (
             <div style={{ color: '#6b7280' }}>暂无内容</div>

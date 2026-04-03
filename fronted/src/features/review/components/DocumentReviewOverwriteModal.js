@@ -94,8 +94,11 @@ export function DocumentReviewOverwriteModal({
 
         <div style={{ marginTop: '12px', display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '12px' }}>
           <div style={{ border: '1px solid #e5e7eb', borderRadius: '10px', padding: '12px' }}>
-            <div style={{ fontWeight: 700, marginBottom: '6px', color: '#b91c1c' }}>已通过文档</div>
+            <div style={{ fontWeight: 700, marginBottom: '6px', color: '#b91c1c' }}>当前生效版本</div>
             <div style={{ color: '#111827', wordBreak: 'break-all' }}>{overwritePrompt.oldDoc.filename}</div>
+            <div style={{ color: '#6b7280', fontSize: '0.9rem', marginTop: '6px' }}>
+              版本：v{overwritePrompt.oldDoc.version_no || 1}
+            </div>
             <div style={{ color: '#6b7280', fontSize: '0.9rem', marginTop: '6px' }}>
               上传时间：
               {overwritePrompt.oldDoc.uploaded_at_ms
@@ -128,7 +131,7 @@ export function DocumentReviewOverwriteModal({
           </div>
 
           <div style={{ border: '1px solid #e5e7eb', borderRadius: '10px', padding: '12px' }}>
-            <div style={{ fontWeight: 700, marginBottom: '6px', color: '#1d4ed8' }}>待审核文档</div>
+            <div style={{ fontWeight: 700, marginBottom: '6px', color: '#1d4ed8' }}>新上传版本（待审核）</div>
             <div style={{ color: '#111827', wordBreak: 'break-all' }}>{newFilename}</div>
             <div style={{ color: '#6b7280', fontSize: '0.9rem', marginTop: '6px', wordBreak: 'break-all' }}>
               归一化名称：{overwritePrompt.normalized || ''}
@@ -181,7 +184,7 @@ export function DocumentReviewOverwriteModal({
             }
             style={actionButtonStyle()}
           >
-            对比差异
+            对比当前版本差异
           </button>
 
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', width: isMobile ? '100%' : 'auto', flexDirection: isMobile ? 'column' : 'row' }}>
@@ -199,7 +202,7 @@ export function DocumentReviewOverwriteModal({
               data-testid="docs-overwrite-use-new"
               style={actionButtonStyle(true)}
             >
-              使用新文档覆盖
+              生成新版本并替换当前版本
             </button>
           </div>
         </div>

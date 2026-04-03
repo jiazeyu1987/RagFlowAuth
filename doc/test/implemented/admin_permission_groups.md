@@ -8,4 +8,6 @@
 已实现 spec（integration）：
 - CRUD：`fronted/e2e/tests/integration.permission-groups.crud.spec.js`
 - 资源接口（knowledge-bases/chats）：`fronted/e2e/tests/integration.permission-groups.resources.spec.js`
+关联需求 ID: `R1`, `R2`  
+关联门禁: `T-P1-1`, `T-P1-2`
 

@@ -15,6 +15,11 @@ const Agents = lazy(() => import('./pages/Agents'));
 const PermissionGroupManagement = lazy(() => import('./pages/PermissionGroupManagement'));
 const DataSecurity = lazy(() => import('./pages/DataSecurity'));
 const DataSecurityTest = lazy(() => import('./pages/DataSecurity-test'));
+const NotificationSettings = lazy(() => import('./pages/NotificationSettings'));
+const ApprovalCenter = lazy(() => import('./pages/ApprovalCenter'));
+const ApprovalConfig = lazy(() => import('./pages/ApprovalConfig'));
+const ElectronicSignatureManagement = lazy(() => import('./pages/ElectronicSignatureManagement'));
+const InboxPage = lazy(() => import('./pages/InboxPage'));
 const OrgDirectoryManagement = lazy(() => import('./pages/OrgDirectoryManagement'));
 const Unauthorized = lazy(() => import('./pages/Unauthorized'));
 const ChangePassword = lazy(() => import('./pages/ChangePassword'));
@@ -273,6 +278,46 @@ function App() {
               }
             />
             <Route
+              path="/approvals"
+              element={
+                <PermissionGuard>
+                  <Layout>
+                    <ApprovalCenter />
+                  </Layout>
+                </PermissionGuard>
+              }
+            />
+            <Route
+              path="/approval-center"
+              element={
+                <PermissionGuard>
+                  <Layout>
+                    <ApprovalCenter />
+                  </Layout>
+                </PermissionGuard>
+              }
+            />
+            <Route
+              path="/approval-config"
+              element={
+                <PermissionGuard allowedRoles={['admin']}>
+                  <Layout>
+                    <ApprovalConfig />
+                  </Layout>
+                </PermissionGuard>
+              }
+            />
+            <Route
+              path="/inbox"
+              element={
+                <PermissionGuard>
+                  <Layout>
+                    <InboxPage />
+                  </Layout>
+                </PermissionGuard>
+              }
+            />
+            <Route
               path="/org-directory"
               element={
                 <PermissionGuard allowedRoles={['admin']}>
@@ -285,9 +330,39 @@ function App() {
             <Route
               path="/data-security"
               element={
-                <PermissionGuard allowedRoles={['admin']}>
+                <PermissionGuard allowedRoles={['admin', 'sub_admin']}>
                   <Layout>
                     <DataSecurity />
+                  </Layout>
+                </PermissionGuard>
+              }
+            />
+            <Route
+              path="/notification-settings"
+              element={
+                <PermissionGuard allowedRoles={['admin', 'sub_admin']}>
+                  <Layout>
+                    <NotificationSettings />
+                  </Layout>
+                </PermissionGuard>
+              }
+            />
+            <Route
+              path="/electronic-signatures"
+              element={
+                <PermissionGuard allowedRoles={['admin', 'sub_admin']}>
+                  <Layout>
+                    <ElectronicSignatureManagement />
+                  </Layout>
+                </PermissionGuard>
+              }
+            />
+            <Route
+              path="/messages"
+              element={
+                <PermissionGuard>
+                  <Layout>
+                    <InboxPage />
                   </Layout>
                 </PermissionGuard>
               }

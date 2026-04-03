@@ -17,3 +17,8 @@
 - `doc/test/implemented/admin_data_security.md`
 - `doc/test/implemented/audit.md`
 - `doc/test/implemented/integration.md`
+- `doc/test/fronted/implemented-mapping.md`（跨模块重点链路索引）
+## 合规映射说明
+
+- 本目录按模块归档自动化测试证据。
+- 每个模块文档已补充“关联需求 ID”，用于将测试证据追踪到 `R1-R10`。

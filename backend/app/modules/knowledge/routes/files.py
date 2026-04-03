@@ -41,6 +41,9 @@ def preview_document(
     if not doc:
         raise HTTPException(status_code=404, detail="文档不存在")
 
+    if str(getattr(doc, "effective_status", "") or "").strip().lower() == "archived":
+        raise HTTPException(status_code=409, detail="document_retired_use_archive_route")
+
     assert_kb_allowed(snapshot, doc.kb_id)
 
     if not os.path.exists(doc.file_path):
@@ -134,6 +137,10 @@ def batch_download_documents(
             assert_kb_allowed(snapshot, doc.kb_id)
         except HTTPException:
             logger.warning(f"[BATCH DOWNLOAD] No access to doc {doc_id} kb_id={doc.kb_id}")
+            continue
+
+        if str(getattr(doc, "effective_status", "") or "").strip().lower() == "archived":
+            logger.info(f"[BATCH DOWNLOAD] Skip retired document: {doc_id}")
             continue
 
         if not os.path.exists(doc.file_path):

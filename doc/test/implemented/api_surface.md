@@ -46,4 +46,6 @@
 
 ## Diagnostics（/api/diagnostics/*）
 - permissions/ragflow（integration API smoke）：`fronted/e2e/tests/integration.diagnostics.spec.js`
+关联需求 ID: `R1-R10`  
+关联门禁: `T-P5-1`
 
