@@ -72,7 +72,7 @@ function App() {
             <Route
               path="/users"
               element={
-                <PermissionGuard allowedRoles={['admin']}>
+                <PermissionGuard allowedRoles={['admin', 'sub_admin']}>
                   <Layout>
                     <UserManagement />
                   </Layout>
@@ -82,7 +82,7 @@ function App() {
             <Route
               path="/upload"
               element={
-                <PermissionGuard>
+                <PermissionGuard permission={{ resource: 'kb_documents', action: 'upload' }}>
                   <Layout>
                     <KnowledgeUpload />
                   </Layout>
@@ -232,7 +232,7 @@ function App() {
             <Route
               path="/kbs"
               element={
-                <PermissionGuard permission={{ resource: 'kbs_config', action: 'view' }}>
+                <PermissionGuard allowedRoles={['sub_admin']} permission={{ resource: 'kbs_config', action: 'view' }}>
                   <Layout>
                     <KnowledgeBases />
                   </Layout>
@@ -270,7 +270,7 @@ function App() {
             <Route
               path="/permission-groups"
               element={
-                <PermissionGuard allowedRoles={['admin']}>
+                <PermissionGuard allowedRoles={['sub_admin']}>
                   <Layout>
                     <PermissionGroupManagement />
                   </Layout>
@@ -340,7 +340,7 @@ function App() {
             <Route
               path="/notification-settings"
               element={
-                <PermissionGuard allowedRoles={['admin', 'sub_admin']}>
+                <PermissionGuard allowedRoles={['admin']}>
                   <Layout>
                     <NotificationSettings />
                   </Layout>
@@ -350,7 +350,7 @@ function App() {
             <Route
               path="/electronic-signatures"
               element={
-                <PermissionGuard allowedRoles={['admin', 'sub_admin']}>
+                <PermissionGuard allowedRoles={['admin']}>
                   <Layout>
                     <ElectronicSignatureManagement />
                   </Layout>

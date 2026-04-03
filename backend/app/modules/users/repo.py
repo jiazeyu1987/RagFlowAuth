@@ -3,6 +3,10 @@ from __future__ import annotations
 from typing import Any, Optional
 
 from backend.app.dependencies import AppDependencies
+from backend.database.schema_migrations import ensure_schema
+from backend.database.tenant_paths import resolve_tenant_auth_db_path
+from backend.services.knowledge_directory.store import KnowledgeDirectoryStore
+from backend.services.knowledge_tree import KnowledgeTreeManager
 
 
 class UsersRepo:
@@ -99,3 +103,25 @@ class UsersRepo:
 
     def get_department(self, department_id: int):
         return self._deps.org_structure_manager.get_department(department_id)
+
+    def get_managed_kb_root_path(self, *, company_id: int | None, node_id: str | None) -> str | None:
+        clean_node_id = str(node_id or "").strip()
+        if company_id is None or not clean_node_id:
+            return None
+        tenant_db_path = resolve_tenant_auth_db_path(
+            company_id=company_id,
+            base_db_path=getattr(self._deps.user_store, "db_path", None),
+        )
+        ensure_schema(str(tenant_db_path))
+        store = KnowledgeDirectoryStore(db_path=str(tenant_db_path))
+        node = store.get_node(clean_node_id)
+        if not node:
+            return None
+        tree = KnowledgeTreeManager(store=store).snapshot([], prune_unknown=False)
+        for item in tree.get("nodes", []):
+            if not isinstance(item, dict):
+                continue
+            if str(item.get("id") or "") == clean_node_id:
+                path = str(item.get("path") or "").strip()
+                return path or None
+        return None

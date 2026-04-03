@@ -43,6 +43,7 @@ class PermissionGroupFolderManager:
 
         group_bindings: dict[int, str | None] = {}
         group_counts: dict[str, int] = {}
+        visible_folder_ids: set[str] = set()
         for group in groups or []:
             if not isinstance(group, dict):
                 continue
@@ -54,11 +55,23 @@ class PermissionGroupFolderManager:
             group_bindings[group_id] = clean_folder_id
             key = clean_folder_id or "__root__"
             group_counts[key] = int(group_counts.get(key, 0) or 0) + 1
+            cur_id = clean_folder_id
+            while cur_id:
+                if cur_id in visible_folder_ids:
+                    break
+                visible_folder_ids.add(cur_id)
+                folder = folder_by_id.get(cur_id)
+                if not folder:
+                    break
+                parent = folder.get("parent_id")
+                cur_id = str(parent) if isinstance(parent, str) and parent else None
 
         out_folders = []
         for folder in folders:
             folder_id = str(folder.get("folder_id") or "")
             if not folder_id:
+                continue
+            if visible_folder_ids and folder_id not in visible_folder_ids:
                 continue
             out_folders.append(
                 {

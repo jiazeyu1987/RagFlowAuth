@@ -54,20 +54,24 @@ const UserManagement = () => {
     disableUserError,
     companies,
     departments,
+    orgDirectoryError,
     kbDirectoryNodes,
     kbDirectoryLoading,
     kbDirectoryError,
+    kbDirectoryCreateError,
+    kbDirectoryCreatingRoot,
+    managedKbRootInvalid,
     filteredUsers,
     groupedUsers,
-    managerOptions,
+    subAdminOptions,
+    policySubAdminOptions,
     setFilters,
-    setPolicyForm,
+    handleChangePolicyForm,
     setResetPasswordValue,
     setResetPasswordConfirm,
     handleOpenCreateModal,
     handleCloseCreateModal,
     setNewUserField,
-    toggleNewUserGroup,
     handleCreateUser,
     handleDeleteUser,
     handleToggleUserStatus,
@@ -76,7 +80,6 @@ const UserManagement = () => {
     handleSubmitResetPassword,
     handleOpenPolicyModal,
     handleClosePolicyModal,
-    handleTogglePolicyGroup,
     handleSavePolicy,
     handleCloseDisableUserModal,
     handleChangeDisableMode,
@@ -87,6 +90,8 @@ const UserManagement = () => {
     toggleSelectedGroup,
     handleSaveGroup,
     handleResetFilters,
+    handleCreateModalRootDirectory,
+    handlePolicyRootDirectory,
   } = useUserManagement();
 
   useEffect(() => {
@@ -183,19 +188,22 @@ const UserManagement = () => {
         open={showPolicyModal}
         user={policyUser}
         policyForm={policyForm}
-        managerOptions={managerOptions}
-        availableGroups={availableGroups}
         companies={companies}
         departments={departments}
+        policySubAdminOptions={policySubAdminOptions}
         kbDirectoryNodes={kbDirectoryNodes}
         kbDirectoryLoading={kbDirectoryLoading}
         kbDirectoryError={kbDirectoryError}
+        kbDirectoryCreateError={kbDirectoryCreateError}
+        kbDirectoryCreatingRoot={kbDirectoryCreatingRoot}
+        managedKbRootInvalid={managedKbRootInvalid}
+        orgDirectoryError={orgDirectoryError}
         policyError={policyError}
         policySubmitting={policySubmitting}
-        onChangePolicyForm={setPolicyForm}
-        onTogglePolicyGroup={handleTogglePolicyGroup}
+        onChangePolicyForm={handleChangePolicyForm}
         onCancel={handleClosePolicyModal}
         onSave={handleSavePolicy}
+        onCreateRootDirectory={handlePolicyRootDirectory}
       />
 
       <DisableUserModal
@@ -216,17 +224,19 @@ const UserManagement = () => {
           open={showCreateModal}
           newUser={newUser}
           error={createUserError}
-          availableGroups={availableGroups}
           companies={companies}
           departments={departments}
-          managerOptions={managerOptions}
+          subAdminOptions={subAdminOptions}
           kbDirectoryNodes={kbDirectoryNodes}
           kbDirectoryLoading={kbDirectoryLoading}
           kbDirectoryError={kbDirectoryError}
+          kbDirectoryCreateError={kbDirectoryCreateError}
+          kbDirectoryCreatingRoot={kbDirectoryCreatingRoot}
+          orgDirectoryError={orgDirectoryError}
           onSubmit={handleCreateUser}
           onCancel={handleCloseCreateModal}
           onFieldChange={setNewUserField}
-          onToggleGroup={toggleNewUserGroup}
+          onCreateRootDirectory={handleCreateModalRootDirectory}
         />
       ) : null}
 

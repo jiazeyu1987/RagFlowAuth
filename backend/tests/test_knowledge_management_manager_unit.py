@@ -96,6 +96,12 @@ class TestKnowledgeManagementManagerUnit(unittest.TestCase):
         self.assertEqual(scope.mode, "none")
         self.assertFalse(scope.can_manage)
 
+    def test_sub_admin_with_missing_root_reports_precise_error(self):
+        user = SimpleNamespace(role="sub_admin", managed_kb_root_node_id="missing-node")
+        with self.assertRaises(KnowledgeManagementError) as cm:
+            self.manager.assert_can_manage(user)
+        self.assertEqual(cm.exception.code, "managed_kb_root_node_not_found")
+
     def test_assert_node_manageable_rejects_out_of_scope_node(self):
         user = SimpleNamespace(role="sub_admin", managed_kb_root_node_id=self.root["id"])
         with self.assertRaises(KnowledgeManagementError) as cm:

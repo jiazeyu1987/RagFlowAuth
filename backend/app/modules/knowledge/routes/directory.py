@@ -2,12 +2,13 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
 from backend.app.core.authz import AuthContextDep
 from backend.app.core.datasets import list_accessible_datasets
 from backend.app.core.permission_resolver import assert_can_manage_kb_directory
+from backend.app.dependencies import get_tenant_dependencies
 
 router = APIRouter()
 
@@ -34,9 +35,22 @@ def _management_manager(deps) -> Any:
     return getattr(deps, "knowledge_management_manager", None)
 
 
+def _resolve_directory_deps(request: Request, ctx: AuthContextDep, company_id: int | None):
+    if company_id is None:
+        return ctx.deps
+    if not ctx.snapshot.is_admin:
+        raise HTTPException(status_code=403, detail="admin_required")
+    try:
+        return get_tenant_dependencies(request.app, company_id=company_id)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 @router.get("/directories")
-def list_knowledge_directories(ctx: AuthContextDep):
-    deps = ctx.deps
+def list_knowledge_directories(request: Request, ctx: AuthContextDep, company_id: int | None = None):
+    deps = _resolve_directory_deps(request, ctx, company_id)
     management_manager = _management_manager(deps)
     if management_manager is not None:
         try:
@@ -59,9 +73,15 @@ def list_knowledge_directories(ctx: AuthContextDep):
 
 
 @router.post("/directories")
-def create_knowledge_directory(payload: DirectoryCreateRequest, ctx: AuthContextDep):
-    management_manager = _management_manager(ctx.deps)
-    manager = management_manager or _tree_manager(ctx.deps)
+def create_knowledge_directory(
+    request: Request,
+    payload: DirectoryCreateRequest,
+    ctx: AuthContextDep,
+    company_id: int | None = None,
+):
+    deps = _resolve_directory_deps(request, ctx, company_id)
+    management_manager = _management_manager(deps)
+    manager = management_manager or _tree_manager(deps)
     try:
         if management_manager is not None:
             node = manager.create_directory(

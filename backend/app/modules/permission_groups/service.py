@@ -69,9 +69,9 @@ class PermissionGroupsService:
         except PermissionManagementError as e:
             self._raise(e)
 
-    def list_group_folders(self) -> dict[str, Any]:
+    def list_group_folders(self, groups: list[dict[str, Any]] | None = None) -> dict[str, Any]:
         try:
-            return self._manager.list_group_folders()
+            return self._manager.list_group_folders(groups)
         except PermissionManagementError as e:
             self._raise(e)
 

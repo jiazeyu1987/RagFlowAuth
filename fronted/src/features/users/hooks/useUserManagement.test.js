@@ -38,6 +38,7 @@ jest.mock('../../orgDirectory/api', () => ({
 jest.mock('../../knowledge/api', () => ({
   knowledgeApi: {
     listKnowledgeDirectories: jest.fn(),
+    createKnowledgeDirectory: jest.fn(),
   },
 }));
 
@@ -48,32 +49,41 @@ function HookHarness() {
       <button type="button" data-testid="open-create" onClick={hook.handleOpenCreateModal}>
         open-create
       </button>
-      <button type="button" data-testid="set-role-sub-admin" onClick={() => hook.setNewUserField('role', 'sub_admin')}>
-        set-role-sub-admin
+      <button type="button" data-testid="set-type-sub-admin" onClick={() => hook.setNewUserField('user_type', 'sub_admin')}>
+        set-type-sub-admin
       </button>
-      <button type="button" data-testid="set-role-viewer" onClick={() => hook.setNewUserField('role', 'viewer')}>
-        set-role-viewer
+      <button type="button" data-testid="set-company" onClick={() => hook.setNewUserField('company_id', '1')}>
+        set-company
       </button>
-      <button type="button" data-testid="set-root-node" onClick={() => hook.setNewUserField('managed_kb_root_node_id', 'node-1')}>
-        set-root-node
+      <button type="button" data-testid="set-company-2" onClick={() => hook.setNewUserField('company_id', '2')}>
+        set-company-2
+      </button>
+      <button type="button" data-testid="set-department" onClick={() => hook.setNewUserField('department_id', '11')}>
+        set-department
+      </button>
+      <button type="button" data-testid="set-manager" onClick={() => hook.setNewUserField('manager_user_id', 'sub-1')}>
+        set-manager
       </button>
       <button type="button" data-testid="submit-create" onClick={() => hook.handleCreateUser({ preventDefault() {} })}>
         submit-create
       </button>
+      <button type="button" data-testid="create-root-create" onClick={() => hook.handleCreateModalRootDirectory('New Root')}>
+        create-root-create
+      </button>
       <button
         type="button"
-        data-testid="open-policy"
+        data-testid="open-policy-normal"
         onClick={() =>
           hook.handleOpenPolicyModal({
             user_id: 'u-1',
             username: 'alice',
-            role: 'sub_admin',
+            role: 'viewer',
             full_name: 'Alice',
-            email: 'alice@example.com',
             company_id: 1,
             department_id: 11,
+            manager_user_id: 'sub-1',
             group_ids: [7],
-            managed_kb_root_node_id: 'node-1',
+            managed_kb_root_node_id: '',
             max_login_sessions: 3,
             idle_timeout_minutes: 120,
             can_change_password: true,
@@ -81,57 +91,163 @@ function HookHarness() {
           })
         }
       >
-        open-policy
+        open-policy-normal
       </button>
       <button
         type="button"
-        data-testid="policy-role-viewer"
-        onClick={() => hook.setPolicyForm((prev) => ({ ...prev, role: 'viewer', managed_kb_root_node_id: 'node-1' }))}
+        data-testid="open-policy-sub-admin"
+        onClick={() =>
+          hook.handleOpenPolicyModal({
+            user_id: 'u-2',
+            username: 'suba',
+            role: 'sub_admin',
+            full_name: 'Sub A',
+            company_id: 1,
+            department_id: 11,
+            group_ids: [7],
+            managed_kb_root_node_id: 'node-1',
+            managed_kb_root_path: null,
+            max_login_sessions: 3,
+            idle_timeout_minutes: 120,
+            can_change_password: true,
+            status: 'active',
+          })
+        }
       >
-        policy-role-viewer
+        open-policy-sub-admin
       </button>
       <button
         type="button"
-        data-testid="policy-role-sub-admin-empty"
-        onClick={() => hook.setPolicyForm((prev) => ({ ...prev, role: 'sub_admin', managed_kb_root_node_id: '' }))}
+        data-testid="policy-set-normal"
+        onClick={() =>
+          hook.handleChangePolicyForm((prev) => ({
+            ...prev,
+            user_type: 'normal',
+            manager_user_id: 'sub-1',
+            managed_kb_root_node_id: 'node-1',
+          }))
+        }
       >
-        policy-role-sub-admin-empty
+        policy-set-normal
+      </button>
+      <button
+        type="button"
+        data-testid="policy-set-normal-empty-manager"
+        onClick={() =>
+          hook.handleChangePolicyForm((prev) => ({
+            ...prev,
+            user_type: 'normal',
+            manager_user_id: '',
+          }))
+        }
+      >
+        policy-set-normal-empty-manager
       </button>
       <button type="button" data-testid="submit-policy" onClick={hook.handleSavePolicy}>
         submit-policy
       </button>
+      <button
+        type="button"
+        data-testid="assign-owned-user"
+        onClick={() =>
+          hook.handleAssignGroup({ user_id: 'u-owned', role: 'viewer', manager_user_id: 'sub-actor', group_ids: [7] })
+        }
+      >
+        assign-owned-user
+      </button>
+      <button
+        type="button"
+        data-testid="assign-other-user"
+        onClick={() =>
+          hook.handleAssignGroup({ user_id: 'u-other', role: 'viewer', manager_user_id: 'someone-else', group_ids: [7] })
+        }
+      >
+        assign-other-user
+      </button>
       <div data-testid="create-error">{hook.createUserError || ''}</div>
       <div data-testid="policy-error">{hook.policyError || ''}</div>
+      <div data-testid="org-error">{hook.orgDirectoryError || ''}</div>
+      <div data-testid="kb-root-invalid">{hook.managedKbRootInvalid ? 'yes' : 'no'}</div>
+      <div data-testid="assign-groups-flag">{hook.canAssignGroups ? 'yes' : 'no'}</div>
+      <div data-testid="show-group-modal">{hook.showGroupModal ? 'yes' : 'no'}</div>
     </div>
   );
 }
 
-describe('useUserManagement sub admin payloads', () => {
+describe('useUserManagement user type payloads', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     useAuth.mockReturnValue({
-      user: { role: 'admin' },
+      user: { role: 'admin', user_id: 'admin-1' },
       can: jest.fn(() => true),
     });
-    usersApi.list.mockResolvedValue([]);
+    usersApi.list.mockResolvedValue([
+      { user_id: 'sub-1', username: 'sub_admin_a', full_name: '子管理员A', role: 'sub_admin', status: 'active', company_id: 1 },
+      { user_id: 'viewer-1', username: 'viewer_a', full_name: '普通用户B', role: 'viewer', status: 'active', company_id: 1, manager_user_id: 'sub-1' },
+    ]);
     usersApi.create.mockResolvedValue({});
     usersApi.update.mockResolvedValue({});
     permissionGroupsApi.list.mockResolvedValue({ ok: true, data: [{ group_id: 7, group_name: 'G7' }] });
-    orgDirectoryApi.listCompanies.mockResolvedValue([{ id: 1, name: 'Acme' }]);
-    orgDirectoryApi.listDepartments.mockResolvedValue([{ id: 11, name: 'QA', company_id: 1 }]);
+    orgDirectoryApi.listCompanies.mockResolvedValue([{ id: 1, name: 'Acme' }, { id: 2, name: 'Beta' }]);
+    orgDirectoryApi.listDepartments.mockResolvedValue([
+      { id: 11, name: 'QA', company_id: 1 },
+      { id: 21, name: 'Ops', company_id: 2 },
+    ]);
     knowledgeApi.listKnowledgeDirectories.mockResolvedValue({
       nodes: [{ id: 'node-1', name: '目录A', parent_id: '', path: '/目录A' }],
       datasets: [],
     });
+    knowledgeApi.createKnowledgeDirectory.mockResolvedValue({ node: { id: 'node-created' } });
   });
 
-  it('requires managed root when creating sub admin', async () => {
+  it('requires manager user when creating normal user', async () => {
     const user = userEvent.setup();
     render(<HookHarness />);
 
     await waitFor(() => expect(usersApi.list).toHaveBeenCalled());
     await user.click(screen.getByTestId('open-create'));
-    await user.click(screen.getByTestId('set-role-sub-admin'));
+    await user.click(screen.getByTestId('set-company'));
+    await user.click(screen.getByTestId('set-department'));
+    await user.click(screen.getByTestId('submit-create'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('create-error')).toHaveTextContent('请选择归属子管理员');
+    });
+    expect(usersApi.create).not.toHaveBeenCalled();
+  });
+
+  it('normal user create payload includes manager user and clears permission groups', async () => {
+    const user = userEvent.setup();
+    render(<HookHarness />);
+
+    await waitFor(() => expect(usersApi.list).toHaveBeenCalled());
+    await user.click(screen.getByTestId('open-create'));
+    await user.click(screen.getByTestId('set-company'));
+    await user.click(screen.getByTestId('set-department'));
+    await user.click(screen.getByTestId('set-manager'));
+    await user.click(screen.getByTestId('submit-create'));
+
+    await waitFor(() => expect(usersApi.create).toHaveBeenCalled());
+    expect(usersApi.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        role: 'viewer',
+        manager_user_id: 'sub-1',
+        managed_kb_root_node_id: null,
+        group_ids: [],
+      })
+    );
+  });
+
+  it('sub admin create payload clears manager user and requires managed root', async () => {
+    const user = userEvent.setup();
+    render(<HookHarness />);
+
+    await waitFor(() => expect(usersApi.list).toHaveBeenCalled());
+    await user.click(screen.getByTestId('open-create'));
+    await user.click(screen.getByTestId('set-company'));
+    await user.click(screen.getByTestId('set-department'));
+    await user.click(screen.getByTestId('set-manager'));
+    await user.click(screen.getByTestId('set-type-sub-admin'));
     await user.click(screen.getByTestId('submit-create'));
 
     await waitFor(() => {
@@ -140,55 +256,153 @@ describe('useUserManagement sub admin payloads', () => {
     expect(usersApi.create).not.toHaveBeenCalled();
   });
 
-  it('clears managed root when creating non sub admin', async () => {
+  it('editing viewer requires manager user and clears direct groups', async () => {
+    const user = userEvent.setup();
+    render(<HookHarness />);
+
+    await waitFor(() => expect(usersApi.list).toHaveBeenCalled());
+    await user.click(screen.getByTestId('open-policy-normal'));
+    await user.click(screen.getByTestId('policy-set-normal-empty-manager'));
+    await user.click(screen.getByTestId('submit-policy'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('policy-error')).toHaveTextContent('请选择归属子管理员');
+    });
+    expect(usersApi.update).not.toHaveBeenCalled();
+  });
+
+  it('editing sub admin to normal user requires manager and clears managed root', async () => {
+    const user = userEvent.setup();
+    render(<HookHarness />);
+
+    await waitFor(() => expect(usersApi.list).toHaveBeenCalled());
+    await user.click(screen.getByTestId('open-policy-sub-admin'));
+    await user.click(screen.getByTestId('policy-set-normal'));
+    await user.click(screen.getByTestId('submit-policy'));
+
+    await waitFor(() => expect(usersApi.update).toHaveBeenCalled());
+    expect(usersApi.update).toHaveBeenCalledWith(
+      'u-2',
+      expect.objectContaining({
+        role: 'viewer',
+        manager_user_id: 'sub-1',
+        managed_kb_root_node_id: null,
+        group_ids: [],
+      })
+    );
+  });
+
+  it('blocks submit when departments cannot be loaded', async () => {
+    orgDirectoryApi.listDepartments.mockResolvedValueOnce([]);
+    const user = userEvent.setup();
+    render(<HookHarness />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('org-error')).toHaveTextContent('组织管理中没有可用部门，无法创建或编辑用户');
+    });
+    await user.click(screen.getByTestId('open-create'));
+    await user.click(screen.getByTestId('submit-create'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('create-error')).toHaveTextContent('组织管理中没有可用部门，无法创建或编辑用户');
+    });
+    expect(usersApi.create).not.toHaveBeenCalled();
+  });
+
+  it('only sub admin can assign groups and only for owned users', async () => {
+    useAuth.mockReturnValue({
+      user: { role: 'sub_admin', user_id: 'sub-actor' },
+      can: jest.fn(() => true),
+    });
+    const user = userEvent.setup();
+    render(<HookHarness />);
+
+    await waitFor(() => expect(usersApi.list).toHaveBeenCalled());
+    expect(screen.getByTestId('assign-groups-flag')).toHaveTextContent('yes');
+
+    await user.click(screen.getByTestId('assign-other-user'));
+    expect(screen.getByTestId('show-group-modal')).toHaveTextContent('no');
+
+    await user.click(screen.getByTestId('assign-owned-user'));
+    expect(screen.getByTestId('show-group-modal')).toHaveTextContent('yes');
+  });
+
+  it('admin does not request permission groups anymore', async () => {
+    render(<HookHarness />);
+
+    await waitFor(() => expect(usersApi.list).toHaveBeenCalled());
+    expect(permissionGroupsApi.list).not.toHaveBeenCalled();
+  });
+
+  it('sub admin still loads permission groups for assignment', async () => {
+    useAuth.mockReturnValue({
+      user: { role: 'sub_admin', user_id: 'sub-actor' },
+      can: jest.fn(() => true),
+    });
+
+    render(<HookHarness />);
+
+    await waitFor(() => expect(usersApi.list).toHaveBeenCalled());
+    await waitFor(() => expect(permissionGroupsApi.list).toHaveBeenCalled());
+  });
+
+  it('reloads knowledge directories by selected company for sub admin creation', async () => {
+    const user = userEvent.setup();
+    render(<HookHarness />);
+
+    await waitFor(() => expect(usersApi.list).toHaveBeenCalled());
+    knowledgeApi.listKnowledgeDirectories.mockClear();
+
+    await user.click(screen.getByTestId('open-create'));
+    await user.click(screen.getByTestId('set-type-sub-admin'));
+    await user.click(screen.getByTestId('set-company'));
+
+    await waitFor(() =>
+      expect(knowledgeApi.listKnowledgeDirectories).toHaveBeenCalledWith({ companyId: 1 })
+    );
+
+    await user.click(screen.getByTestId('set-company-2'));
+
+    await waitFor(() =>
+      expect(knowledgeApi.listKnowledgeDirectories).toHaveBeenCalledWith({ companyId: 2 })
+    );
+  });
+
+  it('admin can create a top-level root directory for the selected company', async () => {
     const user = userEvent.setup();
     render(<HookHarness />);
 
     await waitFor(() => expect(usersApi.list).toHaveBeenCalled());
     await user.click(screen.getByTestId('open-create'));
-    await user.click(screen.getByTestId('set-root-node'));
-    await user.click(screen.getByTestId('set-role-viewer'));
-    await user.click(screen.getByTestId('submit-create'));
+    await user.click(screen.getByTestId('set-type-sub-admin'));
+    await user.click(screen.getByTestId('set-company'));
+    await user.click(screen.getByTestId('create-root-create'));
 
-    await waitFor(() => expect(usersApi.create).toHaveBeenCalled());
-    expect(usersApi.create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        role: 'viewer',
-        managed_kb_root_node_id: null,
-      })
+    await waitFor(() =>
+      expect(knowledgeApi.createKnowledgeDirectory).toHaveBeenCalledWith(
+        { name: 'New Root', parent_id: null },
+        { companyId: 1 }
+      )
     );
   });
 
-  it('clears managed root when editing user away from sub admin', async () => {
+  it('marks invalid managed root and blocks saving until rebinding', async () => {
     const user = userEvent.setup();
+    knowledgeApi.listKnowledgeDirectories.mockResolvedValueOnce({ nodes: [], datasets: [] });
+
     render(<HookHarness />);
 
     await waitFor(() => expect(usersApi.list).toHaveBeenCalled());
-    await user.click(screen.getByTestId('open-policy'));
-    await user.click(screen.getByTestId('policy-role-viewer'));
-    await user.click(screen.getByTestId('submit-policy'));
+    await user.click(screen.getByTestId('open-policy-sub-admin'));
 
-    await waitFor(() => expect(usersApi.update).toHaveBeenCalled());
-    expect(usersApi.update).toHaveBeenCalledWith(
-      'u-1',
-      expect.objectContaining({
-        role: 'viewer',
-        managed_kb_root_node_id: null,
-      })
-    );
-  });
+    await waitFor(() => {
+      expect(screen.getByTestId('kb-root-invalid')).toHaveTextContent('yes');
+    });
 
-  it('requires managed root when editing user into sub admin', async () => {
-    const user = userEvent.setup();
-    render(<HookHarness />);
-
-    await waitFor(() => expect(usersApi.list).toHaveBeenCalled());
-    await user.click(screen.getByTestId('open-policy'));
-    await user.click(screen.getByTestId('policy-role-sub-admin-empty'));
     await user.click(screen.getByTestId('submit-policy'));
 
     await waitFor(() => {
-      expect(screen.getByTestId('policy-error')).toHaveTextContent('请选择子管理员负责的知识库目录');
+      expect(screen.getByTestId('policy-error')).toHaveTextContent('当前负责目录已失效');
     });
     expect(usersApi.update).not.toHaveBeenCalled();
   });

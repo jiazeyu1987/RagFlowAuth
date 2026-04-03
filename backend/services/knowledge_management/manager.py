@@ -138,6 +138,9 @@ class KnowledgeManagementManager:
     def assert_can_manage(self, user: Any) -> KnowledgeManagementScope:
         scope = self.get_management_scope(user)
         if not scope.can_manage:
+            role = str(getattr(user, "role", "") or "").strip().lower()
+            if role == "sub_admin" and scope.root_node_id and not scope.root_node_path:
+                raise KnowledgeManagementError("managed_kb_root_node_not_found", status_code=403)
             raise KnowledgeManagementError("no_knowledge_management_permission", status_code=403)
         return scope
 
@@ -321,11 +324,39 @@ class KnowledgeManagementManager:
             group = permission_group_store.get_group(int(group_id))
             if not group:
                 raise KnowledgeManagementError(f"permission_group_not_found:{group_id}", status_code=400)
+            self.assert_permission_group_manageable(user=user, group=group)
+
+    def assert_permission_group_manageable(self, *, user: Any, group: dict[str, Any] | None) -> dict[str, Any]:
+        if not isinstance(group, dict):
+            raise KnowledgeManagementError("permission_group_not_found", status_code=404)
+        try:
             self.validate_group_kb_scope(
                 user=user,
                 accessible_kbs=group.get("accessible_kbs"),
                 accessible_kb_nodes=group.get("accessible_kb_nodes"),
             )
+        except KnowledgeManagementError:
+            raise
+        except Exception as exc:
+            raise KnowledgeManagementError(
+                "permission_group_out_of_management_scope",
+                status_code=403,
+            ) from exc
+        return group
+
+    def filter_manageable_permission_groups(
+        self,
+        *,
+        user: Any,
+        groups: list[dict[str, Any]] | None,
+    ) -> list[dict[str, Any]]:
+        manageable: list[dict[str, Any]] = []
+        for group in groups or []:
+            try:
+                manageable.append(self.assert_permission_group_manageable(user=user, group=group))
+            except KnowledgeManagementError:
+                continue
+        return manageable
 
     def resolve_dataset_id(self, dataset_ref: str) -> str | None:
         clean_ref = str(dataset_ref or "").strip()

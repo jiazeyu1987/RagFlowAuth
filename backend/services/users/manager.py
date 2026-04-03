@@ -39,6 +39,7 @@ class UsersPort(Protocol):
     def get_department(self, department_id: int): ...
     def get_login_session_summary(self, user_id: str, idle_timeout_minutes: int | None): ...
     def get_login_session_summaries(self, idle_timeout_by_user: dict[str, int | None]): ...
+    def get_managed_kb_root_path(self, *, company_id: int | None, node_id: str | None): ...
 
 
 @dataclass
@@ -160,6 +161,7 @@ class UserManagementManager:
         user_id: str | None,
         manager_user_id: str | None,
         company_id: int | None,
+        require_sub_admin: bool = False,
     ) -> str | None:
         normalized = str(manager_user_id or "").strip()
         if not normalized:
@@ -171,6 +173,8 @@ class UserManagementManager:
             raise UserManagementError("manager_user_not_found")
         if str(getattr(manager_user, "status", "") or "").strip().lower() != "active":
             raise UserManagementError("manager_user_inactive")
+        if require_sub_admin and str(getattr(manager_user, "role", "") or "").strip() != "sub_admin":
+            raise UserManagementError("manager_user_must_be_sub_admin")
         if company_id is not None and getattr(manager_user, "company_id", None) != company_id:
             raise UserManagementError("manager_user_company_mismatch")
         return normalized
@@ -195,11 +199,42 @@ class UserManagementManager:
         if int(department_company_id) != int(company_id):
             raise UserManagementError("department_company_mismatch")
 
+    @staticmethod
+    def _normalize_managed_kb_root_node_id(node_id: str | None) -> str | None:
+        normalized = str(node_id or "").strip()
+        return normalized or None
+
+    def _validate_managed_kb_root_node(
+        self,
+        *,
+        company_id: int | None,
+        node_id: str | None,
+        required: bool,
+    ) -> tuple[str | None, str | None]:
+        clean_node_id = self._normalize_managed_kb_root_node_id(node_id)
+        if not clean_node_id:
+            if required:
+                raise UserManagementError("managed_kb_root_node_required_for_sub_admin")
+            return None, None
+        if company_id is None:
+            raise UserManagementError("company_required_for_sub_admin")
+        path = self._port.get_managed_kb_root_path(company_id=company_id, node_id=clean_node_id)
+        if not path:
+            raise UserManagementError("managed_kb_root_node_not_found")
+        return clean_node_id, path
+
     def _to_response(self, user, session_summary: dict[str, int | None] | None = None) -> UserResponse:
         group = self._port.get_permission_group(user.group_id) if user.group_id else None
         company = self._port.get_company(user.company_id) if getattr(user, "company_id", None) else None
         department = self._port.get_department(user.department_id) if getattr(user, "department_id", None) else None
         manager_user = self._port.get_user(user.manager_user_id) if getattr(user, "manager_user_id", None) else None
+        managed_kb_root_node_id = getattr(user, "managed_kb_root_node_id", None)
+        managed_kb_root_path = None
+        if managed_kb_root_node_id and getattr(user, "company_id", None) is not None:
+            managed_kb_root_path = self._port.get_managed_kb_root_path(
+                company_id=getattr(user, "company_id", None),
+                node_id=managed_kb_root_node_id,
+            )
 
         active_count = 0
         active_last = None
@@ -247,7 +282,8 @@ class UserManagementManager:
             active_session_last_activity_at_ms=active_last,
             created_at_ms=user.created_at_ms,
             last_login_at_ms=user.last_login_at_ms,
-            managed_kb_root_node_id=getattr(user, "managed_kb_root_node_id", None),
+            managed_kb_root_node_id=managed_kb_root_node_id,
+            managed_kb_root_path=managed_kb_root_path,
             electronic_signature_enabled=bool(getattr(user, "electronic_signature_enabled", True)),
         )
 
@@ -313,10 +349,30 @@ class UserManagementManager:
             user_id=None,
             manager_user_id=user_data.manager_user_id,
             company_id=user_data.company_id,
+            require_sub_admin=(role == "viewer"),
         )
+        if role == "viewer" and not manager_user_id:
+            raise UserManagementError("manager_user_required_for_viewer")
+        managed_kb_root_node_id = self._normalize_managed_kb_root_node_id(user_data.managed_kb_root_node_id)
+        if role == "sub_admin":
+            managed_kb_root_node_id, _ = self._validate_managed_kb_root_node(
+                company_id=user_data.company_id,
+                node_id=managed_kb_root_node_id,
+                required=True,
+            )
+            manager_user_id = None
+        else:
+            managed_kb_root_node_id = None
 
         group_ids = user_data.group_ids
-        if not group_ids:
+        if group_ids is None:
+            group_ids = []
+        for gid in group_ids:
+            if not self._port.get_permission_group(gid):
+                raise UserManagementError(f"permission_group_not_found:{gid}")
+        if role in {"viewer", "sub_admin"}:
+            group_ids = []
+        elif not group_ids:
             group_id = user_data.group_id
             if not group_id:
                 default_group = self._port.get_group_by_name("viewer")
@@ -325,10 +381,6 @@ class UserManagementManager:
                 else:
                     raise UserManagementError("default_permission_group_not_found")
             group_ids = [group_id] if group_id else []
-
-        for gid in group_ids:
-            if not self._port.get_permission_group(gid):
-                raise UserManagementError(f"permission_group_not_found:{gid}")
 
         try:
             create_kwargs = dict(
@@ -349,9 +401,8 @@ class UserManagementManager:
                 disable_login_until_ms=disable_login_until_ms,
                 electronic_signature_enabled=bool(user_data.electronic_signature_enabled),
                 created_by=created_by,
+                managed_kb_root_node_id=managed_kb_root_node_id,
             )
-            if user_data.managed_kb_root_node_id is not None:
-                create_kwargs["managed_kb_root_node_id"] = user_data.managed_kb_root_node_id
             user = self._port.create_user(**create_kwargs)
         except ValueError as e:
             message = str(e).lower()
@@ -417,7 +468,33 @@ class UserManagementManager:
                 user_id=user_id,
                 manager_user_id=user_data.manager_user_id,
                 company_id=next_company_id,
+                require_sub_admin=((role or current_user.role) == "viewer"),
             )
+
+        effective_role = role or current_user.role
+        if effective_role == "viewer" and "manager_user_id" in fields_set and not manager_user_id:
+            raise UserManagementError("manager_user_required_for_viewer")
+        if effective_role == "viewer" and "manager_user_id" not in fields_set:
+            if not getattr(current_user, "manager_user_id", None):
+                raise UserManagementError("manager_user_required_for_viewer")
+            self._validate_manager_user_id(
+                user_id=user_id,
+                manager_user_id=getattr(current_user, "manager_user_id", None),
+                company_id=next_company_id,
+                require_sub_admin=True,
+            )
+        managed_kb_root_node_id = getattr(current_user, "managed_kb_root_node_id", None)
+        if effective_role == "sub_admin":
+            if "managed_kb_root_node_id" in fields_set:
+                managed_kb_root_node_id = user_data.managed_kb_root_node_id
+            managed_kb_root_node_id, _ = self._validate_managed_kb_root_node(
+                company_id=next_company_id,
+                node_id=managed_kb_root_node_id,
+                required=True,
+            )
+            manager_user_id = None
+        else:
+            managed_kb_root_node_id = None
 
         disable_now = False
         if status is not None and status != "active":
@@ -442,6 +519,8 @@ class UserManagementManager:
             if not group:
                 raise UserManagementError("permission_group_not_found")
             group_ids = [user_data.group_id]
+        if effective_role in {"viewer", "sub_admin"} and group_ids is not None:
+            group_ids = []
 
         update_kwargs = dict(
             user_id=user_id,
@@ -459,9 +538,8 @@ class UserManagementManager:
             disable_login_enabled=disable_login_enabled,
             disable_login_until_ms=disable_login_until_ms,
             electronic_signature_enabled=user_data.electronic_signature_enabled,
+            managed_kb_root_node_id=(managed_kb_root_node_id if effective_role == "sub_admin" else ""),
         )
-        if user_data.managed_kb_root_node_id is not None:
-            update_kwargs["managed_kb_root_node_id"] = user_data.managed_kb_root_node_id
         user = self._port.update_user(**update_kwargs)
         if not user:
             raise UserManagementError("user_not_found", status_code=404)

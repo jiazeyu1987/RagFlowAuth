@@ -3,21 +3,49 @@ import KnowledgeRootNodeSelector from '../KnowledgeRootNodeSelector';
 
 const MOBILE_BREAKPOINT = 768;
 
+const TEXT = {
+  title: '\u65b0\u5efa\u7528\u6237',
+  fullName: '\u59d3\u540d',
+  username: '\u7528\u6237\u8d26\u53f7',
+  password: '\u5bc6\u7801',
+  userType: '\u7528\u6237\u7c7b\u578b',
+  normalUser: '\u666e\u901a\u7528\u6237',
+  subAdmin: '\u5b50\u7ba1\u7406\u5458',
+  company: '\u516c\u53f8',
+  companyPlaceholder: '\u8bf7\u9009\u62e9\u516c\u53f8',
+  department: '\u90e8\u95e8',
+  departmentPlaceholder: '\u8bf7\u9009\u62e9\u90e8\u95e8',
+  ownerSubAdmin: '\u5f52\u5c5e\u5b50\u7ba1\u7406\u5458',
+  ownerSubAdminPlaceholder: '\u8bf7\u9009\u62e9\u5f52\u5c5e\u5b50\u7ba1\u7406\u5458',
+  maxSessions: '\u6700\u5927\u767b\u5f55\u4f1a\u8bdd\u6570',
+  idleTimeout: '\u7a7a\u95f2\u8d85\u65f6(\u5206\u949f)',
+  permissionGroup: '\u6743\u9650\u7ec4',
+  normalUserHint:
+    '\u521b\u5efa\u666e\u901a\u7528\u6237\u65f6\u4e0d\u76f4\u63a5\u914d\u7f6e\u6743\u9650\u7ec4\uff0c\u540e\u7eed\u7531\u5f52\u5c5e\u5b50\u7ba1\u7406\u5458\u8d1f\u8d23\u5206\u914d\u3002',
+  kbRoot: '\u77e5\u8bc6\u5e93\u8d1f\u8d23\u76ee\u5f55',
+  kbRootHint:
+    '\u8be5\u7528\u6237\u62e5\u6709\u6240\u9009\u76ee\u5f55\u53ca\u5176\u540e\u4ee3\u7684\u5168\u90e8\u77e5\u8bc6\u5e93\u7ba1\u7406\u6743\u9650\u3002',
+  submit: '\u521b\u5efa',
+  cancel: '\u53d6\u6d88',
+};
+
 export default function CreateUserModal({
   open,
   newUser,
   error,
-  availableGroups,
   companies,
   departments,
-  managerOptions,
+  subAdminOptions,
   kbDirectoryNodes,
   kbDirectoryLoading,
   kbDirectoryError,
+  kbDirectoryCreateError,
+  kbDirectoryCreatingRoot,
+  orgDirectoryError,
   onSubmit,
   onCancel,
   onFieldChange,
-  onToggleGroup,
+  onCreateRootDirectory,
 }) {
   const [isMobile, setIsMobile] = useState(() => {
     if (typeof window === 'undefined') return false;
@@ -41,18 +69,15 @@ export default function CreateUserModal({
   };
 
   const selectedCompanyId = newUser.company_id ? Number(newUser.company_id) : null;
-  const visibleDepartments =
-    selectedCompanyId == null
-      ? departments
-      : departments.filter((department) => department.company_id == null || department.company_id === selectedCompanyId);
+  const visibleDepartments = useMemo(() => {
+    const items = Array.isArray(departments) ? departments : [];
+    if (selectedCompanyId == null) return items;
+    return items.filter(
+      (department) => department.company_id == null || Number(department.company_id) === selectedCompanyId
+    );
+  }, [departments, selectedCompanyId]);
 
-  const filteredManagerOptions = useMemo(() => {
-    const companyId = newUser.company_id ? Number(newUser.company_id) : null;
-    return (Array.isArray(managerOptions) ? managerOptions : []).filter((item) => {
-      if (companyId === null) return true;
-      return item.company_id === companyId;
-    });
-  }, [managerOptions, newUser.company_id]);
+  const isSubAdmin = String(newUser.user_type || 'normal') === 'sub_admin';
 
   if (!open) return null;
 
@@ -84,198 +109,168 @@ export default function CreateUserModal({
           margin: isMobile ? 'auto 0' : 0,
         }}
       >
-        <h3 style={{ margin: '0 0 24px 0' }}>新建用户</h3>
+        <h3 style={{ margin: '0 0 24px 0' }}>{TEXT.title}</h3>
         <form onSubmit={onSubmit} data-testid="users-create-form">
           <div style={{ marginBottom: '16px' }}>
-            <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500' }}>姓名</label>
+            <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500' }}>{TEXT.fullName}</label>
             <input
               type="text"
               value={newUser.full_name || ''}
-              onChange={(e) => onFieldChange('full_name', e.target.value)}
+              onChange={(event) => onFieldChange('full_name', event.target.value)}
               data-testid="users-create-full-name"
               style={inputStyle}
             />
           </div>
 
           <div style={{ marginBottom: '16px' }}>
-            <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500' }}>用户名</label>
+            <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500' }}>{TEXT.username}</label>
             <input
               type="text"
               required
-              value={newUser.username}
-              onChange={(e) => onFieldChange('username', e.target.value)}
+              value={newUser.username || ''}
+              onChange={(event) => onFieldChange('username', event.target.value)}
               data-testid="users-create-username"
               style={inputStyle}
             />
           </div>
 
           <div style={{ marginBottom: '16px' }}>
-            <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500' }}>密码</label>
+            <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500' }}>{TEXT.password}</label>
             <input
               type="password"
               required
-              value={newUser.password}
-              onChange={(e) => onFieldChange('password', e.target.value)}
+              value={newUser.password || ''}
+              onChange={(event) => onFieldChange('password', event.target.value)}
               data-testid="users-create-password"
               style={inputStyle}
             />
           </div>
 
           <div style={{ marginBottom: '16px' }}>
-            <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500' }}>邮箱</label>
-            <input
-              type="text"
-              value={newUser.email}
-              onChange={(e) => onFieldChange('email', e.target.value)}
-              data-testid="users-create-email"
-              style={inputStyle}
-            />
-          </div>
-
-          <div style={{ marginBottom: '16px' }}>
-            <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500' }}>角色</label>
+            <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500' }}>{TEXT.userType}</label>
             <select
-              value={newUser.role || 'viewer'}
-              onChange={(e) => onFieldChange('role', e.target.value)}
-              data-testid="users-create-role"
+              value={newUser.user_type || 'normal'}
+              onChange={(event) => onFieldChange('user_type', event.target.value)}
+              data-testid="users-create-user-type"
               style={{ ...inputStyle, backgroundColor: 'white' }}
             >
-              <option value="viewer">普通查看者</option>
-              <option value="operator">操作员</option>
-              <option value="reviewer">审核员</option>
-              <option value="guest">访客</option>
-              <option value="sub_admin">子管理员</option>
-              <option value="admin">管理员</option>
+              <option value="normal">{TEXT.normalUser}</option>
+              <option value="sub_admin">{TEXT.subAdmin}</option>
             </select>
           </div>
 
           <div style={{ marginBottom: '16px' }}>
-            <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500' }}>公司</label>
+            <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500' }}>{TEXT.company}</label>
             <select
               required
-              value={newUser.company_id}
-              onChange={(e) => onFieldChange('company_id', e.target.value)}
+              value={newUser.company_id || ''}
+              onChange={(event) => onFieldChange('company_id', event.target.value)}
               data-testid="users-create-company"
               style={{ ...inputStyle, backgroundColor: 'white' }}
             >
-              <option value="" disabled>请选择公司</option>
-              {companies.map((c) => (
-                <option key={c.id} value={String(c.id)}>{c.name}</option>
-              ))}
-            </select>
-          </div>
-
-          <div style={{ marginBottom: '16px' }}>
-            <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500' }}>部门</label>
-            <select
-              required
-              value={newUser.department_id}
-              onChange={(e) => onFieldChange('department_id', e.target.value)}
-              data-testid="users-create-department"
-              style={{ ...inputStyle, backgroundColor: 'white' }}
-            >
-              <option value="" disabled>请选择部门</option>
-              {visibleDepartments.map((d) => (
-                <option key={d.id} value={String(d.id)}>{d.path_name || d.name}</option>
-              ))}
-            </select>
-          </div>
-
-          <div style={{ marginBottom: '16px' }}>
-            <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500' }}>直属主管</label>
-            <select
-              value={newUser.manager_user_id || ''}
-              onChange={(e) => onFieldChange('manager_user_id', e.target.value)}
-              data-testid="users-create-manager"
-              style={{ ...inputStyle, backgroundColor: 'white' }}
-            >
-              <option value="">无</option>
-              {filteredManagerOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
+              <option value="" disabled>
+                {TEXT.companyPlaceholder}
+              </option>
+              {(Array.isArray(companies) ? companies : []).map((company) => (
+                <option key={company.id} value={String(company.id)}>
+                  {company.name}
                 </option>
               ))}
             </select>
           </div>
 
           <div style={{ marginBottom: '16px' }}>
-            <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500' }}>最大登录会话数</label>
+            <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500' }}>{TEXT.department}</label>
+            <select
+              required
+              value={newUser.department_id || ''}
+              onChange={(event) => onFieldChange('department_id', event.target.value)}
+              data-testid="users-create-department"
+              style={{ ...inputStyle, backgroundColor: 'white' }}
+            >
+              <option value="" disabled>
+                {TEXT.departmentPlaceholder}
+              </option>
+              {visibleDepartments.map((department) => (
+                <option key={department.id} value={String(department.id)}>
+                  {department.path_name || department.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {!isSubAdmin ? (
+            <div style={{ marginBottom: '16px' }}>
+              <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500' }}>{TEXT.ownerSubAdmin}</label>
+              <select
+                required
+                value={newUser.manager_user_id || ''}
+                onChange={(event) => onFieldChange('manager_user_id', event.target.value)}
+                data-testid="users-create-sub-admin"
+                style={{ ...inputStyle, backgroundColor: 'white' }}
+              >
+                <option value="" disabled>
+                  {TEXT.ownerSubAdminPlaceholder}
+                </option>
+                {(Array.isArray(subAdminOptions) ? subAdminOptions : []).map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : null}
+
+          <div style={{ marginBottom: '16px' }}>
+            <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500' }}>{TEXT.maxSessions}</label>
             <input
               type="number"
               min={1}
               max={1000}
               required
               value={newUser.max_login_sessions}
-              onChange={(e) => onFieldChange('max_login_sessions', e.target.value)}
+              onChange={(event) => onFieldChange('max_login_sessions', event.target.value)}
               data-testid="users-create-max-login-sessions"
               style={inputStyle}
             />
           </div>
 
           <div style={{ marginBottom: '16px' }}>
-            <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500' }}>空闲超时(分钟)</label>
+            <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500' }}>{TEXT.idleTimeout}</label>
             <input
               type="number"
               min={1}
               max={43200}
               required
               value={newUser.idle_timeout_minutes}
-              onChange={(e) => onFieldChange('idle_timeout_minutes', e.target.value)}
+              onChange={(event) => onFieldChange('idle_timeout_minutes', event.target.value)}
               data-testid="users-create-idle-timeout"
               style={inputStyle}
             />
           </div>
 
-          <div style={{ marginBottom: '24px' }}>
-            <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500' }}>权限组，可多选</label>
-            <div
-              style={{
-                border: '1px solid #d1d5db',
-                borderRadius: '4px',
-                padding: '12px',
-                maxHeight: isMobile ? '180px' : '200px',
-                overflowY: 'auto',
-                backgroundColor: '#f9fafb',
-              }}
-            >
-              {availableGroups.length === 0 ? (
-                <div style={{ color: '#6b7280', textAlign: 'center', padding: '8px' }}>暂无可用权限组</div>
-              ) : (
-                availableGroups.map((group) => (
-                  <label
-                    key={group.group_id}
-                    style={{ display: 'flex', alignItems: 'center', padding: '8px 0', cursor: 'pointer' }}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={newUser.group_ids?.includes(group.group_id) || false}
-                      onChange={(e) => onToggleGroup(group.group_id, e.target.checked)}
-                      data-testid={`users-create-group-${group.group_id}`}
-                      style={{ marginRight: '8px', flexShrink: 0 }}
-                    />
-                    <div>
-                      <div style={{ fontWeight: '500' }}>{group.group_name}</div>
-                      {group.description ? (
-                        <div style={{ fontSize: '0.85rem', color: '#6b7280' }}>{group.description}</div>
-                      ) : null}
-                    </div>
-                  </label>
-                ))
-              )}
-            </div>
-            {newUser.group_ids && newUser.group_ids.length > 0 ? (
-              <div style={{ marginTop: '8px', fontSize: '0.85rem', color: '#6b7280' }}>
-                已选择 {newUser.group_ids.length} 个权限组
-              </div>
-            ) : null}
-          </div>
-
-          {String(newUser.role || '') === 'sub_admin' ? (
+          {!isSubAdmin ? (
             <div style={{ marginBottom: '24px' }}>
-              <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500' }}>知识库负责目录</label>
-              <div style={{ marginBottom: '8px', color: '#6b7280', fontSize: '0.85rem' }}>
-                子管理员只能管理该目录及其后代。
+              <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500' }}>{TEXT.permissionGroup}</label>
+              <div
+                style={{
+                  border: '1px solid #d1d5db',
+                  borderRadius: '4px',
+                  padding: '12px',
+                  backgroundColor: '#f9fafb',
+                  color: '#6b7280',
+                  fontSize: '0.9rem',
+                }}
+              >
+                {TEXT.normalUserHint}
               </div>
+            </div>
+          ) : null}
+
+          {isSubAdmin ? (
+            <div style={{ marginBottom: '24px' }}>
+              <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500' }}>{TEXT.kbRoot}</label>
+              <div style={{ marginBottom: '8px', color: '#6b7280', fontSize: '0.85rem' }}>{TEXT.kbRootHint}</div>
               <KnowledgeRootNodeSelector
                 nodes={kbDirectoryNodes}
                 selectedNodeId={newUser.managed_kb_root_node_id || ''}
@@ -283,7 +278,17 @@ export default function CreateUserModal({
                 disabled={false}
                 loading={kbDirectoryLoading}
                 error={kbDirectoryError}
+                canCreateRoot={Boolean(newUser.company_id && onCreateRootDirectory)}
+                creatingRoot={kbDirectoryCreatingRoot}
+                createRootError={kbDirectoryCreateError}
+                onCreateRoot={onCreateRootDirectory}
               />
+            </div>
+          ) : null}
+
+          {orgDirectoryError ? (
+            <div style={{ marginBottom: '16px', color: '#ef4444' }} data-testid="users-create-org-error">
+              {orgDirectoryError}
             </div>
           ) : null}
 
@@ -308,7 +313,7 @@ export default function CreateUserModal({
                 width: isMobile ? '100%' : 'auto',
               }}
             >
-              创建
+              {TEXT.submit}
             </button>
             <button
               type="button"
@@ -325,7 +330,7 @@ export default function CreateUserModal({
                 width: isMobile ? '100%' : 'auto',
               }}
             >
-              取消
+              {TEXT.cancel}
             </button>
           </div>
         </form>

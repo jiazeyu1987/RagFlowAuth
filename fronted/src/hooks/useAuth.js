@@ -18,8 +18,17 @@ const APP_VERSION = '7';
 
 const mapLoginErrorMessage = (message) => {
   const code = String(message || '').trim();
+  if (code === 'invalid_username_or_password') {
+    return '用户名或密码错误';
+  }
+  if (code === 'credentials_locked') {
+    return '账号已被临时锁定，请稍后再试或联系管理员';
+  }
   if (code === 'account_inactive' || code === 'account_disabled') {
     return '该账号已被禁用，请联系管理员';
+  }
+  if (code === 'missing_refresh_token' || code.startsWith('invalid_refresh_token')) {
+    return '登录状态已失效，请重新登录';
   }
   return code || '登录失败';
 };

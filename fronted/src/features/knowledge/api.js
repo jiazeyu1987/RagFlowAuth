@@ -15,6 +15,12 @@ function unwrapEnvelope(res) {
   return res;
 }
 
+function withCompanyId(path, companyId) {
+  if (companyId === undefined || companyId === null || companyId === '') return path;
+  const query = new URLSearchParams({ company_id: String(companyId) }).toString();
+  return `${path}?${query}`;
+}
+
 export const knowledgeApi = {
   listRagflowDatasets() {
     return httpClient.requestJson(authBackendUrl('/api/datasets'), { method: 'GET' });
@@ -48,12 +54,14 @@ export const knowledgeApi = {
     });
   },
 
-  listKnowledgeDirectories() {
-    return httpClient.requestJson(authBackendUrl('/api/knowledge/directories'), { method: 'GET' });
+  listKnowledgeDirectories(options = {}) {
+    const path = withCompanyId('/api/knowledge/directories', options.companyId);
+    return httpClient.requestJson(authBackendUrl(path), { method: 'GET' });
   },
 
-  createKnowledgeDirectory(payload) {
-    return httpClient.requestJson(authBackendUrl('/api/knowledge/directories'), {
+  createKnowledgeDirectory(payload, options = {}) {
+    const path = withCompanyId('/api/knowledge/directories', options.companyId);
+    return httpClient.requestJson(authBackendUrl(path), {
       method: 'POST',
       body: JSON.stringify(payload || {}),
     });

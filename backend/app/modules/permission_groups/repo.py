@@ -169,8 +169,8 @@ class PermissionGroupsRepo:
         except Exception:
             return {"nodes": [], "datasets": datasets, "bindings": {}}
 
-    def list_group_folders(self) -> dict[str, Any]:
-        groups = self.list_groups()
+    def list_group_folders(self, groups: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+        groups = list(groups) if groups is not None else self.list_groups()
         manager = getattr(self._deps, "permission_group_folder_manager", None)
         if manager is None:
             return {"folders": [], "group_bindings": {}, "root_group_count": len(groups)}

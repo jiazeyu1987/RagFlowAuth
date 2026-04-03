@@ -96,24 +96,34 @@ async def update_user(
     if ctx.snapshot.is_admin:
         return service.update_user(user_id=user_id, user_data=user_data)
 
-    manager = getattr(ctx.deps, "knowledge_management_manager", None)
-    if manager is None:
-        raise HTTPException(status_code=403, detail="admin_required")
-    try:
-        manager.assert_can_manage(ctx.user)
-    except Exception as exc:
-        raise HTTPException(status_code=int(getattr(exc, "status_code", 403) or 403), detail=str(exc)) from exc
-
     fields_set = set(getattr(user_data, "model_fields_set", set()) or set())
     allowed_fields = {"group_id", "group_ids"}
     disallowed = [field for field in fields_set if field not in allowed_fields]
     if disallowed:
+        manager = getattr(ctx.deps, "knowledge_management_manager", None)
+        if manager is None:
+            raise HTTPException(status_code=403, detail="admin_required")
+        try:
+            manager.assert_can_manage(ctx.user)
+        except Exception as exc:
+            raise HTTPException(status_code=int(getattr(exc, "status_code", 403) or 403), detail=str(exc)) from exc
         raise HTTPException(status_code=403, detail="sub_admin_group_assignment_only")
+
+    target_user = ctx.deps.user_store.get_by_user_id(user_id)
+    if not target_user:
+        raise HTTPException(status_code=404, detail="user_not_found")
+    if str(getattr(target_user, "role", "") or "") != "viewer":
+        raise HTTPException(status_code=403, detail="sub_admin_can_only_assign_viewer_groups")
+    if str(getattr(target_user, "manager_user_id", "") or "") != str(getattr(ctx.user, "user_id", "") or ""):
+        raise HTTPException(status_code=403, detail="sub_admin_can_only_assign_owned_users")
 
     target_group_ids = user_data.group_ids
     if target_group_ids is None and user_data.group_id is not None:
         target_group_ids = [user_data.group_id]
     if target_group_ids is not None:
+        manager = getattr(ctx.deps, "knowledge_management_manager", None)
+        if manager is None:
+            raise HTTPException(status_code=403, detail="admin_required")
         try:
             manager.validate_permission_group_ids(
                 user=ctx.user,

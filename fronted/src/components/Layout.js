@@ -133,7 +133,7 @@ const Layout = ({ children }) => {
   const navigation = [
     { name: TEXT.nav.chat, path: '/chat', icon: '\ud83d\udcac' },
     { name: TEXT.nav.agents, path: '/agents', icon: '\ud83d\udd0d' },
-    { name: TEXT.nav.kbs, path: '/kbs', icon: '\ud83d\udcd6', show: canViewKbConfig },
+    { name: TEXT.nav.kbs, path: '/kbs', icon: '\ud83d\udcd6', show: canViewKbConfig, allowedRoles: ['sub_admin'] },
     { name: TEXT.nav.browser, path: '/browser', icon: '\ud83d\udcc4' },
     { name: TEXT.nav.documents, path: '/documents', icon: '\u2705', show: canReview },
     { name: TEXT.nav.upload, path: '/upload', icon: '\ud83d\udce4', show: canUpload },
@@ -144,10 +144,10 @@ const Layout = ({ children }) => {
     { name: TEXT.nav.tools, path: '/tools', icon: '\ud83e\uddf0', show: canViewTools },
     { name: TEXT.nav.users, path: '/users', icon: '\ud83d\udc65', allowedRoles: ['admin', 'sub_admin'] },
     { name: TEXT.nav.orgDirectory, path: '/org-directory', icon: '\ud83c\udfe2', allowedRoles: ['admin'] },
-    { name: TEXT.nav.permissionGroups, path: '/permission-groups', icon: '\ud83d\udee1\ufe0f', allowedRoles: ['admin', 'sub_admin'] },
+    { name: TEXT.nav.permissionGroups, path: '/permission-groups', icon: '\ud83d\udee1\ufe0f', allowedRoles: ['sub_admin'] },
     { name: TEXT.nav.dataSecurity, path: '/data-security', icon: '\ud83d\udd12', allowedRoles: ['admin'] },
-    { name: TEXT.nav.notificationSettings, path: '/notification-settings', icon: '\ud83d\udd14', allowedRoles: ['admin', 'sub_admin'] },
-    { name: TEXT.nav.electronicSignatures, path: '/electronic-signatures', icon: '\u270d\ufe0f', allowedRoles: ['admin', 'sub_admin'] },
+    { name: TEXT.nav.notificationSettings, path: '/notification-settings', icon: '\ud83d\udd14', allowedRoles: ['admin'] },
+    { name: TEXT.nav.electronicSignatures, path: '/electronic-signatures', icon: '\u270d\ufe0f', allowedRoles: ['admin'] },
     { name: TEXT.nav.logs, path: '/logs', icon: '\ud83d\udccb', allowedRoles: ['admin'] },
   ];
 

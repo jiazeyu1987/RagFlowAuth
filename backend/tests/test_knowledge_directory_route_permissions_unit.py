@@ -1,4 +1,5 @@
 import unittest
+from unittest.mock import patch
 
 from authx import TokenPayload
 from fastapi import FastAPI, Request
@@ -50,15 +51,24 @@ class _RagflowService:
     def normalize_dataset_id(self, dataset_ref: str):
         return dataset_ref
 
+    def list_datasets(self):
+        return []
+
 
 class _DirectoryManager:
     def __init__(self):
         self.create_calls = []
         self.assign_calls = []
+        self.nodes = []
 
     def create_node(self, *, name: str, parent_id: str | None, created_by: str):
         self.create_calls.append({"name": name, "parent_id": parent_id, "created_by": created_by})
-        return {"id": "node_1", "name": name, "parent_id": parent_id}
+        node = {"id": f"node_{len(self.create_calls)}", "name": name, "parent_id": parent_id}
+        self.nodes.append(node)
+        return node
+
+    def snapshot(self, datasets, *, prune_unknown: bool):  # noqa: ARG002
+        return {"nodes": list(self.nodes), "datasets": [], "bindings": {}}
 
     def assign_dataset(self, *, dataset_id: str, node_id: str | None):
         self.assign_calls.append({"dataset_id": dataset_id, "node_id": node_id})
@@ -131,6 +141,44 @@ class TestKnowledgeDirectoryRoutePermissionsUnit(unittest.TestCase):
             deps.knowledge_directory_manager.assign_calls,
             [{"dataset_id": "ds_1", "node_id": "node_1"}],
         )
+
+    def test_admin_company_override_lists_and_creates_target_company_directories(self):
+        client, deps = _make_client(role="admin", can_manage_kb_directory=False)
+        tenant_deps = _Deps(user=_User(role="admin"), can_manage_kb_directory=True)
+        tenant_deps.knowledge_directory_manager.create_node(
+            name="Tenant Folder",
+            parent_id=None,
+            created_by="seed",
+        )
+
+        with patch(
+            "backend.app.modules.knowledge.routes.directory.get_tenant_dependencies",
+            return_value=tenant_deps,
+        ) as mocked_get_tenant_deps:
+            with client:
+                list_resp = client.get("/api/knowledge/directories?company_id=2")
+                create_resp = client.post(
+                    "/api/knowledge/directories?company_id=2",
+                    json={"name": "Folder B", "parent_id": None},
+                )
+
+        self.assertEqual(list_resp.status_code, 200)
+        self.assertEqual(create_resp.status_code, 200)
+        self.assertEqual(len(tenant_deps.knowledge_directory_manager.create_calls), 2)
+        self.assertEqual(
+            tenant_deps.knowledge_directory_manager.create_calls[-1],
+            {"name": "Folder B", "parent_id": None, "created_by": "u1"},
+        )
+        mocked_get_tenant_deps.assert_called_with(client.app, company_id=2)
+        self.assertEqual([], deps.knowledge_directory_manager.create_calls)
+
+    def test_non_admin_cannot_use_company_override(self):
+        client, _ = _make_client(role="viewer", can_manage_kb_directory=True)
+        with client:
+            resp = client.get("/api/knowledge/directories?company_id=2")
+
+        self.assertEqual(resp.status_code, 403)
+        self.assertEqual(resp.json().get("detail"), "admin_required")
 
 
 if __name__ == "__main__":

@@ -200,15 +200,6 @@ def resolve_permissions(deps: "AppDependencies", user: Any) -> PermissionSnapsho
     # 业务授权以“权限组（resolver）”为准，不再合并按用户单独授权的 KB/Chat 可见性。
     # Legacy per-user KB/chat grants are no longer supported and do not affect authorization.
 
-    kb_scope = ResourceScope.SET if kb_names else ResourceScope.NONE
-    chat_scope = ResourceScope.SET if chat_ids else ResourceScope.NONE
-    if not can_view_tools:
-        tool_scope = ResourceScope.NONE
-    elif tool_has_global_access or not tool_has_scoped_access:
-        tool_scope = ResourceScope.ALL
-    else:
-        tool_scope = ResourceScope.SET
-
     if role == "sub_admin":
         management_manager = getattr(deps, "knowledge_management_manager", None)
         if management_manager is not None:
@@ -217,8 +208,22 @@ def resolve_permissions(deps: "AppDependencies", user: Any) -> PermissionSnapsho
             except Exception:
                 scope = None
             if scope is not None and getattr(scope, "can_manage", False):
+                can_upload = True
+                can_delete = True
                 can_manage_kb_directory = True
                 can_view_kb_config = True
+                for dataset_id in getattr(scope, "dataset_ids", frozenset()) or frozenset():
+                    if isinstance(dataset_id, str) and dataset_id:
+                        _add_kb_ref(kb_names, dataset_id, dataset_index)
+
+    kb_scope = ResourceScope.SET if kb_names else ResourceScope.NONE
+    chat_scope = ResourceScope.SET if chat_ids else ResourceScope.NONE
+    if not can_view_tools:
+        tool_scope = ResourceScope.NONE
+    elif tool_has_global_access or not tool_has_scoped_access:
+        tool_scope = ResourceScope.ALL
+    else:
+        tool_scope = ResourceScope.SET
 
     return PermissionSnapshot(
         is_admin=False,

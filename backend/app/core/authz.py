@@ -24,17 +24,22 @@ def get_auth_context(
     request: Request,
     payload: TokenPayload = Depends(get_current_payload),
 ) -> AuthContext:
+    request_state = getattr(request, "state", None)
+    authenticated_user = getattr(request_state, "authenticated_user", None)
     deps = resolve_scoped_deps(
         request,
         payload=payload,
-        user=getattr(getattr(request, "state", None), "authenticated_user", None),
+        user=authenticated_user,
         force_tenant_scope=True,
     )
-    try:
-        user = deps.user_store.get_by_user_id(payload.sub)
-    except sqlite3.OperationalError as e:
-        # Avoid leaking transient sqlite errors as 500s (e.g. during backup/restore IO).
-        raise HTTPException(status_code=503, detail=f"db_unavailable: {e}") from e
+    if authenticated_user is not None and getattr(authenticated_user, "user_id", None) == payload.sub:
+        user = authenticated_user
+    else:
+        try:
+            user = deps.user_store.get_by_user_id(payload.sub)
+        except sqlite3.OperationalError as e:
+            # Avoid leaking transient sqlite errors as 500s (e.g. during backup/restore IO).
+            raise HTTPException(status_code=503, detail=f"db_unavailable: {e}") from e
     if not user:
         # Treat missing user for an authenticated token as unauthorized.
         raise HTTPException(status_code=401, detail="用户不存在")

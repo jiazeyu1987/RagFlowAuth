@@ -35,6 +35,12 @@ export default function UserFiltersPanel({
     boxSizing: 'border-box',
   };
 
+  const selectedCompanyId = filters.company_id ? Number(filters.company_id) : null;
+  const visibleDepartments =
+    selectedCompanyId == null
+      ? departments
+      : departments.filter((department) => department.company_id == null || department.company_id === selectedCompanyId);
+
   return (
     <div
       style={{
@@ -91,9 +97,9 @@ export default function UserFiltersPanel({
             style={inputStyle}
           >
             <option value="">{'全部'}</option>
-            {departments.map((d) => (
+            {visibleDepartments.map((d) => (
               <option key={d.id} value={String(d.id)}>
-                {d.name}
+                {d.path_name || d.name}
               </option>
             ))}
           </select>
