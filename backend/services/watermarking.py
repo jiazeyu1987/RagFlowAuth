@@ -12,11 +12,11 @@ _PURPOSE_LABELS = {
 
 
 class DocumentWatermarkService:
-    def __init__(self, *, store: Any, org_directory_store: Any = None):
+    def __init__(self, *, store: Any, org_structure_manager: Any = None):
         if store is None:
             raise RuntimeError("watermark_policy_store_unavailable")
         self._store = store
-        self._org_directory_store = org_directory_store
+        self._org_structure_manager = org_structure_manager
 
     def build_watermark(
         self,
@@ -29,7 +29,8 @@ class DocumentWatermarkService:
         source: str,
     ) -> dict[str, Any]:
         policy = self._store.get_active_policy()
-        username = self._resolve_username(user=user, payload_sub=payload_sub)
+        actor_name = self._resolve_username(user=user, payload_sub=payload_sub)
+        actor_account = self._resolve_user_account(user=user, payload_sub=payload_sub)
         company_name = self._resolve_company_name(user=user)
         timestamp = datetime.now().astimezone().strftime("%Y-%m-%d %H:%M:%S %Z")
         purpose_label = _PURPOSE_LABELS.get(str(purpose or "").strip().lower(), str(purpose or "").strip() or "未知")
@@ -37,7 +38,7 @@ class DocumentWatermarkService:
         try:
             watermark_text = str(
                 policy.text_template.format(
-                    username=username,
+                    username=actor_name,
                     company=company_name,
                     timestamp=timestamp,
                     purpose=purpose_label,
@@ -56,7 +57,9 @@ class DocumentWatermarkService:
             "purpose_label": purpose_label,
             "label": policy.label_text or "受控预览",
             "text": watermark_text,
-            "username": username,
+            "username": actor_name,
+            "actor_name": actor_name,
+            "actor_account": actor_account,
             "company": company_name,
             "timestamp": timestamp,
             "doc_id": str(doc_id or "").strip(),
@@ -129,13 +132,24 @@ class DocumentWatermarkService:
             raise RuntimeError("watermark_actor_missing")
         return value
 
+    @staticmethod
+    def _resolve_user_account(*, user: Any, payload_sub: str | None) -> str:
+        value = str(
+            getattr(user, "username", None)
+            or payload_sub
+            or ""
+        ).strip()
+        if not value:
+            raise RuntimeError("watermark_actor_account_missing")
+        return value
+
     def _resolve_company_name(self, *, user: Any) -> str:
         company_id = getattr(user, "company_id", None)
         if company_id is None:
             return "未配置公司"
-        if self._org_directory_store is None:
-            raise RuntimeError("org_directory_store_unavailable")
-        company = self._org_directory_store.get_company(int(company_id))
+        if self._org_structure_manager is None:
+            raise RuntimeError("org_structure_manager_unavailable")
+        company = self._org_structure_manager.get_company(int(company_id))
         if company is None:
             return f"公司ID:{int(company_id)}"
         value = str(getattr(company, "name", "") or "").strip()

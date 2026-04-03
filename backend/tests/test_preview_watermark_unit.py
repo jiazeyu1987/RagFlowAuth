@@ -108,6 +108,7 @@ class _Deps:
         self.kb_store = _KbStore(doc)
         self.permission_group_store = _PermissionGroupStore()
         self.org_directory_store = _OrgDirectoryStore()
+        self.org_structure_manager = self.org_directory_store
         self.watermark_policy_store = _WatermarkPolicyStore()
         self.knowledge_directory_manager = None
 
@@ -140,6 +141,8 @@ class TestPreviewWatermarkUnit(unittest.TestCase):
             self.assertIn("公司:测试公司", watermark.get("text", ""))
             self.assertIn("用途:预览", watermark.get("text", ""))
             self.assertIn("文档ID:k1", watermark.get("text", ""))
+            self.assertEqual(watermark.get("actor_name"), _User().full_name)
+            self.assertEqual(watermark.get("actor_account"), _User().username)
             self.assertEqual(watermark.get("overlay", {}).get("rotation_deg"), -24)
         finally:
             cleanup_dir(td)

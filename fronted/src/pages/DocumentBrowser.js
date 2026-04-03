@@ -49,15 +49,13 @@ export default function DocumentBrowser() {
     transferDialog,
     batchTransferProgress,
     selectedCount,
-    totalDocs,
     setDatasetFilterKeyword,
     setPreviewOpen,
     setPreviewTarget,
     setTransferDialog,
     setBatchTransferProgress,
-    expandAll,
-    collapseAll,
-    refreshAll,
+    quickDatasets,
+    openQuickDataset,
     toggleDataset,
     fetchDocumentsForDataset,
     isAllSelectedInDataset,
@@ -70,9 +68,6 @@ export default function DocumentBrowser() {
     openSingleTransferDialog,
     canDelete,
     canUpload,
-    clearAllSelections,
-    handleBatchDownload,
-    openBatchTransferDialog,
     handleTransferConfirm,
     commitKeyword,
     openFolder,
@@ -98,49 +93,61 @@ export default function DocumentBrowser() {
   return (
     <div data-testid="browser-page">
       <div style={{ marginBottom: 24 }}>
-        <h2 style={{ margin: '0 0 8px 0' }}>{TEXT.title}</h2>
-        <p style={{ margin: 0, color: '#6b7280', fontSize: '0.9rem' }}>{TEXT.desc}</p>
-      </div>
-
-      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 24 }}>
-        <button onClick={expandAll} data-testid="browser-expand-all" style={toolbarButtonStyle('primary')}>
-          {TEXT.expandAll}
-        </button>
-        <button onClick={collapseAll} data-testid="browser-collapse-all" style={toolbarButtonStyle('neutral')}>
-          {TEXT.collapseAll}
-        </button>
-        <button onClick={refreshAll} data-testid="browser-refresh-all" style={toolbarButtonStyle('success')}>
-          {TEXT.refresh}
-        </button>
-        {selectedCount > 0 && canDownload() ? (
-          <button onClick={handleBatchDownload} data-testid="browser-batch-download" style={toolbarButtonStyle('accent', actionLoading['batch-download'])}>
-            {actionLoading['batch-download'] ? TEXT.packing : `${TEXT.batch} (${selectedCount})`}
-          </button>
-        ) : null}
-        {selectedCount > 0 && canUpload() ? (
-          <button onClick={() => openBatchTransferDialog('copy')} data-testid="browser-batch-copy" style={toolbarButtonStyle('primary', actionLoading['batch-copy'])}>
-            {actionLoading['batch-copy'] ? TEXT.loading : `${TEXT.batchCopy} (${selectedCount})`}
-          </button>
-        ) : null}
-        {selectedCount > 0 && canUpload() && canDelete() ? (
-          <button onClick={() => openBatchTransferDialog('move')} data-testid="browser-batch-move" style={toolbarButtonStyle('neutral', actionLoading['batch-move'])}>
-            {actionLoading['batch-move'] ? TEXT.loading : `${TEXT.batchMove} (${selectedCount})`}
-          </button>
-        ) : null}
-        {selectedCount > 0 && (canDownload() || canUpload()) ? (
-          <button onClick={clearAllSelections} data-testid="browser-clear-selection" style={toolbarButtonStyle('danger')}>
-            {TEXT.clearSelection}
-          </button>
-        ) : null}
-      </div>
-
-      <div style={{ background: '#f9fafb', padding: isMobile ? 14 : 16, borderRadius: 8, marginBottom: 16 }}>
-        <div style={{ display: 'flex', gap: isMobile ? 12 : 32, flexWrap: 'wrap' }}>
-          <div>
-            {TEXT.datasets}: <strong>{visibleDatasets.length}{visibleDatasets.length !== datasetsWithFolders.length ? ` / ${datasetsWithFolders.length}` : ''}</strong>
-          </div>
-          <div>
-            {TEXT.docs}: <strong>{totalDocs}</strong>
+        <div
+          style={{
+            background: '#fff',
+            border: '1px solid #e5e7eb',
+            borderRadius: 12,
+            padding: isMobile ? 14 : 18,
+          }}
+        >
+          <div
+            data-testid="browser-quick-datasets"
+            style={{
+              display: 'grid',
+              gridTemplateColumns: isMobile ? 'repeat(2, minmax(0, 1fr))' : 'repeat(5, minmax(0, 1fr))',
+              gap: 12,
+            }}
+          >
+            {quickDatasets.map((dataset) => (
+              <button
+                key={dataset.id || dataset.name}
+                type="button"
+                onClick={() => openQuickDataset(dataset)}
+                data-testid={`browser-quick-dataset-${String(dataset.id || dataset.name).replace(/[^a-zA-Z0-9_-]/g, '_')}`}
+                style={{
+                  border: '1px solid #dbeafe',
+                  background: 'linear-gradient(180deg, #eff6ff 0%, #ffffff 100%)',
+                  borderRadius: 12,
+                  padding: '12px 14px',
+                  textAlign: 'left',
+                  cursor: 'pointer',
+                  minHeight: 84,
+                }}
+              >
+                <div style={{ fontWeight: 700, color: '#1f2937', marginBottom: 6, wordBreak: 'break-all' }}>
+                  {dataset.name}
+                </div>
+                <div style={{ fontSize: '0.8rem', color: '#6b7280', marginBottom: 8, wordBreak: 'break-all' }}>
+                  {dataset.node_path && dataset.node_path !== '/' ? `${TEXT.root} > ${dataset.node_path.split('/').filter(Boolean).join(' > ')}` : TEXT.root}
+                </div>
+                <div style={{ fontSize: '0.78rem', color: '#2563eb', fontWeight: 700 }}>
+                  打开知识库
+                </div>
+              </button>
+            ))}
+            {quickDatasets.length === 0 ? (
+              <div
+                style={{
+                  gridColumn: '1 / -1',
+                  padding: '20px 0',
+                  textAlign: 'center',
+                  color: '#6b7280',
+                }}
+              >
+                {TEXT.shortcutEmpty}
+              </div>
+            ) : null}
           </div>
         </div>
       </div>

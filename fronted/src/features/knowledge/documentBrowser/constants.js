@@ -18,6 +18,9 @@ export const canPreviewFilename = (name = '') => PREVIEW_SUPPORTED_EXTENSIONS.ha
 export const TEXT = {
   title: '\u6587\u6863\u6d4f\u89c8',
   desc: '\u6587\u6863\u6d4f\u89c8\u7684\u77e5\u8bc6\u5e93\u76ee\u5f55\u5c42\u7ea7\u4e0e\u77e5\u8bc6\u914d\u7f6e\u4fdd\u6301\u4e00\u81f4\u3002',
+  shortcuts: '\u5feb\u6377\u77e5\u8bc6\u5e93',
+  shortcutsDesc: '\u5c55\u793a\u5f53\u524d\u7528\u6237\u6700\u5e38\u7528\u7684 10 \u4e2a\u77e5\u8bc6\u5e93\u3002',
+  shortcutEmpty: '\u6682\u65e0\u5feb\u6377\u77e5\u8bc6\u5e93',
   root: '\u6839\u76ee\u5f55',
   folder: '\u6587\u4ef6\u5939',
   datasets: '\u77e5\u8bc6\u5e93\u6570\u91cf',

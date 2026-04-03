@@ -13,6 +13,9 @@ export const DEFAULT_NEW_USER = {
   username: '',
   password: '',
   email: '',
+  manager_user_id: '',
+  role: 'viewer',
+  managed_kb_root_node_id: '',
   company_id: '',
   department_id: '',
   group_ids: [],
@@ -22,6 +25,13 @@ export const DEFAULT_NEW_USER = {
 
 export const DEFAULT_POLICY_FORM = {
   full_name: '',
+  email: '',
+  manager_user_id: '',
+  company_id: '',
+  department_id: '',
+  role: 'viewer',
+  managed_kb_root_node_id: '',
+  group_ids: [],
   max_login_sessions: 3,
   idle_timeout_minutes: 120,
   can_change_password: true,

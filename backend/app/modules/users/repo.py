@@ -95,7 +95,7 @@ class UsersRepo:
         return self._deps.permission_group_store.get_group_by_name(name)
 
     def get_company(self, company_id: int):
-        return self._deps.org_directory_store.get_company(company_id)
+        return self._deps.org_structure_manager.get_company(company_id)
 
     def get_department(self, department_id: int):
-        return self._deps.org_directory_store.get_department(department_id)
+        return self._deps.org_structure_manager.get_department(department_id)

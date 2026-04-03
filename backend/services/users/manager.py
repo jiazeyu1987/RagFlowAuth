@@ -154,10 +154,52 @@ class UserManagementManager:
                 result.append({"group_id": gid, "group_name": pg.get("group_name", "")})
         return result
 
+    def _validate_manager_user_id(
+        self,
+        *,
+        user_id: str | None,
+        manager_user_id: str | None,
+        company_id: int | None,
+    ) -> str | None:
+        normalized = str(manager_user_id or "").strip()
+        if not normalized:
+            return None
+        if user_id and normalized == str(user_id):
+            raise UserManagementError("manager_user_self_reference_not_allowed")
+        manager_user = self._port.get_user(normalized)
+        if not manager_user:
+            raise UserManagementError("manager_user_not_found")
+        if str(getattr(manager_user, "status", "") or "").strip().lower() != "active":
+            raise UserManagementError("manager_user_inactive")
+        if company_id is not None and getattr(manager_user, "company_id", None) != company_id:
+            raise UserManagementError("manager_user_company_mismatch")
+        return normalized
+
+    @staticmethod
+    def _department_display_name(department) -> str | None:
+        if not department:
+            return None
+        return getattr(department, "path_name", None) or getattr(department, "name", None)
+
+    def _validate_company_department_relation(
+        self,
+        *,
+        company_id: int | None,
+        department,
+    ) -> None:
+        if company_id is None or department is None:
+            return
+        department_company_id = getattr(department, "company_id", None)
+        if department_company_id is None:
+            return
+        if int(department_company_id) != int(company_id):
+            raise UserManagementError("department_company_mismatch")
+
     def _to_response(self, user, session_summary: dict[str, int | None] | None = None) -> UserResponse:
         group = self._port.get_permission_group(user.group_id) if user.group_id else None
         company = self._port.get_company(user.company_id) if getattr(user, "company_id", None) else None
         department = self._port.get_department(user.department_id) if getattr(user, "department_id", None) else None
+        manager_user = self._port.get_user(user.manager_user_id) if getattr(user, "manager_user_id", None) else None
 
         active_count = 0
         active_last = None
@@ -178,10 +220,13 @@ class UserManagementManager:
             username=user.username,
             full_name=getattr(user, "full_name", None),
             email=user.email,
+            manager_user_id=getattr(user, "manager_user_id", None),
+            manager_username=getattr(manager_user, "username", None) if manager_user else None,
+            manager_full_name=getattr(manager_user, "full_name", None) if manager_user else None,
             company_id=getattr(user, "company_id", None),
             company_name=company.name if company else None,
             department_id=getattr(user, "department_id", None),
-            department_name=department.name if department else None,
+            department_name=self._department_display_name(department),
             group_id=user.group_id,
             group_name=group["group_name"] if group else None,
             group_ids=user.group_ids,
@@ -203,6 +248,7 @@ class UserManagementManager:
             created_at_ms=user.created_at_ms,
             last_login_at_ms=user.last_login_at_ms,
             managed_kb_root_node_id=getattr(user, "managed_kb_root_node_id", None),
+            electronic_signature_enabled=bool(getattr(user, "electronic_signature_enabled", True)),
         )
 
     def list_users(
@@ -245,8 +291,12 @@ class UserManagementManager:
 
         if user_data.company_id is not None and not self._port.get_company(user_data.company_id):
             raise UserManagementError("company_not_found")
-        if user_data.department_id is not None and not self._port.get_department(user_data.department_id):
-            raise UserManagementError("department_not_found")
+        department = None
+        if user_data.department_id is not None:
+            department = self._port.get_department(user_data.department_id)
+            if not department:
+                raise UserManagementError("department_not_found")
+        self._validate_company_department_relation(company_id=user_data.company_id, department=department)
 
         max_login_sessions, idle_timeout_minutes = self._normalize_login_policy(
             max_login_sessions=user_data.max_login_sessions,
@@ -259,6 +309,11 @@ class UserManagementManager:
             for_create=True,
         )
         full_name = self._normalize_full_name(user_data.full_name, for_create=True)
+        manager_user_id = self._validate_manager_user_id(
+            user_id=None,
+            manager_user_id=user_data.manager_user_id,
+            company_id=user_data.company_id,
+        )
 
         group_ids = user_data.group_ids
         if not group_ids:
@@ -281,6 +336,7 @@ class UserManagementManager:
                 password=user_data.password,
                 full_name=full_name,
                 email=user_data.email,
+                manager_user_id=manager_user_id,
                 company_id=user_data.company_id,
                 department_id=user_data.department_id,
                 role=role,
@@ -291,6 +347,7 @@ class UserManagementManager:
                 can_change_password=bool(user_data.can_change_password),
                 disable_login_enabled=bool(disable_login_enabled),
                 disable_login_until_ms=disable_login_until_ms,
+                electronic_signature_enabled=bool(user_data.electronic_signature_enabled),
                 created_by=created_by,
             )
             if user_data.managed_kb_root_node_id is not None:
@@ -322,16 +379,23 @@ class UserManagementManager:
         current_user = self._port.get_user(user_id)
         if not current_user:
             raise UserManagementError("user_not_found", status_code=404)
+        fields_set = set(getattr(user_data, "model_fields_set", set()) or set())
 
         role = user_data.role
         if role is not None and role not in VALID_ROLES:
             raise UserManagementError(f"Invalid role: {role}")
         status = self._normalize_user_status(user_data.status, for_create=False)
 
+        next_company_id = current_user.company_id if user_data.company_id is None else user_data.company_id
         if user_data.company_id is not None and not self._port.get_company(user_data.company_id):
             raise UserManagementError("company_not_found")
-        if user_data.department_id is not None and not self._port.get_department(user_data.department_id):
-            raise UserManagementError("department_not_found")
+        department = None
+        next_department_id = current_user.department_id if user_data.department_id is None else user_data.department_id
+        if next_department_id is not None:
+            department = self._port.get_department(next_department_id)
+            if not department:
+                raise UserManagementError("department_not_found")
+        self._validate_company_department_relation(company_id=next_company_id, department=department)
 
         max_login_sessions, idle_timeout_minutes = self._normalize_login_policy(
             max_login_sessions=user_data.max_login_sessions,
@@ -347,6 +411,13 @@ class UserManagementManager:
             bool(user_data.can_change_password) if user_data.can_change_password is not None else None
         )
         full_name = self._normalize_full_name(user_data.full_name, for_create=False)
+        manager_user_id = None
+        if "manager_user_id" in fields_set:
+            manager_user_id = self._validate_manager_user_id(
+                user_id=user_id,
+                manager_user_id=user_data.manager_user_id,
+                company_id=next_company_id,
+            )
 
         disable_now = False
         if status is not None and status != "active":
@@ -376,6 +447,7 @@ class UserManagementManager:
             user_id=user_id,
             full_name=full_name,
             email=user_data.email,
+            manager_user_id=(manager_user_id if manager_user_id is not None else "" if "manager_user_id" in fields_set else None),
             company_id=user_data.company_id,
             department_id=user_data.department_id,
             role=role,
@@ -386,6 +458,7 @@ class UserManagementManager:
             can_change_password=can_change_password,
             disable_login_enabled=disable_login_enabled,
             disable_login_until_ms=disable_login_until_ms,
+            electronic_signature_enabled=user_data.electronic_signature_enabled,
         )
         if user_data.managed_kb_root_node_id is not None:
             update_kwargs["managed_kb_root_node_id"] = user_data.managed_kb_root_node_id

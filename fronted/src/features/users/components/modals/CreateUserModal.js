@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import KnowledgeRootNodeSelector from '../KnowledgeRootNodeSelector';
 
 const MOBILE_BREAKPOINT = 768;
 
@@ -9,6 +10,10 @@ export default function CreateUserModal({
   availableGroups,
   companies,
   departments,
+  managerOptions,
+  kbDirectoryNodes,
+  kbDirectoryLoading,
+  kbDirectoryError,
   onSubmit,
   onCancel,
   onFieldChange,
@@ -27,8 +32,6 @@ export default function CreateUserModal({
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  if (!open) return null;
-
   const inputStyle = {
     width: '100%',
     padding: '8px',
@@ -36,6 +39,22 @@ export default function CreateUserModal({
     borderRadius: '4px',
     boxSizing: 'border-box',
   };
+
+  const selectedCompanyId = newUser.company_id ? Number(newUser.company_id) : null;
+  const visibleDepartments =
+    selectedCompanyId == null
+      ? departments
+      : departments.filter((department) => department.company_id == null || department.company_id === selectedCompanyId);
+
+  const filteredManagerOptions = useMemo(() => {
+    const companyId = newUser.company_id ? Number(newUser.company_id) : null;
+    return (Array.isArray(managerOptions) ? managerOptions : []).filter((item) => {
+      if (companyId === null) return true;
+      return item.company_id === companyId;
+    });
+  }, [managerOptions, newUser.company_id]);
+
+  if (!open) return null;
 
   return (
     <div
@@ -59,7 +78,7 @@ export default function CreateUserModal({
           padding: isMobile ? '20px 16px' : '32px',
           borderRadius: '8px',
           width: '100%',
-          maxWidth: '400px',
+          maxWidth: '420px',
           maxHeight: isMobile ? '100%' : '90vh',
           overflowY: 'auto',
           margin: isMobile ? 'auto 0' : 0,
@@ -69,26 +88,76 @@ export default function CreateUserModal({
         <form onSubmit={onSubmit} data-testid="users-create-form">
           <div style={{ marginBottom: '16px' }}>
             <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500' }}>姓名</label>
-            <input type="text" value={newUser.full_name || ''} onChange={(e) => onFieldChange('full_name', e.target.value)} data-testid="users-create-full-name" style={inputStyle} />
+            <input
+              type="text"
+              value={newUser.full_name || ''}
+              onChange={(e) => onFieldChange('full_name', e.target.value)}
+              data-testid="users-create-full-name"
+              style={inputStyle}
+            />
           </div>
+
           <div style={{ marginBottom: '16px' }}>
             <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500' }}>用户名</label>
-            <input type="text" required value={newUser.username} onChange={(e) => onFieldChange('username', e.target.value)} data-testid="users-create-username" style={inputStyle} />
+            <input
+              type="text"
+              required
+              value={newUser.username}
+              onChange={(e) => onFieldChange('username', e.target.value)}
+              data-testid="users-create-username"
+              style={inputStyle}
+            />
           </div>
 
           <div style={{ marginBottom: '16px' }}>
             <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500' }}>密码</label>
-            <input type="password" required value={newUser.password} onChange={(e) => onFieldChange('password', e.target.value)} data-testid="users-create-password" style={inputStyle} />
+            <input
+              type="password"
+              required
+              value={newUser.password}
+              onChange={(e) => onFieldChange('password', e.target.value)}
+              data-testid="users-create-password"
+              style={inputStyle}
+            />
           </div>
 
           <div style={{ marginBottom: '16px' }}>
             <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500' }}>邮箱</label>
-            <input type="text" value={newUser.email} onChange={(e) => onFieldChange('email', e.target.value)} data-testid="users-create-email" style={inputStyle} />
+            <input
+              type="text"
+              value={newUser.email}
+              onChange={(e) => onFieldChange('email', e.target.value)}
+              data-testid="users-create-email"
+              style={inputStyle}
+            />
+          </div>
+
+          <div style={{ marginBottom: '16px' }}>
+            <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500' }}>角色</label>
+            <select
+              value={newUser.role || 'viewer'}
+              onChange={(e) => onFieldChange('role', e.target.value)}
+              data-testid="users-create-role"
+              style={{ ...inputStyle, backgroundColor: 'white' }}
+            >
+              <option value="viewer">普通查看者</option>
+              <option value="operator">操作员</option>
+              <option value="reviewer">审核员</option>
+              <option value="guest">访客</option>
+              <option value="sub_admin">子管理员</option>
+              <option value="admin">管理员</option>
+            </select>
           </div>
 
           <div style={{ marginBottom: '16px' }}>
             <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500' }}>公司</label>
-            <select required value={newUser.company_id} onChange={(e) => onFieldChange('company_id', e.target.value)} data-testid="users-create-company" style={{ ...inputStyle, backgroundColor: 'white' }}>
+            <select
+              required
+              value={newUser.company_id}
+              onChange={(e) => onFieldChange('company_id', e.target.value)}
+              data-testid="users-create-company"
+              style={{ ...inputStyle, backgroundColor: 'white' }}
+            >
               <option value="" disabled>请选择公司</option>
               {companies.map((c) => (
                 <option key={c.id} value={String(c.id)}>{c.name}</option>
@@ -98,43 +167,125 @@ export default function CreateUserModal({
 
           <div style={{ marginBottom: '16px' }}>
             <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500' }}>部门</label>
-            <select required value={newUser.department_id} onChange={(e) => onFieldChange('department_id', e.target.value)} data-testid="users-create-department" style={{ ...inputStyle, backgroundColor: 'white' }}>
+            <select
+              required
+              value={newUser.department_id}
+              onChange={(e) => onFieldChange('department_id', e.target.value)}
+              data-testid="users-create-department"
+              style={{ ...inputStyle, backgroundColor: 'white' }}
+            >
               <option value="" disabled>请选择部门</option>
-              {departments.map((d) => (
-                <option key={d.id} value={String(d.id)}>{d.name}</option>
+              {visibleDepartments.map((d) => (
+                <option key={d.id} value={String(d.id)}>{d.path_name || d.name}</option>
+              ))}
+            </select>
+          </div>
+
+          <div style={{ marginBottom: '16px' }}>
+            <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500' }}>直属主管</label>
+            <select
+              value={newUser.manager_user_id || ''}
+              onChange={(e) => onFieldChange('manager_user_id', e.target.value)}
+              data-testid="users-create-manager"
+              style={{ ...inputStyle, backgroundColor: 'white' }}
+            >
+              <option value="">无</option>
+              {filteredManagerOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
               ))}
             </select>
           </div>
 
           <div style={{ marginBottom: '16px' }}>
             <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500' }}>最大登录会话数</label>
-            <input type="number" min={1} max={1000} required value={newUser.max_login_sessions} onChange={(e) => onFieldChange('max_login_sessions', e.target.value)} data-testid="users-create-max-login-sessions" style={inputStyle} />
+            <input
+              type="number"
+              min={1}
+              max={1000}
+              required
+              value={newUser.max_login_sessions}
+              onChange={(e) => onFieldChange('max_login_sessions', e.target.value)}
+              data-testid="users-create-max-login-sessions"
+              style={inputStyle}
+            />
           </div>
 
           <div style={{ marginBottom: '16px' }}>
             <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500' }}>空闲超时(分钟)</label>
-            <input type="number" min={1} max={43200} required value={newUser.idle_timeout_minutes} onChange={(e) => onFieldChange('idle_timeout_minutes', e.target.value)} data-testid="users-create-idle-timeout" style={inputStyle} />
+            <input
+              type="number"
+              min={1}
+              max={43200}
+              required
+              value={newUser.idle_timeout_minutes}
+              onChange={(e) => onFieldChange('idle_timeout_minutes', e.target.value)}
+              data-testid="users-create-idle-timeout"
+              style={inputStyle}
+            />
           </div>
 
           <div style={{ marginBottom: '24px' }}>
             <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500' }}>权限组，可多选</label>
-            <div style={{ border: '1px solid #d1d5db', borderRadius: '4px', padding: '12px', maxHeight: isMobile ? '180px' : '200px', overflowY: 'auto', backgroundColor: '#f9fafb' }}>
+            <div
+              style={{
+                border: '1px solid #d1d5db',
+                borderRadius: '4px',
+                padding: '12px',
+                maxHeight: isMobile ? '180px' : '200px',
+                overflowY: 'auto',
+                backgroundColor: '#f9fafb',
+              }}
+            >
               {availableGroups.length === 0 ? (
                 <div style={{ color: '#6b7280', textAlign: 'center', padding: '8px' }}>暂无可用权限组</div>
               ) : (
                 availableGroups.map((group) => (
-                  <label key={group.group_id} style={{ display: 'flex', alignItems: 'center', padding: '8px 0', cursor: 'pointer' }}>
-                    <input type="checkbox" checked={newUser.group_ids?.includes(group.group_id) || false} onChange={(e) => onToggleGroup(group.group_id, e.target.checked)} data-testid={`users-create-group-${group.group_id}`} style={{ marginRight: '8px', flexShrink: 0 }} />
+                  <label
+                    key={group.group_id}
+                    style={{ display: 'flex', alignItems: 'center', padding: '8px 0', cursor: 'pointer' }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={newUser.group_ids?.includes(group.group_id) || false}
+                      onChange={(e) => onToggleGroup(group.group_id, e.target.checked)}
+                      data-testid={`users-create-group-${group.group_id}`}
+                      style={{ marginRight: '8px', flexShrink: 0 }}
+                    />
                     <div>
                       <div style={{ fontWeight: '500' }}>{group.group_name}</div>
-                      {group.description ? <div style={{ fontSize: '0.85rem', color: '#6b7280' }}>{group.description}</div> : null}
+                      {group.description ? (
+                        <div style={{ fontSize: '0.85rem', color: '#6b7280' }}>{group.description}</div>
+                      ) : null}
                     </div>
                   </label>
                 ))
               )}
             </div>
-            {newUser.group_ids && newUser.group_ids.length > 0 ? <div style={{ marginTop: '8px', fontSize: '0.85rem', color: '#6b7280' }}>已选择 {newUser.group_ids.length} 个权限组</div> : null}
+            {newUser.group_ids && newUser.group_ids.length > 0 ? (
+              <div style={{ marginTop: '8px', fontSize: '0.85rem', color: '#6b7280' }}>
+                已选择 {newUser.group_ids.length} 个权限组
+              </div>
+            ) : null}
           </div>
+
+          {String(newUser.role || '') === 'sub_admin' ? (
+            <div style={{ marginBottom: '24px' }}>
+              <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500' }}>知识库负责目录</label>
+              <div style={{ marginBottom: '8px', color: '#6b7280', fontSize: '0.85rem' }}>
+                子管理员只能管理该目录及其后代。
+              </div>
+              <KnowledgeRootNodeSelector
+                nodes={kbDirectoryNodes}
+                selectedNodeId={newUser.managed_kb_root_node_id || ''}
+                onSelect={(nodeId) => onFieldChange('managed_kb_root_node_id', nodeId)}
+                disabled={false}
+                loading={kbDirectoryLoading}
+                error={kbDirectoryError}
+              />
+            </div>
+          ) : null}
 
           {error ? (
             <div style={{ marginBottom: '16px', color: '#ef4444' }} data-testid="users-create-error">
@@ -143,8 +294,39 @@ export default function CreateUserModal({
           ) : null}
 
           <div style={{ display: 'flex', gap: '12px', flexDirection: isMobile ? 'column' : 'row' }}>
-            <button type="submit" data-testid="users-create-submit" style={{ flex: 1, padding: '10px', backgroundColor: '#3b82f6', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', width: isMobile ? '100%' : 'auto' }}>创建</button>
-            <button type="button" onClick={onCancel} data-testid="users-create-cancel" style={{ flex: 1, padding: '10px', backgroundColor: '#6b7280', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', width: isMobile ? '100%' : 'auto' }}>取消</button>
+            <button
+              type="submit"
+              data-testid="users-create-submit"
+              style={{
+                flex: 1,
+                padding: '10px',
+                backgroundColor: '#3b82f6',
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                width: isMobile ? '100%' : 'auto',
+              }}
+            >
+              创建
+            </button>
+            <button
+              type="button"
+              onClick={onCancel}
+              data-testid="users-create-cancel"
+              style={{
+                flex: 1,
+                padding: '10px',
+                backgroundColor: '#6b7280',
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                width: isMobile ? '100%' : 'auto',
+              }}
+            >
+              取消
+            </button>
           </div>
         </form>
       </div>

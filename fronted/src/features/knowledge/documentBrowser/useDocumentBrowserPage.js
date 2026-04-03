@@ -15,6 +15,7 @@ export default function useDocumentBrowserPage() {
   const [directoryTree, setDirectoryTree] = useState({ nodes: [], datasets: [] });
   const [datasetFilterKeyword, setDatasetFilterKeyword] = useState('');
   const [recentDatasetKeywords, setRecentDatasetKeywords] = useState([]);
+  const [datasetUsageCounts, setDatasetUsageCounts] = useState({});
   const [documents, setDocuments] = useState({});
   const [documentErrors, setDocumentErrors] = useState({});
   const [loading, setLoading] = useState(true);
@@ -90,6 +91,23 @@ export default function useDocumentBrowserPage() {
     return Array.from(new Set(names)).sort((a, b) => a.localeCompare(b, 'zh-Hans-CN'));
   }, [datasetsWithFolders]);
 
+  const usageStorageKey = useMemo(
+    () => `ragflowauth_browser_dataset_usage_v1:${user?.user_id || 'anon'}`,
+    [user?.user_id]
+  );
+
+  const quickDatasets = useMemo(() => {
+    const counts = datasetUsageCounts || {};
+    return [...datasetsWithFolders]
+      .sort((a, b) => {
+        const countA = Number(counts[a.name] || 0);
+        const countB = Number(counts[b.name] || 0);
+        if (countA !== countB) return countB - countA;
+        return String(a.name || '').localeCompare(String(b.name || ''), 'zh-Hans-CN');
+      })
+      .slice(0, 10);
+  }, [datasetUsageCounts, datasetsWithFolders]);
+
   useEffect(() => {
     const storageKey = `ragflowauth_recent_dataset_keywords_v1:${user?.user_id || 'anon'}`;
     try {
@@ -107,6 +125,24 @@ export default function useDocumentBrowserPage() {
   }, [user?.user_id]);
 
   useEffect(() => {
+    try {
+      const raw = JSON.parse(window.localStorage.getItem(usageStorageKey) || '{}');
+      if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+        setDatasetUsageCounts({});
+        return;
+      }
+      const normalized = {};
+      Object.entries(raw).forEach(([key, value]) => {
+        const count = Number(value || 0);
+        if (key && Number.isFinite(count) && count > 0) normalized[key] = count;
+      });
+      setDatasetUsageCounts(normalized);
+    } catch {
+      setDatasetUsageCounts({});
+    }
+  }, [usageStorageKey]);
+
+  useEffect(() => {
     setDocuments({});
     setDocumentErrors({});
     setExpandedDatasets(new Set());
@@ -114,7 +150,28 @@ export default function useDocumentBrowserPage() {
     setDirectoryTree({ nodes: [], datasets: [] });
     setCurrentFolderId(ROOT);
     setExpandedFolderIds([]);
+    setDatasetUsageCounts({});
   }, [user?.user_id]);
+
+  const recordDatasetUsage = useCallback(
+    (datasetName) => {
+      const name = String(datasetName || '').trim();
+      if (!name) return;
+      setDatasetUsageCounts((previous) => {
+        const next = {
+          ...(previous || {}),
+          [name]: Number(previous?.[name] || 0) + 1,
+        };
+        try {
+          window.localStorage.setItem(usageStorageKey, JSON.stringify(next));
+        } catch {
+          // ignore storage errors
+        }
+        return next;
+      });
+    },
+    [usageStorageKey]
+  );
 
   useEffect(() => {
     setCanDeleteDocs(can('ragflow_documents', 'delete'));
@@ -212,13 +269,17 @@ export default function useDocumentBrowserPage() {
     (datasetName) => {
       setExpandedDatasets((previous) => {
         const next = new Set(previous);
-        if (next.has(datasetName)) next.delete(datasetName);
-        else next.add(datasetName);
+        if (next.has(datasetName)) {
+          next.delete(datasetName);
+        } else {
+          next.add(datasetName);
+          recordDatasetUsage(datasetName);
+        }
         return next;
       });
       if (!documents[datasetName]) fetchDocumentsForDataset(datasetName);
     },
-    [documents, fetchDocumentsForDataset]
+    [documents, fetchDocumentsForDataset, recordDatasetUsage]
   );
 
   const openFolder = useCallback(
@@ -254,6 +315,7 @@ export default function useDocumentBrowserPage() {
   }, [fetchDocumentsForDataset, visibleDatasets]);
 
   const handleView = useCallback((docId, datasetName) => {
+    recordDatasetUsage(datasetName);
     const doc = documents[datasetName]?.find((item) => item.id === docId);
     setPreviewTarget({
       source: DOCUMENT_SOURCE.RAGFLOW,
@@ -262,10 +324,11 @@ export default function useDocumentBrowserPage() {
       filename: doc?.name || `document_${docId}`,
     });
     setPreviewOpen(true);
-  }, [documents]);
+  }, [documents, recordDatasetUsage]);
   viewRef.current = handleView;
 
   const handleDownload = useCallback(async (docId, datasetName) => {
+    recordDatasetUsage(datasetName);
     const doc = documents[datasetName]?.find((item) => item.id === docId);
     try {
       setActionLoading((previous) => ({ ...previous, [`${docId}-download`]: true }));
@@ -280,7 +343,7 @@ export default function useDocumentBrowserPage() {
     } finally {
       setActionLoading((previous) => ({ ...previous, [`${docId}-download`]: false }));
     }
-  }, [documents]);
+  }, [documents, recordDatasetUsage]);
 
   const handleDelete = useCallback(async (docId, datasetName) => {
     if (!window.confirm(TEXT.deleteConfirm)) return;
@@ -304,6 +367,7 @@ export default function useDocumentBrowserPage() {
 
   const openSingleTransferDialog = useCallback(
     (docId, sourceDatasetName, operation) => {
+      recordDatasetUsage(sourceDatasetName);
       const candidates = transferTargetOptions.filter(
         (name) => name !== sourceDatasetName
       );
@@ -319,7 +383,26 @@ export default function useDocumentBrowserPage() {
         targetDatasetName: candidates[0],
       });
     },
-    [transferTargetOptions]
+    [recordDatasetUsage, transferTargetOptions]
+  );
+
+  const openQuickDataset = useCallback(
+    (datasetRef) => {
+      if (!datasetRef) return;
+      const dataset =
+        typeof datasetRef === 'string'
+          ? datasetsWithFolders.find((item) => item.name === datasetRef || item.id === datasetRef)
+          : datasetRef;
+      if (!dataset) return;
+      const datasetName = dataset.name || dataset.id;
+      recordDatasetUsage(datasetName);
+      const nodeIds = pathNodes(dataset.node_id, indexes.byId).map((node) => node.id);
+      setCurrentFolderId(dataset.node_id || ROOT);
+      setExpandedFolderIds((previous) => Array.from(new Set([...previous, ...nodeIds])));
+      setExpandedDatasets((previous) => new Set([...previous, datasetName]));
+      if (!documents[datasetName]) fetchDocumentsForDataset(datasetName);
+    },
+    [datasetsWithFolders, documents, fetchDocumentsForDataset, indexes.byId, recordDatasetUsage]
   );
 
   const handleSelectDoc = useCallback((docId, datasetName) => {
@@ -596,6 +679,7 @@ export default function useDocumentBrowserPage() {
     transferTargetOptions,
     datasetFilterKeyword,
     recentDatasetKeywords,
+    quickDatasets,
     documents,
     documentErrors,
     loading,
@@ -617,6 +701,7 @@ export default function useDocumentBrowserPage() {
     expandAll,
     collapseAll,
     refreshAll,
+    openQuickDataset,
     toggleDataset,
     fetchDocumentsForDataset,
     isAllSelectedInDataset,

@@ -54,8 +54,12 @@ const UserManagement = () => {
     disableUserError,
     companies,
     departments,
+    kbDirectoryNodes,
+    kbDirectoryLoading,
+    kbDirectoryError,
     filteredUsers,
     groupedUsers,
+    managerOptions,
     setFilters,
     setPolicyForm,
     setResetPasswordValue,
@@ -72,6 +76,7 @@ const UserManagement = () => {
     handleSubmitResetPassword,
     handleOpenPolicyModal,
     handleClosePolicyModal,
+    handleTogglePolicyGroup,
     handleSavePolicy,
     handleCloseDisableUserModal,
     handleChangeDisableMode,
@@ -178,9 +183,17 @@ const UserManagement = () => {
         open={showPolicyModal}
         user={policyUser}
         policyForm={policyForm}
+        managerOptions={managerOptions}
+        availableGroups={availableGroups}
+        companies={companies}
+        departments={departments}
+        kbDirectoryNodes={kbDirectoryNodes}
+        kbDirectoryLoading={kbDirectoryLoading}
+        kbDirectoryError={kbDirectoryError}
         policyError={policyError}
         policySubmitting={policySubmitting}
         onChangePolicyForm={setPolicyForm}
+        onTogglePolicyGroup={handleTogglePolicyGroup}
         onCancel={handleClosePolicyModal}
         onSave={handleSavePolicy}
       />
@@ -206,6 +219,10 @@ const UserManagement = () => {
           availableGroups={availableGroups}
           companies={companies}
           departments={departments}
+          managerOptions={managerOptions}
+          kbDirectoryNodes={kbDirectoryNodes}
+          kbDirectoryLoading={kbDirectoryLoading}
+          kbDirectoryError={kbDirectoryError}
           onSubmit={handleCreateUser}
           onCancel={handleCloseCreateModal}
           onFieldChange={setNewUserField}

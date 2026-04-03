@@ -98,5 +98,6 @@ adminTest('document preview renders backend watermark badge and overlay for only
   await expect(page.getByTestId('preview-controlled-badge')).toContainText('受控预览');
   await expect(page.getByTestId('preview-controlled-badge')).toContainText('禁止截图/外传');
   await expect(page.getByTestId('preview-watermark-overlay')).toHaveAttribute('data-watermark-text', /文档ID:doc1/);
+  await expect(page.getByTestId('preview-corner-watermark')).toBeVisible();
   await expect(page.locator('[data-doc-editor-ready="1"]')).toBeVisible();
 });

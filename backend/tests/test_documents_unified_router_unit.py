@@ -147,6 +147,7 @@ class _Deps:
         self.deletion_log_store = _DeletionLogStore()
         self.permission_group_store = _PermissionGroupStore()
         self.org_directory_store = _OrgDirectoryStore()
+        self.org_structure_manager = self.org_directory_store
         self.watermark_policy_store = _WatermarkPolicyStore()
 
 

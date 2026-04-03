@@ -8,6 +8,7 @@ class UserCreate(BaseModel):
     password: str
     full_name: Optional[str] = None
     email: Optional[str] = None
+    manager_user_id: Optional[str] = None
     company_id: Optional[int] = None
     department_id: Optional[int] = None
     role: Optional[str] = None
@@ -22,11 +23,13 @@ class UserCreate(BaseModel):
     disable_login_enabled: bool = False
     disable_login_until_ms: Optional[int] = None
     managed_kb_root_node_id: Optional[str] = None
+    electronic_signature_enabled: bool = True
 
 
 class UserUpdate(BaseModel):
     full_name: Optional[str] = None
     email: Optional[str] = None
+    manager_user_id: Optional[str] = None
     company_id: Optional[int] = None
     department_id: Optional[int] = None
     role: Optional[str] = None
@@ -39,6 +42,7 @@ class UserUpdate(BaseModel):
     disable_login_enabled: Optional[bool] = None
     disable_login_until_ms: Optional[int] = None
     managed_kb_root_node_id: Optional[str] = None
+    electronic_signature_enabled: Optional[bool] = None
 
 
 class UserResponse(BaseModel):
@@ -46,6 +50,9 @@ class UserResponse(BaseModel):
     username: str
     full_name: Optional[str] = None
     email: Optional[str] = None
+    manager_user_id: Optional[str] = None
+    manager_username: Optional[str] = None
+    manager_full_name: Optional[str] = None
     company_id: Optional[int] = None
     company_name: Optional[str] = None
     department_id: Optional[int] = None
@@ -68,3 +75,4 @@ class UserResponse(BaseModel):
     last_login_at_ms: Optional[int] = None
     managed_kb_root_node_id: Optional[str] = None
     managed_kb_root_path: Optional[str] = None
+    electronic_signature_enabled: bool = True

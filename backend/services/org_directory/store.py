@@ -5,7 +5,7 @@ import time
 from backend.database.paths import resolve_auth_db_path
 from backend.database.sqlite import connect_sqlite
 
-from .models import Company, Department, OrgDirectoryAuditLog
+from .models import Company, Department, Employee, OrgDirectoryAuditLog
 
 
 class OrgDirectoryStore:
@@ -16,14 +16,17 @@ class OrgDirectoryStore:
     def _get_connection(self):
         return connect_sqlite(self.db_path)
 
-    # -------- Companies --------
     def list_companies(self) -> list[Company]:
         conn = self._get_connection()
         try:
             rows = conn.execute(
-                "SELECT company_id, name, created_at_ms, updated_at_ms FROM companies ORDER BY name ASC"
+                """
+                SELECT company_id, name, source_key, created_at_ms, updated_at_ms
+                FROM companies
+                ORDER BY name COLLATE NOCASE ASC, company_id ASC
+                """
             ).fetchall()
-            return [Company(*row) for row in rows]
+            return [self._row_to_company(row) for row in rows]
         finally:
             conn.close()
 
@@ -31,114 +34,44 @@ class OrgDirectoryStore:
         conn = self._get_connection()
         try:
             row = conn.execute(
-                "SELECT company_id, name, created_at_ms, updated_at_ms FROM companies WHERE company_id = ?",
+                """
+                SELECT company_id, name, source_key, created_at_ms, updated_at_ms
+                FROM companies
+                WHERE company_id = ?
+                """,
                 (company_id,),
             ).fetchone()
-            return Company(*row) if row else None
+            return self._row_to_company(row) if row else None
         finally:
             conn.close()
 
-    def create_company(self, *, name: str, actor_user_id: str) -> Company:
-        name = (name or "").strip()
-        if not name:
-            raise ValueError("公司名不能为空")
-
-        now_ms = int(time.time() * 1000)
-        conn = self._get_connection()
-        try:
-            cur = conn.cursor()
-            cur.execute(
-                "INSERT INTO companies (name, created_at_ms, updated_at_ms) VALUES (?, ?, ?)",
-                (name, now_ms, now_ms),
-            )
-            company_id = int(cur.lastrowid)
-            self._log(
-                conn,
-                entity_type="company",
-                action="create",
-                entity_id=company_id,
-                before_name=None,
-                after_name=name,
-                actor_user_id=actor_user_id,
-            )
-            conn.commit()
-            return Company(company_id=company_id, name=name, created_at_ms=now_ms, updated_at_ms=now_ms)
-        finally:
-            conn.close()
-
-    def update_company(self, *, company_id: int, name: str, actor_user_id: str) -> Company:
-        name = (name or "").strip()
-        if not name:
-            raise ValueError("公司名不能为空")
-
-        conn = self._get_connection()
-        try:
-            cur = conn.cursor()
-            row = cur.execute(
-                "SELECT company_id, name, created_at_ms, updated_at_ms FROM companies WHERE company_id = ?",
-                (company_id,),
-            ).fetchone()
-            if not row:
-                raise KeyError("公司不存在")
-            before = Company(*row)
-
-            now_ms = int(time.time() * 1000)
-            cur.execute(
-                "UPDATE companies SET name = ?, updated_at_ms = ? WHERE company_id = ?",
-                (name, now_ms, company_id),
-            )
-            self._log(
-                conn,
-                entity_type="company",
-                action="update",
-                entity_id=company_id,
-                before_name=before.name,
-                after_name=name,
-                actor_user_id=actor_user_id,
-            )
-            conn.commit()
-            return Company(company_id=company_id, name=name, created_at_ms=before.created_at_ms, updated_at_ms=now_ms)
-        finally:
-            conn.close()
-
-    def delete_company(self, *, company_id: int, actor_user_id: str) -> None:
-        conn = self._get_connection()
-        try:
-            cur = conn.cursor()
-            row = cur.execute(
-                "SELECT company_id, name, created_at_ms, updated_at_ms FROM companies WHERE company_id = ?",
-                (company_id,),
-            ).fetchone()
-            if not row:
-                raise KeyError("公司不存在")
-            company = Company(*row)
-
-            used = cur.execute("SELECT COUNT(*) FROM users WHERE company_id = ?", (company_id,)).fetchone()[0]
-            if used and int(used) > 0:
-                raise ValueError("该公司已被用户使用，无法删除")
-
-            cur.execute("DELETE FROM companies WHERE company_id = ?", (company_id,))
-            self._log(
-                conn,
-                entity_type="company",
-                action="delete",
-                entity_id=company_id,
-                before_name=company.name,
-                after_name=None,
-                actor_user_id=actor_user_id,
-            )
-            conn.commit()
-        finally:
-            conn.close()
-
-    # -------- Departments --------
     def list_departments(self) -> list[Department]:
         conn = self._get_connection()
         try:
             rows = conn.execute(
-                "SELECT department_id, name, created_at_ms, updated_at_ms FROM departments ORDER BY name ASC"
+                """
+                SELECT
+                    department_id,
+                    name,
+                    company_id,
+                    parent_department_id,
+                    source_key,
+                    source_department_id,
+                    level_no,
+                    path_name,
+                    sort_order,
+                    created_at_ms,
+                    updated_at_ms
+                FROM departments
+                ORDER BY
+                    COALESCE(company_id, 0) ASC,
+                    level_no ASC,
+                    sort_order ASC,
+                    path_name COLLATE NOCASE ASC,
+                    department_id ASC
+                """
             ).fetchall()
-            return [Department(*row) for row in rows]
+            return [self._row_to_department(row) for row in rows]
         finally:
             conn.close()
 
@@ -146,109 +79,90 @@ class OrgDirectoryStore:
         conn = self._get_connection()
         try:
             row = conn.execute(
-                "SELECT department_id, name, created_at_ms, updated_at_ms FROM departments WHERE department_id = ?",
+                """
+                SELECT
+                    department_id,
+                    name,
+                    company_id,
+                    parent_department_id,
+                    source_key,
+                    source_department_id,
+                    level_no,
+                    path_name,
+                    sort_order,
+                    created_at_ms,
+                    updated_at_ms
+                FROM departments
+                WHERE department_id = ?
+                """,
                 (department_id,),
             ).fetchone()
-            return Department(*row) if row else None
+            return self._row_to_department(row) if row else None
         finally:
             conn.close()
 
-    def create_department(self, *, name: str, actor_user_id: str) -> Department:
-        name = (name or "").strip()
-        if not name:
-            raise ValueError("部门名不能为空")
-
-        now_ms = int(time.time() * 1000)
+    def list_employees(self) -> list[Employee]:
         conn = self._get_connection()
         try:
-            cur = conn.cursor()
-            cur.execute(
-                "INSERT INTO departments (name, created_at_ms, updated_at_ms) VALUES (?, ?, ?)",
-                (name, now_ms, now_ms),
-            )
-            department_id = int(cur.lastrowid)
-            self._log(
-                conn,
-                entity_type="department",
-                action="create",
-                entity_id=department_id,
-                before_name=None,
-                after_name=name,
-                actor_user_id=actor_user_id,
-            )
-            conn.commit()
-            return Department(department_id=department_id, name=name, created_at_ms=now_ms, updated_at_ms=now_ms)
+            rows = conn.execute(
+                """
+                SELECT
+                    employee_id,
+                    employee_user_id,
+                    name,
+                    email,
+                    employee_no,
+                    department_manager_name,
+                    is_department_manager,
+                    company_id,
+                    department_id,
+                    source_key,
+                    sort_order,
+                    created_at_ms,
+                    updated_at_ms
+                FROM org_employees
+                ORDER BY
+                    COALESCE(company_id, 0) ASC,
+                    CASE WHEN department_id IS NULL THEN 0 ELSE 1 END ASC,
+                    COALESCE(department_id, 0) ASC,
+                    is_department_manager DESC,
+                    sort_order ASC,
+                    name COLLATE NOCASE ASC,
+                    employee_id ASC
+                """
+            ).fetchall()
+            return [self._row_to_employee(row) for row in rows]
         finally:
             conn.close()
 
-    def update_department(self, *, department_id: int, name: str, actor_user_id: str) -> Department:
-        name = (name or "").strip()
-        if not name:
-            raise ValueError("部门名不能为空")
-
+    def get_employee(self, employee_id: int) -> Employee | None:
         conn = self._get_connection()
         try:
-            cur = conn.cursor()
-            row = cur.execute(
-                "SELECT department_id, name, created_at_ms, updated_at_ms FROM departments WHERE department_id = ?",
-                (department_id,),
+            row = conn.execute(
+                """
+                SELECT
+                    employee_id,
+                    employee_user_id,
+                    name,
+                    email,
+                    employee_no,
+                    department_manager_name,
+                    is_department_manager,
+                    company_id,
+                    department_id,
+                    source_key,
+                    sort_order,
+                    created_at_ms,
+                    updated_at_ms
+                FROM org_employees
+                WHERE employee_id = ?
+                """,
+                (employee_id,),
             ).fetchone()
-            if not row:
-                raise KeyError("部门不存在")
-            before = Department(*row)
-
-            now_ms = int(time.time() * 1000)
-            cur.execute(
-                "UPDATE departments SET name = ?, updated_at_ms = ? WHERE department_id = ?",
-                (name, now_ms, department_id),
-            )
-            self._log(
-                conn,
-                entity_type="department",
-                action="update",
-                entity_id=department_id,
-                before_name=before.name,
-                after_name=name,
-                actor_user_id=actor_user_id,
-            )
-            conn.commit()
-            return Department(
-                department_id=department_id, name=name, created_at_ms=before.created_at_ms, updated_at_ms=now_ms
-            )
+            return self._row_to_employee(row) if row else None
         finally:
             conn.close()
 
-    def delete_department(self, *, department_id: int, actor_user_id: str) -> None:
-        conn = self._get_connection()
-        try:
-            cur = conn.cursor()
-            row = cur.execute(
-                "SELECT department_id, name, created_at_ms, updated_at_ms FROM departments WHERE department_id = ?",
-                (department_id,),
-            ).fetchone()
-            if not row:
-                raise KeyError("部门不存在")
-            dept = Department(*row)
-
-            used = cur.execute("SELECT COUNT(*) FROM users WHERE department_id = ?", (department_id,)).fetchone()[0]
-            if used and int(used) > 0:
-                raise ValueError("该部门已被用户使用，无法删除")
-
-            cur.execute("DELETE FROM departments WHERE department_id = ?", (department_id,))
-            self._log(
-                conn,
-                entity_type="department",
-                action="delete",
-                entity_id=department_id,
-                before_name=dept.name,
-                after_name=None,
-                actor_user_id=actor_user_id,
-            )
-            conn.commit()
-        finally:
-            conn.close()
-
-    # -------- Audit --------
     def list_audit_logs(
         self,
         *,
@@ -276,7 +190,7 @@ class OrgDirectoryStore:
             if action:
                 query += " AND action = ?"
                 params.append(action)
-            query += " ORDER BY created_at_ms DESC LIMIT ?"
+            query += " ORDER BY created_at_ms DESC, id DESC LIMIT ?"
             params.append(limit)
 
             rows = conn.execute(query, params).fetchall()
@@ -305,3 +219,46 @@ class OrgDirectoryStore:
             (entity_type, action, entity_id, before_name, after_name, actor_user_id, now_ms),
         )
 
+    @staticmethod
+    def _row_to_company(row) -> Company:
+        return Company(
+            company_id=int(row[0]),
+            name=str(row[1] or ""),
+            source_key=(str(row[2]).strip() if row[2] is not None else None),
+            created_at_ms=int(row[3]),
+            updated_at_ms=int(row[4]),
+        )
+
+    @staticmethod
+    def _row_to_department(row) -> Department:
+        return Department(
+            department_id=int(row[0]),
+            name=str(row[1] or ""),
+            company_id=(int(row[2]) if row[2] is not None else None),
+            parent_department_id=(int(row[3]) if row[3] is not None else None),
+            source_key=(str(row[4]).strip() if row[4] is not None else None),
+            source_department_id=(str(row[5]).strip() if row[5] is not None else None),
+            level_no=int(row[6] or 0),
+            path_name=str(row[7] or ""),
+            sort_order=int(row[8] or 0),
+            created_at_ms=int(row[9]),
+            updated_at_ms=int(row[10]),
+        )
+
+    @staticmethod
+    def _row_to_employee(row) -> Employee:
+        return Employee(
+            employee_id=int(row[0]),
+            employee_user_id=str(row[1] or ""),
+            name=str(row[2] or ""),
+            email=(str(row[3]).strip() if row[3] is not None and str(row[3]).strip() else None),
+            employee_no=(str(row[4]).strip() if row[4] is not None and str(row[4]).strip() else None),
+            department_manager_name=(str(row[5]).strip() if row[5] is not None and str(row[5]).strip() else None),
+            is_department_manager=bool(int(row[6] or 0)),
+            company_id=(int(row[7]) if row[7] is not None else None),
+            department_id=(int(row[8]) if row[8] is not None else None),
+            source_key=str(row[9] or ""),
+            sort_order=int(row[10] or 0),
+            created_at_ms=int(row[11]),
+            updated_at_ms=int(row[12]),
+        )

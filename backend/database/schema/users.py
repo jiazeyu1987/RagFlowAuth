@@ -24,6 +24,7 @@ def ensure_users_table(conn: sqlite3.Connection) -> None:
             username TEXT UNIQUE NOT NULL,
             password_hash TEXT NOT NULL,
             email TEXT,
+            manager_user_id TEXT,
             role TEXT NOT NULL DEFAULT 'viewer',
             group_id INTEGER,
             company_id INTEGER,
@@ -34,6 +35,7 @@ def ensure_users_table(conn: sqlite3.Connection) -> None:
             can_change_password INTEGER NOT NULL DEFAULT 1,
             disable_login_enabled INTEGER NOT NULL DEFAULT 0,
             disable_login_until_ms INTEGER,
+            electronic_signature_enabled INTEGER NOT NULL DEFAULT 1,
             password_changed_at_ms INTEGER,
             credential_fail_count INTEGER NOT NULL DEFAULT 0,
             credential_fail_window_started_at_ms INTEGER,
@@ -46,6 +48,7 @@ def ensure_users_table(conn: sqlite3.Connection) -> None:
         """
     )
     conn.execute("CREATE INDEX IF NOT EXISTS idx_users_username ON users(username)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_users_manager_user_id ON users(manager_user_id)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_users_role ON users(role)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_users_group_id ON users(group_id)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_users_company_id ON users(company_id)")
@@ -55,8 +58,10 @@ def ensure_users_table(conn: sqlite3.Connection) -> None:
 def ensure_org_columns_on_users(conn: sqlite3.Connection) -> None:
     if not table_exists(conn, "users"):
         return
+    add_column_if_missing(conn, "users", "manager_user_id TEXT")
     add_column_if_missing(conn, "users", "company_id INTEGER")
     add_column_if_missing(conn, "users", "department_id INTEGER")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_users_manager_user_id ON users(manager_user_id)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_users_company_id ON users(company_id)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_users_department_id ON users(department_id)")
 
@@ -92,6 +97,12 @@ def ensure_user_password_security_columns(conn: sqlite3.Connection) -> None:
     add_column_if_missing(conn, "users", "credential_fail_window_started_at_ms INTEGER")
     add_column_if_missing(conn, "users", "credential_locked_until_ms INTEGER")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_users_credential_locked_until_ms ON users(credential_locked_until_ms)")
+
+
+def ensure_user_electronic_signature_columns(conn: sqlite3.Connection) -> None:
+    if not table_exists(conn, "users"):
+        return
+    add_column_if_missing(conn, "users", "electronic_signature_enabled INTEGER NOT NULL DEFAULT 1")
 
 
 def ensure_password_history_table(conn: sqlite3.Connection) -> None:

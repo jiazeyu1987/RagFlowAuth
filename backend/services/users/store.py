@@ -32,8 +32,10 @@ class UserStore:
             cursor.execute(
                 """
                 SELECT user_id, username, password_hash, email, role, group_id, company_id, department_id, status,
+                       manager_user_id,
                        max_login_sessions, idle_timeout_minutes, can_change_password,
                        disable_login_enabled, disable_login_until_ms,
+                       electronic_signature_enabled,
                        created_at_ms, last_login_at_ms, created_by, full_name, managed_kb_root_node_id,
                        password_changed_at_ms, credential_fail_count, credential_fail_window_started_at_ms,
                        credential_locked_until_ms
@@ -48,25 +50,27 @@ class UserStore:
                     username=row[1],
                     password_hash=row[2],
                     email=row[3],
-                    full_name=row[17],
+                    full_name=row[18],
+                    manager_user_id=row[9],
                     role=row[4],
                     group_id=row[5],
                     company_id=row[6],
                     department_id=row[7],
                     status=row[8],
-                    max_login_sessions=int(row[9] or 3),
-                    idle_timeout_minutes=int(row[10] or 120),
-                    can_change_password=bool(row[11]) if row[11] is not None else True,
-                    disable_login_enabled=bool(row[12]) if row[12] is not None else False,
-                    disable_login_until_ms=int(row[13]) if row[13] is not None else None,
-                    created_at_ms=row[14],
-                    last_login_at_ms=row[15],
-                    created_by=row[16],
-                    managed_kb_root_node_id=row[18],
-                    password_changed_at_ms=(int(row[19]) if row[19] is not None else None),
-                    credential_fail_count=int(row[20] or 0),
-                    credential_fail_window_started_at_ms=(int(row[21]) if row[21] is not None else None),
-                    credential_locked_until_ms=(int(row[22]) if row[22] is not None else None),
+                    max_login_sessions=int(row[10] or 3),
+                    idle_timeout_minutes=int(row[11] or 120),
+                    can_change_password=bool(row[12]) if row[12] is not None else True,
+                    disable_login_enabled=bool(row[13]) if row[13] is not None else False,
+                    disable_login_until_ms=int(row[14]) if row[14] is not None else None,
+                    electronic_signature_enabled=bool(row[15]) if row[15] is not None else True,
+                    created_at_ms=row[16],
+                    last_login_at_ms=row[17],
+                    created_by=row[18],
+                    managed_kb_root_node_id=row[20],
+                    password_changed_at_ms=(int(row[21]) if row[21] is not None else None),
+                    credential_fail_count=int(row[22] or 0),
+                    credential_fail_window_started_at_ms=(int(row[23]) if row[23] is not None else None),
+                    credential_locked_until_ms=(int(row[24]) if row[24] is not None else None),
                 )
                 user.group_ids = self._get_user_group_ids(user.user_id, conn)
                 user.group_id = user.group_ids[0] if user.group_ids else None
@@ -82,8 +86,10 @@ class UserStore:
             cursor.execute(
                 """
                 SELECT user_id, username, password_hash, email, role, group_id, company_id, department_id, status,
+                       manager_user_id,
                        max_login_sessions, idle_timeout_minutes, can_change_password,
                        disable_login_enabled, disable_login_until_ms,
+                       electronic_signature_enabled,
                        created_at_ms, last_login_at_ms, created_by, full_name, managed_kb_root_node_id,
                        password_changed_at_ms, credential_fail_count, credential_fail_window_started_at_ms,
                        credential_locked_until_ms
@@ -98,25 +104,27 @@ class UserStore:
                     username=row[1],
                     password_hash=row[2],
                     email=row[3],
-                    full_name=row[17],
+                    full_name=row[18],
+                    manager_user_id=row[9],
                     role=row[4],
                     group_id=row[5],
                     company_id=row[6],
                     department_id=row[7],
                     status=row[8],
-                    max_login_sessions=int(row[9] or 3),
-                    idle_timeout_minutes=int(row[10] or 120),
-                    can_change_password=bool(row[11]) if row[11] is not None else True,
-                    disable_login_enabled=bool(row[12]) if row[12] is not None else False,
-                    disable_login_until_ms=int(row[13]) if row[13] is not None else None,
-                    created_at_ms=row[14],
-                    last_login_at_ms=row[15],
-                    created_by=row[16],
-                    managed_kb_root_node_id=row[18],
-                    password_changed_at_ms=(int(row[19]) if row[19] is not None else None),
-                    credential_fail_count=int(row[20] or 0),
-                    credential_fail_window_started_at_ms=(int(row[21]) if row[21] is not None else None),
-                    credential_locked_until_ms=(int(row[22]) if row[22] is not None else None),
+                    max_login_sessions=int(row[10] or 3),
+                    idle_timeout_minutes=int(row[11] or 120),
+                    can_change_password=bool(row[12]) if row[12] is not None else True,
+                    disable_login_enabled=bool(row[13]) if row[13] is not None else False,
+                    disable_login_until_ms=int(row[14]) if row[14] is not None else None,
+                    electronic_signature_enabled=bool(row[15]) if row[15] is not None else True,
+                    created_at_ms=row[16],
+                    last_login_at_ms=row[17],
+                    created_by=row[18],
+                    managed_kb_root_node_id=row[20],
+                    password_changed_at_ms=(int(row[21]) if row[21] is not None else None),
+                    credential_fail_count=int(row[22] or 0),
+                    credential_fail_window_started_at_ms=(int(row[23]) if row[23] is not None else None),
+                    credential_locked_until_ms=(int(row[24]) if row[24] is not None else None),
                 )
                 user.group_ids = self._get_user_group_ids(user.user_id, conn)
                 user.group_id = user.group_ids[0] if user.group_ids else None
@@ -167,6 +175,7 @@ class UserStore:
         password: str,
         full_name: Optional[str] = None,
         email: Optional[str] = None,
+        manager_user_id: Optional[str] = None,
         company_id: Optional[int] = None,
         department_id: Optional[int] = None,
         role: str = "viewer",
@@ -179,6 +188,7 @@ class UserStore:
         disable_login_until_ms: Optional[int] = None,
         created_by: Optional[str] = None,
         managed_kb_root_node_id: Optional[str] = None,
+        electronic_signature_enabled: bool = True,
     ) -> User:
         # Deprecated: users.group_id is no longer the source of truth (use user_permission_groups).
         group_id = None
@@ -193,19 +203,21 @@ class UserStore:
             cursor.execute(
                 """
                 INSERT INTO users (
-                    user_id, username, password_hash, email, role, group_id, company_id, department_id,
+                    user_id, username, password_hash, email, manager_user_id, role, group_id, company_id, department_id,
                     max_login_sessions, idle_timeout_minutes, status,
                     can_change_password, disable_login_enabled, disable_login_until_ms,
+                    electronic_signature_enabled,
                     password_changed_at_ms,
                     credential_fail_count, credential_fail_window_started_at_ms, credential_locked_until_ms,
                     created_at_ms, created_by, full_name, managed_kb_root_node_id
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     user_id,
                     username,
                     password_hash_value,
                     email,
+                    manager_user_id,
                     role,
                     group_id,
                     company_id,
@@ -216,6 +228,7 @@ class UserStore:
                     1 if can_change_password else 0,
                     1 if disable_login_enabled else 0,
                     int(disable_login_until_ms) if disable_login_until_ms is not None else None,
+                    1 if electronic_signature_enabled else 0,
                     now_ms,
                     0,
                     None,
@@ -233,6 +246,7 @@ class UserStore:
                 password_hash=password_hash_value,
                 email=email,
                 full_name=full_name,
+                manager_user_id=manager_user_id,
                 role=role,
                 group_id=group_id,
                 company_id=company_id,
@@ -243,6 +257,7 @@ class UserStore:
                 can_change_password=bool(can_change_password),
                 disable_login_enabled=bool(disable_login_enabled),
                 disable_login_until_ms=int(disable_login_until_ms) if disable_login_until_ms is not None else None,
+                electronic_signature_enabled=bool(electronic_signature_enabled),
                 password_changed_at_ms=now_ms,
                 credential_fail_count=0,
                 credential_fail_window_started_at_ms=None,
@@ -261,6 +276,7 @@ class UserStore:
         user_id: str,
         full_name: Optional[str] = None,
         email: Optional[str] = None,
+        manager_user_id: Optional[str] = None,
         company_id: Optional[int] = None,
         department_id: Optional[int] = None,
         role: Optional[str] = None,
@@ -272,6 +288,7 @@ class UserStore:
         disable_login_enabled: Optional[bool] = None,
         disable_login_until_ms: Optional[int] = None,
         managed_kb_root_node_id: Optional[str] = None,
+        electronic_signature_enabled: Optional[bool] = None,
     ) -> Optional[User]:
         updates = []
         params = []
@@ -282,6 +299,9 @@ class UserStore:
         if email is not None:
             updates.append("email = ?")
             params.append(email)
+        if manager_user_id is not None:
+            updates.append("manager_user_id = ?")
+            params.append(str(manager_user_id).strip() or None)
         if company_id is not None:
             updates.append("company_id = ?")
             params.append(company_id)
@@ -308,6 +328,9 @@ class UserStore:
             params.append(int(disable_login_until_ms))
         elif disable_login_enabled is not None and not disable_login_enabled:
             updates.append("disable_login_until_ms = NULL")
+        if electronic_signature_enabled is not None:
+            updates.append("electronic_signature_enabled = ?")
+            params.append(1 if electronic_signature_enabled else 0)
         if managed_kb_root_node_id is not None:
             updates.append("managed_kb_root_node_id = ?")
             params.append(str(managed_kb_root_node_id).strip() or None)
@@ -401,7 +424,7 @@ class UserStore:
         max_failures: int = DEFAULT_CREDENTIAL_FAILURE_LIMIT,
         window_ms: int = DEFAULT_CREDENTIAL_FAILURE_WINDOW_MS,
         lockout_ms: int = DEFAULT_CREDENTIAL_LOCKOUT_MS,
-    ) -> int | None:
+    ) -> tuple[int | None, bool]:
         current_ms = int(time.time() * 1000) if now_ms is None else int(now_ms)
         conn = self._get_connection()
         try:
@@ -416,7 +439,7 @@ class UserStore:
             ).fetchone()
             if row is None:
                 conn.commit()
-                return None
+                return None, False
 
             previous_count = int(row[0] or 0)
             previous_window_start = int(row[1]) if row[1] is not None else None
@@ -424,7 +447,7 @@ class UserStore:
 
             if previous_locked_until is not None and current_ms < previous_locked_until:
                 conn.commit()
-                return previous_locked_until
+                return previous_locked_until, False
 
             if previous_window_start is None or current_ms - previous_window_start > int(window_ms):
                 next_count = 1
@@ -434,8 +457,10 @@ class UserStore:
                 next_window_start = previous_window_start
 
             next_locked_until = None
+            newly_locked = False
             if next_count >= int(max_failures):
                 next_locked_until = current_ms + int(lockout_ms)
+                newly_locked = True
 
             conn.execute(
                 """
@@ -448,7 +473,7 @@ class UserStore:
                 (next_count, next_window_start, next_locked_until, user_id),
             )
             conn.commit()
-            return next_locked_until
+            return next_locked_until, newly_locked
         finally:
             conn.close()
 
@@ -499,8 +524,10 @@ class UserStore:
         try:
             base_query = """
                 SELECT user_id, username, password_hash, email, role, group_id, company_id, department_id, status,
+                       manager_user_id,
                        max_login_sessions, idle_timeout_minutes, can_change_password,
                        disable_login_enabled, disable_login_until_ms,
+                       electronic_signature_enabled,
                        created_at_ms, last_login_at_ms, created_by, full_name, managed_kb_root_node_id,
                        password_changed_at_ms, credential_fail_count, credential_fail_window_started_at_ms,
                        credential_locked_until_ms
@@ -558,25 +585,27 @@ class UserStore:
                     username=row[1],
                     password_hash=row[2],
                     email=row[3],
-                    full_name=row[17],
+                    full_name=row[18],
+                    manager_user_id=row[9],
                     role=row[4],
                     group_id=row[5],
                     company_id=row[6],
                     department_id=row[7],
                     status=row[8],
-                    max_login_sessions=int(row[9] or 3),
-                    idle_timeout_minutes=int(row[10] or 120),
-                    can_change_password=bool(row[11]) if row[11] is not None else True,
-                    disable_login_enabled=bool(row[12]) if row[12] is not None else False,
-                    disable_login_until_ms=int(row[13]) if row[13] is not None else None,
-                    created_at_ms=row[14],
-                    last_login_at_ms=row[15],
-                    created_by=row[16],
-                    managed_kb_root_node_id=row[18],
-                    password_changed_at_ms=(int(row[19]) if row[19] is not None else None),
-                    credential_fail_count=int(row[20] or 0),
-                    credential_fail_window_started_at_ms=(int(row[21]) if row[21] is not None else None),
-                    credential_locked_until_ms=(int(row[22]) if row[22] is not None else None),
+                    max_login_sessions=int(row[10] or 3),
+                    idle_timeout_minutes=int(row[11] or 120),
+                    can_change_password=bool(row[12]) if row[12] is not None else True,
+                    disable_login_enabled=bool(row[13]) if row[13] is not None else False,
+                    disable_login_until_ms=int(row[14]) if row[14] is not None else None,
+                    electronic_signature_enabled=bool(row[15]) if row[15] is not None else True,
+                    created_at_ms=row[16],
+                    last_login_at_ms=row[17],
+                    created_by=row[18],
+                    managed_kb_root_node_id=row[20],
+                    password_changed_at_ms=(int(row[21]) if row[21] is not None else None),
+                    credential_fail_count=int(row[22] or 0),
+                    credential_fail_window_started_at_ms=(int(row[23]) if row[23] is not None else None),
+                    credential_locked_until_ms=(int(row[24]) if row[24] is not None else None),
                 )
                 user.group_ids = self._get_user_group_ids(user.user_id, conn)
                 user.group_id = user.group_ids[0] if user.group_ids else None

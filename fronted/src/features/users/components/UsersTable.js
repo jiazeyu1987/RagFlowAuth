@@ -1,20 +1,44 @@
 import React from 'react';
 
-const isUserDisabled = (user) => {
-  if (!user) return false;
-  if (user.login_disabled === true) return true;
-  const status = String(user.status || '').toLowerCase();
-  if (status && status !== 'active') return true;
-  const disableEnabled = user.disable_login_enabled === true;
-  if (!disableEnabled) return false;
-  const untilMs = Number(user.disable_login_until_ms || 0);
-  if (!Number.isFinite(untilMs) || untilMs <= 0) return true;
-  return Date.now() < untilMs;
+const formatRole = (role) => {
+  const value = String(role || '').trim();
+  if (value === 'admin') return '管理员';
+  if (value === 'sub_admin') return '子管理员';
+  if (value === 'reviewer') return '审核员';
+  if (value === 'operator') return '操作员';
+  if (value === 'guest') return '访客';
+  return '普通查看者';
+};
+
+const formatStatus = (user) => {
+  if (user?.login_disabled) return '已停用';
+  return String(user?.status || '').toLowerCase() === 'active' ? '正常' : '已停用';
+};
+
+const roleBadgeStyle = (role) => {
+  if (role === 'sub_admin') {
+    return {
+      backgroundColor: '#ecfeff',
+      border: '1px solid #67e8f9',
+      color: '#155e75',
+    };
+  }
+  if (role === 'admin') {
+    return {
+      backgroundColor: '#eff6ff',
+      border: '1px solid #93c5fd',
+      color: '#1d4ed8',
+    };
+  }
+  return {
+    backgroundColor: '#f3f4f6',
+    border: '1px solid #d1d5db',
+    color: '#374151',
+  };
 };
 
 export default function UsersTable({
   filteredUsers,
-  canManageUsers,
   canEditUserPolicy,
   canAssignGroups,
   canResetPasswords,
@@ -27,8 +51,11 @@ export default function UsersTable({
   onToggleUserStatus,
   statusUpdatingUserId,
 }) {
+  const users = Array.isArray(filteredUsers) ? filteredUsers : [];
+
   return (
     <div
+      data-testid="users-table"
       style={{
         backgroundColor: 'white',
         borderRadius: '8px',
@@ -37,216 +64,190 @@ export default function UsersTable({
       }}
     >
       <div style={{ overflowX: 'auto' }}>
-        <table style={{ width: '100%', minWidth: '1100px', borderCollapse: 'collapse' }}>
-          <thead style={{ backgroundColor: '#f9fafb' }}>
-            <tr>
-              <th style={{ padding: '12px 16px', textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>
-                姓名 / 账号
-              </th>
-              <th style={{ padding: '12px 16px', textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>
-                公司
-              </th>
-              <th style={{ padding: '12px 16px', textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>
-                部门
-              </th>
-              <th style={{ padding: '12px 16px', textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>
-                状态
-              </th>
-              <th style={{ padding: '12px 16px', textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>
-                登录策略
-              </th>
-              <th style={{ padding: '12px 16px', textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>
-                权限组
-              </th>
-              <th style={{ padding: '12px 16px', textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>
-                创建时间
-              </th>
-              <th style={{ padding: '12px 16px', textAlign: 'right', borderBottom: '1px solid #e5e7eb' }}>
-                操作
-              </th>
+        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <thead>
+            <tr style={{ backgroundColor: '#f9fafb', textAlign: 'left' }}>
+              <th style={{ padding: '12px 16px', fontWeight: 600 }}>用户</th>
+              <th style={{ padding: '12px 16px', fontWeight: 600 }}>角色</th>
+              <th style={{ padding: '12px 16px', fontWeight: 600 }}>公司/部门</th>
+              <th style={{ padding: '12px 16px', fontWeight: 600 }}>知识库管理目录</th>
+              <th style={{ padding: '12px 16px', fontWeight: 600 }}>状态</th>
+              <th style={{ padding: '12px 16px', fontWeight: 600 }}>操作</th>
             </tr>
           </thead>
           <tbody>
-            {filteredUsers.map((user) => {
-              const isProtectedAdmin = String(user?.username || '').toLowerCase() === 'admin';
-              const fullName = String(user?.full_name || '').trim();
-              const fallbackName = String(user?.email || '').trim();
-              const displayName = fullName || fallbackName;
-              const disabledNow = isUserDisabled(user);
+            {users.map((user) => {
+              const safeUserId = String(user?.user_id || '');
+              const isBuiltInAdmin = String(user?.username || '').toLowerCase() === 'admin';
+              const isActive = String(user?.status || '').toLowerCase() === 'active';
 
               return (
                 <tr
-                  key={user.user_id}
-                  data-testid={`users-row-${user.user_id}`}
-                  style={{ borderBottom: '1px solid #e5e7eb' }}
+                  key={safeUserId}
+                  data-testid={`users-row-${safeUserId}`}
+                  style={{ borderTop: '1px solid #e5e7eb' }}
                 >
-                  <td style={{ padding: '12px 16px' }}>
-                    <div style={{ color: '#111827', fontWeight: 500 }}>{displayName || user.username}</div>
-                    {displayName ? (
-                      <div style={{ color: '#6b7280', fontSize: '0.85rem' }}>{`账号: ${user.username}`}</div>
+                  <td style={{ padding: '14px 16px', verticalAlign: 'top' }}>
+                    <div style={{ fontWeight: 600, color: '#111827' }}>
+                      {user?.full_name || user?.username || '-'}
+                    </div>
+                    <div style={{ fontSize: '0.85rem', color: '#6b7280' }}>{user?.username || '-'}</div>
+                    {user?.email ? (
+                      <div style={{ fontSize: '0.85rem', color: '#6b7280' }}>{user.email}</div>
                     ) : null}
                   </td>
-                  <td style={{ padding: '12px 16px', color: '#6b7280' }}>{user.company_name || '-'}</td>
-                  <td style={{ padding: '12px 16px', color: '#6b7280' }}>{user.department_name || '-'}</td>
-                  <td style={{ padding: '12px 16px' }}>
-                    <span style={{ color: disabledNow ? '#ef4444' : '#10b981' }}>
-                      {disabledNow ? '停用' : '激活'}
+                  <td style={{ padding: '14px 16px', verticalAlign: 'top' }}>
+                    <span
+                      data-testid={`users-role-${safeUserId}`}
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        padding: '4px 10px',
+                        borderRadius: '999px',
+                        fontSize: '0.82rem',
+                        fontWeight: 700,
+                        ...roleBadgeStyle(String(user?.role || '')),
+                      }}
+                    >
+                      {formatRole(user?.role)}
                     </span>
                   </td>
-                  <td style={{ padding: '12px 16px', color: '#4b5563', fontSize: '0.9rem' }}>
-                    <div>最大登录数: {Number(user.max_login_sessions || 3)}</div>
-                    <div>空闲超时: {Number(user.idle_timeout_minutes || 120)} 分钟</div>
-                    <div>当前在线: {Number(user.active_session_count || 0)}</div>
-                    {user.disable_login_enabled && user.disable_login_until_ms ? (
-                      <div>
-                        禁用到期: {new Date(user.disable_login_until_ms).toLocaleString('zh-CN')}
-                      </div>
-                    ) : null}
+                  <td style={{ padding: '14px 16px', verticalAlign: 'top' }}>
+                    <div>{user?.company_name || '-'}</div>
+                    <div style={{ fontSize: '0.85rem', color: '#6b7280' }}>
+                      {user?.department_name || '-'}
+                    </div>
                   </td>
-                  <td style={{ padding: '12px 16px' }}>
-                    {user.permission_groups && user.permission_groups.length > 0 ? (
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
-                        {user.permission_groups.map((pg) => (
-                          <span
-                            key={pg.group_id}
-                            style={{
-                              display: 'inline-block',
-                              padding: '4px 8px',
-                              borderRadius: '4px',
-                              backgroundColor: '#e0e7ff',
-                              color: '#4338ca',
-                              fontSize: '0.85rem',
-                            }}
-                          >
-                            {pg.group_name}
-                          </span>
-                        ))}
+                  <td style={{ padding: '14px 16px', verticalAlign: 'top' }}>
+                    {user?.role === 'sub_admin' ? (
+                      <div data-testid={`users-managed-root-${safeUserId}`}>
+                        <div
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            padding: '4px 8px',
+                            borderRadius: '999px',
+                            backgroundColor: '#f0fdf4',
+                            border: '1px solid #86efac',
+                            color: '#166534',
+                            fontSize: '0.78rem',
+                            fontWeight: 700,
+                            marginBottom: 6,
+                          }}
+                        >
+                          KB 子树管理员
+                        </div>
+                        <div style={{ fontSize: '0.9rem', color: '#111827', wordBreak: 'break-all' }}>
+                          {user?.managed_kb_root_path || user?.managed_kb_root_node_id || '-'}
+                        </div>
                       </div>
                     ) : (
-                      <span style={{ color: '#9ca3af', fontSize: '0.85rem' }}>未分配</span>
+                      <div style={{ color: '#9ca3af' }}>-</div>
                     )}
                   </td>
-                  <td style={{ padding: '12px 16px', color: '#6b7280', fontSize: '0.9rem' }}>
-                    {new Date(user.created_at_ms).toLocaleString('zh-CN')}
-                  </td>
-                  <td style={{ padding: '12px 16px', textAlign: 'right' }}>
-                    {canEditUserPolicy && !isProtectedAdmin ? (
-                      <button
-                        type="button"
-                        onClick={() => onOpenPolicyModal(user)}
-                        data-testid={`users-edit-policy-${user.user_id}`}
-                        style={{
-                          padding: '6px 12px',
-                          backgroundColor: '#0ea5e9',
-                          color: 'white',
-                          border: 'none',
-                          borderRadius: '4px',
-                          cursor: 'pointer',
-                          fontSize: '0.9rem',
-                          marginRight: '8px',
-                        }}
-                      >
-                        登录策略
-                      </button>
-                    ) : null}
-
-                    {canAssignGroups && !isProtectedAdmin ? (
-                      <button
-                        type="button"
-                        onClick={() => onAssignGroup(user)}
-                        data-testid={`users-edit-groups-${user.user_id}`}
-                        style={{
-                          padding: '6px 12px',
-                          backgroundColor: '#8b5cf6',
-                          color: 'white',
-                          border: 'none',
-                          borderRadius: '4px',
-                          cursor: 'pointer',
-                          fontSize: '0.9rem',
-                          marginRight: '8px',
-                        }}
-                      >
-                        权限组
-                      </button>
-                    ) : null}
-
-                    {canResetPasswords ? (
-                      <button
-                        type="button"
-                        onClick={() => onOpenResetPassword(user)}
-                        data-testid={`users-reset-password-${user.user_id}`}
-                        style={{
-                          padding: '6px 12px',
-                          backgroundColor: '#3b82f6',
-                          color: 'white',
-                          border: 'none',
-                          borderRadius: '4px',
-                          cursor: 'pointer',
-                          fontSize: '0.9rem',
-                          marginRight: '8px',
-                        }}
-                      >
-                        修改密码
-                      </button>
-                    ) : null}
-
-                    {canToggleUserStatus && !isProtectedAdmin ? (
-                      <button
-                        type="button"
-                        onClick={() => onToggleUserStatus(user)}
-                        data-testid={`users-toggle-status-${user.user_id}`}
-                        disabled={statusUpdatingUserId === user.user_id}
-                        style={{
-                          padding: '6px 12px',
-                          backgroundColor: disabledNow ? '#10b981' : '#f59e0b',
-                          color: 'white',
-                          border: 'none',
-                          borderRadius: '4px',
-                          cursor: statusUpdatingUserId === user.user_id ? 'not-allowed' : 'pointer',
-                          opacity: statusUpdatingUserId === user.user_id ? 0.7 : 1,
-                          fontSize: '0.9rem',
-                          marginRight: '8px',
-                        }}
-                      >
-                        {statusUpdatingUserId === user.user_id
-                          ? disabledNow
-                            ? '解禁中...'
-                            : '禁用中...'
-                          : disabledNow
-                            ? '解禁'
-                            : '禁用'}
-                      </button>
-                    ) : null}
-
-                    {canDeleteUsers && !isProtectedAdmin ? (
-                      <button
-                        type="button"
-                        onClick={() => onDeleteUser(user.user_id)}
-                        data-testid={`users-delete-${user.user_id}`}
-                        style={{
-                          padding: '6px 12px',
-                          backgroundColor: '#ef4444',
-                          color: 'white',
-                          border: 'none',
-                          borderRadius: '4px',
-                          cursor: 'pointer',
-                          fontSize: '0.9rem',
-                        }}
-                      >
-                        删除
-                      </button>
-                    ) : null}
+                  <td style={{ padding: '14px 16px', verticalAlign: 'top' }}>{formatStatus(user)}</td>
+                  <td style={{ padding: '14px 16px', verticalAlign: 'top' }}>
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                      {canEditUserPolicy ? (
+                        <button
+                          type="button"
+                          onClick={() => onOpenPolicyModal?.(user)}
+                          data-testid={`users-edit-policy-${safeUserId}`}
+                          style={{
+                            padding: '6px 10px',
+                            border: '1px solid #93c5fd',
+                            background: '#eff6ff',
+                            borderRadius: 6,
+                            cursor: 'pointer',
+                          }}
+                        >
+                          用户配置
+                        </button>
+                      ) : null}
+                      {canAssignGroups ? (
+                        <button
+                          type="button"
+                          onClick={() => onAssignGroup?.(user)}
+                          data-testid={`users-edit-groups-${safeUserId}`}
+                          style={{
+                            padding: '6px 10px',
+                            border: '1px solid #cbd5e1',
+                            background: '#f8fafc',
+                            borderRadius: 6,
+                            cursor: 'pointer',
+                          }}
+                        >
+                          权限组
+                        </button>
+                      ) : null}
+                      {canResetPasswords ? (
+                        <button
+                          type="button"
+                          onClick={() => onOpenResetPassword?.(user)}
+                          data-testid={`users-reset-password-${safeUserId}`}
+                          style={{
+                            padding: '6px 10px',
+                            border: '1px solid #cbd5e1',
+                            background: '#f8fafc',
+                            borderRadius: 6,
+                            cursor: 'pointer',
+                          }}
+                        >
+                          重置密码
+                        </button>
+                      ) : null}
+                      {canToggleUserStatus ? (
+                        <button
+                          type="button"
+                          onClick={() => onToggleUserStatus?.(user)}
+                          disabled={statusUpdatingUserId === safeUserId || isBuiltInAdmin}
+                          data-testid={`users-toggle-status-${safeUserId}`}
+                          style={{
+                            padding: '6px 10px',
+                            border: '1px solid #fcd34d',
+                            background: '#fffbeb',
+                            borderRadius: 6,
+                            cursor:
+                              statusUpdatingUserId === safeUserId || isBuiltInAdmin
+                                ? 'not-allowed'
+                                : 'pointer',
+                          }}
+                        >
+                          {isActive ? '停用' : '启用'}
+                        </button>
+                      ) : null}
+                      {canDeleteUsers && !isBuiltInAdmin ? (
+                        <button
+                          type="button"
+                          onClick={() => onDeleteUser?.(safeUserId)}
+                          data-testid={`users-delete-${safeUserId}`}
+                          style={{
+                            padding: '6px 10px',
+                            border: '1px solid #fecaca',
+                            background: '#fef2f2',
+                            borderRadius: 6,
+                            cursor: 'pointer',
+                            color: '#b91c1c',
+                          }}
+                        >
+                          删除
+                        </button>
+                      ) : null}
+                    </div>
                   </td>
                 </tr>
               );
             })}
+            {users.length === 0 ? (
+              <tr>
+                <td colSpan={6} style={{ padding: '24px 16px', textAlign: 'center', color: '#6b7280' }}>
+                  暂无用户
+                </td>
+              </tr>
+            ) : null}
           </tbody>
         </table>
       </div>
-
-      {filteredUsers.length === 0 ? (
-        <div style={{ padding: '48px', textAlign: 'center', color: '#6b7280' }}>暂无用户</div>
-      ) : null}
     </div>
   );
 }

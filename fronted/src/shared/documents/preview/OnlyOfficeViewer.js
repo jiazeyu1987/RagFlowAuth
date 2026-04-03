@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 
 import { nowMs, previewTrace } from './previewUtils';
-import { WatermarkOverlay } from './watermarkOverlay';
+import { CornerWatermarkBadge, WatermarkOverlay } from './watermarkOverlay';
 
 export default function OnlyOfficeViewer({ serverUrl, config, traceContext, watermark, height = '78vh' }) {
   const containerId = useMemo(
@@ -124,6 +124,7 @@ export default function OnlyOfficeViewer({ serverUrl, config, traceContext, wate
     >
       <div id={containerId} style={{ width: '100%', height: '100%' }} />
       <WatermarkOverlay watermark={watermark} />
+      <CornerWatermarkBadge watermark={watermark} />
     </div>
   );
 }

@@ -11,6 +11,7 @@ class User:
     password_hash: str
     full_name: Optional[str] = None
     email: Optional[str] = None
+    manager_user_id: Optional[str] = None
     role: str = "viewer"
     # Deprecated: single group id, kept for compatibility.
     group_id: Optional[int] = None
@@ -29,6 +30,7 @@ class User:
     last_login_at_ms: Optional[int] = None
     created_by: Optional[str] = None
     managed_kb_root_node_id: Optional[str] = None
+    electronic_signature_enabled: bool = True
     password_changed_at_ms: Optional[int] = None
     credential_fail_count: int = 0
     credential_fail_window_started_at_ms: Optional[int] = None

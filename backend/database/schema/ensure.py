@@ -39,9 +39,8 @@ from .package_drawings import ensure_package_drawing_tables
 from .org_directory import (
     ensure_companies_table,
     ensure_departments_table,
+    ensure_org_employees_table,
     ensure_org_directory_audit_logs_table,
-    seed_default_companies,
-    seed_default_departments,
 )
 from .permission_groups import (
     backfill_user_permission_groups_from_users_group_id,
@@ -66,6 +65,7 @@ from .users import (
     ensure_password_history_table,
     ensure_org_columns_on_users,
     ensure_user_full_name_column,
+    ensure_user_electronic_signature_columns,
     ensure_user_login_policy_columns,
     ensure_user_managed_kb_root_column,
     ensure_user_password_security_columns,
@@ -90,6 +90,7 @@ def ensure_schema(db_path: str | Path) -> None:
         ensure_user_login_policy_columns(conn)
         ensure_user_full_name_column(conn)
         ensure_user_managed_kb_root_column(conn)
+        ensure_user_electronic_signature_columns(conn)
         ensure_user_password_security_columns(conn)
         ensure_password_history_table(conn)
         ensure_auth_login_sessions_table(conn)
@@ -130,9 +131,8 @@ def ensure_schema(db_path: str | Path) -> None:
         # Org directory (companies/departments) + audit
         ensure_companies_table(conn)
         ensure_departments_table(conn)
+        ensure_org_employees_table(conn)
         ensure_org_directory_audit_logs_table(conn)
-        seed_default_companies(conn)
-        seed_default_departments(conn)
         ensure_org_columns_on_users(conn)
 
         # Audit tables

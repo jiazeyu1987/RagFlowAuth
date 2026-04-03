@@ -3,6 +3,7 @@ import { useAuth } from '../../../hooks/useAuth';
 import { permissionGroupsApi } from '../../permissionGroups/api';
 import { usersApi } from '../api';
 import { orgDirectoryApi } from '../../orgDirectory/api';
+import { knowledgeApi } from '../../knowledge/api';
 import { DEFAULT_FILTERS, DEFAULT_NEW_USER, DEFAULT_POLICY_FORM } from '../utils/constants';
 import { buildListParams, filterUsers, groupUsersByDepartment } from '../utils/userFilters';
 
@@ -78,6 +79,9 @@ export const useUserManagement = () => {
 
   const [companies, setCompanies] = useState([]);
   const [departments, setDepartments] = useState([]);
+  const [kbDirectoryNodes, setKbDirectoryNodes] = useState([]);
+  const [kbDirectoryLoading, setKbDirectoryLoading] = useState(false);
+  const [kbDirectoryError, setKbDirectoryError] = useState(null);
 
   useEffect(() => {
     setCanManageUsers(can('users', 'manage'));
@@ -120,14 +124,53 @@ export const useUserManagement = () => {
     }
   }, []);
 
+  const fetchKnowledgeDirectories = useCallback(async () => {
+    try {
+      setKbDirectoryLoading(true);
+      const data = await knowledgeApi.listKnowledgeDirectories();
+      setKbDirectoryNodes(Array.isArray(data?.nodes) ? data.nodes : []);
+      setKbDirectoryError(null);
+    } catch (err) {
+      setKbDirectoryNodes([]);
+      setKbDirectoryError(err?.message || '加载知识库目录失败');
+    } finally {
+      setKbDirectoryLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     fetchUsers();
     fetchPermissionGroups();
     fetchOrgDirectory();
-  }, [fetchOrgDirectory, fetchPermissionGroups, fetchUsers]);
+    fetchKnowledgeDirectories();
+  }, [fetchKnowledgeDirectories, fetchOrgDirectory, fetchPermissionGroups, fetchUsers]);
+
+  useEffect(() => {
+    const selectedCompanyId = newUser.company_id ? Number(newUser.company_id) : null;
+    const selectedDepartmentId = newUser.department_id ? Number(newUser.department_id) : null;
+    if (selectedDepartmentId == null) return;
+    const selectedDepartment = departments.find((department) => department.id === selectedDepartmentId);
+    if (!selectedDepartment) return;
+    if (selectedCompanyId != null && selectedDepartment.company_id != null && selectedDepartment.company_id !== selectedCompanyId) {
+      setNewUser((prev) => ({ ...prev, department_id: '' }));
+    }
+  }, [departments, newUser.company_id, newUser.department_id]);
 
   const filteredUsers = useMemo(() => filterUsers(allUsers, filters), [allUsers, filters]);
   const groupedUsers = useMemo(() => groupUsersByDepartment(filteredUsers), [filteredUsers]);
+  const managerOptions = useMemo(
+    () =>
+      (Array.isArray(allUsers) ? allUsers : [])
+        .filter((item) => String(item?.status || '').toLowerCase() === 'active')
+        .map((item) => ({
+          value: String(item?.user_id || ''),
+          label: String(item?.full_name || item?.username || item?.user_id || ''),
+          username: String(item?.username || ''),
+          company_id: item?.company_id ?? null,
+        }))
+        .filter((item) => item.value),
+    [allUsers]
+  );
 
   const handleOpenCreateModal = useCallback(() => {
     setCreateUserError(null);
@@ -142,7 +185,13 @@ export const useUserManagement = () => {
 
   const setNewUserField = useCallback((field, value) => {
     setCreateUserError(null);
-    setNewUser((prev) => ({ ...prev, [field]: value }));
+    setNewUser((prev) => {
+      const next = { ...prev, [field]: value };
+      if (field === 'role' && value !== 'sub_admin') {
+        next.managed_kb_root_node_id = '';
+      }
+      return next;
+    });
   }, []);
 
   const toggleNewUserGroup = useCallback((groupId, checked) => {
@@ -165,11 +214,21 @@ export const useUserManagement = () => {
         const payload = {
           ...newUser,
           full_name: String(newUser.full_name || '').trim() || null,
+          manager_user_id: String(newUser.manager_user_id || '').trim() || null,
+          role: String(newUser.role || 'viewer').trim() || 'viewer',
+          managed_kb_root_node_id:
+            String(newUser.role || '') === 'sub_admin'
+              ? String(newUser.managed_kb_root_node_id || '').trim() || null
+              : null,
           company_id: newUser.company_id ? Number(newUser.company_id) : null,
           department_id: newUser.department_id ? Number(newUser.department_id) : null,
           max_login_sessions: Number(newUser.max_login_sessions),
           idle_timeout_minutes: Number(newUser.idle_timeout_minutes),
         };
+        if (payload.role === 'sub_admin' && !payload.managed_kb_root_node_id) {
+          setCreateUserError('请选择子管理员负责的知识库目录');
+          return;
+        }
         await usersApi.create(payload);
         handleCloseCreateModal();
         fetchUsers();
@@ -337,6 +396,17 @@ export const useUserManagement = () => {
     setPolicyError(null);
     setPolicyForm({
       full_name: String(user?.full_name || ''),
+      email: String(user?.email || ''),
+      manager_user_id: String(user?.manager_user_id || ''),
+      company_id: user?.company_id != null ? String(user.company_id) : '',
+      department_id: user?.department_id != null ? String(user.department_id) : '',
+      role: String(user?.role || 'viewer'),
+      managed_kb_root_node_id: String(user?.managed_kb_root_node_id || ''),
+      group_ids: Array.isArray(user?.group_ids)
+        ? [...user.group_ids]
+        : Array.isArray(user?.permission_groups)
+          ? user.permission_groups.map((pg) => pg.group_id)
+          : [],
       max_login_sessions: Number(user?.max_login_sessions || 3),
       idle_timeout_minutes: Number(user?.idle_timeout_minutes || 120),
       can_change_password: user?.can_change_password !== false,
@@ -353,6 +423,17 @@ export const useUserManagement = () => {
     setPolicySubmitting(false);
     setPolicyError(null);
     setPolicyForm(DEFAULT_POLICY_FORM);
+  }, []);
+
+  const handleTogglePolicyGroup = useCallback((groupId, checked) => {
+    setPolicyForm((prev) => {
+      const current = Array.isArray(prev.group_ids) ? prev.group_ids : [];
+      if (checked) {
+        if (current.includes(groupId)) return prev;
+        return { ...prev, group_ids: [...current, groupId] };
+      }
+      return { ...prev, group_ids: current.filter((id) => id !== groupId) };
+    });
   }, []);
 
   const handleSavePolicy = useCallback(async () => {
@@ -373,10 +454,24 @@ export const useUserManagement = () => {
 
     const payload = {
       full_name: String(policyForm.full_name || '').trim(),
+      email: String(policyForm.email || '').trim() || null,
+      manager_user_id: String(policyForm.manager_user_id || '').trim() || null,
+      company_id: policyForm.company_id ? Number(policyForm.company_id) : null,
+      department_id: policyForm.department_id ? Number(policyForm.department_id) : null,
+      role: String(policyForm.role || 'viewer').trim() || 'viewer',
+      group_ids: Array.isArray(policyForm.group_ids) ? policyForm.group_ids : [],
+      managed_kb_root_node_id:
+        String(policyForm.role || '') === 'sub_admin'
+          ? String(policyForm.managed_kb_root_node_id || '').trim() || null
+          : null,
       max_login_sessions: maxSessions,
       idle_timeout_minutes: idleMinutes,
       can_change_password: !!policyForm.can_change_password,
     };
+    if (payload.role === 'sub_admin' && !payload.managed_kb_root_node_id) {
+      setPolicyError('请选择子管理员负责的知识库目录');
+      return;
+    }
 
     if (!policyForm.disable_account) {
       payload.status = 'active';
@@ -491,8 +586,12 @@ export const useUserManagement = () => {
     disableUserError,
     companies,
     departments,
+    kbDirectoryNodes,
+    kbDirectoryLoading,
+    kbDirectoryError,
     filteredUsers,
     groupedUsers,
+    managerOptions,
     setFilters,
     setPolicyForm,
     setResetPasswordValue,
@@ -509,6 +608,7 @@ export const useUserManagement = () => {
     handleSubmitResetPassword,
     handleOpenPolicyModal,
     handleClosePolicyModal,
+    handleTogglePolicyGroup,
     handleSavePolicy,
     handleCloseDisableUserModal,
     handleChangeDisableMode,
