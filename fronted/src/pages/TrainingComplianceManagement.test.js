@@ -1,4 +1,5 @@
 import React from 'react';
+import { MemoryRouter } from 'react-router-dom';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import TrainingComplianceManagement from './TrainingComplianceManagement';
@@ -49,11 +50,6 @@ const requirementsResponse = {
   ],
 };
 
-const usersResponse = [
-  { user_id: 'user-1', username: 'alice', full_name: 'Alice' },
-  { user_id: 'user-2', username: 'bob', full_name: 'Bob' },
-];
-
 const recordsResponse = {
   items: [
     {
@@ -82,67 +78,109 @@ const certificationsResponse = {
   ],
 };
 
-const mockLoaders = () => {
-  trainingComplianceApi.listRequirements.mockResolvedValue(requirementsResponse);
-  authClient.listUsers.mockResolvedValue(usersResponse);
-  trainingComplianceApi.listRecords.mockResolvedValue(recordsResponse);
-  trainingComplianceApi.listCertifications.mockResolvedValue(certificationsResponse);
-};
+const searchUsers = [
+  { user_id: 'user-1', username: 'alice', full_name: 'Alice' },
+  { user_id: 'user-2', username: 'bob', full_name: 'Bob' },
+];
+
+const renderPage = (initialEntries = ['/training-compliance']) => render(
+  <MemoryRouter initialEntries={initialEntries}>
+    <TrainingComplianceManagement />
+  </MemoryRouter>
+);
 
 describe('TrainingComplianceManagement', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     jest.spyOn(Date, 'now').mockReturnValue(new Date('2026-04-04T09:30:00.000Z').getTime());
+
     useAuth.mockReturnValue({ user: currentAdmin });
+
+    trainingComplianceApi.listRequirements.mockResolvedValue(requirementsResponse);
+    trainingComplianceApi.listRecords.mockResolvedValue(recordsResponse);
+    trainingComplianceApi.listCertifications.mockResolvedValue(certificationsResponse);
     trainingComplianceApi.createRecord.mockResolvedValue({ record_id: 'record-2' });
     trainingComplianceApi.createCertification.mockResolvedValue({ certification_id: 'cert-2' });
-    mockLoaders();
+
+    authClient.listUsers.mockImplementation(async ({ q }) => {
+      const keyword = String(q || '').trim().toLowerCase();
+      return searchUsers.filter((item) => (
+        item.user_id.toLowerCase().includes(keyword)
+        || item.username.toLowerCase().includes(keyword)
+        || item.full_name.toLowerCase().includes(keyword)
+      ));
+    });
   });
 
   afterEach(() => {
     jest.restoreAllMocks();
   });
 
-  it('loads requirements, users, records and certifications for admins', async () => {
-    render(<TrainingComplianceManagement />);
+  it('loads requirements and recent records without preloading all users', async () => {
+    renderPage();
 
     expect(await screen.findByTestId('training-compliance-page')).toBeInTheDocument();
     expect(screen.getByText('培训合规管理')).toBeInTheDocument();
     expect(screen.getAllByText('TR-001').length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/Alice/).length).toBeGreaterThan(0);
+    expect(screen.getByTestId('training-records-tab-panel')).toBeInTheDocument();
 
     await waitFor(() => {
       expect(trainingComplianceApi.listRequirements).toHaveBeenCalledWith({ limit: 100 });
-      expect(authClient.listUsers).toHaveBeenCalledWith({ limit: 200 });
       expect(trainingComplianceApi.listRecords).toHaveBeenCalledWith({ limit: 100 });
       expect(trainingComplianceApi.listCertifications).toHaveBeenCalledWith({ limit: 100 });
     });
+
+    expect(authClient.listUsers).not.toHaveBeenCalled();
   });
 
-  it('shows a default training summary, Chinese controlled action labels and one-year valid-until default', async () => {
-    render(<TrainingComplianceManagement />);
+  it('switches between training record and certification tabs', async () => {
+    const user = userEvent.setup();
+
+    renderPage();
+
+    expect(await screen.findByTestId('training-records-tab-panel')).toBeInTheDocument();
+    expect(screen.queryByTestId('training-certifications-tab-panel')).not.toBeInTheDocument();
+
+    await user.click(screen.getByTestId('training-tab-certifications'));
+
+    expect(await screen.findByTestId('training-certifications-tab-panel')).toBeInTheDocument();
+    expect(screen.queryByTestId('training-records-tab-panel')).not.toBeInTheDocument();
+  });
+
+  it('shows default summary, Chinese controlled action labels and one-year valid-until default', async () => {
+    const user = userEvent.setup();
+
+    renderPage();
 
     const summaryInput = await screen.findByTestId('training-record-summary');
-    const certificationValidUntilInput = screen.getByTestId('training-certification-valid-until');
+    expect(screen.getAllByText('审批决策').length).toBeGreaterThan(0);
+    expect(screen.getAllByRole('option', { name: 'TR-001 | 审批决策 | v2026.04' }).length).toBeGreaterThan(0);
+    expect(summaryInput).toHaveValue('已完成《审批与发布操作员培训》培训，满足审批决策上岗要求。');
 
-    expect(screen.getAllByText('文档审批').length).toBeGreaterThan(0);
-    expect(screen.getAllByRole('option', { name: 'TR-001 | 文档审批 | v2026.04' }).length).toBeGreaterThan(0);
-    expect(summaryInput).toHaveValue('已完成《审批与发布操作员培训》培训，满足文档审批上岗要求。');
-
+    await user.click(screen.getByTestId('training-tab-certifications'));
+    const certificationValidUntilInput = await screen.findByTestId('training-certification-valid-until');
     const validUntilMs = Date.parse(certificationValidUntilInput.value);
     const nowMs = Date.now();
+
     expect(validUntilMs - nowMs).toBeGreaterThanOrEqual(364 * 24 * 60 * 60 * 1000);
     expect(validUntilMs - nowMs).toBeLessThanOrEqual(366 * 24 * 60 * 60 * 1000);
   });
 
-  it('submits a training record with admin trainer and reviewer fields', async () => {
+  it('searches users by keyword and submits a training record with the selected user', async () => {
     const user = userEvent.setup();
 
-    render(<TrainingComplianceManagement />);
+    renderPage();
 
-    await screen.findByTestId('training-record-user');
+    const userInput = await screen.findByTestId('training-record-user-search-input');
+    await user.type(userInput, 'bob');
 
-    await user.selectOptions(screen.getByTestId('training-record-user'), 'user-2');
+    await waitFor(() => {
+      expect(authClient.listUsers).toHaveBeenCalledWith({ q: 'bob', limit: 20 });
+    });
+
+    await user.click(await screen.findByTestId('training-record-user-search-result-user-2'));
+    expect(screen.getByTestId('training-record-user-search-selected')).toHaveTextContent('Bob (bob)');
+
     await user.clear(screen.getByTestId('training-record-summary'));
     await user.type(screen.getByTestId('training-record-summary'), '完成岗位培训并通过效果评估');
     await user.clear(screen.getByTestId('training-record-notes'));
@@ -156,14 +194,9 @@ describe('TrainingComplianceManagement', () => {
           user_id: 'user-2',
           curriculum_version: 'v2026.04',
           trainer_user_id: 'admin-1',
-          training_outcome: 'passed',
-          effectiveness_status: 'effective',
-          effectiveness_score: 100,
           effectiveness_summary: '完成岗位培训并通过效果评估',
           training_notes: '现场培训',
           effectiveness_reviewed_by_user_id: 'admin-1',
-          completed_at_ms: expect.any(Number),
-          effectiveness_reviewed_at_ms: expect.any(Number),
         })
       );
     });
@@ -171,14 +204,23 @@ describe('TrainingComplianceManagement', () => {
     expect(await screen.findByTestId('training-compliance-success')).toHaveTextContent('培训记录已保存。');
   });
 
-  it('submits an operator certification with the current admin as grantor', async () => {
+  it('searches users by keyword and submits an operator certification with the selected user', async () => {
     const user = userEvent.setup();
 
-    render(<TrainingComplianceManagement />);
+    renderPage();
 
-    await screen.findByTestId('training-certification-user');
+    await user.click(await screen.findByTestId('training-tab-certifications'));
 
-    await user.selectOptions(screen.getByTestId('training-certification-user'), 'user-2');
+    const userInput = await screen.findByTestId('training-certification-user-search-input');
+    await user.type(userInput, 'alice');
+
+    await waitFor(() => {
+      expect(authClient.listUsers).toHaveBeenCalledWith({ q: 'alice', limit: 20 });
+    });
+
+    await user.click(await screen.findByTestId('training-certification-user-search-result-user-1'));
+    expect(screen.getByTestId('training-certification-user-search-selected')).toHaveTextContent('Alice (alice)');
+
     await user.clear(screen.getByTestId('training-certification-valid-until'));
     await user.type(screen.getByTestId('training-certification-valid-until'), '2026-12-31T09:30');
     await user.clear(screen.getByTestId('training-certification-notes'));
@@ -189,7 +231,7 @@ describe('TrainingComplianceManagement', () => {
       expect(trainingComplianceApi.createCertification).toHaveBeenCalledWith(
         expect.objectContaining({
           requirement_code: 'TR-001',
-          user_id: 'user-2',
+          user_id: 'user-1',
           granted_by_user_id: 'admin-1',
           certification_status: 'active',
           certification_notes: '授权上岗',
@@ -199,5 +241,22 @@ describe('TrainingComplianceManagement', () => {
     });
 
     expect(await screen.findByTestId('training-compliance-success')).toHaveTextContent('上岗认证已保存。');
+  });
+
+  it('prefills tab, target user and requirement from approval-center query params', async () => {
+    renderPage(['/training-compliance?tab=certifications&user_id=user-2&controlled_action=document_review']);
+
+    expect(await screen.findByTestId('training-certifications-tab-panel')).toBeInTheDocument();
+
+    await waitFor(() => {
+      expect(authClient.listUsers).toHaveBeenCalledWith({ q: 'user-2', limit: 20 });
+    });
+
+    expect(await screen.findByTestId('training-certification-user-search-selected')).toHaveTextContent('Bob (bob)');
+    expect(screen.getByTestId('training-certification-requirement')).toHaveValue('TR-001');
+
+    await userEvent.setup().click(screen.getByTestId('training-tab-records'));
+    expect(await screen.findByTestId('training-record-user-search-selected')).toHaveTextContent('Bob (bob)');
+    expect(screen.getByTestId('training-record-requirement')).toHaveValue('TR-001');
   });
 });

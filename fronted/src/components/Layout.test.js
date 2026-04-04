@@ -1,8 +1,9 @@
 import React from 'react';
-import { render, screen } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import Layout from './Layout';
 import { useAuth } from '../hooks/useAuth';
+import operationApprovalApi from '../features/operationApproval/api';
 
 jest.mock('../hooks/useAuth', () => ({
   useAuth: jest.fn(),
@@ -144,5 +145,38 @@ describe('Layout permission group navigation visibility', () => {
 
     expect(screen.queryByTestId('nav-notification-settings')).not.toBeInTheDocument();
     expect(screen.queryByTestId('nav-electronic-signatures')).not.toBeInTheDocument();
+  });
+
+  it('updates inbox unread badge immediately when unread count event is published', async () => {
+    operationApprovalApi.listInbox.mockResolvedValue({ unread_count: 0 });
+    useAuth.mockReturnValue({
+      user: { user_id: 'viewer-1', username: 'viewer', role: 'viewer', permission_groups: [] },
+      logout: jest.fn(),
+      canUpload: () => true,
+      canReview: () => true,
+      canViewKbConfig: () => false,
+      canViewTools: () => true,
+      hasRole: () => false,
+    });
+
+    render(
+      <MemoryRouter initialEntries={['/inbox']}>
+        <Layout>
+          <div>content</div>
+        </Layout>
+      </MemoryRouter>
+    );
+
+    await waitFor(() => {
+      expect(operationApprovalApi.listInbox).toHaveBeenCalled();
+    });
+
+    act(() => {
+      window.dispatchEvent(new CustomEvent('notification:inbox-unread-count', {
+        detail: { unreadCount: 3 },
+      }));
+    });
+
+    expect(screen.getByTestId('layout-inbox-unread')).toHaveTextContent('3');
   });
 });

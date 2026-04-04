@@ -503,6 +503,22 @@ class TestOperationApprovalServiceUnit(unittest.TestCase):
         self.assertEqual(second_detail["steps"][0]["step_name"], "Director Review")
         self.assertEqual(second_detail["steps"][0]["approvers"][0]["approver_user_id"], self.approver_2.user_id)
 
+    def test_request_detail_exposes_approver_full_name(self):
+        self.approver_1.full_name = "王歆"
+        self._upsert_workflow(
+            "knowledge_base_create",
+            [{"step_name": "Manager Review", "approver_user_ids": [self.approver_1.user_id]}],
+        )
+
+        request = self._create_dataset_request(name="Dataset Full Name")
+        detail = self.service.get_request_detail_for_user(
+            request_id=request["request_id"],
+            requester_user=self.admin_user,
+        )
+
+        self.assertEqual(detail["steps"][0]["approvers"][0]["approver_username"], self.approver_1.username)
+        self.assertEqual(detail["steps"][0]["approvers"][0]["approver_full_name"], "王歆")
+
     def test_direct_manager_resolves_at_submission_and_snapshot_keeps_member_definition(self):
         self.admin_user.manager_user_id = self.approver_1.user_id
         self._upsert_workflow_members(

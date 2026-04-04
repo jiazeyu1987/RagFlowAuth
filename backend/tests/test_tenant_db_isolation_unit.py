@@ -11,6 +11,7 @@ from backend.app.dependencies import AppDependencies, create_dependencies, get_t
 from backend.core.security import auth
 from backend.services.inbox_store import UserInboxStore
 from backend.services.operation_approval import OperationApprovalStore
+from backend.tests._training_test_utils import qualify_user_for_action
 from backend.tests._util_tempdir import cleanup_dir, make_temp_dir
 
 
@@ -209,6 +210,30 @@ class TestTenantDbIsolationUnit(unittest.TestCase):
             for item in tenant_deps.notification_manager.list_channels(enabled_only=False)
         }
         self.assertIn("in_app", channel_types)
+
+    def test_tenant_training_gate_uses_global_training_records(self):
+        approver = self.global_deps.user_store.create_user(
+            username="tenant_training_user",
+            password="Pass1234",
+            company_id=2,
+            role="sub_admin",
+        )
+        qualify_user_for_action(str(self.global_db), user_id=approver.user_id, action_code="document_review")
+
+        tenant_deps = get_tenant_dependencies(self.app, company_id=2)
+
+        status = tenant_deps.training_compliance_service.evaluate_action_status(
+            user_id=approver.user_id,
+            role_code="sub_admin",
+            controlled_action="document_review",
+        )
+
+        self.assertTrue(status["allowed"])
+        self.assertEqual(status["requirements"][0]["failure_code"], None)
+        training_db_path = str(tenant_deps.training_compliance_service.db_path).replace("\\", "/")
+        tenant_kb_db_path = str(tenant_deps.kb_store.db_path).replace("\\", "/")
+        self.assertTrue(training_db_path.endswith("/global/auth.db"))
+        self.assertIn("/tenants/company_2/auth.db", tenant_kb_db_path)
 
 
 if __name__ == "__main__":

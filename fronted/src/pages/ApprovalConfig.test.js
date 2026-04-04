@@ -2,20 +2,21 @@ import React from 'react';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import ApprovalConfig from './ApprovalConfig';
+import authClient from '../api/authClient';
 import operationApprovalApi from '../features/operationApproval/api';
-import { usersApi } from '../features/users/api';
+
+jest.mock('../api/authClient', () => ({
+  __esModule: true,
+  default: {
+    listUsers: jest.fn(),
+  },
+}));
 
 jest.mock('../features/operationApproval/api', () => ({
   __esModule: true,
   default: {
     listWorkflows: jest.fn(),
     updateWorkflow: jest.fn(),
-  },
-}));
-
-jest.mock('../features/users/api', () => ({
-  usersApi: {
-    list: jest.fn(),
   },
 }));
 
@@ -71,7 +72,14 @@ describe('ApprovalConfig', () => {
     jest.clearAllMocks();
     operationApprovalApi.listWorkflows.mockResolvedValue(workflowResponse);
     operationApprovalApi.updateWorkflow.mockResolvedValue({});
-    usersApi.list.mockResolvedValue(activeUsers);
+    authClient.listUsers.mockImplementation(async ({ q }) => {
+      const keyword = String(q || '').trim().toLowerCase();
+      return activeUsers.filter((item) => (
+        item.user_id.toLowerCase().includes(keyword)
+        || item.username.toLowerCase().includes(keyword)
+        || item.full_name.toLowerCase().includes(keyword)
+      ));
+    });
   });
 
   it('switches workflow scenario by dropdown', async () => {
@@ -156,14 +164,65 @@ describe('ApprovalConfig', () => {
     });
   });
 
+  it('uses the same fuzzy user output style as training compliance for fixed members', async () => {
+    const user = userEvent.setup();
+
+    render(<ApprovalConfig />);
+
+    await screen.findByTestId('approval-config-card-knowledge_file_upload');
+    await waitFor(() => {
+      expect(authClient.listUsers).toHaveBeenCalledWith({ q: 'u-1', limit: 20 });
+    });
+
+    expect(await screen.findByTestId('approval-config-member-ref-knowledge_file_upload-0-0-selected')).toHaveTextContent(
+      '已选择用户: Alice (alice) / u-1'
+    );
+
+    const memberInput = screen.getByTestId('approval-config-member-ref-knowledge_file_upload-0-0-input');
+    await user.clear(memberInput);
+    await user.type(memberInput, 'carol');
+
+    await waitFor(() => {
+      expect(authClient.listUsers).toHaveBeenCalledWith({ q: 'carol', limit: 20 });
+    });
+
+    await user.click(await screen.findByTestId('approval-config-member-ref-knowledge_file_upload-0-0-result-u-3'));
+    expect(screen.getByTestId('approval-config-member-ref-knowledge_file_upload-0-0-selected')).toHaveTextContent(
+      '已选择用户: Carol (carol) / u-3'
+    );
+
+    await user.click(screen.getByTestId('approval-config-save-knowledge_file_upload'));
+
+    await waitFor(() => {
+      expect(operationApprovalApi.updateWorkflow).toHaveBeenCalledWith(
+        'knowledge_file_upload',
+        expect.objectContaining({
+          steps: [
+            {
+              step_name: '第一层',
+              step_no: 1,
+              members: [
+                {
+                  member_type: 'user',
+                  member_ref: 'u-3',
+                },
+              ],
+            },
+          ],
+        })
+      );
+    });
+  });
+
   it('shows validation error when a fixed user member is missing', async () => {
     const user = userEvent.setup();
 
     render(<ApprovalConfig />);
 
     await screen.findByTestId('approval-config-card-knowledge_file_upload');
+    await screen.findByTestId('approval-config-member-ref-knowledge_file_upload-0-0-selected');
 
-    await user.selectOptions(screen.getByTestId('approval-config-member-ref-knowledge_file_upload-0-0'), '');
+    await user.clear(screen.getByTestId('approval-config-member-ref-knowledge_file_upload-0-0-input'));
     await user.click(screen.getByTestId('approval-config-save-knowledge_file_upload'));
 
     expect(await screen.findByTestId('approval-config-error')).toHaveTextContent('固定用户成员必须选择用户');

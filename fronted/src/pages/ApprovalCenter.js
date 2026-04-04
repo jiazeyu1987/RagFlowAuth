@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import SignatureConfirmModal from '../features/operationApproval/components/SignatureConfirmModal';
 import operationApprovalApi from '../features/operationApproval/api';
 import { useSignaturePrompt } from '../features/operationApproval/useSignaturePrompt';
@@ -119,6 +119,18 @@ const APPROVAL_ERROR_MESSAGES = {
   training_requirement_not_configured: '审批培训要求未配置完成，请先检查培训合规配置。',
 };
 
+const TRAINING_COMPLIANCE_ERROR_CODES = new Set([
+  'training_record_missing',
+  'training_curriculum_outdated',
+  'training_outcome_not_passed',
+  'training_effectiveness_not_met',
+  'operator_certification_missing',
+  'operator_certification_outdated',
+  'operator_certification_expired',
+  'operator_certification_inactive',
+  'training_requirement_not_configured',
+]);
+
 function formatTime(value) {
   const ms = Number(value || 0);
   if (!Number.isFinite(ms) || ms <= 0) return '-';
@@ -189,6 +201,21 @@ function mapApprovalCenterErrorMessage(message) {
   return APPROVAL_ERROR_MESSAGES[code] || code;
 }
 
+function buildTrainingCompliancePath({ tab, userId, controlledAction = 'document_review' }) {
+  const params = new URLSearchParams();
+  if (tab) {
+    params.set('tab', String(tab));
+  }
+  if (userId) {
+    params.set('user_id', String(userId));
+  }
+  if (controlledAction) {
+    params.set('controlled_action', String(controlledAction));
+  }
+  const query = params.toString();
+  return query ? `/training-compliance?${query}` : '/training-compliance';
+}
+
 export default function ApprovalCenter() {
   const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -197,6 +224,7 @@ export default function ApprovalCenter() {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [errorCode, setErrorCode] = useState('');
   const [selectedRequestId, setSelectedRequestId] = useState(() => searchParams.get('request_id') || '');
   const [detail, setDetail] = useState(null);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -232,6 +260,7 @@ export default function ApprovalCenter() {
   const refreshList = useCallback(async (nextView = view, nextStatus = statusFilter) => {
     setLoading(true);
     setError('');
+    setErrorCode('');
     try {
       const response = await operationApprovalApi.listRequests({
         view: nextView,
@@ -254,7 +283,9 @@ export default function ApprovalCenter() {
       setItems([]);
       setDetail(null);
       setSelectedRequestId('');
-      setError(mapApprovalCenterErrorMessage(requestError?.message || '加载审批申请失败'));
+      const nextErrorCode = String(requestError?.message || '').trim();
+      setErrorCode(nextErrorCode);
+      setError(mapApprovalCenterErrorMessage(nextErrorCode || '加载审批申请失败'));
     } finally {
       setLoading(false);
     }
@@ -268,12 +299,15 @@ export default function ApprovalCenter() {
     }
     setDetailLoading(true);
     setError('');
+    setErrorCode('');
     try {
       const response = await operationApprovalApi.getRequest(nextRequestId);
       setDetail(response || null);
     } catch (requestError) {
       setDetail(null);
-      setError(mapApprovalCenterErrorMessage(requestError?.message || '加载审批详情失败'));
+      const nextErrorCode = String(requestError?.message || '').trim();
+      setErrorCode(nextErrorCode);
+      setError(mapApprovalCenterErrorMessage(nextErrorCode || '加载审批详情失败'));
     } finally {
       setDetailLoading(false);
     }
@@ -328,6 +362,7 @@ export default function ApprovalCenter() {
     if (!signaturePayload) return;
     setActionLoading(action);
     setError('');
+    setErrorCode('');
     try {
       if (action === 'approve') {
         await operationApprovalApi.approveRequest(detail.request_id, {
@@ -343,9 +378,11 @@ export default function ApprovalCenter() {
       await refreshList(view, statusFilter);
       await refreshDetail(detail.request_id);
     } catch (requestError) {
+      const nextErrorCode = String(requestError?.message || '').trim();
+      setErrorCode(nextErrorCode);
       setError(
         mapApprovalCenterErrorMessage(
-          requestError?.message || `处理${action === 'approve' ? '通过' : '驳回'}失败`
+          nextErrorCode || `处理${action === 'approve' ? '通过' : '驳回'}失败`
         )
       );
     } finally {
@@ -358,6 +395,7 @@ export default function ApprovalCenter() {
     const reason = window.prompt('请输入撤回原因（可留空）', '') ?? '';
     setActionLoading('withdraw');
     setError('');
+    setErrorCode('');
     try {
       await operationApprovalApi.withdrawRequest(detail.request_id, {
         reason: String(reason || '').trim() || null,
@@ -365,7 +403,9 @@ export default function ApprovalCenter() {
       await refreshList(view, statusFilter);
       await refreshDetail(detail.request_id);
     } catch (requestError) {
-      setError(mapApprovalCenterErrorMessage(requestError?.message || '撤回申请失败'));
+      const nextErrorCode = String(requestError?.message || '').trim();
+      setErrorCode(nextErrorCode);
+      setError(mapApprovalCenterErrorMessage(nextErrorCode || '撤回申请失败'));
     } finally {
       setActionLoading('');
     }
@@ -375,6 +415,19 @@ export default function ApprovalCenter() {
     () => isCurrentPendingApprover(detail, user?.user_id),
     [detail, user?.user_id]
   );
+  const showTrainingHelp = TRAINING_COMPLIANCE_ERROR_CODES.has(String(errorCode || '').trim());
+  const currentUserLabel = String(user?.full_name || '').trim()
+    || String(user?.username || '').trim()
+    || String(user?.user_id || '').trim()
+    || '-';
+  const trainingRecordPath = buildTrainingCompliancePath({
+    tab: 'records',
+    userId: user?.user_id,
+  });
+  const trainingCertificationPath = buildTrainingCompliancePath({
+    tab: 'certifications',
+    userId: user?.user_id,
+  });
 
   return (
     <div style={{ display: 'grid', gap: '16px' }} data-testid="approval-center-page">
@@ -429,7 +482,34 @@ export default function ApprovalCenter() {
 
       {error ? (
         <div data-testid="approval-center-error" style={{ ...cardStyle, borderColor: '#fecaca', background: '#fef2f2', color: '#991b1b' }}>
-          {error}
+          <div>{error}</div>
+          {showTrainingHelp ? (
+            <div style={{ marginTop: '10px', display: 'grid', gap: '10px' }}>
+              <div data-testid="approval-center-training-help">
+                当前审批账号：{currentUserLabel}。审批培训门禁已生效，需要先补录培训记录，再授予上岗认证。
+              </div>
+              {String(user?.role || '') === 'admin' ? (
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                  <Link
+                    data-testid="approval-center-training-record-link"
+                    to={trainingRecordPath}
+                    style={{ ...primaryButtonStyle, textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}
+                  >
+                    去补录培训记录
+                  </Link>
+                  <Link
+                    data-testid="approval-center-training-certification-link"
+                    to={trainingCertificationPath}
+                    style={{ ...buttonStyle, textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}
+                  >
+                    去补录上岗认证
+                  </Link>
+                </div>
+              ) : (
+                <div>请联系管理员在“培训合规管理”中为当前账号补录培训记录并授予上岗认证。</div>
+              )}
+            </div>
+          ) : null}
         </div>
       ) : null}
 
@@ -581,13 +661,13 @@ export default function ApprovalCenter() {
                         <strong>{`第 ${step.step_no} 层：${step.step_name}`}</strong>
                         <span style={getStepStatusStyle(step.status)}>{STEP_STATUS_LABELS[step.status] || step.status}</span>
                       </div>
-                      <div style={{ marginTop: '8px', display: 'grid', gap: '6px' }}>
-                        {(step.approvers || []).map((approver) => (
-                          <div key={`${step.step_no}-${approver.approver_user_id}`} style={{ color: '#4b5563' }}>
-                            {approver.approver_username || approver.approver_user_id}
-                            {' - '}
-                            <span style={getStepStatusStyle(approver.status)}>
-                              {STEP_STATUS_LABELS[approver.status] || approver.status}
+                        <div style={{ marginTop: '8px', display: 'grid', gap: '6px' }}>
+                          {(step.approvers || []).map((approver) => (
+                            <div key={`${step.step_no}-${approver.approver_user_id}`} style={{ color: '#4b5563' }}>
+                              {approver.approver_full_name || approver.approver_username || approver.approver_user_id}
+                              {' - '}
+                              <span style={getStepStatusStyle(approver.status)}>
+                                {STEP_STATUS_LABELS[approver.status] || approver.status}
                             </span>
                             {approver.acted_at_ms ? ` (${formatTime(approver.acted_at_ms)})` : ''}
                           </div>

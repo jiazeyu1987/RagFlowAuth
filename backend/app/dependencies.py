@@ -107,6 +107,7 @@ def create_dependencies(
     db_path: str | None = None,
     *,
     operation_approval_control_db_path: str | None = None,
+    training_compliance_db_path: str | None = None,
     operation_approval_execution_deps_resolver: Callable[[int | str], AppDependencies] | None = None,
 ) -> AppDependencies:
     db_path = resolve_auth_db_path(db_path)
@@ -115,11 +116,18 @@ def create_dependencies(
         if operation_approval_control_db_path is not None
         else db_path
     )
+    training_db_path = (
+        resolve_auth_db_path(training_compliance_db_path)
+        if training_compliance_db_path is not None
+        else db_path
+    )
     inbox_db_path = operation_approval_db_path
 
     ensure_schema(str(db_path))
     if operation_approval_db_path != db_path:
         ensure_schema(str(operation_approval_db_path))
+    if training_db_path not in {db_path, operation_approval_db_path}:
+        ensure_schema(str(training_db_path))
 
     chat_session_store = ChatSessionStore(db_path=str(db_path))
     chat_ownership_store = ChatOwnershipStore(db_path=str(db_path))
@@ -150,7 +158,7 @@ def create_dependencies(
     electronic_signature_store = ElectronicSignatureStore(db_path=str(db_path))
     emergency_change_service = EmergencyChangeService(db_path=str(db_path))
     supplier_qualification_service = SupplierQualificationService(db_path=str(db_path))
-    training_compliance_service = TrainingComplianceService(db_path=str(db_path))
+    training_compliance_service = TrainingComplianceService(db_path=str(training_db_path))
     watermark_policy_store = WatermarkPolicyStore(db_path=str(db_path))
     user_store = UserStore(db_path=str(db_path))
     audit_log_store = AuditLogStore(db_path=str(db_path))
@@ -269,6 +277,7 @@ def get_tenant_dependencies(app: Any, *, company_id: int | str) -> AppDependenci
     deps = create_dependencies(
         db_path=str(tenant_db_path),
         operation_approval_control_db_path=str(base_db_path) if base_db_path is not None else None,
+        training_compliance_db_path=str(base_db_path) if base_db_path is not None else None,
         operation_approval_execution_deps_resolver=lambda execution_company_id: get_tenant_dependencies(
             app, company_id=execution_company_id
         ),

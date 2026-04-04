@@ -75,6 +75,9 @@ describe('InboxPage', () => {
       expect(operationApprovalApi.markInboxRead).toHaveBeenCalledWith('inbox-1');
     });
     await waitFor(() => {
+      expect(screen.getByTestId('inbox-unread-count')).toHaveTextContent('0');
+    });
+    await waitFor(() => {
       expect(mockNavigate).toHaveBeenCalledWith('/approvals?request_id=req-1');
     });
   });
@@ -97,6 +100,9 @@ describe('InboxPage', () => {
 
     await waitFor(() => {
       expect(operationApprovalApi.markAllInboxRead).toHaveBeenCalled();
+    });
+    await waitFor(() => {
+      expect(screen.getByTestId('inbox-unread-count')).toHaveTextContent('0');
     });
   });
 });

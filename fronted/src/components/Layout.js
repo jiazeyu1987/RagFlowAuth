@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import operationApprovalApi from '../features/operationApproval/api';
+import { publishInboxUnreadCount, subscribeInboxUnreadCount } from '../features/notification/inboxUnreadSync';
 import { useAuth } from '../hooks/useAuth';
 import PermissionGuard from './PermissionGuard';
 
@@ -76,6 +77,10 @@ const Layout = ({ children }) => {
   });
   const [inboxUnreadCount, setInboxUnreadCount] = useState(0);
 
+  useEffect(() => subscribeInboxUnreadCount((nextCount) => {
+    setInboxUnreadCount(nextCount);
+  }), []);
+
   useEffect(() => {
     if (typeof window === 'undefined') return undefined;
     const handleResize = () => {
@@ -103,11 +108,14 @@ const Layout = ({ children }) => {
       try {
         const response = await operationApprovalApi.listInbox({ limit: 1 });
         if (!cancelled) {
-          setInboxUnreadCount(Number(response?.unread_count || 0));
+          const nextCount = Number(response?.unread_count || 0);
+          setInboxUnreadCount(nextCount);
+          publishInboxUnreadCount(nextCount);
         }
       } catch {
         if (!cancelled) {
           setInboxUnreadCount(0);
+          publishInboxUnreadCount(0);
         }
       }
     };

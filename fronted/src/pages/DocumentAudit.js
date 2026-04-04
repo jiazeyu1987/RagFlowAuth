@@ -175,19 +175,21 @@ const DocumentAudit = ({ embedded = false }) => {
   const userMap = useMemo(() => {
     const map = new Map();
     users.forEach((item) => {
-      if (item?.user_id) map.set(item.user_id, item.username);
-      if (item?.username) map.set(item.username, item.username);
+      const displayName = item?.full_name || item?.username || '';
+      if (item?.user_id && displayName) map.set(item.user_id, displayName);
+      if (item?.username && displayName) map.set(item.username, displayName);
     });
     return map;
   }, [users]);
 
   const currentUserId = user?.user_id || '';
   const currentUsername = user?.username || '';
+  const currentDisplayName = user?.full_name || currentUsername;
 
   const resolveDisplayName = (ref, explicitName) => {
-    if (explicitName) return explicitName;
     if (ref && userMap.has(ref)) return userMap.get(ref);
-    if (ref && currentUsername && (ref === currentUserId || ref === currentUsername)) return currentUsername;
+    if (explicitName) return explicitName;
+    if (ref && currentUsername && (ref === currentUserId || ref === currentUsername)) return currentDisplayName;
     return ref || '\u5176\u4ed6';
   };
 
@@ -409,18 +411,16 @@ const DocumentAudit = ({ embedded = false }) => {
       {activeTab === 'documents' ? (
         <>
           <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '1380px' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '1120px' }}>
               <thead style={{ backgroundColor: '#f9fafb' }}>
                 <tr>
                   <th style={{ ...baseHeaderCell, color: '#374151' }}>{'\u77e5\u8bc6\u5e93'}</th>
                   <th style={{ ...baseHeaderCell, color: '#374151' }}>{'\u6587\u4ef6\u540d'}</th>
-                  <th style={{ ...baseHeaderCell, color: '#374151' }}>{'\u7248\u672c'}</th>
                   <th style={{ ...baseHeaderCell, color: '#374151' }}>{'\u4e0a\u4f20\u8005'}</th>
                   <th style={{ ...baseHeaderCell, color: '#374151' }}>{'\u5ba1\u6838\u8005'}</th>
                   <th style={{ ...baseHeaderCell, color: '#374151' }}>{'\u72b6\u6001'}</th>
                   <th style={{ ...baseHeaderCell, color: '#374151' }}>{'\u4e0a\u4f20\u65f6\u95f4'}</th>
                   <th style={{ ...baseHeaderCell, color: '#374151' }}>{'\u5ba1\u6838\u65f6\u95f4'}</th>
-                  <th style={{ ...baseHeaderCell, color: '#374151' }}>{'\u7535\u5b50\u7b7e\u540d'}</th>
                   <th style={{ ...baseHeaderCell, color: '#374151' }}>{'\u7248\u672c\u5386\u53f2'}</th>
                 </tr>
               </thead>
@@ -436,7 +436,7 @@ const DocumentAudit = ({ embedded = false }) => {
                   >
                     <td style={{ padding: '12px 16px', fontSize: '0.9rem' }}>{doc.kb_id}</td>
                     <td style={{ padding: '12px 16px', fontSize: '0.9rem' }}>{doc.filename}</td>
-                    <td style={{ padding: '12px 16px', fontSize: '0.9rem' }}>
+                    <td style={{ display: 'none' }}>
                       <div style={{ fontWeight: 600 }}>v{doc.version_no || 1}</div>
                       <div style={{ color: '#6b7280', fontSize: '0.8rem', marginTop: 4 }}>
                         {doc.is_current === false ? '历史版本' : '当前记录'}
@@ -462,7 +462,7 @@ const DocumentAudit = ({ embedded = false }) => {
                     </td>
                     <td style={{ padding: '12px 16px', fontSize: '0.9rem', color: '#6b7280' }}>{formatTime(doc.uploaded_at_ms)}</td>
                     <td style={{ padding: '12px 16px', fontSize: '0.9rem', color: '#6b7280' }}>{doc.reviewed_at_ms ? formatTime(doc.reviewed_at_ms) : '-'}</td>
-                    <td style={{ padding: '12px 16px', minWidth: '260px' }}>
+                    <td style={{ display: 'none' }}>
                       {renderSignatureManifestation(doc)}
                     </td>
                     <td style={{ padding: '12px 16px', fontSize: '0.9rem' }}>

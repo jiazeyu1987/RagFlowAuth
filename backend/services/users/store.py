@@ -164,6 +164,41 @@ class UserStore:
         finally:
             conn.close()
 
+    def get_display_names_by_ids(self, user_ids: Set[str]) -> dict[str, str]:
+        ids = [i for i in (user_ids or set()) if isinstance(i, str) and i]
+        if not ids:
+            return {}
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        try:
+            placeholders = ",".join("?" for _ in ids)
+            cursor.execute(
+                f"""
+                SELECT user_id, username, full_name
+                FROM users
+                WHERE user_id IN ({placeholders}) OR username IN ({placeholders})
+                """,
+                ids + ids,
+            )
+            rows = cursor.fetchall()
+            result: dict[str, str] = {}
+            for row in rows:
+                if not row or len(row) < 3:
+                    continue
+                user_id = str(row[0] or "")
+                username = str(row[1] or "")
+                full_name = str(row[2] or "").strip()
+                display_name = full_name or username
+                if not display_name:
+                    continue
+                if user_id:
+                    result[user_id] = display_name
+                if username:
+                    result[username] = display_name
+            return result
+        finally:
+            conn.close()
+
     def _get_user_group_ids(self, user_id: str, conn) -> List[int]:
         cursor = conn.cursor()
         cursor.execute("SELECT group_id FROM user_permission_groups WHERE user_id = ?", (user_id,))

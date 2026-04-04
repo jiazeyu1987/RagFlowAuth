@@ -6,6 +6,7 @@ from pydantic import BaseModel
 from backend.app.core.authz import AdminOnly, AuthContextDep
 from backend.app.core.training_support import resolve_training_compliance_service
 from backend.services.training_compliance import TrainingComplianceError
+from backend.services.user_store import UserStore
 
 router = APIRouter()
 
@@ -53,8 +54,16 @@ def _service_from_ctx(ctx: AuthContextDep):
     return resolve_training_compliance_service(ctx.deps)
 
 
+def _user_store_from_ctx(ctx: AuthContextDep):
+    service = _service_from_ctx(ctx)
+    db_path = getattr(service, "db_path", None)
+    if db_path:
+        return UserStore(db_path=str(db_path))
+    return ctx.deps.user_store
+
+
 def _ensure_user_exists(ctx: AuthContextDep, user_id: str, *, field_name: str):
-    user = ctx.deps.user_store.get_by_user_id(str(user_id).strip())
+    user = _user_store_from_ctx(ctx).get_by_user_id(str(user_id).strip())
     if user is None:
         raise HTTPException(status_code=400, detail=f"{field_name}_not_found")
     return user

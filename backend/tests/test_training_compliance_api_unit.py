@@ -19,6 +19,7 @@ from backend.services.audit_log_store import AuditLogStore
 from backend.services.data_security.store import DataSecurityStore
 from backend.services.electronic_signature import ElectronicSignatureService, ElectronicSignatureStore
 from backend.services.training_compliance import TrainingComplianceService
+from backend.services.user_store import UserStore
 from backend.services.users import hash_password
 from backend.tests._training_test_utils import qualify_user_for_action
 from backend.tests._util_tempdir import cleanup_dir, make_temp_dir
@@ -44,8 +45,16 @@ class _OrgStore:
 
 
 class _Deps:
-    def __init__(self, *, db_path: str, users: dict[str, SimpleNamespace]):
+    def __init__(
+        self,
+        *,
+        db_path: str,
+        users: dict[str, SimpleNamespace],
+        training_db_path: str | None = None,
+    ):
         audit_store = AuditLogStore(db_path=db_path)
+        training_db_path = training_db_path or db_path
+        self._seed_users(db_path=training_db_path, users=users)
         self.user_store = _UserStore(users)
         self.permission_group_store = SimpleNamespace(get_group=lambda *_args, **_kwargs: None)
         self.user_kb_permission_store = SimpleNamespace(get_user_kbs=lambda *_args, **_kwargs: [])
@@ -53,10 +62,49 @@ class _Deps:
         self.kb_store = SimpleNamespace(db_path=db_path)
         self.audit_log_store = audit_store
         self.audit_log_manager = AuditLogManager(store=audit_store)
-        self.training_compliance_service = TrainingComplianceService(db_path=db_path)
+        self.training_compliance_service = TrainingComplianceService(db_path=training_db_path)
         self.data_security_store = DataSecurityStore(db_path=db_path)
         self.org_directory_store = _OrgStore()
         self.org_structure_manager = self.org_directory_store
+
+    @staticmethod
+    def _seed_users(*, db_path: str, users: dict[str, SimpleNamespace]) -> None:
+        conn = sqlite3.connect(db_path)
+        try:
+            for item in users.values():
+                conn.execute(
+                    """
+                    INSERT OR IGNORE INTO users (
+                        user_id,
+                        username,
+                        password_hash,
+                        email,
+                        role,
+                        group_id,
+                        company_id,
+                        department_id,
+                        status,
+                        created_at_ms,
+                        full_name
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        str(getattr(item, "user_id", "") or ""),
+                        str(getattr(item, "username", "") or getattr(item, "user_id", "") or ""),
+                        str(getattr(item, "password_hash", "") or ""),
+                        str(getattr(item, "email", "") or ""),
+                        str(getattr(item, "role", "") or "viewer"),
+                        getattr(item, "group_id", None),
+                        getattr(item, "company_id", None),
+                        getattr(item, "department_id", None),
+                        str(getattr(item, "status", "") or "active"),
+                        1,
+                        str(getattr(item, "full_name", "") or getattr(item, "username", "") or ""),
+                    ),
+                )
+            conn.commit()
+        finally:
+            conn.close()
 
 
 class _Request:
@@ -293,6 +341,51 @@ class TestTrainingComplianceApiUnit(unittest.TestCase):
             self.assertEqual(approved_resp.status_code, 200, approved_resp.text)
             self.assertEqual(approved_resp.json()["status"], "approved")
             self.assertEqual(len(fake_operation_approval_service.calls), 1)
+        finally:
+            cleanup_dir(td)
+
+    def test_training_status_endpoint_uses_training_service_db_for_user_lookup(self):
+        td = make_temp_dir(prefix="ragflowauth_training_status_cross_db")
+        try:
+            tenant_db_path = os.path.join(str(td), "tenant.db")
+            global_db_path = os.path.join(str(td), "global.db")
+            ensure_schema(tenant_db_path)
+            ensure_schema(global_db_path)
+
+            global_user_store = UserStore(db_path=global_db_path)
+            stored_admin = global_user_store.create_user(
+                username="admin_status",
+                password="Pass1234",
+                role="admin",
+                company_id=2,
+            )
+            stored_reviewer = global_user_store.create_user(
+                username="reviewer_status",
+                password="Pass1234",
+                role="reviewer",
+                company_id=2,
+            )
+            qualify_user_for_action(global_db_path, user_id=stored_reviewer.user_id, action_code="document_review")
+
+            deps = _Deps(
+                db_path=tenant_db_path,
+                training_db_path=global_db_path,
+                users={
+                    stored_admin.user_id: _make_user(
+                        user_id=stored_admin.user_id,
+                        role="admin",
+                        company_id=2,
+                    )
+                },
+            )
+            app = self._build_app(current_user_id=stored_admin.user_id, deps=deps)
+
+            with TestClient(app) as client:
+                status_resp = client.get(
+                    f"/api/training-compliance/actions/document_review/users/{stored_reviewer.user_id}"
+                )
+                self.assertEqual(status_resp.status_code, 200, status_resp.text)
+                self.assertTrue(status_resp.json()["allowed"])
         finally:
             cleanup_dir(td)
 

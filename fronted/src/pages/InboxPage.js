@@ -1,6 +1,7 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import operationApprovalApi from '../features/operationApproval/api';
+import { publishInboxUnreadCount } from '../features/notification/inboxUnreadSync';
 
 const cardStyle = {
   background: '#ffffff',
@@ -46,6 +47,21 @@ export default function InboxPage() {
   const [unreadCount, setUnreadCount] = useState(0);
   const [busyId, setBusyId] = useState('');
   const [markAllBusy, setMarkAllBusy] = useState(false);
+  const unreadCountRef = useRef(0);
+
+  useEffect(() => {
+    unreadCountRef.current = Number(unreadCount || 0);
+  }, [unreadCount]);
+
+  const syncUnreadCount = useCallback((valueOrUpdater) => {
+    const base = Number(unreadCountRef.current || 0);
+    const rawValue = typeof valueOrUpdater === 'function' ? valueOrUpdater(base) : valueOrUpdater;
+    const normalized = Number.isFinite(Number(rawValue)) && Number(rawValue) > 0 ? Number(rawValue) : 0;
+    unreadCountRef.current = normalized;
+    setUnreadCount(normalized);
+    publishInboxUnreadCount(normalized);
+    return normalized;
+  }, []);
 
   const loadData = useCallback(async (nextUnreadOnly = unreadOnly) => {
     setLoading(true);
@@ -53,15 +69,15 @@ export default function InboxPage() {
     try {
       const response = await operationApprovalApi.listInbox({ unreadOnly: nextUnreadOnly, limit: 100 });
       setItems(Array.isArray(response?.items) ? response.items : []);
-      setUnreadCount(Number(response?.unread_count || 0));
+      syncUnreadCount(Number(response?.unread_count || 0));
     } catch (requestError) {
       setError(requestError?.message || 'Failed to load inbox');
       setItems([]);
-      setUnreadCount(0);
+      syncUnreadCount(0);
     } finally {
       setLoading(false);
     }
-  }, [unreadOnly]);
+  }, [syncUnreadCount, unreadOnly]);
 
   useEffect(() => {
     loadData(unreadOnly);
@@ -74,13 +90,25 @@ export default function InboxPage() {
     setError('');
     try {
       await operationApprovalApi.markInboxRead(inboxId);
-      await loadData(unreadOnly);
+      if (String(item?.status || '') === 'unread') {
+        setItems((prev) => {
+          if (unreadOnly) {
+            return prev.filter((entry) => String(entry?.inbox_id || '') !== inboxId);
+          }
+          return prev.map((entry) => (
+            String(entry?.inbox_id || '') === inboxId
+              ? { ...entry, status: 'read' }
+              : entry
+          ));
+        });
+        syncUnreadCount((prev) => Math.max(0, Number(prev || 0) - 1));
+      }
     } catch (requestError) {
       setError(requestError?.message || 'Failed to update inbox item');
     } finally {
       setBusyId('');
     }
-  }, [loadData, unreadOnly]);
+  }, [syncUnreadCount, unreadOnly]);
 
   const handleOpen = useCallback(async (item) => {
     if (String(item?.status || '') === 'unread') {
@@ -94,13 +122,18 @@ export default function InboxPage() {
     setError('');
     try {
       await operationApprovalApi.markAllInboxRead();
-      await loadData(unreadOnly);
+      setItems((prev) => (
+        unreadOnly
+          ? []
+          : prev.map((entry) => ({ ...entry, status: 'read' }))
+      ));
+      syncUnreadCount(0);
     } catch (requestError) {
       setError(requestError?.message || 'Failed to mark all inbox items as read');
     } finally {
       setMarkAllBusy(false);
     }
-  }, [loadData, unreadOnly]);
+  }, [syncUnreadCount, unreadOnly]);
 
   return (
     <div style={{ display: 'grid', gap: '16px' }} data-testid="inbox-page">

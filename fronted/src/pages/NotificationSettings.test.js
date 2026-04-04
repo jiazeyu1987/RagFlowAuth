@@ -89,11 +89,23 @@ describe('NotificationSettings', () => {
     render(<NotificationSettings />);
 
     await screen.findByTestId('notification-settings-page');
+    expect(screen.getByTestId('notification-save-rules')).toBeInTheDocument();
+    expect(screen.queryByTestId('notification-save-channels')).not.toBeInTheDocument();
+    await user.click(screen.getByTestId('notification-tab-channels'));
+    expect(screen.getByTestId('notification-dingtalk-app-key')).toHaveValue('dingidnt7v7zbm5tqzyn');
+    expect(screen.getByTestId('notification-dingtalk-app-secret')).toHaveValue('gi-v0YEkV_SCwXo9vGvYgBJzEbQ4wS4WUXDwA7ZkqMuNflFu0JfdFW1TeJIxcOjC');
+    expect(screen.getByTestId('notification-dingtalk-agent-id')).toHaveValue('4432005762');
+    expect(screen.getByTestId('notification-dingtalk-recipient-map')).toHaveValue(`{
+  "025247281136343306": "025247281136343306",
+  "3245020131886184": "3245020131886184",
+  "204548010024278804": "204548010024278804"
+}`);
     await user.clear(screen.getByTestId('notification-email-host'));
     await user.type(screen.getByTestId('notification-email-host'), 'smtp.changed.example.com');
     await user.click(screen.getByTestId('notification-save-channels'));
 
     await waitFor(() => {
+      expect(notificationApi.upsertChannel).toHaveBeenCalledTimes(2);
       expect(notificationApi.upsertChannel).toHaveBeenCalledWith(
         'email-main',
         expect.objectContaining({
@@ -103,6 +115,12 @@ describe('NotificationSettings', () => {
             from_email: 'noreply@example.com',
             use_tls: true,
           }),
+        })
+      );
+      expect(notificationApi.upsertChannel).toHaveBeenCalledWith(
+        'inapp-main',
+        expect.objectContaining({
+          channel_type: 'in_app',
         })
       );
     });

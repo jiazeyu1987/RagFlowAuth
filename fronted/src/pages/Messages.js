@@ -1,5 +1,6 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { notificationApi } from '../features/notification/api';
+import { publishInboxUnreadCount } from '../features/notification/inboxUnreadSync';
 
 const cardStyle = {
   background: 'white',
@@ -86,6 +87,21 @@ const Messages = () => {
   const [unreadOnly, setUnreadOnly] = useState(false);
   const [busyMap, setBusyMap] = useState({});
   const [markAllBusy, setMarkAllBusy] = useState(false);
+  const unreadCountRef = useRef(0);
+
+  useEffect(() => {
+    unreadCountRef.current = Number(unreadCount || 0);
+  }, [unreadCount]);
+
+  const syncUnreadCount = useCallback((valueOrUpdater) => {
+    const base = Number(unreadCountRef.current || 0);
+    const rawValue = typeof valueOrUpdater === 'function' ? valueOrUpdater(base) : valueOrUpdater;
+    const normalized = Number.isFinite(Number(rawValue)) && Number(rawValue) > 0 ? Number(rawValue) : 0;
+    unreadCountRef.current = normalized;
+    setUnreadCount(normalized);
+    publishInboxUnreadCount(normalized);
+    return normalized;
+  }, []);
 
   const loadData = useCallback(async (opts = {}) => {
     const onlyUnread = Object.prototype.hasOwnProperty.call(opts, 'unreadOnly') ? !!opts.unreadOnly : unreadOnly;
@@ -95,13 +111,13 @@ const Messages = () => {
       const res = await notificationApi.listMyMessages({ limit: 100, offset: 0, unreadOnly: onlyUnread });
       setItems(Array.isArray(res.items) ? res.items : []);
       setTotal(Number(res.total || 0));
-      setUnreadCount(Number(res.unread_count || 0));
+      syncUnreadCount(Number(res.unread_count || 0));
     } catch (e) {
       setError(e.message || TEXT.loadError);
     } finally {
       setLoading(false);
     }
-  }, [unreadOnly]);
+  }, [syncUnreadCount, unreadOnly]);
 
   useEffect(() => {
     loadData({ unreadOnly });
@@ -118,7 +134,20 @@ const Messages = () => {
     setRowBusy(jobId, true);
     try {
       await notificationApi.updateMyMessageReadState(jobId, nextRead);
-      await loadData();
+      setItems((prev) => {
+        if (unreadOnly && nextRead) {
+          return prev.filter((entry) => entry.job_id !== jobId);
+        }
+        return prev.map((entry) => (
+          entry.job_id === jobId
+            ? { ...entry, read_at_ms: nextRead ? Date.now() : null }
+            : entry
+        ));
+      });
+      syncUnreadCount((prev) => Math.max(0, Number(prev || 0) + (nextRead ? -1 : 1)));
+      if (unreadOnly && nextRead) {
+        setTotal((prev) => Math.max(0, Number(prev || 0) - 1));
+      }
     } catch (e) {
       setError(e.message || TEXT.markError);
     } finally {
@@ -131,7 +160,15 @@ const Messages = () => {
     setMarkAllBusy(true);
     try {
       await notificationApi.markAllMyMessagesRead();
-      await loadData();
+      setItems((prev) => (
+        unreadOnly
+          ? []
+          : prev.map((entry) => ({ ...entry, read_at_ms: entry.read_at_ms || Date.now() }))
+      ));
+      syncUnreadCount(0);
+      if (unreadOnly) {
+        setTotal(0);
+      }
     } catch (e) {
       setError(e.message || TEXT.markAllError);
     } finally {

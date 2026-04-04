@@ -1,10 +1,12 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import authClient from '../api/authClient';
 import operationApprovalApi from '../features/operationApproval/api';
-import { usersApi } from '../features/users/api';
 
 const WORKFLOW_MEMBER_TYPE_USER = 'user';
 const WORKFLOW_MEMBER_TYPE_SPECIAL_ROLE = 'special_role';
 const SPECIAL_ROLE_DIRECT_MANAGER = 'direct_manager';
+const USER_SEARCH_LIMIT = 20;
+const USER_SEARCH_DELAY_MS = 250;
 
 const cardStyle = {
   background: '#ffffff',
@@ -20,6 +22,14 @@ const buttonStyle = {
   color: '#111827',
   cursor: 'pointer',
   padding: '8px 12px',
+};
+
+const inputStyle = {
+  padding: '10px 12px',
+  border: '1px solid #d1d5db',
+  borderRadius: '10px',
+  width: '100%',
+  background: '#ffffff',
 };
 
 const primaryButtonStyle = {
@@ -40,10 +50,47 @@ const createEmptyStep = (stepNo) => ({
   members: [createEmptyMember()],
 });
 
+const createUserSearchState = () => ({
+  keyword: '',
+  results: [],
+  loading: false,
+  open: false,
+  error: '',
+});
+
 const normalizeUsers = (response) => {
   if (Array.isArray(response)) return response;
   if (Array.isArray(response?.items)) return response.items;
   return [];
+};
+
+const buildUserLabel = (user) => {
+  if (!user) return '-';
+  const fullName = String(user.full_name || '').trim();
+  const username = String(user.username || '').trim();
+  if (fullName && username && fullName !== username) {
+    return `${fullName} (${username})`;
+  }
+  return fullName || username || String(user.user_id || '-');
+};
+
+const buildMemberSearchKey = (operationType, stepIndex, memberIndex) =>
+  `${String(operationType || '')}:${Number(stepIndex)}:${Number(memberIndex)}`;
+
+const collectConfiguredUserIds = (drafts) => {
+  const ids = new Set();
+  (drafts || []).forEach((draft) => {
+    (draft.steps || []).forEach((step) => {
+      (step.members || []).forEach((member) => {
+        if (String(member?.member_type || '') !== WORKFLOW_MEMBER_TYPE_USER) return;
+        const userId = String(member?.member_ref || '').trim();
+        if (userId) {
+          ids.add(userId);
+        }
+      });
+    });
+  });
+  return Array.from(ids);
 };
 
 const normalizeMembers = (step) => {
@@ -82,27 +129,226 @@ const specialRoleLabel = (memberRef) => {
   return memberRef || '-';
 };
 
+function UserLookupField({
+  searchKey,
+  selectedUser,
+  searchState,
+  onSearchStateChange,
+  onInputChange,
+  onSelectUser,
+  searchUsers,
+  testIdPrefix,
+}) {
+  const blurTimerRef = useRef(null);
+
+  useEffect(() => () => {
+    if (blurTimerRef.current) {
+      window.clearTimeout(blurTimerRef.current);
+    }
+  }, []);
+
+  useEffect(() => {
+    const keyword = String(searchState?.keyword || '').trim();
+    if (!searchState?.open) return undefined;
+    if (!keyword) {
+      onSearchStateChange(searchKey, (prev) => ({ ...prev, loading: false, results: [], error: '' }));
+      return undefined;
+    }
+
+    let cancelled = false;
+    const timerId = window.setTimeout(async () => {
+      onSearchStateChange(searchKey, (prev) => (
+        String(prev.keyword || '').trim() === keyword
+          ? { ...prev, loading: true, error: '' }
+          : prev
+      ));
+      try {
+        const items = await searchUsers(keyword);
+        if (cancelled) return;
+        onSearchStateChange(searchKey, (prev) => (
+          String(prev.keyword || '').trim() === keyword && prev.open
+            ? { ...prev, loading: false, results: items, error: '' }
+            : prev
+        ));
+      } catch (requestError) {
+        if (cancelled) return;
+        onSearchStateChange(searchKey, (prev) => (
+          String(prev.keyword || '').trim() === keyword && prev.open
+            ? { ...prev, loading: false, results: [], error: requestError?.message || '用户搜索失败' }
+            : prev
+        ));
+      }
+    }, USER_SEARCH_DELAY_MS);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timerId);
+    };
+  }, [onSearchStateChange, searchKey, searchState?.keyword, searchState?.open, searchUsers]);
+
+  const handleBlur = () => {
+    if (blurTimerRef.current) {
+      window.clearTimeout(blurTimerRef.current);
+    }
+    blurTimerRef.current = window.setTimeout(() => {
+      onSearchStateChange(searchKey, (prev) => ({ ...prev, open: false }));
+    }, 120);
+  };
+
+  const handleFocus = () => {
+    if (blurTimerRef.current) {
+      window.clearTimeout(blurTimerRef.current);
+    }
+    onSearchStateChange(searchKey, (prev) => ({ ...prev, open: true }));
+  };
+
+  const inputValue = String(searchState?.keyword || '') || (selectedUser ? buildUserLabel(selectedUser) : '');
+  const showDropdown = !!searchState?.open && (
+    !!searchState?.loading
+    || !!searchState?.error
+    || (Array.isArray(searchState?.results) && searchState.results.length > 0)
+    || !!String(searchState?.keyword || '').trim()
+  );
+
+  return (
+    <div style={{ display: 'grid', gap: '6px' }}>
+      <div style={{ position: 'relative' }}>
+        <input
+          data-testid={`${testIdPrefix}-input`}
+          value={inputValue}
+          onChange={(event) => onInputChange(event.target.value)}
+          onFocus={handleFocus}
+          onBlur={handleBlur}
+          placeholder="输入姓名、账号或用户 ID 模糊查询"
+          autoComplete="off"
+          style={inputStyle}
+        />
+        {showDropdown ? (
+          <div
+            data-testid={`${testIdPrefix}-results`}
+            style={{
+              position: 'absolute',
+              zIndex: 10,
+              top: 'calc(100% + 6px)',
+              left: 0,
+              right: 0,
+              background: '#ffffff',
+              border: '1px solid #d1d5db',
+              borderRadius: '10px',
+              boxShadow: '0 12px 30px rgba(15, 23, 42, 0.12)',
+              overflow: 'hidden',
+            }}
+          >
+            {searchState?.loading ? (
+              <div style={{ padding: '10px 12px', color: '#6b7280', fontSize: '0.9rem' }}>正在搜索用户...</div>
+            ) : null}
+            {!searchState?.loading && searchState?.error ? (
+              <div style={{ padding: '10px 12px', color: '#991b1b', fontSize: '0.9rem' }}>{searchState.error}</div>
+            ) : null}
+            {!searchState?.loading && !searchState?.error && (!searchState?.results || searchState.results.length === 0) ? (
+              <div style={{ padding: '10px 12px', color: '#6b7280', fontSize: '0.9rem' }}>未找到匹配用户</div>
+            ) : null}
+            {!searchState?.loading && !searchState?.error
+              ? (searchState.results || []).map((item) => (
+                <button
+                  key={item.user_id}
+                  type="button"
+                  data-testid={`${testIdPrefix}-result-${item.user_id}`}
+                  onMouseDown={(event) => {
+                    event.preventDefault();
+                    onSelectUser(item);
+                  }}
+                  style={{
+                    width: '100%',
+                    textAlign: 'left',
+                    border: 'none',
+                    background: '#ffffff',
+                    padding: '10px 12px',
+                    cursor: 'pointer',
+                    borderTop: '1px solid #f3f4f6',
+                  }}
+                >
+                  <div style={{ fontWeight: 600 }}>{buildUserLabel(item)}</div>
+                  <div style={{ color: '#6b7280', fontSize: '0.8rem', marginTop: '2px' }}>{item.user_id}</div>
+                </button>
+              ))
+              : null}
+          </div>
+        ) : null}
+      </div>
+      <div data-testid={`${testIdPrefix}-selected`} style={{ color: '#6b7280', fontSize: '0.85rem' }}>
+        {selectedUser
+          ? `已选择用户: ${buildUserLabel(selectedUser)} / ${selectedUser.user_id}`
+          : '已选择用户: 未选择用户'}
+      </div>
+      <div style={{ color: '#9ca3af', fontSize: '0.8rem' }}>先输入关键词，再从下拉结果中选择用户</div>
+    </div>
+  );
+}
+
 export default function ApprovalConfig() {
   const [loading, setLoading] = useState(true);
   const [savingKey, setSavingKey] = useState('');
   const [error, setError] = useState('');
   const [saveMessage, setSaveMessage] = useState('');
   const [drafts, setDrafts] = useState([]);
-  const [users, setUsers] = useState([]);
+  const [userDirectory, setUserDirectory] = useState({});
+  const [memberSearchStates, setMemberSearchStates] = useState({});
   const [currentOperationType, setCurrentOperationType] = useState('');
+
+  const mergeUsersIntoDirectory = useCallback((items) => {
+    setUserDirectory((prev) => {
+      let changed = false;
+      const next = { ...prev };
+      (items || []).forEach((item) => {
+        const userId = String(item?.user_id || '').trim();
+        if (!userId) return;
+        next[userId] = item;
+        changed = true;
+      });
+      return changed ? next : prev;
+    });
+  }, []);
+
+  const searchUsers = useCallback(async (keyword) => {
+    const response = await authClient.listUsers({ q: keyword, limit: USER_SEARCH_LIMIT });
+    const items = normalizeUsers(response);
+    mergeUsersIntoDirectory(items);
+    return items;
+  }, [mergeUsersIntoDirectory]);
+
+  const hydrateConfiguredUsers = useCallback(async (nextDrafts) => {
+    const configuredIds = collectConfiguredUserIds(nextDrafts);
+    if (configuredIds.length === 0) return;
+    const resolvedUsers = await Promise.all(
+      configuredIds.map(async (userId) => {
+        const items = await searchUsers(userId);
+        return items.find((item) => String(item?.user_id || '') === userId) || null;
+      })
+    );
+    mergeUsersIntoDirectory(resolvedUsers.filter(Boolean));
+  }, [mergeUsersIntoDirectory, searchUsers]);
+
+  const updateMemberSearchState = useCallback((searchKey, updater) => {
+    setMemberSearchStates((prev) => {
+      const current = prev[searchKey] || createUserSearchState();
+      const nextState = typeof updater === 'function' ? updater(current) : updater;
+      return {
+        ...prev,
+        [searchKey]: nextState,
+      };
+    });
+  }, []);
 
   const loadData = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
-      const [workflowResponse, userResponse] = await Promise.all([
-        operationApprovalApi.listWorkflows(),
-        usersApi.list({ limit: 500, status: 'active' }),
-      ]);
+      const workflowResponse = await operationApprovalApi.listWorkflows();
       const workflowItems = Array.isArray(workflowResponse?.items) ? workflowResponse.items : [];
       const nextDrafts = workflowItems.map(createDraftFromWorkflow);
       setDrafts(nextDrafts);
-      setUsers(normalizeUsers(userResponse));
+      await hydrateConfiguredUsers(nextDrafts);
       setCurrentOperationType((prev) => {
         if (prev && nextDrafts.some((draft) => draft.operation_type === prev)) return prev;
         return nextDrafts[0]?.operation_type || '';
@@ -110,27 +356,15 @@ export default function ApprovalConfig() {
     } catch (requestError) {
       setError(requestError?.message || 'Failed to load approval config');
       setDrafts([]);
-      setUsers([]);
       setCurrentOperationType('');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [hydrateConfiguredUsers]);
 
   useEffect(() => {
     loadData();
   }, [loadData]);
-
-  const userOptions = useMemo(
-    () =>
-      users
-        .map((user) => ({
-          value: String(user?.user_id || ''),
-          label: String(user?.full_name || user?.username || user?.user_id || ''),
-        }))
-        .filter((item) => item.value),
-    [users]
-  );
 
   const currentDraft = useMemo(
     () => drafts.find((draft) => draft.operation_type === currentOperationType) || null,
@@ -235,6 +469,64 @@ export default function ApprovalConfig() {
       }));
     },
     [updateCurrentDraft]
+  );
+
+  const handleMemberUserKeywordChange = useCallback(
+    (operationType, stepIndex, memberIndex, value) => {
+      const searchKey = buildMemberSearchKey(operationType, stepIndex, memberIndex);
+      updateDraft(operationType, (draft) => ({
+        ...draft,
+        steps: (draft.steps || []).map((step, currentStepIndex) => {
+          if (currentStepIndex !== stepIndex) return step;
+          return {
+            ...step,
+            members: (step.members || []).map((member, currentMemberIndex) => (
+              currentMemberIndex === memberIndex
+                ? { ...member, member_ref: '' }
+                : member
+            )),
+          };
+        }),
+      }));
+      updateMemberSearchState(searchKey, (prev) => ({
+        ...prev,
+        keyword: value,
+        open: true,
+        error: '',
+        ...(String(value || '').trim() ? {} : { results: [] }),
+      }));
+    },
+    [updateDraft, updateMemberSearchState]
+  );
+
+  const handleSelectMemberUser = useCallback(
+    (operationType, stepIndex, memberIndex, selectedUser) => {
+      const searchKey = buildMemberSearchKey(operationType, stepIndex, memberIndex);
+      mergeUsersIntoDirectory([selectedUser]);
+      updateDraft(operationType, (draft) => ({
+        ...draft,
+        steps: (draft.steps || []).map((step, currentStepIndex) => {
+          if (currentStepIndex !== stepIndex) return step;
+          return {
+            ...step,
+            members: (step.members || []).map((member, currentMemberIndex) => (
+              currentMemberIndex === memberIndex
+                ? { ...member, member_ref: String(selectedUser?.user_id || '') }
+                : member
+            )),
+          };
+        }),
+      }));
+      updateMemberSearchState(searchKey, (prev) => ({
+        ...prev,
+        keyword: buildUserLabel(selectedUser),
+        open: false,
+        loading: false,
+        results: [],
+        error: '',
+      }));
+    },
+    [mergeUsersIntoDirectory, updateDraft, updateMemberSearchState]
   );
 
   const validateDraft = useCallback((draft) => {
@@ -427,19 +719,34 @@ export default function ApprovalConfig() {
                         </select>
 
                         {member.member_type === WORKFLOW_MEMBER_TYPE_USER ? (
-                          <select
-                            value={member.member_ref}
-                            data-testid={`approval-config-member-ref-${currentDraft.operation_type}-${stepIndex}-${memberIndex}`}
-                            onChange={(event) => updateMemberField(stepIndex, memberIndex, 'member_ref', event.target.value)}
-                            style={{ padding: '10px 12px', border: '1px solid #d1d5db', borderRadius: '10px' }}
-                          >
-                            <option value="">请选择用户</option>
-                            {userOptions.map((option) => (
-                              <option key={option.value} value={option.value}>
-                                {option.label}
-                              </option>
-                            ))}
-                          </select>
+                          <UserLookupField
+                            searchKey={buildMemberSearchKey(currentDraft.operation_type, stepIndex, memberIndex)}
+                            selectedUser={userDirectory[String(member.member_ref || '')] || null}
+                            searchState={
+                              memberSearchStates[
+                                buildMemberSearchKey(currentDraft.operation_type, stepIndex, memberIndex)
+                              ] || createUserSearchState()
+                            }
+                            onSearchStateChange={updateMemberSearchState}
+                            onInputChange={(value) =>
+                              handleMemberUserKeywordChange(
+                                currentDraft.operation_type,
+                                stepIndex,
+                                memberIndex,
+                                value
+                              )
+                            }
+                            onSelectUser={(selectedUser) =>
+                              handleSelectMemberUser(
+                                currentDraft.operation_type,
+                                stepIndex,
+                                memberIndex,
+                                selectedUser
+                              )
+                            }
+                            searchUsers={searchUsers}
+                            testIdPrefix={`approval-config-member-ref-${currentDraft.operation_type}-${stepIndex}-${memberIndex}`}
+                          />
                         ) : (
                           <div
                             data-testid={`approval-config-member-role-${currentDraft.operation_type}-${stepIndex}-${memberIndex}`}

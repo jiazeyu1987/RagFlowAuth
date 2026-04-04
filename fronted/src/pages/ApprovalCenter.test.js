@@ -200,6 +200,56 @@ describe('ApprovalCenter', () => {
     expect(await screen.findByTestId('approval-center-error')).toHaveTextContent(
       '当前审批账号缺少审批培训记录，请先补录培训记录后再审批或驳回。'
     );
+    expect(screen.getByTestId('approval-center-training-help')).toHaveTextContent('当前审批账号：approver-1');
+    expect(screen.getByText('请联系管理员在“培训合规管理”中为当前账号补录培训记录并授予上岗认证。')).toBeInTheDocument();
+  });
+
+  it('shows admin shortcut links to training compliance when approval is blocked by training gate', async () => {
+    const user = userEvent.setup();
+    useAuth.mockReturnValue({
+      user: {
+        user_id: 'admin-1',
+        username: 'admin',
+        role: 'admin',
+      },
+    });
+    operationApprovalApi.getRequest.mockResolvedValue({
+      ...requestDetail,
+      steps: [
+        {
+          ...requestDetail.steps[0],
+          approvers: [
+            {
+              approver_user_id: 'admin-1',
+              approver_username: 'admin',
+              status: 'pending',
+            },
+          ],
+        },
+      ],
+    });
+    authClient.requestSignatureChallenge.mockResolvedValue({ sign_token: 'sign-token-training-admin-1' });
+    operationApprovalApi.approveRequest.mockRejectedValue(new Error('training_record_missing'));
+
+    render(
+      <MemoryRouter initialEntries={['/approvals?request_id=req-1']}>
+        <ApprovalCenter />
+      </MemoryRouter>
+    );
+
+    await screen.findByTestId('approval-center-approve');
+    await user.click(screen.getByTestId('approval-center-approve'));
+    await user.type(screen.getByTestId('review-signature-password'), 'SignPass123');
+    await user.click(screen.getByTestId('review-signature-submit'));
+
+    expect(await screen.findByTestId('approval-center-training-record-link')).toHaveAttribute(
+      'href',
+      '/training-compliance?tab=records&user_id=admin-1&controlled_action=document_review'
+    );
+    expect(screen.getByTestId('approval-center-training-certification-link')).toHaveAttribute(
+      'href',
+      '/training-compliance?tab=certifications&user_id=admin-1&controlled_action=document_review'
+    );
   });
 
   it('renders different request statuses with different colors', async () => {
