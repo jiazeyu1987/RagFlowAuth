@@ -22,6 +22,10 @@ const TEXT = {
   permissionGroup: '\u6743\u9650\u7ec4',
   normalUserHint:
     '\u521b\u5efa\u666e\u901a\u7528\u6237\u65f6\u4e0d\u76f4\u63a5\u914d\u7f6e\u6743\u9650\u7ec4\uff0c\u540e\u7eed\u7531\u5f52\u5c5e\u5b50\u7ba1\u7406\u5458\u8d1f\u8d23\u5206\u914d\u3002',
+  subAdminPermissionHint:
+    '\u53ef\u4e3a\u5b50\u7ba1\u7406\u5458\u914d\u7f6e\u53ef\u4f7f\u7528\u7684\u6743\u9650\u7ec4\uff0c\u5176\u4e2d\u7684\u5b9e\u7528\u5de5\u5177\u529f\u80fd\u4f1a\u6210\u4e3a\u5176\u5411\u4e0b\u5206\u914d\u7684\u4e0a\u9650\u3002',
+  noPermissionGroups: '\u6682\u65e0\u53ef\u5206\u914d\u7684\u6743\u9650\u7ec4',
+  selectedPermissionGroups: '\u5df2\u9009\u62e9',
   kbRoot: '\u77e5\u8bc6\u5e93\u8d1f\u8d23\u76ee\u5f55',
   kbRootHint:
     '\u8be5\u7528\u6237\u62e5\u6709\u6240\u9009\u76ee\u5f55\u53ca\u5176\u540e\u4ee3\u7684\u5168\u90e8\u77e5\u8bc6\u5e93\u7ba1\u7406\u6743\u9650\u3002',
@@ -36,6 +40,7 @@ export default function CreateUserModal({
   companies,
   departments,
   subAdminOptions,
+  availableGroups,
   kbDirectoryNodes,
   kbDirectoryLoading,
   kbDirectoryError,
@@ -45,6 +50,7 @@ export default function CreateUserModal({
   onSubmit,
   onCancel,
   onFieldChange,
+  onToggleGroup,
   onCreateRootDirectory,
 }) {
   const [isMobile, setIsMobile] = useState(() => {
@@ -264,6 +270,52 @@ export default function CreateUserModal({
               >
                 {TEXT.normalUserHint}
               </div>
+            </div>
+          ) : null}
+
+          {isSubAdmin ? (
+            <div style={{ marginBottom: '24px' }}>
+              <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500' }}>{TEXT.permissionGroup}</label>
+              <div style={{ marginBottom: '8px', color: '#6b7280', fontSize: '0.85rem' }}>{TEXT.subAdminPermissionHint}</div>
+              <div
+                style={{
+                  border: '1px solid #d1d5db',
+                  borderRadius: '8px',
+                  padding: '12px',
+                  backgroundColor: '#f9fafb',
+                  maxHeight: isMobile ? '220px' : '260px',
+                  overflowY: 'auto',
+                }}
+              >
+                {(Array.isArray(availableGroups) ? availableGroups : []).length === 0 ? (
+                  <div style={{ color: '#6b7280', textAlign: 'center', padding: '8px 0' }}>{TEXT.noPermissionGroups}</div>
+                ) : (
+                  (Array.isArray(availableGroups) ? availableGroups : []).map((group) => (
+                    <label
+                      key={group.group_id}
+                      style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '8px 0', cursor: 'pointer' }}
+                    >
+                      <input
+                        type="checkbox"
+                        data-testid={`users-create-group-${group.group_id}`}
+                        checked={(newUser.group_ids || []).includes(group.group_id)}
+                        onChange={(event) => onToggleGroup?.(group.group_id, event.target.checked)}
+                      />
+                      <div>
+                        <div style={{ fontWeight: 500, color: '#111827' }}>{group.group_name}</div>
+                        {group.description ? (
+                          <div style={{ fontSize: '0.85rem', color: '#6b7280' }}>{group.description}</div>
+                        ) : null}
+                      </div>
+                    </label>
+                  ))
+                )}
+              </div>
+              {(newUser.group_ids || []).length > 0 ? (
+                <div style={{ marginTop: '8px', color: '#6b7280', fontSize: '0.85rem' }}>
+                  {TEXT.selectedPermissionGroups} {(newUser.group_ids || []).length} 个权限组
+                </div>
+              ) : null}
             </div>
           ) : null}
 

@@ -29,7 +29,7 @@ export default function GroupModal({
   return (
     <div data-testid="users-group-modal" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0, 0, 0, 0.5)', display: 'flex', justifyContent: 'center', alignItems: isMobile ? 'stretch' : 'center', padding: isMobile ? '16px 12px' : '24px', zIndex: 1000 }}>
       <div style={{ backgroundColor: 'white', padding: isMobile ? '20px 16px' : '32px', borderRadius: '8px', width: '100%', maxWidth: '500px', maxHeight: isMobile ? '100%' : '90vh', overflowY: 'auto', margin: isMobile ? 'auto 0' : 0 }}>
-        <h3 style={{ margin: '0 0 24px 0' }}>分配权限组 - {editingGroupUser.username}</h3>
+        <h3 style={{ margin: '0 0 24px 0' }}>分配权限组 - {editingGroupUser.full_name || editingGroupUser.username}</h3>
         <div style={{ marginBottom: '24px' }}>
           <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500' }}>选择权限组，可多选</label>
           <div style={{ border: '1px solid #d1d5db', borderRadius: '4px', padding: '12px', maxHeight: isMobile ? '240px' : '300px', overflowY: 'auto', backgroundColor: '#f9fafb' }}>

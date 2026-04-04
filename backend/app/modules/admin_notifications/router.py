@@ -6,6 +6,7 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from backend.app.core.authz import AdminOnly, AuthContextDep
+from backend.app.core.user_display import resolve_user_display_names
 from backend.services.audit_helpers import actor_fields_from_ctx
 from backend.services.notification import NotificationManager, NotificationManagerError
 
@@ -81,6 +82,11 @@ def list_jobs(
 ):
     manager = _resolve_notification_manager(ctx)
     items = manager.list_jobs(limit=limit, status=status, event_type=event_type, channel_type=channel_type)
+    names = resolve_user_display_names(ctx.deps, {str(item.get("recipient_user_id") or "").strip() for item in items if item.get("recipient_user_id")})
+    for item in items:
+        user_id = str(item.get("recipient_user_id") or "").strip()
+        if user_id and names.get(user_id):
+            item["recipient_full_name"] = names.get(user_id)
     return {"items": items, "count": len(items)}
 
 

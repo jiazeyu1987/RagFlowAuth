@@ -136,7 +136,6 @@ export default function UsersTable({
                     <div style={{ fontWeight: 600, color: '#111827' }}>
                       {user?.full_name || user?.username || '-'}
                     </div>
-                    <div style={{ fontSize: '0.85rem', color: '#6b7280' }}>{user?.username || '-'}</div>
                   </td>
                   <td style={{ padding: '14px 16px', verticalAlign: 'top' }}>
                     <span

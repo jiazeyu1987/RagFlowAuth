@@ -1,5 +1,3 @@
-from pathlib import Path
-
 from fastapi import APIRouter, HTTPException
 from typing import Optional
 
@@ -11,50 +9,10 @@ from backend.app.core.permission_resolver import (
 )
 from backend.app.core.permdbg import permdbg
 from backend.app.core.signature_support import resolve_signature_service, signature_manifestation_payload
-from backend.database.tenant_paths import resolve_tenant_db_root
-from backend.services.user_store import UserStore
+from backend.app.core.user_display import resolve_user_display_names
 
 
 router = APIRouter()
-
-
-def _resolve_user_display_names(ctx: AuthContextDep, user_ids: set[str]) -> dict[str, str]:
-    ids = {str(item).strip() for item in (user_ids or set()) if str(item or "").strip()}
-    if not ids:
-        return {}
-
-    candidates: list[object] = []
-    primary_store = getattr(ctx.deps, "user_store", None)
-    if primary_store is not None:
-        candidates.append(primary_store)
-
-    db_path = getattr(primary_store, "db_path", None)
-    if db_path:
-        try:
-            db_file = Path(str(db_path)).resolve()
-            tenant_root = resolve_tenant_db_root(base_db_path=str(db_file))
-            if tenant_root.resolve() in db_file.parents:
-                root_store = UserStore(db_path=str(tenant_root.parent / "auth.db"))
-                candidates.append(root_store)
-        except Exception:
-            pass
-
-    result: dict[str, str] = {}
-    seen_store_ids: set[int] = set()
-    for store in candidates:
-        if id(store) in seen_store_ids:
-            continue
-        seen_store_ids.add(id(store))
-        try:
-            mapping = store.get_display_names_by_ids(ids)
-        except Exception:
-            mapping = {}
-        for key, value in (mapping or {}).items():
-            normalized_key = str(key or "").strip()
-            normalized_value = str(value or "").strip()
-            if normalized_key and normalized_value and normalized_key not in result:
-                result[normalized_key] = normalized_value
-    return result
 
 
 def _document_payload(
@@ -162,7 +120,7 @@ def list_documents(
     user_ids = {d.uploaded_by for d in docs if d.uploaded_by}
     user_ids.update({d.reviewed_by for d in docs if d.reviewed_by})
     try:
-        usernames = _resolve_user_display_names(ctx, user_ids)
+        usernames = resolve_user_display_names(ctx.deps, user_ids)
     except Exception:
         usernames = {}
 
@@ -205,7 +163,7 @@ def get_document(
 
     usernames = {}
     try:
-        usernames = _resolve_user_display_names(ctx, {doc.uploaded_by, doc.reviewed_by} - {None, ""})
+        usernames = resolve_user_display_names(ctx.deps, {doc.uploaded_by, doc.reviewed_by} - {None, ""})
     except Exception:
         usernames = {}
 

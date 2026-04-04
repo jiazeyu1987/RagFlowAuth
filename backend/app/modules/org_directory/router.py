@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 
 from backend.app.core.auth import get_global_deps
 from backend.app.core.authz import AdminOnly
+from backend.app.core.user_display import resolve_user_display_names
 from backend.app.dependencies import AppDependencies
 from backend.database.tenant_paths import resolve_tenant_auth_db_path
 from backend.models.org_directory import (
@@ -193,7 +194,7 @@ async def list_org_audit_logs(
     user_ids = {item.actor_user_id for item in logs if item.actor_user_id}
     usernames = {}
     try:
-        usernames = deps.user_store.get_usernames_by_ids(user_ids)
+        usernames = resolve_user_display_names(deps, user_ids)
     except Exception:
         usernames = {}
 

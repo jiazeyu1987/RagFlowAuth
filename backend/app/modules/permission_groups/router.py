@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from backend.app.core.auth import get_deps
 from backend.app.core.authz import AdminOnly, AuthContextDep
+from backend.app.core.permission_resolver import group_tool_scope_within_snapshot
 from backend.app.dependencies import AppDependencies
 
 from backend.app.modules.permission_groups.schemas import (
@@ -68,6 +69,14 @@ def _list_manageable_groups(ctx: AuthContextDep, service: PermissionGroupsServic
         return []
     groups = manager.filter_manageable_permission_groups(user=ctx.user, groups=groups)
     return _chat_management_manager(ctx).filter_manageable_permission_groups(user=ctx.user, groups=groups)
+
+
+def _list_assignable_groups(ctx: AuthContextDep, service: PermissionGroupsService) -> list[dict]:
+    if ctx.snapshot.is_admin:
+        return service.list_groups()
+    _assert_group_management(ctx)
+    groups = _list_manageable_groups(ctx, service)
+    return [group for group in groups if group_tool_scope_within_snapshot(ctx.snapshot, group)]
 
 
 def _get_manageable_group(ctx: AuthContextDep, service: PermissionGroupsService, group_id: int) -> dict:
@@ -155,6 +164,14 @@ def create_router() -> APIRouter:
     ):
         _assert_group_management(ctx)
         groups = _list_manageable_groups(ctx, service)
+        return {"ok": True, "data": groups}
+
+    @router.get("/permission-groups/assignable")
+    async def list_assignable_permission_groups(
+        ctx: AuthContextDep,
+        service: PermissionGroupsService = Depends(get_service),
+    ):
+        groups = _list_assignable_groups(ctx, service)
         return {"ok": True, "data": groups}
 
     @router.get("/permission-groups/{group_id}")

@@ -413,7 +413,7 @@ const AuditLogs = () => {
                 <tr key={r.id}>
                   <td style={tdStyle}>{formatMs(r.created_at_ms)}</td>
                   <td style={tdStyle}>{actionLabel(r.action)}</td>
-                  <td style={tdStyle}>{r.username || r.actor}</td>
+                  <td style={tdStyle}>{r.full_name || r.username || r.actor}</td>
                   <td style={tdStyle}>{r.company_name || (r.company_id != null ? String(r.company_id) : '')}</td>
                   <td style={tdStyle}>{r.department_name || (r.department_id != null ? String(r.department_id) : '')}</td>
                   <td style={tdStyle}>{sourceLabel(r.source)}</td>

@@ -24,7 +24,7 @@ jest.mock('../api', () => ({
 
 jest.mock('../../permissionGroups/api', () => ({
   permissionGroupsApi: {
-    list: jest.fn(),
+    listAssignable: jest.fn(),
   },
 }));
 
@@ -61,8 +61,14 @@ function HookHarness() {
       <button type="button" data-testid="set-department" onClick={() => hook.setNewUserField('department_id', '11')}>
         set-department
       </button>
+      <button type="button" data-testid="set-create-root-node" onClick={() => hook.setNewUserField('managed_kb_root_node_id', 'node-1')}>
+        set-create-root-node
+      </button>
       <button type="button" data-testid="set-manager" onClick={() => hook.setNewUserField('manager_user_id', 'sub-1')}>
         set-manager
+      </button>
+      <button type="button" data-testid="select-create-group-7" onClick={() => hook.toggleNewUserGroup(7, true)}>
+        select-create-group-7
       </button>
       <button type="button" data-testid="submit-create" onClick={() => hook.handleCreateUser({ preventDefault() {} })}>
         submit-create
@@ -145,6 +151,9 @@ function HookHarness() {
       </button>
       <button type="button" data-testid="submit-policy" onClick={hook.handleSavePolicy}>
         submit-policy
+      </button>
+      <button type="button" data-testid="select-policy-group-7" onClick={() => hook.handleTogglePolicyGroup(7, true)}>
+        select-policy-group-7
       </button>
       <button
         type="button"
@@ -241,7 +250,7 @@ describe('useUserManagement user type payloads', () => {
     ]);
     usersApi.create.mockResolvedValue({});
     usersApi.update.mockResolvedValue({});
-    permissionGroupsApi.list.mockResolvedValue({ ok: true, data: [{ group_id: 7, group_name: 'G7' }] });
+    permissionGroupsApi.listAssignable.mockResolvedValue({ ok: true, data: [{ group_id: 7, group_name: 'G7' }] });
     orgDirectoryApi.listCompanies.mockResolvedValue([{ id: 1, name: 'Acme' }, { id: 2, name: 'Beta' }]);
     orgDirectoryApi.listDepartments.mockResolvedValue([
       { id: 11, name: 'QA', company_id: 1 },
@@ -310,6 +319,28 @@ describe('useUserManagement user type payloads', () => {
     expect(usersApi.create).not.toHaveBeenCalled();
   });
 
+  it('sub admin create payload keeps selected permission groups', async () => {
+    const user = userEvent.setup();
+    render(<HookHarness />);
+
+    await waitFor(() => expect(usersApi.list).toHaveBeenCalled());
+    await user.click(screen.getByTestId('open-create'));
+    await user.click(screen.getByTestId('set-company'));
+    await user.click(screen.getByTestId('set-department'));
+    await user.click(screen.getByTestId('set-type-sub-admin'));
+    await user.click(screen.getByTestId('select-create-group-7'));
+    await user.click(screen.getByTestId('set-create-root-node'));
+    await user.click(screen.getByTestId('submit-create'));
+
+    await waitFor(() => expect(usersApi.create).toHaveBeenCalled());
+    expect(usersApi.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        role: 'sub_admin',
+        group_ids: [7],
+      })
+    );
+  });
+
   it('editing viewer requires manager user and clears direct groups', async () => {
     const user = userEvent.setup();
     render(<HookHarness />);
@@ -342,6 +373,24 @@ describe('useUserManagement user type payloads', () => {
         manager_user_id: 'sub-1',
         managed_kb_root_node_id: null,
         group_ids: [],
+      })
+    );
+  });
+
+  it('editing sub admin keeps selected permission groups', async () => {
+    const user = userEvent.setup();
+    render(<HookHarness />);
+
+    await waitFor(() => expect(usersApi.list).toHaveBeenCalled());
+    await user.click(screen.getByTestId('open-policy-sub-admin'));
+    await user.click(screen.getByTestId('submit-policy'));
+
+    await waitFor(() => expect(usersApi.update).toHaveBeenCalled());
+    expect(usersApi.update).toHaveBeenCalledWith(
+      'u-2',
+      expect.objectContaining({
+        role: 'sub_admin',
+        group_ids: [7],
       })
     );
   });
@@ -390,7 +439,7 @@ describe('useUserManagement user type payloads', () => {
     render(<HookHarness />);
 
     await waitFor(() => expect(usersApi.list).toHaveBeenCalled());
-    await waitFor(() => expect(permissionGroupsApi.list).toHaveBeenCalled());
+    await waitFor(() => expect(permissionGroupsApi.listAssignable).toHaveBeenCalled());
 
     await user.click(screen.getByTestId('assign-owned-user-stale-groups'));
 
@@ -404,11 +453,11 @@ describe('useUserManagement user type payloads', () => {
     );
   });
 
-  it('admin does not request permission groups anymore', async () => {
+  it('admin loads assignable permission groups for sub admin configuration', async () => {
     render(<HookHarness />);
 
     await waitFor(() => expect(usersApi.list).toHaveBeenCalled());
-    expect(permissionGroupsApi.list).not.toHaveBeenCalled();
+    await waitFor(() => expect(permissionGroupsApi.listAssignable).toHaveBeenCalled());
   });
 
   it('sub admin still loads permission groups for assignment', async () => {
@@ -420,7 +469,7 @@ describe('useUserManagement user type payloads', () => {
     render(<HookHarness />);
 
     await waitFor(() => expect(usersApi.list).toHaveBeenCalled());
-    await waitFor(() => expect(permissionGroupsApi.list).toHaveBeenCalled());
+    await waitFor(() => expect(permissionGroupsApi.listAssignable).toHaveBeenCalled());
   });
 
   it('sub admin can reset own and owned user passwords only', async () => {

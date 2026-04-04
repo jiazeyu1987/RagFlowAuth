@@ -58,7 +58,7 @@ export default function DisableUserModal({
           margin: isMobile ? 'auto 0' : 0,
         }}
       >
-        <h3 style={{ margin: '0 0 8px 0' }}>禁用账户 - {user.username}</h3>
+        <h3 style={{ margin: '0 0 8px 0' }}>禁用账户 - {user.full_name || user.username}</h3>
         <div style={{ marginBottom: 16, color: '#6b7280', fontSize: '0.9rem' }}>
           请选择禁用方式：立即禁用，或禁用到指定日期。
         </div>

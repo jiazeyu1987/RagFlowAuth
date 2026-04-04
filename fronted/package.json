@@ -34,6 +34,8 @@
     "e2e:all": "playwright test",
     "e2e:realdata": "playwright test --grep @realdata --workers=1",
     "e2e:realdata:strict": "python ../scripts/run_realdata_e2e.py --strict --fronted-dir .",
+    "e2e:docs": "python ../scripts/run_doc_e2e.py --fronted-dir .",
+    "e2e:docs:list": "python ../scripts/run_doc_e2e.py --fronted-dir . --list",
     "e2e:smoke": "playwright test --grep @smoke",
     "e2e:integration": "playwright test --grep @integration --workers=1",
     "e2e:integration:nonrealdata": "playwright test --grep @integration --grep-invert @realdata --workers=1",

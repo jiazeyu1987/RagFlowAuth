@@ -74,6 +74,52 @@ def _safe_list(value: Any) -> list[Any]:
         return value
     return []
 
+
+def _normalize_tool_ids(raw: Any) -> frozenset[str]:
+    tool_ids: set[str] = set()
+    for item in _safe_list(raw):
+        if not isinstance(item, str):
+            continue
+        value = item.strip()
+        if value:
+            tool_ids.add(value)
+    return frozenset(tool_ids)
+
+
+def resolve_group_tool_scope(group: Any) -> tuple[ResourceScope, frozenset[str]]:
+    if not isinstance(group, dict):
+        return ResourceScope.NONE, frozenset()
+    if not bool(group.get("can_view_tools", True)):
+        return ResourceScope.NONE, frozenset()
+    tool_ids = _normalize_tool_ids(group.get("accessible_tools"))
+    if tool_ids:
+        return ResourceScope.SET, tool_ids
+    return ResourceScope.ALL, frozenset()
+
+
+def group_tool_scope_within_snapshot(snapshot: PermissionSnapshot, group: Any) -> bool:
+    group_scope, group_tool_ids = resolve_group_tool_scope(group)
+    if group_scope == ResourceScope.NONE:
+        return True
+    if snapshot.tool_scope == ResourceScope.ALL:
+        return True
+    if snapshot.tool_scope != ResourceScope.SET:
+        return False
+    if group_scope != ResourceScope.SET:
+        return False
+    return group_tool_ids.issubset(snapshot.tool_ids)
+
+
+def assert_group_tool_scope_within_snapshot(
+    snapshot: PermissionSnapshot,
+    group: Any,
+    *,
+    detail: str = "tool_out_of_management_scope",
+    status_code: int = 400,
+) -> None:
+    if not group_tool_scope_within_snapshot(snapshot, group):
+        raise HTTPException(status_code=status_code, detail=detail)
+
 def _add_kb_ref(kb_names: set[str], ref: str, dataset_index: dict[str, dict[str, str]] | None) -> None:
     kb_names.add(ref)
     if not dataset_index:
@@ -149,14 +195,10 @@ def resolve_permissions(deps: "AppDependencies", user: Any) -> PermissionSnapsho
         can_view_tools = can_view_tools or bool(group.get("can_view_tools", True))
 
         if bool(group.get("can_view_tools", True)):
-            group_tools = _safe_list(group.get("accessible_tools"))
+            group_tools = resolve_group_tool_scope(group)[1]
             if group_tools:
                 tool_has_scoped_access = True
-                for tid in group_tools:
-                    if isinstance(tid, str):
-                        value = tid.strip()
-                        if value:
-                            tool_ids.add(value)
+                tool_ids.update(group_tools)
             else:
                 # Legacy groups without tool-level restriction keep full tools visibility.
                 tool_has_global_access = True

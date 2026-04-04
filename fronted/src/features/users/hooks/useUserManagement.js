@@ -59,6 +59,15 @@ const normalizeGroupId = (value) => {
   return Number.isInteger(groupId) && groupId > 0 ? groupId : null;
 };
 
+const normalizeGroupIds = (values) =>
+  Array.from(
+    new Set(
+      (Array.isArray(values) ? values : [])
+        .map((value) => normalizeGroupId(value))
+        .filter((groupId) => groupId != null)
+    )
+  );
+
 const buildUserDisplayLabel = (item) => {
   const fullName = normalizePersonName(item?.full_name);
   const username = String(item?.username || '').trim();
@@ -75,13 +84,13 @@ const normalizeDraftByUserType = (draft) => {
   const next = {
     ...draft,
     user_type: userType,
+    group_ids: normalizeGroupIds(draft?.group_ids),
   };
   if (userType !== 'sub_admin') {
     next.managed_kb_root_node_id = '';
     next.group_ids = [];
   } else {
     next.manager_user_id = '';
-    next.group_ids = [];
   }
   return next;
 };
@@ -174,12 +183,12 @@ export const useUserManagement = () => {
   }, []);
 
   const fetchPermissionGroups = useCallback(async () => {
-    if (!isSubAdminUser) {
+    if (!isAdminUser && !isSubAdminUser) {
       setAvailableGroups([]);
       return;
     }
     try {
-      const data = await permissionGroupsApi.list();
+      const data = await permissionGroupsApi.listAssignable();
       if (data?.ok) {
         setAvailableGroups(Array.isArray(data.data) ? data.data : []);
       }
@@ -187,7 +196,7 @@ export const useUserManagement = () => {
       console.error('Failed to load permission groups:', err);
       setAvailableGroups([]);
     }
-  }, [isSubAdminUser]);
+  }, [isAdminUser, isSubAdminUser]);
 
   const fetchOrgDirectory = useCallback(async () => {
     try {
@@ -461,7 +470,7 @@ export const useUserManagement = () => {
           manager_user_id:
             userType === 'sub_admin' ? null : String(newUser.manager_user_id || '').trim() || null,
           role: userType === 'sub_admin' ? 'sub_admin' : 'viewer',
-          group_ids: [],
+          group_ids: userType === 'sub_admin' ? normalizeGroupIds(newUser.group_ids) : [],
           managed_kb_root_node_id:
             userType === 'sub_admin' ? String(newUser.managed_kb_root_node_id || '').trim() || null : null,
           company_id: newUser.company_id ? Number(newUser.company_id) : null,
@@ -719,10 +728,10 @@ export const useUserManagement = () => {
   const handleTogglePolicyGroup = useCallback(
     (groupId, checked) => {
       setPolicyFormState((prev) => {
-        if (String(prev.user_type || 'normal') === 'sub_admin' || String(policyUser?.role || '') === 'admin') {
+        if (String(policyUser?.role || '') === 'admin' || String(prev.user_type || 'normal') !== 'sub_admin') {
           return { ...prev, group_ids: [] };
         }
-        const current = Array.isArray(prev.group_ids) ? prev.group_ids : [];
+        const current = normalizeGroupIds(prev.group_ids);
         if (checked) {
           if (current.includes(groupId)) return prev;
           return { ...prev, group_ids: [...current, groupId] };
@@ -769,7 +778,12 @@ export const useUserManagement = () => {
           ? null
           : String(policyForm.manager_user_id || '').trim() || null,
       role: isAdminTarget ? 'admin' : userType === 'sub_admin' ? 'sub_admin' : 'viewer',
-      group_ids: isAdminTarget ? undefined : [],
+      group_ids:
+        isAdminTarget
+          ? undefined
+          : userType === 'sub_admin'
+            ? normalizeGroupIds(policyForm.group_ids)
+            : [],
       managed_kb_root_node_id:
         userType === 'sub_admin' ? String(policyForm.managed_kb_root_node_id || '').trim() || null : null,
       max_login_sessions: maxSessions,

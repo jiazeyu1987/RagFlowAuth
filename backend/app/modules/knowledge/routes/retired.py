@@ -11,6 +11,7 @@ from backend.app.core.authz import AuthContextDep
 from backend.app.core.kb_refs import resolve_kb_ref
 from backend.app.core.permission_resolver import ResourceScope, assert_can_review, assert_kb_allowed
 from backend.services.audit_helpers import actor_fields_from_ctx
+from backend.app.core.user_display import resolve_user_display_names
 from backend.services.compliance import RetiredRecordsService
 from backend.services.documents.document_manager import DocumentManager
 
@@ -127,7 +128,7 @@ def retire_document(
 
     usernames = {}
     try:
-        usernames = deps.user_store.get_usernames_by_ids({retired.uploaded_by, retired.reviewed_by, retired.retired_by} - {None, ""})
+        usernames = resolve_user_display_names(deps, {retired.uploaded_by, retired.reviewed_by, retired.retired_by} - {None, ""})
     except Exception:
         usernames = {}
     return _retired_payload(retired, usernames)
@@ -165,7 +166,7 @@ def list_retired_documents(
     user_ids.update({item.reviewed_by for item in docs if item.reviewed_by})
     user_ids.update({getattr(item, "retired_by", None) for item in docs if getattr(item, "retired_by", None)})
     try:
-        usernames = deps.user_store.get_usernames_by_ids(user_ids)
+        usernames = resolve_user_display_names(deps, user_ids)
     except Exception:
         usernames = {}
     return {"items": [_retired_payload(item, usernames) for item in docs], "count": len(docs)}

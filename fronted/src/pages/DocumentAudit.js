@@ -69,7 +69,7 @@ const renderSignatureManifestation = (item) => {
     <div style={{ display: 'grid', gap: '6px' }}>
       <div>
         <div style={manifestLabelStyle}>{'\u7b7e\u540d\u4eba'}</div>
-        <div style={manifestValueStyle}>{item.signed_by_username || item.reviewed_by_name || item.reviewed_by || '-'}</div>
+        <div style={manifestValueStyle}>{item.signed_by_full_name || item.signed_by_username || item.reviewed_by_name || item.reviewed_by || '-'}</div>
       </div>
       <div>
         <div style={manifestLabelStyle}>{'\u7b7e\u540d\u65f6\u95f4'}</div>

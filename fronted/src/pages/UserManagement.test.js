@@ -226,6 +226,7 @@ describe('UserManagement simplified user ownership forms', () => {
     render(<UserManagement />);
 
     expect(await screen.findByTestId('users-kb-root-selector')).toBeInTheDocument();
+    expect(screen.getByTestId('users-create-group-7')).toBeInTheDocument();
     expect(screen.queryByTestId('users-create-sub-admin')).not.toBeInTheDocument();
     await user.click(screen.getByTestId('users-kb-root-node-node-root-a'));
 
@@ -276,6 +277,7 @@ describe('UserManagement simplified user ownership forms', () => {
 
     expect(await screen.findByTestId('users-kb-root-selector')).toBeInTheDocument();
     expect(screen.getByTestId('users-policy-invalid-kb-root')).toBeInTheDocument();
+    expect(screen.getByTestId('users-policy-group-7')).toBeInTheDocument();
     expect(screen.queryByTestId('users-policy-sub-admin')).not.toBeInTheDocument();
     await user.click(screen.getByTestId('users-kb-root-node-node-root-a'));
 

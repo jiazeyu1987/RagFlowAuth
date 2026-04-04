@@ -137,7 +137,7 @@ export default function Dashboard() {
       <div style={{ marginBottom: '14px' }}>
         <h2 style={{ margin: 0, color: '#111827' }}>控制台</h2>
         <div style={{ marginTop: '6px', color: '#6b7280', wordBreak: 'break-word' }}>
-          用户：{user?.username || '-'} | 角色：{user?.role || '-'}
+          用户：{user?.full_name || user?.username || '-'} | 角色：{user?.role || '-'}
         </div>
       </div>
 

@@ -7,6 +7,7 @@ from pydantic import BaseModel
 
 from backend.app.core.auth import get_deps, get_global_deps
 from backend.app.core.authz import AdminOnly, AuthContextDep
+from backend.app.core.permission_resolver import assert_group_tool_scope_within_snapshot
 from backend.app.dependencies import AppDependencies
 from backend.app.modules.permission_groups.service import PermissionGroupsService
 from backend.app.modules.users.repo import UsersRepo
@@ -97,6 +98,24 @@ def _assert_can_reset_password(ctx: AuthContextDep, target_user) -> None:
         detail="sub_admin_can_only_reset_password_for_owned_users",
         role_detail="sub_admin_can_only_reset_password_for_owned_users",
     )
+
+
+def _validate_permission_group_tool_scope(
+    ctx: AuthContextDep,
+    *,
+    group_ids: list[int],
+) -> None:
+    if ctx.snapshot.is_admin:
+        return
+    store = getattr(ctx.deps, "permission_group_store", None)
+    if store is None:
+        raise HTTPException(status_code=500, detail="permission_group_store_unavailable")
+    for raw_group_id in group_ids:
+        group_id = int(raw_group_id)
+        group = store.get_group(group_id)
+        if not group:
+            raise HTTPException(status_code=400, detail=f"permission_group_not_found:{group_id}")
+        assert_group_tool_scope_within_snapshot(ctx.snapshot, group)
 
 
 @router.get("", response_model=list[UserResponse])
@@ -216,6 +235,10 @@ async def update_user(
             )
         except Exception as exc:
             raise HTTPException(status_code=int(getattr(exc, "status_code", 400) or 400), detail=str(exc)) from exc
+        _validate_permission_group_tool_scope(
+            ctx,
+            group_ids=[int(group_id) for group_id in target_group_ids],
+        )
     return service.update_user(user_id=user_id, user_data=user_data)
 
 

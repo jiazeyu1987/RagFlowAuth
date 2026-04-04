@@ -5,6 +5,7 @@ from fastapi import APIRouter
 from backend.app.core.authz import AuthContextDep
 from backend.app.core.kb_refs import resolve_kb_ref
 from backend.app.core.permission_resolver import assert_kb_allowed
+from backend.app.core.user_display import resolve_user_display_names
 
 router = APIRouter()
 
@@ -27,6 +28,7 @@ def list_downloads(
         downloaded_by = ctx.payload.sub
 
     downloads = deps.download_log_store.list_downloads(kb_refs=kb_refs, downloaded_by=downloaded_by, limit=limit)
+    names = resolve_user_display_names(deps, {item.downloaded_by for item in downloads if item.downloaded_by})
 
     return {
         "downloads": [
@@ -36,6 +38,7 @@ def list_downloads(
                 "filename": d.filename,
                 "kb_id": (d.kb_name or d.kb_id),
                 "downloaded_by": d.downloaded_by,
+                "downloaded_by_name": names.get(d.downloaded_by) if d.downloaded_by else None,
                 "downloaded_at_ms": d.downloaded_at_ms,
                 "ragflow_doc_id": d.ragflow_doc_id,
                 "is_batch": d.is_batch,

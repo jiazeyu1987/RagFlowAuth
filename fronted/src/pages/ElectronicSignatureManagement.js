@@ -490,10 +490,9 @@ const ElectronicSignatureManagement = () => {
                   </tr>
                 ) : authorizations.map((item) => (
                   <tr key={item.user_id}>
-                    <td style={cellStyle}>
-                      <div>{item.full_name || item.username}</div>
-                      <div style={{ color: '#6b7280', fontSize: '0.8rem' }}>{item.username}</div>
-                    </td>
+                  <td style={cellStyle}>
+                    <div>{item.full_name || item.username}</div>
+                  </td>
                     <td style={cellStyle}>{item.status || '-'}</td>
                     <td style={cellStyle}>
                       {item.electronic_signature_enabled ? TEXT.authorizationEnabled : TEXT.authorizationDisabled}

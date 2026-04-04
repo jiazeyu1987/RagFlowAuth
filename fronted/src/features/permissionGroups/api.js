@@ -19,6 +19,14 @@ export const permissionGroupsApi = {
     return response.json();
   },
 
+  async listAssignable() {
+    const response = await authClient.fetchWithAuth(authBackendUrl('/api/permission-groups/assignable'), {
+      method: 'GET',
+    });
+    if (!response.ok) throw new Error(await parseError(response, 'Failed to load assignable permission groups'));
+    return response.json();
+  },
+
   async listKnowledgeBases() {
     const response = await authClient.fetchWithAuth(
       authBackendUrl('/api/permission-groups/resources/knowledge-bases'),

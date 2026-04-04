@@ -5,6 +5,7 @@ import json
 from fastapi import APIRouter, HTTPException, Request, Response
 
 from backend.app.core.authz import AdminOnly, AuthContextDep
+from backend.app.core.user_display import resolve_user_display_names
 from backend.services.audit import AuditEvidenceExportService
 from backend.services.compliance import ComplianceReviewPackageService, RetiredRecordsService
 
@@ -48,7 +49,7 @@ async def list_audit_events(
     if manager is None:
         manager = ctx.deps.audit_log_store
     if hasattr(manager, "list_events") and manager is not ctx.deps.audit_log_store:
-        return manager.list_events(
+        result = manager.list_events(
             action=action,
             actor=actor,
             actor_username=username,
@@ -71,67 +72,76 @@ async def list_audit_events(
             offset=offset,
             limit=limit,
         )
-    total, rows = ctx.deps.audit_log_store.list_events(
-        action=action,
-        actor=actor,
-        actor_username=username,
-        company_id=company_id,
-        department_id=department_id,
-        resource_type=resource_type,
-        resource_id=resource_id,
-        event_type=event_type,
-        signature_id=signature_id,
-        request_id=request_id,
-        source=source,
-        doc_id=doc_id,
-        filename=filename,
-        kb_id=kb_id,
-        kb_dataset_id=kb_dataset_id,
-        kb_name=kb_name,
-        kb_ref=kb_ref,
-        from_ms=from_ms,
-        to_ms=to_ms,
-        offset=offset,
-        limit=limit,
-    )
-    return {
-        "total": total,
-        "items": [
-            {
-                "id": r.id,
-                "action": r.action,
-                "actor": r.actor,
-                "username": r.actor_username,
-                "company_id": r.company_id,
-                "company_name": r.company_name,
-                "department_id": r.department_id,
-                "department_name": r.department_name,
-                "created_at_ms": r.created_at_ms,
-                "resource_type": r.resource_type,
-                "resource_id": r.resource_id,
-                "event_type": r.event_type,
-                "before": _decode_meta_json(r.before_json),
-                "after": _decode_meta_json(r.after_json),
-                "before_json": r.before_json,
-                "after_json": r.after_json,
-                "reason": r.reason,
-                "signature_id": r.signature_id,
-                "request_id": r.request_id,
-                "client_ip": r.client_ip,
-                "prev_hash": r.prev_hash,
-                "event_hash": r.event_hash,
-                "source": r.source,
-                "doc_id": r.doc_id,
-                "filename": r.filename,
-                "kb_id": r.kb_id,
-                "kb_dataset_id": r.kb_dataset_id,
-                "kb_name": r.kb_name,
-                "meta": _decode_meta_json(r.meta_json),
-                "meta_json": r.meta_json,
-            }
-            for r in rows
-        ],
-    }
+    else:
+        total, rows = ctx.deps.audit_log_store.list_events(
+            action=action,
+            actor=actor,
+            actor_username=username,
+            company_id=company_id,
+            department_id=department_id,
+            resource_type=resource_type,
+            resource_id=resource_id,
+            event_type=event_type,
+            signature_id=signature_id,
+            request_id=request_id,
+            source=source,
+            doc_id=doc_id,
+            filename=filename,
+            kb_id=kb_id,
+            kb_dataset_id=kb_dataset_id,
+            kb_name=kb_name,
+            kb_ref=kb_ref,
+            from_ms=from_ms,
+            to_ms=to_ms,
+            offset=offset,
+            limit=limit,
+        )
+        result = {
+            "total": total,
+            "items": [
+                {
+                    "id": r.id,
+                    "action": r.action,
+                    "actor": r.actor,
+                    "username": r.actor_username,
+                    "company_id": r.company_id,
+                    "company_name": r.company_name,
+                    "department_id": r.department_id,
+                    "department_name": r.department_name,
+                    "created_at_ms": r.created_at_ms,
+                    "resource_type": r.resource_type,
+                    "resource_id": r.resource_id,
+                    "event_type": r.event_type,
+                    "before": _decode_meta_json(r.before_json),
+                    "after": _decode_meta_json(r.after_json),
+                    "before_json": r.before_json,
+                    "after_json": r.after_json,
+                    "reason": r.reason,
+                    "signature_id": r.signature_id,
+                    "request_id": r.request_id,
+                    "client_ip": r.client_ip,
+                    "prev_hash": r.prev_hash,
+                    "event_hash": r.event_hash,
+                    "source": r.source,
+                    "doc_id": r.doc_id,
+                    "filename": r.filename,
+                    "kb_id": r.kb_id,
+                    "kb_dataset_id": r.kb_dataset_id,
+                    "kb_name": r.kb_name,
+                    "meta": _decode_meta_json(r.meta_json),
+                    "meta_json": r.meta_json,
+                }
+                for r in rows
+            ],
+        }
+    items = list(result.get("items") or [])
+    names = resolve_user_display_names(ctx.deps, {str(item.get("actor") or "").strip() for item in items if item.get("actor")})
+    for item in items:
+        actor_id = str(item.get("actor") or "").strip()
+        if actor_id and names.get(actor_id):
+            item["full_name"] = names.get(actor_id)
+    result["items"] = items
+    return result
 
 
 def _decode_meta_json(meta_json: str | None):

@@ -74,6 +74,7 @@ const UserManagement = () => {
     handleOpenCreateModal,
     handleCloseCreateModal,
     setNewUserField,
+    toggleNewUserGroup,
     handleCreateUser,
     handleDeleteUser,
     handleToggleUserStatus,
@@ -82,6 +83,7 @@ const UserManagement = () => {
     handleSubmitResetPassword,
     handleOpenPolicyModal,
     handleClosePolicyModal,
+    handleTogglePolicyGroup,
     handleSavePolicy,
     handleCloseDisableUserModal,
     handleChangeDisableMode,
@@ -223,6 +225,7 @@ const UserManagement = () => {
         companies={companies}
         departments={departments}
         policySubAdminOptions={policySubAdminOptions}
+        availableGroups={availableGroups}
         kbDirectoryNodes={kbDirectoryNodes}
         kbDirectoryLoading={kbDirectoryLoading}
         kbDirectoryError={kbDirectoryError}
@@ -233,6 +236,7 @@ const UserManagement = () => {
         policyError={policyError}
         policySubmitting={policySubmitting}
         onChangePolicyForm={handleChangePolicyForm}
+        onToggleGroup={handleTogglePolicyGroup}
         onCancel={handleClosePolicyModal}
         onSave={handleSavePolicy}
         onCreateRootDirectory={handlePolicyRootDirectory}
@@ -259,6 +263,7 @@ const UserManagement = () => {
           companies={companies}
           departments={departments}
           subAdminOptions={subAdminOptions}
+          availableGroups={availableGroups}
           kbDirectoryNodes={kbDirectoryNodes}
           kbDirectoryLoading={kbDirectoryLoading}
           kbDirectoryError={kbDirectoryError}
@@ -268,6 +273,7 @@ const UserManagement = () => {
           onSubmit={handleCreateUser}
           onCancel={handleCloseCreateModal}
           onFieldChange={setNewUserField}
+          onToggleGroup={toggleNewUserGroup}
           onCreateRootDirectory={handleCreateModalRootDirectory}
         />
       ) : null}

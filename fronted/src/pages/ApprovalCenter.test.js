@@ -37,8 +37,15 @@ const requestBrief = {
   target_ref: 'kb-a',
   target_label: 'demo.txt',
   applicant_user_id: 'user-1',
+  applicant_full_name: 'Applicant User',
   applicant_username: 'user1',
-  summary: { filename: 'demo.txt' },
+  summary: {
+    filename: 'demo.txt',
+    kb_id: 'ffce75402fd111f1a24e3efb393b44db',
+    kb_name: 'ICE',
+    kb_ref: 'ICE',
+    mime_type: 'text/markdown; charset=utf-8',
+  },
 };
 
 const requestDetail = {
@@ -52,6 +59,7 @@ const requestDetail = {
       approvers: [
         {
           approver_user_id: 'approver-1',
+          approver_full_name: 'Approver User',
           approver_username: 'approver1',
           status: 'pending',
         },
@@ -60,9 +68,26 @@ const requestDetail = {
   ],
   events: [
     {
+      event_id: 'evt-hidden-1',
+      event_type: 'notification_external_skipped',
+      actor_user_id: 'system',
+      actor_username: 'system',
+      step_no: 1,
+      created_at_ms: 1_710_000_000_000,
+    },
+    {
+      event_id: 'evt-hidden-2',
+      event_type: 'notification_inbox_created',
+      actor_user_id: 'system',
+      actor_username: 'system',
+      step_no: 1,
+      created_at_ms: 1_710_000_000_000,
+    },
+    {
       event_id: 'evt-1',
       event_type: 'request_submitted',
       actor_user_id: 'user-1',
+      actor_full_name: 'Applicant User',
       actor_username: 'user1',
       step_no: 1,
       created_at_ms: 1_710_000_000_000,
@@ -76,6 +101,7 @@ describe('ApprovalCenter', () => {
     useAuth.mockReturnValue({
       user: {
         user_id: 'approver-1',
+        username: 'approver-1',
         role: 'reviewer',
       },
     });
@@ -118,6 +144,41 @@ describe('ApprovalCenter', () => {
         })
       );
     });
+  });
+
+  it('renders full names in request detail when available', async () => {
+    render(
+      <MemoryRouter initialEntries={['/approvals?request_id=req-1']}>
+        <ApprovalCenter />
+      </MemoryRouter>
+    );
+
+    expect(await screen.findByText('申请人：Applicant User')).toBeInTheDocument();
+    expect(screen.getByText(/Approver User/)).toBeInTheDocument();
+    expect(screen.getByText(/操作人：Applicant User/)).toBeInTheDocument();
+    expect(screen.queryByText('申请人：user1')).not.toBeInTheDocument();
+    expect(screen.queryByText(/操作人：user1/)).not.toBeInTheDocument();
+  });
+
+  it('hides internal summary fields, request id, and notification-only timeline events', async () => {
+    render(
+      <MemoryRouter initialEntries={['/approvals?request_id=req-1']}>
+        <ApprovalCenter />
+      </MemoryRouter>
+    );
+
+    await screen.findByText('filename:');
+    expect(screen.getAllByText('demo.txt').length).toBeGreaterThan(0);
+    expect(screen.queryByText('kb_id:')).not.toBeInTheDocument();
+    expect(screen.queryByText('kb_name:')).not.toBeInTheDocument();
+    expect(screen.queryByText('kb_ref:')).not.toBeInTheDocument();
+    expect(screen.queryByText('mime_type:')).not.toBeInTheDocument();
+    expect(screen.queryByText('ffce75402fd111f1a24e3efb393b44db')).not.toBeInTheDocument();
+    expect(screen.queryByText('text/markdown; charset=utf-8')).not.toBeInTheDocument();
+    expect(screen.queryByText(/申请单号/)).not.toBeInTheDocument();
+    expect(screen.queryByText('未配置外部通知渠道')).not.toBeInTheDocument();
+    expect(screen.queryByText('站内信已生成')).not.toBeInTheDocument();
+    expect(screen.queryByText(/操作人：system/)).not.toBeInTheDocument();
   });
 
   it('shows reject signature prompt in Chinese', async () => {

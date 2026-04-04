@@ -226,9 +226,6 @@ const buildUserLabel = (user) => {
   if (!user) return '-';
   const fullName = String(user.full_name || '').trim();
   const username = String(user.username || '').trim();
-  if (fullName && username && fullName !== username) {
-    return `${fullName} (${username})`;
-  }
   return fullName || username || String(user.user_id || '-');
 };
 
@@ -384,7 +381,7 @@ function UserLookupField({
                   }}
                 >
                   <div style={{ fontWeight: 600 }}>{buildUserLabel(item)}</div>
-                  <div style={{ color: '#6b7280', fontSize: '0.8rem', marginTop: '2px' }}>{item.user_id}</div>
+                  <div style={{ color: '#6b7280', fontSize: '0.8rem', marginTop: '2px' }}>{item.department_name || item.company_name || ''}</div>
                 </button>
               ))
               : null}
@@ -392,7 +389,7 @@ function UserLookupField({
         ) : null}
       </div>
       <div data-testid={`${testIdPrefix}-selected`} style={{ color: '#6b7280', fontSize: '0.85rem' }}>
-        {selectedUser ? `${TEXT.selectedUser}: ${buildUserLabel(selectedUser)} / ${selectedUser.user_id}` : `${TEXT.selectedUser}: ${TEXT.noSelectedUser}`}
+        {selectedUser ? `${TEXT.selectedUser}: ${buildUserLabel(selectedUser)}` : `${TEXT.selectedUser}: ${TEXT.noSelectedUser}`}
       </div>
       <div style={{ color: '#9ca3af', fontSize: '0.8rem' }}>{TEXT.userSearchHint}</div>
     </label>

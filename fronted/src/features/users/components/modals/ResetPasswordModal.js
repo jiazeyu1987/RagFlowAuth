@@ -32,7 +32,7 @@ export default function ResetPasswordModal({
   return (
     <div data-testid="users-reset-password-modal" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0, 0, 0, 0.5)', display: 'flex', justifyContent: 'center', alignItems: isMobile ? 'stretch' : 'center', padding: isMobile ? '16px 12px' : '24px', zIndex: 1000 }}>
       <div style={{ backgroundColor: 'white', padding: isMobile ? '20px 16px' : '32px', borderRadius: '8px', width: '100%', maxWidth: '500px', maxHeight: isMobile ? '100%' : '90vh', overflowY: 'auto', margin: isMobile ? 'auto 0' : 0 }}>
-        <h3 style={{ margin: '0 0 24px 0' }}>修改密码 - {user.username}</h3>
+        <h3 style={{ margin: '0 0 24px 0' }}>修改密码 - {user.full_name || user.username}</h3>
 
         <div style={{ marginBottom: 16 }}>
           <label style={{ display: 'block', marginBottom: 8, fontWeight: '500' }}>新密码</label>

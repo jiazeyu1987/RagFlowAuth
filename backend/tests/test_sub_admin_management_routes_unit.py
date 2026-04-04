@@ -11,7 +11,7 @@ from backend.app.modules.users.router import get_service as get_users_service, r
 
 
 class _User:
-    def __init__(self, *, role: str = "sub_admin"):
+    def __init__(self, *, role: str = "sub_admin", group_ids: list[int] | None = None):
         self.user_id = "u_sub"
         self.username = "sub_admin"
         self.email = "sub@example.com"
@@ -19,7 +19,7 @@ class _User:
         self.status = "active"
         self.company_id = 1
         self.group_id = None
-        self.group_ids = []
+        self.group_ids = list(group_ids or [])
         self.managed_kb_root_node_id = "node-root"
 
 
@@ -154,6 +154,46 @@ class _ChatManagementManager:
 
 class _PermissionGroupStore:
     def get_group(self, group_id: int):
+        if group_id == 41:
+            return {
+                "group_id": 41,
+                "created_by": "u_sub",
+                "accessible_kbs": ["ds-in"],
+                "accessible_kb_nodes": ["node-root"],
+                "accessible_chats": ["chat_c_in"],
+                "can_view_tools": True,
+                "accessible_tools": ["tool_1"],
+            }
+        if group_id == 42:
+            return {
+                "group_id": 42,
+                "created_by": "u_sub",
+                "accessible_kbs": ["ds-in"],
+                "accessible_kb_nodes": ["node-root"],
+                "accessible_chats": ["chat_c_in"],
+                "can_view_tools": True,
+                "accessible_tools": ["tool_4"],
+            }
+        if group_id == 43:
+            return {
+                "group_id": 43,
+                "created_by": "u_sub",
+                "accessible_kbs": ["ds-in"],
+                "accessible_kb_nodes": ["node-root"],
+                "accessible_chats": ["chat_c_in"],
+                "can_view_tools": True,
+                "accessible_tools": [],
+            }
+        if group_id == 301:
+            return {
+                "group_id": 301,
+                "created_by": "u_admin",
+                "accessible_kbs": [],
+                "accessible_kb_nodes": [],
+                "accessible_chats": [],
+                "can_view_tools": True,
+                "accessible_tools": ["tool_1", "tool_2", "tool_3"],
+            }
         if group_id == 77:
             return {
                 "group_id": 77,
@@ -161,6 +201,8 @@ class _PermissionGroupStore:
                 "accessible_kbs": ["ds-in"],
                 "accessible_kb_nodes": ["node-root"],
                 "accessible_chats": ["chat_c_in"],
+                "can_view_tools": False,
+                "accessible_tools": [],
             }
         if group_id == 98:
             return {
@@ -169,15 +211,27 @@ class _PermissionGroupStore:
                 "accessible_kbs": ["ds-in"],
                 "accessible_kb_nodes": ["node-root"],
                 "accessible_chats": ["chat_c_out"],
+                "can_view_tools": False,
+                "accessible_tools": [],
             }
         if group_id == 99:
-            return {"group_id": 99, "created_by": "u_sub", "accessible_kbs": ["ds-out"], "accessible_kb_nodes": [], "accessible_chats": []}
+            return {
+                "group_id": 99,
+                "created_by": "u_sub",
+                "accessible_kbs": ["ds-out"],
+                "accessible_kb_nodes": [],
+                "accessible_chats": [],
+                "can_view_tools": False,
+                "accessible_tools": [],
+            }
         return {
             "group_id": group_id,
             "created_by": "u_sub",
             "accessible_kbs": ["ds-in"],
             "accessible_kb_nodes": ["node-root"],
             "accessible_chats": ["chat_c_in"],
+            "can_view_tools": False,
+            "accessible_tools": [],
         }
 
 
@@ -187,20 +241,29 @@ class _PermissionGroupsService:
 
     def list_groups(self):
         return [
-            {"group_id": 1, "group_name": "in-scope", "created_by": "u_sub", "folder_id": "folder-visible", "accessible_kbs": ["ds-in"], "accessible_kb_nodes": ["node-root"], "accessible_chats": ["chat_c_in"]},
-            {"group_id": 77, "group_name": "other-owner", "created_by": "u_other_sub", "folder_id": "folder-other", "accessible_kbs": ["ds-in"], "accessible_kb_nodes": ["node-root"], "accessible_chats": ["chat_c_in"]},
-            {"group_id": 98, "group_name": "chat-out", "created_by": "u_sub", "folder_id": "folder-hidden", "accessible_kbs": ["ds-in"], "accessible_kb_nodes": ["node-root"], "accessible_chats": ["chat_c_out"]},
-            {"group_id": 99, "group_name": "out-scope", "created_by": "u_sub", "folder_id": "folder-hidden", "accessible_kbs": ["ds-out"], "accessible_kb_nodes": ["node-out"], "accessible_chats": []},
+            {"group_id": 1, "group_name": "in-scope", "created_by": "u_sub", "folder_id": "folder-visible", "accessible_kbs": ["ds-in"], "accessible_kb_nodes": ["node-root"], "accessible_chats": ["chat_c_in"], "can_view_tools": False, "accessible_tools": []},
+            {"group_id": 41, "group_name": "tool-subset", "created_by": "u_sub", "folder_id": "folder-visible", "accessible_kbs": ["ds-in"], "accessible_kb_nodes": ["node-root"], "accessible_chats": ["chat_c_in"], "can_view_tools": True, "accessible_tools": ["tool_1"]},
+            {"group_id": 42, "group_name": "tool-out", "created_by": "u_sub", "folder_id": "folder-visible", "accessible_kbs": ["ds-in"], "accessible_kb_nodes": ["node-root"], "accessible_chats": ["chat_c_in"], "can_view_tools": True, "accessible_tools": ["tool_4"]},
+            {"group_id": 43, "group_name": "tool-global", "created_by": "u_sub", "folder_id": "folder-visible", "accessible_kbs": ["ds-in"], "accessible_kb_nodes": ["node-root"], "accessible_chats": ["chat_c_in"], "can_view_tools": True, "accessible_tools": []},
+            {"group_id": 77, "group_name": "other-owner", "created_by": "u_other_sub", "folder_id": "folder-other", "accessible_kbs": ["ds-in"], "accessible_kb_nodes": ["node-root"], "accessible_chats": ["chat_c_in"], "can_view_tools": False, "accessible_tools": []},
+            {"group_id": 98, "group_name": "chat-out", "created_by": "u_sub", "folder_id": "folder-hidden", "accessible_kbs": ["ds-in"], "accessible_kb_nodes": ["node-root"], "accessible_chats": ["chat_c_out"], "can_view_tools": False, "accessible_tools": []},
+            {"group_id": 99, "group_name": "out-scope", "created_by": "u_sub", "folder_id": "folder-hidden", "accessible_kbs": ["ds-out"], "accessible_kb_nodes": ["node-out"], "accessible_chats": [], "can_view_tools": False, "accessible_tools": []},
         ]
 
     def get_group(self, group_id: int):
+        if group_id == 41:
+            return {"group_id": 41, "group_name": "tool-subset", "created_by": "u_sub", "folder_id": "folder-visible", "accessible_kbs": ["ds-in"], "accessible_kb_nodes": ["node-root"], "accessible_chats": ["chat_c_in"], "can_view_tools": True, "accessible_tools": ["tool_1"]}
+        if group_id == 42:
+            return {"group_id": 42, "group_name": "tool-out", "created_by": "u_sub", "folder_id": "folder-visible", "accessible_kbs": ["ds-in"], "accessible_kb_nodes": ["node-root"], "accessible_chats": ["chat_c_in"], "can_view_tools": True, "accessible_tools": ["tool_4"]}
+        if group_id == 43:
+            return {"group_id": 43, "group_name": "tool-global", "created_by": "u_sub", "folder_id": "folder-visible", "accessible_kbs": ["ds-in"], "accessible_kb_nodes": ["node-root"], "accessible_chats": ["chat_c_in"], "can_view_tools": True, "accessible_tools": []}
         if group_id == 77:
-            return {"group_id": 77, "group_name": "other-owner", "created_by": "u_other_sub", "folder_id": "folder-other", "accessible_kbs": ["ds-in"], "accessible_kb_nodes": ["node-root"], "accessible_chats": ["chat_c_in"]}
+            return {"group_id": 77, "group_name": "other-owner", "created_by": "u_other_sub", "folder_id": "folder-other", "accessible_kbs": ["ds-in"], "accessible_kb_nodes": ["node-root"], "accessible_chats": ["chat_c_in"], "can_view_tools": False, "accessible_tools": []}
         if group_id == 98:
-            return {"group_id": 98, "group_name": "chat-out", "created_by": "u_sub", "folder_id": "folder-hidden", "accessible_kbs": ["ds-in"], "accessible_kb_nodes": ["node-root"], "accessible_chats": ["chat_c_out"]}
+            return {"group_id": 98, "group_name": "chat-out", "created_by": "u_sub", "folder_id": "folder-hidden", "accessible_kbs": ["ds-in"], "accessible_kb_nodes": ["node-root"], "accessible_chats": ["chat_c_out"], "can_view_tools": False, "accessible_tools": []}
         if group_id == 99:
-            return {"group_id": 99, "group_name": "out-scope", "created_by": "u_sub", "folder_id": "folder-hidden", "accessible_kbs": ["ds-out"], "accessible_kb_nodes": ["node-out"], "accessible_chats": []}
-        return {"group_id": group_id, "created_by": "u_sub", "accessible_kbs": ["ds-in"], "accessible_kb_nodes": ["node-root"], "accessible_chats": ["chat_c_in"]}
+            return {"group_id": 99, "group_name": "out-scope", "created_by": "u_sub", "folder_id": "folder-hidden", "accessible_kbs": ["ds-out"], "accessible_kb_nodes": ["node-out"], "accessible_chats": [], "can_view_tools": False, "accessible_tools": []}
+        return {"group_id": group_id, "created_by": "u_sub", "accessible_kbs": ["ds-in"], "accessible_kb_nodes": ["node-root"], "accessible_chats": ["chat_c_in"], "can_view_tools": False, "accessible_tools": []}
 
     def filter_manageable_groups(self, *, user, groups):  # noqa: ARG002
         return [group for group in (groups or []) if str(group.get("created_by") or "") == "u_sub"]
@@ -318,8 +381,8 @@ def _override_get_current_payload(_: Request) -> TokenPayload:
     return TokenPayload(sub="u_sub")
 
 
-def _make_permission_group_client(role: str = "sub_admin"):
-    user = _User(role=role)
+def _make_permission_group_client(role: str = "sub_admin", *, group_ids: list[int] | None = None):
+    user = _User(role=role, group_ids=group_ids)
     km = _KnowledgeManagementManager()
     cm = _ChatManagementManager()
     service = _PermissionGroupsService()
@@ -337,8 +400,8 @@ def _make_permission_group_client(role: str = "sub_admin"):
     return TestClient(app), km, cm, service
 
 
-def _make_users_client(*, can_manage: bool = True):
-    user = _User(role="sub_admin")
+def _make_users_client(*, can_manage: bool = True, actor_group_ids: list[int] | None = None):
+    user = _User(role="sub_admin", group_ids=actor_group_ids)
     km = _KnowledgeManagementManager(can_manage=can_manage)
     cm = _ChatManagementManager()
     service = _UsersService()
@@ -370,8 +433,22 @@ class TestSubAdminPermissionGroupRoutesUnit(unittest.TestCase):
         with client:
             resp = client.get("/api/permission-groups")
         self.assertEqual(resp.status_code, 200)
-        self.assertEqual([item["group_id"] for item in resp.json()["data"]], [1])
-        self.assertEqual([item["group_name"] for item in resp.json()["data"]], ["in-scope"])
+        self.assertEqual([item["group_id"] for item in resp.json()["data"]], [1, 41, 42, 43])
+        self.assertEqual([item["group_name"] for item in resp.json()["data"]], ["in-scope", "tool-subset", "tool-out", "tool-global"])
+
+    def test_admin_can_list_assignable_permission_groups(self):
+        client, _, _, _ = _make_permission_group_client(role="admin")
+        with client:
+            resp = client.get("/api/permission-groups/assignable")
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual([item["group_id"] for item in resp.json()["data"]], [1, 41, 42, 43, 77, 98, 99])
+
+    def test_sub_admin_assignable_groups_are_filtered_by_own_tool_scope(self):
+        client, _, _, _ = _make_permission_group_client(group_ids=[301])
+        with client:
+            resp = client.get("/api/permission-groups/assignable")
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual([item["group_id"] for item in resp.json()["data"]], [1, 41])
 
     def test_sub_admin_can_create_group_with_in_scope_kb_resources(self):
         client, km, cm, service = _make_permission_group_client()
@@ -482,6 +559,29 @@ class TestSubAdminUserGroupAssignmentRoutesUnit(unittest.TestCase):
             resp = client.put("/api/users/u_target", json={"group_ids": [98]})
         self.assertEqual(resp.status_code, 403)
         self.assertEqual(resp.json()["detail"], "permission_group_out_of_management_scope")
+
+    def test_sub_admin_can_assign_permission_groups_with_tool_subset(self):
+        client, km, cm, service, _ = _make_users_client(actor_group_ids=[301])
+        with client:
+            resp = client.put("/api/users/u_target", json={"group_ids": [41]})
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(km.validated_group_ids[0], [41])
+        self.assertEqual(cm.validated_group_ids[0], [41])
+        self.assertEqual(service.updated[0][0], "u_target")
+
+    def test_sub_admin_cannot_assign_permission_groups_with_out_of_scope_tools(self):
+        client, _, _, _, _ = _make_users_client(actor_group_ids=[301])
+        with client:
+            resp = client.put("/api/users/u_target", json={"group_ids": [42]})
+        self.assertEqual(resp.status_code, 400)
+        self.assertEqual(resp.json()["detail"], "tool_out_of_management_scope")
+
+    def test_sub_admin_cannot_assign_permission_groups_with_global_tool_scope_when_actor_is_limited(self):
+        client, _, _, _, _ = _make_users_client(actor_group_ids=[301])
+        with client:
+            resp = client.put("/api/users/u_target", json={"group_ids": [43]})
+        self.assertEqual(resp.status_code, 400)
+        self.assertEqual(resp.json()["detail"], "tool_out_of_management_scope")
 
     def test_sub_admin_cannot_assign_other_users_permission_groups(self):
         client, _, _, _, _ = _make_users_client()

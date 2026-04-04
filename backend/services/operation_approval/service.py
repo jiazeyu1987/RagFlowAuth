@@ -202,19 +202,20 @@ class OperationApprovalService:
         item["steps"] = steps
         return item
 
+    def _resolve_user_full_name(self, user_id: str | None, user_cache: dict[str, Any] | None = None) -> str | None:
+        clean_user_id = str(user_id or "").strip()
+        if not clean_user_id:
+            return None
+        cache = user_cache if user_cache is not None else {}
+        if clean_user_id not in cache:
+            cache[clean_user_id] = self._user_store.get_by_user_id(clean_user_id)
+        user = cache[clean_user_id]
+        full_name = getattr(user, "full_name", None) if user is not None else None
+        normalized = str(full_name or "").strip()
+        return normalized or None
+
     def _enrich_request_steps(self, steps: list[dict]) -> list[dict]:
         user_cache: dict[str, Any] = {}
-
-        def resolve_full_name(user_id: str | None) -> str | None:
-            clean_user_id = str(user_id or "").strip()
-            if not clean_user_id:
-                return None
-            if clean_user_id not in user_cache:
-                user_cache[clean_user_id] = self._user_store.get_by_user_id(clean_user_id)
-            user = user_cache[clean_user_id]
-            full_name = getattr(user, "full_name", None) if user is not None else None
-            normalized = str(full_name or "").strip()
-            return normalized or None
 
         enriched_steps: list[dict] = []
         for step in steps or []:
@@ -222,7 +223,10 @@ class OperationApprovalService:
             next_step["approvers"] = []
             for approver in step.get("approvers") or []:
                 next_approver = dict(approver)
-                next_approver["approver_full_name"] = resolve_full_name(approver.get("approver_user_id"))
+                next_approver["approver_full_name"] = self._resolve_user_full_name(
+                    approver.get("approver_user_id"),
+                    user_cache,
+                )
                 next_step["approvers"].append(next_approver)
             enriched_steps.append(next_step)
         return enriched_steps
@@ -230,21 +234,10 @@ class OperationApprovalService:
     def _enrich_request_events(self, events: list[dict]) -> list[dict]:
         user_cache: dict[str, Any] = {}
 
-        def resolve_full_name(user_id: str | None) -> str | None:
-            clean_user_id = str(user_id or "").strip()
-            if not clean_user_id:
-                return None
-            if clean_user_id not in user_cache:
-                user_cache[clean_user_id] = self._user_store.get_by_user_id(clean_user_id)
-            user = user_cache[clean_user_id]
-            full_name = getattr(user, "full_name", None) if user is not None else None
-            normalized = str(full_name or "").strip()
-            return normalized or None
-
         enriched_events: list[dict] = []
         for event in events or []:
             next_event = dict(event)
-            next_event["actor_full_name"] = resolve_full_name(event.get("actor_user_id"))
+            next_event["actor_full_name"] = self._resolve_user_full_name(event.get("actor_user_id"), user_cache)
             enriched_events.append(next_event)
         return enriched_events
 
@@ -392,6 +385,7 @@ class OperationApprovalService:
             "target_label": item.get("target_label"),
             "applicant_user_id": item.get("applicant_user_id"),
             "applicant_username": item.get("applicant_username"),
+            "applicant_full_name": self._resolve_user_full_name(item.get("applicant_user_id")),
             "summary": item.get("summary") or {},
             "last_error": item.get("last_error"),
         }
@@ -524,6 +518,7 @@ class OperationApprovalService:
             raise OperationApprovalServiceError("operation_request_not_visible", status_code=403)
         data = dict(request_data)
         data["operation_label"] = self.operation_label(data["operation_type"])
+        data["applicant_full_name"] = self._resolve_user_full_name(data.get("applicant_user_id"))
         data["steps"] = self._enrich_request_steps(data.get("steps") or [])
         data["events"] = self._enrich_request_events(data.get("events") or [])
         return data

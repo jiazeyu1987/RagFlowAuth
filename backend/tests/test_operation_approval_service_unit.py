@@ -504,6 +504,7 @@ class TestOperationApprovalServiceUnit(unittest.TestCase):
         self.assertEqual(second_detail["steps"][0]["approvers"][0]["approver_user_id"], self.approver_2.user_id)
 
     def test_request_detail_exposes_approver_full_name(self):
+        self.admin_user.full_name = "Applicant User"
         self.approver_1.full_name = "王歆"
         self._upsert_workflow(
             "knowledge_base_create",
@@ -515,8 +516,12 @@ class TestOperationApprovalServiceUnit(unittest.TestCase):
             request_id=request["request_id"],
             requester_user=self.admin_user,
         )
+        self.assertEqual(detail["applicant_username"], self.admin_user.username)
+        self.assertEqual(detail["applicant_full_name"], "Applicant User")
 
         self.assertEqual(detail["steps"][0]["approvers"][0]["approver_username"], self.approver_1.username)
+        self.assertEqual(detail["events"][0]["actor_username"], self.admin_user.username)
+        self.assertEqual(detail["events"][0]["actor_full_name"], "Applicant User")
         self.assertEqual(detail["steps"][0]["approvers"][0]["approver_full_name"], "王歆")
 
     def test_direct_manager_resolves_at_submission_and_snapshot_keeps_member_definition(self):

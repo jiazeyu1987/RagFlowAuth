@@ -4,6 +4,7 @@ import SignatureConfirmModal from '../features/operationApproval/components/Sign
 import operationApprovalApi from '../features/operationApproval/api';
 import { useSignaturePrompt } from '../features/operationApproval/useSignaturePrompt';
 import { useAuth } from '../hooks/useAuth';
+import { getDisplayName } from '../shared/users/displayName';
 
 const cardStyle = {
   background: '#ffffff',
@@ -131,6 +132,18 @@ const TRAINING_COMPLIANCE_ERROR_CODES = new Set([
   'training_requirement_not_configured',
 ]);
 
+const HIDDEN_SUMMARY_FIELDS = new Set([
+  'kb_id',
+  'kb_name',
+  'kb_ref',
+  'mime_type',
+]);
+
+const HIDDEN_EVENT_TYPES = new Set([
+  'notification_inbox_created',
+  'notification_external_skipped',
+]);
+
 function formatTime(value) {
   const ms = Number(value || 0);
   if (!Number.isFinite(ms) || ms <= 0) return '-';
@@ -214,6 +227,20 @@ function buildTrainingCompliancePath({ tab, userId, controlledAction = 'document
   }
   const query = params.toString();
   return query ? `/training-compliance?${query}` : '/training-compliance';
+}
+
+function getVisibleSummaryEntries(summary) {
+  return Object.entries(summary || {}).filter(([key]) => {
+    const normalizedKey = String(key || '').trim().toLowerCase();
+    return !HIDDEN_SUMMARY_FIELDS.has(normalizedKey);
+  });
+}
+
+function getVisibleEvents(events) {
+  return (events || []).filter((event) => {
+    const eventType = String(event?.event_type || '').trim();
+    return !HIDDEN_EVENT_TYPES.has(eventType);
+  });
 }
 
 export default function ApprovalCenter() {
@@ -415,11 +442,10 @@ export default function ApprovalCenter() {
     () => isCurrentPendingApprover(detail, user?.user_id),
     [detail, user?.user_id]
   );
+  const visibleSummaryEntries = useMemo(() => getVisibleSummaryEntries(detail?.summary), [detail?.summary]);
+  const visibleEvents = useMemo(() => getVisibleEvents(detail?.events), [detail?.events]);
   const showTrainingHelp = TRAINING_COMPLIANCE_ERROR_CODES.has(String(errorCode || '').trim());
-  const currentUserLabel = String(user?.full_name || '').trim()
-    || String(user?.username || '').trim()
-    || String(user?.user_id || '').trim()
-    || '-';
+  const currentUserLabel = getDisplayName(user);
   const trainingRecordPath = buildTrainingCompliancePath({
     tab: 'records',
     userId: user?.user_id,
@@ -571,7 +597,6 @@ export default function ApprovalCenter() {
               <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', alignItems: 'flex-start', flexWrap: 'wrap' }}>
                 <div>
                   <div style={{ fontSize: '1.1rem', fontWeight: 700, color: '#111827' }}>{getOperationLabel(detail)}</div>
-                  <div style={{ marginTop: '6px', color: '#4b5563' }}>申请单号：<code>{detail.request_id}</code></div>
                   <div style={{ marginTop: '4px', color: '#4b5563' }}>
                     当前状态：
                     {' '}
@@ -620,7 +645,7 @@ export default function ApprovalCenter() {
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '12px' }}>
                 <div style={{ ...cardStyle, padding: '14px' }}>
                   <div style={{ fontWeight: 700, marginBottom: '8px' }}>基本信息</div>
-                  <div>申请人：{detail.applicant_username || detail.applicant_user_id || '-'}</div>
+                  <div>申请人：{detail.applicant_full_name || detail.applicant_username || detail.applicant_user_id || '-'}</div>
                   <div>目标对象：{detail.target_label || detail.target_ref || '-'}</div>
                   <div>当前审批层：{detail.current_step_name || '-'}</div>
                   <div>提交时间：{formatTime(detail.submitted_at_ms)}</div>
@@ -630,11 +655,11 @@ export default function ApprovalCenter() {
 
                 <div style={{ ...cardStyle, padding: '14px' }}>
                   <div style={{ fontWeight: 700, marginBottom: '8px' }}>申请摘要</div>
-                  {Object.entries(detail.summary || {}).length === 0 ? (
+                  {visibleSummaryEntries.length === 0 ? (
                     <div style={{ color: '#6b7280' }}>无摘要信息</div>
                   ) : (
                     <div style={{ display: 'grid', gap: '6px' }}>
-                      {Object.entries(detail.summary || {}).map(([key, value]) => (
+                      {visibleSummaryEntries.map(([key, value]) => (
                         <div key={key}>
                           <strong>{key}:</strong> {String(value)}
                         </div>
@@ -664,7 +689,7 @@ export default function ApprovalCenter() {
                         <div style={{ marginTop: '8px', display: 'grid', gap: '6px' }}>
                           {(step.approvers || []).map((approver) => (
                             <div key={`${step.step_no}-${approver.approver_user_id}`} style={{ color: '#4b5563' }}>
-                              {approver.approver_full_name || approver.approver_username || approver.approver_user_id}
+                              {getDisplayName(approver, approver.approver_user_id || '-')}
                               {' - '}
                               <span style={getStepStatusStyle(approver.status)}>
                                 {STEP_STATUS_LABELS[approver.status] || approver.status}
@@ -680,15 +705,15 @@ export default function ApprovalCenter() {
 
               <div style={{ ...cardStyle, padding: '14px' }}>
                 <div style={{ fontWeight: 700, marginBottom: '10px' }}>时间线</div>
-                {(detail.events || []).length === 0 ? (
+                {visibleEvents.length === 0 ? (
                   <div style={{ color: '#6b7280' }}>暂无时间线记录</div>
                 ) : (
                   <div style={{ display: 'grid', gap: '10px' }}>
-                    {(detail.events || []).map((event) => (
+                    {visibleEvents.map((event) => (
                       <div key={event.event_id} style={{ borderLeft: '3px solid #dbeafe', paddingLeft: '10px' }}>
                         <div style={{ fontWeight: 600 }}>{EVENT_LABELS[event.event_type] || event.event_type}</div>
                         <div style={{ color: '#4b5563', marginTop: '4px' }}>
-                          操作人：{event.actor_username || event.actor_user_id || 'system'}
+                          操作人：{event.actor_full_name || event.actor_username || event.actor_user_id || 'system'}
                           {event.step_no ? ` | 第 ${event.step_no} 层` : ''}
                         </div>
                         <div style={{ color: '#9ca3af', marginTop: '4px', fontSize: '0.85rem' }}>

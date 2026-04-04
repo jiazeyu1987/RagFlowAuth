@@ -110,6 +110,8 @@ class _FakePort:
     def get_permission_group(self, group_id: int):
         if group_id == 1:
             return {"group_id": 1, "group_name": "viewer"}
+        if group_id == 9:
+            return {"group_id": 9, "group_name": "tools-sub-admin"}
         return None
 
     def get_group_by_name(self, name: str):
@@ -248,6 +250,23 @@ class UserManagementManagerManagerUserTests(unittest.TestCase):
 
         self.assertEqual("managed_kb_root_node_required_for_sub_admin", ctx.exception.code)
 
+    def test_create_sub_admin_keeps_permission_groups(self):
+        response = self.manager.create_user(
+            user_data=UserCreate(
+                username="sub_admin_tools",
+                password="Pass1234",
+                company_id=1,
+                department_id=10,
+                role="sub_admin",
+                group_ids=[9],
+                managed_kb_root_node_id="node-1",
+            ),
+            created_by="admin-1",
+        )
+
+        self.assertEqual([9], self.port.users[response.user_id].group_ids)
+        self.assertEqual(9, self.port.users[response.user_id].group_id)
+
     def test_update_user_rejects_self_reference_manager(self):
         with self.assertRaises(UserManagementError) as ctx:
             self.manager.update_user(
@@ -280,6 +299,20 @@ class UserManagementManagerManagerUserTests(unittest.TestCase):
         )
 
         self.assertEqual("", self.port.update_calls[-1]["managed_kb_root_node_id"])
+
+    def test_update_sub_admin_keeps_permission_groups(self):
+        self.port.users["user-1"].role = "sub_admin"
+        self.port.users["user-1"].company_id = 1
+        self.port.users["user-1"].department_id = 10
+        self.port.users["user-1"].managed_kb_root_node_id = "node-1"
+
+        response = self.manager.update_user(
+            user_id="user-1",
+            user_data=UserUpdate(group_ids=[9]),
+        )
+
+        self.assertEqual([9], response.group_ids)
+        self.assertEqual(9, self.port.users["user-1"].group_id)
 
     def test_create_user_rejects_department_from_other_company(self):
         with self.assertRaises(UserManagementError) as ctx:

@@ -7,6 +7,7 @@ from backend.app.core.kb_refs import resolve_kb_ref
 from backend.app.core.permission_resolver import (
     assert_kb_allowed,
 )
+from backend.app.core.user_display import resolve_user_display_names
 
 
 router = APIRouter()
@@ -48,7 +49,7 @@ def list_deletions(
     user_ids.update({d.original_uploader for d in deletions if d.original_uploader})
     user_ids.update({d.original_reviewer for d in deletions if d.original_reviewer})
     try:
-        usernames = deps.user_store.get_usernames_by_ids(user_ids)
+        usernames = resolve_user_display_names(deps, user_ids)
     except Exception:
         usernames = {}
 

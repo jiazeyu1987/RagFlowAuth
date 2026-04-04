@@ -373,7 +373,7 @@ class UserManagementManager:
         for gid in group_ids:
             if not self._port.get_permission_group(gid):
                 raise UserManagementError(f"permission_group_not_found:{gid}")
-        if role in {"viewer", "sub_admin"}:
+        if role == "viewer":
             group_ids = []
         elif not group_ids:
             group_id = user_data.group_id
@@ -522,9 +522,6 @@ class UserManagementManager:
             if not group:
                 raise UserManagementError("permission_group_not_found")
             group_ids = [user_data.group_id]
-        if effective_role == "sub_admin" and group_ids is not None:
-            group_ids = []
-
         update_kwargs = dict(
             user_id=user_id,
             full_name=full_name,
