@@ -1,7 +1,61 @@
-from typing import Optional, Dict, Any, List
+﻿from typing import Optional, Dict, Any, List
 
 
 class RagflowChatSessionService:
+    @staticmethod
+    def _coerce_count(value: Any) -> int | None:
+        if value is None:
+            return None
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return None
+
+    def _find_unready_dataset_ids(self, dataset_ids: list[str]) -> list[str]:
+        normalized_ids: list[str] = []
+        seen: set[str] = set()
+        for raw in dataset_ids or []:
+            dataset_id = str(raw or "").strip()
+            if not dataset_id or dataset_id in seen:
+                continue
+            seen.add(dataset_id)
+            normalized_ids.append(dataset_id)
+
+        if not normalized_ids:
+            return []
+
+        if not hasattr(self._client, "get_list"):
+            return []
+
+        datasets = self._client.get_list(
+            "/api/v1/datasets",
+            params={"page": 1, "page_size": 1000},
+            context="list_datasets_for_chat_binding",
+        )
+        dataset_map: dict[str, dict[str, Any]] = {}
+        for item in datasets or []:
+            if not isinstance(item, dict):
+                continue
+            dataset_id = str(item.get("id") or "").strip()
+            if dataset_id:
+                dataset_map[dataset_id] = item
+
+        unready: list[str] = []
+        for dataset_id in normalized_ids:
+            item = dataset_map.get(dataset_id)
+            if not item:
+                continue
+            chunk_count = self._coerce_count(item.get("chunk_count"))
+            if chunk_count is None:
+                chunk_count = self._coerce_count(item.get("chunk_num"))
+            document_count = self._coerce_count(item.get("document_count"))
+            if chunk_count is not None and chunk_count <= 0:
+                unready.append(dataset_id)
+                continue
+            if chunk_count is None and document_count is not None and document_count <= 0:
+                unready.append(dataset_id)
+        return unready
+
     @staticmethod
     def _response_message(payload: dict | None) -> str:
         if not isinstance(payload, dict):
@@ -42,18 +96,17 @@ class RagflowChatSessionService:
         chat_id: Optional[str] = None
     ) -> List[dict]:
         """
-        列出聊天助手
+        鍒楀嚭鑱婂ぉ鍔╂墜
 
         Args:
-            page: 页码，默认1
-            page_size: 每页数量，默认30
-            orderby: 排序字段，默认create_time
-            desc: 是否降序，默认True
-            name: 按名称过滤
-            chat_id: 按ID过滤
+            page: 椤电爜锛岄粯璁?
+            page_size: 姣忛〉鏁伴噺锛岄粯璁?0
+            orderby: 鎺掑簭瀛楁锛岄粯璁reate_time
+            desc: 鏄惁闄嶅簭锛岄粯璁rue
+            name: 鎸夊悕绉拌繃婊?            chat_id: 鎸塈D杩囨护
 
         Returns:
-            聊天助手列表
+            鑱婂ぉ鍔╂墜鍒楄〃
         """
         self._reload_config_if_changed()
         params: dict[str, Any] = {
@@ -70,13 +123,13 @@ class RagflowChatSessionService:
 
     def get_chat(self, chat_id: str) -> Optional[dict]:
         """
-        获取单个聊天助手信息
+        鑾峰彇鍗曚釜鑱婂ぉ鍔╂墜淇℃伅
 
         Args:
-            chat_id: 聊天助手ID
+            chat_id: 鑱婂ぉ鍔╂墜ID
 
         Returns:
-            聊天助手信息，如果不存在返回None
+            鑱婂ぉ鍔╂墜淇℃伅锛屽鏋滀笉瀛樺湪杩斿洖None
         """
         chats = self.list_chats(chat_id=chat_id)
         return chats[0] if chats else None
@@ -84,6 +137,9 @@ class RagflowChatSessionService:
     def create_chat(self, payload: dict[str, Any]) -> Optional[dict]:
         self._reload_config_if_changed()
         body = self._sanitize_chat_payload(payload, for_update=False)
+        unready_dataset_ids = self._find_unready_dataset_ids(self._extract_dataset_ids(body))
+        if unready_dataset_ids:
+            raise ValueError(f"chat_dataset_not_ready: {','.join(unready_dataset_ids)}")
         resp = self._client.post_json("/api/v1/chats", body=body)
         if not resp:
             return None
@@ -98,6 +154,9 @@ class RagflowChatSessionService:
     def update_chat(self, chat_id: str, payload: dict[str, Any]) -> Optional[dict]:
         self._reload_config_if_changed()
         body = self._sanitize_chat_payload(payload, for_update=True)
+        unready_dataset_ids = self._find_unready_dataset_ids(self._extract_dataset_ids(body))
+        if unready_dataset_ids:
+            raise ValueError(f"chat_dataset_not_ready: {','.join(unready_dataset_ids)}")
 
         def _coerce_updated_chat(resp_payload: dict | None, fallback_fields: dict[str, Any]) -> Optional[dict]:
             """
@@ -190,12 +249,36 @@ class RagflowChatSessionService:
                     self._chat_ref_cache_at_s = 0.0
                     return data2
                 if resp2 and resp2.get("code") != 0 and self._is_dataset_ownership_error(resp2):
-                    # Second-chance: some RAGFlow versions require keeping datasets that already
-                    # own existing parsed files. In that case, we cannot "deselect" those datasets
-                    # via update. Merge current dataset ids and retry to keep the chat usable.
                     current = self.get_chat(chat_id) or {}
                     cur_ids = self._extract_dataset_ids(current)
                     desired_ids = self._extract_dataset_ids(body)
+
+                    # If the chat currently has no dataset linkage, this lock almost always comes
+                    # from stale hidden parsed-file bindings copied from another chat. Clear them
+                    # once and retry the user's desired dataset update.
+                    if not cur_ids:
+                        clear_fields = self._parsed_file_clear_fields(current)
+                        if clear_fields:
+                            self.logger.warning(
+                                "RAGFlow update_chat hit parsed-file ownership on an unbound chat; clearing stale parsed-file bindings before retry. desired=%s",
+                                desired_ids,
+                            )
+                            self.clear_chat_parsed_files(chat_id)
+                            resp_after_clear = self._client.put_json(f"/api/v1/chats/{chat_id}", body=minimal)
+                            if resp_after_clear and resp_after_clear.get("code") == 0:
+                                data_after_clear = _coerce_updated_chat(resp_after_clear, minimal)
+                                self._chat_ref_cache = None
+                                self._chat_ref_cache_at_s = 0.0
+                                return data_after_clear
+                            if resp_after_clear and resp_after_clear.get("code") != 0 and not self._is_dataset_ownership_error(resp_after_clear):
+                                self.logger.error("RAGFlow update_chat failed (retry#clear): %s", resp_after_clear.get("message"))
+                                raise ValueError(str(resp_after_clear.get("message") or "chat_update_failed"))
+                            if resp_after_clear:
+                                resp2 = resp_after_clear
+
+                    # Second-chance: some RAGFlow versions require keeping datasets that already
+                    # own existing parsed files. In that case, we cannot "deselect" those datasets
+                    # via update. Merge current dataset ids and retry to keep the chat usable.
                     merged = []
                     seen = set()
                     for x in list(cur_ids) + list(desired_ids):
@@ -341,15 +424,15 @@ class RagflowChatSessionService:
         user_id: Optional[str] = None
     ) -> Optional[dict]:
         """
-        创建聊天会话
+        鍒涘缓鑱婂ぉ浼氳瘽
 
         Args:
-            chat_id: 聊天助手ID
-            name: 会话名称
-            user_id: 用户ID（可选）
+            chat_id: 鑱婂ぉ鍔╂墜ID
+            name: 浼氳瘽鍚嶇О
+            user_id: 鐢ㄦ埛ID锛堝彲閫夛級
 
         Returns:
-            创建的会话信息，失败返回None
+            鍒涘缓鐨勪細璇濅俊鎭紝澶辫触杩斿洖None
         """
         self._reload_config_if_changed()
         body: dict[str, Any] = {"name": name}
@@ -392,20 +475,18 @@ class RagflowChatSessionService:
         user_id: Optional[str] = None
     ) -> List[dict]:
         """
-        列出聊天助手的所有会话
-
+        鍒楀嚭鑱婂ぉ鍔╂墜鐨勬墍鏈変細璇?
         Args:
-            chat_id: 聊天助手ID
-            page: 页码
-            page_size: 每页数量
-            orderby: 排序字段
-            desc: 是否降序
-            name: 按名称过滤
-            session_id: 按会话ID过滤
-            user_id: 按用户ID过滤
+            chat_id: 鑱婂ぉ鍔╂墜ID
+            page: 椤电爜
+            page_size: 姣忛〉鏁伴噺
+            orderby: 鎺掑簭瀛楁
+            desc: 鏄惁闄嶅簭
+            name: 鎸夊悕绉拌繃婊?            session_id: 鎸変細璇滻D杩囨护
+            user_id: 鎸夌敤鎴稩D杩囨护
 
         Returns:
-            会话列表
+            浼氳瘽鍒楄〃
         """
         self._reload_config_if_changed()
         params: dict[str, Any] = {
@@ -433,15 +514,13 @@ class RagflowChatSessionService:
         user_id: Optional[str] = None
     ) -> bool:
         """
-        删除聊天会话
+        鍒犻櫎鑱婂ぉ浼氳瘽
 
         Args:
-            chat_id: 聊天助手ID
-            session_ids: 要删除的会话ID列表，如果为None则删除所有会话
-            user_id: 用户ID（用于本地数据库标记）
-
+            chat_id: 鑱婂ぉ鍔╂墜ID
+            session_ids: 瑕佸垹闄ょ殑浼氳瘽ID鍒楄〃锛屽鏋滀负None鍒欏垹闄ゆ墍鏈変細璇?            user_id: 鐢ㄦ埛ID锛堢敤浜庢湰鍦版暟鎹簱鏍囪锛?
         Returns:
-            是否成功
+            鏄惁鎴愬姛
         """
         self._reload_config_if_changed()
         body: dict[str, Any] = {}
@@ -468,19 +547,17 @@ class RagflowChatSessionService:
         id: Optional[str] = None
     ) -> List[dict]:
         """
-        列出所有搜索体 (Agents)
+        鍒楀嚭鎵€鏈夋悳绱綋 (Agents)
 
         Args:
-            page: 页码，默认1
-            page_size: 每页数量，默认30
-            orderby: 排序字段，默认create_time
-            desc: 是否降序，默认True
-            name: 按名称过滤
-            id: 按ID过滤
+            page: 椤电爜锛岄粯璁?
+            page_size: 姣忛〉鏁伴噺锛岄粯璁?0
+            orderby: 鎺掑簭瀛楁锛岄粯璁reate_time
+            desc: 鏄惁闄嶅簭锛岄粯璁rue
+            name: 鎸夊悕绉拌繃婊?            id: 鎸塈D杩囨护
 
         Returns:
-            搜索体列表
-        """
+            鎼滅储浣撳垪琛?        """
         self._reload_config_if_changed()
         params: dict[str, Any] = {
             "page": page,
@@ -496,13 +573,12 @@ class RagflowChatSessionService:
 
     def get_agent(self, agent_id: str) -> Optional[dict]:
         """
-        获取单个搜索体信息
-
+        鑾峰彇鍗曚釜鎼滅储浣撲俊鎭?
         Args:
-            agent_id: 搜索体ID
+            agent_id: 鎼滅储浣揑D
 
         Returns:
-            搜索体信息，如果不存在返回None
+            鎼滅储浣撲俊鎭紝濡傛灉涓嶅瓨鍦ㄨ繑鍥濶one
         """
         agents = self.list_agents(id=agent_id)
         return agents[0] if agents else None
@@ -624,3 +700,4 @@ class RagflowChatSessionService:
             self.logger.error("RAGFlow delete_agent failed: %s", resp2.get("message"))
             raise ValueError(str(resp2.get("message") or "agent_delete_failed"))
         return False
+

@@ -27,7 +27,7 @@ const panelStyle = {
 
 export function ChatConfigsPanel() {
   const { user } = useAuth();
-  const isAdmin = (user?.role || '') === 'admin';
+  const canManageChats = ['admin', 'sub_admin'].includes(String(user?.role || ''));
   const [isMobile, setIsMobile] = useState(() => {
     if (typeof window === 'undefined') return false;
     return window.innerWidth <= MOBILE_BREAKPOINT;
@@ -50,8 +50,6 @@ export function ChatConfigsPanel() {
 
   const [createOpen, setCreateOpen] = useState(false);
   const [createName, setCreateName] = useState('');
-  const [createFromId, setCreateFromId] = useState('');
-  const [createJsonText, setCreateJsonText] = useState('{}');
   const [createError, setCreateError] = useState('');
 
   const [kbList, setKbList] = useState([]);
@@ -137,7 +135,7 @@ export function ChatConfigsPanel() {
   }
 
   function toggleDatasetSelection(datasetId) {
-    if (!isAdmin || !datasetId) return;
+    if (!canManageChats || !datasetId) return;
     setChatDetailError('');
     setChatSaveStatus('');
 
@@ -210,11 +208,13 @@ export function ChatConfigsPanel() {
           setChatNameText(String(fresh?.name || name));
           setChatJsonText(prettyJson(sanitizeChatPayload(fresh)));
         }
-      } catch (_) {
-      }
+      } catch (_) {}
     } catch (error) {
       const message = String(error?.message || '');
-      if (message.includes('chat_dataset_locked') || message.includes("doesn't own parsed file")) {
+      if (message.includes('chat_dataset_not_ready')) {
+        setChatLocked(null);
+        setChatDetailError('所选知识库还没有已解析文档，暂时不能绑定到对话。请先上传并完成解析。');
+      } else if (message.includes('chat_dataset_locked') || message.includes("doesn't own parsed file")) {
         setChatLocked({ message, desiredPayload: updates });
         setChatDetailError('该对话已关联已解析文档，当前不允许直接切换到不包含这些文档的知识库。可以先复制为新对话，再调整知识库。');
       } else {
@@ -253,7 +253,7 @@ export function ChatConfigsPanel() {
   }
 
   async function copyToNewChat() {
-    if (!isAdmin || !chatLocked?.desiredPayload) return;
+    if (!canManageChats || !chatLocked?.desiredPayload) return;
     const baseName = String(chatNameText || chatSelected?.name || '新对话').trim() || '新对话';
     const name = `${baseName}_copy`;
 
@@ -274,7 +274,7 @@ export function ChatConfigsPanel() {
   }
 
   async function clearParsedFiles() {
-    if (!chatSelected?.id || !isAdmin) return;
+    if (!chatSelected?.id || !canManageChats) return;
     const ok = window.confirm('确认清除该对话的已解析文件绑定？\n\n这将尝试解除 RAGFlow parsed files 的归属限制，以便切换知识库。');
     if (!ok) return;
 
@@ -286,7 +286,7 @@ export function ChatConfigsPanel() {
       await knowledgeApi.clearRagflowChatParsedFiles(chatSelected.id);
       await fetchChatList();
       await loadChatDetail(chatSelected.id);
-      setChatSaveStatus('已清除解析绑定（如后端支持）');
+      setChatSaveStatus('已尝试清除解析绑定');
     } catch (error) {
       setChatDetailError(error?.message || '清除失败');
     } finally {
@@ -311,31 +311,14 @@ export function ChatConfigsPanel() {
     }
   }
 
-  async function syncCreateJsonFromCopy(sourceId) {
-    if (!sourceId) return;
-    setCreateError('');
-    try {
-      const source = await knowledgeApi.getRagflowChat(sourceId);
-      if (!source || !source.id) throw new Error('未获取到源对话配置');
-      setCreateJsonText(prettyJson(sanitizeChatPayload(source)));
-    } catch (error) {
-      setCreateJsonText('{}');
-      setCreateError(error?.message || '读取源对话配置失败');
-    }
-  }
-
   function openCreate() {
     setCreateName('');
-    const firstId = String(chatList[0]?.id || '');
-    setCreateFromId(firstId);
-    setCreateJsonText('{}');
     setCreateError('');
-    if (firstId) syncCreateJsonFromCopy(firstId);
     setCreateOpen(true);
   }
 
   async function createChat() {
-    if (!isAdmin) return;
+    if (!canManageChats) return;
     setCreateError('');
 
     const name = String(createName || '').trim();
@@ -344,22 +327,20 @@ export function ChatConfigsPanel() {
       return;
     }
 
-    const parsed = parseJson(createJsonText);
-    if (!parsed.ok) {
-      setCreateError(parsed.error);
-      return;
-    }
-
-    const payload = sanitizeChatPayload({ ...parsed.value, name });
     setBusy(true);
     try {
-      const created = await knowledgeApi.createRagflowChat(payload);
+      const created = await knowledgeApi.createRagflowChat({ name });
       if (!created || !created.id) throw new Error('新建成功，但未返回对话信息');
       setCreateOpen(false);
       await fetchChatList();
       await loadChatDetail(created.id);
     } catch (error) {
-      setCreateError(error?.message || '创建失败');
+      const message = String(error?.message || '');
+      if (message.includes('chat_dataset_not_ready')) {
+        setCreateError('所选知识库还没有已解析文档，暂时不能绑定到对话。请先上传并完成解析。');
+      } else {
+        setCreateError(message || '创建失败');
+      }
     } finally {
       setBusy(false);
     }
@@ -381,7 +362,7 @@ export function ChatConfigsPanel() {
         isMobile={isMobile}
         chatLoading={chatLoading}
         chatListLength={chatList.length}
-        isAdmin={isAdmin}
+        canManageChats={canManageChats}
         onOpenCreate={openCreate}
         chatFilter={chatFilter}
         onFilterChange={setChatFilter}
@@ -397,7 +378,7 @@ export function ChatConfigsPanel() {
       <ChatConfigDetailPanel
         panelStyle={panelStyle}
         isMobile={isMobile}
-        isAdmin={isAdmin}
+        canManageChats={canManageChats}
         chatSaveStatus={chatSaveStatus}
         onSave={saveChat}
         saveDisabled={!chatSelected?.id || busy || chatDetailLoading}
@@ -424,15 +405,9 @@ export function ChatConfigsPanel() {
         isMobile={isMobile}
         createName={createName}
         onCreateNameChange={setCreateName}
-        createFromId={createFromId}
-        onCreateFromIdChange={(value) => {
-          setCreateFromId(value);
-          syncCreateJsonFromCopy(value);
-        }}
-        chatList={chatList}
         createError={createError}
         onCreate={createChat}
-        isAdmin={isAdmin}
+        isAdmin={canManageChats}
         busy={busy}
       />
     </div>

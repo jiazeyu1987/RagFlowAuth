@@ -61,8 +61,13 @@ export default function usePermissionGroupManagement() {
   const [editingGroupId, setEditingGroupId] = useState(null);
   const [formData, setFormData] = useState({ ...emptyForm });
   const modeRef = useRef(mode);
+  const folderIndexesRef = useRef(new Map());
 
   const folderIndexes = useMemo(() => buildFolderIndexes(groupFolders), [groupFolders]);
+
+  useEffect(() => {
+    folderIndexesRef.current = folderIndexes.byId;
+  }, [folderIndexes.byId]);
 
   const folderPath = useMemo(
     () => [
@@ -155,14 +160,14 @@ export default function usePermissionGroupManagement() {
   const ensureFolderExpanded = useCallback(
     (folderId) => {
       if (!folderId) return;
-      const ids = pathFolders(folderId, folderIndexes.byId).map((folder) => folder.id);
+      const ids = pathFolders(folderId, folderIndexesRef.current).map((folder) => folder.id);
       setExpandedFolderIds((previous) => {
         const next = new Set(previous);
         ids.forEach((id) => next.add(id));
         return Array.from(next);
       });
     },
-    [folderIndexes.byId]
+    []
   );
 
   const openFolder = useCallback(
@@ -181,12 +186,36 @@ export default function usePermissionGroupManagement() {
     setFormData({ ...emptyForm, folder_id: currentFolderId || null });
   }, [currentFolderId]);
 
-  const startEditGroup = useCallback((group) => {
-    if (!group) return;
-    setMode('edit');
-    setEditingGroupId(group.group_id);
-    setFormData(fillFormFromGroup(group));
-  }, []);
+  const selectGroup = useCallback(
+    (group) => {
+      if (!group) return;
+      setEditingGroupId(group.group_id);
+      setFormData(fillFormFromGroup(group));
+      setSelectedItem({ kind: 'group', id: group.group_id });
+      openFolder(group.folder_id || ROOT);
+    },
+    [openFolder]
+  );
+
+  const viewGroup = useCallback(
+    (group) => {
+      if (!group) return;
+      setMode('view');
+      selectGroup(group);
+    },
+    [selectGroup]
+  );
+
+  const startEditGroup = useCallback(
+    (group) => {
+      if (!group) return;
+      setMode('edit');
+      selectGroup(group);
+    },
+    [selectGroup]
+  );
+
+  const activateGroup = startEditGroup;
 
   useEffect(() => {
     modeRef.current = mode;
@@ -195,13 +224,13 @@ export default function usePermissionGroupManagement() {
   const fetchAll = useCallback(async () => {
     setLoading(true);
     setError('');
-    try {
-      const groupsRes = await permissionGroupsApi.list();
-      const [folderRes, knowledgeTreeRes, chatsRes] = await Promise.all([
-        permissionGroupsApi.listGroupFolders().catch(() => null),
-        permissionGroupsApi.listKnowledgeTree().catch(() => null),
-        permissionGroupsApi.listChats().catch(() => ({ ok: true, data: [] })),
-      ]);
+      try {
+        const groupsRes = await permissionGroupsApi.list();
+        const [folderRes, knowledgeTreeRes, chatsRes] = await Promise.all([
+          permissionGroupsApi.listGroupFolders(),
+          permissionGroupsApi.listKnowledgeTree(),
+          permissionGroupsApi.listChats(),
+        ]);
 
       const folderData = folderRes?.data || {
         folders: [],
@@ -234,13 +263,20 @@ export default function usePermissionGroupManagement() {
     fetchAll().then((list) => {
       if (!active) return;
       if (modeRef.current === 'create' || modeRef.current === 'edit') return;
-      if (list.length) startEditGroup(list[0]);
-      else startCreateGroup();
+      if (list.length) viewGroup(list[0]);
+      else {
+        setSelectedItem({ kind: 'folder', id: ROOT });
+        setCurrentFolderId(ROOT);
+        setSelectedFolderId(ROOT);
+        setMode('create');
+        setEditingGroupId(null);
+        setFormData({ ...emptyForm, folder_id: null });
+      }
     });
     return () => {
       active = false;
     };
-  }, [fetchAll, startCreateGroup, startEditGroup]);
+  }, [fetchAll, viewGroup]);
 
   const saveForm = useCallback(
     async (event) => {
@@ -255,7 +291,7 @@ export default function usePermissionGroupManagement() {
           const nextGroups = await fetchAll();
           const created = nextGroups.find((group) => group.group_id === newId) || null;
           if (created) {
-            startEditGroup(created);
+            viewGroup(created);
             setHint('权限组已创建');
           }
         } else if (mode === 'edit' && editingGroupId != null) {
@@ -263,7 +299,7 @@ export default function usePermissionGroupManagement() {
           const nextGroups = await fetchAll();
           const updated = nextGroups.find((group) => group.group_id === editingGroupId) || null;
           if (updated) {
-            startEditGroup(updated);
+            viewGroup(updated);
             setHint('权限组已保存');
           }
         }
@@ -273,16 +309,28 @@ export default function usePermissionGroupManagement() {
         setSaving(false);
       }
     },
-    [editingGroupId, fetchAll, formData, mode, startEditGroup]
+    [editingGroupId, fetchAll, formData, mode, viewGroup]
   );
 
   const cancelEdit = useCallback(() => {
     if (mode === 'edit' && editingGroup) {
-      setFormData(fillFormFromGroup(editingGroup));
+      viewGroup(editingGroup);
       return;
     }
-    startCreateGroup();
-  }, [editingGroup, mode, startCreateGroup]);
+    if (mode === 'create') {
+      const selectedGroup =
+        selectedItem?.kind === 'group'
+          ? groups.find((group) => group.group_id === selectedItem.id) || null
+          : null;
+      if (selectedGroup) {
+        viewGroup(selectedGroup);
+        return;
+      }
+      setMode('');
+      setEditingGroupId(null);
+      setFormData({ ...emptyForm, folder_id: currentFolderId || null });
+    }
+  }, [currentFolderId, editingGroup, groups, mode, selectedItem, viewGroup]);
 
   const removeGroup = useCallback(
     async (group, options = {}) => {
@@ -298,7 +346,7 @@ export default function usePermissionGroupManagement() {
         await permissionGroupsApi.remove(group.group_id);
         const nextGroups = await fetchAll();
         if (editingGroupId === group.group_id) {
-          if (nextGroups.length) startEditGroup(nextGroups[0]);
+          if (nextGroups.length) viewGroup(nextGroups[0]);
           else startCreateGroup();
         }
         setHint('权限组已删除');
@@ -306,7 +354,7 @@ export default function usePermissionGroupManagement() {
         setError(removeError?.message || '删除权限组失败');
       }
     },
-    [editingGroupId, fetchAll, startCreateGroup, startEditGroup]
+    [editingGroupId, fetchAll, startCreateGroup, viewGroup]
   );
 
   const createFolder = useCallback(async () => {
@@ -478,6 +526,7 @@ export default function usePermissionGroupManagement() {
     selectedItem,
     dragGroupId,
     dropTargetFolderId,
+    mode,
     formData,
     editingGroup,
     folderIndexes,
@@ -496,7 +545,9 @@ export default function usePermissionGroupManagement() {
     renameFolder,
     deleteFolder,
     startCreateGroup,
+    viewGroup,
     startEditGroup,
+    activateGroup,
     saveForm,
     cancelEdit,
     removeGroup,

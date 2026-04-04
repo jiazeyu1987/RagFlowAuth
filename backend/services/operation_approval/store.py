@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import time
+from collections.abc import Iterable
 from uuid import uuid4
 
 from backend.database.paths import resolve_auth_db_path
@@ -16,6 +17,12 @@ def _from_json_text(value: str | None):
     if not value:
         return {}
     return json.loads(value)
+
+
+def _coerce_ms(value: int | None) -> int | None:
+    if value is None:
+        return None
+    return int(value)
 
 
 class OperationApprovalStore:
@@ -50,21 +57,30 @@ class OperationApprovalStore:
             ).fetchall()
             steps: list[dict] = []
             for step_row in step_rows:
-                approver_rows = conn.execute(
+                member_rows = conn.execute(
                     """
-                    SELECT approver_user_id
+                    SELECT approver_user_id, member_type, member_ref
                     FROM operation_approval_step_approvers
                     WHERE workflow_step_id = ?
-                    ORDER BY approver_user_id ASC
+                    ORDER BY rowid ASC
                     """,
                     (str(step_row["workflow_step_id"]),),
                 ).fetchall()
+                members: list[dict] = []
+                for item in member_rows:
+                    if not item:
+                        continue
+                    member_type = str(item["member_type"] or "").strip() or "user"
+                    member_ref = str(item["member_ref"] or "").strip() or str(item["approver_user_id"] or "").strip()
+                    if not member_ref:
+                        continue
+                    members.append({"member_type": member_type, "member_ref": member_ref})
                 steps.append(
                     {
                         "workflow_step_id": str(step_row["workflow_step_id"]),
                         "step_no": int(step_row["step_no"] or 0),
                         "step_name": str(step_row["step_name"]),
-                        "approver_user_ids": [str(item["approver_user_id"]) for item in approver_rows if item],
+                        "members": members,
                         "created_at_ms": int(step_row["created_at_ms"] or 0),
                     }
                 )
@@ -89,9 +105,14 @@ class OperationApprovalStore:
                 ORDER BY operation_type ASC
                 """
             ).fetchall()
-            return [self.get_workflow(str(row["operation_type"])) for row in rows if row]
         finally:
             conn.close()
+        items: list[dict] = []
+        for row in rows:
+            workflow = self.get_workflow(str(row["operation_type"]))
+            if workflow is not None:
+                items.append(workflow)
+        return items
 
     def upsert_workflow(self, *, operation_type: str, name: str, steps: list[dict]) -> dict:
         now_ms = int(time.time() * 1000)
@@ -122,14 +143,23 @@ class OperationApprovalStore:
                     """,
                     (step_id, operation_type, step_no, item["step_name"], now_ms),
                 )
-                for approver_user_id in item["approver_user_ids"]:
+                members = list(item.get("members") or [])
+                if not members and item.get("approver_user_ids"):
+                    members = [
+                        {"member_type": "user", "member_ref": str(approver_user_id)}
+                        for approver_user_id in item.get("approver_user_ids") or []
+                    ]
+                for member in members:
+                    member_type = str(member["member_type"])
+                    member_ref = str(member["member_ref"])
                     conn.execute(
                         """
                         INSERT INTO operation_approval_step_approvers (
-                            workflow_step_approver_id, workflow_step_id, operation_type, step_no, approver_user_id, created_at_ms
-                        ) VALUES (?, ?, ?, ?, ?, ?)
+                            workflow_step_approver_id, workflow_step_id, operation_type, step_no,
+                            approver_user_id, member_type, member_ref, created_at_ms
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                         """,
-                        (str(uuid4()), step_id, operation_type, step_no, approver_user_id, now_ms),
+                        (str(uuid4()), step_id, operation_type, step_no, member_ref, member_type, member_ref, now_ms),
                     )
             conn.commit()
         finally:
@@ -160,8 +190,76 @@ class OperationApprovalStore:
         now_ms = int(time.time() * 1000)
         current_step_no = int(steps[0]["step_no"]) if steps else None
         current_step_name = str(steps[0]["step_name"]) if steps else None
+        return self.import_request(
+            request={
+                "request_id": request_id,
+                "operation_type": operation_type,
+                "workflow_name": workflow_name,
+                "status": "in_approval",
+                "applicant_user_id": applicant_user_id,
+                "applicant_username": applicant_username,
+                "target_ref": target_ref,
+                "target_label": target_label,
+                "summary": summary,
+                "payload": payload,
+                "result_payload": None,
+                "workflow_snapshot": workflow_snapshot,
+                "current_step_no": current_step_no,
+                "current_step_name": current_step_name,
+                "submitted_at_ms": now_ms,
+                "completed_at_ms": None,
+                "execution_started_at_ms": None,
+                "executed_at_ms": None,
+                "last_error": None,
+                "company_id": company_id,
+                "department_id": department_id,
+            },
+            steps=[
+                {
+                    "step_no": int(step["step_no"]),
+                    "step_name": str(step["step_name"]),
+                    "approval_rule": str(step.get("approval_rule") or "all"),
+                    "status": (
+                        "active"
+                        if current_step_no is not None and int(step["step_no"]) == int(current_step_no)
+                        else "pending"
+                    ),
+                    "created_at_ms": now_ms,
+                    "activated_at_ms": (
+                        now_ms if current_step_no is not None and int(step["step_no"]) == int(current_step_no) else None
+                    ),
+                    "completed_at_ms": None,
+                    "approvers": [
+                        {
+                            "approver_user_id": str(approver["user_id"]),
+                            "approver_username": approver.get("username"),
+                            "status": "pending",
+                            "action": None,
+                            "notes": None,
+                            "signature_id": None,
+                            "acted_at_ms": None,
+                        }
+                        for approver in step.get("approvers") or []
+                    ],
+                }
+                for step in steps
+            ],
+            artifacts=artifacts,
+            events=[],
+        )
+
+    def import_request(
+        self,
+        *,
+        request: dict,
+        steps: list[dict],
+        artifacts: list[dict],
+        events: list[dict],
+    ) -> dict:
+        request_id = str(request["request_id"])
         conn = self._conn()
         try:
+            conn.execute("BEGIN IMMEDIATE")
             conn.execute(
                 """
                 INSERT INTO operation_approval_requests (
@@ -169,87 +267,126 @@ class OperationApprovalStore:
                     target_ref, target_label, summary_json, request_payload_json, result_payload_json,
                     workflow_snapshot_json, current_step_no, current_step_name, submitted_at_ms, completed_at_ms,
                     execution_started_at_ms, executed_at_ms, last_error, company_id, department_id
-                ) VALUES (?, ?, ?, 'in_approval', ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, NULL, NULL, NULL, NULL, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     request_id,
-                    operation_type,
-                    workflow_name,
-                    applicant_user_id,
-                    applicant_username,
-                    target_ref,
-                    target_label,
-                    _to_json_text(summary),
-                    _to_json_text(payload),
-                    _to_json_text(workflow_snapshot),
-                    current_step_no,
-                    current_step_name,
-                    now_ms,
-                    company_id,
-                    department_id,
+                    str(request["operation_type"]),
+                    str(request["workflow_name"]),
+                    str(request["status"]),
+                    str(request["applicant_user_id"]),
+                    str(request["applicant_username"]),
+                    request.get("target_ref"),
+                    request.get("target_label"),
+                    _to_json_text(request.get("summary")),
+                    _to_json_text(request.get("payload")),
+                    (_to_json_text(request.get("result_payload")) if request.get("result_payload") is not None else None),
+                    _to_json_text(request.get("workflow_snapshot")),
+                    request.get("current_step_no"),
+                    request.get("current_step_name"),
+                    int(request["submitted_at_ms"]),
+                    _coerce_ms(request.get("completed_at_ms")),
+                    _coerce_ms(request.get("execution_started_at_ms")),
+                    _coerce_ms(request.get("executed_at_ms")),
+                    request.get("last_error"),
+                    request.get("company_id"),
+                    request.get("department_id"),
                 ),
             )
-            for step in steps:
-                request_step_id = str(uuid4())
-                is_active = int(step["step_no"]) == int(current_step_no or 0)
+            for step in steps or []:
+                request_step_id = str(step.get("request_step_id") or uuid4())
                 conn.execute(
                     """
                     INSERT INTO operation_approval_request_steps (
-                        request_step_id, request_id, step_no, step_name, status, created_at_ms, activated_at_ms, completed_at_ms
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, NULL)
+                        request_step_id, request_id, step_no, step_name, approval_rule,
+                        status, created_at_ms, activated_at_ms, completed_at_ms
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         request_step_id,
                         request_id,
                         int(step["step_no"]),
-                        step["step_name"],
-                        "active" if is_active else "pending",
-                        now_ms,
-                        now_ms if is_active else None,
+                        str(step["step_name"]),
+                        str(step.get("approval_rule") or "all"),
+                        str(step.get("status") or "pending"),
+                        int(step.get("created_at_ms") or int(time.time() * 1000)),
+                        _coerce_ms(step.get("activated_at_ms")),
+                        _coerce_ms(step.get("completed_at_ms")),
                     ),
                 )
-                for approver in step["approvers"]:
+                for approver in step.get("approvers") or []:
                     conn.execute(
                         """
                         INSERT INTO operation_approval_request_step_approvers (
                             request_step_approver_id, request_id, request_step_id, step_no,
                             approver_user_id, approver_username, status, action, notes, signature_id, acted_at_ms
-                        ) VALUES (?, ?, ?, ?, ?, ?, 'pending', NULL, NULL, NULL, NULL)
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         """,
                         (
-                            str(uuid4()),
+                            str(approver.get("request_step_approver_id") or uuid4()),
                             request_id,
                             request_step_id,
                             int(step["step_no"]),
-                            approver["user_id"],
-                            approver.get("username"),
+                            str(approver["approver_user_id"]),
+                            approver.get("approver_username"),
+                            str(approver.get("status") or "pending"),
+                            approver.get("action"),
+                            approver.get("notes"),
+                            approver.get("signature_id"),
+                            _coerce_ms(approver.get("acted_at_ms")),
                         ),
                     )
-            for artifact in artifacts:
+            for artifact in artifacts or []:
                 conn.execute(
                     """
                     INSERT INTO operation_approval_artifacts (
                         artifact_id, request_id, artifact_type, file_path, file_name, mime_type, size_bytes,
                         sha256, meta_json, created_at_ms, cleaned_at_ms, cleanup_status
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL)
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
-                        str(uuid4()),
+                        str(artifact.get("artifact_id") or uuid4()),
                         request_id,
-                        artifact["artifact_type"],
-                        artifact["file_path"],
+                        str(artifact["artifact_type"]),
+                        str(artifact["file_path"]),
                         artifact.get("file_name"),
                         artifact.get("mime_type"),
                         artifact.get("size_bytes"),
                         artifact.get("sha256"),
                         _to_json_text(artifact.get("meta") or {}),
-                        now_ms,
+                        int(artifact.get("created_at_ms") or int(time.time() * 1000)),
+                        _coerce_ms(artifact.get("cleaned_at_ms")),
+                        artifact.get("cleanup_status"),
+                    ),
+                )
+            for event in events or []:
+                conn.execute(
+                    """
+                    INSERT INTO operation_approval_events (
+                        event_id, request_id, event_type, actor_user_id, actor_username, step_no, payload_json, created_at_ms
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        str(event.get("event_id") or uuid4()),
+                        request_id,
+                        str(event["event_type"]),
+                        event.get("actor_user_id"),
+                        event.get("actor_username"),
+                        event.get("step_no"),
+                        _to_json_text(event.get("payload") or {}),
+                        int(event.get("created_at_ms") or int(time.time() * 1000)),
                     ),
                 )
             conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
         finally:
             conn.close()
-        return self.get_request(request_id)
+        data = self.get_request(request_id)
+        if not data:
+            raise RuntimeError("operation_approval_request_import_failed")
+        return data
 
     def _request_row_to_summary(self, row) -> dict:
         return {
@@ -287,7 +424,7 @@ class OperationApprovalStore:
             data = self._request_row_to_summary(row)
             step_rows = conn.execute(
                 """
-                SELECT request_step_id, step_no, step_name, status, created_at_ms, activated_at_ms, completed_at_ms
+                SELECT request_step_id, step_no, step_name, approval_rule, status, created_at_ms, activated_at_ms, completed_at_ms
                 FROM operation_approval_request_steps
                 WHERE request_id = ?
                 ORDER BY step_no ASC
@@ -301,7 +438,7 @@ class OperationApprovalStore:
                     SELECT approver_user_id, approver_username, status, action, notes, signature_id, acted_at_ms
                     FROM operation_approval_request_step_approvers
                     WHERE request_step_id = ?
-                    ORDER BY approver_user_id ASC
+                    ORDER BY approver_user_id ASC, request_step_approver_id ASC
                     """,
                     (str(step_row["request_step_id"]),),
                 ).fetchall()
@@ -310,6 +447,7 @@ class OperationApprovalStore:
                         "request_step_id": str(step_row["request_step_id"]),
                         "step_no": int(step_row["step_no"] or 0),
                         "step_name": str(step_row["step_name"]),
+                        "approval_rule": str(step_row["approval_rule"] or "all"),
                         "status": str(step_row["status"]),
                         "created_at_ms": int(step_row["created_at_ms"] or 0),
                         "activated_at_ms": (
@@ -396,6 +534,9 @@ class OperationApprovalStore:
         *,
         applicant_user_id: str | None = None,
         pending_approver_user_id: str | None = None,
+        related_approver_user_id: str | None = None,
+        status: str | None = None,
+        company_id: int | None = None,
         include_all: bool = False,
         limit: int = 100,
     ) -> list[dict]:
@@ -422,7 +563,23 @@ class OperationApprovalStore:
                 )
             """
             params.append(pending_approver_user_id)
-        if not include_all and not applicant_user_id and not pending_approver_user_id:
+        if related_approver_user_id:
+            query += """
+                AND EXISTS (
+                    SELECT 1
+                    FROM operation_approval_request_step_approvers rsa
+                    WHERE rsa.request_id = operation_approval_requests.request_id
+                      AND rsa.approver_user_id = ?
+                )
+            """
+            params.append(related_approver_user_id)
+        if status:
+            query += " AND status = ?"
+            params.append(status)
+        if company_id is not None:
+            query += " AND company_id = ?"
+            params.append(int(company_id))
+        if not include_all and not applicant_user_id and not pending_approver_user_id and not related_approver_user_id:
             return []
         query += " ORDER BY submitted_at_ms DESC LIMIT ?"
         params.append(lim)
@@ -456,7 +613,7 @@ class OperationApprovalStore:
         try:
             row = conn.execute(
                 """
-                SELECT request_step_id, step_no, step_name, status, created_at_ms, activated_at_ms, completed_at_ms
+                SELECT request_step_id, step_no, step_name, approval_rule, status, created_at_ms, activated_at_ms, completed_at_ms
                 FROM operation_approval_request_steps
                 WHERE request_id = ? AND status = 'active'
                 ORDER BY step_no ASC
@@ -470,6 +627,7 @@ class OperationApprovalStore:
                 "request_step_id": str(row["request_step_id"]),
                 "step_no": int(row["step_no"] or 0),
                 "step_name": str(row["step_name"]),
+                "approval_rule": str(row["approval_rule"] or "all"),
                 "status": str(row["status"]),
                 "created_at_ms": int(row["created_at_ms"] or 0),
                 "activated_at_ms": (int(row["activated_at_ms"]) if row["activated_at_ms"] is not None else None),
@@ -515,7 +673,7 @@ class OperationApprovalStore:
         status: str,
         action: str,
         notes: str | None,
-        signature_id: str,
+        signature_id: str | None,
     ) -> None:
         now_ms = int(time.time() * 1000)
         conn = self._conn()
@@ -545,6 +703,30 @@ class OperationApprovalStore:
                 ),
             )
             conn.commit()
+        finally:
+            conn.close()
+
+    def mark_remaining_step_approvers(
+        self,
+        *,
+        request_step_id: str,
+        status: str,
+        action: str,
+        notes: str | None = None,
+    ) -> int:
+        now_ms = int(time.time() * 1000)
+        conn = self._conn()
+        try:
+            cur = conn.execute(
+                """
+                UPDATE operation_approval_request_step_approvers
+                SET status = ?, action = ?, notes = ?, acted_at_ms = ?
+                WHERE request_step_id = ? AND status = 'pending'
+                """,
+                (status, action, notes, now_ms, request_step_id),
+            )
+            conn.commit()
+            return int(cur.rowcount or 0)
         finally:
             conn.close()
 
@@ -685,3 +867,139 @@ class OperationApprovalStore:
             conn.commit()
         finally:
             conn.close()
+
+    def count_requests_by_statuses_for_company(
+        self,
+        *,
+        statuses: Iterable[str],
+        company_id: int | None,
+    ) -> dict[str, int]:
+        status_list = [str(item).strip() for item in statuses if str(item).strip()]
+        counts = {status: 0 for status in status_list}
+        if not status_list:
+            return counts
+        placeholders = ",".join("?" for _ in status_list)
+        query = f"""
+            SELECT status, COUNT(1) AS c
+            FROM operation_approval_requests
+            WHERE status IN ({placeholders})
+        """
+        params: list[object] = list(status_list)
+        if company_id is not None:
+            query += " AND company_id = ?"
+            params.append(int(company_id))
+        query += " GROUP BY status"
+        conn = self._conn()
+        try:
+            rows = conn.execute(query, params).fetchall()
+            for row in rows:
+                counts[str(row["status"])] = int(row["c"] or 0)
+            return counts
+        finally:
+            conn.close()
+
+    def count_requests_by_statuses_for_user_visibility(
+        self,
+        *,
+        statuses: Iterable[str],
+        user_id: str,
+    ) -> dict[str, int]:
+        status_list = [str(item).strip() for item in statuses if str(item).strip()]
+        counts = {status: 0 for status in status_list}
+        if not status_list:
+            return counts
+        placeholders = ",".join("?" for _ in status_list)
+        conn = self._conn()
+        try:
+            rows = conn.execute(
+                f"""
+                SELECT r.status, COUNT(1) AS c
+                FROM operation_approval_requests r
+                WHERE r.status IN ({placeholders})
+                  AND (
+                    r.applicant_user_id = ?
+                    OR EXISTS (
+                        SELECT 1
+                        FROM operation_approval_request_step_approvers rsa
+                        WHERE rsa.request_id = r.request_id
+                          AND rsa.approver_user_id = ?
+                    )
+                  )
+                GROUP BY r.status
+                """,
+                [*status_list, user_id, user_id],
+            ).fetchall()
+            for row in rows:
+                counts[str(row["status"])] = int(row["c"] or 0)
+            return counts
+        finally:
+            conn.close()
+
+    def get_legacy_migration(self, *, legacy_instance_id: str) -> dict | None:
+        conn = self._conn()
+        try:
+            row = conn.execute(
+                """
+                SELECT legacy_instance_id, request_id, company_id, source_db_path, status, error, migrated_at_ms
+                FROM operation_approval_legacy_migrations
+                WHERE legacy_instance_id = ?
+                """,
+                (legacy_instance_id,),
+            ).fetchone()
+            if not row:
+                return None
+            return {
+                "legacy_instance_id": str(row["legacy_instance_id"]),
+                "request_id": (str(row["request_id"]) if row["request_id"] else None),
+                "company_id": (int(row["company_id"]) if row["company_id"] is not None else None),
+                "source_db_path": (str(row["source_db_path"]) if row["source_db_path"] else None),
+                "status": str(row["status"]),
+                "error": (str(row["error"]) if row["error"] else None),
+                "migrated_at_ms": int(row["migrated_at_ms"] or 0),
+            }
+        finally:
+            conn.close()
+
+    def record_legacy_migration(
+        self,
+        *,
+        legacy_instance_id: str,
+        request_id: str | None,
+        company_id: int | None,
+        source_db_path: str | None,
+        status: str,
+        error: str | None,
+    ) -> dict:
+        now_ms = int(time.time() * 1000)
+        conn = self._conn()
+        try:
+            conn.execute(
+                """
+                INSERT INTO operation_approval_legacy_migrations (
+                    legacy_instance_id, request_id, company_id, source_db_path, status, error, migrated_at_ms
+                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(legacy_instance_id) DO UPDATE SET
+                    request_id = excluded.request_id,
+                    company_id = excluded.company_id,
+                    source_db_path = excluded.source_db_path,
+                    status = excluded.status,
+                    error = excluded.error,
+                    migrated_at_ms = excluded.migrated_at_ms
+                """,
+                (
+                    legacy_instance_id,
+                    request_id,
+                    company_id,
+                    source_db_path,
+                    status,
+                    error,
+                    now_ms,
+                ),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+        item = self.get_legacy_migration(legacy_instance_id=legacy_instance_id)
+        if not item:
+            raise RuntimeError("operation_approval_legacy_migration_record_failed")
+        return item

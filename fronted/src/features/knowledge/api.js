@@ -42,10 +42,11 @@ export const knowledgeApi = {
   },
 
   async createRagflowDataset(payload) {
-    return httpClient.requestJson(authBackendUrl('/api/datasets'), {
+    const res = await httpClient.requestJson(authBackendUrl('/api/datasets'), {
       method: 'POST',
       body: JSON.stringify(payload || {}),
     });
+    return unwrapEnvelope(res);
   },
 
   deleteRagflowDataset(datasetRef) {

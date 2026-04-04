@@ -38,6 +38,26 @@ class RunnerWorkersUnitTests(unittest.TestCase):
         self.assertEqual(kwargs["workers"], 1)
         self.assertFalse(kwargs["reload"])
 
+    def test_run_server_defaults_to_single_worker_app_object(self):
+        from backend.runtime import runner
+
+        fake_uvicorn = types.SimpleNamespace(run=Mock())
+        fake_app_module = types.SimpleNamespace(app=object())
+
+        with patch.dict("sys.modules", {"uvicorn": fake_uvicorn, "backend.app.main": fake_app_module}):
+            with (
+                patch.object(runner.settings, "HOST", "127.0.0.1"),
+                patch.object(runner.settings, "PORT", 8001),
+                patch.object(runner.settings, "UVICORN_WORKERS", 1),
+            ):
+                runner.run_server(workers=None, reload=False)
+
+        fake_uvicorn.run.assert_called_once()
+        args, kwargs = fake_uvicorn.run.call_args
+        self.assertIs(args[0], fake_app_module.app)
+        self.assertEqual(kwargs["workers"], 1)
+        self.assertFalse(kwargs["reload"])
+
     def test_run_server_forces_single_worker_in_reload_mode(self):
         from backend.runtime import runner
 

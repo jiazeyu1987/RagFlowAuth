@@ -300,6 +300,8 @@ class ElectronicSignatureStore:
         action: str | None = None,
         signed_by: str | None = None,
         status: str | None = None,
+        signed_at_from_ms: int | None = None,
+        signed_at_to_ms: int | None = None,
         offset: int = 0,
         limit: int = 100,
     ) -> tuple[int, list[ElectronicSignature]]:
@@ -322,6 +324,12 @@ class ElectronicSignatureStore:
         if status:
             where.append("status = ?")
             params.append(str(status))
+        if signed_at_from_ms is not None:
+            where.append("signed_at_ms >= ?")
+            params.append(int(signed_at_from_ms))
+        if signed_at_to_ms is not None:
+            where.append("signed_at_ms <= ?")
+            params.append(int(signed_at_to_ms))
 
         safe_offset = max(0, int(offset))
         safe_limit = max(1, min(500, int(limit)))

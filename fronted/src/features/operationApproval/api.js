@@ -26,9 +26,15 @@ export const operationApprovalApi = {
     );
   },
 
-  listRequests({ view = 'mine', limit = 100 } = {}) {
+  listRequests({ view = 'mine', status = 'all', limit = 100 } = {}) {
     return httpClient.requestJson(
-      authBackendUrl(`/api/operation-approvals/requests${buildQuery({ view, limit })}`),
+      authBackendUrl(
+        `/api/operation-approvals/requests${buildQuery({
+          view,
+          status: status && status !== 'all' ? status : '',
+          limit,
+        })}`
+      ),
       { method: 'GET' }
     );
   },
@@ -45,6 +51,10 @@ export const operationApprovalApi = {
       authBackendUrl(`/api/operation-approvals/requests/${encodeURIComponent(requestId)}`),
       { method: 'GET' }
     );
+  },
+
+  getStats() {
+    return httpClient.requestJson(authBackendUrl('/api/operation-approvals/stats'), { method: 'GET' });
   },
 
   approveRequest(requestId, payload) {

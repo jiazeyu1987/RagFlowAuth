@@ -13,20 +13,21 @@ def actor_fields_from_user(deps: Any, user: Any) -> dict[str, Any]:
     username = getattr(user, "username", None)
     company_id = getattr(user, "company_id", None)
     department_id = getattr(user, "department_id", None)
+    org_structure_manager = getattr(deps, "org_structure_manager", None)
 
     company_name = None
-    if company_id is not None:
+    if company_id is not None and org_structure_manager is not None:
         try:
-            c = deps.org_directory_store.get_company(int(company_id))
+            c = org_structure_manager.get_company(int(company_id))
             company_name = getattr(c, "name", None) if c else None
         except Exception:
             company_name = None
 
     department_name = None
-    if department_id is not None:
+    if department_id is not None and org_structure_manager is not None:
         try:
-            d = deps.org_directory_store.get_department(int(department_id))
-            department_name = getattr(d, "name", None) if d else None
+            d = org_structure_manager.get_department(int(department_id))
+            department_name = (getattr(d, "path_name", None) or getattr(d, "name", None)) if d else None
         except Exception:
             department_name = None
 
@@ -50,4 +51,3 @@ def actor_fields_from_ctx(deps: Any, ctx: Any) -> dict[str, Any]:
             "department_name": None,
         }
     return actor_fields_from_user(deps, user)
-

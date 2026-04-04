@@ -517,6 +517,7 @@ class UserStore:
         department_id: Optional[int] = None,
         created_from_ms: Optional[int] = None,
         created_to_ms: Optional[int] = None,
+        manager_user_id: Optional[str] = None,
         limit: int = 100,
     ) -> List[User]:
         conn = self._get_connection()
@@ -548,6 +549,9 @@ class UserStore:
             if department_id is not None:
                 base_query += " AND department_id = ?"
                 base_params.append(department_id)
+            if manager_user_id is not None:
+                base_query += " AND manager_user_id = ?"
+                base_params.append(str(manager_user_id).strip() or None)
             if q:
                 base_query += " AND (username LIKE ? OR full_name LIKE ?)"
                 base_params.append(f"%{q}%")

@@ -51,6 +51,24 @@ class PermissionGroupsService:
         except PermissionManagementError as e:
             self._raise(e)
 
+    def filter_manageable_groups(self, *, user: Any, groups: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
+        try:
+            return self._manager.filter_manageable_groups(user=user, groups=groups)
+        except PermissionManagementError as e:
+            self._raise(e)
+
+    def assert_group_manageable(self, *, user: Any, group: dict[str, Any] | None) -> dict[str, Any]:
+        try:
+            return self._manager.assert_group_manageable(user=user, group=group)
+        except PermissionManagementError as e:
+            self._raise(e)
+
+    def validate_group_ids_manageable(self, *, user: Any, group_ids: list[int]) -> None:
+        try:
+            self._manager.validate_group_ids_manageable(user=user, group_ids=group_ids)
+        except PermissionManagementError as e:
+            self._raise(e)
+
     def list_knowledge_bases(self) -> list[dict[str, str]]:
         try:
             return self._manager.list_knowledge_bases()

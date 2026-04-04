@@ -7,6 +7,8 @@ from typing import Any
 from backend.database.paths import resolve_auth_db_path
 from backend.database.sqlite import connect_sqlite
 
+from .event_catalog import AVAILABLE_CHANNEL_TYPES
+
 
 def _to_json_text(value: Any) -> str:
     return json.dumps(value, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
@@ -211,9 +213,12 @@ class NotificationStore:
             ).fetchone()
             if not row:
                 return None
+            channel = self.get_channel(str(row["channel_id"]))
             return {
                 "job_id": int(row["job_id"]),
                 "channel_id": row["channel_id"],
+                "channel_type": (str(channel.get("channel_type")) if channel else None),
+                "channel_name": (str(channel.get("name")) if channel else None),
                 "event_type": row["event_type"],
                 "payload": _from_json_text(row["payload_json"]) or {},
                 "recipient_user_id": row["recipient_user_id"],
@@ -233,31 +238,40 @@ class NotificationStore:
         finally:
             conn.close()
 
-    def list_jobs(self, *, limit: int = 100, status: str | None = None) -> list[dict[str, Any]]:
+    def list_jobs(
+        self,
+        *,
+        limit: int = 100,
+        status: str | None = None,
+        event_type: str | None = None,
+        channel_type: str | None = None,
+    ) -> list[dict[str, Any]]:
         lim = max(1, min(500, int(limit)))
+        where_parts: list[str] = []
+        params: list[Any] = []
+        if status:
+            where_parts.append("j.status = ?")
+            params.append(str(status))
+        if event_type:
+            where_parts.append("j.event_type = ?")
+            params.append(str(event_type))
+        if channel_type:
+            where_parts.append("c.channel_type = ?")
+            params.append(str(channel_type).strip().lower())
+        where_sql = f"WHERE {' AND '.join(where_parts)}" if where_parts else ""
         conn = self._conn()
         try:
-            if status:
-                rows = conn.execute(
-                    """
-                    SELECT job_id
-                    FROM notification_jobs
-                    WHERE status = ?
-                    ORDER BY created_at_ms DESC
-                    LIMIT ?
-                    """,
-                    (status, lim),
-                ).fetchall()
-            else:
-                rows = conn.execute(
-                    """
-                    SELECT job_id
-                    FROM notification_jobs
-                    ORDER BY created_at_ms DESC
-                    LIMIT ?
-                    """,
-                    (lim,),
-                ).fetchall()
+            rows = conn.execute(
+                f"""
+                SELECT j.job_id
+                FROM notification_jobs j
+                JOIN notification_channels c ON c.channel_id = j.channel_id
+                {where_sql}
+                ORDER BY j.created_at_ms DESC
+                LIMIT ?
+                """,
+                (*params, lim),
+            ).fetchall()
             out: list[dict[str, Any]] = []
             for row in rows:
                 item = self.get_job(int(row["job_id"]))
@@ -266,6 +280,95 @@ class NotificationStore:
             return out
         finally:
             conn.close()
+
+    def get_event_rule(self, event_type: str) -> dict[str, Any] | None:
+        event_type = str(event_type or "").strip()
+        if not event_type:
+            return None
+        conn = self._conn()
+        try:
+            row = conn.execute(
+                """
+                SELECT event_type, enabled_channel_types_json, created_at_ms, updated_at_ms
+                FROM notification_event_rules
+                WHERE event_type = ?
+                """,
+                (event_type,),
+            ).fetchone()
+            if not row:
+                return None
+            return {
+                "event_type": str(row["event_type"]),
+                "enabled_channel_types": list(_from_json_text(row["enabled_channel_types_json"]) or []),
+                "created_at_ms": int(row["created_at_ms"] or 0),
+                "updated_at_ms": int(row["updated_at_ms"] or 0),
+            }
+        finally:
+            conn.close()
+
+    def list_event_rules(self) -> list[dict[str, Any]]:
+        conn = self._conn()
+        try:
+            rows = conn.execute(
+                """
+                SELECT event_type
+                FROM notification_event_rules
+                ORDER BY event_type ASC
+                """
+            ).fetchall()
+            out: list[dict[str, Any]] = []
+            for row in rows:
+                item = self.get_event_rule(str(row["event_type"]))
+                if item:
+                    out.append(item)
+            return out
+        finally:
+            conn.close()
+
+    def upsert_event_rule(self, *, event_type: str, enabled_channel_types: list[str] | tuple[str, ...] | set[str]) -> dict[str, Any]:
+        normalized_event_type = str(event_type or "").strip()
+        if not normalized_event_type:
+            raise ValueError("notification_event_type_required")
+
+        normalized_types: list[str] = []
+        seen: set[str] = set()
+        for item in enabled_channel_types or []:
+            channel_type = str(item or "").strip().lower()
+            if not channel_type:
+                continue
+            if channel_type not in AVAILABLE_CHANNEL_TYPES:
+                raise ValueError("invalid_channel_type")
+            if channel_type in seen:
+                continue
+            seen.add(channel_type)
+            normalized_types.append(channel_type)
+
+        now_ms = int(time.time() * 1000)
+        conn = self._conn()
+        try:
+            conn.execute(
+                """
+                INSERT INTO notification_event_rules (
+                    event_type, enabled_channel_types_json, created_at_ms, updated_at_ms
+                ) VALUES (?, ?, ?, ?)
+                ON CONFLICT(event_type) DO UPDATE SET
+                    enabled_channel_types_json = excluded.enabled_channel_types_json,
+                    updated_at_ms = excluded.updated_at_ms
+                """,
+                (
+                    normalized_event_type,
+                    _to_json_text(normalized_types),
+                    now_ms,
+                    now_ms,
+                ),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+        item = self.get_event_rule(normalized_event_type)
+        if not item:
+            raise RuntimeError("notification_event_rule_upsert_failed")
+        return item
 
     def find_duplicate_job(
         self,

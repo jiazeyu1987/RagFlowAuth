@@ -227,7 +227,7 @@ async def update_dataset_detail(
     return {"dataset": updated}
 
 
-@router.post("/datasets", status_code=202)
+@router.post("/datasets")
 async def create_dataset(
     ctx: AuthContextDep,
     body: object = Body(...),
@@ -255,20 +255,32 @@ async def create_dataset(
     body["name"] = name
     body.pop("id", None)
     body.pop("dataset_id", None)
-    service = getattr(deps, "operation_approval_service", None)
-    if service is None:
-        raise HTTPException(status_code=500, detail="operation_approval_service_unavailable")
+    if management_manager is None:
+        raise HTTPException(status_code=500, detail="knowledge_management_manager_unavailable")
     try:
-        return await service.create_request(
-            operation_type="knowledge_base_create",
-            ctx=ctx,
-            body=body,
-        )
+        created = management_manager.create_dataset(user=ctx.user, payload=body)
     except Exception as exc:
         raise HTTPException(
             status_code=int(getattr(exc, "status_code", 400) or 400),
-            detail=getattr(exc, "code", None) or str(exc) or "operation_approval_create_failed",
+            detail=getattr(exc, "code", None) or str(exc) or "dataset_create_failed",
         ) from exc
+
+    audit = getattr(deps, "audit_log_store", None)
+    if audit:
+        try:
+            audit.log_event(
+                action="datasets_create",
+                actor=ctx.payload.sub,
+                source="ragflow",
+                kb_id=str(created.get("id") or ""),
+                kb_name=str(created.get("name") or name),
+                meta={"keys": sorted([k for k in body.keys() if isinstance(k, str)])[:100]},
+                **actor_fields_from_ctx(deps, ctx),
+            )
+        except Exception:
+            pass
+
+    return {"dataset": created}
 
 
 @router.delete("/datasets/{dataset_ref}", status_code=202)

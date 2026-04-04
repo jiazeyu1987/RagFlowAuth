@@ -25,4 +25,23 @@ export const electronicSignatureApi = {
       method: 'POST',
     });
   },
+
+  listAuthorizations(params = {}) {
+    const search = new URLSearchParams();
+    Object.entries(params).forEach(([key, value]) => {
+      if (value === undefined || value === null || value === '') return;
+      search.set(key, String(value));
+    });
+    const query = search.toString();
+    return httpClient.requestJson(authBackendUrl(`/api/electronic-signature-authorizations${query ? `?${query}` : ''}`), {
+      method: 'GET',
+    });
+  },
+
+  updateAuthorization(userId, payload) {
+    return httpClient.requestJson(authBackendUrl(`/api/electronic-signature-authorizations/${userId}`), {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    });
+  },
 };

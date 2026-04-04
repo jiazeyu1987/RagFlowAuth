@@ -17,8 +17,12 @@ realAdminTest('data security restore drill can be recorded and listed @regressio
     auth_db_path: 'data/auth.db',
     last_run_at_ms: null,
     backup_retention_max: 30,
-    backup_target_path: '/mnt/replica/RagflowAuth',
+    backup_target_path: '/app/data/backups',
     backup_pack_count: 1,
+    local_backup_target_path: '/app/data/backups',
+    local_backup_pack_count: 1,
+    windows_backup_target_path: '/mnt/replica/RagflowAuth',
+    windows_backup_pack_count: 1,
   };
 
   const nowMs = Date.now();
@@ -30,13 +34,32 @@ realAdminTest('data security restore drill can be recorded and listed @regressio
       progress: 100,
       message: 'done',
       detail: null,
-      output_dir: '/mnt/replica/RagflowAuth/migration_pack_20260402',
+      output_dir: '/app/data/backups/migration_pack_20260402',
       package_hash: 'abcd1234hash',
       verified_by: null,
       verified_at_ms: null,
+      replication_status: 'failed',
+      replication_error: 'disk full',
       created_at_ms: nowMs,
       started_at_ms: nowMs - 1000,
       finished_at_ms: nowMs,
+    },
+    {
+      id: 102,
+      kind: 'full',
+      status: 'completed',
+      progress: 100,
+      message: 'windows only',
+      detail: 'local backup failed',
+      output_dir: '',
+      package_hash: 'windowsonlyhash',
+      verified_by: null,
+      verified_at_ms: null,
+      replication_status: 'succeeded',
+      replica_path: '/mnt/replica/RagflowAuth/migration_pack_20260403',
+      created_at_ms: nowMs - 10_000,
+      started_at_ms: nowMs - 11_000,
+      finished_at_ms: nowMs - 10_000,
     },
   ];
   const drills = [];
@@ -93,6 +116,8 @@ realAdminTest('data security restore drill can be recorded and listed @regressio
   await page.goto('/data-security');
 
   await expect(page.getByTestId('ds-restore-job-select')).toBeVisible();
+  await expect(page.getByRole('option', { name: /#101/ })).toHaveCount(1);
+  await expect(page.getByRole('option', { name: /#102/ })).toHaveCount(0);
   await page.getByTestId('ds-restore-target').fill('qa-restore');
   await page.getByTestId('ds-restore-notes').fill('restore verified in qa');
   await page.getByTestId('ds-restore-submit').click();

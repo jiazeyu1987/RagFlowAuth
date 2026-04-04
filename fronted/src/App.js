@@ -9,7 +9,6 @@ const Dashboard = lazy(() => import('./pages/Dashboard'));
 const UserManagement = lazy(() => import('./pages/UserManagement'));
 const KnowledgeUpload = lazy(() => import('./pages/KnowledgeUpload'));
 const DocumentBrowser = lazy(() => import('./pages/DocumentBrowser'));
-const DocumentReviewAudit = lazy(() => import('./pages/DocumentReviewAudit'));
 const Chat = lazy(() => import('./pages/Chat'));
 const Agents = lazy(() => import('./pages/Agents'));
 const PermissionGroupManagement = lazy(() => import('./pages/PermissionGroupManagement'));
@@ -19,6 +18,7 @@ const NotificationSettings = lazy(() => import('./pages/NotificationSettings'));
 const ApprovalCenter = lazy(() => import('./pages/ApprovalCenter'));
 const ApprovalConfig = lazy(() => import('./pages/ApprovalConfig'));
 const ElectronicSignatureManagement = lazy(() => import('./pages/ElectronicSignatureManagement'));
+const TrainingComplianceManagement = lazy(() => import('./pages/TrainingComplianceManagement'));
 const InboxPage = lazy(() => import('./pages/InboxPage'));
 const OrgDirectoryManagement = lazy(() => import('./pages/OrgDirectoryManagement'));
 const Unauthorized = lazy(() => import('./pages/Unauthorized'));
@@ -34,7 +34,6 @@ const NMPATool = lazy(() => import('./pages/NMPATool'));
 const PackageDrawingTool = lazy(() => import('./pages/PackageDrawingTool'));
 const SearchConfigsPanel = lazy(() => import('./pages/SearchConfigsPanel'));
 const ChatConfigsPanel = lazy(() => import('./pages/ChatConfigsPanel'));
-const DocumentReview = lazy(() => import('./pages/DocumentReview'));
 const DocumentAudit = lazy(() => import('./pages/DocumentAudit'));
 
 
@@ -90,27 +89,7 @@ function App() {
               }
             />
             <Route
-              path="/documents"
-              element={
-                <PermissionGuard>
-                  <Layout>
-                    <DocumentReviewAudit />
-                  </Layout>
-                </PermissionGuard>
-              }
-            />
-            <Route
-              path="/documents/review"
-              element={
-                <PermissionGuard>
-                  <Layout>
-                    <DocumentReview />
-                  </Layout>
-                </PermissionGuard>
-              }
-            />
-            <Route
-              path="/documents/audit"
+              path="/document-history"
               element={
                 <PermissionGuard>
                   <Layout>
@@ -242,7 +221,7 @@ function App() {
             <Route
               path="/chat-configs"
               element={
-                <PermissionGuard allowedRoles={['admin']}>
+                <PermissionGuard allowedRoles={['sub_admin']} permission={{ resource: 'kbs_config', action: 'view' }}>
                   <Layout>
                     <ChatConfigsPanel />
                   </Layout>
@@ -260,14 +239,6 @@ function App() {
               }
             />
             <Route
-              path="/audit"
-              element={
-                <PermissionGuard>
-                  <Navigate to="/documents?tab=records" replace />
-                </PermissionGuard>
-              }
-            />
-            <Route
               path="/permission-groups"
               element={
                 <PermissionGuard allowedRoles={['sub_admin']}>
@@ -279,16 +250,6 @@ function App() {
             />
             <Route
               path="/approvals"
-              element={
-                <PermissionGuard>
-                  <Layout>
-                    <ApprovalCenter />
-                  </Layout>
-                </PermissionGuard>
-              }
-            />
-            <Route
-              path="/approval-center"
               element={
                 <PermissionGuard>
                   <Layout>
@@ -353,6 +314,16 @@ function App() {
                 <PermissionGuard allowedRoles={['admin']}>
                   <Layout>
                     <ElectronicSignatureManagement />
+                  </Layout>
+                </PermissionGuard>
+              }
+            />
+            <Route
+              path="/training-compliance"
+              element={
+                <PermissionGuard allowedRoles={['admin']}>
+                  <Layout>
+                    <TrainingComplianceManagement />
                   </Layout>
                 </PermissionGuard>
               }

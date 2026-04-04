@@ -48,7 +48,7 @@ export function useSignaturePrompt() {
       });
     } catch (error) {
       setSignatureSubmitting(false);
-      setSignatureError(error?.message || 'Electronic signature failed');
+      setSignatureError(error?.message || '电子签名失败');
     }
   }, [resetPrompt]);
 

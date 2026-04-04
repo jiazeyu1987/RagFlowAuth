@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from typing import Any
 from uuid import uuid4
 
-from backend.services.users import resolve_login_block, verify_password
+from backend.services.users import emit_credential_lock_alert, resolve_login_block, verify_password
 
 from .store import ElectronicSignature, ElectronicSignatureStore
 
@@ -60,12 +60,21 @@ class ElectronicSignatureService:
     def _assert_user_can_sign(user: Any) -> None:
         blocked, reason = resolve_login_block(user)
         if not blocked:
+            if not bool(getattr(user, "electronic_signature_enabled", True)):
+                raise ElectronicSignatureError("signature_user_not_authorized", status_code=403)
             return
         if reason == "account_inactive":
             raise ElectronicSignatureError("signature_user_inactive", status_code=403)
         raise ElectronicSignatureError("signature_user_disabled", status_code=403)
 
-    def issue_challenge(self, *, user: Any, password: str, user_store: Any | None = None) -> dict[str, Any]:
+    def issue_challenge(
+        self,
+        *,
+        user: Any,
+        password: str,
+        user_store: Any | None = None,
+        deps: Any | None = None,
+    ) -> dict[str, Any]:
         self._assert_user_can_sign(user)
         password_text = self._normalize_required(password, field_name="signature_password_required")
         password_hash = str(getattr(user, "password_hash", "") or "")
@@ -75,8 +84,18 @@ class ElectronicSignatureService:
         password_ok, needs_rehash = verify_password(password_text, password_hash)
         if not password_ok:
             locked_until_ms = None
+            newly_locked = False
             if user_store is not None and getattr(user, "user_id", None) and hasattr(user_store, "record_credential_failure"):
-                locked_until_ms = user_store.record_credential_failure(str(getattr(user, "user_id")))
+                locked_until_ms, newly_locked = user_store.record_credential_failure(str(getattr(user, "user_id")))
+                if newly_locked and locked_until_ms is not None:
+                    emit_credential_lock_alert(
+                        deps=(deps if deps is not None else None),
+                        user=user,
+                        source="electronic_signature",
+                        lock_reason="signature_password_invalid",
+                        lock_until_ms=locked_until_ms,
+                        actor=str(getattr(user, "user_id", "") or ""),
+                    )
             if locked_until_ms is not None:
                 raise ElectronicSignatureError("signature_credentials_locked", status_code=423)
             raise ElectronicSignatureError("signature_password_invalid", status_code=400)
@@ -228,6 +247,8 @@ class ElectronicSignatureService:
         action: str | None = None,
         signed_by: str | None = None,
         status: str | None = None,
+        signed_at_from_ms: int | None = None,
+        signed_at_to_ms: int | None = None,
         offset: int = 0,
         limit: int = 100,
     ) -> tuple[int, list[ElectronicSignature]]:
@@ -237,6 +258,8 @@ class ElectronicSignatureService:
             action=action,
             signed_by=signed_by,
             status=status,
+            signed_at_from_ms=signed_at_from_ms,
+            signed_at_to_ms=signed_at_to_ms,
             offset=offset,
             limit=limit,
         )

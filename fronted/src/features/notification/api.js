@@ -8,10 +8,19 @@ export const notificationApi = {
       method: 'PUT',
       body: JSON.stringify(payload || {}),
     }),
-  listJobs: async ({ limit = 50, status = '' } = {}) => {
+  listRules: async () =>
+    httpClient.requestJson('/api/admin/notifications/rules'),
+  upsertRules: async (payload) =>
+    httpClient.requestJson('/api/admin/notifications/rules', {
+      method: 'PUT',
+      body: JSON.stringify(payload || {}),
+    }),
+  listJobs: async ({ limit = 50, status = '', eventType = '', channelType = '' } = {}) => {
     const qs = new URLSearchParams();
     qs.set('limit', String(limit));
     if (status) qs.set('status', status);
+    if (eventType) qs.set('event_type', eventType);
+    if (channelType) qs.set('channel_type', channelType);
     return httpClient.requestJson(`/api/admin/notifications/jobs?${qs.toString()}`);
   },
   listJobLogs: async (jobId, limit = 20) =>
@@ -23,6 +32,11 @@ export const notificationApi = {
     }),
   dispatchPending: async (limit = 100) =>
     httpClient.requestJson(`/api/admin/notifications/dispatch?limit=${encodeURIComponent(limit)}`, {
+      method: 'POST',
+      body: JSON.stringify({}),
+    }),
+  resendJob: async (jobId) =>
+    httpClient.requestJson(`/api/admin/notifications/jobs/${encodeURIComponent(jobId)}/resend`, {
       method: 'POST',
       body: JSON.stringify({}),
     }),

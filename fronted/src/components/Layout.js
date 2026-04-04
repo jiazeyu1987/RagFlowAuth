@@ -10,12 +10,17 @@ const TEXT = {
   appName: '\u77e5\u8bc6\u5e93\u7cfb\u7edf',
   home: '\u9996\u9875',
   logout: '\u9000\u51fa',
+  roles: {
+    admin: '\u7ba1\u7406\u5458',
+    subAdmin: '\u5b50\u7ba1\u7406\u5458',
+    viewer: '\u666e\u901a\u7528\u6237',
+  },
   nav: {
     chat: '\u667a\u80fd\u5bf9\u8bdd',
     agents: '\u5168\u5e93\u641c\u7d22',
     kbs: '\u77e5\u8bc6\u5e93\u914d\u7f6e',
     browser: '\u6587\u6863\u6d4f\u89c8',
-    documents: '\u6587\u6863\u5ba1\u6838',
+    documentHistory: '\u6587\u6863\u8bb0\u5f55',
     upload: '\u6587\u6863\u4e0a\u4f20',
     approvalCenter: '\u5ba1\u6279\u4e2d\u5fc3',
     approvalConfig: '\u5ba1\u6279\u914d\u7f6e',
@@ -30,6 +35,7 @@ const TEXT = {
     messages: '\u6d88\u606f\u4e2d\u5fc3',
     notificationSettings: '\u901a\u77e5\u8bbe\u7f6e',
     electronicSignatures: '\u7535\u5b50\u7b7e\u540d\u7ba1\u7406',
+    trainingCompliance: '\u57f9\u8bad\u5408\u89c4',
   },
   toolTitles: {
     patentDownload: '\u4e13\u5229\u4e0b\u8f7d',
@@ -40,10 +46,19 @@ const TEXT = {
   },
 };
 
+const formatRoleLabel = (role) => {
+  const value = String(role || '').trim();
+  if (value === 'admin') return TEXT.roles.admin;
+  if (value === 'sub_admin') return TEXT.roles.subAdmin;
+  if (value === 'viewer') return TEXT.roles.viewer;
+  return '';
+};
+
 const Layout = ({ children }) => {
   const {
     user,
     logout,
+    can,
     canUpload,
     canReview,
     canViewKbConfig,
@@ -106,14 +121,9 @@ const Layout = ({ children }) => {
     };
   }, [user?.user_id]);
 
-  const permissionGroupLabel = (() => {
-    const groups = (user?.permission_groups || [])
-      .map((group) => (group && typeof group.group_name === 'string' ? group.group_name.trim() : ''))
-      .filter(Boolean);
-    const unique = Array.from(new Set(groups));
-    if (unique.length > 0) return unique.join(' / ');
-    return user?.role || '';
-  })();
+  const displayName = String(user?.full_name || '').trim();
+  const displayRole = formatRoleLabel(user?.role);
+  const canViewDocumentHistory = user?.role === 'admin' || canReview() || (typeof can === 'function' && can('kb_documents', 'view'));
 
   const handleLogout = async () => {
     await logout();
@@ -135,7 +145,7 @@ const Layout = ({ children }) => {
     { name: TEXT.nav.agents, path: '/agents', icon: '\ud83d\udd0d' },
     { name: TEXT.nav.kbs, path: '/kbs', icon: '\ud83d\udcd6', show: canViewKbConfig, allowedRoles: ['sub_admin'] },
     { name: TEXT.nav.browser, path: '/browser', icon: '\ud83d\udcc4' },
-    { name: TEXT.nav.documents, path: '/documents', icon: '\u2705', show: canReview },
+    { name: TEXT.nav.documentHistory, path: '/document-history', icon: '\ud83d\uddc2\ufe0f', show: () => canViewDocumentHistory },
     { name: TEXT.nav.upload, path: '/upload', icon: '\ud83d\udce4', show: canUpload },
     { name: TEXT.nav.approvalCenter, path: '/approvals', icon: '\ud83d\udccb' },
     { name: TEXT.nav.inbox, path: '/inbox', icon: '\ud83d\udcec' },
@@ -148,10 +158,11 @@ const Layout = ({ children }) => {
     { name: TEXT.nav.dataSecurity, path: '/data-security', icon: '\ud83d\udd12', allowedRoles: ['admin'] },
     { name: TEXT.nav.notificationSettings, path: '/notification-settings', icon: '\ud83d\udd14', allowedRoles: ['admin'] },
     { name: TEXT.nav.electronicSignatures, path: '/electronic-signatures', icon: '\u270d\ufe0f', allowedRoles: ['admin'] },
+    { name: TEXT.nav.trainingCompliance, path: '/training-compliance', icon: '\ud83c\udf93', allowedRoles: ['admin'] },
     { name: TEXT.nav.logs, path: '/logs', icon: '\ud83d\udccb', allowedRoles: ['admin'] },
   ];
 
-  const adminHiddenPaths = new Set(['/chat', '/agents', '/kbs', '/browser', '/documents', '/upload', '/tools']);
+  const adminHiddenPaths = new Set(['/chat', '/agents', '/kbs', '/browser', '/upload', '/tools']);
   navigation.forEach((item) => {
     if (adminHiddenPaths.has(item.path)) {
       item.hiddenRoles = ['admin'];
@@ -167,10 +178,11 @@ const Layout = ({ children }) => {
     '/tools/package-drawing': TEXT.toolTitles.packageDrawing,
     '/electronic-signatures': TEXT.nav.electronicSignatures,
     '/approvals': TEXT.nav.approvalCenter,
-    '/approval-center': TEXT.nav.approvalCenter,
     '/approval-config': TEXT.nav.approvalConfig,
     '/inbox': TEXT.nav.inbox,
     '/messages': TEXT.nav.inbox,
+    '/document-history': TEXT.nav.documentHistory,
+    '/training-compliance': TEXT.nav.trainingCompliance,
   };
 
   const currentTitle = pageTitleOverrides[location.pathname]
@@ -319,8 +331,8 @@ const Layout = ({ children }) => {
         <div style={{ padding: isMobile ? '16px' : '20px', borderTop: '1px solid #374151' }}>
           {sidebarOpen ? (
             <div style={{ marginBottom: '10px', fontSize: '0.9rem' }}>
-              <div style={{ fontWeight: 'bold' }} data-testid="layout-user-name">{user?.username}</div>
-              <div style={{ color: '#9ca3af', fontSize: '0.8rem' }} data-testid="layout-user-role">{permissionGroupLabel}</div>
+              <div style={{ fontWeight: 'bold' }} data-testid="layout-user-name">{displayName}</div>
+              <div style={{ color: '#9ca3af', fontSize: '0.8rem' }} data-testid="layout-user-role">{displayRole}</div>
             </div>
           ) : null}
           <button

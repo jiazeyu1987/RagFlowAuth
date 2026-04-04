@@ -342,7 +342,7 @@ const DocumentAudit = ({ embedded = false }) => {
   return (
     <div data-testid="audit-page">
       <div style={{ marginBottom: '24px' }}>
-        {!embedded && <h2 style={{ margin: '0 0 16px 0' }}>{'\u6587\u6863\u5ba1\u6838\u8bb0\u5f55'}</h2>}
+        {!embedded && <h2 style={{ margin: '0 0 16px 0' }}>{'\u6587\u6863\u8bb0\u5f55'}</h2>}
 
         <div style={{ marginBottom: '16px', borderBottom: '1px solid #e5e7eb', display: 'flex', flexWrap: 'wrap', gap: isMobile ? '8px' : 0 }}>
           <button

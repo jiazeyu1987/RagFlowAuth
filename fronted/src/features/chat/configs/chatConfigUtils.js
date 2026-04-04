@@ -1,4 +1,5 @@
 export const HIDDEN_CHAT_NAMES = new Set(['\u5927\u6a21\u578b', '\u5c0f\u6a21\u578b', '\u95ee\u9898\u6bd4\u5bf9']);
+const HIDDEN_PARSED_FILE_FIELD_PATTERN = /parsed.*file|file.*parsed/i;
 
 export function prettyJson(obj) {
   return JSON.stringify(obj ?? {}, null, 2);
@@ -70,6 +71,7 @@ export function sanitizeChatPayload(payload) {
 
   for (const key of Object.keys(body)) {
     if (key.endsWith('_task_id') || key.endsWith('_task_finish_at') || key.endsWith('_task_start_at')) delete body[key];
+    if (HIDDEN_PARSED_FILE_FIELD_PATTERN.test(key)) delete body[key];
   }
 
   const derivedIds = getSelectedDatasetIdsFromChatJson(body);

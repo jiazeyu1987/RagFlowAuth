@@ -60,14 +60,6 @@ class _DeletionLogStore:
         self.calls.append(kwargs)
 
 
-class _ReviewWorkflowService:
-    def __init__(self):
-        self.notifications: list[dict] = []
-
-    def notify_current_step(self, **kwargs):
-        self.notifications.append(kwargs)
-
-
 class _NoopAdapter:
     def send(self, **kwargs):  # noqa: ARG002
         return None
@@ -79,7 +71,10 @@ class _FakeRagflowService:
         self.deleted_documents: list[tuple[str, str | None]] = []
         self.created_payloads: list[dict] = []
         self.deleted_dataset_refs: list[str] = []
+        self.uploaded_documents: list[dict] = []
+        self.parsed_documents: list[dict] = []
         self._counter = 1
+        self._uploaded_counter = 1
 
     def add_dataset(
         self,
@@ -149,6 +144,23 @@ class _FakeRagflowService:
         self.deleted_documents.append((str(ragflow_doc_id), dataset_name))
         return True
 
+    def upload_document_blob(self, file_filename: str, file_content: bytes, kb_id: str = "展厅") -> str:
+        doc_id = f"rag-doc-{self._uploaded_counter}"
+        self._uploaded_counter += 1
+        self.uploaded_documents.append(
+            {
+                "doc_id": doc_id,
+                "file_filename": str(file_filename),
+                "file_content": bytes(file_content),
+                "kb_id": str(kb_id),
+            }
+        )
+        return doc_id
+
+    def parse_document(self, *, dataset_ref: str, document_id: str) -> bool:
+        self.parsed_documents.append({"dataset_ref": str(dataset_ref), "document_id": str(document_id)})
+        return True
+
 
 class _KnowledgeManagementManager:
     def __init__(self, ragflow_service: _FakeRagflowService):
@@ -191,7 +203,16 @@ class _KnowledgeManagementManager:
         return self._ragflow_service.delete_dataset_if_empty(dataset_ref)
 
 
-def _make_user(user_id: str, *, role: str = "viewer", status: str = "active", email: str | None = None):
+def _make_user(
+    user_id: str,
+    *,
+    role: str = "viewer",
+    status: str = "active",
+    email: str | None = None,
+    company_id: int = 1,
+    department_id: int = 10,
+    manager_user_id: str | None = None,
+):
     username = user_id.replace("-", "_")
     return SimpleNamespace(
         user_id=user_id,
@@ -200,8 +221,9 @@ def _make_user(user_id: str, *, role: str = "viewer", status: str = "active", em
         email=email or f"{username}@example.com",
         role=role,
         status=status,
-        company_id=1,
-        department_id=10,
+        company_id=company_id,
+        department_id=department_id,
+        manager_user_id=manager_user_id,
         group_ids=[],
         password_hash=hash_password(SIGN_PASSWORD),
     )
@@ -275,6 +297,13 @@ class TestOperationApprovalServiceUnit(unittest.TestCase):
             retry_interval_seconds=1,
         )
         self.notification_service.upsert_channel(
+            channel_id="inapp-main",
+            channel_type="in_app",
+            name="In App",
+            enabled=True,
+            config={},
+        )
+        self.notification_service.upsert_channel(
             channel_id="email-main",
             channel_type="email",
             name="Main Email",
@@ -283,16 +312,16 @@ class TestOperationApprovalServiceUnit(unittest.TestCase):
         )
         self.ragflow_service = _FakeRagflowService()
         self.knowledge_management_manager = _KnowledgeManagementManager(self.ragflow_service)
-        self.review_workflow_service = _ReviewWorkflowService()
         self.deletion_log_store = _DeletionLogStore()
         self.org_directory_store = _OrgDirectoryStore()
+        self.org_structure_manager = self.org_directory_store
 
         self.deps = SimpleNamespace(
             kb_store=self.kb_store,
             audit_log_store=self.audit_store,
             org_directory_store=self.org_directory_store,
+            org_structure_manager=self.org_structure_manager,
             notification_service=self.notification_service,
-            approval_workflow_service=self.review_workflow_service,
             deletion_log_store=self.deletion_log_store,
             ragflow_service=self.ragflow_service,
             knowledge_management_manager=self.knowledge_management_manager,
@@ -325,6 +354,13 @@ class TestOperationApprovalServiceUnit(unittest.TestCase):
         return str(challenge["sign_token"])
 
     def _upsert_workflow(self, operation_type: str, steps: list[dict]):
+        return self.service.upsert_workflow(
+            operation_type=operation_type,
+            name=None,
+            steps=steps,
+        )
+
+    def _upsert_workflow_members(self, operation_type: str, steps: list[dict]):
         return self.service.upsert_workflow(
             operation_type=operation_type,
             name=None,
@@ -414,19 +450,29 @@ class TestOperationApprovalServiceUnit(unittest.TestCase):
             self.service.upsert_workflow(operation_type="knowledge_base_create", name=None, steps=[])
         self.assertEqual(empty_ctx.exception.code, "workflow_steps_required")
 
-        with self.assertRaises(OperationApprovalServiceError) as duplicate_ctx:
+        with self.assertRaises(OperationApprovalServiceError) as invalid_member_ctx:
             self.service.upsert_workflow(
                 operation_type="knowledge_base_create",
                 name=None,
-                steps=[{"step_name": "Step 1", "approver_user_ids": [self.approver_1.user_id, self.approver_1.user_id]}],
+                steps=[
+                    {
+                        "step_name": "Step 1",
+                        "members": [{"member_type": "unknown", "member_ref": "x"}],
+                    }
+                ],
             )
-        self.assertEqual(duplicate_ctx.exception.code, "workflow_step_duplicate_approver")
+        self.assertEqual(invalid_member_ctx.exception.code, "workflow_step_member_type_invalid")
 
         with self.assertRaises(OperationApprovalServiceError) as inactive_ctx:
             self.service.upsert_workflow(
                 operation_type="knowledge_base_create",
                 name=None,
-                steps=[{"step_name": "Step 1", "approver_user_ids": [self.inactive_user.user_id]}],
+                steps=[
+                    {
+                        "step_name": "Step 1",
+                        "members": [{"member_type": "user", "member_ref": self.inactive_user.user_id}],
+                    }
+                ],
             )
         self.assertEqual(inactive_ctx.exception.code, "workflow_approver_inactive")
 
@@ -445,19 +491,147 @@ class TestOperationApprovalServiceUnit(unittest.TestCase):
 
         first_detail = self.service.get_request_detail_for_user(
             request_id=first["request_id"],
-            requester_user_id=str(self.admin_user.user_id),
-            is_admin=True,
+            requester_user=self.admin_user,
         )
         second_detail = self.service.get_request_detail_for_user(
             request_id=second["request_id"],
-            requester_user_id=str(self.admin_user.user_id),
-            is_admin=True,
+            requester_user=self.admin_user,
         )
 
         self.assertEqual(first_detail["steps"][0]["step_name"], "Manager Review")
         self.assertEqual(first_detail["steps"][0]["approvers"][0]["approver_user_id"], self.approver_1.user_id)
         self.assertEqual(second_detail["steps"][0]["step_name"], "Director Review")
         self.assertEqual(second_detail["steps"][0]["approvers"][0]["approver_user_id"], self.approver_2.user_id)
+
+    def test_direct_manager_resolves_at_submission_and_snapshot_keeps_member_definition(self):
+        self.admin_user.manager_user_id = self.approver_1.user_id
+        self._upsert_workflow_members(
+            "knowledge_base_create",
+            [
+                {
+                    "step_name": "Manager Review",
+                    "members": [{"member_type": "special_role", "member_ref": "direct_manager"}],
+                }
+            ],
+        )
+
+        request = self._create_dataset_request(name="Dataset Direct Manager")
+        self.admin_user.manager_user_id = self.approver_2.user_id
+
+        detail = self.service.get_request_detail_for_user(
+            request_id=request["request_id"],
+            requester_user=self.admin_user,
+        )
+
+        self.assertEqual(detail["steps"][0]["approvers"][0]["approver_user_id"], self.approver_1.user_id)
+        self.assertEqual(detail["workflow_snapshot"]["steps"][0]["members"][0]["member_ref"], "direct_manager")
+
+    def test_direct_manager_missing_is_skipped_when_layer_has_fixed_user(self):
+        self.admin_user.manager_user_id = None
+        self._upsert_workflow_members(
+            "knowledge_base_create",
+            [
+                {
+                    "step_name": "Manager And Fixed",
+                    "members": [
+                        {"member_type": "user", "member_ref": self.approver_1.user_id},
+                        {"member_type": "special_role", "member_ref": "direct_manager"},
+                    ],
+                }
+            ],
+        )
+
+        request = self._create_dataset_request(name="Dataset Mixed Step")
+        detail = self.service.get_request_detail_for_user(
+            request_id=request["request_id"],
+            requester_user=self.admin_user,
+        )
+
+        self.assertEqual(detail["current_step_no"], 1)
+        self.assertEqual(len(detail["steps"][0]["approvers"]), 1)
+        self.assertEqual(detail["steps"][0]["approvers"][0]["approver_user_id"], self.approver_1.user_id)
+        self.assertIn("step_member_auto_skipped", {item["event_type"] for item in detail["events"]})
+
+        executed = self._approve(request["request_id"], self.approver_1)
+        self.assertEqual(executed["status"], "executed")
+
+    def test_direct_manager_only_step_auto_skips_to_next_step(self):
+        self.admin_user.manager_user_id = None
+        self._upsert_workflow_members(
+            "knowledge_base_create",
+            [
+                {
+                    "step_name": "Manager Review",
+                    "members": [{"member_type": "special_role", "member_ref": "direct_manager"}],
+                },
+                {
+                    "step_name": "Director Review",
+                    "members": [{"member_type": "user", "member_ref": self.approver_2.user_id}],
+                },
+            ],
+        )
+
+        request = self._create_dataset_request(name="Dataset Skip Step")
+        detail = self.service.get_request_detail_for_user(
+            request_id=request["request_id"],
+            requester_user=self.admin_user,
+        )
+
+        self.assertEqual(detail["current_step_no"], 2)
+        self.assertEqual(detail["current_step_name"], "Director Review")
+        self.assertEqual(len(detail["steps"]), 1)
+        self.assertEqual(detail["steps"][0]["step_no"], 2)
+        self.assertIn("step_auto_skipped", {item["event_type"] for item in detail["events"]})
+
+    def test_all_steps_skipped_execute_immediately(self):
+        self.admin_user.manager_user_id = None
+        self._upsert_workflow_members(
+            "knowledge_base_create",
+            [
+                {
+                    "step_name": "Manager Review",
+                    "members": [{"member_type": "special_role", "member_ref": "direct_manager"}],
+                }
+            ],
+        )
+
+        request = self._create_dataset_request(name="Dataset Auto Execute")
+        detail = self.service.get_request_detail_for_user(
+            request_id=request["request_id"],
+            requester_user=self.admin_user,
+        )
+
+        self.assertEqual(request["status"], "executed")
+        self.assertEqual(detail["status"], "executed")
+        self.assertEqual(detail["current_step_no"], None)
+        event_types = {item["event_type"] for item in detail["events"]}
+        self.assertIn("step_auto_skipped", event_types)
+        self.assertIn("request_approved", event_types)
+        self.assertIn("execution_completed", event_types)
+
+    def test_same_user_resolved_from_fixed_and_direct_manager_is_deduplicated(self):
+        self.admin_user.manager_user_id = self.approver_1.user_id
+        self._upsert_workflow_members(
+            "knowledge_base_create",
+            [
+                {
+                    "step_name": "Deduplicated Step",
+                    "members": [
+                        {"member_type": "user", "member_ref": self.approver_1.user_id},
+                        {"member_type": "special_role", "member_ref": "direct_manager"},
+                    ],
+                }
+            ],
+        )
+
+        request = self._create_dataset_request(name="Dataset Dedup")
+        detail = self.service.get_request_detail_for_user(
+            request_id=request["request_id"],
+            requester_user=self.admin_user,
+        )
+
+        self.assertEqual(len(detail["steps"][0]["approvers"]), 1)
+        self.assertEqual(detail["steps"][0]["approvers"][0]["approver_user_id"], self.approver_1.user_id)
 
     def test_same_layer_requires_all_approvers_before_advancing(self):
         self._upsert_workflow(
@@ -482,6 +656,54 @@ class TestOperationApprovalServiceUnit(unittest.TestCase):
         self.assertEqual(second_detail["steps"][0]["status"], "approved")
         self.assertEqual(second_detail["steps"][1]["status"], "active")
         self.assertEqual(self.ragflow_service.created_payloads, [])
+
+    def test_list_requests_for_user_supports_status_filter_and_approver_history(self):
+        self._upsert_workflow(
+            "knowledge_base_create",
+            [{"step_name": "Step 1", "approver_user_ids": [self.approver_1.user_id]}],
+        )
+
+        executed_request = self._create_dataset_request(name="Dataset Executed For List")
+        rejected_request = self._create_dataset_request(name="Dataset Rejected For List")
+
+        self._approve(executed_request["request_id"], self.approver_1)
+        self._reject(rejected_request["request_id"], self.approver_1, notes="Rejected for list")
+
+        approver_all = self.service.list_requests_for_user(
+            requester_user=self.approver_1,
+            view="todo",
+            status=None,
+            limit=20,
+        )
+        approver_rejected = self.service.list_requests_for_user(
+            requester_user=self.approver_1,
+            view="todo",
+            status="rejected",
+            limit=20,
+        )
+        applicant_executed = self.service.list_requests_for_user(
+            requester_user=self.admin_user,
+            view="mine",
+            status="executed",
+            limit=20,
+        )
+
+        self.assertEqual({item["request_id"] for item in approver_all["items"]}, {
+            executed_request["request_id"],
+            rejected_request["request_id"],
+        })
+        self.assertEqual([item["request_id"] for item in approver_rejected["items"]], [rejected_request["request_id"]])
+        self.assertEqual([item["request_id"] for item in applicant_executed["items"]], [executed_request["request_id"]])
+
+    def test_list_requests_for_user_rejects_invalid_status_filter(self):
+        with self.assertRaises(OperationApprovalServiceError) as invalid_ctx:
+            self.service.list_requests_for_user(
+                requester_user=self.admin_user,
+                view="mine",
+                status="unknown_status",
+                limit=20,
+            )
+        self.assertEqual(invalid_ctx.exception.code, "operation_request_status_invalid")
 
     def test_any_reject_terminates_request(self):
         self._upsert_workflow(
@@ -611,20 +833,223 @@ class TestOperationApprovalServiceUnit(unittest.TestCase):
         docs = self.kb_store.list_documents(include_history=True, limit=20)
         uploaded_doc = next((item for item in docs if item.filename == "approved.txt"), None)
         self.assertIsNotNone(uploaded_doc)
-        self.assertEqual(uploaded_doc.status, "pending")
-        self.assertEqual(len(self.review_workflow_service.notifications), 1)
-        self.assertEqual(self.review_workflow_service.notifications[0]["doc"].doc_id, uploaded_doc.doc_id)
+        self.assertEqual(uploaded_doc.status, "approved")
+        self.assertEqual(uploaded_doc.reviewed_by, self.editor_user.user_id)
+        self.assertEqual(uploaded_doc.review_notes, f"operation_approval:{upload_request['request_id']}")
+        self.assertTrue(str(uploaded_doc.ragflow_doc_id or "").startswith("rag-doc-"))
+        self.assertEqual(len(self.ragflow_service.uploaded_documents), 1)
+        self.assertEqual(self.ragflow_service.uploaded_documents[0]["kb_id"], "ds-kb-a")
+        self.assertEqual(self.ragflow_service.parsed_documents[0]["dataset_ref"], "ds-kb-a")
         self.assertIsNone(self.kb_store.get_document(existing_doc.doc_id))
         self.assertIn("Created After Approval", [item["name"] for item in self.ragflow_service.datasets.values()])
         self.assertNotIn("ds-delete", self.ragflow_service.datasets)
 
         upload_request_detail = self.service.get_request_detail_for_user(
             request_id=upload_request["request_id"],
-            requester_user_id=str(self.editor_user.user_id),
-            is_admin=False,
+            requester_user=self.editor_user,
         )
         self.assertEqual(upload_request_detail["artifacts"][0]["cleanup_status"], "cleaned")
         self.assertFalse(Path(upload_request_detail["artifacts"][0]["file_path"]).exists())
+
+    def test_upload_request_executes_direct_ingestion_without_legacy_review_workflow(self):
+        self.ragflow_service.add_dataset(dataset_id="ds-kb-a", name="kb-a", document_count=0, chunk_count=0)
+        self._upsert_workflow(
+            "knowledge_file_upload",
+            [{"step_name": "Upload Approval", "approver_user_ids": [self.approver_1.user_id]}],
+        )
+
+        upload_request = self._create_upload_request(filename="auto-approved.txt", content=b"approved data")
+        upload_detail = self._approve(upload_request["request_id"], self.approver_1)
+
+        self.assertEqual(upload_detail["status"], "executed")
+        docs = self.kb_store.list_documents(include_history=True, limit=20)
+        uploaded_doc = next((item for item in docs if item.filename == "auto-approved.txt"), None)
+        self.assertIsNotNone(uploaded_doc)
+        self.assertEqual(uploaded_doc.status, "approved")
+        self.assertEqual(uploaded_doc.reviewed_by, self.editor_user.user_id)
+        self.assertEqual(uploaded_doc.review_notes, f"operation_approval:{upload_request['request_id']}")
+        self.assertTrue(str(uploaded_doc.ragflow_doc_id or "").startswith("rag-doc-"))
+        self.assertEqual(len(self.ragflow_service.uploaded_documents), 1)
+        self.assertEqual(self.ragflow_service.uploaded_documents[0]["kb_id"], "ds-kb-a")
+        self.assertEqual(self.ragflow_service.parsed_documents[0]["dataset_ref"], "ds-kb-a")
+
+    def test_execution_uses_company_scoped_deps_resolver(self):
+        control_db_path = os.path.join(str(self.temp_dir), "control_auth.db")
+        tenant_db_path = os.path.join(str(self.temp_dir), "tenant_auth.db")
+        ensure_schema(control_db_path)
+        ensure_schema(tenant_db_path)
+
+        tenant_kb_store = KbStore(db_path=tenant_db_path)
+        tenant_audit_store = AuditLogStore(db_path=tenant_db_path)
+        tenant_deps = SimpleNamespace(
+            kb_store=tenant_kb_store,
+            audit_log_store=tenant_audit_store,
+            org_directory_store=self.org_directory_store,
+            org_structure_manager=self.org_structure_manager,
+            notification_service=self.notification_service,
+            deletion_log_store=self.deletion_log_store,
+            ragflow_service=self.ragflow_service,
+            knowledge_management_manager=self.knowledge_management_manager,
+            upload_settings_store=None,
+        )
+
+        control_signature_service = ElectronicSignatureService(
+            store=ElectronicSignatureStore(db_path=control_db_path)
+        )
+        control_inbox_service = UserInboxService(store=UserInboxStore(db_path=control_db_path))
+        control_notification_store = NotificationStore(db_path=control_db_path)
+        control_notification_service = NotificationService(
+            store=control_notification_store,
+            email_adapter=_NoopAdapter(),
+            dingtalk_adapter=_NoopAdapter(),
+            retry_interval_seconds=1,
+        )
+        control_notification_service.upsert_channel(
+            channel_id="email-main",
+            channel_type="email",
+            name="Main Email",
+            enabled=True,
+            config={"host": "smtp.example.com", "from_email": "noreply@example.com"},
+        )
+        split_service = OperationApprovalService(
+            store=OperationApprovalStore(db_path=control_db_path),
+            user_store=self.user_store,
+            inbox_service=control_inbox_service,
+            notification_service=control_notification_service,
+            electronic_signature_service=control_signature_service,
+            deps=self.deps,
+            execution_deps_resolver=lambda company_id: tenant_deps,
+        )
+
+        self.ragflow_service.add_dataset(dataset_id="ds-kb-a", name="kb-a", document_count=0, chunk_count=0)
+        split_service.upsert_workflow(
+            operation_type="knowledge_file_upload",
+            name="Upload Approval",
+            steps=[{"step_name": "Upload Approval", "approver_user_ids": [self.approver_1.user_id]}],
+        )
+
+        request = asyncio.run(
+            split_service.create_request(
+                operation_type="knowledge_file_upload",
+                ctx=self._ctx(self.editor_user, _snapshot(can_upload=True, kb_names=("kb-a", "ds-kb-a"))),
+                upload_file=_UploadFileStub(filename="scoped.txt", content=b"tenant scoped"),
+                kb_ref="kb-a",
+            )
+        )
+        sign_token = control_signature_service.issue_challenge(user=self.approver_1, password=SIGN_PASSWORD)[
+            "sign_token"
+        ]
+        detail = split_service.approve_request(
+            request_id=request["request_id"],
+            actor_user=self.approver_1,
+            sign_token=str(sign_token),
+            signature_meaning="Approval",
+            signature_reason="Approve request",
+            notes=None,
+        )
+
+        self.assertEqual(detail["status"], "executed")
+        self.assertEqual(self.kb_store.count_documents(include_history=True), 0)
+        self.assertEqual(tenant_kb_store.count_documents(include_history=True), 1)
+        tenant_docs = tenant_kb_store.list_documents(include_history=True, limit=20)
+        self.assertEqual(tenant_docs[0].filename, "scoped.txt")
+        request_row = OperationApprovalStore(db_path=control_db_path).get_request(request["request_id"])
+        self.assertIsNotNone(request_row)
+        self.assertEqual(request_row["company_id"], self.editor_user.company_id)
+
+    def test_tenant_submission_writes_approver_inbox_to_control_inbox_store(self):
+        control_db_path = os.path.join(str(self.temp_dir), "control_auth_notify.db")
+        tenant_db_path = os.path.join(str(self.temp_dir), "tenant_auth_notify.db")
+        ensure_schema(control_db_path)
+        ensure_schema(tenant_db_path)
+
+        tenant_kb_store = KbStore(db_path=tenant_db_path)
+        tenant_audit_store = AuditLogStore(db_path=tenant_db_path)
+        tenant_notification_store = NotificationStore(db_path=tenant_db_path)
+        tenant_notification_service = NotificationService(
+            store=tenant_notification_store,
+            email_adapter=_NoopAdapter(),
+            dingtalk_adapter=_NoopAdapter(),
+            retry_interval_seconds=1,
+        )
+        tenant_notification_service.upsert_channel(
+            channel_id="inapp-main",
+            channel_type="in_app",
+            name="Tenant In App",
+            enabled=True,
+            config={},
+        )
+        tenant_deps = SimpleNamespace(
+            kb_store=tenant_kb_store,
+            audit_log_store=tenant_audit_store,
+            org_directory_store=self.org_directory_store,
+            org_structure_manager=self.org_structure_manager,
+            notification_service=tenant_notification_service,
+            deletion_log_store=self.deletion_log_store,
+            ragflow_service=self.ragflow_service,
+            knowledge_management_manager=self.knowledge_management_manager,
+            upload_settings_store=None,
+        )
+
+        control_signature_service = ElectronicSignatureService(
+            store=ElectronicSignatureStore(db_path=control_db_path)
+        )
+        control_inbox_service = UserInboxService(store=UserInboxStore(db_path=control_db_path))
+        control_notification_store = NotificationStore(db_path=control_db_path)
+        control_notification_service = NotificationService(
+            store=control_notification_store,
+            email_adapter=_NoopAdapter(),
+            dingtalk_adapter=_NoopAdapter(),
+            retry_interval_seconds=1,
+        )
+        control_notification_service.upsert_channel(
+            channel_id="inapp-main",
+            channel_type="in_app",
+            name="Control In App",
+            enabled=True,
+            config={},
+        )
+        split_service = OperationApprovalService(
+            store=OperationApprovalStore(db_path=control_db_path),
+            user_store=self.user_store,
+            inbox_service=control_inbox_service,
+            notification_service=control_notification_service,
+            electronic_signature_service=control_signature_service,
+            deps=tenant_deps,
+        )
+
+        self.ragflow_service.add_dataset(dataset_id="ds-kb-a", name="kb-a", document_count=0, chunk_count=0)
+        split_service.upsert_workflow(
+            operation_type="knowledge_file_upload",
+            name="Upload Approval",
+            steps=[{"step_name": "Upload Approval", "approver_user_ids": [self.approver_1.user_id]}],
+        )
+
+        request = asyncio.run(
+            split_service.create_request(
+                operation_type="knowledge_file_upload",
+                ctx=SimpleNamespace(
+                    deps=tenant_deps,
+                    user=self.editor_user,
+                    payload=SimpleNamespace(sub=str(self.editor_user.user_id)),
+                    snapshot=_snapshot(can_upload=True, kb_names=("kb-a", "ds-kb-a")),
+                ),
+                upload_file=_UploadFileStub(filename="notify-scope.txt", content=b"notify scoped"),
+                kb_ref="kb-a",
+            )
+        )
+
+        control_inbox = control_notification_service.list_inbox(
+            recipient_user_id=self.approver_1.user_id,
+            unread_only=False,
+            limit=20,
+            offset=0,
+        )
+        self.assertEqual(control_inbox["total"], 1)
+        self.assertEqual(control_inbox["unread_count"], 1)
+        self.assertEqual(control_inbox["items"][0]["event_type"], "operation_approval_todo")
+        self.assertEqual(control_inbox["items"][0]["payload"]["request_id"], request["request_id"])
+        self.assertEqual(len(tenant_notification_store.list_jobs(limit=20)), 0)
 
     def test_dataset_delete_fails_when_target_becomes_non_empty_before_execution(self):
         self.ragflow_service.add_dataset(dataset_id="ds-non-empty", name="kb-non-empty", document_count=0, chunk_count=0)
@@ -667,25 +1092,54 @@ class TestOperationApprovalServiceUnit(unittest.TestCase):
         request = self._create_dataset_request(name="Dataset Notify")
         request_id = request["request_id"]
 
-        applicant_inbox = self.inbox_service.list_items(recipient_user_id=str(self.admin_user.user_id), limit=20)
-        approver_inbox = self.inbox_service.list_items(recipient_user_id=str(self.approver_1.user_id), limit=20)
-        self.assertEqual(applicant_inbox["count"], 1)
-        self.assertEqual(approver_inbox["count"], 1)
+        applicant_inbox = self.notification_service.list_inbox(
+            recipient_user_id=str(self.admin_user.user_id),
+            limit=20,
+            offset=0,
+            unread_only=False,
+        )
+        approver_inbox = self.notification_service.list_inbox(
+            recipient_user_id=str(self.approver_1.user_id),
+            limit=20,
+            offset=0,
+            unread_only=False,
+        )
+        self.assertEqual(applicant_inbox["total"], 0)
+        self.assertEqual(applicant_inbox["unread_count"], 0)
+        self.assertEqual(approver_inbox["total"], 1)
+        self.assertEqual(approver_inbox["unread_count"], 1)
 
         queued_jobs = self.notification_store.list_jobs(limit=20)
-        self.assertEqual(len(queued_jobs), 2)
+        self.assertEqual(len(queued_jobs), 3)
+        self.assertEqual(sum(1 for item in queued_jobs if item["status"] == "queued"), 2)
 
         detail = self._approve(request_id, self.approver_1)
         self.assertEqual(detail["status"], "executed")
 
-        applicant_inbox_after = self.inbox_service.list_items(recipient_user_id=str(self.admin_user.user_id), limit=20)
-        self.assertEqual(applicant_inbox_after["count"], 2)
-        self.assertEqual(len(self.notification_store.list_jobs(limit=20)), 3)
+        applicant_inbox_after = self.notification_service.list_inbox(
+            recipient_user_id=str(self.admin_user.user_id),
+            limit=20,
+            offset=0,
+            unread_only=False,
+        )
+        approver_inbox_after = self.notification_service.list_inbox(
+            recipient_user_id=str(self.approver_1.user_id),
+            limit=20,
+            offset=0,
+            unread_only=False,
+        )
+        self.assertEqual(applicant_inbox_after["total"], 0)
+        self.assertEqual(applicant_inbox_after["unread_count"], 0)
+        self.assertEqual(approver_inbox_after["total"], 1)
+        self.assertEqual(len(self.notification_store.list_jobs(limit=20)), 4)
+        self.assertEqual(
+            sum(1 for item in self.notification_store.list_jobs(limit=20) if item["status"] == "queued"),
+            3,
+        )
 
         request_detail = self.service.get_request_detail_for_user(
             request_id=request_id,
-            requester_user_id=str(self.admin_user.user_id),
-            is_admin=True,
+            requester_user=self.admin_user,
         )
         event_types = {item["event_type"] for item in request_detail["events"]}
         self.assertIn("request_submitted", event_types)

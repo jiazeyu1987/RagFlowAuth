@@ -1,4 +1,4 @@
-import tempfile
+﻿import tempfile
 import unittest
 import tempfile
 from pathlib import Path
@@ -28,6 +28,43 @@ class _FakeHttp:
 
 
 class TestRagflowChatUpdateRetryUnit(unittest.TestCase):
+    def test_update_chat_rejects_unparsed_dataset_before_retry_logic(self):
+        class _UnreadyDatasetHttp:
+            def __init__(self):
+                self.put_calls = []
+
+            def set_config(self, _cfg):  # noqa: ARG002
+                return None
+
+            def get_list(self, path, params=None, context=None):  # noqa: ARG002
+                if path == "/api/v1/datasets":
+                    return [{"id": "d_unready", "chunk_count": 0, "document_count": 0}]
+                if path == "/api/v1/chats" and isinstance(params, dict) and params.get("id") == "c1":
+                    return [{"id": "c1", "name": "old", "dataset_ids": []}]
+                return []
+
+            def put_json(self, path, body=None, params=None):  # noqa: ARG002
+                self.put_calls.append((path, body))
+                return {"code": 0, "data": {"id": "c1", **(body or {})}}
+
+        with tempfile.TemporaryDirectory() as td:
+            cfg_path = Path(td) / "ragflow_config.json"
+            cfg_path.write_text('{"base_url":"http://127.0.0.1:9380","api_key":"k","timeout":10}', encoding="utf-8")
+
+            http = _UnreadyDatasetHttp()
+            conn = RagflowConnection(
+                config_path=cfg_path,
+                config={"base_url": "http://127.0.0.1:9380", "api_key": "k", "timeout": 10},
+                http=http,
+            )
+            svc = RagflowChatService(connection=conn)
+
+            with self.assertRaises(ValueError) as ctx:
+                svc.update_chat("c1", {"name": "n1", "dataset_ids": ["d_unready"]})
+
+            self.assertEqual(str(ctx.exception), "chat_dataset_not_ready: d_unready")
+            self.assertEqual(http.put_calls, [])
+
     def test_update_chat_retries_minimal_on_parsed_file_ownership_error(self):
         with tempfile.TemporaryDirectory() as td:
             cfg_path = Path(td) / "ragflow_config.json"
@@ -40,8 +77,7 @@ class TestRagflowChatUpdateRetryUnit(unittest.TestCase):
             payload = {
                 "name": "n1",
                 "dataset_ids": ["d1", "d2"],
-                # This field is not stripped by sanitize and simulates a "hidden binding"
-                # that some RAGFlow versions reject when dataset ownership changes.
+                # Hidden parsed-file bindings must be stripped before the request is sent.
                 "parsed_files": ["pf1"],
             }
             out = svc.update_chat("c1", payload)
@@ -51,11 +87,10 @@ class TestRagflowChatUpdateRetryUnit(unittest.TestCase):
             self.assertEqual(len(fake_http.put_calls), 2)
             _path1, body1 = fake_http.put_calls[0]
             _path2, body2 = fake_http.put_calls[1]
-            self.assertIn("parsed_files", body1)
-            # Retry must be minimal.
-            self.assertNotIn("parsed_files", body2)
-            self.assertEqual(body2.get("dataset_ids"), ["d1", "d2"])
-            self.assertEqual(body2.get("name"), "n1")
+            self.assertNotIn("parsed_files", body1)
+            self.assertEqual(body1.get("dataset_ids"), ["d1", "d2"])
+            self.assertEqual(body1.get("name"), "n1")
+            self.assertEqual(body2, body1)
 
     def test_update_chat_refetches_when_put_returns_none_but_applied(self):
         class _ApplyButNoResponseHttp:
@@ -126,6 +161,70 @@ class TestRagflowChatUpdateRetryUnit(unittest.TestCase):
                 svc.update_chat("c1", {"name": "n1", "dataset_ids": ["d1"]})
             self.assertIn("chat_dataset_locked", str(ctx.exception))
 
+    def test_update_chat_clears_stale_parsed_bindings_for_unbound_chat(self):
+        class _AutoClearHttp:
+            def __init__(self):
+                self.put_calls = []
+                self._stored = {
+                    "id": "c_auto",
+                    "name": "old",
+                    "dataset_ids": [],
+                    "parsed_files": ["pf1"],
+                    "parsed_file_id": "pf_single",
+                }
+
+            def set_config(self, _cfg):  # noqa: ARG002
+                return None
+
+            def get_list(self, path, params=None, context=None):  # noqa: ARG002
+                if path == "/api/v1/chats" and isinstance(params, dict) and params.get("id") == "c_auto":
+                    return [dict(self._stored)]
+                return []
+
+            def put_json(self, path, body=None, params=None):  # noqa: ARG002
+                self.put_calls.append((path, body))
+                call_idx = len(self.put_calls)
+                if call_idx in (1, 2):
+                    return {"code": 100, "message": "The dataset d_new doesn't own parsed file", "data": None}
+                if call_idx == 3:
+                    if isinstance(body, dict):
+                        if "parsed_files" in body:
+                            self._stored["parsed_files"] = list(body["parsed_files"])
+                        if "parsed_file_id" in body:
+                            self._stored["parsed_file_id"] = body["parsed_file_id"]
+                    return {"code": 0, "data": {"id": "c_auto", **(body or {})}}
+                if isinstance(body, dict) and "dataset_ids" in body:
+                    self._stored["dataset_ids"] = list(body["dataset_ids"])
+                return {"code": 0, "data": {"id": "c_auto", **(body or {})}}
+
+        with tempfile.TemporaryDirectory() as td:
+            cfg_path = Path(td) / "ragflow_config.json"
+            cfg_path.write_text('{"base_url":"http://127.0.0.1:9380","api_key":"k","timeout":10}', encoding="utf-8")
+            http = _AutoClearHttp()
+            conn = RagflowConnection(
+                config_path=cfg_path,
+                config={"base_url": "http://127.0.0.1:9380", "api_key": "k", "timeout": 10},
+                http=http,
+            )
+            svc = RagflowChatService(connection=conn)
+
+            out = svc.update_chat("c_auto", {"name": "n_auto", "dataset_ids": ["d_new"]})
+            self.assertIsInstance(out, dict)
+            self.assertEqual(out.get("id"), "c_auto")
+            self.assertEqual(out.get("dataset_ids"), ["d_new"])
+            self.assertEqual(len(http.put_calls), 4)
+
+            _path1, body1 = http.put_calls[0]
+            _path2, body2 = http.put_calls[1]
+            _path3, body3 = http.put_calls[2]
+            _path4, body4 = http.put_calls[3]
+
+            self.assertEqual(_path3, "/api/v1/chats/c_auto")
+            self.assertEqual(body1, body2)
+            self.assertEqual(body3.get("parsed_files"), [])
+            self.assertEqual(body3.get("parsed_file_id"), "")
+            self.assertEqual(body4.get("dataset_ids"), ["d_new"])
+            self.assertEqual(body4.get("name"), "n_auto")
     def test_clear_chat_parsed_files_clears_only_existing_fields(self):
         class _Http:
             def __init__(self):
@@ -287,3 +386,4 @@ class TestRagflowChatUpdateMergeRetryUnit(unittest.TestCase):
             self.assertEqual(len(fake_http.put_calls), 3)
             _p3, b3 = fake_http.put_calls[2]
             self.assertEqual(sorted(b3.get("dataset_ids")), ["d_new", "d_old"])
+

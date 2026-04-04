@@ -19,7 +19,7 @@ class Settings(BaseSettings):
     # Server
     HOST: str = "0.0.0.0"
     PORT: int = 8001
-    UVICORN_WORKERS: int = 2
+    UVICORN_WORKERS: int = 1
 
     # AuthX JWT
     JWT_SECRET_KEY: str = "your-secret-key-change-in-production"

@@ -1,4 +1,5 @@
 import os
+import sqlite3
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
@@ -10,16 +11,13 @@ from fastapi.testclient import TestClient
 from backend.app.core import auth as auth_module
 from backend.app.core.permission_resolver import PermissionSnapshot, ResourceScope
 from backend.app.modules.data_security import router as data_security_router
-from backend.app.modules.review.routes.approve import _approve_document_impl
+from backend.app.modules.operation_approvals.router import router as operation_approval_router
 from backend.app.modules.training_compliance.router import router as training_router
 from backend.database.schema.ensure import ensure_schema
-from backend.models.document import DocumentReviewRequest
-from backend.services.approval import ApprovalWorkflowService, ApprovalWorkflowStore
 from backend.services.audit import AuditLogManager
 from backend.services.audit_log_store import AuditLogStore
 from backend.services.data_security.store import DataSecurityStore
 from backend.services.electronic_signature import ElectronicSignatureService, ElectronicSignatureStore
-from backend.services.kb import KbStore
 from backend.services.training_compliance import TrainingComplianceService
 from backend.services.users import hash_password
 from backend.tests._training_test_utils import qualify_user_for_action
@@ -58,6 +56,7 @@ class _Deps:
         self.training_compliance_service = TrainingComplianceService(db_path=db_path)
         self.data_security_store = DataSecurityStore(db_path=db_path)
         self.org_directory_store = _OrgStore()
+        self.org_structure_manager = self.org_directory_store
 
 
 class _Request:
@@ -109,18 +108,34 @@ def _snapshot(kb_id: str) -> PermissionSnapshot:
     )
 
 
-def _issue_review_request(signature_service: ElectronicSignatureService, user, *, reason: str) -> DocumentReviewRequest:
+def _issue_review_request(signature_service: ElectronicSignatureService, user, *, reason: str) -> dict:
     challenge = signature_service.issue_challenge(user=user, password=SIGN_PASSWORD)
-    return DocumentReviewRequest(
-        sign_token=challenge["sign_token"],
-        signature_meaning="Document review",
-        signature_reason=reason,
-        review_notes=reason,
-    )
+    return {
+        "sign_token": challenge["sign_token"],
+        "signature_meaning": "Document review",
+        "signature_reason": reason,
+        "notes": reason,
+    }
+
+
+class _FakeOperationApprovalService:
+    def __init__(self):
+        self.calls: list[dict] = []
+
+    def approve_request(self, **kwargs):
+        self.calls.append(dict(kwargs))
+        return {"request_id": kwargs.get("request_id"), "status": "approved"}
 
 
 class TestTrainingComplianceApiUnit(unittest.TestCase):
-    def _build_app(self, *, current_user_id: str, deps, include_restore_router: bool = False):
+    def _build_app(
+        self,
+        *,
+        current_user_id: str,
+        deps,
+        include_restore_router: bool = False,
+        include_operation_approval_router: bool = False,
+    ):
         def _override_get_current_payload(_: Request) -> TokenPayload:
             return TokenPayload(sub=current_user_id)
 
@@ -129,6 +144,8 @@ class TestTrainingComplianceApiUnit(unittest.TestCase):
         app.include_router(training_router, prefix="/api")
         if include_restore_router:
             app.include_router(data_security_router.router, prefix="/api")
+        if include_operation_approval_router:
+            app.include_router(operation_approval_router, prefix="/api")
         app.dependency_overrides[auth_module.get_current_payload] = _override_get_current_payload
         return app
 
@@ -216,55 +233,21 @@ class TestTrainingComplianceApiUnit(unittest.TestCase):
         finally:
             cleanup_dir(td)
 
-    def test_curriculum_version_change_blocks_review_until_retrained(self):
+    def test_curriculum_version_change_blocks_operation_approval_until_retrained(self):
         td = make_temp_dir(prefix="ragflowauth_training_requalification")
         try:
             db_path = os.path.join(str(td), "auth.db")
             ensure_schema(db_path)
             qualify_user_for_action(db_path, user_id="reviewer-1", action_code="document_review")
 
-            kb_store = KbStore(db_path=db_path)
             signature_service = ElectronicSignatureService(store=ElectronicSignatureStore(db_path=db_path))
-            workflow_service = ApprovalWorkflowService(store=ApprovalWorkflowStore(db_path=db_path))
-            workflow_service.upsert_workflow(
-                workflow_id="wf-kb-a",
-                kb_ref="kb-a",
-                name="KB-A Workflow",
-                steps=[
-                    {"step_no": 1, "step_name": "Step 1", "approver_user_id": "reviewer-1"},
-                    {"step_no": 2, "step_name": "Step 2", "approver_user_id": "reviewer-1"},
-                ],
-            )
-
-            file_path = Path(td) / "doc.txt"
-            file_path.write_text("doc", encoding="utf-8")
-            doc = kb_store.create_document(
-                filename="doc.txt",
-                file_path=str(file_path),
-                file_size=file_path.stat().st_size,
-                mime_type="text/plain",
-                uploaded_by="uploader-1",
-                kb_id="kb-a",
-                kb_dataset_id="ds-a",
-                kb_name="kb-a",
-                status="pending",
-            )
+            fake_operation_approval_service = _FakeOperationApprovalService()
 
             reviewer = _make_user(user_id="reviewer-1", role="reviewer", department_id=2)
-            deps = SimpleNamespace(
-                kb_store=kb_store,
-                ragflow_service=_RagflowService(),
-                audit_log_manager=AuditLogManager(store=AuditLogStore(db_path=db_path)),
-                approval_workflow_service=workflow_service,
-                electronic_signature_service=signature_service,
-                training_compliance_service=TrainingComplianceService(db_path=db_path),
-            )
-            ctx = SimpleNamespace(
-                deps=deps,
-                payload=SimpleNamespace(sub="reviewer-1"),
-                user=reviewer,
-                snapshot=_snapshot("kb-a"),
-            )
+            users = {"reviewer-1": reviewer}
+            deps = _Deps(db_path=db_path, users=users)
+            deps.operation_approval_service = fake_operation_approval_service
+            deps.electronic_signature_service = signature_service
 
             service = TrainingComplianceService(db_path=db_path)
             requirement = service.get_requirement("TR-001")
@@ -281,15 +264,19 @@ class TestTrainingComplianceApiUnit(unittest.TestCase):
                 active=requirement["active"],
             )
 
-            with self.assertRaises(HTTPException) as exc:
-                _approve_document_impl(
-                    doc.doc_id,
-                    ctx,
-                    request=_Request("rid-outdated"),
-                    review_data=_issue_review_request(signature_service, reviewer, reason="outdated training"),
+            app = self._build_app(
+                current_user_id="reviewer-1",
+                deps=deps,
+                include_operation_approval_router=True,
+            )
+            with TestClient(app) as client:
+                blocked_resp = client.post(
+                    "/api/operation-approvals/requests/req-1/approve",
+                    json=_issue_review_request(signature_service, reviewer, reason="outdated training"),
                 )
-            self.assertEqual(exc.exception.status_code, 403)
-            self.assertEqual(exc.exception.detail, "training_curriculum_outdated")
+            self.assertEqual(blocked_resp.status_code, 403, blocked_resp.text)
+            self.assertEqual(blocked_resp.json()["detail"], "training_curriculum_outdated")
+            self.assertEqual(fake_operation_approval_service.calls, [])
 
             qualify_user_for_action(
                 db_path,
@@ -298,23 +285,75 @@ class TestTrainingComplianceApiUnit(unittest.TestCase):
                 completed_at_ms=1_900_000_000_000,
                 valid_until_ms=2_000_000_000_000,
             )
-            first_step = _approve_document_impl(
-                doc.doc_id,
-                ctx,
-                request=_Request("rid-retrained"),
-                review_data=_issue_review_request(signature_service, reviewer, reason="retrained"),
-            )
-            self.assertEqual(first_step.status, "pending")
-            self.assertEqual(first_step.approval_status, "in_progress")
+            with TestClient(app) as client:
+                approved_resp = client.post(
+                    "/api/operation-approvals/requests/req-1/approve",
+                    json=_issue_review_request(signature_service, reviewer, reason="retrained"),
+                )
+            self.assertEqual(approved_resp.status_code, 200, approved_resp.text)
+            self.assertEqual(approved_resp.json()["status"], "approved")
+            self.assertEqual(len(fake_operation_approval_service.calls), 1)
+        finally:
+            cleanup_dir(td)
 
-            approved = _approve_document_impl(
-                doc.doc_id,
-                ctx,
-                request=_Request("rid-retrained-final"),
-                review_data=_issue_review_request(signature_service, reviewer, reason="retrained final"),
+    def test_operation_approval_requirement_seed_migrates_legacy_reviewer_binding_to_wildcard(self):
+        td = make_temp_dir(prefix="ragflowauth_training_requirement_migration")
+        try:
+            db_path = os.path.join(str(td), "auth.db")
+            ensure_schema(db_path)
+
+            conn = sqlite3.connect(db_path)
+            try:
+                conn.execute(
+                    """
+                    UPDATE training_requirements
+                    SET role_code = ?, updated_at_ms = ?
+                    WHERE requirement_code = ?
+                    """,
+                    ("reviewer", 1, "TR-001"),
+                )
+                conn.commit()
+            finally:
+                conn.close()
+
+            ensure_schema(db_path)
+
+            signature_service = ElectronicSignatureService(store=ElectronicSignatureStore(db_path=db_path))
+            fake_operation_approval_service = _FakeOperationApprovalService()
+            admin = _make_user(user_id="admin-1", role="admin", department_id=2)
+            users = {"admin-1": admin}
+            deps = _Deps(db_path=db_path, users=users)
+            deps.operation_approval_service = fake_operation_approval_service
+            deps.electronic_signature_service = signature_service
+
+            service = TrainingComplianceService(db_path=db_path)
+            requirement = service.get_requirement("TR-001")
+            self.assertEqual(requirement["role_code"], "*")
+
+            app = self._build_app(
+                current_user_id="admin-1",
+                deps=deps,
+                include_operation_approval_router=True,
             )
-            self.assertEqual(approved.status, "approved")
-            self.assertEqual(approved.approval_status, "approved")
+            with TestClient(app) as client:
+                blocked_resp = client.post(
+                    "/api/operation-approvals/requests/req-1/approve",
+                    json=_issue_review_request(signature_service, admin, reason="admin approval without qualification"),
+                )
+            self.assertEqual(blocked_resp.status_code, 403, blocked_resp.text)
+            self.assertEqual(blocked_resp.json()["detail"], "training_record_missing")
+            self.assertEqual(fake_operation_approval_service.calls, [])
+
+            qualify_user_for_action(db_path, user_id="admin-1", action_code="document_review")
+
+            with TestClient(app) as client:
+                approved_resp = client.post(
+                    "/api/operation-approvals/requests/req-1/approve",
+                    json=_issue_review_request(signature_service, admin, reason="admin approval after qualification"),
+                )
+            self.assertEqual(approved_resp.status_code, 200, approved_resp.text)
+            self.assertEqual(approved_resp.json()["status"], "approved")
+            self.assertEqual(len(fake_operation_approval_service.calls), 1)
         finally:
             cleanup_dir(td)
 

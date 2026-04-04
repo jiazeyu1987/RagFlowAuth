@@ -1,37 +1,75 @@
 import React from 'react';
-import { ChatSelection, FolderSelectionList, KnowledgeNodeTreeSelection } from './SelectionLists';
-import { TOOL_PERMISSION_ITEMS } from '../constants';
+import { ChatSelection, FolderSelectionList } from './SelectionLists';
+
+const LOADING_TEXT = '\u52a0\u8f7d\u4e2d...';
+const EMPTY_HINT =
+  '\u8bf7\u5148\u4ece\u5de6\u4fa7\u9009\u62e9\u6743\u9650\u7ec4\u67e5\u770b\uff0c\u6216\u70b9\u51fb\u201c\u65b0\u5efa\u5206\u7ec4\u201d\u3002';
+const VIEW_HINT =
+  '\u5f53\u524d\u4e3a\u67e5\u770b\u6a21\u5f0f\uff0c\u70b9\u51fb\u5de6\u4fa7\u201c\u4fee\u6539\u201d\u53ef\u8fdb\u5165\u7f16\u8f91\u3002';
+const GROUP_NAME_LABEL = '\u6743\u9650\u7ec4\u540d\u79f0';
+const DESCRIPTION_LABEL = '\u63cf\u8ff0';
+const KB_PERMISSION_LABEL = '\u77e5\u8bc6\u5e93\u6743\u9650';
+const KB_EMPTY_TEXT = '\u6682\u65e0\u77e5\u8bc6\u5e93';
+const ACTION_PERMISSION_LABEL = '\u64cd\u4f5c\u6743\u9650';
+const CANCEL_LABEL = '\u53d6\u6d88';
+const SAVE_LABEL = '\u4fdd\u5b58';
+
+const fieldRowStyle = {
+  display: 'grid',
+  gridTemplateColumns: '130px 1fr',
+  gap: 10,
+};
 
 export default function GroupEditorForm({
   loading,
+  mode,
   formData,
   editingGroup,
   saving,
-  knowledgeNodeTreeNodes,
   knowledgeDatasetItems,
   chatAgents,
   onSetFormData,
-  onToggleNodeAuth,
   onToggleKbAuth,
   onToggleChatAuth,
-  onToggleToolAuth,
   onSaveForm,
   onCancelEdit,
 }) {
-  if (loading) return <div style={{ color: '#6b7280' }}>加载中...</div>;
+  const isReadOnly = mode !== 'edit' && mode !== 'create';
+  const isSystemGroup = editingGroup?.is_system === 1;
+
+  if (loading && !editingGroup && mode !== 'create') {
+    return <div style={{ color: '#6b7280' }}>{LOADING_TEXT}</div>;
+  }
+
+  if (!editingGroup && mode !== 'create') {
+    return <div style={{ color: '#6b7280' }}>{EMPTY_HINT}</div>;
+  }
 
   return (
     <form onSubmit={onSaveForm}>
+      {isReadOnly ? (
+        <div
+          style={{
+            marginBottom: 12,
+            padding: '10px 12px',
+            borderRadius: 8,
+            background: '#eff6ff',
+            color: '#1d4ed8',
+            fontSize: 13,
+          }}
+        >
+          {VIEW_HINT}
+        </div>
+      ) : null}
+
       <div
         style={{
-          display: 'grid',
-          gridTemplateColumns: '130px 1fr',
-          gap: 10,
+          ...fieldRowStyle,
           alignItems: 'center',
           marginBottom: 10,
         }}
       >
-        <label>权限组名称</label>
+        <label>{GROUP_NAME_LABEL}</label>
         <input
           data-testid="pg-form-group-name"
           value={formData.group_name}
@@ -42,25 +80,24 @@ export default function GroupEditorForm({
             }))
           }
           required
-          disabled={editingGroup?.is_system === 1}
+          disabled={isReadOnly || isSystemGroup}
           style={{
             padding: '9px 10px',
             border: '1px solid #d1d5db',
             borderRadius: 8,
+            background: isReadOnly || isSystemGroup ? '#f8fafc' : '#fff',
           }}
         />
       </div>
 
       <div
         style={{
-          display: 'grid',
-          gridTemplateColumns: '130px 1fr',
-          gap: 10,
+          ...fieldRowStyle,
           alignItems: 'start',
           marginBottom: 10,
         }}
       >
-        <label>描述</label>
+        <label>{DESCRIPTION_LABEL}</label>
         <textarea
           data-testid="pg-form-description"
           value={formData.description}
@@ -71,28 +108,23 @@ export default function GroupEditorForm({
             }))
           }
           rows={2}
+          disabled={isReadOnly}
           style={{
             padding: '9px 10px',
             border: '1px solid #d1d5db',
             borderRadius: 8,
+            background: isReadOnly ? '#f8fafc' : '#fff',
           }}
         />
       </div>
 
-      <KnowledgeNodeTreeSelection
-        title="知识目录权限"
-        nodes={knowledgeNodeTreeNodes}
-        selected={formData.accessible_kb_nodes || []}
-        onToggle={onToggleNodeAuth}
-        emptyText="暂无知识目录"
-        itemTestIdPrefix="pg-form-kb-node"
-      />
       <FolderSelectionList
-        title="知识库权限"
+        title={KB_PERMISSION_LABEL}
         items={knowledgeDatasetItems}
         selected={formData.accessible_kbs || []}
         onToggle={onToggleKbAuth}
-        emptyText="暂无知识库"
+        disabled={isReadOnly}
+        emptyText={KB_EMPTY_TEXT}
         itemTestIdPrefix="pg-form-kb"
         emptyTestId="pg-form-kb-empty"
       />
@@ -100,28 +132,18 @@ export default function GroupEditorForm({
         chatAgents={chatAgents || []}
         selected={formData.accessible_chats || []}
         onToggle={onToggleChatAuth}
+        disabled={isReadOnly}
       />
-      <FolderSelectionList
-        title="实用工具权限"
-        items={TOOL_PERMISSION_ITEMS}
-        selected={formData.accessible_tools || []}
-        onToggle={onToggleToolAuth}
-        emptyText="暂无工具"
-        itemTestIdPrefix="pg-form-tool"
-        emptyTestId="pg-form-tool-empty"
-      />
-      <div style={{ marginTop: '-4px', marginBottom: 10, color: '#6b7280', fontSize: 12 }}>
-        留空表示可访问全部实用工具；勾选后仅可访问所选工具。
-      </div>
 
       <div style={{ marginBottom: 12 }}>
-        <div style={{ fontWeight: 700, marginBottom: 8 }}>操作权限</div>
+        <div style={{ fontWeight: 700, marginBottom: 8 }}>{ACTION_PERMISSION_LABEL}</div>
         <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
           <label>
             <input
               type="checkbox"
               data-testid="pg-form-can-upload"
               checked={!!formData.can_upload}
+              disabled={isReadOnly}
               onChange={(event) =>
                 onSetFormData((previous) => ({
                   ...previous,
@@ -129,27 +151,14 @@ export default function GroupEditorForm({
                 }))
               }
             />{' '}
-            上传
-          </label>
-          <label>
-            <input
-              type="checkbox"
-              data-testid="pg-form-can-review"
-              checked={!!formData.can_review}
-              onChange={(event) =>
-                onSetFormData((previous) => ({
-                  ...previous,
-                  can_review: event.target.checked,
-                }))
-              }
-            />{' '}
-            审核
+            {'\u4e0a\u4f20'}
           </label>
           <label>
             <input
               type="checkbox"
               data-testid="pg-form-can-download"
               checked={!!formData.can_download}
+              disabled={isReadOnly}
               onChange={(event) =>
                 onSetFormData((previous) => ({
                   ...previous,
@@ -157,13 +166,14 @@ export default function GroupEditorForm({
                 }))
               }
             />{' '}
-            下载
+            {'\u4e0b\u8f7d'}
           </label>
           <label>
             <input
               type="checkbox"
               data-testid="pg-form-can-copy"
               checked={!!formData.can_copy}
+              disabled={isReadOnly}
               onChange={(event) =>
                 onSetFormData((previous) => ({
                   ...previous,
@@ -171,13 +181,14 @@ export default function GroupEditorForm({
                 }))
               }
             />{' '}
-            {"\u590d\u5236"}
+            {'\u590d\u5236'}
           </label>
           <label>
             <input
               type="checkbox"
               data-testid="pg-form-can-delete"
               checked={!!formData.can_delete}
+              disabled={isReadOnly}
               onChange={(event) =>
                 onSetFormData((previous) => ({
                   ...previous,
@@ -185,84 +196,44 @@ export default function GroupEditorForm({
                 }))
               }
             />{' '}
-            删除
-          </label>
-          <label>
-            <input
-              type="checkbox"
-              data-testid="pg-form-can-manage-kb-directory"
-              checked={!!formData.can_manage_kb_directory}
-              onChange={(event) =>
-                onSetFormData((previous) => ({
-                  ...previous,
-                  can_manage_kb_directory: event.target.checked,
-                }))
-              }
-            />{' '}
-            目录操作与文件移动
-          </label>
-          <label>
-            <input
-              type="checkbox"
-              data-testid="pg-form-can-view-kb-config"
-              checked={formData.can_view_kb_config !== false}
-              onChange={(event) =>
-                onSetFormData((previous) => ({
-                  ...previous,
-                  can_view_kb_config: event.target.checked,
-                }))
-              }
-            />{' '}
-            可查看知识配置
-          </label>
-          <label>
-            <input
-              type="checkbox"
-              data-testid="pg-form-can-view-tools"
-              checked={formData.can_view_tools !== false}
-              onChange={(event) =>
-                onSetFormData((previous) => ({
-                  ...previous,
-                  can_view_tools: event.target.checked,
-                }))
-              }
-            />{' '}
-            可查看实用工具
+            {'\u5220\u9664'}
           </label>
         </div>
       </div>
 
-      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
-        <button
-          type="button"
-          data-testid="pg-form-cancel"
-          onClick={onCancelEdit}
-          style={{
-            border: '1px solid #d1d5db',
-            borderRadius: 8,
-            background: '#fff',
-            cursor: 'pointer',
-            padding: '8px 14px',
-          }}
-        >
-          取消
-        </button>
-        <button
-          type="submit"
-          data-testid="pg-form-submit"
-          disabled={saving}
-          style={{
-            border: '1px solid #2563eb',
-            borderRadius: 8,
-            background: saving ? '#93c5fd' : '#2563eb',
-            color: '#fff',
-            cursor: saving ? 'not-allowed' : 'pointer',
-            padding: '8px 14px',
-          }}
-        >
-          保存
-        </button>
-      </div>
+      {!isReadOnly ? (
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+          <button
+            type="button"
+            data-testid="pg-form-cancel"
+            onClick={onCancelEdit}
+            style={{
+              border: '1px solid #d1d5db',
+              borderRadius: 8,
+              background: '#fff',
+              cursor: 'pointer',
+              padding: '8px 14px',
+            }}
+          >
+            {CANCEL_LABEL}
+          </button>
+          <button
+            type="submit"
+            data-testid="pg-form-submit"
+            disabled={saving}
+            style={{
+              border: '1px solid #2563eb',
+              borderRadius: 8,
+              background: saving ? '#93c5fd' : '#2563eb',
+              color: '#fff',
+              cursor: saving ? 'not-allowed' : 'pointer',
+              padding: '8px 14px',
+            }}
+          >
+            {SAVE_LABEL}
+          </button>
+        </div>
+      ) : null}
     </form>
   );
 }

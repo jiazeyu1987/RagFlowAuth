@@ -49,6 +49,8 @@ def ensure_operation_approval_tables(conn: sqlite3.Connection) -> None:
                 operation_type TEXT NOT NULL,
                 step_no INTEGER NOT NULL,
                 approver_user_id TEXT NOT NULL,
+                member_type TEXT,
+                member_ref TEXT,
                 created_at_ms INTEGER NOT NULL
             )
             """
@@ -57,6 +59,8 @@ def ensure_operation_approval_tables(conn: sqlite3.Connection) -> None:
     add_column_if_missing(conn, "operation_approval_step_approvers", "operation_type TEXT")
     add_column_if_missing(conn, "operation_approval_step_approvers", "step_no INTEGER")
     add_column_if_missing(conn, "operation_approval_step_approvers", "approver_user_id TEXT")
+    add_column_if_missing(conn, "operation_approval_step_approvers", "member_type TEXT")
+    add_column_if_missing(conn, "operation_approval_step_approvers", "member_ref TEXT")
     add_column_if_missing(conn, "operation_approval_step_approvers", "created_at_ms INTEGER")
 
     if not table_exists(conn, "operation_approval_requests"):
@@ -116,6 +120,7 @@ def ensure_operation_approval_tables(conn: sqlite3.Connection) -> None:
                 request_id TEXT NOT NULL,
                 step_no INTEGER NOT NULL,
                 step_name TEXT NOT NULL,
+                approval_rule TEXT NOT NULL DEFAULT 'all',
                 status TEXT NOT NULL,
                 created_at_ms INTEGER NOT NULL,
                 activated_at_ms INTEGER,
@@ -126,6 +131,7 @@ def ensure_operation_approval_tables(conn: sqlite3.Connection) -> None:
     add_column_if_missing(conn, "operation_approval_request_steps", "request_id TEXT")
     add_column_if_missing(conn, "operation_approval_request_steps", "step_no INTEGER")
     add_column_if_missing(conn, "operation_approval_request_steps", "step_name TEXT")
+    add_column_if_missing(conn, "operation_approval_request_steps", "approval_rule TEXT NOT NULL DEFAULT 'all'")
     add_column_if_missing(conn, "operation_approval_request_steps", "status TEXT")
     add_column_if_missing(conn, "operation_approval_request_steps", "created_at_ms INTEGER")
     add_column_if_missing(conn, "operation_approval_request_steps", "activated_at_ms INTEGER")
@@ -214,6 +220,27 @@ def ensure_operation_approval_tables(conn: sqlite3.Connection) -> None:
     add_column_if_missing(conn, "operation_approval_artifacts", "cleaned_at_ms INTEGER")
     add_column_if_missing(conn, "operation_approval_artifacts", "cleanup_status TEXT")
 
+    if not table_exists(conn, "operation_approval_legacy_migrations"):
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS operation_approval_legacy_migrations (
+                legacy_instance_id TEXT PRIMARY KEY,
+                request_id TEXT,
+                company_id INTEGER,
+                source_db_path TEXT,
+                status TEXT NOT NULL,
+                error TEXT,
+                migrated_at_ms INTEGER NOT NULL
+            )
+            """
+        )
+    add_column_if_missing(conn, "operation_approval_legacy_migrations", "request_id TEXT")
+    add_column_if_missing(conn, "operation_approval_legacy_migrations", "company_id INTEGER")
+    add_column_if_missing(conn, "operation_approval_legacy_migrations", "source_db_path TEXT")
+    add_column_if_missing(conn, "operation_approval_legacy_migrations", "status TEXT")
+    add_column_if_missing(conn, "operation_approval_legacy_migrations", "error TEXT")
+    add_column_if_missing(conn, "operation_approval_legacy_migrations", "migrated_at_ms INTEGER")
+
     conn.execute(
         """
         CREATE INDEX IF NOT EXISTS idx_operation_approval_workflow_steps_operation
@@ -224,6 +251,12 @@ def ensure_operation_approval_tables(conn: sqlite3.Connection) -> None:
         """
         CREATE INDEX IF NOT EXISTS idx_operation_approval_step_approvers_operation
         ON operation_approval_step_approvers(operation_type, step_no)
+        """
+    )
+    conn.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_operation_approval_step_approvers_member
+        ON operation_approval_step_approvers(operation_type, step_no, member_type, member_ref)
         """
     )
     conn.execute(
@@ -260,6 +293,12 @@ def ensure_operation_approval_tables(conn: sqlite3.Connection) -> None:
         """
         CREATE INDEX IF NOT EXISTS idx_operation_approval_artifacts_request
         ON operation_approval_artifacts(request_id, created_at_ms ASC)
+        """
+    )
+    conn.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_operation_approval_legacy_migrations_request
+        ON operation_approval_legacy_migrations(request_id)
         """
     )
 

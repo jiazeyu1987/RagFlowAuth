@@ -17,7 +17,12 @@ from backend.services.audit_helpers import actor_fields_from_user
 from backend.services.documents.document_manager import DocumentManager
 from backend.services.knowledge_ingestion import KnowledgeIngestionManager
 
-from .types import OperationApprovalArtifact, OperationExecutionError, PreparedOperationRequest
+from .types import (
+    INTERNAL_OPERATION_TYPE_LEGACY_DOCUMENT_REVIEW,
+    OperationApprovalArtifact,
+    OperationExecutionError,
+    PreparedOperationRequest,
+)
 
 
 def _sha256_for_file(file_path: str) -> str:
@@ -45,6 +50,17 @@ class BaseOperationApprovalHandler:
 
     def execute_request(self, *, request_data: dict, deps: Any, applicant_user: Any) -> dict:
         raise NotImplementedError
+
+    def reject_request(
+        self,
+        *,
+        request_data: dict,
+        deps: Any,
+        actor_user: Any,
+        notes: str | None,
+        signature_id: str,
+    ) -> None:
+        return None
 
 
 class KnowledgeFileUploadApprovalHandler(BaseOperationApprovalHandler):
@@ -127,6 +143,15 @@ class KnowledgeFileUploadApprovalHandler(BaseOperationApprovalHandler):
             kb_name=(str(payload.get("kb_name")) if payload.get("kb_name") else None),
             status="pending",
         )
+        try:
+            doc = KnowledgeIngestionManager(deps=deps).finalize_document(
+                doc=doc,
+                reviewed_by=str(applicant_user.user_id),
+                review_notes=f"operation_approval:{request_data['request_id']}",
+            )
+        except Exception as exc:
+            raise OperationExecutionError(str(exc) or "document_finalize_failed", status_code=500) from exc
+
         audit = getattr(deps, "audit_log_store", None)
         if audit:
             audit.log_event(
@@ -145,9 +170,6 @@ class KnowledgeFileUploadApprovalHandler(BaseOperationApprovalHandler):
                 },
                 **actor_fields_from_user(deps, applicant_user),
             )
-        workflow_service = getattr(deps, "approval_workflow_service", None)
-        if workflow_service is not None:
-            workflow_service.notify_current_step(doc=doc, actor=str(applicant_user.user_id), notes=None)
         return {
             "doc_id": doc.doc_id,
             "filename": doc.filename,
@@ -309,9 +331,92 @@ class KnowledgeBaseDeleteApprovalHandler(BaseOperationApprovalHandler):
         return {"ok": True, "dataset_id": str(payload.get("dataset_id") or dataset_ref)}
 
 
+class LegacyDocumentReviewApprovalHandler(BaseOperationApprovalHandler):
+    operation_type = INTERNAL_OPERATION_TYPE_LEGACY_DOCUMENT_REVIEW
+
+    async def prepare_request(self, *, request_id: str, ctx: Any, **kwargs) -> PreparedOperationRequest:  # noqa: ARG002
+        raise HTTPException(status_code=400, detail="legacy_document_review_create_not_supported")
+
+    def execute_request(self, *, request_data: dict, deps: Any, applicant_user: Any) -> dict:  # noqa: ARG002
+        payload = request_data.get("payload") or {}
+        doc_id = str(payload.get("doc_id") or "")
+        if not doc_id:
+            raise OperationExecutionError("legacy_review_doc_id_missing", status_code=400)
+
+        doc = deps.kb_store.get_document(doc_id)
+        if not doc:
+            raise OperationExecutionError("legacy_review_document_not_found", status_code=409)
+        if str(getattr(doc, "status", "") or "") != "pending":
+            raise OperationExecutionError("legacy_review_document_not_pending", status_code=409)
+
+        reviewer_user_id = None
+        review_notes = None
+        for event in reversed(request_data.get("events") or []):
+            if str(event.get("event_type") or "") != "request_approved":
+                continue
+            reviewer_user_id = str(event.get("actor_user_id") or "").strip() or None
+            break
+        for step in reversed(request_data.get("steps") or []):
+            for approver in step.get("approvers") or []:
+                if str(approver.get("action") or "") != "approve":
+                    continue
+                if reviewer_user_id and str(approver.get("approver_user_id") or "") != reviewer_user_id:
+                    continue
+                review_notes = approver.get("notes")
+                if not reviewer_user_id:
+                    reviewer_user_id = str(approver.get("approver_user_id") or "").strip() or None
+                break
+            if reviewer_user_id:
+                break
+
+        try:
+            updated = KnowledgeIngestionManager(deps=deps).finalize_document(
+                doc=doc,
+                reviewed_by=str(reviewer_user_id or applicant_user.user_id),
+                review_notes=str(review_notes or "").strip() or f"legacy_document_review:{request_data['request_id']}",
+            )
+        except Exception as exc:
+            raise OperationExecutionError(str(exc) or "legacy_review_execute_failed", status_code=500) from exc
+
+        return {
+            "doc_id": updated.doc_id,
+            "filename": updated.filename,
+            "status": updated.status,
+            "kb_id": updated.kb_id,
+        }
+
+    def reject_request(
+        self,
+        *,
+        request_data: dict,
+        deps: Any,
+        actor_user: Any,
+        notes: str | None,
+        signature_id: str,  # noqa: ARG002
+    ) -> None:
+        payload = request_data.get("payload") or {}
+        doc_id = str(payload.get("doc_id") or "")
+        if not doc_id:
+            raise OperationExecutionError("legacy_review_doc_id_missing", status_code=400)
+        doc = deps.kb_store.get_document(doc_id)
+        if not doc:
+            raise OperationExecutionError("legacy_review_document_not_found", status_code=409)
+        if str(getattr(doc, "status", "") or "") != "pending":
+            raise OperationExecutionError("legacy_review_document_not_pending", status_code=409)
+        updated = deps.kb_store.update_document_status(
+            doc_id=doc_id,
+            status="rejected",
+            reviewed_by=str(actor_user.user_id),
+            review_notes=str(notes or "").strip() or f"legacy_document_review_rejected:{request_data['request_id']}",
+        )
+        if updated is None:
+            raise OperationExecutionError("legacy_review_reject_failed", status_code=500)
+
+
 HANDLER_REGISTRY: dict[str, BaseOperationApprovalHandler] = {
     "knowledge_file_upload": KnowledgeFileUploadApprovalHandler(),
     "knowledge_file_delete": KnowledgeFileDeleteApprovalHandler(),
     "knowledge_base_create": KnowledgeBaseCreateApprovalHandler(),
     "knowledge_base_delete": KnowledgeBaseDeleteApprovalHandler(),
+    INTERNAL_OPERATION_TYPE_LEGACY_DOCUMENT_REVIEW: LegacyDocumentReviewApprovalHandler(),
 }

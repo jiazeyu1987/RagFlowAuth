@@ -6,6 +6,7 @@ export default function UserFiltersPanel({
   companies,
   departments,
   availableGroups,
+  isSubAdminUser,
   onResetFilters,
 }) {
   const [isMobile, setIsMobile] = useState(() => {
@@ -39,7 +40,9 @@ export default function UserFiltersPanel({
   const visibleDepartments =
     selectedCompanyId == null
       ? departments
-      : departments.filter((department) => department.company_id == null || department.company_id === selectedCompanyId);
+      : departments.filter(
+          (department) => department.company_id == null || department.company_id === selectedCompanyId
+        );
 
   return (
     <div
@@ -61,102 +64,128 @@ export default function UserFiltersPanel({
         }}
       >
         <div style={fieldWrapStyle('220px')}>
-          <label style={{ display: 'block', marginBottom: '6px', fontWeight: 500 }}>{'搜索用户名'}</label>
+          <label style={{ display: 'block', marginBottom: '6px', fontWeight: 500 }}>搜索用户名</label>
           <input
             value={filters.q}
             onChange={(e) => setFilters({ ...filters, q: e.target.value })}
-            placeholder={'支持模糊搜索'}
+            placeholder="支持模糊搜索"
             data-testid="users-filter-q"
             style={inputStyle}
           />
         </div>
 
-        <div style={fieldWrapStyle('180px')}>
-          <label style={{ display: 'block', marginBottom: '6px', fontWeight: 500 }}>{'公司'}</label>
-          <select
-            value={filters.company_id}
-            onChange={(e) => setFilters({ ...filters, company_id: e.target.value })}
-            data-testid="users-filter-company"
-            style={inputStyle}
-          >
-            <option value="">{'全部'}</option>
-            {companies.map((c) => (
-              <option key={c.id} value={String(c.id)}>
-                {c.name}
-              </option>
-            ))}
-          </select>
-        </div>
+        {isSubAdminUser ? null : (
+          <div style={fieldWrapStyle('180px')}>
+            <label style={{ display: 'block', marginBottom: '6px', fontWeight: 500 }}>公司</label>
+            <select
+              value={filters.company_id}
+              onChange={(e) => setFilters({ ...filters, company_id: e.target.value })}
+              data-testid="users-filter-company"
+              style={inputStyle}
+            >
+              <option value="">全部</option>
+              {companies.map((company) => (
+                <option key={company.id} value={String(company.id)}>
+                  {company.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
 
-        <div style={fieldWrapStyle('180px')}>
-          <label style={{ display: 'block', marginBottom: '6px', fontWeight: 500 }}>{'部门'}</label>
-          <select
-            value={filters.department_id}
-            onChange={(e) => setFilters({ ...filters, department_id: e.target.value })}
-            data-testid="users-filter-department"
-            style={inputStyle}
-          >
-            <option value="">{'全部'}</option>
-            {visibleDepartments.map((d) => (
-              <option key={d.id} value={String(d.id)}>
-                {d.path_name || d.name}
-              </option>
-            ))}
-          </select>
-        </div>
+        {isSubAdminUser ? null : (
+          <div style={fieldWrapStyle('180px')}>
+            <label style={{ display: 'block', marginBottom: '6px', fontWeight: 500 }}>部门</label>
+            <select
+              value={filters.department_id}
+              onChange={(e) => setFilters({ ...filters, department_id: e.target.value })}
+              data-testid="users-filter-department"
+              style={inputStyle}
+            >
+              <option value="">全部</option>
+              {visibleDepartments.map((department) => (
+                <option key={department.id} value={String(department.id)}>
+                  {department.path_name || department.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
 
         <div style={fieldWrapStyle('140px')}>
-          <label style={{ display: 'block', marginBottom: '6px', fontWeight: 500 }}>{'状态'}</label>
+          <label style={{ display: 'block', marginBottom: '6px', fontWeight: 500 }}>状态</label>
           <select
             value={filters.status}
             onChange={(e) => setFilters({ ...filters, status: e.target.value })}
             data-testid="users-filter-status"
             style={inputStyle}
           >
-            <option value="">{'全部'}</option>
-            <option value="active">{'激活'}</option>
-            <option value="inactive">{'停用'}</option>
+            <option value="">全部</option>
+            <option value="active">激活</option>
+            <option value="inactive">停用</option>
           </select>
         </div>
 
         <div style={fieldWrapStyle('180px')}>
-          <label style={{ display: 'block', marginBottom: '6px', fontWeight: 500 }}>{'权限组'}</label>
+          <label style={{ display: 'block', marginBottom: '6px', fontWeight: 500 }}>权限组</label>
           <select
             value={filters.group_id}
             onChange={(e) => setFilters({ ...filters, group_id: e.target.value })}
             data-testid="users-filter-group"
             style={inputStyle}
           >
-            <option value="">{'全部'}</option>
-            {availableGroups.map((g) => (
-              <option key={g.group_id} value={String(g.group_id)}>
-                {g.group_name}
+            <option value="">全部</option>
+            {availableGroups.map((group) => (
+              <option key={group.group_id} value={String(group.group_id)}>
+                {group.group_name}
               </option>
             ))}
           </select>
         </div>
 
         <div style={fieldWrapStyle('180px')}>
-          <label style={{ display: 'block', marginBottom: '6px', fontWeight: 500 }}>{'创建时间(从)'}</label>
-          <input
-            type="date"
-            value={filters.created_from}
-            onChange={(e) => setFilters({ ...filters, created_from: e.target.value })}
-            data-testid="users-filter-created-from"
+          <label style={{ display: 'block', marginBottom: '6px', fontWeight: 500 }}>权限分配</label>
+          <select
+            value={filters.assignment_status || ''}
+            onChange={(e) => setFilters({ ...filters, assignment_status: e.target.value })}
+            data-testid="users-filter-assignment-status"
             style={inputStyle}
-          />
+          >
+            <option value="">全部</option>
+            <option value="unassigned">待分配</option>
+            <option value="assigned">已分配</option>
+          </select>
         </div>
 
-        <div style={fieldWrapStyle('180px')}>
-          <label style={{ display: 'block', marginBottom: '6px', fontWeight: 500 }}>{'创建时间(到)'}</label>
-          <input
-            type="date"
-            value={filters.created_to}
-            onChange={(e) => setFilters({ ...filters, created_to: e.target.value })}
-            data-testid="users-filter-created-to"
-            style={inputStyle}
-          />
-        </div>
+        {isSubAdminUser ? null : (
+          <div style={fieldWrapStyle('180px')}>
+            <label style={{ display: 'block', marginBottom: '6px', fontWeight: 500 }}>
+              创建时间(从)
+            </label>
+            <input
+              type="date"
+              value={filters.created_from}
+              onChange={(e) => setFilters({ ...filters, created_from: e.target.value })}
+              data-testid="users-filter-created-from"
+              style={inputStyle}
+            />
+          </div>
+        )}
+
+        {isSubAdminUser ? null : (
+          <div style={fieldWrapStyle('180px')}>
+            <label style={{ display: 'block', marginBottom: '6px', fontWeight: 500 }}>
+              创建时间(到)
+            </label>
+            <input
+              type="date"
+              value={filters.created_to}
+              onChange={(e) => setFilters({ ...filters, created_to: e.target.value })}
+              data-testid="users-filter-created-to"
+              style={inputStyle}
+            />
+          </div>
+        )}
 
         <button
           type="button"
@@ -164,7 +193,7 @@ export default function UserFiltersPanel({
           data-testid="users-filter-reset"
           style={{
             padding: '10px 14px',
-            backgroundColor: '#6b7280',
+            backgroundColor: '#dc2626',
             color: 'white',
             border: 'none',
             borderRadius: '6px',
@@ -172,7 +201,7 @@ export default function UserFiltersPanel({
             width: isMobile ? '100%' : 'auto',
           }}
         >
-          {'重置'}
+          重置
         </button>
       </div>
     </div>

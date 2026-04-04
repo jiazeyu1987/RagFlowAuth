@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import ApprovalConfig from './ApprovalConfig';
 import operationApprovalApi from '../features/operationApproval/api';
@@ -30,7 +30,30 @@ const workflowResponse = {
         {
           step_no: 1,
           step_name: '第一层',
-          approver_user_ids: ['u-1'],
+          members: [
+            {
+              member_type: 'user',
+              member_ref: 'u-1',
+            },
+          ],
+        },
+      ],
+    },
+    {
+      operation_type: 'knowledge_file_delete',
+      operation_label: '文件删除',
+      name: '文件删除审批流',
+      is_configured: true,
+      steps: [
+        {
+          step_no: 1,
+          step_name: '删除审批',
+          members: [
+            {
+              member_type: 'user',
+              member_ref: 'u-2',
+            },
+          ],
         },
       ],
     },
@@ -40,6 +63,7 @@ const workflowResponse = {
 const activeUsers = [
   { user_id: 'u-1', username: 'alice', full_name: 'Alice' },
   { user_id: 'u-2', username: 'bob', full_name: 'Bob' },
+  { user_id: 'u-3', username: 'carol', full_name: 'Carol' },
 ];
 
 describe('ApprovalConfig', () => {
@@ -50,7 +74,22 @@ describe('ApprovalConfig', () => {
     usersApi.list.mockResolvedValue(activeUsers);
   });
 
-  it('adds a step and saves workflow with selected approvers', async () => {
+  it('switches workflow scenario by dropdown', async () => {
+    const user = userEvent.setup();
+
+    render(<ApprovalConfig />);
+
+    await screen.findByTestId('approval-config-card-knowledge_file_upload');
+    expect(screen.getByTestId('approval-config-name-knowledge_file_upload')).toHaveValue('文件上传审批流');
+
+    await user.selectOptions(screen.getByTestId('approval-config-operation-select'), 'knowledge_file_delete');
+
+    expect(await screen.findByTestId('approval-config-card-knowledge_file_delete')).toBeInTheDocument();
+    expect(screen.queryByTestId('approval-config-card-knowledge_file_upload')).not.toBeInTheDocument();
+    expect(screen.getByTestId('approval-config-name-knowledge_file_delete')).toHaveValue('文件删除审批流');
+  });
+
+  it('adds and removes steps and members for the selected workflow', async () => {
     const user = userEvent.setup();
 
     render(<ApprovalConfig />);
@@ -58,13 +97,36 @@ describe('ApprovalConfig', () => {
     await screen.findByTestId('approval-config-card-knowledge_file_upload');
 
     await user.click(screen.getByTestId('approval-config-add-step-knowledge_file_upload'));
+    expect(screen.getByTestId('approval-config-step-knowledge_file_upload-1')).toBeInTheDocument();
 
-    const secondStepName = screen.getByTestId('approval-config-step-name-knowledge_file_upload-1');
-    await user.clear(secondStepName);
-    await user.type(secondStepName, '第二层');
+    await user.click(screen.getByTestId('approval-config-add-member-knowledge_file_upload-1'));
+    expect(screen.getByTestId('approval-config-member-knowledge_file_upload-1-1')).toBeInTheDocument();
 
-    const secondApprovers = screen.getByTestId('approval-config-step-approvers-knowledge_file_upload-1');
-    await user.selectOptions(secondApprovers, ['u-2']);
+    const secondStep = screen.getByTestId('approval-config-step-knowledge_file_upload-1');
+    const removeMemberButtons = within(secondStep).getAllByRole('button', { name: '删除成员' });
+    await user.click(removeMemberButtons[1]);
+    expect(screen.queryByTestId('approval-config-member-knowledge_file_upload-1-1')).not.toBeInTheDocument();
+
+    await user.click(within(secondStep).getByRole('button', { name: '删除本层' }));
+    expect(screen.queryByTestId('approval-config-step-knowledge_file_upload-1')).not.toBeInTheDocument();
+  });
+
+  it('saves workflow with mixed fixed users and direct manager members', async () => {
+    const user = userEvent.setup();
+
+    render(<ApprovalConfig />);
+
+    await screen.findByTestId('approval-config-card-knowledge_file_upload');
+
+    await user.click(screen.getByTestId('approval-config-add-member-knowledge_file_upload-0'));
+    await user.selectOptions(
+      screen.getByTestId('approval-config-member-type-knowledge_file_upload-0-1'),
+      'special_role'
+    );
+
+    expect(screen.getByTestId('approval-config-member-role-knowledge_file_upload-0-1')).toHaveTextContent(
+      '直属主管'
+    );
 
     await user.click(screen.getByTestId('approval-config-save-knowledge_file_upload'));
 
@@ -72,27 +134,39 @@ describe('ApprovalConfig', () => {
       expect(operationApprovalApi.updateWorkflow).toHaveBeenCalledWith(
         'knowledge_file_upload',
         expect.objectContaining({
+          name: '文件上传审批流',
           steps: [
-            expect.objectContaining({ step_name: '第一层', approver_user_ids: ['u-1'] }),
-            expect.objectContaining({ step_name: '第二层', approver_user_ids: ['u-2'] }),
+            {
+              step_name: '第一层',
+              step_no: 1,
+              members: [
+                {
+                  member_type: 'user',
+                  member_ref: 'u-1',
+                },
+                {
+                  member_type: 'special_role',
+                  member_ref: 'direct_manager',
+                },
+              ],
+            },
           ],
         })
       );
     });
   });
 
-  it('shows validation error when a step has no approver', async () => {
+  it('shows validation error when a fixed user member is missing', async () => {
     const user = userEvent.setup();
 
     render(<ApprovalConfig />);
 
     await screen.findByTestId('approval-config-card-knowledge_file_upload');
 
-    const firstApprovers = screen.getByTestId('approval-config-step-approvers-knowledge_file_upload-0');
-    await user.deselectOptions(firstApprovers, ['u-1']);
+    await user.selectOptions(screen.getByTestId('approval-config-member-ref-knowledge_file_upload-0-0'), '');
     await user.click(screen.getByTestId('approval-config-save-knowledge_file_upload'));
 
-    expect(await screen.findByTestId('approval-config-error')).toHaveTextContent('每一层至少选择一位审批人');
+    expect(await screen.findByTestId('approval-config-error')).toHaveTextContent('固定用户成员必须选择用户');
     expect(operationApprovalApi.updateWorkflow).not.toHaveBeenCalled();
   });
 });

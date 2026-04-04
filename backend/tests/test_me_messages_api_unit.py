@@ -58,6 +58,7 @@ class _Deps:
             get_company=lambda *_args, **_kwargs: None,
             get_department=lambda *_args, **_kwargs: None,
         )
+        self.org_structure_manager = self.org_directory_store
         self.notification_manager = NotificationService(
             store=NotificationStore(db_path=db_path),
             email_adapter=_NoopAdapter(),
@@ -136,4 +137,3 @@ class TestMeMessagesApiUnit(unittest.TestCase):
                 self.assertEqual(int(final_resp.json().get("unread_count") or 0), 0)
         finally:
             cleanup_dir(td)
-

@@ -57,11 +57,11 @@ describe('KnowledgeBases', () => {
     knowledgeApi.getRagflowDataset.mockResolvedValue(dataset);
     knowledgeApi.updateRagflowDataset.mockResolvedValue(dataset);
     knowledgeApi.assignDatasetDirectory.mockResolvedValue({});
-    knowledgeApi.createRagflowDataset.mockResolvedValue({ request_id: 'req-create-1' });
+    knowledgeApi.createRagflowDataset.mockResolvedValue({ id: 'ds-created-1', name: 'Approved KB' });
     knowledgeApi.deleteRagflowDataset.mockResolvedValue({ request_id: 'req-delete-1' });
   });
 
-  it('shows create request submitted message', async () => {
+  it('shows create success message', async () => {
     const user = userEvent.setup();
 
     render(
@@ -80,7 +80,7 @@ describe('KnowledgeBases', () => {
     await waitFor(() => {
       expect(knowledgeApi.createRagflowDataset).toHaveBeenCalledWith(expect.objectContaining({ name: 'Approved KB' }));
     });
-    expect(await screen.findByText(/新建申请已提交/)).toBeInTheDocument();
+    expect(await screen.findByText('新建知识库成功')).toBeInTheDocument();
   });
 
   it('shows delete request submitted message', async () => {

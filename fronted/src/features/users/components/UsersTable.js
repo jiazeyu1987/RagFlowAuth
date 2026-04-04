@@ -1,14 +1,5 @@
 import React from 'react';
 
-const formatManagerLabel = (user) => {
-  const fullName = String(user?.manager_full_name || '').trim();
-  const username = String(user?.manager_username || '').trim();
-  if (fullName && username) return `${fullName}(${username})`;
-  if (fullName) return fullName;
-  if (username) return username;
-  return String(user?.manager_user_id || '').trim() || '-';
-};
-
 const formatRole = (role) => {
   const value = String(role || '').trim();
   if (value === 'admin') return '管理员';
@@ -43,11 +34,49 @@ const roleBadgeStyle = (role) => {
   };
 };
 
+const getPermissionGroupNames = (user) => {
+  const rawGroups = Array.isArray(user?.permission_groups) ? user.permission_groups : [];
+  return Array.from(
+    new Set(
+      rawGroups
+        .map((group) => String(group?.group_name || '').trim())
+        .filter(Boolean)
+    )
+  );
+};
+
+const permissionGroupTagStyle = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  padding: '4px 8px',
+  borderRadius: '999px',
+  border: '1px solid #bfdbfe',
+  backgroundColor: '#eff6ff',
+  color: '#1d4ed8',
+  fontSize: '0.78rem',
+  fontWeight: 700,
+  lineHeight: 1.2,
+};
+
+const pendingGroupTagStyle = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  padding: '4px 8px',
+  borderRadius: '999px',
+  border: '1px solid #fecaca',
+  backgroundColor: '#fef2f2',
+  color: '#b91c1c',
+  fontSize: '0.78rem',
+  fontWeight: 700,
+  lineHeight: 1.2,
+};
+
 export default function UsersTable({
   filteredUsers,
   canEditUserPolicy,
   canAssignGroups,
   canResetPasswords,
+  canResetPasswordForUser,
   canToggleUserStatus,
   canDeleteUsers,
   onOpenPolicyModal,
@@ -76,7 +105,7 @@ export default function UsersTable({
               <th style={{ padding: '12px 16px', fontWeight: 600 }}>用户</th>
               <th style={{ padding: '12px 16px', fontWeight: 600 }}>角色</th>
               <th style={{ padding: '12px 16px', fontWeight: 600 }}>公司/部门</th>
-              <th style={{ padding: '12px 16px', fontWeight: 600 }}>归属/管理范围</th>
+              <th style={{ padding: '12px 16px', fontWeight: 600 }}>权限组</th>
               <th style={{ padding: '12px 16px', fontWeight: 600 }}>状态</th>
               <th style={{ padding: '12px 16px', fontWeight: 600 }}>操作</th>
             </tr>
@@ -86,6 +115,12 @@ export default function UsersTable({
               const safeUserId = String(user?.user_id || '');
               const isBuiltInAdmin = String(user?.username || '').toLowerCase() === 'admin';
               const isActive = String(user?.status || '').toLowerCase() === 'active';
+              const permissionGroupNames = getPermissionGroupNames(user);
+              const canResetPasswordForRow =
+                canResetPasswords &&
+                (typeof canResetPasswordForUser === 'function'
+                  ? !!canResetPasswordForUser(user)
+                  : true);
               const canEditGroupsForUser =
                 canAssignGroups &&
                 String(user?.role || '') === 'viewer' &&
@@ -126,53 +161,33 @@ export default function UsersTable({
                     </div>
                   </td>
                   <td style={{ padding: '14px 16px', verticalAlign: 'top' }}>
-                    {user?.role === 'sub_admin' ? (
-                      <div data-testid={`users-managed-root-${safeUserId}`}>
-                        <div
-                          style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            padding: '4px 8px',
-                            borderRadius: '999px',
-                            backgroundColor: '#f0fdf4',
-                            border: '1px solid #86efac',
-                            color: '#166534',
-                            fontSize: '0.78rem',
-                            fontWeight: 700,
-                            marginBottom: 6,
-                          }}
+                    <div
+                      data-testid={`users-permission-groups-${safeUserId}`}
+                      style={{
+                        display: 'flex',
+                        flexWrap: 'wrap',
+                        gap: 8,
+                        alignItems: 'flex-start',
+                      }}
+                    >
+                      {permissionGroupNames.length > 0 ? (
+                        permissionGroupNames.map((groupName) => (
+                          <span
+                            key={`${safeUserId}-${groupName}`}
+                            style={permissionGroupTagStyle}
+                          >
+                            {groupName}
+                          </span>
+                        ))
+                      ) : (
+                        <span
+                          data-testid={`users-permission-groups-empty-${safeUserId}`}
+                          style={pendingGroupTagStyle}
                         >
-                          KB 子树管理员
-                        </div>
-                        <div style={{ fontSize: '0.9rem', color: '#111827', wordBreak: 'break-all' }}>
-                          {user?.managed_kb_root_path || user?.managed_kb_root_node_id || '-'}
-                        </div>
-                      </div>
-                    ) : user?.role === 'viewer' ? (
-                      <div data-testid={`users-owned-by-${safeUserId}`}>
-                        <div
-                          style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            padding: '4px 8px',
-                            borderRadius: '999px',
-                            backgroundColor: '#fff7ed',
-                            border: '1px solid #fdba74',
-                            color: '#9a3412',
-                            fontSize: '0.78rem',
-                            fontWeight: 700,
-                            marginBottom: 6,
-                          }}
-                        >
-                          归属子管理员
-                        </div>
-                        <div style={{ fontSize: '0.9rem', color: '#111827', wordBreak: 'break-all' }}>
-                          {formatManagerLabel(user)}
-                        </div>
-                      </div>
-                    ) : (
-                      <div style={{ color: '#9ca3af' }}>-</div>
-                    )}
+                          待分配
+                        </span>
+                      )}
+                    </div>
                   </td>
                   <td style={{ padding: '14px 16px', verticalAlign: 'top' }}>{formatStatus(user)}</td>
                   <td style={{ padding: '14px 16px', verticalAlign: 'top' }}>
@@ -209,7 +224,7 @@ export default function UsersTable({
                           权限组
                         </button>
                       ) : null}
-                      {canResetPasswords ? (
+                      {canResetPasswordForRow ? (
                         <button
                           type="button"
                           onClick={() => onOpenResetPassword?.(user)}

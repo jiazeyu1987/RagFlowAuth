@@ -87,6 +87,22 @@ def ensure_notification_tables(conn: sqlite3.Connection) -> None:
     add_column_if_missing(conn, "notification_delivery_logs", "error TEXT")
     add_column_if_missing(conn, "notification_delivery_logs", "attempted_at_ms INTEGER")
 
+    if not table_exists(conn, "notification_event_rules"):
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS notification_event_rules (
+                event_type TEXT PRIMARY KEY,
+                enabled_channel_types_json TEXT NOT NULL,
+                created_at_ms INTEGER NOT NULL,
+                updated_at_ms INTEGER NOT NULL
+            )
+            """
+        )
+    add_column_if_missing(conn, "notification_event_rules", "event_type TEXT")
+    add_column_if_missing(conn, "notification_event_rules", "enabled_channel_types_json TEXT")
+    add_column_if_missing(conn, "notification_event_rules", "created_at_ms INTEGER")
+    add_column_if_missing(conn, "notification_event_rules", "updated_at_ms INTEGER")
+
     conn.execute("CREATE INDEX IF NOT EXISTS idx_notification_channels_enabled ON notification_channels(enabled)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_notification_jobs_status ON notification_jobs(status)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_notification_jobs_retry ON notification_jobs(next_retry_at_ms)")
@@ -103,3 +119,4 @@ def ensure_notification_tables(conn: sqlite3.Connection) -> None:
         """
     )
     conn.execute("CREATE INDEX IF NOT EXISTS idx_notification_delivery_logs_job ON notification_delivery_logs(job_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_notification_event_rules_updated ON notification_event_rules(updated_at_ms)")

@@ -11,7 +11,7 @@ from backend.core.security import auth
 from backend.models.auth import LoginRequest, TokenResponse
 from backend.services.audit_helpers import actor_fields_from_user
 from backend.services.auth_session import AuthSessionError
-from backend.services.users import resolve_login_block, verify_password
+from backend.services.users import emit_credential_lock_alert, resolve_login_block, verify_password
 
 
 def _header_bearer_token(request: Request) -> str | None:
@@ -95,7 +95,16 @@ def login(
 
     password_ok, needs_rehash = verify_password(credentials.password, user.password_hash)
     if not password_ok:
-        locked_until_ms = deps.user_store.record_credential_failure(user.user_id)
+        locked_until_ms, newly_locked = deps.user_store.record_credential_failure(user.user_id)
+        if newly_locked and locked_until_ms is not None:
+            emit_credential_lock_alert(
+                deps=deps,
+                user=user,
+                source="auth",
+                lock_reason="invalid_username_or_password",
+                lock_until_ms=locked_until_ms,
+                actor=user.user_id,
+            )
         if locked_until_ms is not None:
             raise HTTPException(status_code=423, detail="credentials_locked")
         raise HTTPException(status_code=401, detail="invalid_username_or_password")

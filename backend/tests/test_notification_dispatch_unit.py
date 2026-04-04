@@ -78,6 +78,7 @@ class TestNotificationDispatchUnit(unittest.TestCase):
                 recipients=[self._recipient()],
                 dedupe_key="review_todo_approval:doc-1:step-1",
                 max_attempts=2,
+                channel_types=["email"],
             )
             self.assertEqual(len(jobs), 1)
             job_id = int(jobs[0]["job_id"])
@@ -128,6 +129,7 @@ class TestNotificationDispatchUnit(unittest.TestCase):
                 recipients=[self._recipient()],
                 dedupe_key="review_rejected:doc-2",
                 max_attempts=2,
+                channel_types=["email"],
             )
             job_id = int(jobs[0]["job_id"])
             first = service.dispatch_pending(limit=10)
@@ -171,7 +173,7 @@ class TestNotificationDispatchUnit(unittest.TestCase):
                     recipients=[self._recipient()],
                     dedupe_key="review_todo_approval:doc-x",
                 )
-            self.assertEqual(str(ctx.exception), "notification_channel_not_configured")
+            self.assertEqual(str(ctx.exception), "notification_channel_not_configured:in_app")
         finally:
             cleanup_dir(td)
 
@@ -214,6 +216,7 @@ class TestNotificationDispatchUnit(unittest.TestCase):
                     payload={"doc_id": "doc-strict"},
                     recipients=[self._recipient(user_id="u-strict", username="strict", email="strict@example.com")],
                     dedupe_key="strict:doc-strict",
+                    channel_types=["email", "dingtalk"],
                 )
             self.assertTrue(str(ctx.exception).startswith("notification_recipient_unresolved"))
             self.assertEqual(len(store.list_jobs(limit=10)), 0)
@@ -333,12 +336,14 @@ class TestNotificationDispatchUnit(unittest.TestCase):
                 payload=payload,
                 recipients=[self._recipient()],
                 dedupe_key="review_todo_approval:doc-r5:step-1",
+                channel_types=["email"],
             )
             second = service.notify_event(
                 event_type="review_todo_approval",
                 payload=payload,
                 recipients=[self._recipient()],
                 dedupe_key="review_todo_approval:doc-r5:step-1",
+                channel_types=["email"],
             )
 
             self.assertEqual(len(first), 1)
@@ -362,5 +367,64 @@ class TestNotificationDispatchUnit(unittest.TestCase):
                 capture.calls[0]["payload"]["approval_target"]["route_path"],
                 "/documents?tab=approve&doc_id=doc-r5",
             )
+        finally:
+            cleanup_dir(td)
+
+    def test_event_rules_support_disable_and_missing_channel_fail_fast(self):
+        td = make_temp_dir(prefix="ragflowauth_notification_rules")
+        try:
+            db_path = os.path.join(str(td), "auth.db")
+            ensure_schema(db_path)
+
+            store = NotificationStore(db_path=db_path)
+            service = NotificationService(
+                store=store,
+                email_adapter=_NoopAdapter(),
+                dingtalk_adapter=_NoopAdapter(),
+                retry_interval_seconds=1,
+            )
+            service.upsert_channel(
+                channel_id="email-main",
+                channel_type="email",
+                name="Main Email",
+                enabled=True,
+                config={"host": "smtp.example.com", "from_email": "noreply@example.com"},
+            )
+
+            rules = service.list_event_rules()
+            review_rule = None
+            for group in rules["groups"]:
+                for item in group["items"]:
+                    if item["event_type"] == "review_todo_approval":
+                        review_rule = item
+                        break
+            self.assertIsNotNone(review_rule)
+            self.assertEqual(review_rule["enabled_channel_types"], ["in_app", "email"])
+            self.assertTrue(review_rule["has_enabled_channel_config_by_type"]["email"])
+            self.assertFalse(review_rule["has_enabled_channel_config_by_type"]["in_app"])
+
+            service.upsert_event_rules(
+                items=[{"event_type": "review_todo_approval", "enabled_channel_types": []}],
+            )
+            skipped = service.notify_event(
+                event_type="review_todo_approval",
+                payload={"doc_id": "doc-disabled"},
+                recipients=[self._recipient()],
+                dedupe_key="review_todo_approval:doc-disabled",
+            )
+            self.assertEqual(skipped, [])
+            self.assertEqual(len(store.list_jobs(limit=10)), 0)
+
+            service.upsert_event_rules(
+                items=[{"event_type": "review_todo_approval", "enabled_channel_types": ["email", "dingtalk"]}],
+            )
+            with self.assertRaises(NotificationServiceError) as ctx:
+                service.notify_event(
+                    event_type="review_todo_approval",
+                    payload={"doc_id": "doc-missing-channel"},
+                    recipients=[self._recipient()],
+                    dedupe_key="review_todo_approval:doc-missing-channel",
+                )
+            self.assertEqual(str(ctx.exception), "notification_channel_not_configured:dingtalk")
         finally:
             cleanup_dir(td)

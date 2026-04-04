@@ -3,6 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException, Query
 
 from backend.app.core.authz import AdminOnly, AuthContextDep
+from backend.app.core.training_support import assert_user_training_for_action
 from backend.models.operation_approval import (
     OperationApprovalActionBody,
     OperationApprovalRequestBrief,
@@ -49,10 +50,11 @@ def upsert_operation_approval_workflow(
 def list_operation_approval_requests(
     ctx: AuthContextDep,
     view: str = Query(default="mine"),
+    status: str | None = Query(default=None),
     limit: int = Query(default=100, ge=1, le=500),
 ):
     try:
-        return _service(ctx).list_requests_for_user(requester_user=ctx.user, view=view, limit=limit)
+        return _service(ctx).list_requests_for_user(requester_user=ctx.user, view=view, status=status, limit=limit)
     except OperationApprovalServiceError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.code) from exc
 
@@ -60,11 +62,15 @@ def list_operation_approval_requests(
 @router.get("/operation-approvals/requests/{request_id}")
 def get_operation_approval_request(request_id: str, ctx: AuthContextDep):
     try:
-        return _service(ctx).get_request_detail_for_user(
-            request_id=request_id,
-            requester_user_id=str(ctx.user.user_id),
-            is_admin=bool(ctx.snapshot.is_admin),
-        )
+        return _service(ctx).get_request_detail_for_user(request_id=request_id, requester_user=ctx.user)
+    except OperationApprovalServiceError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.code) from exc
+
+
+@router.get("/operation-approvals/stats")
+def get_operation_approval_stats(ctx: AuthContextDep):
+    try:
+        return _service(ctx).get_stats_for_user(requester_user=ctx.user)
     except OperationApprovalServiceError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.code) from exc
 
@@ -72,6 +78,7 @@ def get_operation_approval_request(request_id: str, ctx: AuthContextDep):
 @router.post("/operation-approvals/requests/{request_id}/approve")
 def approve_operation_approval_request(request_id: str, body: OperationApprovalActionBody, ctx: AuthContextDep):
     try:
+        assert_user_training_for_action(deps=ctx.deps, user=ctx.user, controlled_action="document_review")
         return _service(ctx).approve_request(
             request_id=request_id,
             actor_user=ctx.user,
@@ -87,6 +94,7 @@ def approve_operation_approval_request(request_id: str, body: OperationApprovalA
 @router.post("/operation-approvals/requests/{request_id}/reject")
 def reject_operation_approval_request(request_id: str, body: OperationApprovalActionBody, ctx: AuthContextDep):
     try:
+        assert_user_training_for_action(deps=ctx.deps, user=ctx.user, controlled_action="document_review")
         return _service(ctx).reject_request(
             request_id=request_id,
             actor_user=ctx.user,

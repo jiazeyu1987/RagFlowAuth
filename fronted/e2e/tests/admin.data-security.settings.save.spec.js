@@ -15,8 +15,12 @@ adminTest('data security retention save persists and re-renders @regression @adm
     auth_db_path: 'data/auth.db',
     last_run_at_ms: null,
     backup_retention_max: 30,
-    backup_target_path: '/mnt/backup/ragflowauth',
+    backup_target_path: '/app/data/backups',
     backup_pack_count: 6,
+    local_backup_target_path: '/app/data/backups',
+    local_backup_pack_count: 6,
+    windows_backup_target_path: '/mnt/backup/ragflowauth',
+    windows_backup_pack_count: 6,
   };
 
   let capturedPut = null;

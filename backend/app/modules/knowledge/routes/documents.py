@@ -9,7 +9,6 @@ from backend.app.core.permission_resolver import (
 )
 from backend.app.core.permdbg import permdbg
 from backend.app.core.signature_support import resolve_signature_service, signature_manifestation_payload
-from backend.services.approval import ApprovalWorkflowError, ApprovalWorkflowService, ApprovalWorkflowStore
 
 
 router = APIRouter()
@@ -18,12 +17,10 @@ router = APIRouter()
 def _document_payload(
     doc,
     usernames: dict[str, str],
-    approval: dict | None = None,
     *,
     signature=None,
     signature_verified: bool | None = None,
 ) -> dict:
-    approval = approval or {}
     payload = {
         "doc_id": doc.doc_id,
         "filename": doc.filename,
@@ -39,10 +36,6 @@ def _document_payload(
         "review_notes": doc.review_notes,
         "ragflow_doc_id": doc.ragflow_doc_id,
         "kb_id": (doc.kb_name or doc.kb_id),
-        "approval_status": approval.get("approval_status"),
-        "current_step_no": approval.get("current_step_no"),
-        "current_step_name": approval.get("current_step_name"),
-        "can_review_current_step": approval.get("can_review_current_step"),
         "logical_doc_id": getattr(doc, "logical_doc_id", None),
         "version_no": getattr(doc, "version_no", 1),
         "previous_doc_id": getattr(doc, "previous_doc_id", None),
@@ -130,25 +123,6 @@ def list_documents(
     except Exception:
         usernames = {}
 
-    approval_by_doc: dict[str, dict] = {}
-    store = ApprovalWorkflowStore(db_path=str(deps.kb_store.db_path))
-    service = ApprovalWorkflowService(store=store)
-    filtered_docs = []
-    for doc in docs:
-        try:
-            progress = service.approval_progress(doc=doc, user=user, create_instance=False)
-        except ApprovalWorkflowError:
-            progress = {
-                "approval_status": None,
-                "current_step_no": None,
-                "current_step_name": None,
-                "can_review_current_step": False,
-            }
-        approval_by_doc[doc.doc_id] = progress
-        if (not assigned_to_me) or bool(progress.get("can_review_current_step")):
-            filtered_docs.append(doc)
-    docs = filtered_docs
-
     signature_service = resolve_signature_service(deps)
     signature_map = signature_service.latest_by_records(
         record_type="knowledge_document_review",
@@ -164,7 +138,6 @@ def list_documents(
             _document_payload(
                 d,
                 usernames,
-                approval_by_doc.get(d.doc_id),
                 signature=signature_map.get(d.doc_id),
                 signature_verified=signature_verified_map.get(d.doc_id),
             )
@@ -187,21 +160,6 @@ def get_document(
 
     assert_kb_allowed(snapshot, doc.kb_id)
 
-    approval_status = None
-    current_step_no = None
-    current_step_name = None
-    can_review_current_step = None
-    try:
-        store = ApprovalWorkflowStore(db_path=str(deps.kb_store.db_path))
-        service = ApprovalWorkflowService(store=store)
-        progress = service.approval_progress(doc=doc, user=ctx.user, create_instance=False)
-        approval_status = progress.get("approval_status")
-        current_step_no = progress.get("current_step_no")
-        current_step_name = progress.get("current_step_name")
-        can_review_current_step = progress.get("can_review_current_step")
-    except ApprovalWorkflowError:
-        pass
-
     usernames = {}
     try:
         usernames = deps.user_store.get_usernames_by_ids({doc.uploaded_by, doc.reviewed_by} - {None, ""})
@@ -220,12 +178,6 @@ def get_document(
     return _document_payload(
         doc,
         usernames,
-        {
-            "approval_status": approval_status,
-            "current_step_no": current_step_no,
-            "current_step_name": current_step_name,
-            "can_review_current_step": can_review_current_step,
-        },
         signature=signature,
         signature_verified=signature_verified,
     )

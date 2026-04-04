@@ -130,7 +130,7 @@ def seed_default_training_requirements(conn: sqlite3.Connection) -> None:
         (
             "TR-001",
             "审批与发布操作员培训",
-            "reviewer",
+            "*",
             "document_review",
             "2026.04",
             "doc/compliance/training_matrix.md#tr-001",
@@ -178,3 +178,14 @@ def seed_default_training_requirements(conn: sqlite3.Connection) -> None:
             """,
             item + (now_ms, now_ms),
         )
+    conn.execute(
+        """
+        UPDATE training_requirements
+        SET role_code = ?,
+            updated_at_ms = ?
+        WHERE requirement_code = ?
+          AND controlled_action = ?
+          AND role_code = ?
+        """,
+        ("*", now_ms, "TR-001", "document_review", "reviewer"),
+    )

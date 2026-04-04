@@ -147,16 +147,15 @@
 - `backend/services/training_compliance.py`
 - `backend/app/core/training_support.py`
 - `backend/app/modules/training_compliance/router.py`
-- `backend/app/modules/review/routes/approve.py`
-- `backend/app/modules/review/routes/reject.py`
-- `backend/app/modules/review/routes/overwrite.py`
+- `backend/app/modules/operation_approvals/router.py`
+- `backend/services/operation_approval/service.py`
 - `backend/app/modules/data_security/router.py`
 
 测试证据：
 
 - `python scripts/validate_gbz05_repo_compliance.py --json`
 - `python -m unittest backend.tests.test_training_compliance_api_unit backend.tests.test_gbz05_compliance_gate_unit`
-- `python -m unittest backend.tests.test_review_assignment_integration_unit backend.tests.test_review_signature_integration backend.tests.test_review_audit_integration backend.tests.test_review_notification_integration_unit backend.tests.test_backup_restore_audit_unit`
+- `python -m unittest backend.tests.test_operation_approval_service_unit.py backend.tests.test_backup_restore_audit_unit`
 
 文档复核项：
 

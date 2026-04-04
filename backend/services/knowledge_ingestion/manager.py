@@ -47,6 +47,66 @@ class KnowledgeIngestionManager:
     def __init__(self, deps: object):
         self._deps = deps
 
+    def finalize_document(self, *, doc, reviewed_by: str, review_notes: str | None = None):
+        file_path = Path(str(getattr(doc, "file_path", "") or ""))
+        if not file_path.exists():
+            raise KnowledgeIngestionError("local_file_missing", status_code=409)
+
+        try:
+            file_content = file_path.read_bytes()
+        except Exception as e:
+            raise KnowledgeIngestionError(f"read_file_failed:{e}", status_code=500) from e
+
+        try:
+            ragflow_doc_id = self._deps.ragflow_service.upload_document_blob(
+                file_filename=str(getattr(doc, "filename", "") or file_path.name),
+                file_content=file_content,
+                kb_id=str(getattr(doc, "kb_id", "") or ""),
+            )
+        except Exception as e:
+            raise KnowledgeIngestionError(f"ragflow_upload_failed:{e}", status_code=500) from e
+
+        if not ragflow_doc_id:
+            raise KnowledgeIngestionError("ragflow_upload_failed", status_code=500)
+
+        dataset_ref = (
+            str(getattr(doc, "kb_dataset_id", "") or "").strip()
+            or str(getattr(doc, "kb_id", "") or "").strip()
+            or str(getattr(doc, "kb_name", "") or "").strip()
+        )
+        if ragflow_doc_id != "uploaded":
+            try:
+                ok = self._deps.ragflow_service.parse_document(
+                    dataset_ref=dataset_ref,
+                    document_id=str(ragflow_doc_id),
+                )
+                if not ok:
+                    logger.warning(
+                        "Parse trigger failed after auto-approving uploaded document: doc_id=%s ragflow_doc_id=%s dataset_ref=%s",
+                        getattr(doc, "doc_id", None),
+                        ragflow_doc_id,
+                        dataset_ref,
+                    )
+            except Exception:
+                logger.warning(
+                    "Parse trigger raised after auto-approving uploaded document: doc_id=%s ragflow_doc_id=%s dataset_ref=%s",
+                    getattr(doc, "doc_id", None),
+                    ragflow_doc_id,
+                    dataset_ref,
+                    exc_info=True,
+                )
+
+        updated = self._deps.kb_store.update_document_status(
+            doc_id=str(getattr(doc, "doc_id", "") or ""),
+            status="approved",
+            reviewed_by=str(reviewed_by or getattr(doc, "uploaded_by", "") or ""),
+            review_notes=str(review_notes or "").strip() or None,
+            ragflow_doc_id=str(ragflow_doc_id),
+        )
+        if updated is None:
+            raise KnowledgeIngestionError("document_status_update_failed", status_code=500)
+        return updated
+
     @staticmethod
     def _detect_mime(upload_filename: str, content_type: str | None) -> str:
         file_ext = Path(upload_filename).suffix.lower()
@@ -140,6 +200,12 @@ class KnowledgeIngestionManager:
             status="pending",
         )
 
+        doc = self.finalize_document(
+            doc=doc,
+            reviewed_by=str(ctx.payload.sub),
+            review_notes="direct_upload_ingestion_completed",
+        )
+
         audit = getattr(deps, "audit_log_store", None)
         if audit:
             try:
@@ -157,15 +223,4 @@ class KnowledgeIngestionManager:
                 )
             except Exception:
                 pass
-        workflow_service = getattr(deps, "approval_workflow_service", None)
-        if workflow_service is not None:
-            try:
-                workflow_service.notify_current_step(doc=doc, actor=ctx.payload.sub, notes=None)
-            except Exception:
-                logger.warning(
-                    "Failed to enqueue initial approval notification: doc_id=%s kb_id=%s",
-                    getattr(doc, "doc_id", None),
-                    getattr(doc, "kb_id", None),
-                    exc_info=True,
-                )
         return doc

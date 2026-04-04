@@ -27,22 +27,21 @@ class BackupReplicaService:
         if not getattr(settings, "replica_enabled", False):
             self.store.update_job(
                 job_id,
-                message="backup_completed_replication_skipped",
-                detail="replica_enabled=false",
-                progress=100,
+                message="backup_windows_skipped",
+                progress=97,
                 replication_status="skipped",
+                replication_error="replica_disabled",
             )
-            return True
+            return False
 
-        target_path = str(settings.replica_target_path or "").strip()
+        target_path = str(settings.windows_target_path() or "").strip()
         if not target_path:
             self.store.update_job(
                 job_id,
-                message="backup_replication_failed",
-                detail="replica_target_path is empty",
-                progress=100,
-                replication_status="failed",
-                replication_error="replica_target_path is empty",
+                message="backup_windows_skipped",
+                progress=97,
+                replication_status="skipped",
+                replication_error="windows_target_not_configured",
             )
             return False
 
@@ -51,9 +50,8 @@ class BackupReplicaService:
             detail = f"replica_target_path={target_path!r}"
             self.store.update_job(
                 job_id,
-                message="backup_replication_failed",
-                detail=detail,
-                progress=100,
+                message="backup_windows_failed",
+                progress=97,
                 replication_status="failed",
                 replication_error=detail,
             )
@@ -65,23 +63,23 @@ class BackupReplicaService:
             if str(pack_real).replace("\\", "/").startswith(str(target_real).replace("\\", "/").rstrip("/") + "/"):
                 self.store.update_job(
                     job_id,
-                    message="backup_replication_skipped_already_under_target",
-                    progress=100,
+                    message="backup_windows_skipped",
+                    progress=97,
                     replication_status="skipped",
                     replica_path=str(pack_dir),
+                    replication_error="windows_target_same_as_source",
                 )
-                return True
+                return False
         except Exception:
             pass
 
-        if not self._check_is_cifs_mount(target_base):
+        if self._requires_cifs_mount(target_base) and not self._check_is_cifs_mount(target_base):
             detail = f"{target_base} is not a mounted CIFS share. Files copied to local disk instead."
             self.store.update_job(
                 job_id,
-                message="backup_replication_failed",
-                detail=detail,
-                progress=100,
-                replication_status="failed",
+                message="backup_windows_skipped",
+                progress=97,
+                replication_status="skipped",
                 replication_error=detail,
             )
             return False
@@ -93,7 +91,7 @@ class BackupReplicaService:
 
             self.store.update_job(
                 job_id,
-                message="backup_replication_copying",
+                message="backup_windows_copying",
                 progress=92,
                 replication_status="pending",
             )
@@ -114,13 +112,12 @@ class BackupReplicaService:
             target_final_dir.parent.mkdir(parents=True, exist_ok=True)
             shutil.move(str(target_tmp_dir), str(target_final_dir))
 
-            self.store.update_job(job_id, message="backup_replication_verifying", progress=97)
+            self.store.update_job(job_id, message="backup_windows_verifying", progress=97)
             if not self._verify_replication(target_final_dir):
                 detail = f"replication verification failed for {target_final_dir}"
                 self.store.update_job(
                     job_id,
-                    message="backup_replication_failed",
-                    detail=detail,
+                    message="backup_windows_failed",
                     replication_status="failed",
                     replication_error=detail,
                 )
@@ -128,8 +125,8 @@ class BackupReplicaService:
 
             self.store.update_job(
                 job_id,
-                message="backup_replication_succeeded",
-                progress=100,
+                message="backup_windows_succeeded",
+                progress=98,
                 replication_status="succeeded",
                 replica_path=str(target_final_dir),
                 replication_error="",
@@ -140,13 +137,16 @@ class BackupReplicaService:
             logger.error("[REPLICATION FAILED] Job ID: %s Error: %s", job_id, exc, exc_info=True)
             self.store.update_job(
                 job_id,
-                message="backup_replication_failed",
-                detail=str(exc),
-                progress=100,
+                message="backup_windows_failed",
+                progress=98,
                 replication_status="failed",
                 replication_error=str(exc),
             )
             return False
+
+    def _requires_cifs_mount(self, target_path: Path) -> bool:
+        target_norm = target_path.as_posix().rstrip("/")
+        return target_norm == "/mnt/replica" or target_norm.startswith("/mnt/replica/")
 
     def _generate_subdir(self, pack_name: str, format_type: str) -> str:
         if format_type == "date":

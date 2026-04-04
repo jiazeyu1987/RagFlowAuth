@@ -10,8 +10,9 @@ from backend.services.knowledge_tree import KnowledgeTreeManager
 
 
 class UsersRepo:
-    def __init__(self, deps: AppDependencies):
+    def __init__(self, deps: AppDependencies, *, permission_group_store=None):
         self._deps = deps
+        self._permission_group_store = permission_group_store or getattr(deps, "permission_group_store", None)
 
     def list_users(
         self,
@@ -24,6 +25,7 @@ class UsersRepo:
         department_id: Optional[int],
         created_from_ms: Optional[int],
         created_to_ms: Optional[int],
+        manager_user_id: Optional[str],
         limit: int,
     ):
         return self._deps.user_store.list_users(
@@ -35,6 +37,7 @@ class UsersRepo:
             department_id=department_id,
             created_from_ms=created_from_ms,
             created_to_ms=created_to_ms,
+            manager_user_id=manager_user_id,
             limit=limit,
         )
 
@@ -93,10 +96,14 @@ class UsersRepo:
         return store.get_active_session_summaries(idle_timeout_by_user=idle_timeout_by_user)
 
     def get_permission_group(self, group_id: int) -> dict[str, Any] | None:
-        return self._deps.permission_group_store.get_group(group_id)
+        if self._permission_group_store is None:
+            return None
+        return self._permission_group_store.get_group(group_id)
 
     def get_group_by_name(self, name: str) -> dict[str, Any] | None:
-        return self._deps.permission_group_store.get_group_by_name(name)
+        if self._permission_group_store is None:
+            return None
+        return self._permission_group_store.get_group_by_name(name)
 
     def get_company(self, company_id: int):
         return self._deps.org_structure_manager.get_company(company_id)

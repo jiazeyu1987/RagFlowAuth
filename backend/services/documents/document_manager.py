@@ -63,7 +63,7 @@ class DocumentManager:
     def _watermark_service(self) -> DocumentWatermarkService:
         return DocumentWatermarkService(
             store=getattr(self.deps, "watermark_policy_store", None),
-            org_directory_store=getattr(self.deps, "org_directory_store", None),
+            org_structure_manager=getattr(self.deps, "org_structure_manager", None),
         )
 
     @staticmethod

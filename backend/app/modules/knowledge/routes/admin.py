@@ -5,42 +5,11 @@ from fastapi import APIRouter, HTTPException
 from backend.app.core.authz import AuthContextDep
 from backend.app.core.kb_refs import resolve_kb_ref
 from backend.app.core.permission_resolver import (
-    ResourceScope,
     assert_kb_allowed,
 )
 
 
 router = APIRouter()
-
-
-@router.get("/stats")
-def get_stats(ctx: AuthContextDep):
-    deps = ctx.deps
-    snapshot = ctx.snapshot
-
-    if snapshot.is_admin:
-        total = deps.kb_store.count_documents()
-        pending = deps.kb_store.count_documents(status="pending")
-        approved = deps.kb_store.count_documents(status="approved")
-        rejected = deps.kb_store.count_documents(status="rejected")
-    elif snapshot.kb_scope == ResourceScope.NONE:
-        total = 0
-        pending = 0
-        approved = 0
-        rejected = 0
-    else:
-        kb_ids = list(snapshot.kb_names)
-        total = deps.kb_store.count_documents(kb_ids=kb_ids)
-        pending = deps.kb_store.count_documents(status="pending", kb_ids=kb_ids)
-        approved = deps.kb_store.count_documents(status="approved", kb_ids=kb_ids)
-        rejected = deps.kb_store.count_documents(status="rejected", kb_ids=kb_ids)
-
-    return {
-        "total_documents": total,
-        "pending_documents": pending,
-        "approved_documents": approved,
-        "rejected_documents": rejected,
-    }
 
 
 @router.delete("/documents/{doc_id}", status_code=202)

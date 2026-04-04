@@ -29,19 +29,17 @@ def _build_repo(root: Path) -> None:
         """# Matrix
 版本: v1.0
 更新时间: 2026-04-02
-approval_actor_not_assigned_to_step
+operation_request_not_current_approver
 signature_user_disabled
 """,
     )
     _write(root / "doc/compliance/approval_workflow_sop.md", "# SOP\n版本: v1.0\n更新时间: 2026-04-02\n")
     for rel in (
-        "backend/app/modules/review/routes/approve.py",
-        "backend/app/modules/review/routes/reject.py",
-        "backend/app/modules/review/routes/overwrite.py",
-        "backend/services/approval/service.py",
+        "backend/app/modules/operation_approvals/router.py",
+        "backend/services/operation_approval/service.py",
+        "backend/services/operation_approval/handlers.py",
         "backend/services/electronic_signature/service.py",
-        "backend/tests/test_review_assignment_integration_unit.py",
-        "backend/tests/test_review_signature_integration.py",
+        "backend/tests/test_operation_approval_service_unit.py",
         "backend/tests/test_electronic_signature_unit.py",
         "backend/tests/test_fda01_compliance_gate_unit.py",
         "scripts/validate_fda01_repo_compliance.py",

@@ -54,6 +54,11 @@ const normalizePersonName = (value) => {
   return text;
 };
 
+const normalizeGroupId = (value) => {
+  const groupId = Number(value);
+  return Number.isInteger(groupId) && groupId > 0 ? groupId : null;
+};
+
 const buildUserDisplayLabel = (item) => {
   const fullName = normalizePersonName(item?.full_name);
   const username = String(item?.username || '').trim();
@@ -106,6 +111,7 @@ export const useUserManagement = () => {
   const { can, user } = useAuth();
   const isAdminUser = String(user?.role || '') === 'admin';
   const isSubAdminUser = String(user?.role || '') === 'sub_admin';
+  const currentUserId = String(user?.user_id || '');
 
   const [allUsers, setAllUsers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -598,13 +604,29 @@ export const useUserManagement = () => {
     [fetchUsers]
   );
 
+  const canResetPasswordForUser = useCallback(
+    (targetUser) => {
+      const targetUserId = String(targetUser?.user_id || '');
+      if (!targetUserId) return false;
+      if (isAdminUser) return true;
+      if (!isSubAdminUser) return false;
+      if (targetUserId === currentUserId) return true;
+      return (
+        String(targetUser?.role || '') === 'viewer'
+        && String(targetUser?.manager_user_id || '') === currentUserId
+      );
+    },
+    [currentUserId, isAdminUser, isSubAdminUser]
+  );
+
   const handleOpenResetPassword = useCallback((targetUser) => {
+    if (!canResetPasswordForUser(targetUser)) return;
     setResetPasswordUser(targetUser);
     setResetPasswordValue('');
     setResetPasswordConfirm('');
     setResetPasswordError(null);
     setShowResetPasswordModal(true);
-  }, []);
+  }, [canResetPasswordForUser]);
 
   const handleCloseResetPassword = useCallback(() => {
     setShowResetPasswordModal(false);
@@ -820,11 +842,25 @@ export const useUserManagement = () => {
       if (String(targetUser?.role || '') === 'sub_admin') return;
       if (isSubAdminUser && String(targetUser?.manager_user_id || '') !== String(user?.user_id || '')) return;
       setEditingGroupUser(targetUser);
-      const groupIds = targetUser?.group_ids || (targetUser?.permission_groups || []).map((pg) => pg.group_id);
-      setSelectedGroupIds(Array.isArray(groupIds) ? groupIds : []);
+      const allowedGroupIds = new Set(
+        (Array.isArray(availableGroups) ? availableGroups : [])
+          .map((group) => normalizeGroupId(group?.group_id))
+          .filter((groupId) => groupId != null)
+      );
+      const groupIds = Array.isArray(targetUser?.group_ids)
+        ? targetUser.group_ids
+        : (targetUser?.permission_groups || []).map((pg) => pg.group_id);
+      const validGroupIds = Array.from(
+        new Set(
+          (Array.isArray(groupIds) ? groupIds : [])
+            .map((groupId) => normalizeGroupId(groupId))
+            .filter((groupId) => groupId != null && allowedGroupIds.has(groupId))
+        )
+      );
+      setSelectedGroupIds(validGroupIds);
       setShowGroupModal(true);
     },
-    [isSubAdminUser, user?.user_id]
+    [availableGroups, isSubAdminUser, user?.user_id]
   );
 
   const handleCloseGroupModal = useCallback(() => {
@@ -864,10 +900,12 @@ export const useUserManagement = () => {
     allUsers,
     loading,
     error,
+    isSubAdminUser,
     canManageUsers,
     canCreateUsers: isAdminUser,
     canEditUserPolicy: isAdminUser,
-    canResetPasswords: isAdminUser,
+    canResetPasswords: isAdminUser || isSubAdminUser,
+    canResetPasswordForUser,
     canToggleUserStatus: isAdminUser,
     canDeleteUsers: isAdminUser,
     canAssignGroups: isSubAdminUser,

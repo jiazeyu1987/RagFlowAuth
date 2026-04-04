@@ -36,20 +36,18 @@ REQUIRED_DOCS: dict[str, tuple[str, ...]] = {
 }
 
 REQUIRED_FILES: tuple[str, ...] = (
-    "backend/app/modules/review/routes/approve.py",
-    "backend/app/modules/review/routes/reject.py",
-    "backend/app/modules/review/routes/overwrite.py",
-    "backend/services/approval/service.py",
+    "backend/app/modules/operation_approvals/router.py",
+    "backend/services/operation_approval/service.py",
+    "backend/services/operation_approval/handlers.py",
     "backend/services/electronic_signature/service.py",
-    "backend/tests/test_review_assignment_integration_unit.py",
-    "backend/tests/test_review_signature_integration.py",
+    "backend/tests/test_operation_approval_service_unit.py",
     "backend/tests/test_electronic_signature_unit.py",
     "backend/tests/test_fda01_compliance_gate_unit.py",
     "scripts/validate_fda01_repo_compliance.py",
 )
 
 REQUIRED_PATTERNS: tuple[tuple[str, str, str], ...] = (
-    ("doc/compliance/signature_authorization_matrix.md", r"approval_actor_not_assigned_to_step", "责任矩阵未引用当前步骤授权校验"),
+    ("doc/compliance/signature_authorization_matrix.md", r"operation_request_not_current_approver", "责任矩阵未引用当前步骤授权校验"),
     ("doc/compliance/signature_authorization_matrix.md", r"signature_user_disabled", "责任矩阵未引用停权签名阻断"),
     ("doc/compliance/electronic_signature_policy.md", r"账号不得共用", "电子签名策略缺少账号唯一性/禁共用声明"),
     ("doc/compliance/electronic_signature_policy.md", r"仓库外残余项", "电子签名策略缺少仓库外残余项说明"),

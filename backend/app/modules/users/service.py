@@ -29,6 +29,7 @@ class UsersService:
         status: Optional[str],
         created_from_ms: Optional[int],
         created_to_ms: Optional[int],
+        manager_user_id: Optional[str] = None,
         limit: int,
     ) -> list[UserResponse]:
         try:
@@ -41,6 +42,7 @@ class UsersService:
                 status=status,
                 created_from_ms=created_from_ms,
                 created_to_ms=created_to_ms,
+                manager_user_id=manager_user_id,
                 limit=limit,
             )
         except UserManagementError as e:

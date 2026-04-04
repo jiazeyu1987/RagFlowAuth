@@ -44,7 +44,7 @@ class TestAuditLogManagerUnit(unittest.TestCase):
             ctx = SimpleNamespace(
                 payload=SimpleNamespace(sub="u1"),
                 user=_User(),
-                deps=SimpleNamespace(org_directory_store=_OrgStore()),
+                deps=SimpleNamespace(org_directory_store=_OrgStore(), org_structure_manager=_OrgStore()),
             )
             mgr.log_record_change(
                 ctx=ctx,

@@ -35,6 +35,29 @@ const Card = ({ title, children }) => (
   </div>
 );
 
+const statusColor = (status) => {
+  const text = String(status || '').toLowerCase();
+  if (text === 'failed') return '#dc2626';
+  if (text === 'completed' || text === 'success' || text === 'succeeded') return '#059669';
+  if (isRunningStatus(text) || text === 'pending') return '#2563eb';
+  return '#374151';
+};
+
+const localBackupLabel = (job) => {
+  if (job?.output_dir) return '成功';
+  if (String(job?.status || '').toLowerCase() === 'failed') return '失败';
+  return '未生成';
+};
+
+const windowsBackupLabel = (job) => {
+  const status = String(job?.replication_status || '').toLowerCase();
+  if (status === 'succeeded') return '成功';
+  if (status === 'failed') return '失败';
+  if (status === 'skipped') return '未执行';
+  if (status === 'pending') return '进行中';
+  return '未执行';
+};
+
 const DataSecurity = () => {
   const location = useLocation();
   const [isMobile, setIsMobile] = useState(() => {
@@ -70,11 +93,34 @@ const DataSecurity = () => {
     return sub ? `\\\\${ip}\\${share}\\${sub}` : `\\\\${ip}\\${share}`;
   }, [settings]);
 
+  const localBackupTargetPath = useMemo(
+    () => settings?.local_backup_target_path || settings?.backup_target_path || '/app/data/backups',
+    [settings]
+  );
+
+  const windowsBackupTargetPath = useMemo(
+    () => settings?.windows_backup_target_path || settings?.replica_target_path || targetPreview || '',
+    [settings, targetPreview]
+  );
+
+  const restoreEligibleJobs = useMemo(
+    () => (jobs || []).filter((job) => !!String(job?.output_dir || '').trim()),
+    [jobs]
+  );
+
   const selectedRestoreJob = useMemo(() => {
     const id = Number(selectedRestoreJobId);
     if (!Number.isFinite(id) || id <= 0) return null;
-    return (jobs || []).find((item) => Number(item.id) === id) || null;
-  }, [jobs, selectedRestoreJobId]);
+    return restoreEligibleJobs.find((item) => Number(item.id) === id) || null;
+  }, [restoreEligibleJobs, selectedRestoreJobId]);
+
+  const pickRestoreJobId = (nextJobs, prevValue = '') => {
+    const eligible = (nextJobs || []).filter((job) => !!String(job?.output_dir || '').trim());
+    if (prevValue && eligible.some((job) => String(job.id) === String(prevValue))) {
+      return String(prevValue);
+    }
+    return eligible[0] ? String(eligible[0].id) : '';
+  };
 
   const loadAll = async () => {
     setError(null);
@@ -94,10 +140,7 @@ const DataSecurity = () => {
       setRestoreDrills(nextDrills);
       setActiveJob(latest);
       setRunning(latest ? isRunningStatus(latest.status) : false);
-      setSelectedRestoreJobId((prev) => {
-        if (prev && nextJobs.some((item) => String(item.id) === String(prev))) return String(prev);
-        return latest ? String(latest.id) : '';
-      });
+      setSelectedRestoreJobId((prev) => pickRestoreJobId(nextJobs, prev));
     } catch (e) {
       setError(e.message || '加载失败');
     } finally {
@@ -114,19 +157,16 @@ const DataSecurity = () => {
     const nextDrills = Array.isArray(drillsResp?.items) ? drillsResp.items : [];
     setJobs(nextJobs);
     setRestoreDrills(nextDrills);
-    setSelectedRestoreJobId((prev) => {
-      if (prev && nextJobs.some((item) => String(item.id) === String(prev))) return String(prev);
-      return nextJobs[0] ? String(nextJobs[0].id) : '';
-    });
+    setSelectedRestoreJobId((prev) => pickRestoreJobId(nextJobs, prev));
   };
 
   const pollActiveJob = async (jobId) => {
     try {
       const job = await dataSecurityApi.getJob(jobId);
       setActiveJob(job);
-      const isRunning = isRunningStatus(job?.status);
-      setRunning(isRunning);
-      if (!isRunning) {
+      const nextRunning = isRunningStatus(job?.status);
+      setRunning(nextRunning);
+      if (!nextRunning) {
         await refreshJobsAndDrills();
         if (pollTimer.current) {
           clearInterval(pollTimer.current);
@@ -156,14 +196,13 @@ const DataSecurity = () => {
   const saveRetention = async () => {
     if (!settings) return;
     const changeReason = window.prompt('请输入本次备份保留策略变更原因');
-    if (changeReason === null) {
-      return;
-    }
+    if (changeReason === null) return;
     const trimmedReason = String(changeReason || '').trim();
     if (!trimmedReason) {
       setError('变更原因不能为空');
       return;
     }
+
     setError(null);
     setSavingRetention(true);
     try {
@@ -181,16 +220,18 @@ const DataSecurity = () => {
     }
   };
 
+  const startPollingJob = async (jobId) => {
+    setRunning(true);
+    await pollActiveJob(jobId);
+    if (pollTimer.current) clearInterval(pollTimer.current);
+    pollTimer.current = setInterval(() => pollActiveJob(jobId), 1000);
+  };
+
   const runNow = async () => {
     setError(null);
     try {
       const res = await dataSecurityApi.runBackup();
-      if (res?.job_id) {
-        setRunning(true);
-        await pollActiveJob(res.job_id);
-        if (pollTimer.current) clearInterval(pollTimer.current);
-        pollTimer.current = setInterval(() => pollActiveJob(res.job_id), 1000);
-      }
+      if (res?.job_id) await startPollingJob(res.job_id);
     } catch (e) {
       setError(e.message || '启动失败');
     }
@@ -200,12 +241,7 @@ const DataSecurity = () => {
     setError(null);
     try {
       const res = await dataSecurityApi.runFullBackup();
-      if (res?.job_id) {
-        setRunning(true);
-        await pollActiveJob(res.job_id);
-        if (pollTimer.current) clearInterval(pollTimer.current);
-        pollTimer.current = setInterval(() => pollActiveJob(res.job_id), 1000);
-      }
+      if (res?.job_id) await startPollingJob(res.job_id);
     } catch (e) {
       setError(e.message || '全量备份启动失败');
     }
@@ -214,15 +250,15 @@ const DataSecurity = () => {
   const submitRestoreDrill = async () => {
     setError(null);
     if (!selectedRestoreJob) {
-      setError('请选择备份任务');
+      setError('请先选择可用于本地恢复演练的备份任务');
       return;
     }
     if (!selectedRestoreJob.output_dir) {
-      setError('所选任务缺少 backup_path，无法登记恢复演练');
+      setError('所选任务没有本地备份，无法执行恢复演练');
       return;
     }
     if (!selectedRestoreJob.package_hash) {
-      setError('所选任务缺少 package_hash，无法登记恢复演练');
+      setError('所选任务缺少 package_hash，无法执行恢复演练');
       return;
     }
     if (!restoreTarget.trim()) {
@@ -307,20 +343,22 @@ const DataSecurity = () => {
 
       <Card title="备份保留策略">
         <div style={{ display: 'grid', gap: '12px' }}>
-          <div
-            style={{
-              display: 'flex',
-              flexDirection: isMobile ? 'column' : 'row',
-              justifyContent: 'space-between',
-              gap: '12px',
-              flexWrap: 'wrap',
-            }}
-          >
-            <div style={{ color: '#6b7280' }}>
-              备份路径: <span style={{ color: '#111827' }}>{settings?.backup_target_path || targetPreview || '-'}</span>
+          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '12px' }}>
+            <div style={{ padding: '12px', border: '1px solid #e5e7eb', borderRadius: '10px' }}>
+              <div style={{ color: '#6b7280', fontSize: '0.9rem' }}>本地备份路径</div>
+              <div style={{ marginTop: '6px', color: '#111827', wordBreak: 'break-all' }}>{localBackupTargetPath || '-'}</div>
+              <div style={{ marginTop: '8px', color: '#6b7280', fontSize: '0.85rem' }}>
+                备份数量: <span style={{ color: '#111827', fontWeight: 700 }}>{Number(settings?.local_backup_pack_count ?? settings?.backup_pack_count ?? 0)}</span>
+              </div>
             </div>
-            <div style={{ color: '#6b7280' }}>
-              当前备份数量: <span style={{ color: '#111827', fontWeight: 700 }}>{Number(settings?.backup_pack_count || 0)}</span>
+            <div style={{ padding: '12px', border: '1px solid #e5e7eb', borderRadius: '10px' }}>
+              <div style={{ color: '#6b7280', fontSize: '0.9rem' }}>Windows 备份路径</div>
+              <div style={{ marginTop: '6px', color: '#111827', wordBreak: 'break-all' }}>{windowsBackupTargetPath || '未配置'}</div>
+              <div style={{ marginTop: '8px', color: '#6b7280', fontSize: '0.85rem' }}>
+                备份数量:{' '}
+                <span style={{ color: '#111827', fontWeight: 700 }}>{Number(settings?.windows_backup_pack_count || 0)}</span>
+                {settings?.windows_backup_pack_count_skipped ? '（统计已跳过）' : ''}
+              </div>
             </div>
           </div>
 
@@ -378,8 +416,13 @@ const DataSecurity = () => {
       </Card>
 
       {showAdvanced && (
-        <Card title="备份设置">
+        <Card title="Windows 备份设置">
           <div style={{ display: 'grid', gap: '12px' }}>
+            <div style={{ padding: '12px', background: '#f8fafc', borderRadius: '10px', color: '#475569', fontSize: '0.9rem' }}>
+              本地正式备份目录固定为 <strong>{localBackupTargetPath}</strong>。
+              Windows 备份使用下方配置解析目标路径，优先使用服务器挂载路径，其次使用手动填写的共享或本地路径。
+            </div>
+
             <label style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
               <input
                 type="checkbox"
@@ -400,18 +443,18 @@ const DataSecurity = () => {
                   style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '8px', marginTop: '6px' }}
                 >
                   <option value="share">共享目录</option>
-                  <option value="local">本地目录</option>
+                  <option value="local">本机目录</option>
                 </select>
               </label>
 
               <div style={{ color: '#6b7280', fontSize: '0.9rem', alignSelf: 'end' }}>
-                这里只编辑参数，不会自动保存。真正生效请使用保存接口。
+                当前 Windows 目标预览: <span style={{ color: '#111827' }}>{windowsBackupTargetPath || '未配置'}</span>
               </div>
             </div>
 
             {(settings?.target_mode || 'share') === 'local' ? (
               <label>
-                本机目标目录（绝对路径）
+                Windows 目标目录（绝对路径）
                 <input
                   data-testid="ds-target-local-dir"
                   value={settings?.target_local_dir || ''}
@@ -510,13 +553,22 @@ const DataSecurity = () => {
                 alignItems: isMobile ? 'stretch' : 'center',
               }}
             >
-              <div>
-                <div data-testid="ds-active-job-status" style={{ fontWeight: 600 }}>
+              <div style={{ display: 'grid', gap: '6px' }}>
+                <div data-testid="ds-active-job-status" style={{ fontWeight: 600, color: statusColor(activeJob.status) }}>
                   #{activeJob.id} {activeJob.status}
                 </div>
                 <div data-testid="ds-active-job-message" style={{ color: '#6b7280', fontSize: '0.9rem' }}>
-                  {activeJob.message || ''} {activeJob.output_dir ? `（输出: ${activeJob.output_dir}）` : ''}
+                  {activeJob.message || ''}
                 </div>
+                <div style={{ color: '#6b7280', fontSize: '0.85rem' }}>
+                  本地备份: {localBackupLabel(activeJob)} {activeJob.output_dir ? `| ${activeJob.output_dir}` : ''}
+                </div>
+                <div style={{ color: '#6b7280', fontSize: '0.85rem' }}>
+                  Windows 备份: {windowsBackupLabel(activeJob)} {activeJob.replica_path ? `| ${activeJob.replica_path}` : ''}
+                </div>
+                {activeJob.replication_error ? (
+                  <div style={{ color: '#92400e', fontSize: '0.85rem' }}>Windows 说明: {activeJob.replication_error}</div>
+                ) : null}
               </div>
               <div style={{ minWidth: isMobile ? 'auto' : '140px', textAlign: isMobile ? 'left' : 'right', color: '#6b7280' }}>
                 {activeJob.started_at_ms ? formatTime(activeJob.started_at_ms) : ''}
@@ -560,7 +612,9 @@ const DataSecurity = () => {
                 }}
                 onClick={() => {
                   setActiveJob(job);
-                  setSelectedRestoreJobId(String(job.id));
+                  if (job.output_dir) {
+                    setSelectedRestoreJobId(String(job.id));
+                  }
                   if (isRunningStatus(job.status)) {
                     setRunning(true);
                     if (pollTimer.current) clearInterval(pollTimer.current);
@@ -569,13 +623,19 @@ const DataSecurity = () => {
                 }}
               >
                 <div style={{ display: 'grid', gap: '4px' }}>
-                  <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                  <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
                     <div style={{ fontWeight: 700 }}>#{job.id}</div>
-                    <div style={{ color: job.status === 'failed' ? '#dc2626' : '#374151' }}>{job.status}</div>
+                    <div style={{ color: statusColor(job.status) }}>{job.status}</div>
                     <div style={{ color: '#6b7280' }}>{job.message || ''}</div>
                   </div>
                   <div style={{ color: '#6b7280', fontSize: '0.85rem' }}>
                     Hash: {job.package_hash || '未生成'}
+                  </div>
+                  <div style={{ color: '#6b7280', fontSize: '0.85rem' }}>
+                    本地备份: {localBackupLabel(job)} {job.output_dir ? `| ${job.output_dir}` : ''}
+                  </div>
+                  <div style={{ color: '#6b7280', fontSize: '0.85rem' }}>
+                    Windows 备份: {windowsBackupLabel(job)} {job.replica_path ? `| ${job.replica_path}` : ''}
                   </div>
                   <div style={{ color: '#6b7280', fontSize: '0.85rem' }}>
                     验证: {job.verified_at_ms ? `${job.verified_by || '-'} @ ${formatTime(job.verified_at_ms)}` : '未验证'}
@@ -592,9 +652,13 @@ const DataSecurity = () => {
 
       <Card title="恢复演练">
         <div style={{ display: 'grid', gap: '10px' }}>
+          <div style={{ padding: '12px', background: '#f8fafc', borderRadius: '10px', color: '#475569', fontSize: '0.9rem' }}>
+            恢复演练仅从本地备份执行数据恢复，Windows 备份不会用于演练恢复。
+          </div>
+
           <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '10px' }}>
             <label>
-              备份任务
+              本地备份任务
               <select
                 data-testid="ds-restore-job-select"
                 value={selectedRestoreJobId}
@@ -602,7 +666,7 @@ const DataSecurity = () => {
                 style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '8px', marginTop: '6px' }}
               >
                 <option value="">请选择</option>
-                {jobs.map((job) => (
+                {restoreEligibleJobs.map((job) => (
                   <option key={job.id} value={String(job.id)}>
                     #{job.id} {job.kind || '-'} {job.status || '-'}
                   </option>
@@ -630,6 +694,10 @@ const DataSecurity = () => {
               />
             </label>
           </div>
+
+          {restoreEligibleJobs.length === 0 ? (
+            <div style={{ color: '#6b7280' }}>当前没有可用于本地恢复演练的备份任务。</div>
+          ) : null}
 
           <button
             type="button"

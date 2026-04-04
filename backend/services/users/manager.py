@@ -23,6 +23,7 @@ class UsersPort(Protocol):
         department_id: Optional[int],
         created_from_ms: Optional[int],
         created_to_ms: Optional[int],
+        manager_user_id: Optional[str] = None,
         limit: int,
     ): ...
 
@@ -298,6 +299,7 @@ class UserManagementManager:
         status: Optional[str],
         created_from_ms: Optional[int],
         created_to_ms: Optional[int],
+        manager_user_id: Optional[str] = None,
         limit: int,
     ) -> list[UserResponse]:
         users = self._port.list_users(
@@ -309,6 +311,7 @@ class UserManagementManager:
             department_id=department_id,
             created_from_ms=created_from_ms,
             created_to_ms=created_to_ms,
+            manager_user_id=manager_user_id,
             limit=limit,
         )
         idle_by_user = {
@@ -519,7 +522,7 @@ class UserManagementManager:
             if not group:
                 raise UserManagementError("permission_group_not_found")
             group_ids = [user_data.group_id]
-        if effective_role in {"viewer", "sub_admin"} and group_ids is not None:
+        if effective_role == "sub_admin" and group_ids is not None:
             group_ids = []
 
         update_kwargs = dict(

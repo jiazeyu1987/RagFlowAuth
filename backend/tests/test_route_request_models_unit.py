@@ -103,6 +103,17 @@ class _FakeRagflowService:
         return {"id": dataset_ref, **updates}
 
 
+class _FakeKnowledgeManagementManager:
+    def __init__(self, ragflow_service):
+        self._ragflow_service = ragflow_service
+
+    def create_dataset(self, *, user, payload):  # noqa: ARG002
+        body = dict(payload or {})
+        body.pop("id", None)
+        body.pop("dataset_id", None)
+        return self._ragflow_service.create_dataset(body)
+
+
 class _FakeSearchChatService:
     def __init__(self, *, raise_error: bool = False):
         self.raise_error = bool(raise_error)
@@ -184,6 +195,7 @@ class TestDatasetRequestModelsUnit(unittest.TestCase):
             user_store=_FakeUserStore(role="admin"),
             permission_group_store=_FakePermissionGroupStore(),
             ragflow_service=ragflow,
+            knowledge_management_manager=_FakeKnowledgeManagementManager(ragflow),
         )
         with _make_client(router=agents_router, deps=deps) as client:
             r1 = client.post("/api/datasets", json="invalid")
@@ -191,8 +203,8 @@ class TestDatasetRequestModelsUnit(unittest.TestCase):
             self.assertEqual(r1.json().get("detail"), "invalid_body")
 
             r2 = client.put("/api/datasets/d1", json="invalid")
-            self.assertEqual(r2.status_code, 403)
-            self.assertEqual(r2.json().get("detail"), "kb_not_allowed")
+            self.assertEqual(r2.status_code, 400)
+            self.assertEqual(r2.json().get("detail"), "invalid_updates")
 
             r3 = client.post("/api/datasets", json={"name": ""})
             self.assertEqual(r3.status_code, 400)
@@ -200,13 +212,16 @@ class TestDatasetRequestModelsUnit(unittest.TestCase):
 
             r4 = client.post("/api/datasets", json={"name": "kb1", "id": "xx", "dataset_id": "xx", "foo": "bar"})
             self.assertEqual(r4.status_code, 200)
+            self.assertEqual(r4.json().get("dataset", {}).get("name"), "kb1")
             self.assertEqual(ragflow.created[0].get("id"), None)
             self.assertEqual(ragflow.created[0].get("dataset_id"), None)
             self.assertEqual(ragflow.created[0].get("foo"), "bar")
 
             r5 = client.put("/api/datasets/d1", json={"name": "kb2", "id": "xx", "dataset_id": "xx"})
-            self.assertEqual(r5.status_code, 403)
-            self.assertEqual(r5.json().get("detail"), "kb_not_allowed")
+            self.assertEqual(r5.status_code, 200)
+            self.assertEqual(ragflow.updated[0][0], "d1")
+            self.assertEqual(ragflow.updated[0][1].get("id"), None)
+            self.assertEqual(ragflow.updated[0][1].get("dataset_id"), None)
 
 
 class TestSearchChunksUnit(unittest.TestCase):

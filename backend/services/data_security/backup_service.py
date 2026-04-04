@@ -61,6 +61,40 @@ def _prune_old_backup_packs(*, target_dir: Path, keep_max: int, keep_dir: Path) 
     return deleted
 
 
+def _cleanup_empty_parents(path: Path, *, stop_at: Path) -> None:
+    current = path
+    try:
+        stop_real = stop_at.resolve()
+    except Exception:
+        stop_real = stop_at
+
+    while True:
+        try:
+            current_real = current.resolve()
+        except Exception:
+            current_real = current
+        if current_real == stop_real:
+            break
+        try:
+            current.rmdir()
+        except Exception:
+            break
+        parent = current.parent
+        if parent == current:
+            break
+        current = parent
+
+
+def _finalize_local_backup(*, pack_dir: Path, local_root: Path) -> Path:
+    local_root.mkdir(parents=True, exist_ok=True)
+    final_dir = local_root / pack_dir.name
+    if final_dir.exists():
+        raise RuntimeError(f"local_backup_destination_exists:{final_dir}")
+    pack_dir.rename(final_dir)
+    _cleanup_empty_parents(pack_dir.parent, stop_at=local_root / "_staging")
+    return final_dir
+
+
 def _compute_backup_package_hash(pack_dir: Path) -> str:
     if not pack_dir.exists() or not pack_dir.is_dir():
         raise RuntimeError(f"backup_package_not_found: {pack_dir}")
@@ -135,25 +169,50 @@ class DataSecurityBackupService:
 
         if not ctx.pack_dir:
             raise RuntimeError("pack_dir_not_prepared")
-        pack_dir = ctx.pack_dir
-
-        try:
-            keep_max = int(getattr(settings, "backup_retention_max", 30) or 30)
-            keep_max = max(1, min(100, keep_max))
-            _prune_old_backup_packs(target_dir=pack_dir.parent, keep_max=keep_max, keep_dir=pack_dir)
-        except Exception as exc:
-            logging.getLogger(__name__).warning("[Backup] retention prune skipped: %s", exc, exc_info=True)
+        staged_pack_dir = ctx.pack_dir
+        local_root = Path(settings.local_backup_target_path())
 
         self.store.update_job(job_id, status="running", progress=88, message="backup_hashing")
-        package_hash = _compute_backup_package_hash(pack_dir)
+        package_hash = _compute_backup_package_hash(staged_pack_dir)
         self.store.update_job(job_id, package_hash=package_hash)
+
+        keep_max = int(getattr(settings, "backup_retention_max", 30) or 30)
+        keep_max = max(1, min(100, keep_max))
+
+        local_output_dir: Path | None = None
+        local_error: str | None = None
+        source_pack_dir = staged_pack_dir
+
+        self.store.update_job(job_id, status="running", progress=90, message="backup_localizing")
+        try:
+            local_output_dir = _finalize_local_backup(pack_dir=staged_pack_dir, local_root=local_root)
+            source_pack_dir = local_output_dir
+            self.store.update_job(
+                job_id,
+                output_dir=str(local_output_dir),
+                progress=92,
+                message="backup_local_completed",
+            )
+            try:
+                _prune_old_backup_packs(target_dir=local_root, keep_max=keep_max, keep_dir=local_output_dir)
+            except Exception as exc:
+                logging.getLogger(__name__).warning("[Backup] local retention prune skipped: %s", exc, exc_info=True)
+        except Exception as exc:
+            local_error = str(exc)
+            self.store.update_job(
+                job_id,
+                output_dir="",
+                progress=92,
+                message="backup_local_failed",
+                detail=local_error,
+            )
 
         backup_done_ms = int(time.time() * 1000)
         self.store.update_job(
             job_id,
             status="running",
-            progress=90,
-            message="backup_completed_waiting_replication",
+            progress=94,
+            message="backup_completed_waiting_windows",
         )
         try:
             if job_kind == "full":
@@ -168,37 +227,76 @@ class DataSecurityBackupService:
         try:
             from .replica_service import BackupReplicaService
 
-            replicated = bool(BackupReplicaService(self.store).replicate_backup(pack_dir, job_id))
+            replicated = bool(BackupReplicaService(self.store).replicate_backup(source_pack_dir, job_id))
+            if replicated:
+                current_job = self.store.get_job(job_id)
+                if current_job.replica_path:
+                    try:
+                        _prune_old_backup_packs(
+                            target_dir=Path(current_job.replica_path).parent,
+                            keep_max=keep_max,
+                            keep_dir=Path(current_job.replica_path),
+                        )
+                    except Exception as exc:
+                        logging.getLogger(__name__).warning(
+                            "[Backup] windows retention prune skipped: %s",
+                            exc,
+                            exc_info=True,
+                        )
         except Exception as exc:
             logging.getLogger(__name__).error("Replication failed: %s", exc, exc_info=True)
             replication_error = str(exc)
 
         finished_at_ms = int(time.time() * 1000)
-        replica_enabled = bool(getattr(settings, "replica_enabled", False))
         current_job = self.store.get_job(job_id)
+        local_succeeded = bool(current_job.output_dir)
+        current_replication_status = str(current_job.replication_status or "").strip()
+        if current_replication_status in ("", "pending"):
+            if replicated:
+                final_replication_status = "succeeded"
+            elif replication_error or bool(getattr(settings, "replica_enabled", False)):
+                final_replication_status = "failed"
+            else:
+                final_replication_status = "skipped"
+        else:
+            final_replication_status = current_replication_status
         final_replication_error = replication_error or current_job.replication_error
-        final_replication_status = "succeeded" if replicated else ("failed" if replica_enabled else "skipped")
+        if final_replication_status == "failed" and not final_replication_error:
+            final_replication_error = "windows_backup_failed"
+        if final_replication_status == "skipped" and not final_replication_error:
+            final_replication_error = "windows_backup_skipped"
+        windows_succeeded = final_replication_status == "succeeded" and bool(current_job.replica_path)
 
-        if replica_enabled and not replicated:
-            self.store.update_job(
-                job_id,
-                status="failed",
-                progress=100,
-                message="backup_failed_replication_required",
-                detail=(final_replication_error or current_job.detail or "replication_failed"),
-                replication_status=final_replication_status,
-                replication_error=(final_replication_error or current_job.detail or "replication_failed"),
-                finished_at_ms=finished_at_ms,
-            )
-            return
+        final_detail_parts: list[str] = []
+        if local_error:
+            final_detail_parts.append(f"local_backup_failed:{local_error}")
+        if final_replication_status == "failed" and final_replication_error:
+            final_detail_parts.append(f"windows_backup_failed:{final_replication_error}")
+        elif final_replication_status == "skipped" and final_replication_error:
+            final_detail_parts.append(f"windows_backup_skipped:{final_replication_error}")
 
+        if local_succeeded and windows_succeeded:
+            final_status = "completed"
+            final_message = "backup_completed_local_and_windows"
+        elif local_succeeded:
+            final_status = "completed"
+            final_message = "backup_completed_local_only"
+        elif windows_succeeded:
+            final_status = "completed"
+            final_message = "backup_completed_windows_only"
+        else:
+            final_status = "failed"
+            final_message = "backup_failed_local_and_windows"
+
+        final_detail = "; ".join(part for part in final_detail_parts if part) or None
         self.store.update_job(
             job_id,
-            status="completed",
+            status=final_status,
             progress=100,
-            message="backup_completed",
+            message=final_message,
+            detail=final_detail,
             replication_status=final_replication_status,
-            replication_error=(final_replication_error if final_replication_status == "failed" else None),
+            replication_error=(final_replication_error if final_replication_status in ("failed", "skipped") else None),
             finished_at_ms=finished_at_ms,
         )
 

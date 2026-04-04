@@ -26,6 +26,15 @@ class UserInboxStore:
     def _conn(self):
         return connect_sqlite(self.db_path)
 
+    @staticmethod
+    def _normalize_event_types(event_types) -> list[str]:
+        items: list[str] = []
+        for value in event_types or []:
+            text = str(value or "").strip()
+            if text:
+                items.append(text)
+        return items
+
     def create_item(
         self,
         *,
@@ -99,46 +108,65 @@ class UserInboxStore:
         finally:
             conn.close()
 
-    def list_items(self, *, recipient_user_id: str, unread_only: bool = False, limit: int = 100) -> list[dict]:
+    def list_items(
+        self,
+        *,
+        recipient_user_id: str,
+        unread_only: bool = False,
+        limit: int = 100,
+        exclude_event_types=None,
+    ) -> list[dict]:
         lim = max(1, min(500, int(limit)))
+        excluded = self._normalize_event_types(exclude_event_types)
+        excluded_clause = ""
+        excluded_params: list[str] = []
+        if excluded:
+            excluded_clause = f" AND event_type NOT IN ({', '.join('?' for _ in excluded)})"
+            excluded_params = excluded
         conn = self._conn()
         try:
             if unread_only:
                 rows = conn.execute(
-                    """
+                    f"""
                     SELECT inbox_id
                     FROM user_inbox_notifications
-                    WHERE recipient_user_id = ? AND status = 'unread'
+                    WHERE recipient_user_id = ? AND status = 'unread'{excluded_clause}
                     ORDER BY created_at_ms DESC
                     LIMIT ?
                     """,
-                    (recipient_user_id, lim),
+                    tuple([recipient_user_id, *excluded_params, lim]),
                 ).fetchall()
             else:
                 rows = conn.execute(
-                    """
+                    f"""
                     SELECT inbox_id
                     FROM user_inbox_notifications
-                    WHERE recipient_user_id = ?
+                    WHERE recipient_user_id = ?{excluded_clause}
                     ORDER BY created_at_ms DESC
                     LIMIT ?
                     """,
-                    (recipient_user_id, lim),
+                    tuple([recipient_user_id, *excluded_params, lim]),
                 ).fetchall()
             return [self.get_item(str(row["inbox_id"])) for row in rows if row]
         finally:
             conn.close()
 
-    def count_unread(self, *, recipient_user_id: str) -> int:
+    def count_unread(self, *, recipient_user_id: str, exclude_event_types=None) -> int:
+        excluded = self._normalize_event_types(exclude_event_types)
+        excluded_clause = ""
+        excluded_params: list[str] = []
+        if excluded:
+            excluded_clause = f" AND event_type NOT IN ({', '.join('?' for _ in excluded)})"
+            excluded_params = excluded
         conn = self._conn()
         try:
             row = conn.execute(
-                """
+                f"""
                 SELECT COUNT(1) AS c
                 FROM user_inbox_notifications
-                WHERE recipient_user_id = ? AND status = 'unread'
+                WHERE recipient_user_id = ? AND status = 'unread'{excluded_clause}
                 """,
-                (recipient_user_id,),
+                tuple([recipient_user_id, *excluded_params]),
             ).fetchone()
             return int(row["c"] or 0) if row else 0
         finally:

@@ -334,13 +334,13 @@ export default function KnowledgeBases() {
     try {
       const name = String(createName || '').trim();
       if (!name) throw new Error('\u8bf7\u8f93\u5165\u77e5\u8bc6\u5e93\u540d\u79f0');
-      const request = await knowledgeApi.createRagflowDataset({
+      await knowledgeApi.createRagflowDataset({
         name,
         node_id: createDirId || null,
         ...pickAllowed(createPayload, DATASET_CREATE_ALLOWED_KEYS),
       });
       setCreateOpen(false);
-      setKbSaveStatus(`新建申请已提交${request?.request_id ? `：${request.request_id}` : ''}`);
+      setKbSaveStatus('新建知识库成功');
       await refreshAll();
     } catch (e) {
       setCreateError(e?.message || '\u521b\u5efa\u5931\u8d25');

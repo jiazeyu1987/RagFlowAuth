@@ -180,6 +180,11 @@ const AuditLogs = () => {
   }, []);
 
   const rows = useMemo(() => result.items || [], [result.items]);
+  const visibleDepartments = useMemo(() => {
+    const companyId = filters.company_id ? Number(filters.company_id) : null;
+    if (companyId == null) return departments;
+    return departments.filter((department) => department.company_id == null || department.company_id === companyId);
+  }, [departments, filters.company_id]);
 
   const onApply = async () => {
     const next = { ...filters, offset: 0 };
@@ -265,9 +270,9 @@ const AuditLogs = () => {
               data-testid="audit-filter-department"
             >
               <option value="">全部</option>
-              {departments.map((d) => (
+              {visibleDepartments.map((d) => (
                 <option key={d.id} value={String(d.id)}>
-                  {d.name}
+                  {d.path_name || d.name}
                 </option>
               ))}
             </select>

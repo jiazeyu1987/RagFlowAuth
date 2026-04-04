@@ -164,12 +164,66 @@ function HookHarness() {
       >
         assign-other-user
       </button>
+      <button
+        type="button"
+        data-testid="assign-owned-user-stale-groups"
+        onClick={() =>
+          hook.handleAssignGroup({ user_id: 'u-owned-stale', role: 'viewer', manager_user_id: 'sub-actor', group_ids: [11, 7] })
+        }
+      >
+        assign-owned-user-stale-groups
+      </button>
+      <button type="button" data-testid="save-group" onClick={hook.handleSaveGroup}>
+        save-group
+      </button>
+      <button
+        type="button"
+        data-testid="open-reset-self"
+        onClick={() =>
+          hook.handleOpenResetPassword({ user_id: 'sub-actor', role: 'sub_admin', username: 'sub_admin_a' })
+        }
+      >
+        open-reset-self
+      </button>
+      <button
+        type="button"
+        data-testid="open-reset-owned"
+        onClick={() =>
+          hook.handleOpenResetPassword({ user_id: 'u-owned', role: 'viewer', manager_user_id: 'sub-actor', username: 'viewer_a' })
+        }
+      >
+        open-reset-owned
+      </button>
+      <button
+        type="button"
+        data-testid="open-reset-other-viewer"
+        onClick={() =>
+          hook.handleOpenResetPassword({ user_id: 'u-other', role: 'viewer', manager_user_id: 'someone-else', username: 'viewer_b' })
+        }
+      >
+        open-reset-other-viewer
+      </button>
+      <button
+        type="button"
+        data-testid="open-reset-other-sub-admin"
+        onClick={() =>
+          hook.handleOpenResetPassword({ user_id: 'sub-other', role: 'sub_admin', username: 'sub_admin_b' })
+        }
+      >
+        open-reset-other-sub-admin
+      </button>
+      <button type="button" data-testid="close-reset" onClick={hook.handleCloseResetPassword}>
+        close-reset
+      </button>
       <div data-testid="create-error">{hook.createUserError || ''}</div>
       <div data-testid="policy-error">{hook.policyError || ''}</div>
       <div data-testid="org-error">{hook.orgDirectoryError || ''}</div>
       <div data-testid="kb-root-invalid">{hook.managedKbRootInvalid ? 'yes' : 'no'}</div>
       <div data-testid="assign-groups-flag">{hook.canAssignGroups ? 'yes' : 'no'}</div>
+      <div data-testid="selected-group-ids">{hook.selectedGroupIds.join(',')}</div>
+      <div data-testid="reset-passwords-flag">{hook.canResetPasswords ? 'yes' : 'no'}</div>
       <div data-testid="show-group-modal">{hook.showGroupModal ? 'yes' : 'no'}</div>
+      <div data-testid="show-reset-password-modal">{hook.showResetPasswordModal ? 'yes' : 'no'}</div>
     </div>
   );
 }
@@ -327,6 +381,29 @@ describe('useUserManagement user type payloads', () => {
     expect(screen.getByTestId('show-group-modal')).toHaveTextContent('yes');
   });
 
+  it('filters stale permission group ids before saving owned user assignments', async () => {
+    useAuth.mockReturnValue({
+      user: { role: 'sub_admin', user_id: 'sub-actor' },
+      can: jest.fn(() => true),
+    });
+    const user = userEvent.setup();
+    render(<HookHarness />);
+
+    await waitFor(() => expect(usersApi.list).toHaveBeenCalled());
+    await waitFor(() => expect(permissionGroupsApi.list).toHaveBeenCalled());
+
+    await user.click(screen.getByTestId('assign-owned-user-stale-groups'));
+
+    expect(screen.getByTestId('show-group-modal')).toHaveTextContent('yes');
+    expect(screen.getByTestId('selected-group-ids')).toHaveTextContent('7');
+
+    await user.click(screen.getByTestId('save-group'));
+
+    await waitFor(() =>
+      expect(usersApi.update).toHaveBeenCalledWith('u-owned-stale', { group_ids: [7] })
+    );
+  });
+
   it('admin does not request permission groups anymore', async () => {
     render(<HookHarness />);
 
@@ -344,6 +421,33 @@ describe('useUserManagement user type payloads', () => {
 
     await waitFor(() => expect(usersApi.list).toHaveBeenCalled());
     await waitFor(() => expect(permissionGroupsApi.list).toHaveBeenCalled());
+  });
+
+  it('sub admin can reset own and owned user passwords only', async () => {
+    useAuth.mockReturnValue({
+      user: { role: 'sub_admin', user_id: 'sub-actor' },
+      can: jest.fn(() => true),
+    });
+    const user = userEvent.setup();
+    render(<HookHarness />);
+
+    await waitFor(() => expect(usersApi.list).toHaveBeenCalled());
+    expect(screen.getByTestId('reset-passwords-flag')).toHaveTextContent('yes');
+
+    await user.click(screen.getByTestId('open-reset-other-viewer'));
+    expect(screen.getByTestId('show-reset-password-modal')).toHaveTextContent('no');
+
+    await user.click(screen.getByTestId('open-reset-owned'));
+    expect(screen.getByTestId('show-reset-password-modal')).toHaveTextContent('yes');
+
+    await user.click(screen.getByTestId('close-reset'));
+    expect(screen.getByTestId('show-reset-password-modal')).toHaveTextContent('no');
+
+    await user.click(screen.getByTestId('open-reset-other-sub-admin'));
+    expect(screen.getByTestId('show-reset-password-modal')).toHaveTextContent('no');
+
+    await user.click(screen.getByTestId('open-reset-self'));
+    expect(screen.getByTestId('show-reset-password-modal')).toHaveTextContent('yes');
   });
 
   it('reloads knowledge directories by selected company for sub admin creation', async () => {

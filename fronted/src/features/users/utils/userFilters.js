@@ -1,5 +1,18 @@
 const UNASSIGNED_DEPARTMENT = '未分配部门';
 
+const getUserGroupIds = (user) => {
+  if (Array.isArray(user?.group_ids)) return user.group_ids;
+  if (Array.isArray(user?.permission_groups)) return user.permission_groups.map((group) => group.group_id);
+  return [];
+};
+
+const getVisiblePermissionGroups = (user) =>
+  Array.isArray(user?.permission_groups)
+    ? user.permission_groups.filter((group) => String(group?.group_name || '').trim())
+    : [];
+
+const hasAssignedPermissionGroups = (user) => getVisiblePermissionGroups(user).length > 0;
+
 export const buildListParams = (filters) => {
   const f = filters || {};
   const params = {};
@@ -32,6 +45,7 @@ export const filterUsers = (allUsers, filters) => {
   const departmentId = f.department_id ? Number(f.department_id) : null;
   const status = f.status || '';
   const groupId = f.group_id ? Number(f.group_id) : null;
+  const assignmentStatus = String(f.assignment_status || '').trim();
 
   let fromMs = null;
   let toMs = null;
@@ -44,20 +58,23 @@ export const filterUsers = (allUsers, filters) => {
     toMs = Number.isNaN(ms) ? null : ms;
   }
 
-  return users.filter((u) => {
-    const username = String(u?.username || '');
-    const fullName = String(u?.full_name || '');
-    const email = String(u?.email || '');
+  return users.filter((user) => {
+    const username = String(user?.username || '');
+    const fullName = String(user?.full_name || '');
+    const email = String(user?.email || '');
+
     if (q && !username.includes(q) && !fullName.includes(q) && !email.includes(q)) return false;
-    if (companyId != null && u?.company_id !== companyId) return false;
-    if (departmentId != null && u?.department_id !== departmentId) return false;
-    if (status && u?.status !== status) return false;
+    if (companyId != null && user?.company_id !== companyId) return false;
+    if (departmentId != null && user?.department_id !== departmentId) return false;
+    if (status && user?.status !== status) return false;
     if (groupId != null) {
-      const gids = u?.group_ids || (u?.permission_groups || []).map((pg) => pg.group_id);
-      if (!Array.isArray(gids) || !gids.includes(groupId)) return false;
+      const groupIds = getUserGroupIds(user);
+      if (!Array.isArray(groupIds) || !groupIds.some((id) => Number(id) === groupId)) return false;
     }
-    if (fromMs != null && Number(u?.created_at_ms || 0) < fromMs) return false;
-    if (toMs != null && Number(u?.created_at_ms || 0) > toMs) return false;
+    if (assignmentStatus === 'assigned' && !hasAssignedPermissionGroups(user)) return false;
+    if (assignmentStatus === 'unassigned' && hasAssignedPermissionGroups(user)) return false;
+    if (fromMs != null && Number(user?.created_at_ms || 0) < fromMs) return false;
+    if (toMs != null && Number(user?.created_at_ms || 0) > toMs) return false;
     return true;
   });
 };

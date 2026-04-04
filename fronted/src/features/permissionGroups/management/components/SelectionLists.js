@@ -6,6 +6,7 @@ export function FolderSelectionList({
   items,
   selected,
   onToggle,
+  disabled = false,
   emptyText,
   itemTestIdPrefix,
   emptyTestId,
@@ -38,13 +39,14 @@ export function FolderSelectionList({
                   alignItems: 'center',
                   gap: 8,
                   padding: '4px 2px',
-                  cursor: 'pointer',
+                  cursor: disabled ? 'not-allowed' : 'pointer',
                 }}
               >
                 <input
                   type="checkbox"
                   data-testid={itemTestIdPrefix ? `${itemTestIdPrefix}-${safeId}` : undefined}
                   checked={selected.includes(item.id)}
+                  disabled={disabled}
                   onChange={() => onToggle(item.id)}
                 />
                 <span
@@ -230,7 +232,7 @@ export function KnowledgeNodeTreeSelection({
   );
 }
 
-export function ChatSelection({ chatAgents, selected, onToggle }) {
+export function ChatSelection({ chatAgents, selected, onToggle, disabled = false }) {
   return (
     <div style={{ marginBottom: 12 }}>
       <div style={{ fontWeight: 700, marginBottom: 8 }}>对话权限</div>
@@ -258,13 +260,14 @@ export function ChatSelection({ chatAgents, selected, onToggle }) {
                   alignItems: 'center',
                   gap: 8,
                   padding: '4px 2px',
-                  cursor: 'pointer',
+                  cursor: disabled ? 'not-allowed' : 'pointer',
                 }}
               >
                 <input
                   type="checkbox"
                   data-testid={`pg-form-chat-${safeId}`}
                   checked={selected.includes(chat.id)}
+                  disabled={disabled}
                   onChange={() => onToggle(chat.id)}
                 />
                 <span>

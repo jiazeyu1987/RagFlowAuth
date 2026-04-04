@@ -13,6 +13,7 @@ from .audit_logs import (
     ensure_kb_ref_indexes,
 )
 from .chat_sessions import ensure_chat_sessions_table
+from .chat_management import ensure_chat_ownerships_table
 from .chat_message_sources import ensure_chat_message_sources_table
 from .search_configs import ensure_search_configs_table
 from .upload_settings import ensure_upload_settings_table
@@ -96,6 +97,7 @@ def ensure_schema(db_path: str | Path) -> None:
         ensure_auth_login_sessions_table(conn)
         ensure_kb_documents_table(conn)
         ensure_chat_sessions_table(conn)
+        ensure_chat_ownerships_table(conn)
         ensure_chat_message_sources_table(conn)
         ensure_search_configs_table(conn)
         ensure_upload_settings_table(conn)

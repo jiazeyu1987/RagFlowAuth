@@ -5,9 +5,14 @@ from typing import Optional
 from pydantic import BaseModel
 
 
+class OperationApprovalWorkflowMemberBody(BaseModel):
+    member_type: str
+    member_ref: str
+
+
 class OperationApprovalWorkflowStepBody(BaseModel):
     step_name: str
-    approver_user_ids: list[str]
+    members: list[OperationApprovalWorkflowMemberBody]
 
 
 class OperationApprovalWorkflowBody(BaseModel):

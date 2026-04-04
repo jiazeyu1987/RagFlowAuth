@@ -4,6 +4,7 @@ export const DEFAULT_FILTERS = {
   department_id: '',
   status: '',
   group_id: '',
+  assignment_status: '',
   created_from: '',
   created_to: '',
 };

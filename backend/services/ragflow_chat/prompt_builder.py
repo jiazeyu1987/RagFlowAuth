@@ -1,5 +1,8 @@
-from typing import Any, Dict
+﻿from typing import Any, Dict
 import re
+
+
+PARSED_FILE_FIELD_PATTERN = re.compile(r"parsed.*file|file.*parsed", re.IGNORECASE)
 
 
 class RagflowPromptBuilder:
@@ -32,6 +35,9 @@ class RagflowPromptBuilder:
             if not isinstance(k, str):
                 continue
             if k.endswith("_task_id") or k.endswith("_task_finish_at") or k.endswith("_task_start_at"):
+                body.pop(k, None)
+                continue
+            if PARSED_FILE_FIELD_PATTERN.search(k):
                 body.pop(k, None)
 
         # Update: keep only provided fields (caller may send full object though).
@@ -97,11 +103,10 @@ class RagflowPromptBuilder:
         if not isinstance(payload, dict):
             return {}
         fields: dict[str, Any] = {}
-        pat = re.compile(r"parsed.*file|file.*parsed", re.IGNORECASE)
         for k, v in payload.items():
             if not isinstance(k, str):
                 continue
-            if not pat.search(k):
+            if not PARSED_FILE_FIELD_PATTERN.search(k):
                 continue
             # Only clear fields that already exist on this RAGFlow version.
             # Keep the "shape" so the remote validation is more likely to accept it.

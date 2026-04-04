@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import authClient from '../api/authClient';
+import operationApprovalApi from '../features/operationApproval/api';
 import { useAuth } from '../hooks/useAuth';
 
 const MOBILE_BREAKPOINT = 768;
@@ -39,14 +39,18 @@ export default function Dashboard() {
   });
   const [loading, setLoading] = useState(true);
   const [statsError, setStatsError] = useState('');
-  const [stats, setStats] = useState({ pending: 0, approved: 0, rejected: 0, total: 0 });
+  const [stats, setStats] = useState({
+    in_approval_count: 0,
+    executed_count: 0,
+    rejected_count: 0,
+    execution_failed_count: 0,
+  });
 
   const capabilities = useMemo(
     () => ({
       canBrowse: can('ragflow_documents', 'view'),
-      canViewKb: can('kb_documents', 'view'),
+      canViewDocumentHistory: can('kb_documents', 'view'),
       canUploadKb: can('kb_documents', 'upload'),
-      canReviewKb: can('kb_documents', 'review'),
     }),
     [can]
   );
@@ -65,37 +69,63 @@ export default function Dashboard() {
       setLoading(true);
       setStatsError('');
       try {
-        if (capabilities.canViewKb) {
-          const data = await authClient.getStats();
-          if (!cancelled) {
-            setStats({
-              pending: Number(data?.pending_documents || 0),
-              approved: Number(data?.approved_documents || 0),
-              rejected: Number(data?.rejected_documents || 0),
-              total: Number(data?.total_documents || 0),
-            });
-          }
+        const data = await operationApprovalApi.getStats();
+        if (!cancelled) {
+          setStats({
+            in_approval_count: Number(data?.in_approval_count || 0),
+            executed_count: Number(data?.executed_count || 0),
+            rejected_count: Number(data?.rejected_count || 0),
+            execution_failed_count: Number(data?.execution_failed_count || 0),
+          });
         }
-      } catch (e) {
-        if (!cancelled) setStatsError(e?.message || '加载统计信息失败');
+      } catch (error) {
+        if (!cancelled) {
+          setStatsError(error?.message || '加载审批统计失败');
+        }
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
     };
     run();
     return () => {
       cancelled = true;
     };
-  }, [capabilities.canViewKb]);
+  }, []);
 
   const cards = useMemo(
     () => [
-      { key: 'pending', title: '待审核', value: stats.pending, color: '#f59e0b', show: capabilities.canReviewKb, onClick: () => navigate('/documents') },
-      { key: 'approved', title: '已通过', value: stats.approved, color: '#10b981', show: capabilities.canViewKb, onClick: () => navigate('/documents') },
-      { key: 'rejected', title: '已驳回', value: stats.rejected, color: '#ef4444', show: capabilities.canViewKb, onClick: () => navigate('/documents') },
-      { key: 'total', title: '总文档数', value: stats.total, color: '#3b82f6', show: capabilities.canViewKb, onClick: () => navigate('/documents') },
-    ].filter((card) => card.show),
-    [capabilities.canReviewKb, capabilities.canViewKb, navigate, stats]
+      {
+        key: 'in_approval',
+        title: '审批中',
+        value: stats.in_approval_count,
+        color: '#2563eb',
+        onClick: () => navigate('/approvals?status=in_approval'),
+      },
+      {
+        key: 'executed',
+        title: '已执行',
+        value: stats.executed_count,
+        color: '#15803d',
+        onClick: () => navigate('/approvals?status=executed'),
+      },
+      {
+        key: 'rejected',
+        title: '已驳回',
+        value: stats.rejected_count,
+        color: '#dc2626',
+        onClick: () => navigate('/approvals?status=rejected'),
+      },
+      {
+        key: 'execution_failed',
+        title: '执行失败',
+        value: stats.execution_failed_count,
+        color: '#b91c1c',
+        onClick: () => navigate('/approvals?status=execution_failed'),
+      },
+    ],
+    [navigate, stats]
   );
 
   if (loading) {
@@ -111,27 +141,70 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {statsError ? <div data-testid="dashboard-stats-error" style={{ color: '#b91c1c', marginBottom: '12px' }}>{statsError}</div> : null}
-
-      {cards.length > 0 ? (
-        <div style={cardGridStyle(isMobile)}>
-          {cards.map((card) => (
-            <button key={card.key} type="button" data-testid={`dashboard-card-${card.key}`} onClick={card.onClick} style={{ ...cardStyle, textAlign: 'left', cursor: 'pointer' }}>
-              <div style={{ color: '#6b7280', fontWeight: 700 }}>{card.title}</div>
-              <div style={{ marginTop: '8px', fontSize: '1.8rem', color: card.color, fontWeight: 900 }}>{card.value}</div>
-            </button>
-          ))}
+      {statsError ? (
+        <div data-testid="dashboard-stats-error" style={{ color: '#b91c1c', marginBottom: '12px' }}>
+          {statsError}
         </div>
-      ) : (
-        <div style={{ ...cardStyle, color: '#6b7280' }} data-testid="dashboard-empty">当前角色暂无可展示的统计卡片。</div>
-      )}
+      ) : null}
+
+      <div style={cardGridStyle(isMobile)}>
+        {cards.map((card) => (
+          <button
+            key={card.key}
+            type="button"
+            data-testid={`dashboard-card-${card.key}`}
+            onClick={card.onClick}
+            style={{ ...cardStyle, textAlign: 'left', cursor: 'pointer' }}
+          >
+            <div style={{ color: '#6b7280', fontWeight: 700 }}>{card.title}</div>
+            <div style={{ marginTop: '8px', fontSize: '1.8rem', color: card.color, fontWeight: 900 }}>
+              {card.value}
+            </div>
+          </button>
+        ))}
+      </div>
 
       <div style={{ ...cardStyle, marginTop: '14px' }}>
         <div style={{ marginBottom: '10px', fontWeight: 900, color: '#111827' }}>快捷操作</div>
         <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', flexDirection: isMobile ? 'column' : 'row' }}>
-          {capabilities.canBrowse ? <button type="button" data-testid="dashboard-quick-browser" onClick={() => navigate('/browser')} style={quickButtonStyle('#2563eb', isMobile)}>浏览文档</button> : null}
-          {capabilities.canUploadKb ? <button type="button" data-testid="dashboard-quick-upload" onClick={() => navigate('/upload')} style={quickButtonStyle('#059669', isMobile)}>上传文档</button> : null}
-          {capabilities.canViewKb ? <button type="button" data-testid="dashboard-quick-documents" onClick={() => navigate('/documents')} style={quickButtonStyle('#7c3aed', isMobile)}>查看文档</button> : null}
+          <button
+            type="button"
+            data-testid="dashboard-quick-approvals"
+            onClick={() => navigate('/approvals')}
+            style={quickButtonStyle('#2563eb', isMobile)}
+          >
+            查看审批
+          </button>
+          {capabilities.canUploadKb ? (
+            <button
+              type="button"
+              data-testid="dashboard-quick-upload"
+              onClick={() => navigate('/upload')}
+              style={quickButtonStyle('#059669', isMobile)}
+            >
+              提交上传申请
+            </button>
+          ) : null}
+          {capabilities.canViewDocumentHistory ? (
+            <button
+              type="button"
+              data-testid="dashboard-quick-document-history"
+              onClick={() => navigate('/document-history')}
+              style={quickButtonStyle('#7c3aed', isMobile)}
+            >
+              查看文档记录
+            </button>
+          ) : null}
+          {capabilities.canBrowse ? (
+            <button
+              type="button"
+              data-testid="dashboard-quick-browser"
+              onClick={() => navigate('/browser')}
+              style={quickButtonStyle('#0f766e', isMobile)}
+            >
+              浏览文档
+            </button>
+          ) : null}
         </div>
       </div>
     </div>

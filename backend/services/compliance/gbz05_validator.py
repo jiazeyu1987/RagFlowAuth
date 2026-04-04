@@ -75,9 +75,8 @@ REQUIRED_FILES: tuple[str, ...] = (
     "backend/api/training_compliance.py",
     "backend/app/dependencies.py",
     "backend/app/main.py",
-    "backend/app/modules/review/routes/approve.py",
-    "backend/app/modules/review/routes/reject.py",
-    "backend/app/modules/review/routes/overwrite.py",
+    "backend/app/modules/operation_approvals/router.py",
+    "backend/services/operation_approval/service.py",
     "backend/app/modules/data_security/router.py",
     "backend/services/compliance/gbz05_validator.py",
     "backend/tests/test_training_compliance_api_unit.py",
@@ -238,9 +237,7 @@ def validate_gbz05_repo_state(repo_root: str | Path, *, as_of: date | None = Non
                 )
 
     for rel_path in (
-        "backend/app/modules/review/routes/approve.py",
-        "backend/app/modules/review/routes/reject.py",
-        "backend/app/modules/review/routes/overwrite.py",
+        "backend/app/modules/operation_approvals/router.py",
         "backend/app/modules/data_security/router.py",
     ):
         path = root / rel_path

@@ -13,6 +13,11 @@ const parseMaybeJson = async (response) => {
   }
 };
 
+const NON_AUTH_401_DETAILS = new Set([
+  'sign_token_invalid',
+  'sign_token_expired',
+]);
+
 let refreshPromise = null;
 let authRedirecting = false;
 
@@ -40,6 +45,13 @@ const handleUnauthorizedTerminal = (url, options = {}) => {
   if (!shouldAutoRedirectToLogin(url, options)) return;
   tokenStore.clearAuth();
   redirectToLogin();
+};
+
+const isBusinessUnauthorized = async (response) => {
+  if (!response || response.status !== 401) return false;
+  const data = await parseMaybeJson(response.clone());
+  const detail = String(data?.detail || data?.message || data?.error || '').trim();
+  return NON_AUTH_401_DETAILS.has(detail);
 };
 
 const refreshAccessToken = async () => {
@@ -102,6 +114,7 @@ const request = async (pathOrUrl, options = {}) => {
   const response = await fetch(url, { ...options, headers });
 
   if (response.status !== 401) return response;
+  if (await isBusinessUnauthorized(response)) return response;
 
   if (options.skipRefresh) {
     handleUnauthorizedTerminal(url, options);
@@ -127,6 +140,7 @@ const request = async (pathOrUrl, options = {}) => {
 
   const retryHeaders = withAuthHeaders(options.headers, includeContentType, options.body, options.skipAuth);
   const retryResponse = await fetch(url, { ...options, headers: retryHeaders });
+  if (await isBusinessUnauthorized(retryResponse)) return retryResponse;
   if (retryResponse.status === 401) {
     handleUnauthorizedTerminal(url, options);
   }

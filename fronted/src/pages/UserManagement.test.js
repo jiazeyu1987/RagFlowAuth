@@ -18,6 +18,7 @@ jest.mock('../features/users/components/modals/DisableUserModal', () => () => nu
 const createHookState = (overrides = {}) => ({
   loading: false,
   error: null,
+  isSubAdminUser: false,
   canManageUsers: true,
   canCreateUsers: true,
   canEditUserPolicy: true,
@@ -46,6 +47,7 @@ const createHookState = (overrides = {}) => ({
     department_id: '',
     status: '',
     group_id: '',
+    assignment_status: '',
     created_from: '',
     created_to: '',
   },
@@ -141,6 +143,43 @@ const createHookState = (overrides = {}) => ({
 describe('UserManagement simplified user ownership forms', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+  });
+
+  it('renders the users table in the left column and support panels in the right column', () => {
+    useUserManagement.mockReturnValue(createHookState());
+
+    render(<UserManagement />);
+
+    const layout = screen.getByTestId('users-management-layout');
+    const listColumn = screen.getByTestId('users-management-list-column');
+    const sideColumn = screen.getByTestId('users-management-side-column');
+
+    expect(layout).toHaveStyle({ display: 'flex', flexDirection: 'row' });
+    expect(within(listColumn).getByTestId('users-table')).toBeInTheDocument();
+    expect(within(sideColumn).getByTestId('users-filters-panel')).toBeInTheDocument();
+    expect(within(sideColumn).getByTestId('users-department-cards')).toBeInTheDocument();
+  });
+
+  it('does not render a duplicate page heading inside the content area', () => {
+    useUserManagement.mockReturnValue(createHookState());
+
+    render(<UserManagement />);
+
+    expect(screen.queryByRole('heading', { level: 2 })).not.toBeInTheDocument();
+  });
+
+  it('hides the department summary panel for sub admins', () => {
+    useUserManagement.mockReturnValue(
+      createHookState({
+        isSubAdminUser: true,
+        canCreateUsers: false,
+      })
+    );
+
+    render(<UserManagement />);
+
+    expect(screen.getByTestId('users-filters-panel')).toBeInTheDocument();
+    expect(screen.queryByTestId('users-department-cards')).not.toBeInTheDocument();
   });
 
   it('renders normal user create modal with sub admin selector and no permission groups', async () => {

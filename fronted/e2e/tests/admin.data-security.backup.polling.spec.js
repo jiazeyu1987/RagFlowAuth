@@ -16,6 +16,10 @@ adminTest('data security run backup polls progress until done @regression @admin
     full_backup_include_images: true,
     auth_db_path: 'data/auth.db',
     last_run_at_ms: null,
+    local_backup_target_path: '/app/data/backups',
+    local_backup_pack_count: 2,
+    windows_backup_target_path: '\\\\10.0.0.8\\backup\\ragflowauth',
+    windows_backup_pack_count: 2,
   };
 
   const jobs = [];
@@ -44,6 +48,7 @@ adminTest('data security run backup polls progress until done @regression @admin
       created_at_ms: Date.now(),
       started_at_ms: Date.now(),
       output_dir: '',
+      replication_status: 'pending',
     });
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ job_id: 1 }) });
   });
@@ -69,7 +74,14 @@ adminTest('data security run backup polls progress until done @regression @admin
     } else if (jobGetCount === 3) {
       Object.assign(j, { status: 'running', progress: 80, message: 'running' });
     } else {
-      Object.assign(j, { status: 'success', progress: 100, message: 'done' });
+      Object.assign(j, {
+        status: 'completed',
+        progress: 100,
+        message: 'backup_completed_local_and_windows',
+        output_dir: '/app/data/backups/migration_pack_20260404_020202',
+        replication_status: 'succeeded',
+        replica_path: '\\\\10.0.0.8\\backup\\ragflowauth\\migration_pack_20260404_020202',
+      });
     }
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(j) });
   });
@@ -80,7 +92,7 @@ adminTest('data security run backup polls progress until done @regression @admin
 
   await expect(page.getByTestId('ds-active-job-status')).toContainText('#1');
   await expect(page.getByTestId('ds-active-job-progress')).toContainText('100%', { timeout: 20_000 });
-  await expect(page.getByTestId('ds-active-job-status')).toContainText('success');
+  await expect(page.getByTestId('ds-active-job-status')).toContainText('completed');
 
   // After completion, list refresh should have occurred and history should include job row.
   await expect(page.getByTestId('ds-job-row-1')).toBeVisible();

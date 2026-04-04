@@ -114,6 +114,7 @@ class _Deps:
         self.ragflow_service = _RagflowService(b"%PDF-1.4 test", "x.pdf")
         self.permission_group_store = _PermissionGroupStore()
         self.org_directory_store = _OrgDirectoryStore()
+        self.org_structure_manager = self.org_directory_store
         self.watermark_policy_store = _WatermarkPolicyStore()
         self.knowledge_directory_manager = None
 
@@ -126,8 +127,6 @@ def _write_simple_xlsx(path: str) -> None:
     import openpyxl
     import openpyxl.worksheet._writer as _writer
 
-    # On some Windows environments (AV scanning), openpyxl can fail to delete its temporary files.
-    # For unit tests, cleanup failures should never fail the suite.
     orig_remove = _writer.os.remove
 
     def safe_remove(p: str) -> None:

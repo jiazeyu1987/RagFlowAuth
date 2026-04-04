@@ -20,8 +20,11 @@ class _UploadFile:
 
 
 class _KbStore:
+    def __init__(self):
+        self.created_documents = []
+
     def create_document(self, **kwargs):
-        return SimpleNamespace(
+        doc = SimpleNamespace(
             doc_id="d1",
             filename=kwargs["filename"],
             file_path=kwargs["file_path"],
@@ -33,14 +36,44 @@ class _KbStore:
             kb_dataset_id=kwargs["kb_dataset_id"],
             kb_name=kwargs["kb_name"],
         )
+        self.created_documents.append(doc)
+        return doc
+
+    def update_document_status(self, *, doc_id: str, status: str, reviewed_by: str | None = None, review_notes: str | None = None, ragflow_doc_id: str | None = None):  # noqa: ARG002
+        if not self.created_documents:
+            return None
+        doc = self.created_documents[-1]
+        doc.status = status
+        doc.reviewed_by = reviewed_by
+        doc.review_notes = review_notes
+        doc.ragflow_doc_id = ragflow_doc_id
+        return doc
 
 
 class _RagflowService:
+    def __init__(self):
+        self.uploaded = []
+        self.parsed = []
+
     def normalize_dataset_id(self, kb_ref: str):  # noqa: ARG002
         return None
 
     def resolve_dataset_name(self, kb_ref: str):  # noqa: ARG002
         return None
+
+    def upload_document_blob(self, file_filename: str, file_content: bytes, kb_id: str = "展厅") -> str:
+        self.uploaded.append(
+            {
+                "file_filename": str(file_filename),
+                "file_content": bytes(file_content),
+                "kb_id": str(kb_id),
+            }
+        )
+        return "rag-doc-1"
+
+    def parse_document(self, *, dataset_ref: str, document_id: str) -> bool:
+        self.parsed.append({"dataset_ref": str(dataset_ref), "document_id": str(document_id)})
+        return True
 
 
 @dataclass
@@ -100,7 +133,7 @@ class TestKnowledgeIngestionManagerUnit(unittest.IsolatedAsyncioTestCase):
         upload = _UploadFile(filename="x.png", content=b"abc", content_type=None)
         doc = await self.manager.stage_upload_knowledge(kb_ref="kb1", upload_file=upload, ctx=self.ctx)
         self.assertEqual(doc.mime_type, "image/png")
-        self.assertEqual(doc.status, "pending")
+        self.assertEqual(doc.status, "approved")
 
     async def test_stage_upload_rejects_unsupported_extension(self):
         upload = _UploadFile(filename="x.exe", content=b"abc", content_type=None)
@@ -146,6 +179,16 @@ class TestKnowledgeIngestionManagerUnit(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(doc.file_size, 3)
         finally:
             settings.MAX_FILE_SIZE = old_max
+
+    async def test_stage_upload_directly_finalizes_document(self):
+        upload = _UploadFile(filename="auto.txt", content=b"abc", content_type=None)
+        doc = await self.manager.stage_upload_knowledge(kb_ref="kb1", upload_file=upload, ctx=self.ctx)
+        self.assertEqual(doc.status, "approved")
+        self.assertEqual(doc.reviewed_by, "u1")
+        self.assertEqual(doc.review_notes, "direct_upload_ingestion_completed")
+        self.assertEqual(doc.ragflow_doc_id, "rag-doc-1")
+        self.assertEqual(self.deps.ragflow_service.uploaded[0]["kb_id"], "kb1")
+        self.assertEqual(self.deps.ragflow_service.parsed[0]["dataset_ref"], "kb1")
 
 
 if __name__ == "__main__":

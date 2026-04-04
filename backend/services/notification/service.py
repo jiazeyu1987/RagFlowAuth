@@ -7,6 +7,7 @@ from typing import Any
 
 from .dingtalk_adapter import DingTalkNotificationAdapter
 from .email_adapter import EmailNotificationAdapter
+from .event_catalog import AVAILABLE_CHANNEL_TYPES, SUPPORTED_EVENT_TYPES, list_event_groups
 from .store import NotificationStore
 
 logger = logging.getLogger(__name__)
@@ -74,11 +75,86 @@ class NotificationManager:
     def list_channels(self, *, enabled_only: bool = False) -> list[dict[str, Any]]:
         return self._store.list_channels(enabled_only=enabled_only)
 
-    def list_jobs(self, *, limit: int = 100, status: str | None = None) -> list[dict[str, Any]]:
-        return self._store.list_jobs(limit=limit, status=status)
+    def list_jobs(
+        self,
+        *,
+        limit: int = 100,
+        status: str | None = None,
+        event_type: str | None = None,
+        channel_type: str | None = None,
+    ) -> list[dict[str, Any]]:
+        return self._store.list_jobs(limit=limit, status=status, event_type=event_type, channel_type=channel_type)
 
     def list_delivery_logs(self, *, job_id: int, limit: int = 50) -> list[dict[str, Any]]:
         return self._store.list_delivery_logs(job_id=int(job_id), limit=limit)
+
+    def list_event_rules(self) -> dict[str, Any]:
+        self._ensure_event_rules_seeded()
+        rules_by_type = {str(item["event_type"]): item for item in self._store.list_event_rules()}
+        enabled_channel_config = self._enabled_channel_config_by_type()
+
+        groups: list[dict[str, Any]] = []
+        count = 0
+        for group in list_event_groups():
+            group_items: list[dict[str, Any]] = []
+            for item in group.get("items") or []:
+                event_type = str(item["event_type"])
+                stored_rule = rules_by_type.get(event_type) or {}
+                raw_enabled_channel_types = (
+                    stored_rule.get("enabled_channel_types")
+                    if stored_rule
+                    else self._default_rule_channel_types()
+                )
+                enabled_channel_types = self._normalize_channel_types(raw_enabled_channel_types)
+                group_items.append(
+                    {
+                        "group_key": str(group["group_key"]),
+                        "group_label": str(group["group_label"]),
+                        "event_type": event_type,
+                        "event_label": str(item["event_label"]),
+                        "enabled_channel_types": enabled_channel_types,
+                        "available_channel_types": list(AVAILABLE_CHANNEL_TYPES),
+                        "has_enabled_channel_config_by_type": dict(enabled_channel_config),
+                    }
+                )
+                count += 1
+            groups.append(
+                {
+                    "group_key": str(group["group_key"]),
+                    "group_label": str(group["group_label"]),
+                    "items": group_items,
+                }
+            )
+        return {"groups": groups, "count": count}
+
+    def upsert_event_rules(
+        self,
+        *,
+        items: list[dict[str, Any]],
+        audit: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        self._ensure_event_rules_seeded()
+        for item in items or []:
+            event_type = str((item or {}).get("event_type") or "").strip()
+            if event_type not in SUPPORTED_EVENT_TYPES:
+                raise NotificationManagerError("notification_event_type_unsupported", status_code=400)
+            enabled_channel_types = self._normalize_channel_types((item or {}).get("enabled_channel_types") or [])
+            before = self._store.get_event_rule(event_type)
+            updated = self._store.upsert_event_rule(
+                event_type=event_type,
+                enabled_channel_types=enabled_channel_types,
+            )
+            self._emit_audit(
+                action="notification_event_rule_upsert",
+                event_type=("create" if before is None else "update"),
+                resource_type="notification_event_rule",
+                resource_id=event_type,
+                before=before,
+                after=updated,
+                meta={"event_type": event_type, "enabled_channel_types": enabled_channel_types},
+                audit=audit,
+            )
+        return self.list_event_rules()
 
     def notify_event(
         self,
@@ -89,15 +165,50 @@ class NotificationManager:
         dedupe_key: str | None = None,
         allow_duplicate: bool = False,
         max_attempts: int = 3,
+        channel_types: list[str] | tuple[str, ...] | set[str] | None = None,
         audit: dict[str, Any] | None = None,
     ) -> list[dict[str, Any]]:
         event_type = str(event_type or "").strip()
         if not event_type:
             raise NotificationManagerError("notification_event_type_required", status_code=400)
+        if event_type not in SUPPORTED_EVENT_TYPES:
+            raise NotificationManagerError("notification_event_type_unsupported", status_code=400)
 
-        channels = self._store.list_channels(enabled_only=True)
-        if not channels:
-            raise NotificationManagerError("notification_channel_not_configured", status_code=400)
+        self._ensure_event_rules_seeded()
+        event_rule = self._store.get_event_rule(event_type)
+        if event_rule is None:
+            raise NotificationManagerError("notification_event_rule_not_found", status_code=500)
+
+        rule_channel_types = self._normalize_channel_types(event_rule.get("enabled_channel_types") or [])
+        caller_channel_types = (
+            self._normalize_channel_types(channel_types or [])
+            if channel_types is not None
+            else None
+        )
+        if caller_channel_types is None:
+            effective_channel_types = list(rule_channel_types)
+        else:
+            requested_set = set(caller_channel_types)
+            effective_channel_types = [item for item in rule_channel_types if item in requested_set]
+        if not effective_channel_types:
+            return []
+
+        enabled_channels_by_type = self._enabled_channels_by_type()
+        missing_channel_types = [
+            channel_type_name
+            for channel_type_name in effective_channel_types
+            if not enabled_channels_by_type.get(channel_type_name)
+        ]
+        if missing_channel_types:
+            detail = ",".join(missing_channel_types)
+            raise NotificationManagerError(
+                f"notification_channel_not_configured:{detail}",
+                status_code=400,
+            )
+
+        channels: list[dict[str, Any]] = []
+        for channel_type_name in effective_channel_types:
+            channels.extend(enabled_channels_by_type.get(channel_type_name) or [])
 
         normalized_recipients = self._normalize_recipients(recipients)
         if not normalized_recipients:
@@ -606,6 +717,60 @@ class NotificationManager:
             meta=(meta or {}),
             **actor_fields,
         )
+
+    def _ensure_event_rules_seeded(self) -> None:
+        existing_event_types = {
+            str(item["event_type"])
+            for item in self._store.list_event_rules()
+        }
+        default_channel_types = self._default_rule_channel_types()
+        for event_type in SUPPORTED_EVENT_TYPES:
+            if event_type in existing_event_types:
+                continue
+            self._store.upsert_event_rule(
+                event_type=event_type,
+                enabled_channel_types=default_channel_types,
+            )
+
+    def _default_rule_channel_types(self) -> list[str]:
+        enabled_channel_config = self._enabled_channel_config_by_type()
+        items = ["in_app"]
+        for channel_type_name in ("email", "dingtalk"):
+            if enabled_channel_config.get(channel_type_name):
+                items.append(channel_type_name)
+        return self._normalize_channel_types(items)
+
+    def _enabled_channels_by_type(self) -> dict[str, list[dict[str, Any]]]:
+        out: dict[str, list[dict[str, Any]]] = {channel_type_name: [] for channel_type_name in AVAILABLE_CHANNEL_TYPES}
+        for channel in self._store.list_channels(enabled_only=True):
+            channel_type_name = str(channel.get("channel_type") or "").strip().lower()
+            if channel_type_name in out:
+                out[channel_type_name].append(channel)
+        return out
+
+    def _enabled_channel_config_by_type(self) -> dict[str, bool]:
+        return {
+            channel_type_name: bool(items)
+            for channel_type_name, items in self._enabled_channels_by_type().items()
+        }
+
+    @staticmethod
+    def _normalize_channel_types(
+        channel_types: list[str] | tuple[str, ...] | set[str] | None,
+    ) -> list[str]:
+        normalized: list[str] = []
+        seen: set[str] = set()
+        for item in channel_types or []:
+            value = str(item or "").strip().lower()
+            if not value:
+                continue
+            if value not in AVAILABLE_CHANNEL_TYPES:
+                raise NotificationManagerError("invalid_channel_type", status_code=400)
+            if value in seen:
+                continue
+            seen.add(value)
+            normalized.append(value)
+        return normalized
 
 
 NotificationService = NotificationManager

@@ -5,7 +5,7 @@ export default function ChatConfigListPanel({
   isMobile,
   chatLoading,
   chatListLength,
-  isAdmin,
+  canManageChats,
   onOpenCreate,
   chatFilter,
   onFilterChange,
@@ -24,7 +24,7 @@ export default function ChatConfigListPanel({
           <div style={{ fontSize: '1rem', fontWeight: 950, color: '#111827' }}>对话配置</div>
           <div style={{ display: 'flex', gap: '10px', alignItems: isMobile ? 'stretch' : 'center', width: isMobile ? '100%' : 'auto', flexDirection: isMobile ? 'column' : 'row' }}>
             <div style={{ fontSize: '0.85rem', color: '#6b7280' }}>{chatLoading ? '加载中...' : `${chatListLength} 个`}</div>
-            {isAdmin ? (
+            {canManageChats ? (
               <button type="button" onClick={onOpenCreate} data-testid="chat-config-new" style={{ padding: '8px 12px', borderRadius: '10px', border: '1px solid #1d4ed8', background: '#1d4ed8', color: '#ffffff', cursor: 'pointer', fontWeight: 900, width: isMobile ? '100%' : 'auto' }}>
                 新建对话
               </button>
@@ -48,7 +48,7 @@ export default function ChatConfigListPanel({
           const name = String(chat?.name || '');
           const safeId = id.replace(/[^a-zA-Z0-9_-]/g, '_');
           const isSelected = String(selectedChatId || '') === id;
-          const deleteDisabled = !isAdmin || busy;
+          const deleteDisabled = !canManageChats || busy;
 
           return (
             <div key={id} style={{ position: 'relative', marginBottom: '10px' }}>
@@ -63,7 +63,7 @@ export default function ChatConfigListPanel({
                 <div style={{ marginTop: '6px', color: '#6b7280', fontSize: '0.8rem', wordBreak: 'break-all' }}>{id ? `ID: ${id}` : 'ID:（未知）'}</div>
               </button>
 
-              {isAdmin ? (
+              {canManageChats ? (
                 <button
                   type="button"
                   onClick={(event) => {

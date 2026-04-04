@@ -35,7 +35,14 @@ def _assert_group_management(ctx: AuthContextDep) -> None:
         raise HTTPException(status_code=int(getattr(exc, "status_code", 403) or 403), detail=str(exc)) from exc
 
 
-def _validate_group_scope(ctx: AuthContextDep, *, accessible_kbs, accessible_kb_nodes) -> None:
+def _chat_management_manager(ctx: AuthContextDep):
+    manager = getattr(ctx.deps, "chat_management_manager", None)
+    if manager is None:
+        raise HTTPException(status_code=500, detail="chat_management_manager_unavailable")
+    return manager
+
+
+def _validate_group_scope(ctx: AuthContextDep, *, accessible_kbs, accessible_kb_nodes, accessible_chats) -> None:
     try:
         ctx.deps.knowledge_management_manager.validate_group_kb_scope(
             user=ctx.user,
@@ -44,27 +51,90 @@ def _validate_group_scope(ctx: AuthContextDep, *, accessible_kbs, accessible_kb_
         )
     except Exception as exc:
         raise HTTPException(status_code=int(getattr(exc, "status_code", 400) or 400), detail=str(exc)) from exc
+    try:
+        _chat_management_manager(ctx).validate_group_chat_scope(
+            user=ctx.user,
+            accessible_chats=accessible_chats,
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=int(getattr(exc, "status_code", 400) or 400), detail=str(exc)) from exc
 
 
 def _list_manageable_groups(ctx: AuthContextDep, service: PermissionGroupsService) -> list[dict]:
     groups = service.list_groups()
+    groups = service.filter_manageable_groups(user=ctx.user, groups=groups)
     manager = getattr(ctx.deps, "knowledge_management_manager", None)
     if manager is None:
         return []
-    return manager.filter_manageable_permission_groups(user=ctx.user, groups=groups)
+    groups = manager.filter_manageable_permission_groups(user=ctx.user, groups=groups)
+    return _chat_management_manager(ctx).filter_manageable_permission_groups(user=ctx.user, groups=groups)
 
 
 def _get_manageable_group(ctx: AuthContextDep, service: PermissionGroupsService, group_id: int) -> dict:
     group = service.get_group(group_id)
     if not group:
         raise HTTPException(status_code=404, detail="Permission group not found")
+    group = service.assert_group_manageable(user=ctx.user, group=group)
     try:
-        return ctx.deps.knowledge_management_manager.assert_permission_group_manageable(
+        group = ctx.deps.knowledge_management_manager.assert_permission_group_manageable(
             user=ctx.user,
             group=group,
         )
     except Exception as exc:
         raise HTTPException(status_code=int(getattr(exc, "status_code", 403) or 403), detail=str(exc)) from exc
+    try:
+        return _chat_management_manager(ctx).assert_permission_group_manageable(
+            user=ctx.user,
+            group=group,
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=int(getattr(exc, "status_code", 403) or 403), detail=str(exc)) from exc
+
+
+def _list_manageable_folder_snapshot(ctx: AuthContextDep, service: PermissionGroupsService) -> dict:
+    groups = _list_manageable_groups(ctx, service)
+    snapshot = service.list_group_folders()
+    clean_user_id = str(getattr(ctx.user, "user_id", "") or "").strip()
+    folders = [folder for folder in (snapshot or {}).get("folders", []) if isinstance(folder, dict)]
+    by_id = {
+        str(folder.get("id")): folder
+        for folder in folders
+        if isinstance(folder.get("id"), str) and folder.get("id")
+    }
+    visible_ids: set[str] = set()
+    group_bindings: dict[str, str | None] = {}
+    root_group_count = 0
+
+    def _include_with_ancestors(folder_id: str | None) -> None:
+        current_id = str(folder_id or "").strip()
+        guard: set[str] = set()
+        while current_id and current_id not in guard:
+            guard.add(current_id)
+            visible_ids.add(current_id)
+            parent_id = by_id.get(current_id, {}).get("parent_id")
+            current_id = str(parent_id).strip() if isinstance(parent_id, str) and parent_id.strip() else ""
+
+    for group in groups:
+        if not isinstance(group, dict):
+            continue
+        group_id = group.get("group_id")
+        if not isinstance(group_id, int):
+            continue
+        clean_folder_id = str(group.get("folder_id") or "").strip() or None
+        group_bindings[str(group_id)] = clean_folder_id
+        if clean_folder_id is None:
+            root_group_count += 1
+        _include_with_ancestors(clean_folder_id)
+    for folder in folders:
+        if str(folder.get("created_by") or "").strip() == clean_user_id:
+            _include_with_ancestors(folder.get("id"))
+
+    return {
+        **(snapshot or {}),
+        "folders": [folder for folder in folders if str(folder.get("id") or "") in visible_ids],
+        "group_bindings": group_bindings,
+        "root_group_count": root_group_count,
+    }
 
 
 def _visible_folder_ids(folder_snapshot: dict) -> set[str]:
@@ -105,10 +175,12 @@ def create_router() -> APIRouter:
     ):
         _assert_group_management(ctx)
         payload = data.model_dump()
+        payload["created_by"] = ctx.payload.sub
         _validate_group_scope(
             ctx,
             accessible_kbs=payload.get("accessible_kbs"),
             accessible_kb_nodes=payload.get("accessible_kb_nodes"),
+            accessible_chats=payload.get("accessible_chats"),
         )
         group_id = service.create_group(payload)
         if not group_id:
@@ -134,6 +206,7 @@ def create_router() -> APIRouter:
             ctx,
             accessible_kbs=merged.get("accessible_kbs"),
             accessible_kb_nodes=merged.get("accessible_kb_nodes"),
+            accessible_chats=merged.get("accessible_chats"),
         )
         success = service.update_group(group_id, payload)
         if not success:
@@ -190,7 +263,7 @@ def create_router() -> APIRouter:
     ):
         try:
             _assert_group_management(ctx)
-            chat_list = service.list_chat_agents()
+            chat_list = _chat_management_manager(ctx).list_manageable_chat_resources(ctx.user)
             return {"ok": True, "data": chat_list}
         except HTTPException:
             raise
@@ -205,8 +278,7 @@ def create_router() -> APIRouter:
     ):
         try:
             _assert_group_management(ctx)
-            groups = _list_manageable_groups(ctx, service)
-            return {"ok": True, "data": service.list_group_folders(groups)}
+            return {"ok": True, "data": _list_manageable_folder_snapshot(ctx, service)}
         except HTTPException:
             raise
         except Exception as e:
@@ -221,7 +293,7 @@ def create_router() -> APIRouter:
     ):
         _assert_group_management(ctx)
         if data.parent_id:
-            folder_snapshot = service.list_group_folders(_list_manageable_groups(ctx, service))
+            folder_snapshot = _list_manageable_folder_snapshot(ctx, service)
             if data.parent_id not in _visible_folder_ids(folder_snapshot):
                 raise HTTPException(status_code=403, detail="permission_group_folder_out_of_management_scope")
         folder = service.create_group_folder(name=data.name, parent_id=data.parent_id, created_by=ctx.payload.sub)
@@ -235,7 +307,7 @@ def create_router() -> APIRouter:
         service: PermissionGroupsService = Depends(get_service),
     ):
         _assert_group_management(ctx)
-        folder_snapshot = service.list_group_folders(_list_manageable_groups(ctx, service))
+        folder_snapshot = _list_manageable_folder_snapshot(ctx, service)
         visible_folder_ids = _visible_folder_ids(folder_snapshot)
         if folder_id not in visible_folder_ids:
             raise HTTPException(status_code=403, detail="permission_group_folder_out_of_management_scope")
@@ -259,7 +331,7 @@ def create_router() -> APIRouter:
         service: PermissionGroupsService = Depends(get_service),
     ):
         _assert_group_management(ctx)
-        folder_snapshot = service.list_group_folders(_list_manageable_groups(ctx, service))
+        folder_snapshot = _list_manageable_folder_snapshot(ctx, service)
         if folder_id not in _visible_folder_ids(folder_snapshot):
             raise HTTPException(status_code=403, detail="permission_group_folder_out_of_management_scope")
         ok = service.delete_group_folder(folder_id)

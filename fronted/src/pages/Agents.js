@@ -34,9 +34,9 @@ const Agents = () => {
   const [page, setPage] = useState(1);
   const [pageSize] = useState(30);
   const [similarityThreshold, setSimilarityThreshold] = useState(0.2);
-  const [topK, setTopK] = useState(30);
+  const topK = 30;
   const [keyword, setKeyword] = useState(false);
-  const [highlight, setHighlight] = useState(false);
+  const [highlight, setHighlight] = useState(true);
 
   useEffect(() => {
     if (typeof document !== 'undefined' && !document.getElementById('highlight-styles')) {
@@ -287,8 +287,6 @@ const Agents = () => {
           onRemoveHistoryItem={removeSearchHistoryItem}
           similarityThreshold={similarityThreshold}
           onSimilarityThresholdChange={setSimilarityThreshold}
-          topK={topK}
-          onTopKChange={setTopK}
           keyword={keyword}
           onKeywordChange={setKeyword}
           highlight={highlight}

@@ -215,6 +215,11 @@ def resolve_permissions(deps: "AppDependencies", user: Any) -> PermissionSnapsho
                 for dataset_id in getattr(scope, "dataset_ids", frozenset()) or frozenset():
                     if isinstance(dataset_id, str) and dataset_id:
                         _add_kb_ref(kb_names, dataset_id, dataset_index)
+        chat_management_manager = getattr(deps, "chat_management_manager", None)
+        if chat_management_manager is not None:
+            for chat_ref in chat_management_manager.list_auto_granted_chat_refs(user):
+                if isinstance(chat_ref, str) and chat_ref:
+                    chat_ids.add(chat_ref)
 
     kb_scope = ResourceScope.SET if kb_names else ResourceScope.NONE
     chat_scope = ResourceScope.SET if chat_ids else ResourceScope.NONE

@@ -16,6 +16,7 @@ def ensure_permission_groups_table(conn: sqlite3.Connection) -> None:
             group_name TEXT NOT NULL UNIQUE,
             description TEXT,
             is_system INTEGER DEFAULT 0,
+            created_by TEXT,
             folder_id TEXT,
             accessible_kbs TEXT DEFAULT '[]',
             accessible_kb_nodes TEXT DEFAULT '[]',
@@ -40,6 +41,7 @@ def ensure_permission_groups_table(conn: sqlite3.Connection) -> None:
 def ensure_permission_groups_columns(conn: sqlite3.Connection) -> None:
     if not table_exists(conn, "permission_groups"):
         return
+    add_column_if_missing(conn, "permission_groups", "created_by TEXT")
     add_column_if_missing(conn, "permission_groups", "folder_id TEXT")
     add_column_if_missing(conn, "permission_groups", "accessible_kb_nodes TEXT DEFAULT '[]'")
     add_column_if_missing(conn, "permission_groups", "accessible_tools TEXT DEFAULT '[]'")
@@ -78,12 +80,12 @@ def seed_default_permission_groups(conn: sqlite3.Connection) -> None:
     conn.executemany(
         """
         INSERT INTO permission_groups (
-            group_name, description, is_system,
+            group_name, description, is_system, created_by,
             accessible_kbs, accessible_chats, accessible_tools,
             can_upload, can_review, can_download, can_copy, can_delete, can_manage_kb_directory,
             can_view_kb_config, can_view_tools,
             created_at, updated_at
-        ) VALUES (?, ?, ?, '[]', '[]', '[]', ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        ) VALUES (?, ?, ?, NULL, '[]', '[]', '[]', ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
         """,
         [
             ("admin", "System administrator", 1, 1, 1, 1, 1, 1, 1, 1, 1),

@@ -4,6 +4,9 @@ from dataclasses import dataclass
 from typing import Any
 
 
+LOCAL_BACKUP_TARGET_PATH = "/app/data/backups"
+
+
 @dataclass(frozen=True)
 class DataSecuritySettings:
     enabled: bool
@@ -40,6 +43,9 @@ class DataSecuritySettings:
     replica_target_path: str | None
     replica_subdir_format: str  # 'flat' or 'date'
 
+    def local_backup_target_path(self) -> str:
+        return LOCAL_BACKUP_TARGET_PATH
+
     def target_path(self) -> str | None:
         if self.target_mode == "local":
             return self.target_local_dir
@@ -49,6 +55,12 @@ class DataSecuritySettings:
         if not ip or not share:
             return None
         return f"\\\\{ip}\\{share}\\{subdir}" if subdir else f"\\\\{ip}\\{share}"
+
+    def windows_target_path(self) -> str | None:
+        replica_target = str(self.replica_target_path or "").strip()
+        if replica_target:
+            return replica_target
+        return self.target_path()
 
 
 @dataclass(frozen=True)

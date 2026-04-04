@@ -49,6 +49,7 @@ class _Deps:
             get_company=lambda *_args, **_kwargs: None,
             get_department=lambda *_args, **_kwargs: None,
         )
+        self.org_structure_manager = self.org_directory_store
         self.kb_store = SimpleNamespace(db_path=db_path)
         self.notification_manager = NotificationService(
             store=NotificationStore(db_path=db_path),
@@ -93,6 +94,23 @@ class TestAdminNotificationsApiUnit(unittest.TestCase):
                 self.assertEqual(list_channels_resp.status_code, 200, list_channels_resp.text)
                 self.assertEqual(list_channels_resp.json().get("count"), 1)
 
+                list_rules_resp = client.get("/api/admin/notifications/rules")
+                self.assertEqual(list_rules_resp.status_code, 200, list_rules_resp.text)
+                self.assertGreaterEqual(int(list_rules_resp.json().get("count") or 0), 1)
+
+                update_rules_resp = client.put(
+                    "/api/admin/notifications/rules",
+                    json={
+                        "items": [
+                            {
+                                "event_type": "review_todo_approval",
+                                "enabled_channel_types": ["email"],
+                            }
+                        ]
+                    },
+                )
+                self.assertEqual(update_rules_resp.status_code, 200, update_rules_resp.text)
+
                 jobs = deps.notification_manager.notify_event(
                     event_type="review_todo_approval",
                     payload={"doc_id": "doc-1", "filename": "spec.txt"},
@@ -104,12 +122,20 @@ class TestAdminNotificationsApiUnit(unittest.TestCase):
                         }
                     ],
                     dedupe_key="review_todo_approval:doc-1:step-1",
+                    channel_types=["email"],
                 )
                 job_id = int(jobs[0]["job_id"])
 
                 list_jobs_resp = client.get("/api/admin/notifications/jobs?limit=10")
                 self.assertEqual(list_jobs_resp.status_code, 200, list_jobs_resp.text)
                 self.assertGreaterEqual(int(list_jobs_resp.json().get("count") or 0), 1)
+                self.assertEqual(list_jobs_resp.json()["items"][0]["channel_type"], "email")
+
+                filtered_jobs_resp = client.get(
+                    "/api/admin/notifications/jobs?limit=10&event_type=review_todo_approval&channel_type=email&status=queued"
+                )
+                self.assertEqual(filtered_jobs_resp.status_code, 200, filtered_jobs_resp.text)
+                self.assertEqual(int(filtered_jobs_resp.json().get("count") or 0), 1)
 
                 retry_resp = client.post(f"/api/admin/notifications/jobs/{job_id}/retry")
                 self.assertEqual(retry_resp.status_code, 200, retry_resp.text)

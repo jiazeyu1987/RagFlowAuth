@@ -20,10 +20,12 @@ const UserManagement = () => {
   const {
     loading,
     error,
+    isSubAdminUser,
     canManageUsers,
     canCreateUsers,
     canEditUserPolicy,
     canResetPasswords,
+    canResetPasswordForUser,
     canToggleUserStatus,
     canDeleteUsers,
     canAssignGroups,
@@ -103,23 +105,20 @@ const UserManagement = () => {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  if (loading) return <div>加载中...</div>;
-  if (error) return <div>错误: {error}</div>;
+  if (loading) return <div>鍔犺浇涓?..</div>;
+  if (error) return <div>閿欒: {error}</div>;
 
   return (
     <div>
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: isMobile ? 'stretch' : 'center',
-          flexDirection: isMobile ? 'column' : 'row',
-          gap: isMobile ? '12px' : 0,
-          marginBottom: '24px',
-        }}
-      >
-        <h2 style={{ margin: 0 }}>用户管理</h2>
-        {canCreateUsers ? (
+      {canCreateUsers ? (
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'flex-end',
+            alignItems: isMobile ? 'stretch' : 'center',
+            marginBottom: '24px',
+          }}
+        >
           <button
             type="button"
             onClick={handleOpenCreateModal}
@@ -134,42 +133,75 @@ const UserManagement = () => {
               width: isMobile ? '100%' : 'auto',
             }}
           >
-            新建用户
+            鏂板缓鐢ㄦ埛
           </button>
-        ) : null}
+        </div>
+      ) : null}
+
+      <div
+        data-testid="users-management-layout"
+        style={{
+          display: 'flex',
+          flexDirection: isMobile ? 'column-reverse' : 'row',
+          gap: '16px',
+          alignItems: 'flex-start',
+        }}
+      >
+        <div
+          data-testid="users-management-list-column"
+          style={{
+            flex: '1 1 0%',
+            minWidth: 0,
+            width: '100%',
+          }}
+        >
+          <UsersTable
+            filteredUsers={filteredUsers}
+            canManageUsers={canManageUsers}
+            canEditUserPolicy={canEditUserPolicy}
+            canAssignGroups={canAssignGroups}
+            canResetPasswords={canResetPasswords}
+            canResetPasswordForUser={canResetPasswordForUser}
+            canToggleUserStatus={canToggleUserStatus}
+            canDeleteUsers={canDeleteUsers}
+            onOpenPolicyModal={handleOpenPolicyModal}
+            onAssignGroup={handleAssignGroup}
+            onOpenResetPassword={handleOpenResetPassword}
+            onDeleteUser={handleDeleteUser}
+            onToggleUserStatus={handleToggleUserStatus}
+            statusUpdatingUserId={statusUpdatingUserId}
+          />
+        </div>
+
+        <div
+          data-testid="users-management-side-column"
+          style={{
+            flex: isMobile ? '1 1 auto' : '0 0 360px',
+            width: isMobile ? '100%' : '360px',
+            maxWidth: '100%',
+            minWidth: 0,
+          }}
+        >
+          <UserFiltersPanel
+            filters={filters}
+            setFilters={setFilters}
+            companies={companies}
+            departments={departments}
+            availableGroups={availableGroups}
+            isSubAdminUser={isSubAdminUser}
+            onResetFilters={handleResetFilters}
+          />
+
+          {isSubAdminUser ? null : (
+            <DepartmentCards
+              filteredUsers={filteredUsers}
+              groupedUsers={groupedUsers}
+              filters={filters}
+              setFilters={setFilters}
+            />
+          )}
+        </div>
       </div>
-
-      <UserFiltersPanel
-        filters={filters}
-        setFilters={setFilters}
-        companies={companies}
-        departments={departments}
-        availableGroups={availableGroups}
-        onResetFilters={handleResetFilters}
-      />
-
-      <DepartmentCards
-        filteredUsers={filteredUsers}
-        groupedUsers={groupedUsers}
-        filters={filters}
-        setFilters={setFilters}
-      />
-
-      <UsersTable
-        filteredUsers={filteredUsers}
-        canManageUsers={canManageUsers}
-        canEditUserPolicy={canEditUserPolicy}
-        canAssignGroups={canAssignGroups}
-        canResetPasswords={canResetPasswords}
-        canToggleUserStatus={canToggleUserStatus}
-        canDeleteUsers={canDeleteUsers}
-        onOpenPolicyModal={handleOpenPolicyModal}
-        onAssignGroup={handleAssignGroup}
-        onOpenResetPassword={handleOpenResetPassword}
-        onDeleteUser={handleDeleteUser}
-        onToggleUserStatus={handleToggleUserStatus}
-        statusUpdatingUserId={statusUpdatingUserId}
-      />
 
       <ResetPasswordModal
         open={showResetPasswordModal}

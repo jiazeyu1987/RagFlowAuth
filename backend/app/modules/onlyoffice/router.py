@@ -107,7 +107,7 @@ def build_editor_config(body: dict, request: Request, ctx: AuthContextDep):
 
     watermark = DocumentWatermarkService(
         store=getattr(deps, "watermark_policy_store", None),
-        org_directory_store=getattr(deps, "org_directory_store", None),
+        org_structure_manager=getattr(deps, "org_structure_manager", None),
     ).build_watermark(
         user=getattr(ctx, "user", None),
         payload_sub=getattr(ctx.payload, "sub", None),

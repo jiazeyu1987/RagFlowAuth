@@ -7,16 +7,30 @@ from fastapi.testclient import TestClient
 
 from backend.app.modules.auth.router import router as auth_router
 from backend.database.schema.ensure import ensure_schema
+from backend.services.audit_log_store import AuditLogStore
+from backend.services.notification import NotificationService, NotificationStore
 from backend.services.users import UserStore, is_legacy_password_hash, verify_password
 from backend.tests._util_tempdir import cleanup_dir, make_temp_dir
 
 
+class _NoopAdapter:
+    def send(self, **kwargs):  # noqa: ARG002
+        return None
+
+
 class _Deps:
-    def __init__(self, user_store):
+    def __init__(self, db_path: str, user_store):
         self.user_store = user_store
         self.auth_session_store = None
         self.auth_session_manager = None
-        self.audit_log_store = None
+        self.audit_log_store = AuditLogStore(db_path=db_path)
+        self.notification_service = NotificationService(
+            store=NotificationStore(db_path=db_path),
+            email_adapter=_NoopAdapter(),
+            dingtalk_adapter=_NoopAdapter(),
+            retry_interval_seconds=1,
+        )
+        self.notification_manager = self.notification_service
 
 
 class TestAuthPasswordSecurityApi(unittest.TestCase):
@@ -33,7 +47,7 @@ class TestAuthPasswordSecurityApi(unittest.TestCase):
                 conn.commit()
 
             app = FastAPI()
-            app.state.deps = _Deps(user_store)
+            app.state.deps = _Deps(db_path, user_store)
             app.include_router(auth_router, prefix="/api/auth")
 
             with TestClient(app) as client:
@@ -53,9 +67,18 @@ class TestAuthPasswordSecurityApi(unittest.TestCase):
             ensure_schema(db_path)
             user_store = UserStore(db_path=db_path)
             user_store.create_user(username="bob", password="GoodPass123", role="viewer")
+            user_store.create_user(username="admin1", password="AdminPass123", role="admin", email="admin1@example.com")
+            user_store.create_user(username="subadmin1", password="AdminPass456", role="sub_admin", email="subadmin1@example.com")
 
             app = FastAPI()
-            app.state.deps = _Deps(user_store)
+            app.state.deps = _Deps(db_path, user_store)
+            app.state.deps.notification_service.upsert_channel(
+                channel_id="inapp-main",
+                channel_type="in_app",
+                name="In App",
+                enabled=True,
+                config={},
+            )
             app.include_router(auth_router, prefix="/api/auth")
 
             with TestClient(app) as client:
@@ -69,6 +92,17 @@ class TestAuthPasswordSecurityApi(unittest.TestCase):
                 locked_response = client.post("/api/auth/login", json={"username": "bob", "password": "GoodPass123"})
                 self.assertEqual(locked_response.status_code, 423)
                 self.assertEqual(locked_response.json()["detail"], "credentials_locked")
+
+            jobs = app.state.deps.notification_service.list_jobs(limit=10)
+            self.assertEqual(len(jobs), 2)
+            self.assertTrue(all(job["status"] == "sent" for job in jobs))
+            recipients = {job["recipient_username"] for job in jobs}
+            self.assertEqual(recipients, {"admin1", "subadmin1"})
+            self.assertTrue(all(job["event_type"] == "credential_lockout" for job in jobs))
+
+            total, events = app.state.deps.audit_log_store.list_events(action="credential_lockout")
+            self.assertEqual(total, 1)
+            self.assertEqual(events[0].resource_id, user_store.get_by_username("bob").user_id)
         finally:
             cleanup_dir(td)
 

@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from backend.app.core.authz import AdminOnly, AuthContextDep
 from backend.services.audit_helpers import actor_fields_from_ctx
@@ -17,6 +17,15 @@ class ChannelUpsertBody(BaseModel):
     name: str
     enabled: bool = True
     config: dict[str, Any] | None = None
+
+
+class NotificationRuleBody(BaseModel):
+    event_type: str
+    enabled_channel_types: list[str] = Field(default_factory=list)
+
+
+class NotificationRuleBatchBody(BaseModel):
+    items: list[NotificationRuleBody] = Field(default_factory=list)
 
 
 def _resolve_notification_manager(ctx: AuthContextDep) -> NotificationManager:
@@ -62,10 +71,44 @@ def upsert_channel(channel_id: str, body: ChannelUpsertBody, request: Request, c
 
 
 @router.get("/admin/notifications/jobs")
-def list_jobs(ctx: AuthContextDep, _: AdminOnly, limit: int = 100, status: str | None = None):
+def list_jobs(
+    ctx: AuthContextDep,
+    _: AdminOnly,
+    limit: int = 100,
+    status: str | None = None,
+    event_type: str | None = None,
+    channel_type: str | None = None,
+):
     manager = _resolve_notification_manager(ctx)
-    items = manager.list_jobs(limit=limit, status=status)
+    items = manager.list_jobs(limit=limit, status=status, event_type=event_type, channel_type=channel_type)
     return {"items": items, "count": len(items)}
+
+
+@router.get("/admin/notifications/rules")
+def list_rules(ctx: AuthContextDep, _: AdminOnly):
+    manager = _resolve_notification_manager(ctx)
+    try:
+        return manager.list_event_rules()
+    except NotificationManagerError as e:
+        raise HTTPException(status_code=e.status_code, detail=e.code) from e
+
+
+@router.put("/admin/notifications/rules")
+def upsert_rules(body: NotificationRuleBatchBody, request: Request, ctx: AuthContextDep, _: AdminOnly):
+    manager = _resolve_notification_manager(ctx)
+    try:
+        return manager.upsert_event_rules(
+            items=[
+                {
+                    "event_type": item.event_type,
+                    "enabled_channel_types": list(item.enabled_channel_types or []),
+                }
+                for item in (body.items or [])
+            ],
+            audit=_audit_payload(ctx, request),
+        )
+    except NotificationManagerError as e:
+        raise HTTPException(status_code=e.status_code, detail=e.code) from e
 
 
 @router.get("/admin/notifications/jobs/{job_id}/logs")

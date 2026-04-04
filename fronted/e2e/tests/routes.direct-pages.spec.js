@@ -77,6 +77,10 @@ adminTest('data security test direct route renders page @regression @admin', asy
         full_backup_include_images: false,
         auth_db_path: 'data/auth.db',
         last_run_at_ms: null,
+        local_backup_target_path: '/app/data/backups',
+        local_backup_pack_count: 0,
+        windows_backup_target_path: 'D:\\\\backup\\\\ragflowauth',
+        windows_backup_pack_count: 0,
       }),
     });
   });

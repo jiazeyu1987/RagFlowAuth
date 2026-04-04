@@ -133,11 +133,6 @@ class DataSecurityStore:
             # If the standard mount is present (Linux server / Docker), keep key backup paths fixed.
             # This prevents "environment drift" caused by UI edits and avoids writing large backups to `/`.
             if self._has_standard_replica_mount():
-                target_mode = "local"
-                target_local_dir = "/mnt/replica/RagflowAuth"
-                target_ip = None
-                target_share_name = None
-                target_subdir = None
                 replica_target_path = "/mnt/replica/RagflowAuth"
 
                 # These paths are inside the backend container.
@@ -224,8 +219,6 @@ class DataSecurityStore:
         # If the standard mount is present (Linux server / Docker), keep key backup paths fixed.
         # This prevents UI mistakes from writing huge backups to `/` and avoids cross-env drift.
         if self._has_standard_replica_mount():
-            fields["target_mode"] = "local"
-            fields["target_local_dir"] = "/mnt/replica/RagflowAuth"
             fields["replica_target_path"] = "/mnt/replica/RagflowAuth"
             fields["ragflow_compose_path"] = "/app/ragflow_compose/docker-compose.yml"
             fields["auth_db_path"] = "data/auth.db"

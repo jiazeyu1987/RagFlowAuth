@@ -124,6 +124,7 @@ class _Deps:
         self.audit_log_store = AuditLogStore(db_path=db_path)
         self.audit_log_manager = AuditLogManager(store=self.audit_log_store)
         self.org_directory_store = _OrgDirectoryStore()
+        self.org_structure_manager = self.org_directory_store
         self.watermark_policy_store = _WatermarkPolicyStore()
         self.ragflow_service = _RagflowService()
         self.knowledge_directory_manager = None

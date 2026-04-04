@@ -21,6 +21,7 @@ def signature_challenge(
             user=ctx.user,
             password=request_data.password,
             user_store=ctx.deps.user_store,
+            deps=ctx.deps,
         )
     except ElectronicSignatureError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.code) from exc

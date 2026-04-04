@@ -38,6 +38,7 @@ class PermissionGroupStore:
         self,
         group_name: str,
         description: str = None,
+        created_by: str | None = None,
         folder_id: str | None = None,
         accessible_kbs: List[str] = None,
         accessible_kb_nodes: List[str] = None,
@@ -64,15 +65,16 @@ class PermissionGroupStore:
                 cursor.execute(
                     """
                     INSERT INTO permission_groups (
-                        group_name, description, folder_id, is_system,
+                        group_name, description, created_by, folder_id, is_system,
                         accessible_kbs, accessible_kb_nodes, accessible_chats, accessible_tools,
                         can_upload, can_review, can_download, can_copy, can_delete, can_manage_kb_directory,
                         can_view_kb_config, can_view_tools
-                    ) VALUES (?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ) VALUES (?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         group_name,
                         description,
+                        (str(created_by).strip() if isinstance(created_by, str) and created_by.strip() else None),
                         (str(folder_id).strip() if isinstance(folder_id, str) and folder_id.strip() else None),
                         json.dumps(accessible_kbs or []),
                         json.dumps(accessible_kb_nodes or []),
@@ -105,7 +107,7 @@ class PermissionGroupStore:
 
                 cursor.execute(
                     """
-                    SELECT group_id, group_name, description, is_system,
+                    SELECT group_id, group_name, description, is_system, created_by,
                            folder_id,
                            accessible_kbs, accessible_kb_nodes, accessible_chats, accessible_tools,
                            can_upload, can_review, can_download, can_copy, can_delete, can_manage_kb_directory,
@@ -150,7 +152,7 @@ class PermissionGroupStore:
 
                 cursor.execute(
                     """
-                    SELECT group_id, group_name, description, is_system,
+                    SELECT group_id, group_name, description, is_system, created_by,
                            folder_id,
                            accessible_kbs, accessible_kb_nodes, accessible_chats, accessible_tools,
                            can_upload, can_review, can_download, can_copy, can_delete, can_manage_kb_directory,
@@ -194,7 +196,7 @@ class PermissionGroupStore:
 
                 cursor.execute(
                     """
-                    SELECT group_id, group_name, description, is_system,
+                    SELECT group_id, group_name, description, is_system, created_by,
                            folder_id,
                            accessible_kbs, accessible_kb_nodes, accessible_chats, accessible_tools,
                            can_upload, can_review, can_download, can_copy, can_delete, can_manage_kb_directory,

@@ -102,3 +102,43 @@ class PermissionManagementManager:
             raise PermissionManagementError(code, status_code=status) from e
         if not ok:
             raise PermissionManagementError("folder_not_found", status_code=404)
+
+    def assert_group_manageable(self, *, user: Any, group: dict[str, Any] | None) -> dict[str, Any]:
+        if not isinstance(group, dict):
+            raise PermissionManagementError("permission_group_not_found", status_code=404)
+        role = self._role(user)
+        if role == "admin":
+            return group
+        if role != "sub_admin":
+            raise PermissionManagementError("sub_admin_only_permission_group_management", status_code=403)
+        if str(group.get("created_by") or "").strip() != self._user_id(user):
+            raise PermissionManagementError("permission_group_out_of_management_scope", status_code=403)
+        return group
+
+    def filter_manageable_groups(self, *, user: Any, groups: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
+        manageable: list[dict[str, Any]] = []
+        for group in groups or []:
+            try:
+                manageable.append(self.assert_group_manageable(user=user, group=group))
+            except PermissionManagementError:
+                continue
+        return manageable
+
+    def validate_group_ids_manageable(self, *, user: Any, group_ids: list[int]) -> None:
+        for raw_group_id in group_ids:
+            group_id = int(raw_group_id)
+            group = self._port.get_group(group_id)
+            if not group:
+                raise PermissionManagementError(f"permission_group_not_found:{group_id}", status_code=400)
+            self.assert_group_manageable(user=user, group=group)
+
+    @staticmethod
+    def _role(user: Any) -> str:
+        return str(getattr(user, "role", "") or "").strip().lower()
+
+    @staticmethod
+    def _user_id(user: Any) -> str:
+        user_id = str(getattr(user, "user_id", "") or "").strip()
+        if not user_id:
+            raise PermissionManagementError("permission_group_owner_required", status_code=500)
+        return user_id

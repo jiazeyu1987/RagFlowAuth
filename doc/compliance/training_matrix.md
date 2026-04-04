@@ -7,7 +7,7 @@
 
 | requirement_code | 角色 | controlled_action | 主题 | curriculum_version | 复训周期（天） | 有效性要求 | 记录方式 |
 |---|---|---|---|---|---:|---|---|
-| TR-001 | reviewer | `document_review` | 审批流程、电子签名、待我审批、审批留痕、版本覆盖审批 | 2026.04 | 365 | 需保留通过的培训有效性评价与上岗认证 | `training_records` + `operator_certifications` |
+| TR-001 | * | `document_review` | 审批流程、电子签名、待我审批、审批留痕、版本覆盖审批 | 2026.04 | 365 | 需保留通过的培训有效性评价与上岗认证 | `training_records` + `operator_certifications` |
 | TR-002 | admin | `restore_drill_execute` | 备份包校验、恢复演练、篡改包阻断、审计责任 | 2026.04 | 365 | 需保留通过的培训有效性评价与上岗认证 | `training_records` + `operator_certifications` |
 
 ## 2. 补充角色培训

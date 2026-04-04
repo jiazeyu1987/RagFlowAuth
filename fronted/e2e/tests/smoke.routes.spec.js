@@ -32,8 +32,13 @@ adminTest('routes load with mocked APIs @smoke', async ({ page }) => {
     backup_retention_max: 30,
     backup_target_path: '',
     backup_pack_count: 0,
+    local_backup_target_path: '/app/data/backups',
+    local_backup_pack_count: 0,
+    windows_backup_target_path: '',
+    windows_backup_pack_count: 0,
   });
   await mockJson(page, '**/api/admin/data-security/backup/jobs**', { jobs: [] });
+  await mockJson(page, '**/api/admin/data-security/restore-drills**', { items: [], count: 0 });
 
   for (const route of ['/chat', '/agents', '/documents', '/upload', '/users', '/org-directory', '/permission-groups', '/data-security']) {
     await page.goto(route);

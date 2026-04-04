@@ -11,19 +11,27 @@ class _Settings:
     def __init__(
         self,
         *,
-        replica_target_path: str,
+        local_backup_target_path: str,
+        replica_target_path: str | None,
         auth_db_path: str,
         ragflow_compose_path: str | None = None,
         ragflow_stop_services: int = 0,
         full_backup_include_images: int = 1,
     ) -> None:
+        self._local_backup_target_path = local_backup_target_path
         self.replica_target_path = replica_target_path
         self.auth_db_path = auth_db_path
         self.ragflow_compose_path = ragflow_compose_path
         self.ragflow_stop_services = ragflow_stop_services
         self.full_backup_include_images = full_backup_include_images
 
+    def local_backup_target_path(self) -> str:
+        return self._local_backup_target_path
+
     def target_path(self) -> str:
+        return str(self.replica_target_path or "")
+
+    def windows_target_path(self) -> str | None:
         return self.replica_target_path
 
 
@@ -34,15 +42,16 @@ class TestDataSecurityBackupStepsUnit(unittest.TestCase):
 
         store = Mock()
         store.is_cancel_requested.return_value = False
-        settings = _Settings(replica_target_path="/mnt/replica/RagflowAuth", auth_db_path=str(Path(__file__).resolve()))
+        settings = _Settings(
+            local_backup_target_path="/app/data/backups",
+            replica_target_path="/mnt/replica/RagflowAuth",
+            auth_db_path=str(Path(__file__).resolve()),
+        )
         ctx = BackupContext(store=store, job_id=1, settings=settings, include_images=False)
 
-        with patch.object(precheck, "docker_ok", return_value=(True, "")), patch.object(
-            precheck, "mount_fstype", return_value="ext4"
-        ):
-            # Message text is localized; assert the key invariant.
-            with self.assertRaisesRegex(RuntimeError, "CIFS"):
-                precheck.backup_precheck_and_prepare(ctx)
+        with patch.object(precheck, "docker_ok", return_value=(True, "")):
+            precheck.backup_precheck_and_prepare(ctx)
+        self.assertIsNotNone(ctx.pack_dir)
 
     def test_precheck_sets_pack_dir_and_updates_job(self) -> None:
         from backend.services.data_security.backup_steps.context import BackupContext
@@ -55,7 +64,11 @@ class TestDataSecurityBackupStepsUnit(unittest.TestCase):
 
             store = Mock()
             store.is_cancel_requested.return_value = False
-            settings = _Settings(replica_target_path=str(td_path), auth_db_path=str(auth_db))
+            settings = _Settings(
+                local_backup_target_path=str(td_path),
+                replica_target_path="/mnt/replica/RagflowAuth",
+                auth_db_path=str(auth_db),
+            )
             ctx = BackupContext(store=store, job_id=123, settings=settings, include_images=False)
 
             with patch.object(precheck, "docker_ok", return_value=(True, "")):
@@ -63,13 +76,11 @@ class TestDataSecurityBackupStepsUnit(unittest.TestCase):
 
             self.assertIsNotNone(ctx.pack_dir)
             self.assertTrue(ctx.pack_dir.exists())
-            # Ensure output_dir is written to job for UI (don't assert localized message).
-            self.assertTrue(
-                any(
-                    (kwargs.get("output_dir") == str(ctx.pack_dir))
-                    for _, kwargs in store.update_job.call_args_list
-                ),
-                f"output_dir not written to job: calls={store.update_job.call_args_list!r}",
+            self.assertEqual(ctx.local_backup_root, td_path)
+            self.assertEqual(ctx.staging_root, td_path / "_staging" / "job_123")
+            self.assertFalse(
+                any("output_dir" in kwargs for _, kwargs in store.update_job.call_args_list),
+                f"unexpected output_dir update during precheck: calls={store.update_job.call_args_list!r}",
             )
         finally:
             cleanup_dir(td_path)
@@ -90,17 +101,18 @@ class TestDataSecurityBackupStepsUnit(unittest.TestCase):
 
             store = Mock()
             store.is_cancel_requested.return_value = False
-            settings = _Settings(replica_target_path="/mnt/replica/RagflowAuth", auth_db_path=str(src_db))
+            settings = _Settings(
+                local_backup_target_path=str(td_root),
+                replica_target_path="/mnt/replica/RagflowAuth",
+                auth_db_path=str(src_db),
+            )
             ctx = BackupContext(store=store, job_id=7, settings=settings, include_images=False)
             ctx.pack_dir = pack_dir
-
-            def _fake_sqlite_backup(_src: Path, _dest: Path) -> None:
-                _dest.parent.mkdir(parents=True, exist_ok=True)
-                _dest.write_bytes(b"sqlite")
-
-            with patch.object(sqlite_step, "sqlite_online_backup", side_effect=_fake_sqlite_backup), patch.object(
-                sqlite_step, "timestamp", return_value="20260202_000000"
-            ):
+            with patch.object(sqlite_step, "sqlite_online_backup") as mock_backup:
+                def _fake_sqlite_backup(_src: Path, _dest: Path) -> None:
+                    _dest.parent.mkdir(parents=True, exist_ok=True)
+                    _dest.write_bytes(b"sqlite")
+                mock_backup.side_effect = _fake_sqlite_backup
                 sqlite_step.backup_sqlite_db(ctx)
 
             self.assertTrue((pack_dir / "auth.db").exists())
@@ -120,6 +132,7 @@ class TestDataSecurityBackupStepsUnit(unittest.TestCase):
             store = Mock()
             store.is_cancel_requested.return_value = False
             settings = _Settings(
+                local_backup_target_path=str(td_path),
                 replica_target_path=str(td_path),
                 auth_db_path=str(td_path / "auth.db"),
                 ragflow_compose_path=str(compose),
@@ -157,6 +170,7 @@ class TestDataSecurityBackupStepsUnit(unittest.TestCase):
         store = Mock()
         store.is_cancel_requested.return_value = False
         settings = _Settings(
+            local_backup_target_path="/tmp",
             replica_target_path="/tmp",
             auth_db_path=str(Path(__file__).resolve()),
             ragflow_compose_path="/tmp/x.yml",
@@ -181,6 +195,7 @@ class TestDataSecurityBackupStepsUnit(unittest.TestCase):
             store = Mock()
             store.is_cancel_requested.return_value = False
             settings = _Settings(
+                local_backup_target_path=str(td_path),
                 replica_target_path=str(td_path),
                 auth_db_path=str(Path(__file__).resolve()),
                 ragflow_compose_path=str(td_path / "docker-compose.yml"),

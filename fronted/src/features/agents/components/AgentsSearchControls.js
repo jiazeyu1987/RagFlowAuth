@@ -11,8 +11,6 @@ export default function AgentsSearchControls({
   onRemoveHistoryItem,
   similarityThreshold,
   onSimilarityThresholdChange,
-  topK,
-  onTopKChange,
   keyword,
   onKeywordChange,
   highlight,
@@ -151,27 +149,6 @@ export default function AgentsSearchControls({
             style={{ width: '100%' }}
           />
         </div>
-
-        <div>
-          <label style={{ fontSize: '0.75rem', color: '#6b7280', display: 'block', marginBottom: '4px' }}>
-            Top-K: {topK}
-          </label>
-          <input
-            type="number"
-            min="1"
-            max="1024"
-            value={topK}
-            onChange={(event) => onTopKChange && onTopKChange(parseInt(event.target.value, 10) || 30)}
-            style={{
-              width: '100%',
-              padding: '6px',
-              border: '1px solid #d1d5db',
-              borderRadius: '4px',
-              fontSize: '0.875rem',
-            }}
-          />
-        </div>
-
         <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
           <label style={{ display: 'flex', alignItems: 'center', fontSize: '0.875rem', cursor: 'pointer' }}>
             <input

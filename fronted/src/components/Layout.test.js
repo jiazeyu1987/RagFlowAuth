@@ -41,6 +41,9 @@ describe('Layout permission group navigation visibility', () => {
 
     expect(screen.queryByTestId('nav-permission-groups')).not.toBeInTheDocument();
     expect(screen.queryByTestId('nav-kbs')).not.toBeInTheDocument();
+    expect(screen.getByTestId('nav-document-history')).toBeInTheDocument();
+    expect(screen.getByTestId('nav-training-compliance')).toBeInTheDocument();
+    expect(screen.queryByTestId('nav-documents')).not.toBeInTheDocument();
   });
 
   it('shows permission group navigation for sub admin', () => {
@@ -64,6 +67,38 @@ describe('Layout permission group navigation visibility', () => {
 
     expect(screen.getByTestId('nav-permission-groups')).toBeInTheDocument();
     expect(screen.getByTestId('nav-kbs')).toBeInTheDocument();
+    expect(screen.queryByTestId('nav-training-compliance')).not.toBeInTheDocument();
+  });
+
+  it('shows full name and localized role label in the sidebar profile area', () => {
+    useAuth.mockReturnValue({
+      user: {
+        user_id: 'sub-1',
+        username: 'wangxin',
+        full_name: '王鑫',
+        role: 'sub_admin',
+        permission_groups: [{ group_name: '测试组' }],
+      },
+      logout: jest.fn(),
+      canUpload: () => true,
+      canReview: () => true,
+      canViewKbConfig: () => true,
+      canViewTools: () => true,
+      hasRole: (roles) => roles.includes('sub_admin'),
+    });
+
+    render(
+      <MemoryRouter initialEntries={['/users']}>
+        <Layout>
+          <div>content</div>
+        </Layout>
+      </MemoryRouter>
+    );
+
+    expect(screen.getByTestId('layout-user-name')).toHaveTextContent('王鑫');
+    expect(screen.getByTestId('layout-user-role')).toHaveTextContent('子管理员');
+    expect(screen.getByTestId('layout-user-role')).not.toHaveTextContent('sub_admin');
+    expect(screen.getByTestId('layout-user-role')).not.toHaveTextContent('测试组');
   });
 
   it('hides knowledge bases navigation for normal viewer', () => {

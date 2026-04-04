@@ -278,12 +278,12 @@ const KnowledgeUpload = () => {
         const requestIds = results.map((item) => item.requestId).filter(Boolean);
         setSuccess(`申请已提交：成功 ${okCount} 个${requestIds.length > 0 ? `，申请单 ${requestIds.join(', ')}` : ''}`);
         setSelectedFiles([]);
-        setTimeout(() => navigate('/documents'), 1200);
+        setTimeout(() => navigate('/approvals?view=mine'), 1200);
         return;
         // eslint-disable-next-line no-unreachable
         setSuccess(`上传完成：成功 ${okCount} 个，等待审核`);
         setSelectedFiles([]);
-        setTimeout(() => navigate('/documents'), 1200);
+        setTimeout(() => navigate('/approvals?view=mine'), 1200);
       } else {
         const firstFail = results.find((item) => !item.ok);
         setError(
@@ -388,9 +388,10 @@ const KnowledgeUpload = () => {
   };
 
   return (
-    <div>
+    <div data-testid="knowledge-upload-page">
       <h2 style={{ marginBottom: '24px' }}>上传知识库文档</h2>
 
+      <style>{`[data-testid="knowledge-upload-page"] > h2:first-of-type { display: none; }`}</style>
       {error ? (
         <div
           data-testid="upload-error"
@@ -421,9 +422,23 @@ const KnowledgeUpload = () => {
         </div>
       ) : null}
 
-      <div style={{ ...uploadPanelStyle, padding: isMobile ? '14px' : uploadPanelStyle.padding }}>
-        <form onSubmit={handleUpload}>
-          <div style={{ marginBottom: '24px' }}>
+      <div
+        style={{
+          ...uploadPanelStyle,
+          maxWidth: '100%',
+          padding: isMobile ? '14px' : uploadPanelStyle.padding,
+        }}
+      >
+        <form
+          onSubmit={handleUpload}
+          style={{
+            display: 'grid',
+            gridTemplateColumns: isMobile ? '1fr' : 'minmax(0, 1.2fr) minmax(320px, 0.9fr)',
+            columnGap: '24px',
+            alignItems: 'start',
+          }}
+        >
+          <div style={{ marginBottom: '24px', gridColumn: isMobile ? '1' : '2', gridRow: isMobile ? 'auto' : '1' }}>
             <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', color: '#374151' }}>
               知识库
             </label>
@@ -479,33 +494,38 @@ const KnowledgeUpload = () => {
             </select>
           </div>
 
-          <UploadExtensionsPanel
-            loadingExtensions={loadingExtensions}
-            acceptAttr={acceptAttr}
-            allowedExtensions={allowedExtensions}
-            canManageExtensions={canManageExtensions}
-            extensionDraft={extensionDraft}
-            onExtensionDraftChange={setExtensionDraft}
-            onAddExtension={handleAddExtension}
-            onDeleteExtension={handleDeleteExtension}
-            onSaveExtensions={handleSaveExtensions}
-            savingExtensions={savingExtensions}
-            extensionsMessage={extensionsMessage}
-          />
+          <div style={{ gridColumn: isMobile ? '1' : '2', gridRow: isMobile ? 'auto' : '2' }}>
+            <UploadExtensionsPanel
+              loadingExtensions={loadingExtensions}
+              acceptAttr={acceptAttr}
+              allowedExtensions={allowedExtensions}
+              canManageExtensions={canManageExtensions}
+              extensionDraft={extensionDraft}
+              onExtensionDraftChange={setExtensionDraft}
+              onAddExtension={handleAddExtension}
+              onDeleteExtension={handleDeleteExtension}
+              onSaveExtensions={handleSaveExtensions}
+              savingExtensions={savingExtensions}
+              extensionsMessage={extensionsMessage}
+            />
+          </div>
 
-          <UploadDropzone
-            uploading={uploading}
-            dragActive={dragActive}
-            selectedFilesLength={selectedFiles.length}
-            uploadProgress={uploadProgress}
-            acceptAttr={acceptAttr}
-            onDragOver={handleDragOver}
-            onDragLeave={handleDragLeave}
-            onDrop={handleDrop}
-            onFileSelect={handleFileSelect}
-            onFolderSelect={handleFolderSelect}
-          />
+          <div style={{ gridColumn: '1', gridRow: isMobile ? 'auto' : '1' }}>
+            <UploadDropzone
+              uploading={uploading}
+              dragActive={dragActive}
+              selectedFilesLength={selectedFiles.length}
+              uploadProgress={uploadProgress}
+              acceptAttr={acceptAttr}
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+              onFileSelect={handleFileSelect}
+              onFolderSelect={handleFolderSelect}
+            />
+          </div>
 
+          <div style={{ gridColumn: '1', gridRow: isMobile ? 'auto' : '2' }}>
           <SelectedFilesList
             selectedFiles={selectedFiles}
             uploading={uploading}
@@ -523,6 +543,7 @@ const KnowledgeUpload = () => {
             data-testid="upload-submit"
             style={{
               width: '100%',
+              marginTop: '12px',
               padding: '12px',
               backgroundColor: selectedFiles.length === 0 || uploading ? '#9ca3af' : '#3b82f6',
               color: 'white',
@@ -535,6 +556,7 @@ const KnowledgeUpload = () => {
           >
             {uploading ? '上传中...' : `上传文档${selectedFiles.length > 0 ? `（${selectedFiles.length}）` : ''}`}
           </button>
+          </div>
         </form>
 
         <div

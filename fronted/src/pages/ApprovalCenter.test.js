@@ -120,6 +120,192 @@ describe('ApprovalCenter', () => {
     });
   });
 
+  it('shows reject signature prompt in Chinese', async () => {
+    const user = userEvent.setup();
+
+    render(
+      <MemoryRouter initialEntries={['/approvals?request_id=req-1']}>
+        <ApprovalCenter />
+      </MemoryRouter>
+    );
+
+    await screen.findByTestId('approval-center-reject');
+    await user.click(screen.getByTestId('approval-center-reject'));
+
+    expect(screen.getByText('电子签名')).toBeInTheDocument();
+    expect(screen.getByText('驳回申请单 req-1（文件上传）')).toBeInTheDocument();
+    expect(screen.getByText('当前密码')).toBeInTheDocument();
+    expect(screen.getByText('签名含义')).toBeInTheDocument();
+    expect(screen.getByText('原因')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('操作审批驳回')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('审批后驳回该操作申请')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '签名并驳回' })).toBeInTheDocument();
+  });
+
+  it('submits reject action with electronic signature once', async () => {
+    const user = userEvent.setup();
+    authClient.requestSignatureChallenge.mockResolvedValue({ sign_token: 'sign-token-reject-1' });
+    operationApprovalApi.rejectRequest.mockResolvedValue({ ...requestDetail, status: 'rejected' });
+
+    render(
+      <MemoryRouter initialEntries={['/approvals?request_id=req-1']}>
+        <ApprovalCenter />
+      </MemoryRouter>
+    );
+
+    await screen.findByTestId('approval-center-reject');
+    await user.click(screen.getByTestId('approval-center-reject'));
+
+    await user.type(screen.getByTestId('review-signature-password'), 'RejectPass123');
+    await user.clear(screen.getByTestId('review-signature-meaning'));
+    await user.type(screen.getByTestId('review-signature-meaning'), 'Reject request');
+    await user.clear(screen.getByTestId('review-signature-reason'));
+    await user.type(screen.getByTestId('review-signature-reason'), 'Need changes');
+    await user.click(screen.getByTestId('review-signature-submit'));
+
+    await waitFor(() => {
+      expect(authClient.requestSignatureChallenge).toHaveBeenCalledWith('RejectPass123');
+    });
+    await waitFor(() => {
+      expect(operationApprovalApi.rejectRequest).toHaveBeenCalledWith(
+        'req-1',
+        expect.objectContaining({
+          sign_token: 'sign-token-reject-1',
+          signature_meaning: 'Reject request',
+          signature_reason: 'Need changes',
+          notes: 'Need changes',
+        })
+      );
+    });
+    expect(operationApprovalApi.rejectRequest).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows translated training compliance error when approval is blocked', async () => {
+    const user = userEvent.setup();
+    authClient.requestSignatureChallenge.mockResolvedValue({ sign_token: 'sign-token-training-1' });
+    operationApprovalApi.approveRequest.mockRejectedValue(new Error('training_record_missing'));
+
+    render(
+      <MemoryRouter initialEntries={['/approvals?request_id=req-1']}>
+        <ApprovalCenter />
+      </MemoryRouter>
+    );
+
+    await screen.findByTestId('approval-center-approve');
+    await user.click(screen.getByTestId('approval-center-approve'));
+
+    await user.type(screen.getByTestId('review-signature-password'), 'SignPass123');
+    await user.click(screen.getByTestId('review-signature-submit'));
+
+    expect(await screen.findByTestId('approval-center-error')).toHaveTextContent(
+      '当前审批账号缺少审批培训记录，请先补录培训记录后再审批或驳回。'
+    );
+  });
+
+  it('renders different request statuses with different colors', async () => {
+    useAuth.mockReturnValue({
+      user: {
+        user_id: 'user-1',
+        role: 'reviewer',
+      },
+    });
+    operationApprovalApi.listRequests.mockResolvedValue({
+      items: [
+        {
+          ...requestBrief,
+          request_id: 'req-withdrawn',
+          status: 'withdrawn',
+          current_step_name: '第一层',
+        },
+        {
+          ...requestBrief,
+          request_id: 'req-approval',
+          status: 'in_approval',
+        },
+      ],
+    });
+    operationApprovalApi.getRequest.mockResolvedValue({
+      ...requestDetail,
+      request_id: 'req-withdrawn',
+      status: 'withdrawn',
+      applicant_user_id: 'user-1',
+      applicant_username: 'user1',
+    });
+
+    render(
+      <MemoryRouter initialEntries={['/approvals?request_id=req-withdrawn']}>
+        <ApprovalCenter />
+      </MemoryRouter>
+    );
+
+    expect(await screen.findByTestId('approval-center-list-status-req-withdrawn')).toHaveStyle({ color: '#6b7280' });
+    expect(screen.getByTestId('approval-center-list-status-req-approval')).toHaveStyle({ color: '#2563eb' });
+    expect(await screen.findByTestId('approval-center-detail-status')).toHaveStyle({ color: '#6b7280' });
+    expect(screen.getByTestId('approval-center-detail-status')).toHaveTextContent('已撤回');
+  });
+
+  it('filters requests by selected status', async () => {
+    const user = userEvent.setup();
+    operationApprovalApi.listRequests.mockImplementation(({ status }) => {
+      if (status === 'rejected') {
+        return Promise.resolve({
+          items: [
+            {
+              ...requestBrief,
+              request_id: 'req-rejected',
+              status: 'rejected',
+              current_step_name: '第一层',
+            },
+          ],
+        });
+      }
+      return Promise.resolve({ items: [requestBrief] });
+    });
+    operationApprovalApi.getRequest
+      .mockResolvedValueOnce(requestDetail)
+      .mockResolvedValueOnce({
+        ...requestDetail,
+        request_id: 'req-rejected',
+        status: 'rejected',
+      });
+
+    render(
+      <MemoryRouter initialEntries={['/approvals?request_id=req-1']}>
+        <ApprovalCenter />
+      </MemoryRouter>
+    );
+
+    await screen.findByTestId('approval-center-status-filter');
+    await user.selectOptions(screen.getByTestId('approval-center-status-filter'), 'rejected');
+
+    await waitFor(() => {
+      expect(operationApprovalApi.listRequests).toHaveBeenLastCalledWith({
+        view: 'todo',
+        status: 'rejected',
+        limit: 100,
+      });
+    });
+    expect(await screen.findByTestId('approval-center-list-status-req-rejected')).toHaveTextContent('已驳回');
+    expect(screen.queryByTestId('approval-center-list-status-req-1')).not.toBeInTheDocument();
+  });
+
+  it('hides approve and reject actions for withdrawn requests', async () => {
+    operationApprovalApi.getRequest.mockResolvedValue({
+      ...requestDetail,
+      status: 'withdrawn',
+    });
+
+    render(
+      <MemoryRouter initialEntries={['/approvals?request_id=req-1']}>
+        <ApprovalCenter />
+      </MemoryRouter>
+    );
+
+    await screen.findByTestId('approval-center-detail-status');
+    expect(screen.queryByTestId('approval-center-approve')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('approval-center-reject')).not.toBeInTheDocument();
+  });
+
   it('allows applicant to withdraw request', async () => {
     const user = userEvent.setup();
     useAuth.mockReturnValue({
@@ -145,5 +331,20 @@ describe('ApprovalCenter', () => {
     });
 
     promptSpy.mockRestore();
+  });
+
+  it('reads the mine view from query params', async () => {
+    render(
+      <MemoryRouter initialEntries={['/approvals?view=mine&request_id=req-1']}>
+        <ApprovalCenter />
+      </MemoryRouter>
+    );
+
+    await screen.findByTestId('approval-center-tab-mine');
+    expect(operationApprovalApi.listRequests).toHaveBeenCalledWith({
+      view: 'mine',
+      status: 'all',
+      limit: 100,
+    });
   });
 });

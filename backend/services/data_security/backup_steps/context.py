@@ -24,6 +24,9 @@ class BackupContext:
     pack_dir: Path | None = None
     compose_file: Path | None = None
     ragflow_project: str | None = None
+    local_backup_root: Path | None = None
+    staging_root: Path | None = None
+    windows_target: str | None = None
 
     def now_ms(self) -> int:
         return int(time.time() * 1000)

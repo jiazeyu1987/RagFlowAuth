@@ -43,8 +43,22 @@ class RestoreDrillExecutionService:
         verification_notes: str | None = None,
     ):
         job = self.store.get_job(int(job_id))
-        pack_dir = Path(str(backup_path or "").strip())
-        expected_hash = str(backup_hash or "").strip()
+        local_backup_path = str(job.output_dir or "").strip()
+        job_package_hash = str(job.package_hash or "").strip()
+        provided_backup_path = str(backup_path or "").strip()
+        provided_backup_hash = str(backup_hash or "").strip()
+
+        if not local_backup_path:
+            raise ValueError("restore_drill_requires_local_backup")
+        if not job_package_hash:
+            raise ValueError("restore_drill_requires_job_package_hash")
+        if provided_backup_path != local_backup_path:
+            raise ValueError("restore_drill_backup_path_must_match_local_backup")
+        if provided_backup_hash != job_package_hash:
+            raise ValueError("restore_drill_backup_hash_must_match_job_package_hash")
+
+        pack_dir = Path(provided_backup_path)
+        expected_hash = provided_backup_hash
         when_ms = int(time.time() * 1000) if executed_at_ms is None else int(executed_at_ms)
         report: dict[str, object] = {
             "job_id": int(job.id),

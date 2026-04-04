@@ -11,9 +11,9 @@
 
 | 业务动作 | 路由/模块 | 允许签名人 | 关键系统校验 | 关键证据 |
 |---|---|---|---|---|
-| 审批步骤通过 | `backend/app/modules/review/routes/approve.py` | 当前步骤被授权审批人 | `approval_actor_not_assigned_to_step`、`signature_context_user_mismatch`、`signature_user_disabled`、`signature_user_inactive` | `backend.tests.test_review_assignment_integration_unit`, `backend.tests.test_review_signature_integration.py` |
-| 驳回 | `backend/app/modules/review/routes/reject.py` | 当前步骤被授权审批人 | `approval_actor_not_assigned_to_step`、`signature_user_disabled`、`signature_user_inactive` | `backend.tests.test_review_assignment_integration_unit` |
-| 覆盖审批 | `backend/app/modules/review/routes/overwrite.py` | 当前最终步骤被授权审批人 | `approval_actor_not_assigned_to_step`、`signature_user_disabled`、`signature_user_inactive` | `backend.tests.test_review_signature_integration.py` |
+| 审批步骤通过 | `backend/app/modules/operation_approvals/router.py` | 当前步骤被授权审批人 | `operation_request_not_current_approver`、`signature_context_user_mismatch`、`signature_user_disabled`、`signature_user_inactive` | `backend.tests.test_operation_approval_service_unit.py`, `backend.tests.test_electronic_signature_unit.py` |
+| 驳回 | `backend/app/modules/operation_approvals/router.py` | 当前步骤被授权审批人 | `operation_request_not_current_approver`、`signature_user_disabled`、`signature_user_inactive` | `backend.tests.test_operation_approval_service_unit.py` |
+| 撤回 | `backend/services/operation_approval/service.py` | 申请人本人或管理员 | `operation_request_not_withdrawable`、`operation_request_withdraw_forbidden` | `backend.tests.test_operation_approval_service_unit.py` |
 
 ## 3. 签名责任字段
 

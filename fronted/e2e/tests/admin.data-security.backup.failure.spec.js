@@ -2,7 +2,7 @@
 const { expect } = require('@playwright/test');
 const { adminTest } = require('../helpers/auth');
 
-adminTest('data security run backup shows failure details and stops running @regression @admin', async ({ page }) => {
+adminTest('data security run backup keeps job successful when local backup succeeds but windows backup fails @regression @admin', async ({ page }) => {
   const settings = {
     enabled: false,
     interval_minutes: 60,
@@ -16,6 +16,10 @@ adminTest('data security run backup shows failure details and stops running @reg
     full_backup_include_images: true,
     auth_db_path: 'data/auth.db',
     last_run_at_ms: null,
+    local_backup_target_path: '/app/data/backups',
+    local_backup_pack_count: 1,
+    windows_backup_target_path: '\\\\10.0.0.8\\backup\\ragflowauth',
+    windows_backup_pack_count: 1,
   };
 
   const jobs = [];
@@ -45,6 +49,9 @@ adminTest('data security run backup shows failure details and stops running @reg
       started_at_ms: Date.now(),
       output_dir: '',
       detail: null,
+      replication_status: 'pending',
+      replica_path: '',
+      replication_error: null,
     });
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ job_id: 2 }) });
   });
@@ -66,7 +73,15 @@ adminTest('data security run backup shows failure details and stops running @reg
     if (jobGetCount === 1) {
       Object.assign(j, { status: 'running', progress: 10, message: 'running' });
     } else {
-      Object.assign(j, { status: 'failed', progress: 35, message: 'failed', detail: 'disk full' });
+      Object.assign(j, {
+        status: 'completed',
+        progress: 100,
+        message: 'backup_completed_local_only',
+        detail: 'windows_backup_failed:disk full',
+        output_dir: '/app/data/backups/migration_pack_20260404_010101',
+        replication_status: 'failed',
+        replication_error: 'disk full',
+      });
     }
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(j) });
   });
@@ -75,9 +90,11 @@ adminTest('data security run backup shows failure details and stops running @reg
   await page.getByTestId('ds-run-now').click();
 
   await expect(page.getByTestId('ds-active-job-status')).toContainText('#2');
-  await expect(page.getByTestId('ds-active-job-detail')).toHaveText('disk full', { timeout: 20_000 });
-  await expect(page.getByTestId('ds-active-job-status')).toContainText('failed');
+  await expect(page.getByTestId('ds-active-job-detail')).toContainText('windows_backup_failed:disk full', { timeout: 20_000 });
+  await expect(page.getByTestId('ds-active-job-status')).toContainText('completed');
+  await expect(page.getByTestId('ds-job-row-2')).toContainText('Windows 备份: 失败');
+  await expect(page.getByTestId('ds-job-row-2')).toContainText('本地备份: 成功');
 
-  // Should stop running after failure, allowing another run attempt.
+  // Should stop running after the partial-success completion, allowing another run attempt.
   await expect(page.getByTestId('ds-run-now')).toBeEnabled();
 });

@@ -29,36 +29,56 @@ def _norm_path(s: str) -> str:
 
 
 def _backup_pack_stats(s) -> dict[str, Any]:
-    target = None
+    local_target = None
     try:
-        target = s.target_path()
+        local_target = s.local_backup_target_path()
     except Exception:
-        target = None
+        local_target = None
 
-    if not target:
-        return {"backup_target_path": "", "backup_pack_count": 0}
+    windows_target = None
+    try:
+        windows_target = s.windows_target_path()
+    except Exception:
+        windows_target = None
 
-    target_text = str(target)
+    local_stats = _pack_stats_for_target(str(local_target or ""))
+    windows_stats = _pack_stats_for_target(str(windows_target or ""))
+    return {
+        "backup_target_path": local_stats["target_path"],
+        "backup_pack_count": local_stats["pack_count"],
+        "backup_pack_count_skipped": local_stats.get("pack_count_skipped", False),
+        "local_backup_target_path": local_stats["target_path"],
+        "local_backup_pack_count": local_stats["pack_count"],
+        "local_backup_pack_count_skipped": local_stats.get("pack_count_skipped", False),
+        "windows_backup_target_path": windows_stats["target_path"],
+        "windows_backup_pack_count": windows_stats["pack_count"],
+        "windows_backup_pack_count_skipped": windows_stats.get("pack_count_skipped", False),
+    }
+
+
+def _pack_stats_for_target(target: str) -> dict[str, Any]:
+    target_text = str(target or "").strip()
+    if not target_text:
+        return {"target_path": "", "pack_count": 0}
+
     p = Path(target_text)
     target_norm = _norm_path(target_text)
 
-    # Defensive mode: avoid request-path stat/iterdir on network mount to prevent
-    # kernel D-state stalls when CIFS storage is unhealthy.
     if target_norm == "/mnt/replica" or target_norm.startswith("/mnt/replica/"):
         if not settings.DATA_SECURITY_SCAN_MOUNT_STATS:
             return {
-                "backup_target_path": str(p),
-                "backup_pack_count": 0,
-                "backup_pack_count_skipped": True,
+                "target_path": str(p),
+                "pack_count": 0,
+                "pack_count_skipped": True,
             }
 
     try:
         count = 0
         if p.exists() and p.is_dir():
             count = sum(1 for child in p.iterdir() if child.is_dir() and child.name.startswith("migration_pack_"))
-        return {"backup_target_path": str(p), "backup_pack_count": int(count)}
+        return {"target_path": str(p), "pack_count": int(count)}
     except Exception:
-        return {"backup_target_path": str(p), "backup_pack_count": 0}
+        return {"target_path": str(p), "pack_count": 0}
 
 
 def _request_audit_fields(request: Request) -> tuple[str | None, str | None]:

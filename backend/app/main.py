@@ -18,13 +18,17 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    from backend.app.dependencies import create_dependencies
+    from backend.app.dependencies import create_dependencies, get_tenant_dependencies
     from backend.database.paths import resolve_auth_db_path
     from backend.services.data_security_scheduler_v2 import init_scheduler_v2, stop_scheduler_v2
 
-    app.state.deps = create_dependencies()
     app.state.base_auth_db_path = str(resolve_auth_db_path())
     app.state.tenant_deps_cache = {}
+    app.state.deps = create_dependencies(
+        operation_approval_execution_deps_resolver=lambda company_id: get_tenant_dependencies(
+            app, company_id=company_id
+        )
+    )
     logger.info("Dependencies initialized")
 
     # Help diagnose "stale code" / wrong interpreter issues on Windows.
@@ -116,7 +120,6 @@ def create_app() -> FastAPI:
         permission_groups,
         preview,
         ragflow,
-        review,
         search_configs,
         supplier_qualification,
         training_compliance,
@@ -132,7 +135,6 @@ def create_app() -> FastAPI:
     app.include_router(training_compliance.router, prefix="/api", tags=["Training Compliance"])
     app.include_router(users.router, prefix="/api/users", tags=["Users"])
     app.include_router(knowledge.router, prefix="/api/knowledge", tags=["Knowledge Base"])
-    app.include_router(review.router, prefix="/api/knowledge", tags=["Document Review"])
     app.include_router(operation_approvals.router, prefix="/api", tags=["Operation Approvals"])
     app.include_router(inbox.router, prefix="/api", tags=["Inbox"])
     app.include_router(ragflow.router, prefix="/api/ragflow", tags=["RAGFlow Integration"])

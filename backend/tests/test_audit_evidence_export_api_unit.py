@@ -13,7 +13,7 @@ from fastapi.testclient import TestClient
 from backend.app.core import auth as auth_module
 from backend.app.modules.audit.router import router as audit_router
 from backend.database.schema.ensure import ensure_schema
-from backend.services.approval import ApprovalWorkflowStore
+from backend.database.sqlite import connect_sqlite
 from backend.services.audit import AuditLogManager
 from backend.services.audit_log_store import AuditLogStore
 from backend.services.data_security import DataSecurityStore
@@ -75,7 +75,6 @@ def _override_get_current_payload(_: Request) -> TokenPayload:
 
 def _seed_evidence(db_path: str) -> None:
     audit_store = AuditLogStore(db_path=db_path)
-    approval_store = ApprovalWorkflowStore(db_path=db_path)
     signature_store = ElectronicSignatureStore(db_path=db_path)
     notification_store = NotificationStore(db_path=db_path)
     data_security_store = DataSecurityStore(db_path=db_path)
@@ -97,26 +96,44 @@ def _seed_evidence(db_path: str) -> None:
         request_id="rid-fda02",
         meta={"inspection": True},
     )
-    approval_store.upsert_workflow(
-        workflow_id="wf-fda02",
-        kb_ref="kb-a",
-        name="FDA-02 Workflow",
-        steps=[
-            {"step_no": 1, "step_name": "Step 1", "approver_user_id": "u-admin"},
-            {"step_no": 2, "step_name": "Step 2", "approver_user_id": "u-b"},
-        ],
-        is_active=True,
-    )
-    instance = approval_store.create_instance(doc_id="doc-fda02", workflow_id="wf-fda02")
-    approval_store.record_action(
-        instance_id=str(instance["instance_id"]),
-        doc_id="doc-fda02",
-        workflow_id="wf-fda02",
-        step_no=1,
-        action="approve",
-        actor="u-admin",
-        notes="approved for export test",
-    )
+    conn = connect_sqlite(db_path)
+    try:
+        conn.execute(
+            """
+            INSERT INTO approval_workflows (workflow_id, kb_ref, name, is_active, created_at_ms, updated_at_ms)
+            VALUES ('wf-fda02', 'kb-a', 'FDA-02 Workflow', 1, 1710000000000, 1710000000000)
+            """
+        )
+        conn.execute(
+            """
+            INSERT INTO approval_workflow_steps (
+                step_id, workflow_id, step_no, step_name, approver_user_id, approver_role, approver_group_id,
+                approver_department_id, approver_company_id, approval_mode, created_at_ms
+            ) VALUES
+                ('step-fda02-1', 'wf-fda02', 1, 'Step 1', 'u-admin', NULL, NULL, NULL, NULL, 'all', 1710000000000),
+                ('step-fda02-2', 'wf-fda02', 2, 'Step 2', 'u-b', NULL, NULL, NULL, NULL, 'all', 1710000000000)
+            """
+        )
+        conn.execute(
+            """
+            INSERT INTO document_approval_instances (
+                instance_id, doc_id, workflow_id, current_step_no, status, started_at_ms, completed_at_ms
+            ) VALUES ('inst-fda02', 'doc-fda02', 'wf-fda02', 1, 'in_progress', 1710000000000, NULL)
+            """
+        )
+        conn.execute(
+            """
+            INSERT INTO document_approval_actions (
+                action_id, instance_id, doc_id, workflow_id, step_no, action, actor, notes, created_at_ms
+            ) VALUES (
+                'act-fda02-1', 'inst-fda02', 'doc-fda02', 'wf-fda02', 1, 'approve', 'u-admin',
+                'approved for export test', 1710000001000
+            )
+            """
+        )
+        conn.commit()
+    finally:
+        conn.close()
     signature_store.create_signature(
         signature_id="sig-fda02",
         record_type="document_review",

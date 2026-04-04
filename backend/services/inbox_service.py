@@ -47,13 +47,24 @@ class UserInboxService:
             )
         return items
 
-    def list_items(self, *, recipient_user_id: str, unread_only: bool = False, limit: int = 100) -> dict:
+    def list_items(
+        self,
+        *,
+        recipient_user_id: str,
+        unread_only: bool = False,
+        limit: int = 100,
+        exclude_event_types=None,
+    ) -> dict:
         items = self._store.list_items(
             recipient_user_id=recipient_user_id,
             unread_only=bool(unread_only),
             limit=limit,
+            exclude_event_types=exclude_event_types,
         )
-        unread_count = self._store.count_unread(recipient_user_id=recipient_user_id)
+        unread_count = self._store.count_unread(
+            recipient_user_id=recipient_user_id,
+            exclude_event_types=exclude_event_types,
+        )
         return {
             "items": items,
             "count": len(items),

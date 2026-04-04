@@ -80,53 +80,6 @@ export const policyKnowledgeApiMethods = {
     return result;
   },
 
-  async getStats() {
-    const response = await this.fetchWithAuth(
-      authBackendUrl('/api/knowledge/stats'),
-      { method: 'GET' }
-    );
-
-    if (!response.ok) {
-      throw new Error('Failed to get stats');
-    }
-
-    return response.json();
-  },
-
-  async approveDocument(docId, reviewNotes = null) {
-    const response = await this.fetchWithAuth(
-      authBackendUrl(`/api/knowledge/documents/${docId}/approve`),
-      {
-        method: 'POST',
-        body: JSON.stringify({ review_notes: reviewNotes }),
-      }
-    );
-
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.detail || 'Failed to approve document');
-    }
-
-    return response.json();
-  },
-
-  async rejectDocument(docId, reviewNotes = null) {
-    const response = await this.fetchWithAuth(
-      authBackendUrl(`/api/knowledge/documents/${docId}/reject`),
-      {
-        method: 'POST',
-        body: JSON.stringify({ review_notes: reviewNotes }),
-      }
-    );
-
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.detail || 'Failed to reject document');
-    }
-
-    return response.json();
-  },
-
   async deleteDocument(docId) {
     const response = await this.fetchWithAuth(
       authBackendUrl(`/api/documents/knowledge/${docId}`),
