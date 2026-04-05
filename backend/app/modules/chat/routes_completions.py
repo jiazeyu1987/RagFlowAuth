@@ -135,7 +135,7 @@ async def chat_completion(
                     if ans:
                         assistant_text_for_hash = ans
                     data_obj = chunk.get("data") if isinstance(chunk.get("data"), dict) else {}
-                    answer_len = len(str(data_obj.get("answer") or data_obj.get("content") or data_obj.get("text") or ""))
+                    answer_len = len(str(data_obj.get("answer") or ""))
                     _chat_log(
                         "[CHAT][chunk-in] request_id=%s trace_id=%s idx=%s code=%s answer_len=%s keys=%s",
                         request_id,

@@ -26,10 +26,13 @@ class ChatCompletionRequest(BaseModel):
     session_id: Optional[str] = None
 
 
+class CreateSessionRequest(BaseModel):
+    name: str
+
+
 class DeleteSessionsRequest(BaseModel):
     ids: Optional[list[str]] = None
 
 
 class RenameSessionRequest(BaseModel):
     name: str
-

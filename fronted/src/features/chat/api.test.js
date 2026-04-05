@@ -35,6 +35,24 @@ describe('chatApi', () => {
     await expect(chatApi.listChatSessions('chat-1')).rejects.toThrow('chat_session_list_invalid_payload');
   });
 
+  it('sends create session requests as the explicit backend body contract', async () => {
+    httpClient.requestJson.mockResolvedValue({ id: 'session-1', name: 'New Session', messages: [] });
+
+    await expect(chatApi.createChatSession('chat-1', 'New Session')).resolves.toEqual({
+      id: 'session-1',
+      name: 'New Session',
+      messages: [],
+    });
+
+    expect(httpClient.requestJson).toHaveBeenCalledWith(
+      'http://auth.local/api/chats/chat-1/sessions',
+      {
+        method: 'POST',
+        body: JSON.stringify({ name: 'New Session' }),
+      }
+    );
+  });
+
   it('sends streaming completion requests through the shared http client', async () => {
     const response = { ok: true };
     httpClient.request.mockResolvedValue(response);

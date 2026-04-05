@@ -49,42 +49,18 @@ export const useChatStream = ({
     [isStreamDebugEnabled]
   );
 
-  const pickText = useCallback((value) => {
-    const walk = (node) => {
-      if (typeof node === 'string') return node.trim();
-      if (Array.isArray(node)) {
-        for (const item of node) {
-          const got = walk(item);
-          if (got) return got;
-        }
-        return '';
-      }
-      if (!node || typeof node !== 'object') return '';
-
-      for (const key of ['answer', 'content', 'text', 'response']) {
-        const got = walk(node?.[key]);
-        if (got) return got;
-      }
-      for (const key of ['message', 'delta', 'data', 'output', 'result', 'choices', 'parts']) {
-        const got = walk(node?.[key]);
-        if (got) return got;
-      }
-      return '';
-    };
-    return walk(value);
-  }, []);
-
-  const extractIncomingAnswer = useCallback(
+  const readStreamFrame = useCallback(
     (payload) => {
-      const data = payload && typeof payload === 'object' ? payload.data : null;
-      const candidates = [data, payload];
-      for (const value of candidates) {
-        const text = pickText(value);
-        if (text) return text;
-      }
-      return '';
+      const frame = payload && typeof payload === 'object' && !Array.isArray(payload) ? payload : null;
+      const data = frame?.data && typeof frame.data === 'object' && !Array.isArray(frame.data) ? frame.data : null;
+      return {
+        code: typeof frame?.code === 'number' ? frame.code : null,
+        answer: typeof data?.answer === 'string' ? data.answer : '',
+        sources: Array.isArray(data?.sources) ? data.sources : null,
+        message: String(frame?.message || frame?.detail || '').trim(),
+      };
     },
-    [pickText]
+    []
   );
 
   const upsertAssistantMessage = useCallback(
@@ -227,16 +203,26 @@ export const useChatStream = ({
             topKeys: data && typeof data === 'object' ? Object.keys(data).slice(0, 8) : [],
           });
 
-          if (data?.code === 0 && data?.data && Array.isArray(data.data.sources)) {
-            upsertAssistantSources(data.data.sources);
+          const frame = readStreamFrame(data);
+          if (frame.code === null) {
+            logStream('warn', 'invalid sse payload ignored', {
+              traceId,
+              sseLineIndex,
+              dataPreview: previewText(dataStr, 180),
+            });
+            return;
+          }
+
+          if (Array.isArray(frame.sources)) {
+            upsertAssistantSources(frame.sources);
             logStream('debug', 'sources event', {
               traceId,
               sseLineIndex,
-              sourcesCount: data.data.sources.length,
+              sourcesCount: frame.sources.length,
             });
           }
 
-          const incoming = extractIncomingAnswer(data);
+          const incoming = frame.answer;
           if (incoming) {
             receivedAnswerEvent = true;
             if (incoming.toLowerCase().includes('<think')) {
@@ -338,14 +324,14 @@ export const useChatStream = ({
             });
           }
 
-          if (typeof data?.code === 'number' && data.code !== 0) {
-            const msg = String(data?.message || data?.detail || 'backend_error');
+          if (frame.code !== 0) {
+            const msg = frame.message || 'backend_error';
             setError(msg);
             upsertAssistantMessage(msg);
             logStream('warn', 'backend non-zero code', {
               traceId,
               sseLineIndex,
-              code: data.code,
+              code: frame.code,
               message: previewText(msg, 180),
             });
           }
@@ -384,35 +370,6 @@ export const useChatStream = ({
 
       if (buffer) {
         processSseLine(buffer);
-      }
-
-      // Compatibility fallback: some proxies downgrade stream response to one JSON body.
-      if (!consumedSseEvent && !assistantMessageRef.current) {
-        try {
-          const rawTrimmed = String(rawText || '').trim();
-          if (rawTrimmed) {
-            const payload = JSON.parse(rawTrimmed);
-            const incoming = extractIncomingAnswer(payload);
-            if (incoming) {
-              assistantMessageRef.current = incoming;
-              upsertAssistantMessage(incoming);
-            }
-            const maybeSources = payload?.data?.sources;
-            if (Array.isArray(maybeSources)) {
-              upsertAssistantSources(maybeSources);
-            }
-            logStream('info', 'json-body fallback used', {
-              traceId,
-              rawLen: rawTrimmed.length,
-              fallbackAnswerLen: String(assistantMessageRef.current || '').length,
-            });
-          }
-        } catch {
-          logStream('warn', 'json-body fallback failed', {
-            traceId,
-            rawPreview: previewText(rawText, 180),
-          });
-        }
       }
 
       const visibleAssistantText = String(stripThinkTags(assistantMessageRef.current || '') || '').trim();
@@ -472,12 +429,12 @@ export const useChatStream = ({
   }, [
     autoRenameSessionByFirstQuestion,
     containsReasoningMarkers,
-    extractIncomingAnswer,
     inputMessage,
     logStream,
     messages,
     normalizeForCompare,
     previewText,
+    readStreamFrame,
     saveSourcesForAssistantMessage,
     refreshSessionMessages,
     selectedChatId,
