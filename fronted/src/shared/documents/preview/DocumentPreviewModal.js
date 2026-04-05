@@ -3,7 +3,7 @@ import { useEscapeClose } from '../../hooks/useEscapeClose';
 import { ensureTablePreviewStyles } from '../../preview/tablePreviewStyles';
 import { isMarkdownFilename, MarkdownPreview } from '../../preview/markdownPreview';
 import { loadDocumentPreview } from '../../preview/ragflowPreviewManager';
-import documentClient, { DOCUMENT_SOURCE } from '../documentClient';
+import { DOCUMENT_SOURCE } from '../documentClient';
 import OnlyOfficeViewer from './OnlyOfficeViewer';
 import { ControlledPreviewBadge, WatermarkedPreviewFrame } from './watermarkOverlay';
 import {
@@ -20,7 +20,17 @@ import {
 
 const MOBILE_BREAKPOINT = 768;
 
-export const DocumentPreviewModal = ({ open, target, onClose, canDownloadFiles = false }) => {
+export const DocumentPreviewModal = ({
+  open,
+  target,
+  onClose,
+  canDownloadFiles = false,
+  documentApi,
+}) => {
+  if (!documentApi) {
+    throw new Error('document_api_required');
+  }
+
   const preventCopyInPreview = true;
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -109,7 +119,7 @@ export const DocumentPreviewModal = ({ open, target, onClose, canDownloadFiles =
         ) {
           const onlyOfficeStart = nowMs();
           previewTrace('onlyoffice:editor-config:start', traceContext);
-          const onlyOffice = await documentClient.onlyofficeEditorConfig({
+          const onlyOffice = await documentApi.onlyofficeEditorConfig({
             source,
             docId,
             datasetName: source === DOCUMENT_SOURCE.RAGFLOW ? datasetName : undefined,
@@ -139,7 +149,7 @@ export const DocumentPreviewModal = ({ open, target, onClose, canDownloadFiles =
           dataset: datasetName,
           title,
           getPreviewJson: async ({ docId: _id, dataset }) =>
-            documentClient.preview({
+            documentApi.preview({
               source,
               docId: _id,
               datasetName: source === DOCUMENT_SOURCE.RAGFLOW ? dataset : undefined,
@@ -150,7 +160,7 @@ export const DocumentPreviewModal = ({ open, target, onClose, canDownloadFiles =
             }),
           getDownloadBlob: canDownloadFiles
             ? async ({ docId: _id, dataset, filename }) =>
-                documentClient.downloadBlob({
+                documentApi.downloadBlob({
                   source,
                   docId: _id,
                   datasetName: source === DOCUMENT_SOURCE.RAGFLOW ? dataset : undefined,
@@ -313,7 +323,7 @@ export const DocumentPreviewModal = ({ open, target, onClose, canDownloadFiles =
     try {
       setLoading(true);
       setError('');
-      const data = await documentClient.preview({
+      const data = await documentApi.preview({
         source: target.source,
         docId: target.docId,
         datasetName: target.source === DOCUMENT_SOURCE.RAGFLOW ? target.datasetName || target.dataset : undefined,
@@ -354,7 +364,7 @@ export const DocumentPreviewModal = ({ open, target, onClose, canDownloadFiles =
     } finally {
       setLoading(false);
     }
-  }, [target, effectiveName]);
+  }, [documentApi, target, effectiveName]);
 
   if (!open) return null;
 

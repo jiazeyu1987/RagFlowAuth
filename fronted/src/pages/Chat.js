@@ -295,7 +295,13 @@ const Chat = () => {
         onConfirm={actions.confirmRenameSession}
       />
 
-      <DocumentPreviewModal open={previewOpen} target={previewTarget} onClose={closePreview} canDownloadFiles={canDownloadFiles} />
+      <DocumentPreviewModal
+        open={previewOpen}
+        target={previewTarget}
+        onClose={closePreview}
+        canDownloadFiles={canDownloadFiles}
+        documentApi={documentsApi}
+      />
     </div>
   );
 };

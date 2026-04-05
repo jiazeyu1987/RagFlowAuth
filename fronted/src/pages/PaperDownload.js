@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { clampLimit } from '../features/download/downloadPageUtils';
+import { documentsApi } from '../features/documents/api';
 import DownloadHistorySidebar from '../features/download/components/DownloadHistorySidebar';
 import DownloadHistoryDetailPanel from '../features/download/components/DownloadHistoryDetailPanel';
 import DownloadResultToolbar from '../features/download/components/DownloadResultToolbar';
@@ -123,7 +124,13 @@ export default function PaperDownload() {
         </section>
       </div>
 
-      <DocumentPreviewModal open={previewOpen} onClose={() => setPreviewOpen(false)} target={previewTarget} canDownloadFiles={canDownloadFiles} />
+      <DocumentPreviewModal
+        open={previewOpen}
+        onClose={() => setPreviewOpen(false)}
+        target={previewTarget}
+        canDownloadFiles={canDownloadFiles}
+        documentApi={documentsApi}
+      />
     </div>
   );
 }

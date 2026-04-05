@@ -341,6 +341,7 @@ const Agents = () => {
         target={previewTarget}
         onClose={closePreviewModal}
         canDownloadFiles={canDownloadFiles}
+        documentApi={documentsApi}
       />
     </div>
   );

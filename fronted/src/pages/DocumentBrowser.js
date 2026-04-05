@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { documentsApi } from '../features/documents/api';
 import { toolbarButtonStyle } from '../features/knowledge/documentBrowser/styles';
 import { TEXT } from '../features/knowledge/documentBrowser/constants';
 import BatchTransferProgress from '../features/knowledge/documentBrowser/components/BatchTransferProgress';
@@ -285,6 +286,7 @@ export default function DocumentBrowser() {
           setPreviewTarget(null);
         }}
         canDownloadFiles={typeof canDownload === 'function' ? !!canDownload() : false}
+        documentApi={documentsApi}
       />
       <TransferDialog
         transferDialog={transferDialog}
