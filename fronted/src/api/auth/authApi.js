@@ -1,27 +1,13 @@
 import { authBackendUrl } from '../../config/backend';
-import tokenStore from '../../shared/auth/tokenStore';
-import { httpClient } from './httpClient';
+import { httpClient } from '../../shared/http/httpClient';
 
-export const authApiMethods = {
-  async refreshAccessToken() {
-    try {
-      const token = await httpClient.refreshAccessToken();
-      this.accessToken = token;
-      this.refreshToken = tokenStore.getRefreshToken();
-      return token;
-    } catch (e) {
-      this.clearAuth();
-      window.location.href = '/login';
-      throw e;
-    }
+export const authApi = {
+  refreshAccessToken() {
+    return httpClient.refreshAccessToken();
   },
 
-  async fetchWithAuth(url, options = {}) {
-    const response = await httpClient.request(url, options);
-    this.accessToken = tokenStore.getAccessToken();
-    this.refreshToken = tokenStore.getRefreshToken();
-    this.user = tokenStore.getUser();
-    return response;
+  fetchWithAuth(url, options = {}) {
+    return httpClient.request(url, options);
   },
 
   async login(username, password) {
@@ -37,37 +23,25 @@ export const authApiMethods = {
       skipRefresh: true,
     });
 
-    // 存储两种令牌
-    this.setAuth(data.access_token, data.refresh_token, user);
-
     return {
       ...data,
-      user, // 为了兼容旧代码
+      user,
     };
   },
 
-  async logout() {
-    try {
-      await httpClient.requestJson(authBackendUrl('/api/auth/logout'), {
-        method: 'POST',
-        skipRefresh: true,
-      });
-    } catch (error) {
-      console.error('Logout error:', error);
-    } finally {
-      this.clearAuth();
-    }
+  logout() {
+    return httpClient.requestJson(authBackendUrl('/api/auth/logout'), {
+      method: 'POST',
+      skipRefresh: true,
+    });
   },
 
-  async getCurrentUser() {
-    const response = await this.fetchWithAuth(authBackendUrl('/api/auth/me'), {
+  getCurrentUser(options = {}) {
+    return httpClient.requestJson(authBackendUrl('/api/auth/me'), {
       method: 'GET',
+      ...options,
     });
-
-    if (!response.ok) {
-      throw new Error('Failed to get current user');
-    }
-
-    return response.json();
   },
 };
+
+export default authApi;
