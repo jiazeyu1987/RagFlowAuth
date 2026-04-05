@@ -1,5 +1,5 @@
 import { useCallback, useRef } from 'react';
-import { httpClient } from '../../../shared/http/httpClient';
+import { chatApi } from '../api';
 
 export const useChatStream = ({
   selectedChatId,
@@ -168,10 +168,10 @@ export const useChatStream = ({
         });
       }
 
-      const response = await httpClient.request(`/api/chats/${selectedChatId}/completions`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Chat-Trace-Id': traceId },
-        body: JSON.stringify({ question, stream: true, session_id: selectedSessionId }),
+      const response = await chatApi.requestCompletionStream(selectedChatId, {
+        question,
+        sessionId: selectedSessionId,
+        traceId,
       });
 
       logStream('info', 'send response received', {

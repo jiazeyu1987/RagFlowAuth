@@ -30,4 +30,19 @@ export const chatApi = {
       body: JSON.stringify({ name }),
     });
   },
+
+  requestCompletionStream(chatId, { question, sessionId, traceId } = {}) {
+    return httpClient.request(authBackendUrl(`/api/chats/${chatId}/completions`), {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Chat-Trace-Id': traceId,
+      },
+      body: JSON.stringify({
+        question,
+        stream: true,
+        session_id: sessionId,
+      }),
+    });
+  },
 };

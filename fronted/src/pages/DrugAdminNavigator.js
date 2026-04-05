@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import drugAdminManager from '../features/drugAdmin/DrugAdminManager';
+import drugAdminApi from '../features/drugAdmin/api';
 
 const MOBILE_BREAKPOINT = 768;
 
@@ -66,7 +66,7 @@ export default function DrugAdminNavigator() {
       setLoading(true);
       setError('');
       try {
-        const data = await drugAdminManager.listProvinces();
+        const data = await drugAdminApi.listProvinces();
         if (!alive) return;
         const list = Array.isArray(data?.provinces) ? data.provinces : [];
         setValidatedOn(String(data?.validated_on || ''));
@@ -92,7 +92,7 @@ export default function DrugAdminNavigator() {
     setError('');
     setInfo(`正在检查 ${selectedProvince}...`);
     try {
-      const result = await drugAdminManager.resolveProvince(selectedProvince);
+      const result = await drugAdminApi.resolveProvince(selectedProvince);
       setLastResolve(result);
       if (result?.ok && result?.url) {
         window.open(result.url, '_blank', 'noopener,noreferrer');
@@ -112,7 +112,7 @@ export default function DrugAdminNavigator() {
     setError('');
     setInfo('正在验证全部省份站点...');
     try {
-      const result = await drugAdminManager.verifyAll();
+      const result = await drugAdminApi.verifyAll();
       setVerifyResult(result);
       setInfo(`验证完成：共 ${result?.total || 0} 个，成功 ${result?.success || 0} 个，失败 ${result?.failed || 0} 个`);
     } catch (e) {

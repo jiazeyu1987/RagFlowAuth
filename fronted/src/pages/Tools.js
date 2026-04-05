@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
-import { httpClient } from '../shared/http/httpClient';
+import drugAdminApi from '../features/drugAdmin/api';
 
 const PAGE_SIZE = 12;
 const MOBILE_BREAKPOINT = 768;
@@ -169,7 +169,7 @@ const Tools = () => {
 
     const loadProvinceTools = async () => {
       try {
-        const response = await httpClient.requestJson('/api/drug-admin/provinces');
+        const response = await drugAdminApi.listProvinces();
         if (!active) return;
         setProvinceTools(buildProvinceTools(response?.provinces));
         setProvinceError('');
