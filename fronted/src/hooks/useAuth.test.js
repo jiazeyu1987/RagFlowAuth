@@ -1,11 +1,11 @@
 import React from 'react';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { AuthProvider, useAuth } from './useAuth';
-import authApi from '../api/auth/authApi';
+import authApi from '../features/auth/api';
 import { meApi } from '../features/me/api';
 import tokenStore from '../shared/auth/tokenStore';
 
-jest.mock('../api/auth/authApi', () => ({
+jest.mock('../features/auth/api', () => ({
   __esModule: true,
   default: {
     login: jest.fn(),

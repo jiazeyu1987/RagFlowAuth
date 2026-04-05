@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, createContext, useContext, useRef } from 'react';
-import authApi from '../api/auth/authApi';
 import { STORAGE_KEYS } from '../constants/storageKeys';
+import authApi from '../features/auth/api';
 import { meApi } from '../features/me/api';
 import tokenStore from '../shared/auth/tokenStore';
 
