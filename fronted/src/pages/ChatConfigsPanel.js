@@ -6,7 +6,6 @@ import {
   getDatasetIdsKeyForUpdate,
   getSelectedDatasetIdsFromChatJson,
   HIDDEN_CHAT_NAMES,
-  normalizeChatListResponse,
   normalizeDatasetListResponse,
   parseJson,
   prettyJson,
@@ -85,8 +84,8 @@ export function ChatConfigsPanel() {
     setChatError('');
     setChatLoading(true);
     try {
-      const res = await knowledgeApi.listRagflowChats({ page_size: 1000 });
-      const visibleChats = normalizeChatListResponse(res).filter((chat) => {
+      const chats = await knowledgeApi.listRagflowChats({ page_size: 1000 });
+      const visibleChats = chats.filter((chat) => {
         const rawName = String(chat?.name || '').trim();
         const normalized = rawName.replace(/^\[|\]$/g, '').trim();
         return !HIDDEN_CHAT_NAMES.has(rawName) && !HIDDEN_CHAT_NAMES.has(normalized);

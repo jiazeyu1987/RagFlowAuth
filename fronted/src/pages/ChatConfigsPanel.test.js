@@ -23,9 +23,7 @@ jest.mock('../features/knowledge/api', () => ({
 describe('ChatConfigsPanel', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    knowledgeApi.listRagflowChats.mockResolvedValue({
-      chats: [{ id: 'c1', name: 'Chat 1', description: 'desc' }],
-    });
+    knowledgeApi.listRagflowChats.mockResolvedValue([{ id: 'c1', name: 'Chat 1', description: 'desc' }]);
     knowledgeApi.listRagflowDatasets.mockResolvedValue({
       datasets: [{ id: 'ds1', name: 'KB 1', chunk_count: 3, document_count: 1 }],
     });

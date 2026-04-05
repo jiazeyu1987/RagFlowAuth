@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../../../hooks/useAuth';
 import { knowledgeApi } from '../api';
-import { normalizeListResponse, parseJson, prettyJson } from './utils';
+import { parseJson, prettyJson } from './utils';
 
 export default function useSearchConfigsPanel() {
   const { user } = useAuth();
@@ -41,8 +41,8 @@ export default function useSearchConfigsPanel() {
     setError('');
     setLoading(true);
     try {
-      const response = await knowledgeApi.listSearchConfigs();
-      setList(normalizeListResponse(response));
+      const configs = await knowledgeApi.listSearchConfigs();
+      setList(configs);
     } catch (requestError) {
       setList([]);
       setError(requestError?.message || 'Failed to load configs');

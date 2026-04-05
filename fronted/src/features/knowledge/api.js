@@ -2,6 +2,13 @@ import { authBackendUrl } from '../../config/backend';
 import { DOCUMENT_SOURCE, documentsApi } from '../documents/api';
 import { httpClient } from '../../shared/http/httpClient';
 
+function assertOkResponse(response, action) {
+  if (response?.ok !== true) {
+    const detail = String(response?.detail || response?.error || '').trim();
+    throw new Error(detail || `${action}_failed`);
+  }
+}
+
 function unwrapEnvelope(res) {
   if (!res || typeof res !== 'object') return res;
   if (res.dataset && typeof res.dataset === 'object') return res.dataset;
@@ -101,10 +108,14 @@ export const knowledgeApi = {
     );
   },
 
-  listRagflowChats(params = {}) {
+  async listRagflowChats(params = {}) {
     const query = new URLSearchParams(params).toString();
     const path = query ? `/api/chats?${query}` : '/api/chats';
-    return httpClient.requestJson(authBackendUrl(path), { method: 'GET' });
+    const response = await httpClient.requestJson(authBackendUrl(path), { method: 'GET' });
+    if (!Array.isArray(response?.chats)) {
+      throw new Error('ragflow_chat_list_invalid_payload');
+    }
+    return response.chats;
   },
 
   async getRagflowChat(chatId) {
@@ -128,21 +139,27 @@ export const knowledgeApi = {
     return unwrapEnvelope(res);
   },
 
-  deleteRagflowChat(chatId) {
-    return httpClient.requestJson(authBackendUrl(`/api/chats/${encodeURIComponent(chatId)}`), {
+  async deleteRagflowChat(chatId) {
+    const response = await httpClient.requestJson(authBackendUrl(`/api/chats/${encodeURIComponent(chatId)}`), {
       method: 'DELETE',
     });
+    assertOkResponse(response, 'ragflow_chat_delete');
   },
 
-  clearRagflowChatParsedFiles(chatId) {
-    return httpClient.requestJson(authBackendUrl(`/api/chats/${encodeURIComponent(chatId)}/clear-parsed-files`), {
+  async clearRagflowChatParsedFiles(chatId) {
+    const response = await httpClient.requestJson(authBackendUrl(`/api/chats/${encodeURIComponent(chatId)}/clear-parsed-files`), {
       method: 'POST',
       body: JSON.stringify({}),
     });
+    return unwrapEnvelope(response);
   },
 
-  listSearchConfigs() {
-    return httpClient.requestJson(authBackendUrl('/api/search/configs'), { method: 'GET' });
+  async listSearchConfigs() {
+    const response = await httpClient.requestJson(authBackendUrl('/api/search/configs'), { method: 'GET' });
+    if (!Array.isArray(response?.configs)) {
+      throw new Error('search_config_list_invalid_payload');
+    }
+    return response.configs;
   },
 
   async getSearchConfig(configId) {
@@ -168,10 +185,11 @@ export const knowledgeApi = {
     return unwrapEnvelope(res);
   },
 
-  deleteSearchConfig(configId) {
-    return httpClient.requestJson(authBackendUrl(`/api/search/configs/${encodeURIComponent(configId)}`), {
+  async deleteSearchConfig(configId) {
+    const response = await httpClient.requestJson(authBackendUrl(`/api/search/configs/${encodeURIComponent(configId)}`), {
       method: 'DELETE',
     });
+    assertOkResponse(response, 'search_config_delete');
   },
 
   listLocalDocuments(params = {}) {

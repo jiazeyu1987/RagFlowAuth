@@ -13,11 +13,3 @@ export function parseJson(text) {
     return { ok: false, error: `JSON parse failed: ${error?.message || String(error)}` };
   }
 }
-
-export function normalizeListResponse(response) {
-  if (!response) return [];
-  if (Array.isArray(response.configs)) return response.configs;
-  if (response.data && Array.isArray(response.data.configs)) return response.data.configs;
-  if (Array.isArray(response.data)) return response.data;
-  return [];
-}
