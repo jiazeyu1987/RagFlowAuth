@@ -79,6 +79,8 @@ data/paper_downloads/
 data/patent_downloads/
 data/previews/
 data/restore_drills/
+data/retired_documents/
+data/tenants/
 data/backup_tmp/
 data/backups_test/
 data/db_recovery_*/
