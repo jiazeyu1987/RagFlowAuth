@@ -189,9 +189,7 @@ export const useUserManagement = () => {
     }
     try {
       const data = await permissionGroupsApi.listAssignable();
-      if (data?.ok) {
-        setAvailableGroups(Array.isArray(data.data) ? data.data : []);
-      }
+      setAvailableGroups(data);
     } catch (err) {
       console.error('Failed to load permission groups:', err);
       setAvailableGroups([]);

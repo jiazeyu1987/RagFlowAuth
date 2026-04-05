@@ -24,13 +24,6 @@ function fillFormFromGroup(group) {
   };
 }
 
-function normalizeKnowledgeTreeResponse(knowledgeRes) {
-  if (knowledgeRes?.data && Array.isArray(knowledgeRes.data.datasets)) {
-    return knowledgeRes.data;
-  }
-  return { nodes: [], datasets: [], bindings: {} };
-}
-
 function pathSegmentCount(pathValue) {
   return String(pathValue || '')
     .split('/')
@@ -224,30 +217,24 @@ export default function usePermissionGroupManagement() {
   const fetchAll = useCallback(async () => {
     setLoading(true);
     setError('');
-      try {
-        const groupsRes = await permissionGroupsApi.list();
-        const [folderRes, knowledgeTreeRes, chatsRes] = await Promise.all([
+    try {
+      const [groupsRes, folderRes, knowledgeTreeRes, chatsRes] = await Promise.all([
+        permissionGroupsApi.list(),
           permissionGroupsApi.listGroupFolders(),
           permissionGroupsApi.listKnowledgeTree(),
           permissionGroupsApi.listChats(),
         ]);
 
-      const folderData = folderRes?.data || {
-        folders: [],
-        group_bindings: {},
-        root_group_count: 0,
-      };
-      const normalizedGroups = normalizeGroups(groupsRes?.data || [], folderData.group_bindings || {});
-      const visibleChats = (chatsRes?.data || []).filter((chat) => {
+      const normalizedGroups = normalizeGroups(groupsRes, folderRes.group_bindings);
+      const visibleChats = chatsRes.filter((chat) => {
         const rawName = String(chat?.name || '').trim();
         const normalized = rawName.replace(/^\[|\]$/g, '').trim();
         return !HIDDEN_CHAT_NAMES.has(rawName) && !HIDDEN_CHAT_NAMES.has(normalized);
       });
-      const nextKnowledgeTree = normalizeKnowledgeTreeResponse(knowledgeTreeRes);
 
       setGroups(normalizedGroups);
-      setGroupFolders(folderData.folders || []);
-      setKnowledgeTree(nextKnowledgeTree);
+      setGroupFolders(folderRes.folders);
+      setKnowledgeTree(knowledgeTreeRes);
       setChatAgents(visibleChats);
       return normalizedGroups;
     } catch (requestError) {
@@ -287,7 +274,7 @@ export default function usePermissionGroupManagement() {
       try {
         if (mode === 'create') {
           const response = await permissionGroupsApi.create(formData);
-          const newId = response?.data?.group_id;
+          const newId = response?.group_id;
           const nextGroups = await fetchAll();
           const created = nextGroups.find((group) => group.group_id === newId) || null;
           if (created) {
@@ -367,7 +354,7 @@ export default function usePermissionGroupManagement() {
         name: name.trim(),
         parent_id: currentFolderId || null,
       });
-      const newId = response?.data?.id || '';
+      const newId = response?.id || '';
       await fetchAll();
       if (newId) {
         openFolder(newId);

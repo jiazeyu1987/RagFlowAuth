@@ -11,6 +11,14 @@ jest.mock('../features/permissionGroups/management/components/GroupEditorForm', 
   <div data-testid="pg-editor-form" />
 ));
 
+const LABELS = {
+  refresh: '\u5237\u65b0',
+  createFolder: '\u65b0\u5efa\u6587\u4ef6\u5939',
+  renameFolder: '\u91cd\u547d\u540d\u6587\u4ef6\u5939',
+  deleteFolder: '\u5220\u9664\u6587\u4ef6\u5939',
+  createGroup: '\u65b0\u5efa\u5206\u7ec4',
+};
+
 function buildHookState(overrides = {}) {
   return {
     groups: [{ group_id: 1, group_name: 'G1' }, { group_id: 2, group_name: 'G2' }],
@@ -24,6 +32,7 @@ function buildHookState(overrides = {}) {
     searchKeyword: '',
     selectedItem: null,
     dropTargetFolderId: null,
+    mode: '',
     formData: {},
     editingGroup: null,
     folderIndexes: { byId: new Map(), childrenByParent: new Map() },
@@ -38,13 +47,13 @@ function buildHookState(overrides = {}) {
     renameFolder: jest.fn(),
     deleteFolder: jest.fn(),
     startCreateGroup: jest.fn(),
+    viewGroup: jest.fn(),
     activateGroup: jest.fn(),
     saveForm: jest.fn(),
     cancelEdit: jest.fn(),
     removeGroup: jest.fn(),
     toggleKbAuth: jest.fn(),
     toggleChatAuth: jest.fn(),
-    toggleToolAuth: jest.fn(),
     openFolder: jest.fn(),
     onDragOverFolder: jest.fn(),
     onDropFolder: jest.fn(),
@@ -60,23 +69,23 @@ describe('PermissionGroupManagement', () => {
     jest.clearAllMocks();
   });
 
-  it('renders five icon toolbar buttons with accessible names', () => {
+  it('renders toolbar buttons with accessible names and keeps icon labels hidden', () => {
     usePermissionGroupManagement.mockReturnValue(buildHookState());
 
     render(<PermissionGroupManagement />);
 
-    expect(screen.getByRole('button', { name: '刷新' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '新建文件夹' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '重命名文件夹' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '删除文件夹' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '新建分组' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: LABELS.refresh })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: LABELS.createFolder })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: LABELS.renameFolder })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: LABELS.deleteFolder })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: LABELS.createGroup })).toBeInTheDocument();
     expect(screen.getByTestId('pg-create-open')).toBeInTheDocument();
 
-    expect(screen.queryByText('刷新')).not.toBeInTheDocument();
-    expect(screen.queryByText('新建文件夹')).not.toBeInTheDocument();
-    expect(screen.queryByText('重命名文件夹')).not.toBeInTheDocument();
-    expect(screen.queryByText('删除文件夹')).not.toBeInTheDocument();
-    expect(screen.queryByText('新建分组')).not.toBeInTheDocument();
+    expect(screen.queryByText(LABELS.refresh)).not.toBeInTheDocument();
+    expect(screen.queryByText(LABELS.createFolder)).not.toBeInTheDocument();
+    expect(screen.queryByText(LABELS.renameFolder)).not.toBeInTheDocument();
+    expect(screen.queryByText(LABELS.deleteFolder)).not.toBeInTheDocument();
+    expect(screen.getByText(LABELS.createGroup)).toBeInTheDocument();
   });
 
   it('disables folder rename and delete when root is selected and keeps other actions clickable', () => {
@@ -85,11 +94,11 @@ describe('PermissionGroupManagement', () => {
 
     render(<PermissionGroupManagement />);
 
-    const refreshButton = screen.getByRole('button', { name: '刷新' });
-    const createFolderButton = screen.getByRole('button', { name: '新建文件夹' });
-    const renameButton = screen.getByRole('button', { name: '重命名文件夹' });
-    const deleteButton = screen.getByRole('button', { name: '删除文件夹' });
-    const createGroupButton = screen.getByRole('button', { name: '新建分组' });
+    const refreshButton = screen.getByRole('button', { name: LABELS.refresh });
+    const createFolderButton = screen.getByRole('button', { name: LABELS.createFolder });
+    const renameButton = screen.getByRole('button', { name: LABELS.renameFolder });
+    const deleteButton = screen.getByRole('button', { name: LABELS.deleteFolder });
+    const createGroupButton = screen.getByRole('button', { name: LABELS.createGroup });
 
     expect(renameButton).toBeDisabled();
     expect(deleteButton).toBeDisabled();

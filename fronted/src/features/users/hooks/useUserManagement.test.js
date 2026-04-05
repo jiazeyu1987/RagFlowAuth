@@ -250,7 +250,7 @@ describe('useUserManagement user type payloads', () => {
     ]);
     usersApi.create.mockResolvedValue({});
     usersApi.update.mockResolvedValue({});
-    permissionGroupsApi.listAssignable.mockResolvedValue({ ok: true, data: [{ group_id: 7, group_name: 'G7' }] });
+    permissionGroupsApi.listAssignable.mockResolvedValue([{ group_id: 7, group_name: 'G7' }]);
     orgDirectoryApi.listCompanies.mockResolvedValue([{ id: 1, name: 'Acme' }, { id: 2, name: 'Beta' }]);
     orgDirectoryApi.listDepartments.mockResolvedValue([
       { id: 11, name: 'QA', company_id: 1 },
