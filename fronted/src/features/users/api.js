@@ -8,6 +8,18 @@ export const usersApi = {
     return httpClient.requestJson(authBackendUrl(path), { method: 'GET' });
   },
 
+  async items(params = {}) {
+    const response = await this.list(params);
+    if (Array.isArray(response)) return response;
+    if (Array.isArray(response?.items)) return response.items;
+    if (Array.isArray(response?.users)) return response.users;
+    return [];
+  },
+
+  search(keyword, limit = 20) {
+    return this.items({ q: keyword, limit });
+  },
+
   create(payload) {
     return httpClient.requestJson(authBackendUrl('/api/users'), {
       method: 'POST',
@@ -35,4 +47,3 @@ export const usersApi = {
     });
   },
 };
-

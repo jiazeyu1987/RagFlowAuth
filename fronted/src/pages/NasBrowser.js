@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import authClient from '../api/authClient';
 import { knowledgeApi } from '../features/knowledge/api';
+import nasApi from '../features/nas/api';
 import { useAuth } from '../hooks/useAuth';
 import {
   buildImportSummary,
@@ -66,7 +66,7 @@ export default function NasBrowser() {
     setLoading(true);
     setError('');
     try {
-      const data = await authClient.listNasFiles(path);
+      const data = await nasApi.listFiles(path);
       setCurrentPath(data.current_path || '');
       setParentPath(data.parent_path ?? null);
       setItems(Array.isArray(data.items) ? data.items : []);
@@ -80,7 +80,7 @@ export default function NasBrowser() {
   const pollFolderImportStatus = useCallback(
     async (taskId, options = {}) => {
       try {
-        const status = await authClient.getNasFolderImportStatus(taskId);
+        const status = await nasApi.getFolderImportStatus(taskId);
         setFolderImportProgress(status);
         writeStoredFolderImportTaskId(taskId);
 
@@ -179,7 +179,7 @@ export default function NasBrowser() {
     try {
       if (importTarget.is_dir) {
         stopPolling();
-        const task = await authClient.importNasFolder(importTarget.path, selectedKb);
+        const task = await nasApi.importFolder(importTarget.path, selectedKb);
         setFolderImportProgress(task);
         writeStoredFolderImportTaskId(task.task_id || '');
         setImportDialogOpen(false);
@@ -194,7 +194,7 @@ export default function NasBrowser() {
         return;
       }
 
-      const result = await authClient.importNasFile(importTarget.path, selectedKb);
+      const result = await nasApi.importFile(importTarget.path, selectedKb);
       setImportDialogOpen(false);
       setImportTarget(null);
       setImportLoading(false);

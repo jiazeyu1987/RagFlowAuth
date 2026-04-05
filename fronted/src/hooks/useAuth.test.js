@@ -2,6 +2,7 @@ import React from 'react';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { AuthProvider, useAuth } from './useAuth';
 import authClient from '../api/authClient';
+import { meApi } from '../features/me/api';
 
 jest.mock('../api/authClient', () => ({
   __esModule: true,
@@ -14,7 +15,13 @@ jest.mock('../api/authClient', () => ({
     clearAuth: jest.fn(),
     getCurrentUser: jest.fn(),
     refreshAccessToken: jest.fn(),
-    getMyKnowledgeBases: jest.fn().mockResolvedValue({ kb_ids: [] }),
+  },
+}));
+
+jest.mock('../features/me/api', () => ({
+  __esModule: true,
+  meApi: {
+    listMyKnowledgeBases: jest.fn().mockResolvedValue({ kb_ids: [] }),
   },
 }));
 
@@ -28,6 +35,7 @@ jest.mock('../shared/auth/tokenStore', () => ({
 describe('useAuth login error mapping', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    meApi.listMyKnowledgeBases.mockResolvedValue({ kb_ids: [] });
   });
 
   it('shows a clear invalid-credentials message', async () => {

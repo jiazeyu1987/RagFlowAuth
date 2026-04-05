@@ -5,6 +5,10 @@ import time
 from dataclasses import asdict
 from typing import Any, Generic, Iterable, TypeVar
 
+from backend.app.core.managed_paths import (
+    resolve_managed_data_storage_path,
+    to_managed_data_storage_path,
+)
 from backend.database.paths import resolve_auth_db_path
 from backend.database.sqlite import connect_sqlite
 
@@ -77,7 +81,27 @@ class BaseDownloadStore(Generic[SessionT, ItemT]):
     def _to_item(self, row: Any) -> ItemT:
         if self.ITEM_MODEL is None:
             raise RuntimeError("ITEM_MODEL not configured")
-        return self.ITEM_MODEL(*row)
+        data = list(row)
+        data[13] = self._resolve_item_path(data[13], field_name=f"{self.ITEM_TABLE}.file_path")
+        data[20] = self._resolve_item_path(
+            data[20],
+            field_name=f"{self.ITEM_TABLE}.analysis_file_path",
+        )
+        return self.ITEM_MODEL(*data)
+
+    @staticmethod
+    def _normalize_item_path(value: str | None, *, field_name: str) -> str | None:
+        text = str(value or "").strip()
+        if not text:
+            return None
+        return to_managed_data_storage_path(text, field_name=field_name)
+
+    @staticmethod
+    def _resolve_item_path(value: str | None, *, field_name: str) -> str | None:
+        text = str(value or "").strip()
+        if not text:
+            return None
+        return str(resolve_managed_data_storage_path(text, field_name=field_name))
 
     def create_session(
         self,
@@ -223,14 +247,20 @@ class BaseDownloadStore(Generic[SessionT, ItemT]):
                     item.get("assignee"),
                     item.get("detail_url"),
                     item.get("pdf_url"),
-                    item.get("file_path"),
+                    self._normalize_item_path(
+                        item.get("file_path"),
+                        field_name=f"{self.ITEM_TABLE}.file_path",
+                    ),
                     item.get("filename"),
                     int(item["file_size"]) if item.get("file_size") is not None else None,
                     item.get("mime_type"),
                     str(item.get("status") or "downloaded"),
                     item.get("error"),
                     item.get("analysis_text"),
-                    item.get("analysis_file_path"),
+                    self._normalize_item_path(
+                        item.get("analysis_file_path"),
+                        field_name=f"{self.ITEM_TABLE}.analysis_file_path",
+                    ),
                     item.get("added_doc_id"),
                     item.get("added_analysis_doc_id"),
                     item.get("ragflow_doc_id"),
@@ -419,7 +449,15 @@ class BaseDownloadStore(Generic[SessionT, ItemT]):
                 SET analysis_text = ?, analysis_file_path = ?
                 WHERE session_id = ? AND item_id = ?
                 """,
-                (analysis_text, analysis_file_path, session_id, int(item_id)),
+                (
+                    analysis_text,
+                    self._normalize_item_path(
+                        analysis_file_path,
+                        field_name=f"{self.ITEM_TABLE}.analysis_file_path",
+                    ),
+                    session_id,
+                    int(item_id),
+                ),
             )
             conn.commit()
             return self.get_item(session_id=session_id, item_id=item_id)

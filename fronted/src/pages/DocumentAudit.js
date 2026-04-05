@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import authClient from '../api/authClient';
+import { knowledgeApi } from '../features/knowledge/api';
+import { usersApi } from '../features/users/api';
 import { useAuth } from '../hooks/useAuth';
 
 const MOBILE_BREAKPOINT = 768;
@@ -140,19 +141,19 @@ const DocumentAudit = ({ embedded = false }) => {
       setError('');
       try {
         const [usersResp, docsResp, deletionsResp, downloadsResp] = await Promise.all([
-          authClient.listUsers().catch(() => []),
-          authClient.listDocuments({ limit: 2000 }).catch(() => ({ documents: [] })),
-          authClient.listDeletions({ limit: 2000 }).catch(() => ({ deletions: [] })),
-          authClient.listDownloads({ limit: 2000 }).catch(() => ({ downloads: [] })),
+          usersApi.items({ limit: 2000 }).catch(() => []),
+          knowledgeApi.listDocuments({ limit: 2000 }).catch(() => []),
+          knowledgeApi.listDeletions({ limit: 2000 }).catch(() => []),
+          knowledgeApi.listDownloads({ limit: 2000 }).catch(() => []),
         ]);
 
-        const docs = Array.isArray(docsResp?.documents) ? docsResp.documents : [];
+        const docs = Array.isArray(docsResp) ? docsResp : [];
         docs.sort((a, b) => Number(b.reviewed_at_ms || b.uploaded_at_ms || 0) - Number(a.reviewed_at_ms || a.uploaded_at_ms || 0));
 
-        setUsers(Array.isArray(usersResp) ? usersResp : (usersResp?.users || []));
+        setUsers(Array.isArray(usersResp) ? usersResp : []);
         setDocuments(docs);
-        setDeletions(Array.isArray(deletionsResp?.deletions) ? deletionsResp.deletions : []);
-        setDownloads(Array.isArray(downloadsResp?.downloads) ? downloadsResp.downloads : []);
+        setDeletions(Array.isArray(deletionsResp) ? deletionsResp : []);
+        setDownloads(Array.isArray(downloadsResp) ? downloadsResp : []);
       } catch (err) {
         setError(err?.message || 'load_failed');
       } finally {
@@ -216,15 +217,15 @@ const DocumentAudit = ({ embedded = false }) => {
       logicalDocId: '',
     });
     try {
-      const payload = await authClient.listDocumentVersions(doc.doc_id);
+      const payload = await knowledgeApi.listDocumentVersions(doc.doc_id);
       setVersionsDialog({
         open: true,
         loading: false,
         error: '',
         doc,
         items: Array.isArray(payload?.versions) ? payload.versions : [],
-        currentDocId: payload?.current_doc_id || '',
-        logicalDocId: payload?.logical_doc_id || '',
+        currentDocId: payload?.currentDocId || '',
+        logicalDocId: payload?.logicalDocId || '',
       });
     } catch (err) {
       setVersionsDialog((prev) => ({

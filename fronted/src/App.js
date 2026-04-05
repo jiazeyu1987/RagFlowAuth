@@ -13,7 +13,6 @@ const Chat = lazy(() => import('./pages/Chat'));
 const Agents = lazy(() => import('./pages/Agents'));
 const PermissionGroupManagement = lazy(() => import('./pages/PermissionGroupManagement'));
 const DataSecurity = lazy(() => import('./pages/DataSecurity'));
-const DataSecurityTest = lazy(() => import('./pages/DataSecurity-test'));
 const NotificationSettings = lazy(() => import('./pages/NotificationSettings'));
 const ApprovalCenter = lazy(() => import('./pages/ApprovalCenter'));
 const ApprovalConfig = lazy(() => import('./pages/ApprovalConfig'));
@@ -334,16 +333,6 @@ function App() {
                 <PermissionGuard>
                   <Layout>
                     <InboxPage />
-                  </Layout>
-                </PermissionGuard>
-              }
-            />
-            <Route
-              path="/data-security-test"
-              element={
-                <PermissionGuard allowedRoles={['admin']}>
-                  <Layout>
-                    <DataSecurityTest />
                   </Layout>
                 </PermissionGuard>
               }

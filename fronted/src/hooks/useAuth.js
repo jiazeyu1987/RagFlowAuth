@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, createContext, useContext, useRef } from 'react';
 import authClient from '../api/authClient';
 import { STORAGE_KEYS } from '../constants/storageKeys';
+import { meApi } from '../features/me/api';
 import tokenStore from '../shared/auth/tokenStore';
 
 const AuthContext = createContext(null);
@@ -186,7 +187,7 @@ export const AuthProvider = ({ children }) => {
     const fetchAccessibleKbs = async () => {
       if (user) {
         try {
-          const data = await authClient.getMyKnowledgeBases();
+          const data = await meApi.listMyKnowledgeBases();
           setAccessibleKbs(data.kb_ids || []);
         } catch (err) {
           console.error('Failed to fetch accessible KBs:', err);

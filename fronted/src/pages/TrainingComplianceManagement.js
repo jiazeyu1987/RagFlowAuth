@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import authClient from '../api/authClient';
 import trainingComplianceApi from '../features/trainingCompliance/api';
+import { usersApi } from '../features/users/api';
 import { useAuth } from '../hooks/useAuth';
 
 const USER_SEARCH_LIMIT = 20;
@@ -562,8 +562,7 @@ export default function TrainingComplianceManagement() {
   }, [requirements]);
 
   const runUserSearch = useCallback(async (keyword) => {
-    const response = await authClient.listUsers({ q: keyword, limit: USER_SEARCH_LIMIT });
-    const items = normalizeUsersResponse(response);
+    const items = normalizeUsersResponse(await usersApi.search(keyword, USER_SEARCH_LIMIT));
     mergeUsersIntoDirectory(items);
     return items;
   }, [mergeUsersIntoDirectory]);

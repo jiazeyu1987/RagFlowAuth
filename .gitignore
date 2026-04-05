@@ -38,8 +38,16 @@ test-results/
 fronted/playwright-report/
 fronted/test-results/
 fronted/test-results*/
+fronted/test-results-unified/
+fronted/test-results-unified-*/
+fronted/test-results2/
+fronted/build/
+fronted/package-lock.json.bak
+fronted/*.log
 fronted/e2e/.auth/
 backend/tests/_tmp/
+backend/tests/_tmp_local/
+backend/tests/__pycache__/
 
 # =============================================================================
 # Environment & Secrets
@@ -62,6 +70,38 @@ data/*.db-wal
 # Logs
 *.log
 logs/
+*.db-shm
+*.db-wal
+
+# Managed runtime artifacts
+data/package_drawing_images/
+data/paper_downloads/
+data/patent_downloads/
+data/previews/
+data/restore_drills/
+data/backup_tmp/
+data/backups_test/
+data/db_recovery_*/
+
+# E2E runtime copies and snapshots
+data/e2e/bootstrap_probe_auth.db
+data/e2e/worker*/
+data/e2e/worker*_doc_auth*.db*
+data/e2e/tenants__*/
+data/e2e/tenants__worker*/
+data/e2e/tenants__bootstrap_probe_auth/
+data/e2e/tenants__doc_auth/
+
+# Preserve explicit e2e fixtures and seeds
+!data/e2e/doc-fixtures/
+!data/e2e/doc-fixtures/**
+!data/e2e/ragflow/
+!data/e2e/ragflow/ragflowauth-e2e-seed.txt
+!data/e2e/auth.db
+!data/e2e/doc_auth.db
+!data/e2e/tenants/
+!data/e2e/tenants/company_19/
+!data/e2e/tenants/company_19/auth.db
 
 # =============================================================================
 # IDE & Editor
@@ -100,3 +140,4 @@ desktop.ini
 /nul
 /backend/nul
 /data/patent_downloads
+/tobedeleted/

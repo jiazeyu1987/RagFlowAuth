@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import authClient from '../api/authClient';
 import operationApprovalApi from '../features/operationApproval/api';
+import { usersApi } from '../features/users/api';
 
 const WORKFLOW_MEMBER_TYPE_USER = 'user';
 const WORKFLOW_MEMBER_TYPE_SPECIAL_ROLE = 'special_role';
@@ -308,8 +308,7 @@ export default function ApprovalConfig() {
   }, []);
 
   const searchUsers = useCallback(async (keyword) => {
-    const response = await authClient.listUsers({ q: keyword, limit: USER_SEARCH_LIMIT });
-    const items = normalizeUsers(response);
+    const items = normalizeUsers(await usersApi.search(keyword, USER_SEARCH_LIMIT));
     mergeUsersIntoDirectory(items);
     return items;
   }, [mergeUsersIntoDirectory]);

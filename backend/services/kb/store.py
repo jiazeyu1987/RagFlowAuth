@@ -7,6 +7,10 @@ import uuid
 from pathlib import Path
 from typing import List, Optional
 
+from backend.app.core.managed_paths import (
+    resolve_managed_data_storage_path,
+    to_managed_data_storage_path,
+)
 from backend.database.paths import resolve_auth_db_path
 from backend.database.sqlite import connect_sqlite
 
@@ -65,10 +69,30 @@ class KbStore:
     def _row_to_document(row) -> Optional[KbDocument]:
         if not row:
             return None
+        file_path = resolve_managed_data_storage_path(
+            str(row["file_path"] or ""),
+            field_name="kb_documents.file_path",
+        )
+        archive_manifest_path = (
+            resolve_managed_data_storage_path(
+                str(row["archive_manifest_path"] or ""),
+                field_name="kb_documents.archive_manifest_path",
+            )
+            if row["archive_manifest_path"]
+            else None
+        )
+        archive_package_path = (
+            resolve_managed_data_storage_path(
+                str(row["archive_package_path"] or ""),
+                field_name="kb_documents.archive_package_path",
+            )
+            if row["archive_package_path"]
+            else None
+        )
         return KbDocument(
             doc_id=str(row["doc_id"]),
             filename=str(row["filename"]),
-            file_path=str(row["file_path"]),
+            file_path=str(file_path),
             file_size=int(row["file_size"] or 0),
             mime_type=str(row["mime_type"]),
             uploaded_by=str(row["uploaded_by"]),
@@ -92,13 +116,13 @@ class KbStore:
             file_sha256=(str(row["file_sha256"]) if row["file_sha256"] else None),
             retired_by=(str(row["retired_by"]) if row["retired_by"] else None),
             retirement_reason=(str(row["retirement_reason"]) if row["retirement_reason"] else None),
-            archive_manifest_path=(str(row["archive_manifest_path"]) if row["archive_manifest_path"] else None),
-            archive_package_path=(str(row["archive_package_path"]) if row["archive_package_path"] else None),
+            archive_manifest_path=(str(archive_manifest_path) if archive_manifest_path else None),
+            archive_package_path=(str(archive_package_path) if archive_package_path else None),
             archive_package_sha256=(str(row["archive_package_sha256"]) if row["archive_package_sha256"] else None),
         )
 
     @staticmethod
-    def _calculate_file_sha256(file_path: str) -> str:
+    def _calculate_file_sha256(file_path: str | Path) -> str:
         digest = hashlib.sha256()
         with Path(file_path).open("rb") as handle:
             while True:
@@ -132,7 +156,15 @@ class KbStore:
         now_ms = int(time.time() * 1000)
         logical_doc_id = str(logical_doc_id or doc_id)
         version_no = max(1, int(version_no or 1))
-        file_sha256 = self._calculate_file_sha256(file_path)
+        stored_file_path = to_managed_data_storage_path(
+            file_path,
+            field_name="kb_documents.file_path",
+        )
+        resolved_file_path = resolve_managed_data_storage_path(
+            stored_file_path,
+            field_name="kb_documents.file_path",
+        )
+        file_sha256 = self._calculate_file_sha256(resolved_file_path)
         effective_status = str(effective_status or self._effective_status_for(status))
 
         logger.debug(
@@ -158,7 +190,7 @@ class KbStore:
                 (
                     doc_id,
                     filename,
-                    file_path,
+                    stored_file_path,
                     file_size,
                     mime_type,
                     uploaded_by,
@@ -183,7 +215,7 @@ class KbStore:
             return KbDocument(
                 doc_id=doc_id,
                 filename=filename,
-                file_path=file_path,
+                file_path=str(resolved_file_path),
                 file_size=file_size,
                 mime_type=mime_type,
                 uploaded_by=uploaded_by,
@@ -592,6 +624,19 @@ class KbStore:
         if not archive_package_sha256:
             raise ValueError("archive_package_sha256_required")
 
+        stored_archived_file_path = to_managed_data_storage_path(
+            archived_file_path,
+            field_name="kb_documents.file_path",
+        )
+        stored_archive_manifest_path = to_managed_data_storage_path(
+            archive_manifest_path,
+            field_name="kb_documents.archive_manifest_path",
+        )
+        stored_archive_package_path = to_managed_data_storage_path(
+            archive_package_path,
+            field_name="kb_documents.archive_package_path",
+        )
+
         conn = self._get_connection()
         try:
             conn.execute(
@@ -610,13 +655,13 @@ class KbStore:
                 WHERE doc_id = ?
                 """,
                 (
-                    archived_file_path,
+                    stored_archived_file_path,
                     archived_at_ms,
                     retention_until_ms,
                     retired_by,
                     retirement_reason,
-                    archive_manifest_path,
-                    archive_package_path,
+                    stored_archive_manifest_path,
+                    stored_archive_package_path,
                     archive_package_sha256,
                     str(doc_id),
                 ),

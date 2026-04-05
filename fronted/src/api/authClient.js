@@ -1,9 +1,6 @@
 import { authBackendUrl } from '../config/backend';
 import tokenStore from '../shared/auth/tokenStore';
 import { authApiMethods } from './auth/authApi';
-import { usersApiMethods } from './auth/usersApi';
-import { policyApiMethods } from './auth/policyApi';
-import { sessionApiMethods } from './auth/sessionApi';
 
 class AuthClient {
   constructor() {
@@ -50,10 +47,7 @@ class AuthClient {
 
 Object.assign(
   AuthClient.prototype,
-  authApiMethods,
-  usersApiMethods,
-  policyApiMethods,
-  sessionApiMethods
+  authApiMethods
 );
 
 const authClient = new AuthClient();

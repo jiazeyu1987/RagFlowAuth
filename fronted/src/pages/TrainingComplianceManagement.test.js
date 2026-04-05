@@ -3,14 +3,14 @@ import { MemoryRouter } from 'react-router-dom';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import TrainingComplianceManagement from './TrainingComplianceManagement';
-import authClient from '../api/authClient';
 import trainingComplianceApi from '../features/trainingCompliance/api';
+import { usersApi } from '../features/users/api';
 import { useAuth } from '../hooks/useAuth';
 
-jest.mock('../api/authClient', () => ({
+jest.mock('../features/users/api', () => ({
   __esModule: true,
-  default: {
-    listUsers: jest.fn(),
+  usersApi: {
+    search: jest.fn(),
   },
 }));
 
@@ -102,12 +102,12 @@ describe('TrainingComplianceManagement', () => {
     trainingComplianceApi.createRecord.mockResolvedValue({ record_id: 'record-2' });
     trainingComplianceApi.createCertification.mockResolvedValue({ certification_id: 'cert-2' });
 
-    authClient.listUsers.mockImplementation(async ({ q }) => {
-      const keyword = String(q || '').trim().toLowerCase();
+    usersApi.search.mockImplementation(async (keyword) => {
+      const normalized = String(keyword || '').trim().toLowerCase();
       return searchUsers.filter((item) => (
-        item.user_id.toLowerCase().includes(keyword)
-        || item.username.toLowerCase().includes(keyword)
-        || item.full_name.toLowerCase().includes(keyword)
+        item.user_id.toLowerCase().includes(normalized)
+        || item.username.toLowerCase().includes(normalized)
+        || item.full_name.toLowerCase().includes(normalized)
       ));
     });
   });
@@ -130,7 +130,7 @@ describe('TrainingComplianceManagement', () => {
       expect(trainingComplianceApi.listCertifications).toHaveBeenCalledWith({ limit: 100 });
     });
 
-    expect(authClient.listUsers).not.toHaveBeenCalled();
+    expect(usersApi.search).not.toHaveBeenCalled();
   });
 
   it('switches between training record and certification tabs', async () => {
@@ -175,11 +175,11 @@ describe('TrainingComplianceManagement', () => {
     await user.type(userInput, 'bob');
 
     await waitFor(() => {
-      expect(authClient.listUsers).toHaveBeenCalledWith({ q: 'bob', limit: 20 });
+      expect(usersApi.search).toHaveBeenCalledWith('bob', 20);
     });
 
     await user.click(await screen.findByTestId('training-record-user-search-result-user-2'));
-    expect(screen.getByTestId('training-record-user-search-selected')).toHaveTextContent('Bob (bob)');
+    expect(screen.getByTestId('training-record-user-search-selected')).toHaveTextContent('Bob');
 
     await user.clear(screen.getByTestId('training-record-summary'));
     await user.type(screen.getByTestId('training-record-summary'), '完成岗位培训并通过效果评估');
@@ -215,11 +215,11 @@ describe('TrainingComplianceManagement', () => {
     await user.type(userInput, 'alice');
 
     await waitFor(() => {
-      expect(authClient.listUsers).toHaveBeenCalledWith({ q: 'alice', limit: 20 });
+      expect(usersApi.search).toHaveBeenCalledWith('alice', 20);
     });
 
     await user.click(await screen.findByTestId('training-certification-user-search-result-user-1'));
-    expect(screen.getByTestId('training-certification-user-search-selected')).toHaveTextContent('Alice (alice)');
+    expect(screen.getByTestId('training-certification-user-search-selected')).toHaveTextContent('Alice');
 
     await user.clear(screen.getByTestId('training-certification-valid-until'));
     await user.type(screen.getByTestId('training-certification-valid-until'), '2026-12-31T09:30');
@@ -249,14 +249,14 @@ describe('TrainingComplianceManagement', () => {
     expect(await screen.findByTestId('training-certifications-tab-panel')).toBeInTheDocument();
 
     await waitFor(() => {
-      expect(authClient.listUsers).toHaveBeenCalledWith({ q: 'user-2', limit: 20 });
+      expect(usersApi.search).toHaveBeenCalledWith('user-2', 20);
     });
 
-    expect(await screen.findByTestId('training-certification-user-search-selected')).toHaveTextContent('Bob (bob)');
+    expect(await screen.findByTestId('training-certification-user-search-selected')).toHaveTextContent('Bob');
     expect(screen.getByTestId('training-certification-requirement')).toHaveValue('TR-001');
 
     await userEvent.setup().click(screen.getByTestId('training-tab-records'));
-    expect(await screen.findByTestId('training-record-user-search-selected')).toHaveTextContent('Bob (bob)');
+    expect(await screen.findByTestId('training-record-user-search-selected')).toHaveTextContent('Bob');
     expect(screen.getByTestId('training-record-requirement')).toHaveValue('TR-001');
   });
 });

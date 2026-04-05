@@ -17,7 +17,7 @@ const summary = loadBootstrapSummary();
 const REPO_ROOT = path.resolve(__dirname, '..', '..', '..');
 const adminUsername = process.env.E2E_ADMIN_USER || summary?.users?.admin?.username;
 const adminPassword = process.env.E2E_ADMIN_PASS || 'admin123';
-const isolatedDbPath = process.env.E2E_TEST_DB_PATH || path.join(REPO_ROOT, 'data', 'e2e', 'worker05_doc_auth.db');
+const isolatedDbPath = process.env.E2E_TEST_DB_PATH || path.join(REPO_ROOT, 'data', 'e2e', 'doc_auth.db');
 const composePath = path.join(REPO_ROOT, 'docker', 'docker-compose.yml');
 const workerLocalTarget = path.join(REPO_ROOT, 'data', 'e2e', 'worker05_backup_target');
 

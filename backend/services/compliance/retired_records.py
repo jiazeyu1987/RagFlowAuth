@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 from zipfile import ZIP_DEFLATED, ZipFile
 
+from backend.app.core.managed_paths import to_managed_data_storage_path
 from backend.app.core.paths import resolve_repo_path
 from backend.services.kb import KbDocument, KbStore
 
@@ -307,8 +308,14 @@ class RetiredRecordsService:
                 "reviewed_by": doc.reviewed_by,
                 "reviewed_at_ms": doc.reviewed_at_ms,
                 "review_notes": doc.review_notes,
-                "source_file_path": str(source_path),
-                "archived_file_path": str(archived_file_path),
+                "source_file_path": to_managed_data_storage_path(
+                    source_path,
+                    field_name="retired_record.source_file_path",
+                ),
+                "archived_file_path": to_managed_data_storage_path(
+                    archived_file_path,
+                    field_name="retired_record.archived_file_path",
+                ),
                 "file_sha256": archived_file_sha256,
             },
         }

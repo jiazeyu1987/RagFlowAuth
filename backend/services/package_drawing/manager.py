@@ -11,6 +11,7 @@ from typing import Any
 
 from fastapi import UploadFile
 
+from backend.app.core.managed_paths import resolve_managed_child_storage_path
 from backend.app.core.paths import resolve_repo_path
 from .store import PackageDrawingStore
 
@@ -174,7 +175,11 @@ class PackageDrawingManager:
 
             if item.source_type != "embedded" or not item.rel_path:
                 continue
-            abs_path = self._image_root / item.rel_path
+            abs_path = resolve_managed_child_storage_path(
+                item.rel_path,
+                managed_root=self._image_root,
+                field_name="package_drawing_images.rel_path",
+            )
             if not abs_path.exists():
                 continue
             raw = abs_path.read_bytes()
@@ -205,7 +210,11 @@ class PackageDrawingManager:
             return None
         if image.source_type != "embedded" or not image.rel_path:
             return None
-        abs_path = self._image_root / image.rel_path
+        abs_path = resolve_managed_child_storage_path(
+            image.rel_path,
+            managed_root=self._image_root,
+            field_name="package_drawing_images.rel_path",
+        )
         if not abs_path.exists():
             return None
         filename = image.filename or abs_path.name
@@ -469,7 +478,11 @@ class PackageDrawingManager:
             rel_clean = str(rel or "").strip().replace("\\", "/")
             if not rel_clean:
                 continue
-            abs_path = self._image_root / rel_clean
+            abs_path = resolve_managed_child_storage_path(
+                rel_clean,
+                managed_root=self._image_root,
+                field_name="package_drawing_images.rel_path",
+            )
             try:
                 if abs_path.exists():
                     abs_path.unlink()

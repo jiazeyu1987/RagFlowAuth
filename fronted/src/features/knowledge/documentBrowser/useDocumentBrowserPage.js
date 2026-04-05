@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
-import authClient from '../../../api/authClient';
 import { useAuth } from '../../../hooks/useAuth';
 import documentClient, { DOCUMENT_SOURCE } from '../../../shared/documents/documentClient';
 import { knowledgeApi } from '../api';
@@ -183,7 +182,7 @@ export default function useDocumentBrowserPage() {
       try {
         setLoading(true);
         const [datasetResponse, treeResponse] = await Promise.all([
-          authClient.listRagflowDatasets(),
+          knowledgeApi.listRagflowDatasets(),
           knowledgeApi
             .listKnowledgeDirectories()
             .catch(() => ({ nodes: [], datasets: [] })),
@@ -212,8 +211,8 @@ export default function useDocumentBrowserPage() {
         delete next[datasetName];
         return next;
       });
-      const data = await authClient.listRagflowDocuments(datasetName);
-      setDocuments((previous) => ({ ...previous, [datasetName]: data.documents || [] }));
+      const items = await knowledgeApi.listRagflowDocuments(datasetName);
+      setDocuments((previous) => ({ ...previous, [datasetName]: items }));
     } catch (requestError) {
       setDocumentErrors((previous) => ({
         ...previous,
@@ -527,7 +526,7 @@ export default function useDocumentBrowserPage() {
     async ({ docId, sourceDatasetName, targetDatasetName, operation }) => {
       try {
         setActionLoading((previous) => ({ ...previous, [`${docId}-${operation}`]: true }));
-        await authClient.transferRagflowDocument(
+        await knowledgeApi.transferRagflowDocument(
           docId,
           sourceDatasetName,
           targetDatasetName,
@@ -585,7 +584,7 @@ export default function useDocumentBrowserPage() {
         progress.current = `${item.source_dataset_name} / ${item.doc_id}`;
         setBatchTransferProgress({ ...progress });
         try {
-          await authClient.transferRagflowDocument(
+          await knowledgeApi.transferRagflowDocument(
             item.doc_id,
             item.source_dataset_name,
             item.target_dataset_name,

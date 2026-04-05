@@ -95,7 +95,7 @@ def normalize_match_text(value: str | None) -> str:
 
 
 def translator_script_path() -> Path:
-    return resolve_repo_path("tobeDeleted/translate_zh_to_en_example.py")
+    return resolve_repo_path("scripts/translate_zh_to_en_example.py")
 
 
 def parse_translator_output(stdout: str) -> str:

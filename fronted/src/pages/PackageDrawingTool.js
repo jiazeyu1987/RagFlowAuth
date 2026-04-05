@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import authClient from '../api/authClient';
+import packageDrawingApi from '../features/packageDrawing/api';
 import { useAuth } from '../hooks/useAuth';
 
 const tabStyle = (active) => ({
@@ -92,7 +92,7 @@ const PackageDrawingTool = () => {
     setNotFound(false);
     setQueryResult(null);
     try {
-      const data = await authClient.queryPackageDrawingByModel(clean);
+      const data = await packageDrawingApi.queryByModel(clean);
       setQueryResult(data);
     } catch (error) {
       const message = String(error?.message || '');
@@ -117,7 +117,7 @@ const PackageDrawingTool = () => {
     setImportError('');
     setImportResult(null);
     try {
-      const result = await authClient.importPackageDrawingExcel(importFile);
+      const result = await packageDrawingApi.importExcel(importFile);
       setImportResult(result);
     } catch (error) {
       setImportError(mapApiError(error?.message));

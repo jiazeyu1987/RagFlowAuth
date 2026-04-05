@@ -26,6 +26,16 @@ export const knowledgeApi = {
     return httpClient.requestJson(authBackendUrl('/api/datasets'), { method: 'GET' });
   },
 
+  async listRagflowDocuments(datasetName = '灞曞巺') {
+    const query = new URLSearchParams({
+      dataset_name: String(datasetName || ''),
+    }).toString();
+    const response = await httpClient.requestJson(authBackendUrl(`/api/ragflow/documents?${query}`), {
+      method: 'GET',
+    });
+    return Array.isArray(response?.documents) ? response.documents : [];
+  },
+
   async getRagflowDataset(datasetRef) {
     const res = await httpClient.requestJson(authBackendUrl(`/api/datasets/${encodeURIComponent(datasetRef)}`), {
       method: 'GET',
@@ -169,6 +179,37 @@ export const knowledgeApi = {
     const path = query ? `/api/knowledge/documents?${query}` : '/api/knowledge/documents';
     return httpClient.requestJson(authBackendUrl(path), { method: 'GET' });
   },
+
+  async listDocuments(params = {}) {
+    const response = await this.listLocalDocuments(params);
+    return Array.isArray(response?.documents) ? response.documents : [];
+  },
+
+  async listDocumentVersions(docId) {
+    const response = await httpClient.requestJson(
+      authBackendUrl(`/api/knowledge/documents/${encodeURIComponent(docId)}/versions`),
+      { method: 'GET' }
+    );
+    return {
+      versions: Array.isArray(response?.versions) ? response.versions : [],
+      currentDocId: response?.current_doc_id || '',
+      logicalDocId: response?.logical_doc_id || '',
+    };
+  },
+
+  async listDeletions(params = {}) {
+    const query = new URLSearchParams(params).toString();
+    const path = query ? `/api/knowledge/deletions?${query}` : '/api/knowledge/deletions';
+    const response = await httpClient.requestJson(authBackendUrl(path), { method: 'GET' });
+    return Array.isArray(response?.deletions) ? response.deletions : [];
+  },
+
+  async listDownloads(params = {}) {
+    const query = new URLSearchParams(params).toString();
+    const path = query ? `/api/ragflow/downloads?${query}` : '/api/ragflow/downloads';
+    const response = await httpClient.requestJson(authBackendUrl(path), { method: 'GET' });
+    return Array.isArray(response?.downloads) ? response.downloads : [];
+  },
   getAllowedUploadExtensions() {
     return httpClient.requestJson(authBackendUrl('/api/knowledge/settings/allowed-extensions'), { method: 'GET' });
   },
@@ -196,6 +237,20 @@ export const knowledgeApi = {
 
   async batchDownloadLocalDocuments(docIds) {
     return documentClient.batchDownloadKnowledgeToBrowser(docIds);
+  },
+
+  transferRagflowDocument(docId, sourceDatasetName, targetDatasetName, operation = 'copy') {
+    return httpClient.requestJson(
+      authBackendUrl(`/api/ragflow/documents/${encodeURIComponent(docId)}/transfer`),
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          source_dataset_name: sourceDatasetName,
+          target_dataset_name: targetDatasetName,
+          operation,
+        }),
+      }
+    );
   },
 };
 
