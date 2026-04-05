@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from 'react';
-import authClient from '../../api/authClient';
+import { electronicSignatureApi } from '../electronicSignature/api';
 
 const SIGNATURE_CANCELLED = '__signature_cancelled__';
 
@@ -38,7 +38,7 @@ export function useSignaturePrompt() {
     setSignatureSubmitting(true);
     setSignatureError(null);
     try {
-      const challenge = await authClient.requestSignatureChallenge(password);
+      const challenge = await electronicSignatureApi.requestSignatureChallenge(password);
       resolverRef.current = null;
       resetPrompt();
       resolver.resolve({

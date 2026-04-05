@@ -2,6 +2,13 @@ import { authBackendUrl } from '../../config/backend';
 import { httpClient } from '../../shared/http/httpClient';
 
 export const electronicSignatureApi = {
+  requestSignatureChallenge(password) {
+    return httpClient.requestJson(authBackendUrl('/api/electronic-signatures/challenge'), {
+      method: 'POST',
+      body: JSON.stringify({ password }),
+    });
+  },
+
   listSignatures(params = {}) {
     const search = new URLSearchParams();
     Object.entries(params).forEach(([key, value]) => {

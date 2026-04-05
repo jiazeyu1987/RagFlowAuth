@@ -3,12 +3,15 @@ import { MemoryRouter } from 'react-router-dom';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import ApprovalCenter from './ApprovalCenter';
-import authClient from '../api/authClient';
+import { electronicSignatureApi } from '../features/electronicSignature/api';
 import operationApprovalApi from '../features/operationApproval/api';
 import { useAuth } from '../hooks/useAuth';
 
-jest.mock('../api/authClient', () => ({
-  requestSignatureChallenge: jest.fn(),
+jest.mock('../features/electronicSignature/api', () => ({
+  __esModule: true,
+  electronicSignatureApi: {
+    requestSignatureChallenge: jest.fn(),
+  },
 }));
 
 jest.mock('../features/operationApproval/api', () => ({
@@ -111,7 +114,7 @@ describe('ApprovalCenter', () => {
 
   it('submits approve action with electronic signature', async () => {
     const user = userEvent.setup();
-    authClient.requestSignatureChallenge.mockResolvedValue({ sign_token: 'sign-token-1' });
+    electronicSignatureApi.requestSignatureChallenge.mockResolvedValue({ sign_token: 'sign-token-1' });
     operationApprovalApi.approveRequest.mockResolvedValue({ ...requestDetail, status: 'executed' });
 
     render(
@@ -131,7 +134,7 @@ describe('ApprovalCenter', () => {
     await user.click(screen.getByTestId('review-signature-submit'));
 
     await waitFor(() => {
-      expect(authClient.requestSignatureChallenge).toHaveBeenCalledWith('SignPass123');
+      expect(electronicSignatureApi.requestSignatureChallenge).toHaveBeenCalledWith('SignPass123');
     });
     await waitFor(() => {
       expect(operationApprovalApi.approveRequest).toHaveBeenCalledWith(
@@ -205,7 +208,7 @@ describe('ApprovalCenter', () => {
 
   it('submits reject action with electronic signature once', async () => {
     const user = userEvent.setup();
-    authClient.requestSignatureChallenge.mockResolvedValue({ sign_token: 'sign-token-reject-1' });
+    electronicSignatureApi.requestSignatureChallenge.mockResolvedValue({ sign_token: 'sign-token-reject-1' });
     operationApprovalApi.rejectRequest.mockResolvedValue({ ...requestDetail, status: 'rejected' });
 
     render(
@@ -225,7 +228,7 @@ describe('ApprovalCenter', () => {
     await user.click(screen.getByTestId('review-signature-submit'));
 
     await waitFor(() => {
-      expect(authClient.requestSignatureChallenge).toHaveBeenCalledWith('RejectPass123');
+      expect(electronicSignatureApi.requestSignatureChallenge).toHaveBeenCalledWith('RejectPass123');
     });
     await waitFor(() => {
       expect(operationApprovalApi.rejectRequest).toHaveBeenCalledWith(
@@ -243,7 +246,7 @@ describe('ApprovalCenter', () => {
 
   it('shows translated training compliance error when approval is blocked', async () => {
     const user = userEvent.setup();
-    authClient.requestSignatureChallenge.mockResolvedValue({ sign_token: 'sign-token-training-1' });
+    electronicSignatureApi.requestSignatureChallenge.mockResolvedValue({ sign_token: 'sign-token-training-1' });
     operationApprovalApi.approveRequest.mockRejectedValue(new Error('training_record_missing'));
 
     render(
@@ -289,7 +292,7 @@ describe('ApprovalCenter', () => {
         },
       ],
     });
-    authClient.requestSignatureChallenge.mockResolvedValue({ sign_token: 'sign-token-training-admin-1' });
+    electronicSignatureApi.requestSignatureChallenge.mockResolvedValue({ sign_token: 'sign-token-training-admin-1' });
     operationApprovalApi.approveRequest.mockRejectedValue(new Error('training_record_missing'));
 
     render(

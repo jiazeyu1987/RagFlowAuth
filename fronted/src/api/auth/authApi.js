@@ -70,11 +70,4 @@ export const authApiMethods = {
 
     return response.json();
   },
-
-  async requestSignatureChallenge(password) {
-    return httpClient.requestJson(authBackendUrl('/api/electronic-signatures/challenge'), {
-      method: 'POST',
-      body: JSON.stringify({ password }),
-    });
-  },
 };
