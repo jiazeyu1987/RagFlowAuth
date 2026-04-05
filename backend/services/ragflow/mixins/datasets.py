@@ -1,12 +1,14 @@
 from __future__ import annotations
 
+import inspect
 from time import time
-from typing import List
+from typing import Any, List
 
 from ...ragflow_config import is_placeholder_api_key
 
 
 class RagflowDatasetsMixin:
+    _DATASET_LIST_PAGE_SIZE: int = 200
     # RAGFlow dataset create/update endpoints reject unknown fields (pydantic `extra=forbid`).
     # Keep a strict allow-list here to avoid forwarding "read-only" or computed fields from
     # UI copies (e.g. chunk_count, task ids, status), which would make the mutation fail.
@@ -75,6 +77,151 @@ class RagflowDatasetsMixin:
         if not payload or not isinstance(payload, dict):
             return False
         return payload.get("code") in (0, None)
+
+    def _coerce_dataset_item(self, dataset: Any) -> dict | None:
+        if hasattr(dataset, "name"):
+            item = {
+                "id": getattr(dataset, "id", ""),
+                "name": getattr(dataset, "name", ""),
+                "document_count": getattr(dataset, "document_count", None),
+                "chunk_count": getattr(dataset, "chunk_count", None),
+                "description": getattr(dataset, "description", None),
+            }
+            chunk_method = getattr(dataset, "chunk_method", None)
+            embedding_model = getattr(dataset, "embedding_model", None)
+            avatar = getattr(dataset, "avatar", None)
+            if chunk_method is not None:
+                item["chunk_method"] = chunk_method
+            if embedding_model is not None:
+                item["embedding_model"] = embedding_model
+            if avatar is not None:
+                item["avatar"] = avatar
+            return item
+        if isinstance(dataset, dict):
+            return dict(dataset)
+        return None
+
+    def _extract_dataset_batch_from_payload(self, payload: dict | None, *, context: str) -> list[dict]:
+        if not isinstance(payload, dict):
+            return []
+        if payload.get("code") not in (0, None):
+            logger = getattr(self, "logger", None)
+            if logger is not None and hasattr(logger, "error"):
+                logger.error("RAGFlow %s failed: %s", context, payload.get("message"))
+            return []
+
+        data = payload.get("data")
+        candidates: list[Any] = []
+        if isinstance(data, list):
+            candidates = data
+        elif isinstance(data, dict):
+            for key in ("datasets", "items", "list", "rows"):
+                value = data.get(key)
+                if isinstance(value, list):
+                    candidates = value
+                    break
+
+        result: list[dict] = []
+        for item in candidates:
+            row = self._coerce_dataset_item(item)
+            if row is not None:
+                result.append(row)
+        return result
+
+    def _list_dataset_page_via_http(self, *, page: int, page_size: int, context: str) -> list[dict]:
+        get_json = getattr(self._http, "get_json", None)
+        if callable(get_json):
+            payload = get_json("/api/v1/datasets", params={"page": page, "page_size": page_size})
+            return self._extract_dataset_batch_from_payload(payload, context=context)
+
+        get_list = getattr(self._http, "get_list", None)
+        if callable(get_list):
+            batch = get_list(
+                "/api/v1/datasets",
+                params={"page": page, "page_size": page_size},
+                context=context,
+            )
+            result: list[dict] = []
+            for item in batch:
+                row = self._coerce_dataset_item(item)
+                if row is not None:
+                    result.append(row)
+            return result
+        return []
+
+    def _list_datasets_via_http(self, *, page_size: int) -> list[dict]:
+        datasets: list[dict] = []
+        seen_ids: set[str] = set()
+        page = 1
+        while True:
+            batch = self._list_dataset_page_via_http(page=page, page_size=page_size, context="list_datasets")
+            if not batch:
+                break
+            new_items = 0
+            for item in batch:
+                dataset_id = str(item.get("id") or "").strip()
+                if dataset_id:
+                    if dataset_id in seen_ids:
+                        continue
+                    seen_ids.add(dataset_id)
+                new_items += 1
+                datasets.append(item)
+            if len(batch) < page_size or new_items == 0:
+                break
+            page += 1
+        return datasets
+
+    def _list_datasets_via_sdk(self, *, page_size: int) -> list[dict]:
+        list_datasets = getattr(self.client, "list_datasets", None)
+        if not callable(list_datasets):
+            return []
+
+        supports_page = True
+        try:
+            sig = inspect.signature(list_datasets)
+            supports_page = "page" in sig.parameters and "page_size" in sig.parameters
+        except Exception:
+            supports_page = True
+
+        datasets: list[dict] = []
+        seen_ids: set[str] = set()
+        if not supports_page:
+            batch = list_datasets()
+            if not isinstance(batch, list):
+                return []
+            for item in batch:
+                row = self._coerce_dataset_item(item)
+                if row is None:
+                    continue
+                dataset_id = str(row.get("id") or "").strip()
+                if dataset_id:
+                    if dataset_id in seen_ids:
+                        continue
+                    seen_ids.add(dataset_id)
+                datasets.append(row)
+            return datasets
+
+        page = 1
+        while True:
+            batch = list_datasets(page=page, page_size=page_size)
+            if not isinstance(batch, list) or not batch:
+                break
+            new_items = 0
+            for item in batch:
+                row = self._coerce_dataset_item(item)
+                if row is None:
+                    continue
+                dataset_id = str(row.get("id") or "").strip()
+                if dataset_id:
+                    if dataset_id in seen_ids:
+                        continue
+                    seen_ids.add(dataset_id)
+                new_items += 1
+                datasets.append(row)
+            if len(batch) < page_size or new_items == 0:
+                break
+            page += 1
+        return datasets
 
     def list_all_kb_names(self) -> list[str]:
         datasets = self.list_datasets() or []
@@ -181,32 +328,14 @@ class RagflowDatasetsMixin:
             reload_cfg()
 
         api_key = self.config.get("api_key", "")
+        page_size = int(getattr(self, "_DATASET_LIST_PAGE_SIZE", 200) or 200)
         if not self.client:
-            # Fallback to HTTP API list endpoint when SDK client isn't available.
             if is_placeholder_api_key(api_key):
                 return []
-            datasets = self._http.get_list("/api/v1/datasets", context="list_datasets")
-            # Keep the full dataset objects from the upstream list endpoint. This enables UI features
-            # like "delete only when empty" based on document_count/chunk_count.
-            return [d for d in datasets if isinstance(d, dict)]
+            return self._list_datasets_via_http(page_size=page_size)
 
         try:
-            datasets = self.client.list_datasets()
-            result = []
-            for dataset in datasets:
-                if hasattr(dataset, "name"):
-                    result.append(
-                        {
-                            "id": getattr(dataset, "id", ""),
-                            "name": dataset.name,
-                            "document_count": getattr(dataset, "document_count", None),
-                            "chunk_count": getattr(dataset, "chunk_count", None),
-                            "description": getattr(dataset, "description", None),
-                        }
-                    )
-                elif isinstance(dataset, dict):
-                    result.append(dict(dataset))
-            return result
+            return self._list_datasets_via_sdk(page_size=page_size)
         except Exception as e:
             self.logger.error(f"Failed to list datasets: {e}")
             return []
@@ -235,7 +364,7 @@ class RagflowDatasetsMixin:
 
         # RAGFlow currently does not support GET /api/v1/datasets/{id} (returns 200 with code=100 MethodNotAllowed).
         # Use the list endpoint and pick the matching dataset object.
-        datasets = self._http.get_list("/api/v1/datasets", context="list_datasets_for_detail")
+        datasets = self.list_datasets() or []
         for ds in datasets:
             if not isinstance(ds, dict):
                 continue
@@ -273,7 +402,7 @@ class RagflowDatasetsMixin:
         # If the ref is a name and normalization misses (stale index), resolve id via list endpoint.
         if dataset_id == dataset_ref:
             try:
-                datasets = self._http.get_list("/api/v1/datasets", context="list_datasets_for_update_resolve")
+                datasets = self.list_datasets() or []
                 for ds in datasets:
                     if not isinstance(ds, dict):
                         continue
@@ -347,7 +476,7 @@ class RagflowDatasetsMixin:
             dataset_id = dataset_ref
 
         # Use list endpoint for counts and for resolving dataset id from name.
-        datasets = self._http.get_list("/api/v1/datasets", context="list_datasets_for_delete")
+        datasets = self.list_datasets() or []
         target = None
         for ds in datasets:
             if not isinstance(ds, dict):

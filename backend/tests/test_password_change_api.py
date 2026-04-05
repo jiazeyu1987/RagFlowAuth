@@ -10,6 +10,7 @@ from unittest.mock import MagicMock, patch
 from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
 
+from backend.app.core.authz import AuthContext, get_auth_context
 from backend.app.modules.auth.router import router as auth_router
 from backend.app.core import auth as auth_module
 from backend.services.users import User, hash_password, verify_password
@@ -46,6 +47,11 @@ class _FakeUserStore:
 
 
 class _FakeDeps:
+    def __init__(self):
+        self.user_store = _FakeUserStore()
+
+
+class _TenantOnlyDeps:
     def __init__(self):
         self.user_store = _FakeUserStore()
 
@@ -236,6 +242,33 @@ class TestPasswordChangeAPI(unittest.TestCase):
         self.assertEqual(resp.status_code, 401)
         body = resp.json()
         self.assertIn("detail", body)
+
+    def test_change_password_updates_global_user_store_even_if_auth_context_is_tenant_scoped(self):
+        tenant_deps = _TenantOnlyDeps()
+
+        def _override_auth_context(request: Request) -> AuthContext:  # noqa: ARG001
+            return AuthContext(
+                deps=tenant_deps,
+                payload=MagicMock(sub="u_test"),
+                user=self.deps.user_store.user,
+                snapshot=MagicMock(),
+            )
+
+        self.app.dependency_overrides[get_auth_context] = _override_auth_context
+
+        with TestClient(self.app) as client:
+            resp = client.put(
+                "/api/auth/password",
+                json={
+                    "old_password": "OldPass123",
+                    "new_password": "NewPass456",
+                },
+            )
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(self.deps.user_store.update_called)
+        self.assertFalse(tenant_deps.user_store.update_called)
+        self.assertTrue(verify_password("NewPass456", self.deps.user_store.update_password_hash)[0])
 
 
 if __name__ == "__main__":

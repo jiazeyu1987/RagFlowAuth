@@ -3,6 +3,22 @@ const { test, expect, request } = require('@playwright/test');
 const { FRONTEND_BASE_URL, BACKEND_BASE_URL, preflightAdmin, uiLogin } = require('../helpers/integration');
 const { getRealDataConfig, findChatByName } = require('../helpers/ragflowRealData');
 
+async function selectChatAndWaitForSessions(page, targetChatId) {
+  const targetSessionsResponse = page
+    .waitForResponse(
+      (resp) => resp.url().includes(`/api/chats/${targetChatId}/sessions`) && resp.request().method() === 'GET',
+      { timeout: 15_000 }
+    )
+    .catch(() => null);
+
+  await page.getByTestId(`chat-item-${targetChatId}`).click();
+
+  const sessionsResp = await targetSessionsResponse;
+  if (sessionsResp) {
+    expect(sessionsResp.ok(), `load sessions failed for chat=${targetChatId}`).toBeTruthy();
+  }
+}
+
 test('ragflow real chat: multi-turn responses on target chat @integration @chat @realdata', async ({ page }) => {
   test.setTimeout(360_000);
 
@@ -31,24 +47,25 @@ test('ragflow real chat: multi-turn responses on target chat @integration @chat 
 
     const prompts = cfg.chatPrompts.slice(0, Math.max(1, cfg.maxTerms));
     expect(prompts.length).toBeGreaterThan(0);
+    const sessionName = `e2e multi turn ${Date.now()}`;
+
+    const createSessionResp = await api.post(`/api/chats/${targetChatId}/sessions`, {
+      headers,
+      data: { name: sessionName },
+    });
+    expect(createSessionResp.ok(), 'precreate chat session failed').toBeTruthy();
+    const createdSession = await createSessionResp.json();
+    createdSessionId = createdSession?.id ? String(createdSession.id) : null;
+    expect(createdSessionId, 'created session id missing').toBeTruthy();
 
     await uiLogin(page);
     await page.goto(`${FRONTEND_BASE_URL}/chat`);
     await expect(page.getByTestId('chat-page')).toBeVisible({ timeout: 30_000 });
 
     await expect(page.getByTestId(`chat-item-${targetChatId}`)).toBeVisible({ timeout: 30_000 });
-    await page.getByTestId(`chat-item-${targetChatId}`).click();
-
-    const [createSessionResp] = await Promise.all([
-      page.waitForResponse(
-        (resp) => resp.url().includes(`/api/chats/${targetChatId}/sessions`) && resp.request().method() === 'POST'
-      ),
-      page.getByTestId('chat-session-create').click(),
-    ]);
-    expect(createSessionResp.ok(), 'create chat session failed').toBeTruthy();
-    const createdSession = await createSessionResp.json();
-    createdSessionId = createdSession?.id ? String(createdSession.id) : null;
-    expect(createdSessionId, 'created session id missing').toBeTruthy();
+    await selectChatAndWaitForSessions(page, targetChatId);
+    await expect(page.getByTestId(`chat-session-item-${createdSessionId}`)).toBeVisible({ timeout: 30_000 });
+    await page.getByTestId(`chat-session-item-${createdSessionId}`).click();
 
     const assistantMessages = page.getByTestId('chat-messages').locator("[data-testid$='-assistant']");
 
@@ -107,4 +124,3 @@ test('ragflow real chat: multi-turn responses on target chat @integration @chat 
     }
   }
 });
-

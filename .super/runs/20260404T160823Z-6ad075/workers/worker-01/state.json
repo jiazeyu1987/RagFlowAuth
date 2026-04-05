@@ -1,0 +1,13 @@
+{
+  "worker_id": "worker-01",
+  "agent_id": "019d5946-7ab0-79a0-b1c4-20889c5d5ad2",
+  "status": "ready_for_validation",
+  "owned_paths": [
+    "fronted/e2e/tests/docs.training-compliance.spec.js"
+  ],
+  "current_step": "Ready for validation after adding the docs-driven training compliance e2e spec.",
+  "stuck_count": 0,
+  "updated_at": "2026-04-05T00:24:23Z",
+  "last_supervisor_action": "worker-started",
+  "last_validation_result": ""
+}

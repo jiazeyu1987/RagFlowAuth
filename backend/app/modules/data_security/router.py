@@ -10,11 +10,15 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from backend.app.core.auth import get_deps
 from backend.app.core.authz import AdminOnly
 from backend.app.core.config import settings
+from backend.app.core.paths import repo_root
 from backend.app.core.training_support import assert_user_training_for_action
 from backend.app.dependencies import AppDependencies
 from backend.app.modules.data_security.runner import start_job_if_idle
 from backend.services.audit_helpers import actor_fields_from_user
+from backend.services.data_security.backup_service import _compute_backup_package_hash
+from backend.services.data_security.common import run_cmd
 from backend.services.data_security import RestoreDrillExecutionService
+from backend.services.data_security.docker_utils import docker_ok, list_docker_volumes_by_prefix, read_compose_project_name
 
 router = APIRouter()
 
@@ -122,6 +126,82 @@ def _settings_response(s) -> dict[str, Any]:
     return resp
 
 
+def _resolve_auth_db_path(auth_db_path: str) -> Path:
+    path = Path(str(auth_db_path or "").strip() or "data/auth.db")
+    if not path.is_absolute():
+        path = repo_root() / path
+    return path
+
+
+def _resolve_backup_worker_image() -> tuple[str | None, str | None]:
+    code, out = run_cmd(["docker", "ps", "--filter", "name=ragflowauth-backend", "--format", "{{.Image}}"])
+    if code == 0 and str(out or "").strip():
+        return str(out).strip(), None
+
+    fallback_image = "ragflowauth-backend:latest"
+    code, out = run_cmd(["docker", "image", "inspect", fallback_image])
+    if code == 0:
+        return fallback_image, None
+    return None, f"backup_worker_image_missing:{fallback_image}"
+
+
+def _assert_backup_prerequisites(deps: AppDependencies) -> None:
+    current_settings = deps.data_security_store.get_settings()
+    local_target = str(current_settings.local_backup_target_path() or "").strip()
+    if not local_target:
+        raise RuntimeError("local_backup_target_not_configured")
+
+    ok, why = docker_ok()
+    if not ok:
+        raise RuntimeError(f"docker_unavailable:{why}")
+
+    local_root = Path(local_target)
+    try:
+        probe_dir = local_root / "_staging" / "_preflight"
+        probe_dir.mkdir(parents=True, exist_ok=True)
+        probe = probe_dir / f".write_probe_{int(time.time() * 1000)}"
+        probe.write_text("ok", encoding="utf-8")
+        probe.unlink()
+    except Exception as exc:
+        raise RuntimeError(f"local_backup_target_not_writable:{local_root} err={exc}") from exc
+
+    src_db = _resolve_auth_db_path(current_settings.auth_db_path)
+    if not src_db.exists():
+        raise RuntimeError(f"project_auth_db_not_found:{src_db}")
+
+    compose_path = str(current_settings.ragflow_compose_path or "").strip()
+    if not compose_path:
+        raise RuntimeError("ragflow_compose_path_required")
+    compose_file = Path(compose_path)
+    if not compose_file.is_absolute():
+        compose_file = repo_root() / compose_file
+    if not compose_file.exists():
+        raise RuntimeError(f"ragflow_compose_file_not_found:{compose_file}")
+
+    project_name = read_compose_project_name(compose_file)
+    prefix = f"{project_name}_"
+    volumes = list_docker_volumes_by_prefix(prefix)
+    if not volumes:
+        raise RuntimeError(f"ragflow_volumes_not_found:{prefix}")
+
+    _, worker_error = _resolve_backup_worker_image()
+    if worker_error:
+        raise RuntimeError(worker_error)
+
+
+def _hydrate_job_package_hash(store, job):
+    if not job or job.package_hash or not str(job.output_dir or "").strip():
+        return job
+    pack_dir = Path(str(job.output_dir).strip())
+    if not pack_dir.exists() or not pack_dir.is_dir():
+        return job
+    try:
+        package_hash = _compute_backup_package_hash(pack_dir)
+        return store.update_job(job.id, package_hash=package_hash)
+    except Exception:
+        return job
+
+
 @router.get("/admin/data-security/settings")
 def get_settings(_: AdminOnly, deps: AppDependencies = Depends(get_deps)) -> dict[str, Any]:
     store = deps.data_security_store
@@ -176,9 +256,12 @@ def run_backup(
     deps: AppDependencies = Depends(get_deps),
 ) -> dict[str, Any]:
     try:
+        _assert_backup_prerequisites(deps)
         job_id = start_job_if_idle(reason="manual", store=deps.data_security_store)
     except RuntimeError as e:
-        raise HTTPException(status_code=409, detail=str(e))
+        detail = str(e)
+        status_code = 409 if detail == "backup_job_already_running" or "占用" in detail else 400
+        raise HTTPException(status_code=status_code, detail=detail)
 
     request_id, client_ip = _request_audit_fields(request)
     deps.audit_log_manager.log_event(
@@ -202,7 +285,7 @@ def run_backup(
 @router.get("/admin/data-security/backup/jobs")
 def list_jobs(_: AdminOnly, limit: int = 30, deps: AppDependencies = Depends(get_deps)) -> dict[str, Any]:
     store = deps.data_security_store
-    jobs = store.list_jobs(limit=limit)
+    jobs = [_hydrate_job_package_hash(store, job) for job in store.list_jobs(limit=limit)]
     return {"jobs": [j.as_dict() for j in jobs]}
 
 
@@ -210,7 +293,7 @@ def list_jobs(_: AdminOnly, limit: int = 30, deps: AppDependencies = Depends(get
 def get_job(_: AdminOnly, job_id: int, deps: AppDependencies = Depends(get_deps)) -> dict[str, Any]:
     store = deps.data_security_store
     try:
-        job = store.get_job(job_id)
+        job = _hydrate_job_package_hash(store, store.get_job(job_id))
     except KeyError:
         raise HTTPException(status_code=404, detail="job_not_found")
     return job.as_dict()
@@ -224,9 +307,12 @@ def run_full_backup(
 ) -> dict[str, Any]:
     """Run a full backup including Docker images, containers, and networks."""
     try:
+        _assert_backup_prerequisites(deps)
         job_id = start_job_if_idle(reason="manual_full_backup", store=deps.data_security_store, full_backup=True)
     except RuntimeError as e:
-        raise HTTPException(status_code=409, detail=str(e))
+        detail = str(e)
+        status_code = 409 if detail == "backup_job_already_running" or "占用" in detail else 400
+        raise HTTPException(status_code=status_code, detail=detail)
 
     request_id, client_ip = _request_audit_fields(request)
     deps.audit_log_manager.log_event(

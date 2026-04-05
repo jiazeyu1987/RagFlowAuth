@@ -5,6 +5,7 @@ from types import SimpleNamespace
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from backend.app.core import auth as auth_module
 from backend.app.core import authz as authz_module
 from backend.app.modules.electronic_signature.router import router as electronic_signature_router
 from backend.database.schema.ensure import ensure_schema
@@ -298,6 +299,7 @@ class TestElectronicSignatureUnit(unittest.TestCase):
             app = FastAPI()
             app.include_router(electronic_signature_router, prefix="/api")
             app.dependency_overrides[authz_module.get_auth_context] = lambda: auth_ctx
+            app.dependency_overrides[auth_module.get_global_deps] = lambda: SimpleNamespace(user_store=user_store)
 
             with TestClient(app) as client:
                 list_response = client.get("/api/electronic-signature-authorizations")
@@ -313,6 +315,68 @@ class TestElectronicSignatureUnit(unittest.TestCase):
             self.assertFalse(update_response.json()["electronic_signature_enabled"])
 
             updated_user = user_store.get_by_user_id(target_user.user_id)
+            self.assertIsNotNone(updated_user)
+            self.assertFalse(updated_user.electronic_signature_enabled)
+        finally:
+            cleanup_dir(td)
+
+    def test_management_api_lists_and_updates_signature_authorization_from_global_store_in_tenant_scope(self):
+        td = make_temp_dir(prefix="ragflowauth_esign_authorization_tenant_scope")
+        try:
+            root_db_path = os.path.join(str(td), "auth.db")
+            tenant_db_path = os.path.join(str(td), "tenants", "company_2", "auth.db")
+            ensure_schema(root_db_path)
+            ensure_schema(tenant_db_path)
+
+            root_service = ElectronicSignatureService(store=ElectronicSignatureStore(db_path=root_db_path))
+            global_user_store = UserStore(db_path=root_db_path)
+            tenant_user_store = UserStore(db_path=tenant_db_path)
+
+            target_user = global_user_store.create_user(
+                username="reviewer_scope",
+                password=SIGN_PASSWORD,
+                role="reviewer",
+                company_id=2,
+                electronic_signature_enabled=True,
+            )
+            company_admin = global_user_store.create_user(
+                username="company_admin_scope",
+                password="AdminPass123",
+                role="admin",
+                company_id=2,
+                electronic_signature_enabled=True,
+            )
+
+            auth_ctx = SimpleNamespace(
+                deps=SimpleNamespace(
+                    electronic_signature_service=root_service,
+                    user_store=tenant_user_store,
+                ),
+                user=company_admin,
+                payload=SimpleNamespace(sub=company_admin.user_id),
+                snapshot=SimpleNamespace(is_admin=True),
+            )
+            global_deps = SimpleNamespace(user_store=global_user_store)
+
+            app = FastAPI()
+            app.include_router(electronic_signature_router, prefix="/api")
+            app.dependency_overrides[authz_module.get_auth_context] = lambda: auth_ctx
+            app.dependency_overrides[auth_module.get_global_deps] = lambda: global_deps
+
+            with TestClient(app) as client:
+                list_response = client.get("/api/electronic-signature-authorizations")
+                update_response = client.put(
+                    f"/api/electronic-signature-authorizations/{target_user.user_id}",
+                    json={"electronic_signature_enabled": False},
+                )
+
+            self.assertEqual(list_response.status_code, 200)
+            items = list_response.json()["items"]
+            self.assertTrue(any(item["user_id"] == target_user.user_id for item in items))
+            self.assertEqual(update_response.status_code, 200)
+            self.assertFalse(update_response.json()["electronic_signature_enabled"])
+
+            updated_user = global_user_store.get_by_user_id(target_user.user_id)
             self.assertIsNotNone(updated_user)
             self.assertFalse(updated_user.electronic_signature_enabled)
         finally:

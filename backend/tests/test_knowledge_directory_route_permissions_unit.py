@@ -29,8 +29,10 @@ class _UserStore:
 
 
 class _PermissionGroupStore:
-    def __init__(self, *, can_manage_kb_directory: bool):
+    def __init__(self, *, can_manage_kb_directory: bool, accessible_kbs=None, can_view_kb_config: bool = False):
         self._can_manage_kb_directory = bool(can_manage_kb_directory)
+        self._accessible_kbs = list(accessible_kbs or [])
+        self._can_view_kb_config = bool(can_view_kb_config)
 
     def get_group(self, group_id: int):  # noqa: ARG002
         return {
@@ -39,20 +41,24 @@ class _PermissionGroupStore:
             "can_download": False,
             "can_delete": False,
             "can_manage_kb_directory": self._can_manage_kb_directory,
-            "accessible_kbs": [],
+            "can_view_kb_config": self._can_view_kb_config,
+            "accessible_kbs": list(self._accessible_kbs),
             "accessible_chats": [],
         }
 
 
 class _RagflowService:
     def get_dataset_index(self):
-        return {"by_id": {}, "by_name": {}}
+        return {
+            "by_id": {"ds_1": "KB-1"},
+            "by_name": {"KB-1": "ds_1"},
+        }
 
     def normalize_dataset_id(self, dataset_ref: str):
         return dataset_ref
 
     def list_datasets(self):
-        return []
+        return [{"id": "ds_1", "name": "KB-1"}]
 
 
 class _DirectoryManager:
@@ -68,7 +74,22 @@ class _DirectoryManager:
         return node
 
     def snapshot(self, datasets, *, prune_unknown: bool):  # noqa: ARG002
-        return {"nodes": list(self.nodes), "datasets": [], "bindings": {}}
+        normalized = []
+        bindings = {}
+        for dataset in datasets or []:
+            dataset_id = dataset.get("id")
+            if not dataset_id:
+                continue
+            normalized.append(
+                {
+                    "id": dataset_id,
+                    "name": dataset.get("name"),
+                    "node_id": None,
+                    "node_path": "/",
+                }
+            )
+            bindings[str(dataset_id)] = None
+        return {"nodes": list(self.nodes), "datasets": normalized, "bindings": bindings}
 
     def assign_dataset(self, *, dataset_id: str, node_id: str | None):
         self.assign_calls.append({"dataset_id": dataset_id, "node_id": node_id})
@@ -76,10 +97,12 @@ class _DirectoryManager:
 
 
 class _Deps:
-    def __init__(self, *, user: _User, can_manage_kb_directory: bool):
+    def __init__(self, *, user: _User, can_manage_kb_directory: bool, accessible_kbs=None, can_view_kb_config: bool = False):
         self.user_store = _UserStore(user)
         self.permission_group_store = _PermissionGroupStore(
-            can_manage_kb_directory=can_manage_kb_directory
+            can_manage_kb_directory=can_manage_kb_directory,
+            accessible_kbs=accessible_kbs,
+            can_view_kb_config=can_view_kb_config,
         )
         self.ragflow_service = _RagflowService()
         self.knowledge_directory_manager = _DirectoryManager()
@@ -89,9 +112,20 @@ def _override_get_current_payload(_: Request) -> TokenPayload:
     return TokenPayload(sub="u1")
 
 
-def _make_client(*, role: str, can_manage_kb_directory: bool) -> tuple[TestClient, _Deps]:
+def _make_client(
+    *,
+    role: str,
+    can_manage_kb_directory: bool,
+    accessible_kbs=None,
+    can_view_kb_config: bool = False,
+) -> tuple[TestClient, _Deps]:
     user = _User(role=role, group_ids=[1] if role != "admin" else [])
-    deps = _Deps(user=user, can_manage_kb_directory=can_manage_kb_directory)
+    deps = _Deps(
+        user=user,
+        can_manage_kb_directory=can_manage_kb_directory,
+        accessible_kbs=accessible_kbs,
+        can_view_kb_config=can_view_kb_config,
+    )
 
     app = FastAPI()
     app.state.deps = deps
@@ -102,6 +136,20 @@ def _make_client(*, role: str, can_manage_kb_directory: bool) -> tuple[TestClien
 
 
 class TestKnowledgeDirectoryRoutePermissionsUnit(unittest.TestCase):
+    def test_list_directories_allows_user_with_kb_scope_without_kb_config_permission(self):
+        client, _ = _make_client(
+            role="viewer",
+            can_manage_kb_directory=False,
+            accessible_kbs=["ds_1"],
+            can_view_kb_config=False,
+        )
+        with client:
+            resp = client.get("/api/knowledge/directories")
+
+        self.assertEqual(resp.status_code, 200)
+        body = resp.json()
+        self.assertEqual([item.get("id") for item in body.get("datasets", [])], ["ds_1"])
+
     def test_create_directory_rejects_user_without_manage_permission(self):
         client, _ = _make_client(role="viewer", can_manage_kb_directory=False)
         with client:

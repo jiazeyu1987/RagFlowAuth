@@ -1,6 +1,7 @@
 from fastapi import APIRouter, File, HTTPException, Request, UploadFile
 
 from backend.app.core.authz import AuthContextDep
+from backend.app.core.kb_refs import resolve_kb_ref
 from backend.app.core.permission_resolver import (
     assert_can_upload,
     assert_kb_allowed,
@@ -73,8 +74,9 @@ async def upload_document(
 ):
     kb_ref = request.query_params.get("kb_id", "灞曞巺")
     snapshot = ctx.snapshot
+    kb_info = resolve_kb_ref(ctx.deps, kb_ref)
     assert_can_upload(snapshot)
-    assert_kb_allowed(snapshot, kb_ref)
+    assert_kb_allowed(snapshot, kb_info.variants)
     service = getattr(ctx.deps, "operation_approval_service", None)
     if service is None:
         raise HTTPException(status_code=500, detail="operation_approval_service_unavailable")

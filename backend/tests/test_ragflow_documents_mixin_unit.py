@@ -1,4 +1,6 @@
+import tempfile
 import unittest
+from pathlib import Path
 from types import SimpleNamespace
 
 from backend.services.ragflow.mixins.documents import RagflowDocumentsMixin
@@ -20,6 +22,39 @@ class _Dataset:
     def list_documents(self, page=1, page_size=30, **kwargs):  # noqa: ARG002
         self.calls.append({"page": page, "page_size": page_size})
         return list(self.pages.get(page, []))
+
+
+class _SdkParseDoc:
+    def __init__(self, doc_id: str, *, chunk_count: int = 0, progress: float = 0.0, run: str = "0"):
+        self.id = doc_id
+        self.name = f"{doc_id}.txt"
+        self.status = "1"
+        self.chunk_count = chunk_count
+        self.progress = progress
+        self.run = run
+
+
+class _SdkParseDataset:
+    def __init__(self, document_sequences: dict[str, list[object | None]]):
+        self.document_sequences = {key: list(value) for key, value in document_sequences.items()}
+        self.list_calls = []
+        self.parse_calls = []
+        self.id = "dataset-sdk-1"
+        self.name = "SDK Dataset"
+
+    def list_documents(self, id=None, page=1, page_size=30, **kwargs):  # noqa: ARG002
+        self.list_calls.append({"id": id, "page": page, "page_size": page_size})
+        sequence = self.document_sequences.get(str(id), [])
+        if not sequence:
+            return []
+        current = sequence.pop(0)
+        self.document_sequences[str(id)] = sequence
+        if current is None:
+            return []
+        return [current]
+
+    def async_parse_documents(self, document_ids):
+        self.parse_calls.append(list(document_ids))
 
 
 class _DatasetWithoutPaging:
@@ -55,6 +90,43 @@ class _HttpStub:
         return {"Authorization": "Bearer test"}
 
 
+class _ParseHttpStub:
+    def __init__(self, *, visibility_sequences=None, post_payloads=None):
+        self.visibility_sequences = {key: list(value) for key, value in (visibility_sequences or {}).items()}
+        self.post_payloads = list(post_payloads or [])
+        self.lookup_calls = []
+        self.post_calls = []
+        self.config = SimpleNamespace(base_url="http://ragflow.local")
+
+    def get_json(self, path, *, params=None):
+        query = dict(params or {})
+        self.lookup_calls.append({"path": path, "params": query})
+        doc_id = str(query.get("id") or "").strip()
+        if doc_id:
+            sequence = self.visibility_sequences.get(doc_id, [True])
+            visible = sequence.pop(0) if sequence else True
+            self.visibility_sequences[doc_id] = sequence
+            docs = [{"id": doc_id, "name": f"{doc_id}.txt", "status": "uploaded"}] if visible else []
+            return {"code": 0, "data": {"docs": docs}}
+
+        docs = []
+        for current_doc_id, sequence in list(self.visibility_sequences.items()):
+            visible = sequence.pop(0) if sequence else True
+            self.visibility_sequences[current_doc_id] = sequence
+            if visible:
+                docs.append({"id": current_doc_id, "name": f"{current_doc_id}.txt", "status": "uploaded"})
+        return {"code": 0, "data": {"docs": docs}}
+
+    def post_json(self, path, *, body=None):
+        self.post_calls.append({"path": path, "body": dict(body or {})})
+        if self.post_payloads:
+            return self.post_payloads.pop(0)
+        return {"code": 0}
+
+    def headers(self):
+        return {"Authorization": "Bearer test"}
+
+
 class _Svc(RagflowDocumentsMixin):
     def __init__(self, dataset, http=None):
         self.client = object()
@@ -71,6 +143,76 @@ class _Svc(RagflowDocumentsMixin):
 
     def _find_dataset_by_name(self, dataset_name):  # noqa: ARG002
         return self._dataset
+
+
+class _ParseSvc(RagflowDocumentsMixin):
+    def __init__(self, http):
+        self.client = None
+        self._http = http
+        self.list_calls = 0
+        self.logger = SimpleNamespace(
+            info=lambda *args, **kwargs: None,
+            warning=lambda *args, **kwargs: None,
+            error=lambda *args, **kwargs: None,
+        )
+        self._PARSE_DOCUMENT_READY_TIMEOUT_S = 0.05
+        self._PARSE_DOCUMENT_READY_POLL_INTERVAL_S = 0.0
+
+    def normalize_dataset_id(self, dataset_ref):
+        return "dataset-http-1" if dataset_ref else None
+
+    def list_documents(self, dataset_name="dataset-http-1"):  # noqa: ARG002
+        self.list_calls += 1
+        docs = []
+        for current_doc_id, sequence in list(self._http.visibility_sequences.items()):
+            visible = sequence.pop(0) if sequence else True
+            self._http.visibility_sequences[current_doc_id] = sequence
+            if visible:
+                docs.append({"id": current_doc_id, "name": f"{current_doc_id}.txt", "status": "uploaded"})
+        return docs
+
+
+class _SdkParseSvc(RagflowDocumentsMixin):
+    def __init__(self, dataset):
+        self.client = object()
+        self.dataset = dataset
+        self.logger = SimpleNamespace(
+            info=lambda *args, **kwargs: None,
+            warning=lambda *args, **kwargs: None,
+            error=lambda *args, **kwargs: None,
+        )
+        self._PARSE_DOCUMENT_READY_TIMEOUT_S = 1.0
+        self._PARSE_DOCUMENT_READY_POLL_INTERVAL_S = 0.0
+
+    def _normalize_dataset_name_for_ops(self, dataset_name):
+        return dataset_name
+
+    def normalize_dataset_id(self, dataset_ref):
+        return self.dataset.id if dataset_ref else None
+
+    def _find_dataset_by_name(self, dataset_name):  # noqa: ARG002
+        return self.dataset
+
+
+class _UploadSvc(RagflowDocumentsMixin):
+    def __init__(self):
+        self.client = object()
+        self.logger = SimpleNamespace(
+            info=lambda *args, **kwargs: None,
+            warning=lambda *args, **kwargs: None,
+            error=lambda *args, **kwargs: None,
+        )
+        self.upload_blob_calls = []
+
+    def upload_document_blob(self, file_filename: str, file_content: bytes, kb_id: str = "dataset-1") -> str:
+        self.upload_blob_calls.append(
+            {
+                "file_filename": file_filename,
+                "file_content": file_content,
+                "kb_id": kb_id,
+            }
+        )
+        return "uploaded-doc-1"
 
 
 class TestRagflowDocumentsMixinUnit(unittest.TestCase):
@@ -139,6 +281,89 @@ class TestRagflowDocumentsMixinUnit(unittest.TestCase):
         self.assertEqual(
             http.calls,
             [{"path": "/api/v1/datasets/dataset-http-1/documents", "params": {"id": "x-1", "page": 1, "page_size": 1}}],
+        )
+
+    def test_parse_documents_waits_until_document_visible(self):
+        http = _ParseHttpStub(
+            visibility_sequences={"doc-1": [False, True]},
+            post_payloads=[{"code": 0}],
+        )
+        svc = _ParseSvc(http)
+
+        ok = svc.parse_documents(dataset_ref="dataset-http-1", document_ids=["doc-1"])
+
+        self.assertTrue(ok)
+        self.assertEqual(svc.list_calls, 2)
+        self.assertEqual(
+            http.post_calls,
+            [{"path": "/api/v1/datasets/dataset-http-1/chunks", "body": {"document_ids": ["doc-1"]}}],
+        )
+
+    def test_parse_documents_retries_when_chunks_endpoint_is_not_ready(self):
+        http = _ParseHttpStub(
+            visibility_sequences={"doc-1": [True]},
+            post_payloads=[
+                {"code": 102, "message": "Documents not found"},
+                {"code": 0},
+            ],
+        )
+        svc = _ParseSvc(http)
+
+        ok = svc.parse_documents(dataset_ref="dataset-http-1", document_ids=["doc-1"])
+
+        self.assertTrue(ok)
+        self.assertEqual(len(http.post_calls), 2)
+
+    def test_parse_documents_fails_fast_when_document_never_becomes_visible(self):
+        http = _ParseHttpStub(
+            visibility_sequences={"doc-1": [False, False, False]},
+            post_payloads=[{"code": 0}],
+        )
+        svc = _ParseSvc(http)
+        svc._PARSE_DOCUMENT_READY_TIMEOUT_S = 0.0
+
+        ok = svc.parse_documents(dataset_ref="dataset-http-1", document_ids=["doc-1"])
+
+        self.assertFalse(ok)
+        self.assertEqual(http.post_calls, [])
+
+    def test_parse_documents_prefers_sdk_visibility_and_parse_flow(self):
+        dataset = _SdkParseDataset(
+            {
+                "doc-1": [
+                    None,
+                    _SdkParseDoc("doc-1", chunk_count=0, progress=0.2, run="0"),
+                    _SdkParseDoc("doc-1", chunk_count=1, progress=1.0, run="DONE"),
+                ]
+            }
+        )
+        svc = _SdkParseSvc(dataset)
+
+        ok = svc.parse_documents(dataset_ref="dataset-sdk-1", document_ids=["doc-1"])
+
+        self.assertTrue(ok)
+        self.assertEqual(dataset.parse_calls, [["doc-1"]])
+
+    def test_upload_document_reads_file_and_uses_blob_upload_path(self):
+        svc = _UploadSvc()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            file_path = Path(tmpdir) / "seed.txt"
+            file_path.write_text("seed content\n", encoding="utf-8")
+            expected_bytes = file_path.read_bytes()
+
+            doc_id = svc.upload_document(str(file_path), kb_id="dataset-1")
+
+        self.assertEqual(doc_id, "uploaded-doc-1")
+        self.assertEqual(
+            svc.upload_blob_calls,
+            [
+                {
+                    "file_filename": "seed.txt",
+                    "file_content": expected_bytes,
+                    "kb_id": "dataset-1",
+                }
+            ],
         )
 
 

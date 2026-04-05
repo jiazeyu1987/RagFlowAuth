@@ -4,7 +4,7 @@ import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 
-from backend.app.core.auth import get_deps
+from backend.app.core.auth import get_deps, get_global_deps
 from backend.app.core.authz import AuthContextDep
 from backend.app.dependencies import AppDependencies
 from backend.models.auth import ChangePasswordRequest, LoginRequest, TokenResponse
@@ -54,10 +54,13 @@ def get_current_user(
 @router.put("/password")
 def change_password(
     request_data: ChangePasswordRequest,
+    request: Request,
     ctx: AuthContextDep,
 ):
-    deps = ctx.deps
-    user = ctx.user
+    deps = get_global_deps(request)
+    user = deps.user_store.get_by_user_id(ctx.user.user_id)
+    if not user:
+        raise HTTPException(status_code=401, detail="user_not_found")
 
     if not bool(getattr(user, "can_change_password", True)):
         raise HTTPException(status_code=403, detail="password_change_disabled")

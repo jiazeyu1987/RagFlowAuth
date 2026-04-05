@@ -1,0 +1,26 @@
+{
+  "cookies": [],
+  "origins": [
+    {
+      "origin": "http://127.0.0.1:33102",
+      "localStorage": [
+        {
+          "name": "accessToken",
+          "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIwYzg5YzIyMy03NjU5LTQzYjEtOTI4YS0xMjVjM2YxODBlY2UiLCJqdGkiOiJlZjBmMWZhYi02MzgzLTRlMzAtOGVhZC02MzJiNDA2NTU5ZWUiLCJ0eXBlIjoiYWNjZXNzIiwiZnJlc2giOmZhbHNlLCJjc3JmIjoiIiwiaWF0IjoxNzc1MzY3ODA2LCJleHAiOjE3NzUzNjg3MDYuNjIwNSwic2lkIjoiYzU4NzEyOWQtMTE2YS00ZmRkLTgyYWEtNTQyMWRkZjhkZWNhIiwiY2lkIjoxOSwic2NvcGVzIjpbXX0.td0N1UxyZnmih9I-Q_dKk5ROf_UoUo8mJfR8T14Z44o"
+        },
+        {
+          "name": "refreshToken",
+          "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIwYzg5YzIyMy03NjU5LTQzYjEtOTI4YS0xMjVjM2YxODBlY2UiLCJqdGkiOiI5YWI2NDY2ZC1kY2U5LTQ4MDEtODkxMi1lMDQ3YjljN2ZmMWYiLCJ0eXBlIjoicmVmcmVzaCIsImNzcmYiOiIiLCJpYXQiOjE3NzUzNjc4MDYsImV4cCI6MTc3NTk3MjYwNi42MjA1LCJzaWQiOiJjNTg3MTI5ZC0xMTZhLTRmZGQtODJhYS01NDIxZGRmOGRlY2EiLCJjaWQiOjE5fQ.NOwKQA_q974BsZyyU-xs8kjivELZZXloAHDsr1YtDh4"
+        },
+        {
+          "name": "user",
+          "value": "{\"user_id\":\"0c89c223-7659-43b1-928a-125c3f180ece\",\"username\":\"e2e_viewer\",\"full_name\":\"E2E Viewer\",\"email\":\"e2e_viewer@example.test\",\"role\":\"viewer\",\"status\":\"active\",\"group_id\":6,\"group_ids\":[6],\"permission_groups\":[{\"group_id\":6,\"group_name\":\"e2e_scope_viewer\"}],\"scopes\":[],\"permissions\":{\"can_upload\":false,\"can_review\":false,\"can_download\":false,\"can_copy\":false,\"can_delete\":false,\"can_manage_kb_directory\":false,\"can_view_kb_config\":false,\"can_view_tools\":false,\"accessible_tools\":[]},\"max_login_sessions\":3,\"idle_timeout_minutes\":120,\"can_change_password\":true,\"disable_login_enabled\":false,\"disable_login_until_ms\":null,\"managed_kb_root_node_id\":null,\"managed_kb_root_path\":null,\"accessible_kbs\":[\"RagflowAuth E2E Dataset\"],\"accessible_kb_ids\":[\"ab37a6c4304d11f1a24e3efb393b44db\"],\"accessible_chats\":[]}"
+        },
+        {
+          "name": "appVersion",
+          "value": "7"
+        }
+      ]
+    }
+  ]
+}

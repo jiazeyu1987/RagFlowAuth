@@ -51,19 +51,31 @@ def list_sessions(
     if not snapshot.is_admin:
         assert_chat_access(snapshot, chat_id=chat_id)
 
-    sessions = deps.ragflow_chat_service.list_sessions(
+    upstream_sessions = deps.ragflow_chat_service.list_sessions(
         chat_id=chat_id,
         user_id=user.user_id,
     )
+    sessions = [s for s in (upstream_sessions or []) if isinstance(s, dict)]
 
     try:
         local_sessions = deps.chat_session_store.get_user_sessions(chat_id=chat_id, user_id=user.user_id)
-        name_map = {str(s.get("id")): str(s.get("name") or "") for s in (local_sessions or [])}
-        for s in sessions or []:
-            sid = str(s.get("id") or "")
-            local_name = (name_map.get(sid) or "").strip()
-            if local_name:
-                s["name"] = local_name
+        session_map = {str(s.get("id") or ""): s for s in sessions}
+        missing_local_sessions = []
+        for local_session in local_sessions or []:
+            if not isinstance(local_session, dict):
+                continue
+            session_id = str(local_session.get("id") or "").strip()
+            if not session_id:
+                continue
+            local_name = str(local_session.get("name") or "").strip()
+            existing = session_map.get(session_id)
+            if existing:
+                if local_name:
+                    existing["name"] = local_name
+                continue
+            missing_local_sessions.append(local_session)
+        if missing_local_sessions:
+            sessions = missing_local_sessions + sessions
     except Exception:
         logger.exception("Failed to overlay session names from local store")
 

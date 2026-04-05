@@ -2,9 +2,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
+from backend.app.core.auth import get_global_deps
 from backend.app.core.authz import AdminOnly, AuthContextDep
 from backend.app.core.signature_support import resolve_signature_service
 from backend.database.tenant_paths import resolve_tenant_db_root
@@ -19,6 +20,28 @@ router = APIRouter()
 
 class ElectronicSignatureAuthorizationUpdateRequest(BaseModel):
     electronic_signature_enabled: bool
+
+
+def _resolve_authorization_company_scope(ctx: AuthContextDep) -> int | None:
+    raw_company_id = getattr(ctx.user, "company_id", None)
+    if raw_company_id in (None, ""):
+        return None
+    try:
+        return int(raw_company_id)
+    except Exception as exc:
+        raise HTTPException(status_code=403, detail="invalid_user_company_id") from exc
+
+
+def _assert_authorization_target_in_scope(ctx: AuthContextDep, target_user) -> None:
+    scope_company_id = _resolve_authorization_company_scope(ctx)
+    if scope_company_id is None or target_user is None:
+        return
+    try:
+        target_company_id = int(getattr(target_user, "company_id", None))
+    except Exception as exc:
+        raise HTTPException(status_code=403, detail="admin_company_scope_violation") from exc
+    if target_company_id != scope_company_id:
+        raise HTTPException(status_code=403, detail="admin_company_scope_violation")
 
 
 def _resolve_signature_full_name(ctx: AuthContextDep, service: ElectronicSignatureService, signature) -> str | None:
@@ -195,17 +218,21 @@ def list_electronic_signatures(
 def list_electronic_signature_authorizations(
     ctx: AuthContextDep,
     _: AdminOnly,
+    global_deps=Depends(get_global_deps),
     q: str | None = None,
     status: str | None = None,
     electronic_signature_enabled: bool | None = None,
     limit: int = 100,
 ):
-    users = ctx.deps.user_store.list_users(
+    user_store = getattr(global_deps, "user_store", None)
+    if user_store is None:
+        raise HTTPException(status_code=500, detail="user_store_unavailable")
+    users = user_store.list_users(
         q=q,
         status=status,
         role=None,
         group_id=None,
-        company_id=None,
+        company_id=_resolve_authorization_company_scope(ctx),
         department_id=None,
         created_from_ms=None,
         created_to_ms=None,
@@ -241,17 +268,22 @@ def update_electronic_signature_authorization(
     ctx: AuthContextDep,
     request: Request,
     _: AdminOnly,
+    global_deps=Depends(get_global_deps),
 ):
-    existing = ctx.deps.user_store.get_by_user_id(user_id)
+    user_store = getattr(global_deps, "user_store", None)
+    if user_store is None:
+        raise HTTPException(status_code=500, detail="user_store_unavailable")
+    existing = user_store.get_by_user_id(user_id)
     if existing is None:
         raise HTTPException(status_code=404, detail="user_not_found")
-    updated = ctx.deps.user_store.update_user(
+    _assert_authorization_target_in_scope(ctx, existing)
+    updated = user_store.update_user(
         user_id=user_id,
         electronic_signature_enabled=body.electronic_signature_enabled,
     )
     if updated is None:
         raise HTTPException(status_code=404, detail="user_not_found")
-    audit = getattr(ctx.deps, "audit_log_manager", None)
+    audit = getattr(global_deps, "audit_log_manager", None)
     if audit is not None:
         audit.log_event(
             action="electronic_signature_authorization_update",
@@ -265,7 +297,7 @@ def update_electronic_signature_authorization(
             request_id=getattr(getattr(request, "state", None), "request_id", None),
             client_ip=getattr(getattr(request, "client", None), "host", None),
             meta={"target_username": updated.username},
-            **actor_fields_from_user(ctx.deps, ctx.user),
+            **actor_fields_from_user(global_deps, ctx.user),
         )
     return {
         "user_id": updated.user_id,

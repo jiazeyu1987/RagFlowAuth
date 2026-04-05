@@ -7,7 +7,7 @@ from pydantic import BaseModel
 
 from backend.app.core.authz import AuthContextDep
 from backend.app.core.datasets import list_accessible_datasets
-from backend.app.core.permission_resolver import assert_can_manage_kb_directory
+from backend.app.core.permission_resolver import ResourceScope, assert_can_manage_kb_directory
 from backend.app.dependencies import get_tenant_dependencies
 
 router = APIRouter()
@@ -59,7 +59,7 @@ def list_knowledge_directories(request: Request, ctx: AuthContextDep, company_id
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         if getattr(scope, "can_manage", False):
             return management_manager.list_visible_tree(ctx.user)
-    if not ctx.snapshot.can_view_kb_config:
+    if not ctx.snapshot.can_view_kb_config and ctx.snapshot.kb_scope == ResourceScope.NONE:
         raise HTTPException(status_code=403, detail="no_kb_config_view_permission")
     manager = _tree_manager(deps)
     if ctx.snapshot.is_admin:

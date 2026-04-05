@@ -3,6 +3,7 @@ from __future__ import annotations
 import inspect
 import json
 import time
+from pathlib import Path
 from typing import Optional, List
 
 import requests
@@ -12,6 +13,9 @@ from backend.app.core.request_id import get_request_id
 
 
 class RagflowDocumentsMixin:
+    _PARSE_DOCUMENT_READY_TIMEOUT_S: float = 30.0
+    _PARSE_DOCUMENT_READY_POLL_INTERVAL_S: float = 1.0
+
     def _dataset_id_from_obj(self, dataset) -> str | None:
         dataset_id = getattr(dataset, "id", None)
         if not dataset_id and isinstance(dataset, dict):
@@ -20,18 +24,125 @@ class RagflowDocumentsMixin:
 
     def _coerce_document_item(self, doc) -> dict | None:
         if hasattr(doc, "name"):
-            return {
+            item = {
                 "id": getattr(doc, "id", ""),
                 "name": doc.name,
                 "status": getattr(doc, "status", "unknown"),
             }
+            chunk_count = getattr(doc, "chunk_count", None)
+            progress = getattr(doc, "progress", None)
+            run = getattr(doc, "run", None)
+            if chunk_count is not None:
+                item["chunk_count"] = chunk_count
+            if progress is not None:
+                item["progress"] = progress
+            if run is not None:
+                item["run"] = run
+            return item
         if isinstance(doc, dict):
-            return {
+            item = {
                 "id": doc.get("id", ""),
                 "name": doc.get("name", ""),
                 "status": doc.get("status", "unknown"),
             }
+            if doc.get("chunk_count") is not None:
+                item["chunk_count"] = doc.get("chunk_count")
+            if doc.get("progress") is not None:
+                item["progress"] = doc.get("progress")
+            if doc.get("run") is not None:
+                item["run"] = doc.get("run")
+            return item
         return None
+
+    def _document_is_parse_ready(self, doc) -> bool:
+        if doc is None:
+            return False
+        raw_chunk_count = getattr(doc, "chunk_count", None) if hasattr(doc, "chunk_count") else None
+        if raw_chunk_count is None and isinstance(doc, dict):
+            raw_chunk_count = doc.get("chunk_count")
+        try:
+            if int(raw_chunk_count or 0) > 0:
+                return True
+        except Exception:
+            pass
+
+        raw_progress = getattr(doc, "progress", None) if hasattr(doc, "progress") else None
+        if raw_progress is None and isinstance(doc, dict):
+            raw_progress = doc.get("progress")
+        try:
+            if float(raw_progress or 0.0) >= 1.0:
+                return True
+        except Exception:
+            pass
+
+        raw_run = getattr(doc, "run", None) if hasattr(doc, "run") else None
+        if raw_run is None and isinstance(doc, dict):
+            raw_run = doc.get("run")
+        run = str(raw_run or "").strip().upper()
+        return run in {"DONE", "FAIL", "CANCEL"}
+
+    def _get_sdk_document_by_id(self, dataset, document_id: str):
+        list_documents = getattr(dataset, "list_documents", None)
+        if not callable(list_documents):
+            return None
+        try:
+            docs = list_documents(id=document_id, page=1, page_size=1)
+        except Exception:
+            return None
+        if not isinstance(docs, list) or not docs:
+            return None
+        return docs[0]
+
+    def _parse_documents_via_sdk(
+        self,
+        dataset,
+        *,
+        document_ids: list[str],
+        timeout_s: float,
+        poll_interval_s: float,
+    ) -> bool:
+        deadline = time.time() + max(timeout_s, 0.0)
+        parse_requested = False
+        dataset_id = self._dataset_id_from_obj(dataset) or ""
+        while True:
+            visible_count = 0
+            ready_count = 0
+            for document_id in document_ids:
+                doc = self._get_sdk_document_by_id(dataset, document_id)
+                if doc is None:
+                    continue
+                visible_count += 1
+                if self._document_is_parse_ready(doc):
+                    ready_count += 1
+
+            if ready_count == len(document_ids):
+                return True
+
+            if visible_count == len(document_ids) and not parse_requested:
+                async_parse = getattr(dataset, "async_parse_documents", None)
+                if callable(async_parse):
+                    try:
+                        async_parse(document_ids)
+                    except Exception as exc:
+                        if time.time() >= deadline:
+                            self.logger.error(
+                                "parse_documents: sdk async_parse_documents failed dataset_id=%s error=%s",
+                                dataset_id,
+                                exc,
+                            )
+                            return False
+                    else:
+                        parse_requested = True
+
+            if time.time() >= deadline:
+                self.logger.error(
+                    "parse_documents: sdk documents not ready dataset_id=%s document_ids=%s",
+                    dataset_id,
+                    document_ids,
+                )
+                return False
+
+            time.sleep(max(poll_interval_s, 0.0))
 
     def _extract_document_batch_from_payload(self, payload: dict | None) -> list[dict]:
         if not isinstance(payload, dict):
@@ -122,6 +233,33 @@ class RagflowDocumentsMixin:
             (time.perf_counter() - t0) * 1000,
         )
         return batch[0] if batch else None
+
+    def _wait_for_document_visible_via_http(
+        self,
+        dataset_id: str,
+        document_id: str,
+        *,
+        timeout_s: float | None = None,
+        poll_interval_s: float | None = None,
+    ) -> bool:
+        timeout = float(
+            timeout_s
+            if timeout_s is not None
+            else getattr(self, "_PARSE_DOCUMENT_READY_TIMEOUT_S", 30.0)
+        )
+        poll_interval = float(
+            poll_interval_s
+            if poll_interval_s is not None
+            else getattr(self, "_PARSE_DOCUMENT_READY_POLL_INTERVAL_S", 1.0)
+        )
+        deadline = time.time() + max(timeout, 0.0)
+        while True:
+            documents = self.list_documents(dataset_id)
+            if any(str(item.get("id") or "").strip() == document_id for item in documents if isinstance(item, dict)):
+                return True
+            if time.time() >= deadline:
+                return False
+            time.sleep(max(poll_interval, 0.0))
 
     def _download_document_via_http(self, dataset_id: str, document_id: str) -> bytes | None:
         t0 = time.perf_counter()
@@ -222,20 +360,15 @@ class RagflowDocumentsMixin:
         if not self.client:
             raise ValueError("RAGFlow client not initialized")
 
-        kb_id = self._normalize_dataset_name_for_ops(kb_id)
-        dataset = self._find_dataset_by_name(kb_id)
+        path = Path(file_path).resolve()
+        if not path.exists() or not path.is_file():
+            raise FileNotFoundError(f"document_file_not_found:{path}")
 
-        if not dataset:
-            self.logger.info(f"Creating dataset '{kb_id}'")
-            dataset = self.client.create_dataset(name=kb_id)
-
-        document = dataset.upload_file(file_path)
-
-        doc_id = getattr(document, "id", None)
-        if not doc_id and isinstance(document, dict):
-            doc_id = document.get("id")
-
-        return doc_id
+        return self.upload_document_blob(
+            file_filename=path.name,
+            file_content=path.read_bytes(),
+            kb_id=kb_id,
+        )
 
     def upload_document_blob(self, file_filename: str, file_content: bytes, kb_id: str = "展厅") -> str:
         reload_cfg = getattr(self, "_reload_config_if_changed", None)
@@ -378,16 +511,56 @@ class RagflowDocumentsMixin:
             self.logger.warning("parse_documents: empty document_ids (dataset_ref=%r)", dataset_ref)
             return False
 
-        payload = self._http.post_json(
-            f"/api/v1/datasets/{dataset_id}/chunks",
-            body={"document_ids": doc_ids},
-        )
-        if not payload:
-            self.logger.error("parse_documents: request failed (dataset_id=%s)", dataset_id)
-            return False
+        raw_timeout_s = getattr(self, "_PARSE_DOCUMENT_READY_TIMEOUT_S", 30.0)
+        raw_poll_interval_s = getattr(self, "_PARSE_DOCUMENT_READY_POLL_INTERVAL_S", 1.0)
+        timeout_s = 30.0 if raw_timeout_s is None else float(raw_timeout_s)
+        poll_interval_s = 1.0 if raw_poll_interval_s is None else float(raw_poll_interval_s)
 
-        code = payload.get("code")
-        if code != 0:
+        if self.client:
+            dataset_name = self._normalize_dataset_name_for_ops(dataset_ref)
+            dataset = self._find_dataset_by_name(dataset_name)
+            if not dataset:
+                self.logger.error("parse_documents: dataset_not_found dataset_ref=%s", dataset_ref)
+                return False
+            return self._parse_documents_via_sdk(
+                dataset,
+                document_ids=doc_ids,
+                timeout_s=timeout_s,
+                poll_interval_s=poll_interval_s,
+            )
+
+        for doc_id in doc_ids:
+            visible = self._wait_for_document_visible_via_http(
+                dataset_id,
+                doc_id,
+                timeout_s=timeout_s,
+                poll_interval_s=poll_interval_s,
+            )
+            if not visible:
+                self.logger.error(
+                    "parse_documents: document_not_visible dataset_id=%s document_id=%s",
+                    dataset_id,
+                    doc_id,
+                )
+                return False
+
+        deadline = time.time() + max(timeout_s, 0.0)
+        while True:
+            payload = self._http.post_json(
+                f"/api/v1/datasets/{dataset_id}/chunks",
+                body={"document_ids": doc_ids},
+            )
+            if not payload:
+                self.logger.error("parse_documents: request failed (dataset_id=%s)", dataset_id)
+                return False
+
+            code = payload.get("code")
+            if code == 0:
+                return True
+            if code == 102 and time.time() < deadline:
+                time.sleep(max(poll_interval_s, 0.0))
+                continue
+
             self.logger.error(
                 "parse_documents: RAGFlow returned error code=%s message=%s dataset_id=%s",
                 code,
@@ -395,8 +568,6 @@ class RagflowDocumentsMixin:
                 dataset_id,
             )
             return False
-
-        return True
 
     def parse_document(self, *, dataset_ref: str, document_id: str) -> bool:
         reload_cfg = getattr(self, "_reload_config_if_changed", None)

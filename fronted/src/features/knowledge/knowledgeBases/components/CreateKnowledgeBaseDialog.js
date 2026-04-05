@@ -88,6 +88,7 @@ export default function CreateKnowledgeBaseDialog({
           <button
             type="button"
             onClick={onClose}
+            data-testid="create-kb-close"
             style={{
               border: '1px solid #d1d5db',
               borderRadius: 8,
@@ -104,6 +105,7 @@ export default function CreateKnowledgeBaseDialog({
           <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '110px 1fr', alignItems: 'center', gap: 10, marginBottom: 10 }}>
             <label>{DIALOG_TEXT.name}</label>
             <input
+              data-testid="create-kb-name-input"
               placeholder={DIALOG_TEXT.namePlaceholder}
               value={createName}
               onChange={(event) => onCreateNameChange && onCreateNameChange(event.target.value)}
@@ -112,21 +114,21 @@ export default function CreateKnowledgeBaseDialog({
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '110px 1fr', alignItems: 'center', gap: 10 }}>
             <label>{DIALOG_TEXT.copyFrom}</label>
-            <select value={createFromId} onChange={(event) => onCreateFromIdChange && onCreateFromIdChange(event.target.value)} style={{ padding: '9px 10px', border: '1px solid #d1d5db', borderRadius: 8, width: '100%', boxSizing: 'border-box' }} disabled={!kbList.length}>
+            <select data-testid="create-kb-copy-select" value={createFromId} onChange={(event) => onCreateFromIdChange && onCreateFromIdChange(event.target.value)} style={{ padding: '9px 10px', border: '1px solid #d1d5db', borderRadius: 8, width: '100%', boxSizing: 'border-box' }} disabled={!kbList.length}>
               {kbList.map((dataset) => <option key={String(dataset?.id || '')} value={String(dataset?.id || '')}>{String(dataset?.name || dataset?.id || '')}</option>)}
             </select>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '110px 1fr', alignItems: 'center', gap: 10, marginTop: 10 }}>
             <label>{DIALOG_TEXT.mountDir}</label>
-            <select value={createDirId} onChange={(event) => onCreateDirIdChange && onCreateDirIdChange(event.target.value)} style={{ padding: '9px 10px', border: '1px solid #d1d5db', borderRadius: 8, width: '100%', boxSizing: 'border-box' }}>
+            <select data-testid="create-kb-dir-select" value={createDirId} onChange={(event) => onCreateDirIdChange && onCreateDirIdChange(event.target.value)} style={{ padding: '9px 10px', border: '1px solid #d1d5db', borderRadius: 8, width: '100%', boxSizing: 'border-box' }}>
               {dirOptions.map((option) => <option key={option.id || '__root__'} value={option.id}>{option.label}</option>)}
             </select>
           </div>
           {createError ? <div style={{ color: '#b91c1c', marginTop: 10 }}>{createError}</div> : null}
         </div>
         <div style={{ padding: '12px 14px', borderTop: '1px solid #e5e7eb', display: 'flex', justifyContent: 'flex-end', gap: 8, flexDirection: isMobile ? 'column' : 'row' }}>
-          <button type="button" onClick={onClose} style={{ border: '1px solid #d1d5db', borderRadius: 8, background: '#fff', cursor: 'pointer', padding: '8px 12px', width: isMobile ? '100%' : 'auto' }}>{DIALOG_TEXT.cancel}</button>
-          <button type="button" onClick={onCreate} disabled={!isAdmin || kbBusy} style={{ border: '1px solid #2563eb', borderRadius: 8, background: kbBusy ? '#93c5fd' : '#2563eb', color: '#fff', cursor: kbBusy ? 'not-allowed' : 'pointer', padding: '8px 12px', width: isMobile ? '100%' : 'auto' }}>{DIALOG_TEXT.create}</button>
+          <button data-testid="create-kb-cancel" type="button" onClick={onClose} style={{ border: '1px solid #d1d5db', borderRadius: 8, background: '#fff', cursor: 'pointer', padding: '8px 12px', width: isMobile ? '100%' : 'auto' }}>{DIALOG_TEXT.cancel}</button>
+          <button data-testid="create-kb-confirm" type="button" onClick={onCreate} disabled={!isAdmin || kbBusy} style={{ border: '1px solid #2563eb', borderRadius: 8, background: kbBusy ? '#93c5fd' : '#2563eb', color: '#fff', cursor: kbBusy ? 'not-allowed' : 'pointer', padding: '8px 12px', width: isMobile ? '100%' : 'auto' }}>{DIALOG_TEXT.create}</button>
         </div>
       </div>
     </div>

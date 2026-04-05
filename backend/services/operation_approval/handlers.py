@@ -42,6 +42,43 @@ def _staging_root() -> Path:
     return root
 
 
+def _dataset_local_document_count(
+    deps: Any,
+    *,
+    dataset_ref: str | None = None,
+    dataset_id: str | None = None,
+    dataset_name: str | None = None,
+) -> int:
+    kb_store = getattr(deps, "kb_store", None)
+    if kb_store is None:
+        return 0
+
+    refs: list[str] = []
+    for candidate in (dataset_ref, dataset_id, dataset_name):
+        clean = str(candidate or "").strip()
+        if clean and clean not in refs:
+            refs.append(clean)
+
+    base_ref = next(
+        (
+            str(candidate).strip()
+            for candidate in (dataset_id, dataset_ref, dataset_name)
+            if str(candidate or "").strip()
+        ),
+        "",
+    )
+    if base_ref:
+        kb_info = resolve_kb_ref(deps, base_ref)
+        for candidate in kb_info.variants:
+            clean = str(candidate or "").strip()
+            if clean and clean not in refs:
+                refs.append(clean)
+
+    if not refs:
+        return 0
+    return int(kb_store.count_documents(kb_refs=refs))
+
+
 class BaseOperationApprovalHandler:
     operation_type: str
 
@@ -69,8 +106,9 @@ class KnowledgeFileUploadApprovalHandler(BaseOperationApprovalHandler):
     async def prepare_request(self, *, request_id: str, ctx: Any, upload_file, kb_ref: str) -> PreparedOperationRequest:
         deps = ctx.deps
         snapshot = ctx.snapshot
+        kb_info = resolve_kb_ref(deps, kb_ref)
         assert_can_upload(snapshot)
-        assert_kb_allowed(snapshot, kb_ref)
+        assert_kb_allowed(snapshot, kb_info.variants)
         content = await upload_file.read()
         display_name, relative_path = KnowledgeIngestionManager._normalize_relative_upload_path(upload_file.filename)
         file_ext = Path(display_name).suffix.lower()
@@ -80,7 +118,6 @@ class KnowledgeFileUploadApprovalHandler(BaseOperationApprovalHandler):
         if file_ext not in allowed_extensions:
             raise HTTPException(status_code=400, detail="unsupported_file_type")
 
-        kb_info = resolve_kb_ref(deps, kb_ref)
         staging_path = _staging_root() / request_id / relative_path
         staging_path.parent.mkdir(parents=True, exist_ok=True)
         staging_path.write_bytes(content)
@@ -297,6 +334,13 @@ class KnowledgeBaseDeleteApprovalHandler(BaseOperationApprovalHandler):
             ) from exc
         dataset_id = str(payload.get("dataset_id") or dataset_ref)
         dataset_name = str(payload.get("dataset_name") or dataset_ref)
+        if _dataset_local_document_count(
+            ctx.deps,
+            dataset_ref=str(dataset_ref or ""),
+            dataset_id=dataset_id,
+            dataset_name=dataset_name,
+        ) > 0:
+            raise HTTPException(status_code=409, detail="dataset_not_empty")
         return PreparedOperationRequest(
             operation_type=self.operation_type,
             target_ref=dataset_id,
@@ -307,9 +351,21 @@ class KnowledgeBaseDeleteApprovalHandler(BaseOperationApprovalHandler):
 
     def execute_request(self, *, request_data: dict, deps: Any, applicant_user: Any) -> dict:
         payload = request_data.get("payload") or {}
-        dataset_ref = str(payload.get("dataset_id") or payload.get("dataset_ref") or "")
+        dataset_id = str(payload.get("dataset_id") or "")
+        dataset_ref = str(payload.get("dataset_ref") or dataset_id or "")
+        dataset_name = str(payload.get("dataset_name") or "")
+        if _dataset_local_document_count(
+            deps,
+            dataset_ref=dataset_ref,
+            dataset_id=dataset_id,
+            dataset_name=dataset_name,
+        ) > 0:
+            raise OperationExecutionError("dataset_not_empty_at_execution", status_code=409)
         try:
-            deps.knowledge_management_manager.delete_dataset(user=applicant_user, dataset_ref=dataset_ref)
+            deps.knowledge_management_manager.delete_dataset(
+                user=applicant_user,
+                dataset_ref=dataset_id or dataset_ref,
+            )
         except ValueError as exc:
             code = str(exc) or "dataset_delete_failed"
             if code == "dataset_not_empty":

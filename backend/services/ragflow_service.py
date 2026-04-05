@@ -151,7 +151,13 @@ class RagflowService(RagflowDatasetsMixin, RagflowDocumentsMixin):
             return None
 
         try:
-            datasets = self.client.list_datasets()
+            get_dataset = getattr(self.client, "get_dataset", None)
+            if callable(get_dataset):
+                dataset = get_dataset(dataset_name)
+                if dataset is not None:
+                    return dataset
+
+            datasets = self.client.list_datasets(page=1, page_size=200, name=dataset_name)
             for dataset in datasets:
                 if hasattr(dataset, "name"):
                     if dataset.name == dataset_name:

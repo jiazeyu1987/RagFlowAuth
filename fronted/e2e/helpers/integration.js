@@ -1,7 +1,7 @@
 // @ts-check
 const { request } = require('@playwright/test');
 
-const FRONTEND_BASE_URL = process.env.E2E_FRONTEND_BASE_URL || 'http://localhost:3000';
+const FRONTEND_BASE_URL = process.env.E2E_FRONTEND_BASE_URL || 'http://localhost:3001';
 const BACKEND_BASE_URL = process.env.E2E_BACKEND_BASE_URL || 'http://localhost:8001';
 const ADMIN_USER = process.env.E2E_ADMIN_USER || 'admin';
 const ADMIN_PASS = process.env.E2E_ADMIN_PASS || 'admin123';

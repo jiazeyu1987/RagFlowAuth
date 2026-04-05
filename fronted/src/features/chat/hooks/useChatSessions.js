@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+
 import { chatApi } from '../api';
 
-const DEFAULT_SESSION_NAMES = ['新会话', '新对话', 'new chat'];
-const HIDDEN_CHAT_NAMES = new Set(['大模型', '小模型', '问题比对']);
+const DEFAULT_SESSION_NAMES = ['\u65b0\u4f1a\u8bdd', '\u65b0\u5bf9\u8bdd', 'new chat'];
+const HIDDEN_CHAT_NAMES = new Set(['\u5927\u6a21\u578b', '\u5c0f\u6a21\u578b', '\u95ee\u9898\u6bd4\u5bf9']);
 
 export const useChatSessions = ({ restoreSourcesIntoMessages }) => {
   const [chats, setChats] = useState([]);
@@ -14,6 +15,8 @@ export const useChatSessions = ({ restoreSourcesIntoMessages }) => {
   const [error, setError] = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState({ show: false, sessionId: null, sessionName: '' });
   const [renameDialog, setRenameDialog] = useState({ show: false, sessionId: null, value: '' });
+  const selectedChatIdRef = useRef(null);
+  const fetchSessionsRequestRef = useRef(0);
 
   const closeDeleteConfirm = useCallback(() => {
     setDeleteConfirm({ show: false, sessionId: null, sessionName: '' });
@@ -56,7 +59,7 @@ export const useChatSessions = ({ restoreSourcesIntoMessages }) => {
         setSelectedChatId(null);
       }
     } catch (err) {
-      setError(err?.message || '加载聊天助手失败');
+      setError(err?.message || '\u52a0\u8f7d\u804a\u5929\u52a9\u624b\u5931\u8d25');
     } finally {
       setLoading(false);
     }
@@ -65,8 +68,14 @@ export const useChatSessions = ({ restoreSourcesIntoMessages }) => {
   const fetchSessions = useCallback(
     async (chatId) => {
       if (!chatId) return;
+      const requestedChatId = String(chatId);
+      const requestId = fetchSessionsRequestRef.current + 1;
+      fetchSessionsRequestRef.current = requestId;
       try {
         const data = await chatApi.listChatSessions(chatId);
+        if (fetchSessionsRequestRef.current !== requestId || String(selectedChatIdRef.current || '') !== requestedChatId) {
+          return;
+        }
         const list = data.sessions || [];
         setSessions(list);
         if (list.length > 0) {
@@ -77,7 +86,10 @@ export const useChatSessions = ({ restoreSourcesIntoMessages }) => {
           setMessages([]);
         }
       } catch (err) {
-        setError(err?.message || '加载会话失败');
+        if (fetchSessionsRequestRef.current !== requestId || String(selectedChatIdRef.current || '') !== requestedChatId) {
+          return;
+        }
+        setError(err?.message || '\u52a0\u8f7d\u4f1a\u8bdd\u5931\u8d25');
       }
     },
     [restoreSourcesIntoMessages]
@@ -88,9 +100,14 @@ export const useChatSessions = ({ restoreSourcesIntoMessages }) => {
   }, [fetchChats]);
 
   useEffect(() => {
+    selectedChatIdRef.current = selectedChatId;
+  }, [selectedChatId]);
+
+  useEffect(() => {
     if (selectedChatId) {
       fetchSessions(selectedChatId);
     } else {
+      fetchSessionsRequestRef.current += 1;
       setSessions([]);
       setSelectedSessionId(null);
       setMessages([]);
@@ -100,13 +117,13 @@ export const useChatSessions = ({ restoreSourcesIntoMessages }) => {
   const createSession = useCallback(async () => {
     if (!selectedChatId) return;
     try {
-      const sessionName = '新对话';
+      const sessionName = '\u65b0\u5bf9\u8bdd';
       const session = await chatApi.createChatSession(selectedChatId, sessionName);
       setSessions((prev) => [session, ...prev]);
       setSelectedSessionId(session.id);
       setMessages(restoreSourcesIntoMessages(selectedChatId, session.id, session.messages || []));
     } catch (err) {
-      setError(err?.message || '新建会话失败');
+      setError(err?.message || '\u65b0\u5efa\u4f1a\u8bdd\u5931\u8d25');
     }
   }, [restoreSourcesIntoMessages, selectedChatId]);
 
@@ -139,7 +156,7 @@ export const useChatSessions = ({ restoreSourcesIntoMessages }) => {
       });
       setDeleteConfirm({ show: false, sessionId: null, sessionName: '' });
     } catch (err) {
-      setError(err?.message || '删除会话失败');
+      setError(err?.message || '\u5220\u9664\u4f1a\u8bdd\u5931\u8d25');
     }
   }, [deleteConfirm.sessionId, restoreSourcesIntoMessages, selectedChatId, selectedSessionId]);
 
@@ -152,7 +169,7 @@ export const useChatSessions = ({ restoreSourcesIntoMessages }) => {
       setSessions((prev) => prev.map((s) => (s.id === renameDialog.sessionId ? { ...s, name: newName } : s)));
       setRenameDialog({ show: false, sessionId: null, value: '' });
     } catch (err) {
-      setError(err?.message || '重命名失败');
+      setError(err?.message || '\u91cd\u547d\u540d\u5931\u8d25');
     }
   }, [renameDialog.sessionId, renameDialog.value, selectedChatId]);
 

@@ -1,0 +1,26 @@
+{
+  "cookies": [],
+  "origins": [
+    {
+      "origin": "http://127.0.0.1:33105",
+      "localStorage": [
+        {
+          "name": "accessToken",
+          "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIwOGUxZDBmZi00YzRmLTRiNzktYWYzZC1hNDk0ZDQzMjRiYzEiLCJqdGkiOiJiODdmYzFjNC1lODRlLTQ4MjQtYWY1ZS00MWZlN2ZjOWExZGYiLCJ0eXBlIjoiYWNjZXNzIiwiZnJlc2giOmZhbHNlLCJjc3JmIjoiIiwiaWF0IjoxNzc1MzY3OTQzLCJleHAiOjE3NzUzNjg4NDMuMDA1Njk1LCJzaWQiOiJiNmIwMjE3NS01ZWNjLTQzMTAtYTc3ZS00N2VkNTkyYzJlZTgiLCJjaWQiOjE5LCJzY29wZXMiOltdfQ.AXsCUJhc94Nb3cNo0-ZObglIa6CFWbyvPEf1QuA_Erk"
+        },
+        {
+          "name": "refreshToken",
+          "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIwOGUxZDBmZi00YzRmLTRiNzktYWYzZC1hNDk0ZDQzMjRiYzEiLCJqdGkiOiJjZGNmYTAyYy04NGNkLTRmNWMtOWU0MS05ZGRmMDlmNmNmNDciLCJ0eXBlIjoicmVmcmVzaCIsImNzcmYiOiIiLCJpYXQiOjE3NzUzNjc5NDMsImV4cCI6MTc3NTk3Mjc0My4wMDU2OTUsInNpZCI6ImI2YjAyMTc1LTVlY2MtNDMxMC1hNzdlLTQ3ZWQ1OTJjMmVlOCIsImNpZCI6MTl9.VjcA0jp6F6RnWSlfyNnYbW4zPQBsZVy8xMl0W8nPX38"
+        },
+        {
+          "name": "user",
+          "value": "{\"user_id\":\"08e1d0ff-4c4f-4b79-af3d-a494d4324bc1\",\"username\":\"e2e_sub_admin\",\"full_name\":\"E2E Sub Admin\",\"email\":\"e2e_sub_admin@example.test\",\"role\":\"sub_admin\",\"status\":\"active\",\"group_id\":9,\"group_ids\":[9],\"permission_groups\":[{\"group_id\":9,\"group_name\":\"e2e_scope_operator\"}],\"scopes\":[],\"permissions\":{\"can_upload\":true,\"can_review\":true,\"can_download\":true,\"can_copy\":true,\"can_delete\":true,\"can_manage_kb_directory\":true,\"can_view_kb_config\":true,\"can_view_tools\":true,\"accessible_tools\":[]},\"max_login_sessions\":3,\"idle_timeout_minutes\":120,\"can_change_password\":true,\"disable_login_enabled\":false,\"disable_login_until_ms\":null,\"managed_kb_root_node_id\":\"c9f5f1e3-7de3-4a6d-89c5-11120be98427\",\"managed_kb_root_path\":\"/RagflowAuth E2E Root\",\"accessible_kbs\":[\"RagflowAuth E2E Dataset\"],\"accessible_kb_ids\":[\"ab37a6c4304d11f1a24e3efb393b44db\"],\"accessible_chats\":[]}"
+        },
+        {
+          "name": "appVersion",
+          "value": "7"
+        }
+      ]
+    }
+  ]
+}

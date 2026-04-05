@@ -4,12 +4,30 @@ const os = require('os');
 const path = require('path');
 
 const FRONTEND_BASE_URL = process.env.E2E_FRONTEND_BASE_URL || 'http://localhost:3001';
+const BACKEND_BASE_URL = process.env.E2E_BACKEND_BASE_URL || 'http://localhost:8001';
+const REPO_ROOT = path.resolve(__dirname, '..');
+const TEST_DB_PATH = process.env.E2E_TEST_DB_PATH || path.join(REPO_ROOT, 'data', 'e2e', 'auth.db');
+const FRONTEND_PORT = new URL(FRONTEND_BASE_URL).port || '3001';
+const BACKEND_PORT = new URL(BACKEND_BASE_URL).port || '8001';
+const FRONTEND_ORIGIN = new URL(FRONTEND_BASE_URL).origin;
+const CORS_ORIGINS = JSON.stringify([
+  ...new Set([
+    'http://localhost:3000',
+    'http://127.0.0.1:3000',
+    'http://localhost:3001',
+    'http://127.0.0.1:3001',
+    FRONTEND_ORIGIN,
+  ]),
+]);
+const BACKEND_HEALTH_URL = new URL('/health', `${BACKEND_BASE_URL.replace(/\/+$/, '')}/`).toString();
 // Some Windows environments deny deleting files under the repo workspace (e.g. `test-results/.last-run.json`),
 // which breaks Playwright. Default to an OS temp output dir to keep E2E runnable everywhere.
 const OUTPUT_DIR = process.env.E2E_OUTPUT_DIR || path.join(os.tmpdir(), 'ragflowauth_playwright');
 
 module.exports = defineConfig({
   testDir: './e2e/tests',
+  // Doc E2E has its own dedicated runner/config and requires a different bootstrap summary.
+  testIgnore: ['**/docs*.spec.js'],
   outputDir: OUTPUT_DIR,
   timeout: 60_000,
   expect: { timeout: 10_000 },
@@ -24,15 +42,37 @@ module.exports = defineConfig({
     video: 'retain-on-failure',
   },
   globalSetup: require.resolve('./e2e/global-setup'),
-  webServer: {
-    command: 'npm run start',
-    url: FRONTEND_BASE_URL,
-    reuseExistingServer: !process.env.CI,
-    timeout: 120_000,
-    env: {
-      BROWSER: 'none',
+  webServer: [
+    {
+      command: 'python -m backend',
+      cwd: REPO_ROOT,
+      url: BACKEND_HEALTH_URL,
+      // Real E2E must boot against the isolated test DB, so reusing an arbitrary
+      // already-running backend would silently break test isolation.
+      reuseExistingServer: false,
+      timeout: 120_000,
+      env: {
+        ...process.env,
+        DATABASE_PATH: TEST_DB_PATH,
+        E2E_TEST_DB_PATH: TEST_DB_PATH,
+        PORT: BACKEND_PORT,
+        CORS_ORIGINS,
+      },
     },
-  },
+    {
+      command: 'npm run start',
+      cwd: __dirname,
+      url: FRONTEND_BASE_URL,
+      reuseExistingServer: false,
+      timeout: 120_000,
+      env: {
+        ...process.env,
+        BROWSER: 'none',
+        PORT: FRONTEND_PORT,
+        REACT_APP_AUTH_URL: BACKEND_BASE_URL,
+      },
+    },
+  ],
   projects: [
     {
       name: 'chromium',

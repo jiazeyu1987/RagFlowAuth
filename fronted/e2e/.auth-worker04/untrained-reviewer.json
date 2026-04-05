@@ -1,0 +1,26 @@
+{
+  "cookies": [],
+  "origins": [
+    {
+      "origin": "http://127.0.0.1:33104",
+      "localStorage": [
+        {
+          "name": "accessToken",
+          "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI1NjNmZmNmNi0zMDg4LTQ4ZjAtODE4MS0xNzI0NTc3ZTE1MWUiLCJqdGkiOiIwMmYwZjA5YS01NzQ5LTQ5MDUtOTcyYS02MmE5ZjRhYzM2NzQiLCJ0eXBlIjoiYWNjZXNzIiwiZnJlc2giOmZhbHNlLCJjc3JmIjoiIiwiaWF0IjoxNzc1MzY3ODA3LCJleHAiOjE3NzUzNjg3MDcuNjY3MTksInNpZCI6IjZjMzYxNGJmLWYwOTMtNGQ1Yy1hMWIwLWY4YTBmYmM0NTJkOSIsImNpZCI6MTksInNjb3BlcyI6W119.irNUtnUIuGsfhaB-ROUreDraSjQxuXbZHmHJQ4eUgW4"
+        },
+        {
+          "name": "refreshToken",
+          "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI1NjNmZmNmNi0zMDg4LTQ4ZjAtODE4MS0xNzI0NTc3ZTE1MWUiLCJqdGkiOiI1Zjk0NWI5NS1hOTA0LTRkNTgtODdjZi01MWYxZDY4MzBhNWQiLCJ0eXBlIjoicmVmcmVzaCIsImNzcmYiOiIiLCJpYXQiOjE3NzUzNjc4MDcsImV4cCI6MTc3NTk3MjYwNy42NjcxOSwic2lkIjoiNmMzNjE0YmYtZjA5My00ZDVjLWExYjAtZjhhMGZiYzQ1MmQ5IiwiY2lkIjoxOX0.fT9ySM4DC0qJDx2RjgKnkaRxXrSzfUesh3U1jKMDkO8"
+        },
+        {
+          "name": "user",
+          "value": "{\"user_id\":\"563ffcf6-3088-48f0-8181-1724577e151e\",\"username\":\"doc_untrained_reviewer\",\"full_name\":\"Doc Untrained Reviewer\",\"email\":\"doc_untrained_reviewer@example.test\",\"role\":\"reviewer\",\"status\":\"active\",\"group_id\":7,\"group_ids\":[7],\"permission_groups\":[{\"group_id\":7,\"group_name\":\"e2e_scope_reviewer\"}],\"scopes\":[],\"permissions\":{\"can_upload\":false,\"can_review\":true,\"can_download\":true,\"can_copy\":false,\"can_delete\":false,\"can_manage_kb_directory\":false,\"can_view_kb_config\":false,\"can_view_tools\":false,\"accessible_tools\":[]},\"max_login_sessions\":3,\"idle_timeout_minutes\":120,\"can_change_password\":true,\"disable_login_enabled\":false,\"disable_login_until_ms\":null,\"managed_kb_root_node_id\":null,\"managed_kb_root_path\":null,\"accessible_kbs\":[\"RagflowAuth E2E Dataset\"],\"accessible_kb_ids\":[\"ab37a6c4304d11f1a24e3efb393b44db\"],\"accessible_chats\":[]}"
+        },
+        {
+          "name": "appVersion",
+          "value": "7"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,26 @@
+{
+  "cookies": [],
+  "origins": [
+    {
+      "origin": "http://127.0.0.1:33102",
+      "localStorage": [
+        {
+          "name": "accessToken",
+          "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI1MWEwNjZmNi01NjIyLTRiZDYtOTg4NC02NDZkZDJjYTBiYWYiLCJqdGkiOiI5NjVmZGU0ZS0zMTcyLTRhNjctYmNhNC04ZTQyMzI1MTg2ZjUiLCJ0eXBlIjoiYWNjZXNzIiwiZnJlc2giOmZhbHNlLCJjc3JmIjoiIiwiaWF0IjoxNzc1MzY3ODA1LCJleHAiOjE3NzUzNjg3MDUuOTY5OTUsInNpZCI6ImJiNGQzMGFjLWVlZWMtNDE1ZS1iNjMyLTUyZjkxZThhZmUyYSIsImNpZCI6MTksInNjb3BlcyI6W119.liyeP4pWYXCNbXcDdpLfZnfAN6Pk4O5hVfYwdRZeVcc"
+        },
+        {
+          "name": "refreshToken",
+          "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI1MWEwNjZmNi01NjIyLTRiZDYtOTg4NC02NDZkZDJjYTBiYWYiLCJqdGkiOiJlN2E1ZWJkYy03YWIzLTQ5YzgtOWQ0Ny1jMzA5Mzg0ZWFkNTUiLCJ0eXBlIjoicmVmcmVzaCIsImNzcmYiOiIiLCJpYXQiOjE3NzUzNjc4MDUsImV4cCI6MTc3NTk3MjYwNS45Njk5NSwic2lkIjoiYmI0ZDMwYWMtZWVlYy00MTVlLWI2MzItNTJmOTFlOGFmZTJhIiwiY2lkIjoxOX0.kcrN20Aj7wbXgqhku0R520AkZBM53JVpias3unIqpvw"
+        },
+        {
+          "name": "user",
+          "value": "{\"user_id\":\"51a066f6-5622-4bd6-9884-646dd2ca0baf\",\"username\":\"e2e_sub_admin\",\"full_name\":\"E2E Sub Admin\",\"email\":\"e2e_sub_admin@example.test\",\"role\":\"sub_admin\",\"status\":\"active\",\"group_id\":9,\"group_ids\":[9],\"permission_groups\":[{\"group_id\":9,\"group_name\":\"e2e_scope_operator\"}],\"scopes\":[],\"permissions\":{\"can_upload\":true,\"can_review\":true,\"can_download\":true,\"can_copy\":true,\"can_delete\":true,\"can_manage_kb_directory\":true,\"can_view_kb_config\":true,\"can_view_tools\":true,\"accessible_tools\":[]},\"max_login_sessions\":3,\"idle_timeout_minutes\":120,\"can_change_password\":true,\"disable_login_enabled\":false,\"disable_login_until_ms\":null,\"managed_kb_root_node_id\":\"5c10dd98-d7d3-4524-8fb3-55a5d3ad918b\",\"managed_kb_root_path\":\"/RagflowAuth E2E Root\",\"accessible_kbs\":[\"RagflowAuth E2E Dataset\"],\"accessible_kb_ids\":[\"ab37a6c4304d11f1a24e3efb393b44db\"],\"accessible_chats\":[]}"
+        },
+        {
+          "name": "appVersion",
+          "value": "7"
+        }
+      ]
+    }
+  ]
+}

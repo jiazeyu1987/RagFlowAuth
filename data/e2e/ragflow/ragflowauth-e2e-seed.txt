@@ -1,0 +1,3 @@
+﻿RagflowAuth E2E seed knowledge base.
+This file exists so the real doc/e2e chat assistant always owns at least one parsed file.
+Keyword: ragflowauth-e2e-seed-anchor.

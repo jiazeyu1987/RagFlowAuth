@@ -70,5 +70,7 @@ export function pathNodes(nodeId, byId) {
 }
 
 export function datasetEmpty(ds) {
-  return Number(ds?.document_count || 0) <= 0 && Number(ds?.chunk_count || 0) <= 0;
+  return Number(ds?.local_document_count || 0) <= 0
+    && Number(ds?.document_count || 0) <= 0
+    && Number(ds?.chunk_count || 0) <= 0;
 }

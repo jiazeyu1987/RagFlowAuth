@@ -1,34 +1,10 @@
 // @ts-check
 const fs = require('node:fs');
 const path = require('node:path');
+const { spawnSync } = require('node:child_process');
 const { request } = require('@playwright/test');
 const { getAppVersionFromFrontend } = require('./helpers/appVersion');
 const { getEnv } = require('./helpers/env');
-
-const E2E_KB_REFS = Array.from(new Set([
-  'KB 1',
-  'KB 2',
-  'ds-a',
-  'ds1',
-  'ds2',
-  'ds_root',
-  'ds_nested',
-  'intlife',
-  'kb-a',
-  'kb-hall',
-  'kb-one',
-  'kb-two',
-  'kb-root',
-  'kb-guidewire',
-  'kb-company-a',
-  'kb-research',
-  'kb1',
-  'kb_1',
-  'kb_2',
-  '展厅',
-  '展厅聊天',
-  '知识库调研',
-])).sort((left, right) => left.localeCompare(right, 'zh-Hans-CN'));
 
 /**
  * Write a Playwright storageState file that includes the localStorage keys expected by the React app.
@@ -56,6 +32,14 @@ async function writeStorageState({ storagePath, frontendBaseURL, appVersion, acc
   await fs.promises.writeFile(storagePath, JSON.stringify(storageState, null, 2), 'utf8');
 }
 
+function resolveAuthDir() {
+  const configured = String(process.env.E2E_AUTH_DIR || '').trim();
+  if (configured) {
+    return path.resolve(configured);
+  }
+  return path.join(__dirname, '.auth');
+}
+
 async function readJsonResponse(resp, fallbackMessage) {
   if (!resp.ok()) {
     const body = await resp.text().catch(() => '');
@@ -76,97 +60,130 @@ async function apiLogin(api, username, password) {
   return { tokens, user };
 }
 
-function authHeaders(accessToken) {
-  return {
-    Authorization: `Bearer ${accessToken}`,
-  };
-}
-
-async function ensurePermissionGroup(api, adminAccessToken, payload) {
-  const listResp = await api.get('/api/permission-groups', {
-    headers: authHeaders(adminAccessToken),
-  });
-  const listData = await readJsonResponse(listResp, 'List permission groups failed');
-  const groups = Array.isArray(listData?.data) ? listData.data : [];
-  const existing = groups.find((group) => group && group.group_name === payload.group_name);
-
-  if (existing?.group_id) {
-    const updateResp = await api.put(`/api/permission-groups/${existing.group_id}`, {
-      headers: authHeaders(adminAccessToken),
-      data: payload,
-    });
-    await readJsonResponse(updateResp, `Update permission group '${payload.group_name}' failed`);
-    return Number(existing.group_id);
+function resolvePythonCommand() {
+  const candidates = [];
+  if (process.env.PYTHON && process.env.PYTHON.trim()) {
+    const configured = process.env.PYTHON.trim();
+    const looksLikePath =
+      path.isAbsolute(configured) || configured.includes('\\') || configured.includes('/');
+    if (!looksLikePath || fs.existsSync(configured)) {
+      candidates.push([configured, []]);
+    }
   }
-
-  const createResp = await api.post('/api/permission-groups', {
-    headers: authHeaders(adminAccessToken),
-    data: payload,
-  });
-  const created = await readJsonResponse(createResp, `Create permission group '${payload.group_name}' failed`);
-  const groupId = Number(created?.data?.group_id || 0);
-  if (!groupId) {
-    throw new Error(`Create permission group '${payload.group_name}' returned no group_id`);
-  }
-  return groupId;
-}
-
-async function findUserByUsername(api, adminAccessToken, username) {
-  const resp = await api.get(`/api/users?limit=500&q=${encodeURIComponent(username)}`, {
-    headers: authHeaders(adminAccessToken),
-  });
-  const users = await readJsonResponse(resp, `List users for ${username} failed`);
-  const list = Array.isArray(users) ? users : [];
-  return list.find((user) => String(user?.username || '').trim() === username) || null;
-}
-
-async function ensureUser(api, adminAccessToken, config) {
-  const {
-    username,
-    password,
-    role,
-    groupIds,
-  } = config;
-
-  let existing = await findUserByUsername(api, adminAccessToken, username);
-
-  if (!existing) {
-    const createResp = await api.post('/api/users', {
-      headers: authHeaders(adminAccessToken),
-      data: {
-        username,
-        password,
-        role,
-        status: 'active',
-        group_ids: groupIds,
-        can_change_password: true,
-        disable_login_enabled: false,
-      },
-    });
-    existing = await readJsonResponse(createResp, `Create user '${username}' failed`);
+  if (process.platform === 'win32') {
+    candidates.push(['python', []]);
+    candidates.push(['py', ['-3']]);
   } else {
-    const updateResp = await api.put(`/api/users/${existing.user_id}`, {
-      headers: authHeaders(adminAccessToken),
-      data: {
-        role,
-        status: 'active',
-        group_ids: groupIds,
-        can_change_password: true,
-        disable_login_enabled: false,
-      },
-    });
-    existing = await readJsonResponse(updateResp, `Update user '${username}' failed`);
+    candidates.push(['python3', []]);
+    candidates.push(['python', []]);
+  }
+  return candidates;
+}
+
+function extractBootstrapJson(stdout) {
+  const lines = String(stdout || '')
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  for (let index = lines.length - 1; index >= 0; index -= 1) {
+    try {
+      return JSON.parse(lines[index]);
+    } catch (error) {
+      // Keep scanning upwards until we find the JSON summary line.
+    }
+  }
+  throw new Error(`Real E2E bootstrap returned invalid JSON: ${String(stdout || '').trim()}`);
+}
+
+function runBootstrap(env) {
+  if (env.skipBootstrap) {
+    return null;
   }
 
-  const resetResp = await api.put(`/api/users/${existing.user_id}/password`, {
-    headers: authHeaders(adminAccessToken),
-    data: {
-      new_password: password,
-    },
-  });
-  await readJsonResponse(resetResp, `Reset password for '${username}' failed`);
+  const repoRoot = path.resolve(__dirname, '..', '..');
+  const scriptPath = path.isAbsolute(env.bootstrapScript)
+    ? env.bootstrapScript
+    : path.join(repoRoot, env.bootstrapScript);
+  if (!fs.existsSync(scriptPath)) {
+    throw new Error(`Real E2E bootstrap script not found: ${scriptPath}`);
+  }
 
-  return apiLogin(api, username, password);
+  const baseArgs = [
+    scriptPath,
+    '--json',
+    '--db-path',
+    env.testDbPath,
+    '--admin-username',
+    env.adminUsername,
+    '--admin-password',
+    env.adminPassword,
+    '--sub-admin-username',
+    env.subAdminUsername,
+    '--sub-admin-password',
+    env.subAdminPassword,
+    '--operator-username',
+    env.operatorUsername,
+    '--operator-password',
+    env.operatorPassword,
+    '--viewer-username',
+    env.viewerUsername,
+    '--viewer-password',
+    env.viewerPassword,
+    '--reviewer-username',
+    env.reviewerUsername,
+    '--reviewer-password',
+    env.reviewerPassword,
+    '--uploader-username',
+    env.uploaderUsername,
+    '--uploader-password',
+    env.uploaderPassword,
+    '--root-name',
+    env.rootName,
+  ];
+  if (env.requireBootstrapRagflow) {
+    baseArgs.push('--require-ragflow');
+  }
+  if (env.orgExcelPath) {
+    baseArgs.push('--org-excel-path', env.orgExcelPath);
+  }
+  if (env.companyName) {
+    baseArgs.push('--company-name', env.companyName);
+  }
+  if (env.datasetName) {
+    baseArgs.push('--dataset-name', env.datasetName);
+  }
+
+  const attemptErrors = [];
+  for (const [command, extraArgs] of resolvePythonCommand()) {
+    const result = spawnSync(command, [...extraArgs, ...baseArgs], {
+      cwd: repoRoot,
+      env: {
+        ...process.env,
+        PYTHONIOENCODING: 'utf-8',
+      },
+      encoding: 'utf8',
+    });
+    if (!result.error && result.status === 0) {
+      const stdout = String(result.stdout || '').trim();
+      if (!stdout) {
+        throw new Error('Real E2E bootstrap returned no JSON summary');
+      }
+      return extractBootstrapJson(stdout);
+    }
+
+    const output = [result.stdout, result.stderr, result.error?.message].filter(Boolean).join('\n').trim();
+    attemptErrors.push({
+      command: [command, ...extraArgs].join(' '),
+      details: output || `exit=${result.status}`,
+    });
+  }
+
+  const errorDetails = attemptErrors
+    .map((item) => `[${item.command}] ${item.details}`)
+    .join(' | ');
+  throw new Error(
+    `Real E2E bootstrap failed. Details: ${errorDetails || 'unknown_error'}`
+  );
 }
 
 module.exports = async () => {
@@ -175,113 +192,52 @@ module.exports = async () => {
     throw new Error(`Unsupported E2E_MODE '${env.mode}'. Mock auth mode has been removed; use E2E_MODE=real.`);
   }
 
+  const bootstrapSummary = runBootstrap(env);
+  if (bootstrapSummary) {
+    await fs.promises.mkdir(path.dirname(env.bootstrapSummaryPath), { recursive: true });
+    await fs.promises.writeFile(env.bootstrapSummaryPath, JSON.stringify(bootstrapSummary, null, 2), 'utf8');
+  }
+  const resolvedUsers = bootstrapSummary?.users || {
+    sub_admin: { username: env.subAdminUsername },
+    operator: { username: env.operatorUsername },
+    viewer: { username: env.viewerUsername },
+    reviewer: { username: env.reviewerUsername },
+    uploader: { username: env.uploaderUsername },
+  };
+
   const appVersion = getAppVersionFromFrontend();
   const api = await request.newContext({ baseURL: env.backendBaseURL });
 
   try {
     const realAdmin = await apiLogin(api, env.adminUsername, env.adminPassword);
+    const subAdmin = await apiLogin(api, resolvedUsers.sub_admin.username, env.subAdminPassword);
+    const operator = await apiLogin(api, resolvedUsers.operator.username, env.operatorPassword);
+    const viewer = await apiLogin(api, resolvedUsers.viewer.username, env.viewerPassword);
+    const reviewer = await apiLogin(api, resolvedUsers.reviewer.username, env.reviewerPassword);
+    const uploader = await apiLogin(api, resolvedUsers.uploader.username, env.uploaderPassword);
 
-    const viewerGroupId = await ensurePermissionGroup(api, realAdmin.tokens.access_token, {
-      group_name: 'viewer',
-      description: 'E2E viewer group',
-      accessible_kbs: E2E_KB_REFS,
-      accessible_chats: [],
-      accessible_tools: [],
-      can_upload: false,
-      can_review: false,
-      can_download: true,
-      can_copy: false,
-      can_delete: false,
-      can_manage_kb_directory: false,
-      can_view_kb_config: true,
-      can_view_tools: true,
-    });
-
-    const reviewerGroupId = await ensurePermissionGroup(api, realAdmin.tokens.access_token, {
-      group_name: 'e2e_reviewer',
-      description: 'E2E reviewer group',
-      accessible_kbs: E2E_KB_REFS,
-      accessible_chats: [],
-      accessible_tools: [],
-      can_upload: false,
-      can_review: true,
-      can_download: true,
-      can_copy: false,
-      can_delete: false,
-      can_manage_kb_directory: false,
-      can_view_kb_config: true,
-      can_view_tools: true,
-    });
-
-    const uploaderGroupId = await ensurePermissionGroup(api, realAdmin.tokens.access_token, {
-      group_name: 'e2e_uploader',
-      description: 'E2E uploader group',
-      accessible_kbs: E2E_KB_REFS,
-      accessible_chats: [],
-      accessible_tools: [],
-      can_upload: true,
-      can_review: false,
-      can_download: true,
-      can_copy: false,
-      can_delete: false,
-      can_manage_kb_directory: false,
-      can_view_kb_config: true,
-      can_view_tools: true,
-    });
-
-    const operatorGroupId = await ensurePermissionGroup(api, realAdmin.tokens.access_token, {
-      group_name: 'e2e_operator',
-      description: 'E2E broad business operator group',
-      accessible_kbs: E2E_KB_REFS,
-      accessible_chats: [],
-      accessible_tools: [],
-      can_upload: true,
-      can_review: true,
-      can_download: true,
-      can_copy: true,
-      can_delete: true,
-      can_manage_kb_directory: true,
-      can_view_kb_config: true,
-      can_view_tools: true,
-    });
-
-    const viewer = await ensureUser(api, realAdmin.tokens.access_token, {
-      username: 'e2e_viewer',
-      password: env.viewerPassword,
-      role: 'viewer',
-      groupIds: [viewerGroupId],
-    });
-
-    const reviewer = await ensureUser(api, realAdmin.tokens.access_token, {
-      username: 'e2e_reviewer',
-      password: env.reviewerPassword,
-      role: 'reviewer',
-      groupIds: [reviewerGroupId],
-    });
-
-    const uploader = await ensureUser(api, realAdmin.tokens.access_token, {
-      username: 'e2e_uploader',
-      password: env.uploaderPassword,
-      role: 'operator',
-      groupIds: [uploaderGroupId],
-    });
-
-    const operator = await ensureUser(api, realAdmin.tokens.access_token, {
-      username: 'e2e_operator',
-      password: env.operatorPassword,
-      role: 'operator',
-      groupIds: [operatorGroupId],
-    });
-
-    const authDir = path.join(__dirname, '.auth');
+    const authDir = resolveAuthDir();
     const states = [
       { filename: 'real-admin.json', session: realAdmin },
       { filename: 'admin.json', session: operator },
       { filename: 'operator.json', session: operator },
+      { filename: 'sub-admin.json', session: subAdmin },
       { filename: 'viewer.json', session: viewer },
       { filename: 'reviewer.json', session: reviewer },
       { filename: 'uploader.json', session: uploader },
     ];
+    if (bootstrapSummary?.users?.company_admin?.username) {
+      const companyAdmin = await apiLogin(api, bootstrapSummary.users.company_admin.username, env.adminPassword);
+      states.push({ filename: 'company-admin.json', session: companyAdmin });
+    }
+    if (bootstrapSummary?.users?.untrained_reviewer?.username) {
+      const untrainedReviewer = await apiLogin(
+        api,
+        bootstrapSummary.users.untrained_reviewer.username,
+        env.adminPassword
+      );
+      states.push({ filename: 'untrained-reviewer.json', session: untrainedReviewer });
+    }
 
     for (const item of states) {
       await writeStorageState({

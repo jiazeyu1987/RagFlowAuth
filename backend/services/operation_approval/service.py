@@ -491,7 +491,7 @@ class OperationApprovalService:
             )
         elif clean_view == "todo":
             items = self._store.list_requests(
-                related_approver_user_id=str(requester_user.user_id),
+                pending_approver_user_id=str(requester_user.user_id),
                 status=clean_status,
                 limit=limit,
             )
@@ -1077,21 +1077,6 @@ class OperationApprovalService:
             )
         except ElectronicSignatureError as exc:
             raise OperationApprovalServiceError(exc.code, status_code=exc.status_code) from exc
-
-        handler = HANDLER_REGISTRY.get(str(request_data["operation_type"]))
-        if handler is None:
-            raise OperationApprovalServiceError("operation_handler_not_configured", status_code=500)
-        try:
-            handler.reject_request(
-                request_data=request_data,
-                deps=self._resolve_execution_deps(request_data=request_data),
-                actor_user=actor_user,
-                notes=notes,
-                signature_id=str(signature.signature_id),
-            )
-        except Exception as exc:
-            code = str(exc) or exc.__class__.__name__
-            raise OperationApprovalServiceError(code, status_code=int(getattr(exc, "status_code", 409) or 409)) from exc
 
         self._store.mark_step_approver_action(
             request_id=request_id,

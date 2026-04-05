@@ -14,6 +14,22 @@ function normalizeChatName(rawName) {
     .trim();
 }
 
+async function selectChatAndWaitForSessions(page, targetChatId) {
+  const targetSessionsResponse = page
+    .waitForResponse(
+      (resp) => resp.url().includes(`/api/chats/${targetChatId}/sessions`) && resp.request().method() === 'GET',
+      { timeout: 15_000 }
+    )
+    .catch(() => null);
+
+  await page.getByTestId(`chat-item-${targetChatId}`).click();
+
+  const sessionsResp = await targetSessionsResponse;
+  if (sessionsResp) {
+    expect(sessionsResp.ok(), `load sessions failed for chat=${targetChatId}`).toBeTruthy();
+  }
+}
+
 test('real flow: smart chat and global search are both available @integration @chat @agents @realdata', async ({ page }) => {
   test.setTimeout(300_000);
 
@@ -71,7 +87,7 @@ test('real flow: smart chat and global search are both available @integration @c
     await page.goto(`${FRONTEND_BASE_URL}/chat`);
     await expect(page.getByTestId('chat-page')).toBeVisible({ timeout: 30_000 });
     await expect(page.getByTestId(`chat-item-${targetChatId}`)).toBeVisible({ timeout: 30_000 });
-    await page.getByTestId(`chat-item-${targetChatId}`).click();
+    await selectChatAndWaitForSessions(page, targetChatId);
 
     const [createSessionResp] = await Promise.all([
       page.waitForResponse(

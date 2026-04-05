@@ -223,7 +223,7 @@ const AuditLogs = () => {
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns: isMobile ? '1fr' : 'repeat(6, minmax(0, 1fr))',
+            gridTemplateColumns: isMobile ? '1fr' : 'repeat(7, minmax(0, 1fr))',
             gap: '10px',
             alignItems: 'end',
           }}
@@ -287,6 +287,21 @@ const AuditLogs = () => {
               style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: 6 }}
               data-testid="audit-filter-username"
             />
+          </div>
+
+          <div>
+            <div style={{ fontSize: '0.85rem', color: '#6b7280', marginBottom: 4 }}>每页条数</div>
+            <select
+              value={String(filters.limit)}
+              onChange={(e) => setFilters((s) => ({ ...s, limit: Number(e.target.value) }))}
+              style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: 6 }}
+              data-testid="audit-filter-limit"
+            >
+              <option value="1">1</option>
+              <option value="20">20</option>
+              <option value="50">50</option>
+              <option value="200">200</option>
+            </select>
           </div>
 
           <div>
@@ -410,7 +425,7 @@ const AuditLogs = () => {
                 </tr>
               )}
               {!loading && rows.map((r) => (
-                <tr key={r.id}>
+                <tr key={r.id} data-testid={`audit-row-${r.id}`}>
                   <td style={tdStyle}>{formatMs(r.created_at_ms)}</td>
                   <td style={tdStyle}>{actionLabel(r.action)}</td>
                   <td style={tdStyle}>{r.full_name || r.username || r.actor}</td>

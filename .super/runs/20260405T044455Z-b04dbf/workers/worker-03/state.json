@@ -1,0 +1,26 @@
+﻿{
+    "worker_id":  "worker-03",
+    "agent_id":  "019d5bfa-f896-7613-ae4e-ca3c9fcc1f15",
+    "status":  "passed",
+    "owned_paths":  [
+                        "fronted/e2e/tests/docs.global-search.spec.js",
+                        "fronted/e2e/tests/docs.chat.spec.js",
+                        "fronted/e2e/tests/docs.role.data-isolation.spec.js",
+                        "fronted/e2e/helpers/searchChatFlow.js",
+                        "fronted/src/pages/Chat.js",
+                        "fronted/src/pages/SearchConfigsPanel.js",
+                        "fronted/src/features/chat",
+                        "backend/app/modules/chat",
+                        "backend/app/modules/agents",
+                        "backend/app/modules/search_configs",
+                        "backend/app/modules/user_chat_permissions",
+                        "doc/e2e/unit/鍏ㄥ簱鎼滅储.md",
+                        "doc/e2e/unit/鏅鸿兘瀵硅瘽.md",
+                        "doc/e2e/role/11_瓒婃潈璁块棶涓庢暟鎹殧绂?md"
+                    ],
+    "current_step":  "Passed full validation contract.",
+    "stuck_count":  0,
+    "updated_at":  "2026-04-05T07:54:48Z",
+    "last_supervisor_action":  "full-contract-validation-passed",
+    "last_validation_result":  "passed(full-contract): VALIDATION.md contract succeeded, including docs.global-search, docs.chat, and docs.role.data-isolation."
+}

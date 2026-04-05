@@ -1,0 +1,70 @@
+{
+  "run_id": "20260404T160817Z-3856c5",
+  "cwd": "D:/ProjectPackage/RagflowAuth",
+  "goal": "根据 doc/e2e 下的文档开发并补齐 Playwright 自动化测试用例，整理为可一键执行的测试入口，并完成必要验证。",
+  "status": "starting",
+  "phase": "initialized",
+  "active_wave": 1,
+  "requested_workers": 8,
+  "validation_contract": {
+    "source_type": "script",
+    "source_path": "fronted/node_modules/.bin/esvalidate.cmd",
+    "commands": [
+      "fronted/node_modules/.bin/esvalidate.cmd"
+    ],
+    "reason": "Validation-like script name: esvalidate.cmd"
+  },
+  "started_at": "2026-04-04T16:08:17Z",
+  "updated_at": "2026-04-04T16:08:17Z",
+  "last_error": "",
+  "workers": [
+    {
+      "worker_id": "worker-01",
+      "path": ".super/runs/20260404T160817Z-3856c5/workers/worker-01",
+      "agent_id": "",
+      "status": "queued"
+    },
+    {
+      "worker_id": "worker-02",
+      "path": ".super/runs/20260404T160817Z-3856c5/workers/worker-02",
+      "agent_id": "",
+      "status": "queued"
+    },
+    {
+      "worker_id": "worker-03",
+      "path": ".super/runs/20260404T160817Z-3856c5/workers/worker-03",
+      "agent_id": "",
+      "status": "queued"
+    },
+    {
+      "worker_id": "worker-04",
+      "path": ".super/runs/20260404T160817Z-3856c5/workers/worker-04",
+      "agent_id": "",
+      "status": "queued"
+    },
+    {
+      "worker_id": "worker-05",
+      "path": ".super/runs/20260404T160817Z-3856c5/workers/worker-05",
+      "agent_id": "",
+      "status": "queued"
+    },
+    {
+      "worker_id": "worker-06",
+      "path": ".super/runs/20260404T160817Z-3856c5/workers/worker-06",
+      "agent_id": "",
+      "status": "queued"
+    },
+    {
+      "worker_id": "worker-07",
+      "path": ".super/runs/20260404T160817Z-3856c5/workers/worker-07",
+      "agent_id": "",
+      "status": "queued"
+    },
+    {
+      "worker_id": "worker-08",
+      "path": ".super/runs/20260404T160817Z-3856c5/workers/worker-08",
+      "agent_id": "",
+      "status": "queued"
+    }
+  ]
+}

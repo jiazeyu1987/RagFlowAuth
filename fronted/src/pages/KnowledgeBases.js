@@ -80,6 +80,10 @@ export default function KnowledgeBases() {
     kbList.forEach((x) => x?.id && m.set(x.id, x));
     return m;
   }, [kbList]);
+  const selectedKb = useMemo(() => {
+    if (!kbSelected?.id) return kbSelected;
+    return { ...(kbById.get(kbSelected.id) || {}), ...kbSelected };
+  }, [kbById, kbSelected]);
   const breadcrumb = useMemo(
     () => [{ id: ROOT, name: '\u6839\u76ee\u5f55' }, ...pathNodes(currentDirId, indexes.byId).map((n) => ({ id: n.id, name: n.name || '(\u672a\u547d\u540d\u76ee\u5f55)' }))],
     [currentDirId, indexes.byId]
@@ -146,9 +150,14 @@ export default function KnowledgeBases() {
     if (!datasetId) return;
     setKbError('');
     try {
-      const ds = await knowledgeApi.getRagflowDataset(datasetId);
+      const [ds, docsRes] = await Promise.all([
+        knowledgeApi.getRagflowDataset(datasetId),
+        knowledgeApi.listLocalDocuments({ kb_id: datasetId, limit: 1 }),
+      ]);
       if (!ds?.id) throw new Error('dataset_not_found');
-      setKbSelected(ds);
+      const localDocumentCount = Number(docsRes?.count);
+      if (!Number.isFinite(localDocumentCount)) throw new Error('local_document_count_invalid');
+      setKbSelected({ ...ds, local_document_count: localDocumentCount });
       setKbNameText(String(ds.name || ''));
       const nodeId = ((directoryTree?.datasets || []).find((x) => x.id === ds.id)?.node_id) || ROOT;
       setDatasetDirId(nodeId);
@@ -183,7 +192,10 @@ export default function KnowledgeBases() {
       const updated = await knowledgeApi.updateRagflowDataset(kbSelected.id, updates);
       if (!updated?.id) throw new Error('\u77e5\u8bc6\u5e93\u66f4\u65b0\u5931\u8d25');
       await knowledgeApi.assignDatasetDirectory(updated.id, datasetDirId || null);
-      setKbSelected(updated);
+      setKbSelected({
+        ...updated,
+        local_document_count: Number(selectedKb?.local_document_count || 0),
+      });
       setKbNameText(String(updated.name || name));
       setKbSaveStatus('\u4fdd\u5b58\u6210\u529f');
       await refreshAll();
@@ -490,19 +502,20 @@ export default function KnowledgeBases() {
                 <div style={{ fontWeight: 700, marginBottom: 8 }}>{'\u77e5\u8bc6\u5e93\u5c5e\u6027'}</div>
                 <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '100px 1fr 130px', gap: 8, alignItems: 'center', marginBottom: 8 }}>
                   <label>{'\u540d\u79f0'}</label>
-                  <input value={kbNameText} onChange={(e) => setKbNameText(e.target.value)} disabled={!canManageDatasets} style={{ border: '1px solid #d1d5db', borderRadius: 8, padding: '8px 10px', background: canManageDatasets ? '#fff' : '#f9fafb' }} />
-                  {canManageDatasets && <button onClick={saveKb} disabled={kbBusy} style={{ border: '1px solid #059669', borderRadius: 8, background: kbBusy ? '#6ee7b7' : '#10b981', color: '#fff', cursor: kbBusy ? 'not-allowed' : 'pointer', padding: '8px 10px', width: isMobile ? '100%' : 'auto' }}>{'\u4fdd\u5b58'}</button>}
+                  <input data-testid="kbs-name-input" value={kbNameText} onChange={(e) => setKbNameText(e.target.value)} disabled={!canManageDatasets} style={{ border: '1px solid #d1d5db', borderRadius: 8, padding: '8px 10px', background: canManageDatasets ? '#fff' : '#f9fafb' }} />
+                  {canManageDatasets && <button data-testid="kbs-save-kb" onClick={saveKb} disabled={kbBusy} style={{ border: '1px solid #059669', borderRadius: 8, background: kbBusy ? '#6ee7b7' : '#10b981', color: '#fff', cursor: kbBusy ? 'not-allowed' : 'pointer', padding: '8px 10px', width: isMobile ? '100%' : 'auto' }}>{'\u4fdd\u5b58'}</button>}
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '100px 1fr 130px', gap: 8, alignItems: 'center' }}>
                   <label>{'\u6302\u8f7d\u76ee\u5f55'}</label>
-                  <select value={datasetDirId} onChange={(e) => setDatasetDirId(e.target.value)} disabled={!canManageDatasets} style={{ border: '1px solid #d1d5db', borderRadius: 8, padding: '8px 10px', background: canManageDatasets ? '#fff' : '#f9fafb' }}>
+                  <select data-testid="kbs-dir-select" value={datasetDirId} onChange={(e) => setDatasetDirId(e.target.value)} disabled={!canManageDatasets} style={{ border: '1px solid #d1d5db', borderRadius: 8, padding: '8px 10px', background: canManageDatasets ? '#fff' : '#f9fafb' }}>
                     {dirOptions.map((o) => <option key={o.id || '__root__'} value={o.id}>{o.label}</option>)}
                   </select>
                   {canManageDatasets && (
                     <button
-                      onClick={() => deleteKb(kbById.get(kbSelected.id))}
-                      disabled={kbBusy || !datasetEmpty(kbById.get(kbSelected.id))}
-                      style={{ border: '1px solid #ef4444', borderRadius: 8, background: kbBusy || !datasetEmpty(kbById.get(kbSelected.id)) ? '#fecaca' : '#ef4444', color: '#fff', cursor: kbBusy || !datasetEmpty(kbById.get(kbSelected.id)) ? 'not-allowed' : 'pointer', padding: '8px 10px', width: isMobile ? '100%' : 'auto' }}
+                      data-testid="kbs-delete-kb"
+                      onClick={() => deleteKb(selectedKb)}
+                      disabled={kbBusy || !datasetEmpty(selectedKb)}
+                      style={{ border: '1px solid #ef4444', borderRadius: 8, background: kbBusy || !datasetEmpty(selectedKb) ? '#fecaca' : '#ef4444', color: '#fff', cursor: kbBusy || !datasetEmpty(selectedKb) ? 'not-allowed' : 'pointer', padding: '8px 10px', width: isMobile ? '100%' : 'auto' }}
                     >
                       {'\u5220\u9664\u77e5\u8bc6\u5e93'}
                     </button>

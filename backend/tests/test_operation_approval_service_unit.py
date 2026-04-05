@@ -5,6 +5,8 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
+from fastapi import HTTPException
+
 from backend.app.core.config import settings
 from backend.app.core.permission_resolver import PermissionSnapshot, ResourceScope
 from backend.database.schema.ensure import ensure_schema
@@ -426,7 +428,16 @@ class TestOperationApprovalServiceUnit(unittest.TestCase):
             notes=notes,
         )
 
-    def _seed_document(self, *, filename: str = "seed.txt", content: bytes = b"seed", ragflow_doc_id: str | None = None):
+    def _seed_document(
+        self,
+        *,
+        filename: str = "seed.txt",
+        content: bytes = b"seed",
+        ragflow_doc_id: str | None = None,
+        kb_id: str = "kb-a",
+        kb_dataset_id: str = "ds-kb-a",
+        kb_name: str = "kb-a",
+    ):
         file_path = Path(self.temp_dir) / filename
         file_path.write_bytes(content)
         doc = self.kb_store.create_document(
@@ -435,9 +446,9 @@ class TestOperationApprovalServiceUnit(unittest.TestCase):
             file_size=file_path.stat().st_size,
             mime_type="text/plain",
             uploaded_by=str(self.editor_user.user_id),
-            kb_id="kb-a",
-            kb_dataset_id="ds-kb-a",
-            kb_name="kb-a",
+            kb_id=kb_id,
+            kb_dataset_id=kb_dataset_id,
+            kb_name=kb_name,
             status="approved",
         )
         if ragflow_doc_id:
@@ -894,6 +905,26 @@ class TestOperationApprovalServiceUnit(unittest.TestCase):
         self.assertEqual(self.ragflow_service.uploaded_documents[0]["kb_id"], "ds-kb-a")
         self.assertEqual(self.ragflow_service.parsed_documents[0]["dataset_ref"], "ds-kb-a")
 
+    def test_upload_request_accepts_dataset_id_when_snapshot_stores_dataset_name_variant(self):
+        self.ragflow_service.add_dataset(dataset_id="ds-kb-a", name="kb-a", document_count=0, chunk_count=0)
+        self._upsert_workflow(
+            "knowledge_file_upload",
+            [{"step_name": "Upload Approval", "approver_user_ids": [self.approver_1.user_id]}],
+        )
+
+        request = asyncio.run(
+            self.service.create_request(
+                operation_type="knowledge_file_upload",
+                ctx=self._ctx(self.editor_user, _snapshot(can_upload=True, kb_names=("kb-a",))),
+                upload_file=_UploadFileStub(filename="variant-id.txt", content=b"variant"),
+                kb_ref="ds-kb-a",
+            )
+        )
+
+        self.assertEqual(request["status"], "in_approval")
+        self.assertEqual(request["target_ref"], "ds-kb-a")
+        self.assertEqual(request["target_label"], "kb-a")
+
     def test_execution_uses_company_scoped_deps_resolver(self):
         control_db_path = os.path.join(str(self.temp_dir), "control_auth.db")
         tenant_db_path = os.path.join(str(self.temp_dir), "tenant_auth.db")
@@ -1087,6 +1118,41 @@ class TestOperationApprovalServiceUnit(unittest.TestCase):
         self.assertEqual(detail["status"], "execution_failed")
         self.assertEqual(detail["last_error"], "dataset_not_empty_at_execution")
         self.assertIn("ds-non-empty", self.ragflow_service.datasets)
+
+    def test_dataset_delete_request_rejected_when_local_documents_already_exist(self):
+        self.ragflow_service.add_dataset(dataset_id="ds-kb-a", name="kb-a", document_count=0, chunk_count=0)
+        self._upsert_workflow(
+            "knowledge_base_delete",
+            [{"step_name": "Delete Approval", "approver_user_ids": [self.approver_1.user_id]}],
+        )
+        self._seed_document(filename="existing-local.txt", content=b"existing local")
+
+        with self.assertRaises(HTTPException) as ctx:
+            self._create_delete_dataset_request("ds-kb-a")
+
+        self.assertEqual(ctx.exception.status_code, 409)
+        self.assertEqual(ctx.exception.detail, "dataset_not_empty")
+
+    def test_dataset_delete_fails_when_local_documents_appear_before_execution(self):
+        self.ragflow_service.add_dataset(dataset_id="ds-local-race", name="kb-local-race", document_count=0, chunk_count=0)
+        self._upsert_workflow(
+            "knowledge_base_delete",
+            [{"step_name": "Delete Approval", "approver_user_ids": [self.approver_1.user_id]}],
+        )
+        request = self._create_delete_dataset_request("ds-local-race")
+        self._seed_document(
+            filename="late-local.txt",
+            content=b"late local",
+            kb_id="kb-local-race",
+            kb_dataset_id="ds-local-race",
+            kb_name="kb-local-race",
+        )
+
+        detail = self._approve(request["request_id"], self.approver_1)
+
+        self.assertEqual(detail["status"], "execution_failed")
+        self.assertEqual(detail["last_error"], "dataset_not_empty_at_execution")
+        self.assertIn("ds-local-race", self.ragflow_service.datasets)
 
     def test_execution_failed_when_target_is_changed_before_execution(self):
         self._upsert_workflow(

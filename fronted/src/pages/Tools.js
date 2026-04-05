@@ -1,9 +1,83 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
+import { httpClient } from '../shared/http/httpClient';
 
 const PAGE_SIZE = 12;
 const MOBILE_BREAKPOINT = 768;
+
+const toolPermissionKey = (tool) => String(tool?.permissionKey || tool?.id || '').trim();
+
+const toProvinceToolId = (name) => (
+  `drug_admin_${String(name || '')
+    .trim()
+    .replace(/[^0-9a-zA-Z\u4e00-\u9fa5]+/g, '_')
+    .replace(/^_+|_+$/g, '') || 'unknown'}`
+);
+
+const baseToolDefinitions = [
+  {
+    id: 'paper_download',
+    name: '论文下载分析',
+    description: '进入论文下载页面：配置关键词、下载源和上限，下载后可加入 [本地论文]。',
+    route: '/tools/paper-download',
+  },
+  {
+    id: 'patent_download',
+    name: '专利下载分析',
+    description: '进入专利下载页面：配置关键词、数据源和上限，下载后可加入 [本地专利]。',
+    route: '/tools/patent-download',
+  },
+  {
+    id: 'package_drawing',
+    name: '包装图纸',
+    description: '按型号查询包装图纸信息，支持通过 Excel 录入型号、条形码、产品参数和示意图。',
+    route: '/tools/package-drawing',
+  },
+  {
+    id: 'nhsa_code_search',
+    name: '医保编码查询工具',
+    description: '打开国家医保服务平台：医保编码查询（新窗口）。',
+    href: 'https://code.nhsa.gov.cn/toSearch.html?sysflag=1004',
+  },
+  {
+    id: 'shanghai_tax',
+    name: '上海电子税务局',
+    description: '打开上海电子税务局登录页面（新窗口）。',
+    href: 'https://tpass.shanghai.chinatax.gov.cn:8443/#/login?response_type=code&client_id=d3f156f230415796834bed5e954ed4de&redirect_uri=https%3A%2F%2Fdppt.shanghai.chinatax.gov.cn%3A8443%2Fszzhzz%2FOauth2HandleServlet%3FcdPath%3DL2RlZGV1Y3Rpb24tdHlwZS1jaGVja2VkLWJ1c2luZXNzP3J1dWlkPTE3Njg1Mzg4ODUyMDUmb2F1dGgyc3RhdGU9N2Q4YTRlZDMzOWQyNGVhMWI3OTNlNzRjNDc5OWZlYzk%3D&state=1039c7dafc8d4ac69dcd1fac61121679&ruuid=1770379445455',
+  },
+  {
+    id: 'drug_admin',
+    name: '药监导航',
+    description: '进入省级与国家药监官网导航页，可进一步查看各地真实入口。',
+    route: '/tools/drug-admin',
+  },
+  {
+    id: 'nmpa',
+    name: 'NMPA',
+    description: '国家药监局器审中心。',
+    route: '/tools/nmpa',
+  },
+];
+
+const buildProvinceTools = (provinces) => (
+  (Array.isArray(provinces) ? provinces : [])
+    .map((province) => {
+      const name = String(province?.name || '').trim();
+      const urls = Array.isArray(province?.urls)
+        ? province.urls.map((url) => String(url || '').trim()).filter(Boolean)
+        : [];
+      if (!name || urls.length === 0) return null;
+      return {
+        id: toProvinceToolId(name),
+        permissionKey: 'drug_admin',
+        name: `${name}药监入口`,
+        description: `打开 ${name} 药监相关官网入口（新窗口）。`,
+        href: urls[0],
+      };
+    })
+    .filter(Boolean)
+);
 
 const ToolCard = ({ id, name, description, onClick, disabled, background, isMobile }) => (
   <button
@@ -75,6 +149,8 @@ const Tools = () => {
   const navigate = useNavigate();
   const { isAdmin, canAccessTool } = useAuth();
   const [page, setPage] = useState(1);
+  const [provinceTools, setProvinceTools] = useState([]);
+  const [provinceError, setProvinceError] = useState('');
   const [isMobile, setIsMobile] = useState(() => {
     if (typeof window === 'undefined') return false;
     return window.innerWidth <= MOBILE_BREAKPOINT;
@@ -88,6 +164,28 @@ const Tools = () => {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
+  useEffect(() => {
+    let active = true;
+
+    const loadProvinceTools = async () => {
+      try {
+        const response = await httpClient.requestJson('/api/drug-admin/provinces');
+        if (!active) return;
+        setProvinceTools(buildProvinceTools(response?.provinces));
+        setProvinceError('');
+      } catch (error) {
+        if (!active) return;
+        setProvinceTools([]);
+        setProvinceError(error?.message || '药监入口加载失败');
+      }
+    };
+
+    loadProvinceTools();
+    return () => {
+      active = false;
+    };
+  }, []);
+
   const tools = useMemo(() => {
     const list = [
       ...(isAdmin()
@@ -98,63 +196,14 @@ const Tools = () => {
             route: '/tools/nas-browser',
           }]
         : []),
-      {
-        id: 'paper_download',
-        name: '论文下载分析',
-        description: '进入论文下载页面：配置关键词、下载源和上限，下载后可加入 [本地论文]。',
-        route: '/tools/paper-download',
-      },
-      {
-        id: 'patent_download',
-        name: '专利下载分析',
-        description: '进入专利下载页面：配置关键词、数据源和上限，下载后可加入 [本地专利]。',
-        route: '/tools/patent-download',
-      },
-      {
-        id: 'package_drawing',
-        name: '包装图纸',
-        description: '按型号查询包装图纸信息，支持通过 Excel 录入型号、条形码、产品参数和示意图。',
-        route: '/tools/package-drawing',
-      },
-      {
-        id: 'nhsa_code_search',
-        name: '医保编码查询工具',
-        description: '打开国家医保服务平台：医保编码查询（新窗口）。',
-        href: 'https://code.nhsa.gov.cn/toSearch.html?sysflag=1004',
-      },
-      {
-        id: 'shanghai_tax',
-        name: '上海电子税务局',
-        description: '打开上海电子税务局登录页面（新窗口）。',
-        href: 'https://tpass.shanghai.chinatax.gov.cn:8443/#/login?response_type=code&client_id=d3f156f230415796834bed5e954ed4de&redirect_uri=https%3A%2F%2Fdppt.shanghai.chinatax.gov.cn%3A8443%2Fszzhzz%2FOauth2HandleServlet%3FcdPath%3DL2RlZGV1Y3Rpb24tdHlwZS1jaGVja2VkLWJ1c2luZXNzP3J1dWlkPTE3Njg1Mzg4ODUyMDUmb2F1dGgyc3RhdGU9N2Q4YTRlZDMzOWQyNGVhMWI3OTNlNzRjNDc5OWZlYzk%3D&state=1039c7dafc8d4ac69dcd1fac61121679&ruuid=1770379445455',
-      },
-      {
-        id: 'drug_admin',
-        name: '药监导航',
-        description: '各省与国家药监局官网入口。',
-        route: '/tools/drug-admin',
-      },
-      {
-        id: 'nmpa',
-        name: 'NMPA',
-        description: '国家药监局器审中心。',
-        route: '/tools/nmpa',
-      },
+      ...baseToolDefinitions,
+      ...provinceTools,
     ];
-
-    for (let i = 4; i <= 48; i += 1) {
-      list.push({
-        id: `tbd_${i}`,
-        name: 'TBD',
-        description: '敬请期待',
-        href: '',
-      });
-    }
     return list;
-  }, [isAdmin]);
+  }, [isAdmin, provinceTools]);
 
   const visibleTools = useMemo(
-    () => tools.filter((tool) => canAccessTool(tool.id)),
+    () => tools.filter((tool) => canAccessTool(toolPermissionKey(tool))),
     [tools, canAccessTool]
   );
 
@@ -164,7 +213,7 @@ const Tools = () => {
   const pageItems = visibleTools.slice(start, start + PAGE_SIZE);
 
   const openTool = (tool) => {
-    if (!canAccessTool(tool.id)) return;
+    if (!canAccessTool(toolPermissionKey(tool))) return;
     if (tool.route) {
       navigate(tool.route);
       return;
@@ -173,11 +222,13 @@ const Tools = () => {
       window.open(tool.href, '_blank', 'noopener,noreferrer');
       return;
     }
-    window.alert('该工具尚未开放（TBD）。');
   };
 
   return (
-    <div style={{ padding: isMobile ? '12px' : '20px', width: '100%', boxSizing: 'border-box' }}>
+    <div
+      style={{ padding: isMobile ? '12px' : '20px', width: '100%', boxSizing: 'border-box' }}
+      data-testid="tools-page"
+    >
       <div
         style={{
           display: 'flex',
@@ -234,7 +285,17 @@ const Tools = () => {
         </div>
       </div>
 
+      {provinceError ? (
+        <div
+          data-testid="tools-error"
+          style={{ marginTop: '12px', padding: '10px 12px', background: '#fef2f2', color: '#991b1b', borderRadius: '10px' }}
+        >
+          {provinceError}
+        </div>
+      ) : null}
+
       <div
+        data-testid="tools-grid"
         style={{
           marginTop: '16px',
           display: 'grid',
@@ -243,7 +304,12 @@ const Tools = () => {
         }}
       >
         {!pageItems.length ? (
-          <div style={{ gridColumn: '1 / -1', color: '#6b7280', padding: 8 }}>暂无可访问的实用工具</div>
+          <div
+            data-testid="tools-empty-state"
+            style={{ gridColumn: '1 / -1', color: '#6b7280', padding: 8 }}
+          >
+            暂无可访问的实用工具
+          </div>
         ) : null}
         {pageItems.map((tool, idx) => (
           <ToolCard

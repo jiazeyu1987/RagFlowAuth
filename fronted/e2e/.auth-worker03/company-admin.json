@@ -1,0 +1,26 @@
+{
+  "cookies": [],
+  "origins": [
+    {
+      "origin": "http://127.0.0.1:33103",
+      "localStorage": [
+        {
+          "name": "accessToken",
+          "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJlZGI3ZTFiMC0wY2JhLTQzMDgtYmFiYi03OGNhZWRhMzZiZGEiLCJqdGkiOiIyNWZlN2E3Zi1iZTBlLTQ1NmUtOTc5Ni0wNWFjODllNTU4M2MiLCJ0eXBlIjoiYWNjZXNzIiwiZnJlc2giOmZhbHNlLCJjc3JmIjoiIiwiaWF0IjoxNzc1MzY3ODY5LCJleHAiOjE3NzUzNjg3NjkuMDA3MDA3LCJzaWQiOiJiMzAwN2VkMi1lMGZmLTQ2YjctOTVhOS02MWU1N2Q3NmJkMjQiLCJjaWQiOjE5LCJzY29wZXMiOltdfQ.ZkRROcnEkDzMh3cL3Qf2dLSL47GKxmiY-FHvy0JdRmk"
+        },
+        {
+          "name": "refreshToken",
+          "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJlZGI3ZTFiMC0wY2JhLTQzMDgtYmFiYi03OGNhZWRhMzZiZGEiLCJqdGkiOiJkZTkzYjUxZi1hMTU2LTRmZGYtYTkzOC04YjFlYzA2NTUzMDgiLCJ0eXBlIjoicmVmcmVzaCIsImNzcmYiOiIiLCJpYXQiOjE3NzUzNjc4NjksImV4cCI6MTc3NTk3MjY2OS4wMDU5ODEsInNpZCI6ImIzMDA3ZWQyLWUwZmYtNDZiNy05NWE5LTYxZTU3ZDc2YmQyNCIsImNpZCI6MTl9.wwsOSC5csXMTNqlvaaaS_vZjdfdb0hqohsWWNZIN93g"
+        },
+        {
+          "name": "user",
+          "value": "{\"user_id\":\"edb7e1b0-0cba-4308-babb-78caeda36bda\",\"username\":\"doc_company_admin\",\"full_name\":\"Doc Company Admin\",\"email\":\"doc_company_admin@example.test\",\"role\":\"admin\",\"status\":\"active\",\"group_id\":4,\"group_ids\":[4],\"permission_groups\":[{\"group_id\":4,\"group_name\":\"viewer\"}],\"scopes\":[],\"permissions\":{\"can_upload\":true,\"can_review\":true,\"can_download\":true,\"can_copy\":true,\"can_delete\":true,\"can_manage_kb_directory\":true,\"can_view_kb_config\":true,\"can_view_tools\":true,\"accessible_tools\":[]},\"max_login_sessions\":3,\"idle_timeout_minutes\":120,\"can_change_password\":true,\"disable_login_enabled\":false,\"disable_login_until_ms\":null,\"managed_kb_root_node_id\":null,\"managed_kb_root_path\":\"/\",\"accessible_kbs\":[\"ICE\",\"RagflowAuth E2E Dataset\",\"doc_kbs_empty_1775362137348\",\"doc_kbs_empty_1775362761987\",\"doc_kbs_primary_1775359915377\",\"doc_kbs_saved_1775361118931\",\"doc_kbs_saved_1775362137348\",\"doc_kbs_saved_1775362405824\",\"doc_kbs_saved_1775362761987\",\"doc_role_iso_kb_a_1775366141103\",\"doc_role_iso_kb_a_1775366331059\",\"doc_role_iso_kb_a_1775366512008\",\"doc_role_iso_kb_b_1775366141103\",\"doc_role_iso_kb_b_1775366331059\",\"doc_role_iso_kb_b_1775366512008\",\"doc_scope_kb_a_1775358917677\",\"doc_scope_kb_a_1775359929598\",\"doc_scope_kb_a_1775361374516\",\"doc_scope_kb_a_1775362143997\",\"doc_scope_kb_a_1775362472755\",\"doc_scope_kb_a_1775362786208\",\"doc_scope_kb_b_1775358917677\",\"doc_scope_kb_b_1775359929598\",\"doc_scope_kb_b_1775361374516\",\"doc_scope_kb_b_1775362143997\",\"doc_scope_kb_b_1775362472755\",\"doc_scope_kb_b_1775362786208\",\"本地论文\",\"财务知识库\",\"超声\"],\"accessible_kb_ids\":[\"07e8e72830a011f1a24e3efb393b44db\",\"08044f9030a011f1a24e3efb393b44db\",\"2c467f6830a511f1a24e3efb393b44db\",\"2e1d512c30a511f1a24e3efb393b44db\",\"2fc758c430a511f1a24e3efb393b44db\",\"2fe6999630a511f1a24e3efb393b44db\",\"5bb0909a30af11f1a24e3efb393b44db\",\"5bdb538e30af11f1a24e3efb393b44db\",\"6546653230a311f1a24e3efb393b44db\",\"6562cf9230a311f1a24e3efb393b44db\",\"7e4ced7a30ae11f1a24e3efb393b44db\",\"7e6ccbfe30ae11f1a24e3efb393b44db\",\"a087f0d630a611f1a24e3efb393b44db\",\"a35036fc30a611f1a24e3efb393b44db\",\"ab37a6c4304d11f1a24e3efb393b44db\",\"accbcec0309d11f1a24e3efb393b44db\",\"ace9b4ee309d11f1a24e3efb393b44db\",\"aeb5409630a611f1a24e3efb393b44db\",\"aed6ed1830a611f1a24e3efb393b44db\",\"bc49f900160611f18d9f8eb0c0711940\",\"c226121c146911f18d9f8eb0c0711940\",\"cc5d770430a511f1a24e3efb393b44db\",\"cd3c0d8c30a211f1a24e3efb393b44db\",\"ef8cbace30ae11f1a24e3efb393b44db\",\"efade1b830ae11f1a24e3efb393b44db\",\"eff7f16e2fd111f1a24e3efb393b44db\",\"f3e2144c30a511f1a24e3efb393b44db\",\"f4010e4c30a511f1a24e3efb393b44db\",\"ffbcd21c309f11f1a24e3efb393b44db\",\"ffce75402fd111f1a24e3efb393b44db\"],\"accessible_chats\":[\"agent_30947214d8b711f0ad1fa2b134471365\",\"agent_47df2ef4f1d611f0a1b58ad3d6bffbd9\",\"agent_5ca99a9ed4d111f0933cc228c577fa54\",\"chat_0ca6c2b616e811f18d9f8eb0c0711940\",\"chat_1d59195613e111f18d9f8eb0c0711940\",\"chat_1ed98b1e122c11f18d9f8eb0c0711940\",\"chat_45011b8c30b211f1a24e3efb393b44db\",\"chat_857b45b613c511f18d9f8eb0c0711940\",\"chat_9c1d52ec2fda11f1a24e3efb393b44db\",\"chat_a4f582f2229911f1939e56b52442c578\",\"chat_af6d6cc42fda11f1a24e3efb393b44db\",\"chat_c0ef3680123411f18d9f8eb0c0711940\",\"chat_f400d7941f6411f1981982f54b2151db\"]}"
+        },
+        {
+          "name": "appVersion",
+          "value": "7"
+        }
+      ]
+    }
+  ]
+}
