@@ -28,27 +28,15 @@ describe('knowledgeApi', () => {
     jest.clearAllMocks();
   });
 
-  it('unwraps list endpoints to stable arrays', async () => {
-    httpClient.requestJson
-      .mockResolvedValueOnce({ datasets: [{ id: 'ds-1' }] })
-      .mockResolvedValueOnce({ configs: [{ id: 'cfg-1' }] });
+  it('unwraps the dataset list to a stable array', async () => {
+    httpClient.requestJson.mockResolvedValue({ datasets: [{ id: 'ds-1' }] });
 
     await expect(knowledgeApi.listRagflowDatasets()).resolves.toEqual([{ id: 'ds-1' }]);
-    await expect(knowledgeApi.listSearchConfigs()).resolves.toEqual([{ id: 'cfg-1' }]);
   });
 
-  it('fails fast when list payloads do not match the backend contract', async () => {
-    httpClient.requestJson
-      .mockResolvedValueOnce({ data: [] })
-      .mockResolvedValueOnce({ data: { configs: [] } });
+  it('fails fast when the dataset list payload does not match the backend contract', async () => {
+    httpClient.requestJson.mockResolvedValue({ data: [] });
 
     await expect(knowledgeApi.listRagflowDatasets()).rejects.toThrow('ragflow_dataset_list_invalid_payload');
-    await expect(knowledgeApi.listSearchConfigs()).rejects.toThrow('search_config_list_invalid_payload');
-  });
-
-  it('requires ok=true on search config delete operations', async () => {
-    httpClient.requestJson.mockResolvedValue({ ok: false, detail: 'config_not_found' });
-
-    await expect(knowledgeApi.deleteSearchConfig('cfg-1')).rejects.toThrow('config_not_found');
   });
 });

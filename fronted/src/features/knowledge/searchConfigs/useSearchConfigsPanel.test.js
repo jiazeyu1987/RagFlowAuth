@@ -1,18 +1,18 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import useSearchConfigsPanel from './useSearchConfigsPanel';
-import { knowledgeApi } from '../api';
+import { searchConfigsApi } from './api';
 
 jest.mock('../../../hooks/useAuth', () => ({
   useAuth: jest.fn(),
 }));
 
-jest.mock('../api', () => ({
-  knowledgeApi: {
-    listSearchConfigs: jest.fn(),
-    getSearchConfig: jest.fn(),
-    updateSearchConfig: jest.fn(),
-    deleteSearchConfig: jest.fn(),
-    createSearchConfig: jest.fn(),
+jest.mock('./api', () => ({
+  searchConfigsApi: {
+    listConfigs: jest.fn(),
+    getConfig: jest.fn(),
+    updateConfig: jest.fn(),
+    deleteConfig: jest.fn(),
+    createConfig: jest.fn(),
   },
 }));
 
@@ -24,18 +24,18 @@ describe('useSearchConfigsPanel', () => {
     useAuth.mockReturnValue({
       user: { role: 'admin' },
     });
-    knowledgeApi.listSearchConfigs.mockResolvedValue([{ id: 'cfg-1', name: 'Config A' }]);
-    knowledgeApi.getSearchConfig.mockResolvedValue({
+    searchConfigsApi.listConfigs.mockResolvedValue([{ id: 'cfg-1', name: 'Config A' }]);
+    searchConfigsApi.getConfig.mockResolvedValue({
       id: 'cfg-1',
       name: 'Config A',
       config: { enabled: true },
     });
-    knowledgeApi.updateSearchConfig.mockResolvedValue({
+    searchConfigsApi.updateConfig.mockResolvedValue({
       id: 'cfg-1',
       name: 'Config B',
       config: { enabled: false },
     });
-    knowledgeApi.createSearchConfig.mockResolvedValue({
+    searchConfigsApi.createConfig.mockResolvedValue({
       id: 'cfg-2',
       name: 'Config C',
       config: { mode: 'copy' },
@@ -46,8 +46,8 @@ describe('useSearchConfigsPanel', () => {
     const { result } = renderHook(() => useSearchConfigsPanel());
 
     await waitFor(() => {
-      expect(knowledgeApi.listSearchConfigs).toHaveBeenCalled();
-      expect(knowledgeApi.getSearchConfig).toHaveBeenCalledWith('cfg-1');
+      expect(searchConfigsApi.listConfigs).toHaveBeenCalled();
+      expect(searchConfigsApi.getConfig).toHaveBeenCalledWith('cfg-1');
       expect(result.current.list).toEqual([{ id: 'cfg-1', name: 'Config A' }]);
       expect(result.current.selected).toEqual(
         expect.objectContaining({
@@ -74,7 +74,7 @@ describe('useSearchConfigsPanel', () => {
       await result.current.save();
     });
 
-    expect(knowledgeApi.updateSearchConfig).toHaveBeenCalledWith('cfg-1', {
+    expect(searchConfigsApi.updateConfig).toHaveBeenCalledWith('cfg-1', {
       name: 'Config B',
       config: { enabled: false },
     });

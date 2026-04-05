@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../../../hooks/useAuth';
-import { knowledgeApi } from '../api';
+import { searchConfigsApi } from './api';
 import { parseJson, prettyJson } from './utils';
 
 export default function useSearchConfigsPanel() {
@@ -41,7 +41,7 @@ export default function useSearchConfigsPanel() {
     setError('');
     setLoading(true);
     try {
-      const configs = await knowledgeApi.listSearchConfigs();
+      const configs = await searchConfigsApi.listConfigs();
       setList(configs);
     } catch (requestError) {
       setList([]);
@@ -57,7 +57,7 @@ export default function useSearchConfigsPanel() {
     setSaveStatus('');
     setDetailLoading(true);
     try {
-      const config = await knowledgeApi.getSearchConfig(configId);
+      const config = await searchConfigsApi.getConfig(configId);
       if (!config || !config.id) throw new Error('config_not_found');
       setSelected(config);
       setNameText(String(config?.name || ''));
@@ -97,7 +97,7 @@ export default function useSearchConfigsPanel() {
 
     setBusy(true);
     try {
-      const updated = await knowledgeApi.updateSearchConfig(selected.id, {
+      const updated = await searchConfigsApi.updateConfig(selected.id, {
         name,
         config: parsed.value,
       });
@@ -120,7 +120,7 @@ export default function useSearchConfigsPanel() {
       if (!window.confirm(`确定删除搜索配置：${item.name || item.id}?`)) return;
       setBusy(true);
       try {
-        await knowledgeApi.deleteSearchConfig(item.id);
+        await searchConfigsApi.deleteConfig(item.id);
         if (selected?.id === item.id) setSelected(null);
         await fetchList();
       } catch (requestError) {
@@ -149,7 +149,7 @@ export default function useSearchConfigsPanel() {
     if (!sourceId) return;
     setCreateError('');
     try {
-      const source = await knowledgeApi.getSearchConfig(sourceId);
+      const source = await searchConfigsApi.getConfig(sourceId);
       if (!source || !source.id) throw new Error('source_config_not_found');
       setCreateJsonText(prettyJson(source?.config || {}));
     } catch (requestError) {
@@ -176,7 +176,7 @@ export default function useSearchConfigsPanel() {
 
     setBusy(true);
     try {
-      const created = await knowledgeApi.createSearchConfig({
+      const created = await searchConfigsApi.createConfig({
         name,
         config: parsed.value,
       });

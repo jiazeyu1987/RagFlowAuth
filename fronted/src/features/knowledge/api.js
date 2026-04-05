@@ -2,22 +2,11 @@ import { authBackendUrl } from '../../config/backend';
 import { DOCUMENT_SOURCE, documentsApi } from '../documents/api';
 import { httpClient } from '../../shared/http/httpClient';
 
-function assertOkResponse(response, action) {
-  if (response?.ok !== true) {
-    const detail = String(response?.detail || response?.error || '').trim();
-    throw new Error(detail || `${action}_failed`);
-  }
-}
-
 function unwrapEnvelope(res) {
   if (!res || typeof res !== 'object') return res;
   if (res.dataset && typeof res.dataset === 'object') return res.dataset;
-  if (res.chat && typeof res.chat === 'object') return res.chat;
-  if (res.config && typeof res.config === 'object') return res.config;
   if (res.data && typeof res.data === 'object') {
     if (res.data.dataset && typeof res.data.dataset === 'object') return res.data.dataset;
-    if (res.data.chat && typeof res.data.chat === 'object') return res.data.chat;
-    if (res.data.config && typeof res.data.config === 'object') return res.data.config;
   }
   return res;
 }
@@ -110,44 +99,6 @@ export const knowledgeApi = {
         body: JSON.stringify({ node_id: nodeId || null }),
       }
     );
-  },
-
-  async listSearchConfigs() {
-    const response = await httpClient.requestJson(authBackendUrl('/api/search/configs'), { method: 'GET' });
-    if (!Array.isArray(response?.configs)) {
-      throw new Error('search_config_list_invalid_payload');
-    }
-    return response.configs;
-  },
-
-  async getSearchConfig(configId) {
-    const res = await httpClient.requestJson(authBackendUrl(`/api/search/configs/${encodeURIComponent(configId)}`), {
-      method: 'GET',
-    });
-    return unwrapEnvelope(res);
-  },
-
-  async createSearchConfig(payload) {
-    const res = await httpClient.requestJson(authBackendUrl('/api/search/configs'), {
-      method: 'POST',
-      body: JSON.stringify(payload || {}),
-    });
-    return unwrapEnvelope(res);
-  },
-
-  async updateSearchConfig(configId, updates) {
-    const res = await httpClient.requestJson(authBackendUrl(`/api/search/configs/${encodeURIComponent(configId)}`), {
-      method: 'PUT',
-      body: JSON.stringify(updates || {}),
-    });
-    return unwrapEnvelope(res);
-  },
-
-  async deleteSearchConfig(configId) {
-    const response = await httpClient.requestJson(authBackendUrl(`/api/search/configs/${encodeURIComponent(configId)}`), {
-      method: 'DELETE',
-    });
-    assertOkResponse(response, 'search_config_delete');
   },
 
   listLocalDocuments(params = {}) {
