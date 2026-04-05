@@ -2,13 +2,13 @@ import React from 'react';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import DocumentAudit from './DocumentAudit';
-import { knowledgeApi } from '../features/knowledge/api';
+import { auditApi } from '../features/audit/api';
 import { usersApi } from '../features/users/api';
 import { useAuth } from '../hooks/useAuth';
 
-jest.mock('../features/knowledge/api', () => ({
+jest.mock('../features/audit/api', () => ({
   __esModule: true,
-  knowledgeApi: {
+  auditApi: {
     listDocuments: jest.fn(),
     listDeletions: jest.fn(),
     listDownloads: jest.fn(),
@@ -41,7 +41,7 @@ describe('DocumentAudit', () => {
       { user_id: 'u-1', username: 'alice', full_name: 'Alice' },
       { user_id: 'u-2', username: 'bob', full_name: 'Bob' },
     ]);
-    knowledgeApi.listDocuments.mockResolvedValue([
+    auditApi.listDocuments.mockResolvedValue([
       {
         doc_id: 'doc-1',
         kb_id: 'KB-1',
@@ -53,9 +53,9 @@ describe('DocumentAudit', () => {
         reviewed_at_ms: 1712206800000,
       },
     ]);
-    knowledgeApi.listDeletions.mockResolvedValue([]);
-    knowledgeApi.listDownloads.mockResolvedValue([]);
-    knowledgeApi.listDocumentVersions.mockResolvedValue({
+    auditApi.listDeletions.mockResolvedValue([]);
+    auditApi.listDownloads.mockResolvedValue([]);
+    auditApi.listDocumentVersions.mockResolvedValue({
       versions: [
         {
           doc_id: 'doc-1-v2',
@@ -81,14 +81,14 @@ describe('DocumentAudit', () => {
 
     expect(await screen.findByTestId('audit-doc-row-doc-1')).toBeInTheDocument();
     expect(usersApi.items).toHaveBeenCalledWith({ limit: 2000 });
-    expect(knowledgeApi.listDocuments).toHaveBeenCalledWith({ limit: 2000 });
-    expect(knowledgeApi.listDeletions).toHaveBeenCalledWith({ limit: 2000 });
-    expect(knowledgeApi.listDownloads).toHaveBeenCalledWith({ limit: 2000 });
+    expect(auditApi.listDocuments).toHaveBeenCalledWith({ limit: 2000 });
+    expect(auditApi.listDeletions).toHaveBeenCalledWith({ limit: 2000 });
+    expect(auditApi.listDownloads).toHaveBeenCalledWith({ limit: 2000 });
 
     await user.click(screen.getByTestId('audit-doc-versions-doc-1'));
 
     await waitFor(() => {
-      expect(knowledgeApi.listDocumentVersions).toHaveBeenCalledWith('doc-1');
+      expect(auditApi.listDocumentVersions).toHaveBeenCalledWith('doc-1');
     });
     expect(await screen.findByTestId('audit-version-row-doc-1-v2')).toBeInTheDocument();
   });

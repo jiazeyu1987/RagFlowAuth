@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { knowledgeApi } from '../features/knowledge/api';
+import { auditApi } from '../features/audit/api';
 import { usersApi } from '../features/users/api';
 import { useAuth } from '../hooks/useAuth';
 
@@ -142,9 +142,9 @@ const DocumentAudit = ({ embedded = false }) => {
       try {
         const [usersResp, docsResp, deletionsResp, downloadsResp] = await Promise.all([
           usersApi.items({ limit: 2000 }).catch(() => []),
-          knowledgeApi.listDocuments({ limit: 2000 }).catch(() => []),
-          knowledgeApi.listDeletions({ limit: 2000 }).catch(() => []),
-          knowledgeApi.listDownloads({ limit: 2000 }).catch(() => []),
+          auditApi.listDocuments({ limit: 2000 }).catch(() => []),
+          auditApi.listDeletions({ limit: 2000 }).catch(() => []),
+          auditApi.listDownloads({ limit: 2000 }).catch(() => []),
         ]);
 
         const docs = Array.isArray(docsResp) ? docsResp : [];
@@ -217,7 +217,7 @@ const DocumentAudit = ({ embedded = false }) => {
       logicalDocId: '',
     });
     try {
-      const payload = await knowledgeApi.listDocumentVersions(doc.doc_id);
+      const payload = await auditApi.listDocumentVersions(doc.doc_id);
       setVersionsDialog({
         open: true,
         loading: false,
