@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useAuth } from '../../../hooks/useAuth';
-import documentClient, { DOCUMENT_SOURCE } from '../../../shared/documents/documentClient';
+import { DOCUMENT_SOURCE, documentsApi } from '../../documents/api';
 import { knowledgeApi } from '../api';
 import { ROOT, TEXT } from './constants';
 import { buildDatasetsWithFolders, buildIndexes, pathNodes } from './treeUtils';
@@ -331,7 +331,7 @@ export default function useDocumentBrowserPage() {
     const doc = documents[datasetName]?.find((item) => item.id === docId);
     try {
       setActionLoading((previous) => ({ ...previous, [`${docId}-download`]: true }));
-      await documentClient.downloadToBrowser({
+      await documentsApi.downloadToBrowser({
         source: DOCUMENT_SOURCE.RAGFLOW,
         docId,
         datasetName,
@@ -348,7 +348,7 @@ export default function useDocumentBrowserPage() {
     if (!window.confirm(TEXT.deleteConfirm)) return;
     try {
       setActionLoading((previous) => ({ ...previous, [`${docId}-delete`]: true }));
-      await documentClient.delete({
+      await documentsApi.deleteDocument({
         source: DOCUMENT_SOURCE.RAGFLOW,
         docId,
         datasetName,
@@ -476,7 +476,7 @@ export default function useDocumentBrowserPage() {
 
     try {
       setActionLoading((previous) => ({ ...previous, 'batch-download': true }));
-      await documentClient.batchDownloadRagflowToBrowser(items);
+      await documentsApi.batchDownloadRagflowToBrowser(items);
       clearAllSelections();
     } catch (requestError) {
       setError(requestError?.message || TEXT.batchFail);

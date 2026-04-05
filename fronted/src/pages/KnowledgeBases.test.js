@@ -14,6 +14,7 @@ jest.mock('../features/knowledge/api', () => ({
   knowledgeApi: {
     listRagflowDatasets: jest.fn(),
     listKnowledgeDirectories: jest.fn(),
+    listLocalDocuments: jest.fn(),
     getRagflowDataset: jest.fn(),
     updateRagflowDataset: jest.fn(),
     assignDatasetDirectory: jest.fn(),
@@ -54,6 +55,7 @@ describe('KnowledgeBases', () => {
       nodes: [],
       datasets: [{ id: 'ds-existing', name: 'Existing KB', node_id: null }],
     });
+    knowledgeApi.listLocalDocuments.mockResolvedValue({ count: 0, documents: [] });
     knowledgeApi.getRagflowDataset.mockResolvedValue(dataset);
     knowledgeApi.updateRagflowDataset.mockResolvedValue(dataset);
     knowledgeApi.assignDatasetDirectory.mockResolvedValue({});

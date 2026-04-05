@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import documentClient, { DOCUMENT_SOURCE } from '../shared/documents/documentClient';
+import { DOCUMENT_SOURCE, documentsApi } from '../features/documents/api';
 import { useAuth } from '../hooks/useAuth';
 import { agentsApi } from '../features/agents/api';
 import { ensureTablePreviewStyles } from '../shared/preview/tablePreviewStyles';
@@ -220,7 +220,7 @@ const Agents = () => {
         setError(null);
         const dataset = datasets.find((item) => item.id === datasetId);
         const datasetName = dataset ? dataset.name || dataset.id : '知识库';
-        await documentClient.downloadToBrowser({
+        await documentsApi.downloadToBrowser({
           source: DOCUMENT_SOURCE.RAGFLOW,
           docId,
           datasetName,

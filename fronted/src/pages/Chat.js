@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ensureTablePreviewStyles } from '../shared/preview/tablePreviewStyles';
 import { useEscapeClose } from '../shared/hooks/useEscapeClose';
-import documentClient, { DOCUMENT_SOURCE } from '../shared/documents/documentClient';
+import { DOCUMENT_SOURCE, documentsApi } from '../features/documents/api';
 import { useAuth } from '../hooks/useAuth';
 import { DocumentPreviewModal } from '../shared/documents/preview/DocumentPreviewModal';
 import ChatSidebar from '../features/chat/components/ChatSidebar';
@@ -148,7 +148,7 @@ const Chat = () => {
       const source = normalizeSource(rawSource);
       if (!source.docId || !source.dataset) return;
       if (!canDownloadFiles) throw new Error('no_download_permission');
-      await documentClient.downloadToBrowser({
+      await documentsApi.downloadToBrowser({
         source: DOCUMENT_SOURCE.RAGFLOW,
         docId: source.docId,
         datasetName: source.dataset,

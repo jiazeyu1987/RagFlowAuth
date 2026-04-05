@@ -3,16 +3,17 @@ import { MemoryRouter } from 'react-router-dom';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import useDocumentBrowserPage from './useDocumentBrowserPage';
 import { knowledgeApi } from '../api';
+import { documentsApi } from '../../documents/api';
 
 jest.mock('../../../hooks/useAuth', () => ({
   useAuth: jest.fn(),
 }));
 
-jest.mock('../../../shared/documents/documentClient', () => ({
+jest.mock('../../documents/api', () => ({
   __esModule: true,
-  default: {
+  documentsApi: {
     downloadToBrowser: jest.fn(),
-    delete: jest.fn(),
+    deleteDocument: jest.fn(),
     batchDownloadRagflowToBrowser: jest.fn(),
   },
   DOCUMENT_SOURCE: {
@@ -105,5 +106,25 @@ describe('useDocumentBrowserPage', () => {
       'KB-2',
       'copy'
     );
+  });
+
+  it('routes batch downloads through the documents feature API', async () => {
+    const { result } = renderHook(() => useDocumentBrowserPage(), { wrapper });
+
+    await waitFor(() => {
+      expect(knowledgeApi.listRagflowDocuments).toHaveBeenCalledWith('KB-1');
+    });
+
+    act(() => {
+      result.current.handleSelectDoc('doc-1', 'KB-1');
+    });
+
+    await act(async () => {
+      await result.current.handleBatchDownload();
+    });
+
+    expect(documentsApi.batchDownloadRagflowToBrowser).toHaveBeenCalledWith([
+      { doc_id: 'doc-1', dataset: 'KB-1', name: 'Doc 1' },
+    ]);
   });
 });

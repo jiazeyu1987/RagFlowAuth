@@ -1,5 +1,5 @@
 import paperDownloadApi from './api';
-import { DOCUMENT_SOURCE } from '../../shared/documents/documentClient';
+import { DOCUMENT_SOURCE } from '../documents/api';
 import { httpClient } from '../../shared/http/httpClient';
 
 jest.mock('../../config/backend', () => ({

@@ -1,5 +1,5 @@
 import { authBackendUrl } from '../../config/backend';
-import documentClient, { DOCUMENT_SOURCE } from '../../shared/documents/documentClient';
+import { DOCUMENT_SOURCE, documentsApi } from '../documents/api';
 import { httpClient } from '../../shared/http/httpClient';
 
 function unwrapEnvelope(res) {
@@ -224,19 +224,19 @@ export const knowledgeApi = {
     });
   },
   uploadDocument(file, kbId = '展厅') {
-    return documentClient.uploadKnowledge(file, kbId);
+    return documentsApi.uploadKnowledge(file, kbId);
   },
 
   deleteLocalDocument(docId) {
-    return documentClient.delete({ source: DOCUMENT_SOURCE.KNOWLEDGE, docId });
+    return documentsApi.deleteDocument({ source: DOCUMENT_SOURCE.KNOWLEDGE, docId });
   },
 
   async downloadLocalDocument(docId) {
-    return documentClient.downloadToBrowser({ source: DOCUMENT_SOURCE.KNOWLEDGE, docId });
+    return documentsApi.downloadToBrowser({ source: DOCUMENT_SOURCE.KNOWLEDGE, docId });
   },
 
   async batchDownloadLocalDocuments(docIds) {
-    return documentClient.batchDownloadKnowledgeToBrowser(docIds);
+    return documentsApi.batchDownloadKnowledgeToBrowser(docIds);
   },
 
   transferRagflowDocument(docId, sourceDatasetName, targetDatasetName, operation = 'copy') {
