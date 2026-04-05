@@ -2,12 +2,20 @@ import { authBackendUrl } from '../../config/backend';
 import { httpClient } from '../../shared/http/httpClient';
 
 export const chatApi = {
-  listMyChats() {
-    return httpClient.requestJson(authBackendUrl('/api/chats/my'), { method: 'GET' });
+  async listMyChats() {
+    const response = await httpClient.requestJson(authBackendUrl('/api/chats/my'), { method: 'GET' });
+    if (!Array.isArray(response?.chats)) {
+      throw new Error('chat_my_list_invalid_payload');
+    }
+    return response.chats;
   },
 
-  listChatSessions(chatId) {
-    return httpClient.requestJson(authBackendUrl(`/api/chats/${chatId}/sessions`), { method: 'GET' });
+  async listChatSessions(chatId) {
+    const response = await httpClient.requestJson(authBackendUrl(`/api/chats/${chatId}/sessions`), { method: 'GET' });
+    if (!Array.isArray(response?.sessions)) {
+      throw new Error('chat_session_list_invalid_payload');
+    }
+    return response.sessions;
   },
 
   createChatSession(chatId, name = '新会话') {

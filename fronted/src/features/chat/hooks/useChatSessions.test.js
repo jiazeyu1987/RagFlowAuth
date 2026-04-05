@@ -26,8 +26,9 @@ function deferred() {
 }
 
 function HookHarness() {
+  const restoreSourcesIntoMessages = React.useCallback((chatId, sessionId, messages) => messages, []);
   const hook = useChatSessions({
-    restoreSourcesIntoMessages: (chatId, sessionId, messages) => messages,
+    restoreSourcesIntoMessages,
   });
 
   return (
@@ -52,16 +53,14 @@ describe('useChatSessions', () => {
     const firstChatSessions = deferred();
     const secondChatSessions = deferred();
 
-    chatApi.listMyChats.mockResolvedValue({
-      chats: [
-        { id: 'chat-a', name: 'Chat A' },
-        { id: 'chat-b', name: 'Chat B' },
-      ],
-    });
+    chatApi.listMyChats.mockResolvedValue([
+      { id: 'chat-a', name: 'Chat A' },
+      { id: 'chat-b', name: 'Chat B' },
+    ]);
     chatApi.listChatSessions.mockImplementation((chatId) => {
       if (chatId === 'chat-a') return firstChatSessions.promise;
       if (chatId === 'chat-b') return secondChatSessions.promise;
-      return Promise.resolve({ sessions: [] });
+      return Promise.resolve([]);
     });
 
     render(<HookHarness />);
@@ -75,9 +74,7 @@ describe('useChatSessions', () => {
     await waitFor(() => expect(chatApi.listChatSessions).toHaveBeenCalledWith('chat-b'));
 
     await act(async () => {
-      secondChatSessions.resolve({
-        sessions: [{ id: 'session-b', name: 'Session B', messages: [] }],
-      });
+      secondChatSessions.resolve([{ id: 'session-b', name: 'Session B', messages: [] }]);
       await secondChatSessions.promise;
     });
 
@@ -85,7 +82,7 @@ describe('useChatSessions', () => {
     expect(screen.getByTestId('session-count')).toHaveTextContent('1');
 
     await act(async () => {
-      firstChatSessions.resolve({ sessions: [] });
+      firstChatSessions.resolve([]);
       await firstChatSessions.promise;
     });
 

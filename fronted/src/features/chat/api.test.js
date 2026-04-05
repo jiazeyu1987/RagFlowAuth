@@ -17,6 +17,24 @@ describe('chatApi', () => {
     jest.clearAllMocks();
   });
 
+  it('unwraps chat and session list endpoints to stable arrays', async () => {
+    httpClient.requestJson
+      .mockResolvedValueOnce({ chats: [{ id: 'chat-1' }] })
+      .mockResolvedValueOnce({ sessions: [{ id: 'session-1' }] });
+
+    await expect(chatApi.listMyChats()).resolves.toEqual([{ id: 'chat-1' }]);
+    await expect(chatApi.listChatSessions('chat-1')).resolves.toEqual([{ id: 'session-1' }]);
+  });
+
+  it('fails fast when chat list payloads do not match the backend contract', async () => {
+    httpClient.requestJson
+      .mockResolvedValueOnce({ data: [] })
+      .mockResolvedValueOnce({ data: [] });
+
+    await expect(chatApi.listMyChats()).rejects.toThrow('chat_my_list_invalid_payload');
+    await expect(chatApi.listChatSessions('chat-1')).rejects.toThrow('chat_session_list_invalid_payload');
+  });
+
   it('sends streaming completion requests through the shared http client', async () => {
     const response = { ok: true };
     httpClient.request.mockResolvedValue(response);

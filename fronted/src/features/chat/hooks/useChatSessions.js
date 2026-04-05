@@ -46,8 +46,8 @@ export const useChatSessions = ({ restoreSourcesIntoMessages }) => {
   const fetchChats = useCallback(async () => {
     try {
       setLoading(true);
-      const data = await chatApi.listMyChats();
-      const list = (data.chats || []).filter((chat) => {
+      const chats = await chatApi.listMyChats();
+      const list = chats.filter((chat) => {
         const rawName = String(chat?.name || '').trim();
         const normalized = rawName.replace(/^\[|\]$/g, '').trim();
         return !HIDDEN_CHAT_NAMES.has(rawName) && !HIDDEN_CHAT_NAMES.has(normalized);
@@ -72,11 +72,10 @@ export const useChatSessions = ({ restoreSourcesIntoMessages }) => {
       const requestId = fetchSessionsRequestRef.current + 1;
       fetchSessionsRequestRef.current = requestId;
       try {
-        const data = await chatApi.listChatSessions(chatId);
+        const list = await chatApi.listChatSessions(chatId);
         if (fetchSessionsRequestRef.current !== requestId || String(selectedChatIdRef.current || '') !== requestedChatId) {
           return;
         }
-        const list = data.sessions || [];
         setSessions(list);
         if (list.length > 0) {
           setSelectedSessionId(list[0].id);
@@ -196,8 +195,7 @@ export const useChatSessions = ({ restoreSourcesIntoMessages }) => {
   const refreshCurrentSessionMessages = useCallback(async () => {
     if (!selectedChatId || !selectedSessionId) return false;
     try {
-      const data = await chatApi.listChatSessions(selectedChatId);
-      const list = data.sessions || [];
+      const list = await chatApi.listChatSessions(selectedChatId);
       setSessions(list);
 
       const matched = list.find((s) => s.id === selectedSessionId);
