@@ -26,16 +26,6 @@ export const knowledgeApi = {
     return response.datasets;
   },
 
-  async listRagflowDocuments(datasetName = '灞曞巺') {
-    const query = new URLSearchParams({
-      dataset_name: String(datasetName || ''),
-    }).toString();
-    const response = await httpClient.requestJson(authBackendUrl(`/api/ragflow/documents?${query}`), {
-      method: 'GET',
-    });
-    return Array.isArray(response?.documents) ? response.documents : [];
-  },
-
   async getRagflowDataset(datasetRef) {
     const res = await httpClient.requestJson(authBackendUrl(`/api/datasets/${encodeURIComponent(datasetRef)}`), {
       method: 'GET',
@@ -120,7 +110,8 @@ export const knowledgeApi = {
       }),
     });
   },
-  uploadDocument(file, kbId = '展厅') {
+
+  uploadDocument(file, kbId = '灞曞巺') {
     return documentsApi.uploadKnowledge(file, kbId);
   },
 
@@ -134,20 +125,6 @@ export const knowledgeApi = {
 
   async batchDownloadLocalDocuments(docIds) {
     return documentsApi.batchDownloadKnowledgeToBrowser(docIds);
-  },
-
-  transferRagflowDocument(docId, sourceDatasetName, targetDatasetName, operation = 'copy') {
-    return httpClient.requestJson(
-      authBackendUrl(`/api/ragflow/documents/${encodeURIComponent(docId)}/transfer`),
-      {
-        method: 'POST',
-        body: JSON.stringify({
-          source_dataset_name: sourceDatasetName,
-          target_dataset_name: targetDatasetName,
-          operation,
-        }),
-      }
-    );
   },
 };
 

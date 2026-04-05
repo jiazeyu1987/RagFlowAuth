@@ -2,6 +2,7 @@ import React from 'react';
 import { MemoryRouter } from 'react-router-dom';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import useDocumentBrowserPage from './useDocumentBrowserPage';
+import { documentBrowserApi } from './api';
 import { knowledgeApi } from '../api';
 import { documentsApi } from '../../documents/api';
 
@@ -22,13 +23,19 @@ jest.mock('../../documents/api', () => ({
   },
 }));
 
+jest.mock('./api', () => ({
+  __esModule: true,
+  documentBrowserApi: {
+    listDocuments: jest.fn(),
+    transferDocument: jest.fn(),
+  },
+}));
+
 jest.mock('../api', () => ({
   __esModule: true,
   knowledgeApi: {
     listRagflowDatasets: jest.fn(),
     listKnowledgeDirectories: jest.fn(),
-    listRagflowDocuments: jest.fn(),
-    transferRagflowDocument: jest.fn(),
   },
 }));
 
@@ -61,21 +68,21 @@ describe('useDocumentBrowserPage', () => {
       nodes: [],
       datasets: [],
     });
-    knowledgeApi.listRagflowDocuments.mockImplementation(async (datasetName) => {
+    documentBrowserApi.listDocuments.mockImplementation(async (datasetName) => {
       if (datasetName === 'KB-1') {
         return [{ id: 'doc-1', name: 'Doc 1' }];
       }
       return [];
     });
-    knowledgeApi.transferRagflowDocument.mockResolvedValue({ success: true });
+    documentBrowserApi.transferDocument.mockResolvedValue({ success: true });
   });
 
-  it('loads datasets/documents and transfers through knowledgeApi', async () => {
+  it('loads datasets/documents and transfers through the document browser API', async () => {
     const { result } = renderHook(() => useDocumentBrowserPage(), { wrapper });
 
     await waitFor(() => {
       expect(knowledgeApi.listRagflowDatasets).toHaveBeenCalled();
-      expect(knowledgeApi.listRagflowDocuments).toHaveBeenCalledWith('KB-1');
+      expect(documentBrowserApi.listDocuments).toHaveBeenCalledWith('KB-1');
       expect(result.current.datasetsWithFolders).toHaveLength(2);
     });
 
@@ -98,7 +105,7 @@ describe('useDocumentBrowserPage', () => {
       await result.current.handleTransferConfirm();
     });
 
-    expect(knowledgeApi.transferRagflowDocument).toHaveBeenCalledWith(
+    expect(documentBrowserApi.transferDocument).toHaveBeenCalledWith(
       'doc-1',
       'KB-1',
       'KB-2',
@@ -110,7 +117,7 @@ describe('useDocumentBrowserPage', () => {
     const { result } = renderHook(() => useDocumentBrowserPage(), { wrapper });
 
     await waitFor(() => {
-      expect(knowledgeApi.listRagflowDocuments).toHaveBeenCalledWith('KB-1');
+      expect(documentBrowserApi.listDocuments).toHaveBeenCalledWith('KB-1');
     });
 
     act(() => {

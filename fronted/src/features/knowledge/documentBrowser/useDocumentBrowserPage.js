@@ -3,6 +3,7 @@ import { useLocation } from 'react-router-dom';
 import { useAuth } from '../../../hooks/useAuth';
 import { DOCUMENT_SOURCE, documentsApi } from '../../documents/api';
 import { knowledgeApi } from '../api';
+import { documentBrowserApi } from './api';
 import { ROOT, TEXT } from './constants';
 import { buildDatasetsWithFolders, buildIndexes, pathNodes } from './treeUtils';
 
@@ -211,7 +212,7 @@ export default function useDocumentBrowserPage() {
         delete next[datasetName];
         return next;
       });
-      const items = await knowledgeApi.listRagflowDocuments(datasetName);
+      const items = await documentBrowserApi.listDocuments(datasetName);
       setDocuments((previous) => ({ ...previous, [datasetName]: items }));
     } catch (requestError) {
       setDocumentErrors((previous) => ({
@@ -526,7 +527,7 @@ export default function useDocumentBrowserPage() {
     async ({ docId, sourceDatasetName, targetDatasetName, operation }) => {
       try {
         setActionLoading((previous) => ({ ...previous, [`${docId}-${operation}`]: true }));
-        await knowledgeApi.transferRagflowDocument(
+        await documentBrowserApi.transferDocument(
           docId,
           sourceDatasetName,
           targetDatasetName,
@@ -584,7 +585,7 @@ export default function useDocumentBrowserPage() {
         progress.current = `${item.source_dataset_name} / ${item.doc_id}`;
         setBatchTransferProgress({ ...progress });
         try {
-          await knowledgeApi.transferRagflowDocument(
+          await documentBrowserApi.transferDocument(
             item.doc_id,
             item.source_dataset_name,
             item.target_dataset_name,
