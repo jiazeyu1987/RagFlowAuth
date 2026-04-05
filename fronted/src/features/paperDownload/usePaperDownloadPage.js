@@ -1,6 +1,6 @@
 import { isSessionActive } from '../download/downloadPageUtils';
 import useDownloadPageController from '../download/useDownloadPageController';
-import paperDownloadManager from './PaperDownloadManager';
+import paperDownloadApi from './api';
 import {
   DEFAULT_PAPER_SOURCES,
   PAPER_LAST_CONFIG_KEY,
@@ -10,7 +10,7 @@ import {
 
 export default function usePaperDownloadPage() {
   return useDownloadPageController({
-    manager: paperDownloadManager,
+    manager: paperDownloadApi,
     storageKey: PAPER_LAST_CONFIG_KEY,
     localKbRef: PAPER_LOCAL_KB_REF,
     defaultSources: DEFAULT_PAPER_SOURCES,

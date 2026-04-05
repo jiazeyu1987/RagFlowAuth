@@ -4,7 +4,7 @@ import {
   isSessionActive,
 } from '../download/downloadPageUtils';
 import useDownloadPageController from '../download/useDownloadPageController';
-import patentDownloadManager from './PatentDownloadManager';
+import patentDownloadApi from './api';
 import {
   buildPatentFrontendLogs,
   DEFAULT_PATENT_SOURCES,
@@ -17,12 +17,12 @@ import {
 export default function usePatentDownloadPage() {
   const normalizePatentHistoryKeywords = useCallback(
     async (rawList) =>
-      enrichPatentHistoryKeywords(rawList, patentDownloadManager, isDownloadedItem),
+      enrichPatentHistoryKeywords(rawList, patentDownloadApi, isDownloadedItem),
     []
   );
 
   const controller = useDownloadPageController({
-    manager: patentDownloadManager,
+    manager: patentDownloadApi,
     storageKey: PATENT_LAST_CONFIG_KEY,
     localKbRef: PATENT_LOCAL_KB_REF,
     defaultSources: DEFAULT_PATENT_SOURCES,

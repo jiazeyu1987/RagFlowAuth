@@ -71,26 +71,6 @@ export const authApiMethods = {
     return response.json();
   },
 
-  async changePassword(oldPassword, newPassword) {
-    const response = await this.fetchWithAuth(authBackendUrl('/api/auth/password'), {
-      method: 'PUT',
-      body: JSON.stringify({ old_password: oldPassword, new_password: newPassword }),
-    });
-
-    if (!response.ok) {
-      let errorMessage = 'Failed to change password';
-      try {
-        const data = await response.json();
-        if (data?.detail) errorMessage = data.detail;
-      } catch {
-        // ignore
-      }
-      throw new Error(errorMessage);
-    }
-
-    return response.json();
-  },
-
   async requestSignatureChallenge(password) {
     return httpClient.requestJson(authBackendUrl('/api/electronic-signatures/challenge'), {
       method: 'POST',

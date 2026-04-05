@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import authClient from '../api/authClient';
+import meApi from '../features/me/api';
 import { useAuth } from '../hooks/useAuth';
 
 const MOBILE_BREAKPOINT = 768;
@@ -72,7 +72,7 @@ const ChangePassword = () => {
 
     try {
       setSubmitting(true);
-      await authClient.changePassword(oldPassword, newPassword);
+      await meApi.changePassword(oldPassword, newPassword);
       setMessage('密码修改成功');
       setOldPassword('');
       setNewPassword('');
