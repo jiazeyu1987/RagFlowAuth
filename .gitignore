@@ -85,6 +85,9 @@ data/backup_tmp/
 data/backups_test/
 data/db_recovery_*/
 
+# Retired backend-local runtime directory
+/backend/data/
+
 # E2E runtime copies and snapshots
 data/e2e/bootstrap_probe_auth.db
 data/e2e/worker*/

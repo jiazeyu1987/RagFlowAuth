@@ -1,7 +1,7 @@
 # Real Data E2E (RAGFlow)
 
 ## Scope
-- `@realdata` tests validate real backend/data paths for:
+- `@realdata` tests validate real managed `data/` paths for:
   - Smart chat (`/chat`)
   - Global search (`/agents`)
 
