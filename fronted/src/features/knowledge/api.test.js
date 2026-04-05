@@ -31,31 +31,24 @@ describe('knowledgeApi', () => {
   it('unwraps list endpoints to stable arrays', async () => {
     httpClient.requestJson
       .mockResolvedValueOnce({ datasets: [{ id: 'ds-1' }] })
-      .mockResolvedValueOnce({ chats: [{ id: 'chat-1' }] })
       .mockResolvedValueOnce({ configs: [{ id: 'cfg-1' }] });
 
     await expect(knowledgeApi.listRagflowDatasets()).resolves.toEqual([{ id: 'ds-1' }]);
-    await expect(knowledgeApi.listRagflowChats({ page_size: 1000 })).resolves.toEqual([{ id: 'chat-1' }]);
     await expect(knowledgeApi.listSearchConfigs()).resolves.toEqual([{ id: 'cfg-1' }]);
   });
 
   it('fails fast when list payloads do not match the backend contract', async () => {
     httpClient.requestJson
       .mockResolvedValueOnce({ data: [] })
-      .mockResolvedValueOnce({ data: [] })
       .mockResolvedValueOnce({ data: { configs: [] } });
 
     await expect(knowledgeApi.listRagflowDatasets()).rejects.toThrow('ragflow_dataset_list_invalid_payload');
-    await expect(knowledgeApi.listRagflowChats()).rejects.toThrow('ragflow_chat_list_invalid_payload');
     await expect(knowledgeApi.listSearchConfigs()).rejects.toThrow('search_config_list_invalid_payload');
   });
 
-  it('requires ok=true on delete operations', async () => {
-    httpClient.requestJson
-      .mockResolvedValueOnce({ ok: true })
-      .mockResolvedValueOnce({ ok: false, detail: 'config_not_found' });
+  it('requires ok=true on search config delete operations', async () => {
+    httpClient.requestJson.mockResolvedValue({ ok: false, detail: 'config_not_found' });
 
-    await expect(knowledgeApi.deleteRagflowChat('chat-1')).resolves.toBeUndefined();
     await expect(knowledgeApi.deleteSearchConfig('cfg-1')).rejects.toThrow('config_not_found');
   });
 });

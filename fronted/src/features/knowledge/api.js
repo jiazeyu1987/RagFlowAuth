@@ -112,52 +112,6 @@ export const knowledgeApi = {
     );
   },
 
-  async listRagflowChats(params = {}) {
-    const query = new URLSearchParams(params).toString();
-    const path = query ? `/api/chats?${query}` : '/api/chats';
-    const response = await httpClient.requestJson(authBackendUrl(path), { method: 'GET' });
-    if (!Array.isArray(response?.chats)) {
-      throw new Error('ragflow_chat_list_invalid_payload');
-    }
-    return response.chats;
-  },
-
-  async getRagflowChat(chatId) {
-    const res = await httpClient.requestJson(authBackendUrl(`/api/chats/${encodeURIComponent(chatId)}`), { method: 'GET' });
-    return unwrapEnvelope(res);
-  },
-
-  async createRagflowChat(payload) {
-    const res = await httpClient.requestJson(authBackendUrl('/api/chats'), {
-      method: 'POST',
-      body: JSON.stringify(payload || {}),
-    });
-    return unwrapEnvelope(res);
-  },
-
-  async updateRagflowChat(chatId, updates) {
-    const res = await httpClient.requestJson(authBackendUrl(`/api/chats/${encodeURIComponent(chatId)}`), {
-      method: 'PUT',
-      body: JSON.stringify(updates || {}),
-    });
-    return unwrapEnvelope(res);
-  },
-
-  async deleteRagflowChat(chatId) {
-    const response = await httpClient.requestJson(authBackendUrl(`/api/chats/${encodeURIComponent(chatId)}`), {
-      method: 'DELETE',
-    });
-    assertOkResponse(response, 'ragflow_chat_delete');
-  },
-
-  async clearRagflowChatParsedFiles(chatId) {
-    const response = await httpClient.requestJson(authBackendUrl(`/api/chats/${encodeURIComponent(chatId)}/clear-parsed-files`), {
-      method: 'POST',
-      body: JSON.stringify({}),
-    });
-    return unwrapEnvelope(response);
-  },
-
   async listSearchConfigs() {
     const response = await httpClient.requestJson(authBackendUrl('/api/search/configs'), { method: 'GET' });
     if (!Array.isArray(response?.configs)) {

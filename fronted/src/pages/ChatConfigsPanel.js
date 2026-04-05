@@ -10,6 +10,7 @@ import {
   prettyJson,
   sanitizeChatPayload,
 } from '../features/chat/configs/chatConfigUtils';
+import { chatConfigsApi } from '../features/chat/configs/api';
 import { knowledgeApi } from '../features/knowledge/api';
 import { useAuth } from '../hooks/useAuth';
 
@@ -83,7 +84,7 @@ export function ChatConfigsPanel() {
     setChatError('');
     setChatLoading(true);
     try {
-      const chats = await knowledgeApi.listRagflowChats({ page_size: 1000 });
+      const chats = await chatConfigsApi.listChats({ page_size: 1000 });
       const visibleChats = chats.filter((chat) => {
         const rawName = String(chat?.name || '').trim();
         const normalized = rawName.replace(/^\[|\]$/g, '').trim();
@@ -119,7 +120,7 @@ export function ChatConfigsPanel() {
     setChatLocked(null);
     setChatDetailLoading(true);
     try {
-      const chat = await knowledgeApi.getRagflowChat(chatId);
+      const chat = await chatConfigsApi.getChat(chatId);
       if (!chat || !chat.id) throw new Error('chat_not_found');
       setChatSelected(chat);
       setChatNameText(String(chat?.name || ''));
@@ -190,7 +191,7 @@ export function ChatConfigsPanel() {
     const updates = sanitizeChatPayload({ ...parsed.value, name });
     setBusy(true);
     try {
-      const updated = await knowledgeApi.updateRagflowChat(chatSelected.id, updates);
+      const updated = await chatConfigsApi.updateChat(chatSelected.id, updates);
       if (!updated || !updated.id) throw new Error('保存成功，但未返回最新配置');
 
       setChatSelected(updated);
@@ -200,7 +201,7 @@ export function ChatConfigsPanel() {
       await fetchChatList();
 
       try {
-        const fresh = await knowledgeApi.getRagflowChat(chatSelected.id);
+        const fresh = await chatConfigsApi.getChat(chatSelected.id);
         if (fresh && fresh.id) {
           setChatSelected(fresh);
           setChatNameText(String(fresh?.name || name));
@@ -235,7 +236,7 @@ export function ChatConfigsPanel() {
     setChatSaveStatus('');
     setBusy(true);
     try {
-      const updated = await knowledgeApi.updateRagflowChat(chatSelected.id, { name });
+      const updated = await chatConfigsApi.updateChat(chatSelected.id, { name });
       if (!updated || !updated.id) throw new Error('保存成功，但未返回最新配置');
       setChatSelected(updated);
       setChatNameText(String(updated?.name || name));
@@ -257,7 +258,7 @@ export function ChatConfigsPanel() {
 
     setBusy(true);
     try {
-      const created = await knowledgeApi.createRagflowChat({ ...chatLocked.desiredPayload, name });
+      const created = await chatConfigsApi.createChat({ ...chatLocked.desiredPayload, name });
       if (!created || !created.id) throw new Error('新建成功，但未返回对话信息');
       setChatLocked(null);
       setChatDetailError('');
@@ -281,7 +282,7 @@ export function ChatConfigsPanel() {
     setChatLocked(null);
     setBusy(true);
     try {
-      await knowledgeApi.clearRagflowChatParsedFiles(chatSelected.id);
+      await chatConfigsApi.clearParsedFiles(chatSelected.id);
       await fetchChatList();
       await loadChatDetail(chatSelected.id);
       setChatSaveStatus('已尝试清除解析绑定');
@@ -299,7 +300,7 @@ export function ChatConfigsPanel() {
 
     setBusy(true);
     try {
-      await knowledgeApi.deleteRagflowChat(chat.id);
+      await chatConfigsApi.deleteChat(chat.id);
       if (chatSelected?.id === chat.id) setChatSelected(null);
       await fetchChatList();
     } catch (error) {
@@ -327,7 +328,7 @@ export function ChatConfigsPanel() {
 
     setBusy(true);
     try {
-      const created = await knowledgeApi.createRagflowChat({ name });
+      const created = await chatConfigsApi.createChat({ name });
       if (!created || !created.id) throw new Error('新建成功，但未返回对话信息');
       setCreateOpen(false);
       await fetchChatList();

@@ -1,6 +1,7 @@
 import React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { ChatConfigsPanel } from './ChatConfigsPanel';
+import { chatConfigsApi } from '../features/chat/configs/api';
 import { knowledgeApi } from '../features/knowledge/api';
 import { useAuth } from '../hooks/useAuth';
 
@@ -8,26 +9,31 @@ jest.mock('../hooks/useAuth', () => ({
   useAuth: jest.fn(),
 }));
 
+jest.mock('../features/chat/configs/api', () => ({
+  chatConfigsApi: {
+    listChats: jest.fn(),
+    getChat: jest.fn(),
+    createChat: jest.fn(),
+    updateChat: jest.fn(),
+    deleteChat: jest.fn(),
+    clearParsedFiles: jest.fn(),
+  },
+}));
+
 jest.mock('../features/knowledge/api', () => ({
   knowledgeApi: {
-    listRagflowChats: jest.fn(),
     listRagflowDatasets: jest.fn(),
-    getRagflowChat: jest.fn(),
-    createRagflowChat: jest.fn(),
-    updateRagflowChat: jest.fn(),
-    deleteRagflowChat: jest.fn(),
-    clearRagflowChatParsedFiles: jest.fn(),
   },
 }));
 
 describe('ChatConfigsPanel', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    knowledgeApi.listRagflowChats.mockResolvedValue([{ id: 'c1', name: 'Chat 1', description: 'desc' }]);
+    chatConfigsApi.listChats.mockResolvedValue([{ id: 'c1', name: 'Chat 1', description: 'desc' }]);
     knowledgeApi.listRagflowDatasets.mockResolvedValue([
       { id: 'ds1', name: 'KB 1', chunk_count: 3, document_count: 1 },
     ]);
-    knowledgeApi.getRagflowChat.mockResolvedValue({
+    chatConfigsApi.getChat.mockResolvedValue({
       id: 'c1',
       name: 'Chat 1',
       dataset_ids: ['ds1'],
@@ -55,22 +61,22 @@ describe('ChatConfigsPanel', () => {
     render(<ChatConfigsPanel />);
 
     await waitFor(() => expect(screen.getByTestId('chat-config-name')).toHaveValue('Chat 1'));
-    const detailCallsBeforeOpen = knowledgeApi.getRagflowChat.mock.calls.length;
+    const detailCallsBeforeOpen = chatConfigsApi.getChat.mock.calls.length;
 
     fireEvent.click(screen.getByTestId('chat-config-new'));
 
     expect(screen.getByTestId('chat-config-create-dialog')).toBeInTheDocument();
     expect(screen.queryByTestId('chat-config-create-from')).not.toBeInTheDocument();
-    expect(knowledgeApi.getRagflowChat).toHaveBeenCalledTimes(detailCallsBeforeOpen);
+    expect(chatConfigsApi.getChat).toHaveBeenCalledTimes(detailCallsBeforeOpen);
   });
 
   it('creates a blank chat payload with name only', async () => {
     useAuth.mockReturnValue({ user: { role: 'sub_admin' } });
-    knowledgeApi.createRagflowChat.mockResolvedValue({
+    chatConfigsApi.createChat.mockResolvedValue({
       id: 'c2',
       name: 'New Chat',
     });
-    knowledgeApi.getRagflowChat
+    chatConfigsApi.getChat
       .mockResolvedValueOnce({
         id: 'c1',
         name: 'Chat 1',
@@ -89,7 +95,7 @@ describe('ChatConfigsPanel', () => {
     fireEvent.change(screen.getByTestId('chat-config-create-name'), { target: { value: 'New Chat' } });
     fireEvent.click(screen.getByTestId('chat-config-create-confirm'));
 
-    await waitFor(() => expect(knowledgeApi.createRagflowChat).toHaveBeenCalledWith({ name: 'New Chat' }));
+    await waitFor(() => expect(chatConfigsApi.createChat).toHaveBeenCalledWith({ name: 'New Chat' }));
   });
 
   it('disables unparsed knowledge bases in the selection list', async () => {
@@ -97,7 +103,7 @@ describe('ChatConfigsPanel', () => {
     knowledgeApi.listRagflowDatasets.mockResolvedValue([
       { id: 'ds_unready', name: 'KB Unready', chunk_count: 0, document_count: 0 },
     ]);
-    knowledgeApi.getRagflowChat.mockResolvedValue({
+    chatConfigsApi.getChat.mockResolvedValue({
       id: 'c1',
       name: 'Chat 1',
       dataset_ids: [],
@@ -112,7 +118,7 @@ describe('ChatConfigsPanel', () => {
 
   it('shows dataset-not-ready guidance instead of locked-chat guidance', async () => {
     useAuth.mockReturnValue({ user: { role: 'sub_admin' } });
-    knowledgeApi.updateRagflowChat.mockRejectedValue(new Error('chat_dataset_not_ready: ds1'));
+    chatConfigsApi.updateChat.mockRejectedValue(new Error('chat_dataset_not_ready: ds1'));
 
     render(<ChatConfigsPanel />);
 
