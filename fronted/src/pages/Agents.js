@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { DOCUMENT_SOURCE, documentsApi } from '../features/documents/api';
 import { useAuth } from '../hooks/useAuth';
 import { agentsApi } from '../features/agents/api';
+import { knowledgeApi } from '../features/knowledge/api';
 import { ensureTablePreviewStyles } from '../shared/preview/tablePreviewStyles';
 import { useEscapeClose } from '../shared/hooks/useEscapeClose';
 import { DocumentPreviewModal } from '../shared/documents/preview/DocumentPreviewModal';
@@ -96,8 +97,7 @@ const Agents = () => {
   const fetchDatasets = useCallback(async () => {
     try {
       setLoading(true);
-      const data = await agentsApi.getAvailableDatasets();
-      const rows = Array.isArray(data?.datasets) ? data.datasets : [];
+      const rows = await knowledgeApi.listRagflowDatasets();
       setDatasets(rows);
       if (rows.length) {
         setSelectedDatasetIds(rows.map((item) => item.id));
