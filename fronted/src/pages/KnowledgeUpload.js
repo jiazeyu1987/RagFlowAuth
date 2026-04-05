@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { knowledgeApi } from '../features/knowledge/api';
+import { knowledgeUploadApi } from '../features/knowledge/upload/api';
 import SelectedFilesList from '../features/knowledge/upload/components/SelectedFilesList';
 import UploadDropzone from '../features/knowledge/upload/components/UploadDropzone';
 import UploadExtensionsPanel from '../features/knowledge/upload/components/UploadExtensionsPanel';
@@ -186,7 +187,7 @@ const KnowledgeUpload = () => {
     const fetchAllowedExtensions = async () => {
       try {
         setLoadingExtensions(true);
-        const payload = await knowledgeApi.getAllowedUploadExtensions();
+        const payload = await knowledgeUploadApi.getAllowedExtensions();
         const items = Array.isArray(payload?.allowed_extensions) && payload.allowed_extensions.length > 0
           ? payload.allowed_extensions.map(normalizeExtension).filter(Boolean)
           : DEFAULT_ACCEPTED_EXTENSIONS;
@@ -261,7 +262,7 @@ const KnowledgeUpload = () => {
           filename: getDisplayPath(file),
         });
         try {
-          const result = await knowledgeApi.uploadDocument(file, kbId);
+          const result = await knowledgeUploadApi.uploadDocument(file, kbId);
           results.push({
             ok: true,
             filename: getDisplayPath(file),
@@ -374,7 +375,7 @@ const KnowledgeUpload = () => {
     setSavingExtensions(true);
     setExtensionsMessage(null);
     try {
-      const payload = await knowledgeApi.updateAllowedUploadExtensions(allowedExtensions, trimmedReason);
+      const payload = await knowledgeUploadApi.updateAllowedExtensions(allowedExtensions, trimmedReason);
       const next = Array.isArray(payload?.allowed_extensions)
         ? payload.allowed_extensions.map(normalizeExtension).filter(Boolean)
         : allowedExtensions;

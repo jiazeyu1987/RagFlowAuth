@@ -3,6 +3,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import KnowledgeUpload from './KnowledgeUpload';
+import { knowledgeUploadApi } from '../features/knowledge/upload/api';
 import { knowledgeApi } from '../features/knowledge/api';
 import { useAuth } from '../hooks/useAuth';
 
@@ -22,7 +23,12 @@ jest.mock('../features/knowledge/api', () => ({
   knowledgeApi: {
     listRagflowDatasets: jest.fn(),
     listKnowledgeDirectories: jest.fn(),
-    getAllowedUploadExtensions: jest.fn(),
+  },
+}));
+
+jest.mock('../features/knowledge/upload/api', () => ({
+  knowledgeUploadApi: {
+    getAllowedExtensions: jest.fn(),
     uploadDocument: jest.fn(),
   },
 }));
@@ -58,10 +64,10 @@ describe('KnowledgeUpload', () => {
       nodes: [],
       datasets: [{ id: 'ds-kb-1', name: 'KB-1', node_id: null }],
     });
-    knowledgeApi.getAllowedUploadExtensions.mockResolvedValue({
+    knowledgeUploadApi.getAllowedExtensions.mockResolvedValue({
       allowed_extensions: ['.txt'],
     });
-    knowledgeApi.uploadDocument.mockResolvedValue({
+    knowledgeUploadApi.uploadDocument.mockResolvedValue({
       request_id: 'req-upload-1',
     });
   });
@@ -82,7 +88,7 @@ describe('KnowledgeUpload', () => {
     await user.click(screen.getByTestId('upload-submit'));
 
     await waitFor(() => {
-      expect(knowledgeApi.uploadDocument).toHaveBeenCalledWith(file, 'KB-1');
+      expect(knowledgeUploadApi.uploadDocument).toHaveBeenCalledWith(file, 'KB-1');
     });
     expect(await screen.findByTestId('upload-success')).toHaveTextContent('申请已提交');
   });

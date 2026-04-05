@@ -97,24 +97,6 @@ export const knowledgeApi = {
     return httpClient.requestJson(authBackendUrl(path), { method: 'GET' });
   },
 
-  getAllowedUploadExtensions() {
-    return httpClient.requestJson(authBackendUrl('/api/knowledge/settings/allowed-extensions'), { method: 'GET' });
-  },
-
-  updateAllowedUploadExtensions(allowedExtensions, changeReason) {
-    return httpClient.requestJson(authBackendUrl('/api/knowledge/settings/allowed-extensions'), {
-      method: 'PUT',
-      body: JSON.stringify({
-        allowed_extensions: allowedExtensions || [],
-        change_reason: changeReason,
-      }),
-    });
-  },
-
-  uploadDocument(file, kbId = '灞曞巺') {
-    return documentsApi.uploadKnowledge(file, kbId);
-  },
-
   deleteLocalDocument(docId) {
     return documentsApi.deleteDocument({ source: DOCUMENT_SOURCE.KNOWLEDGE, docId });
   },
@@ -127,4 +109,3 @@ export const knowledgeApi = {
     return documentsApi.batchDownloadKnowledgeToBrowser(docIds);
   },
 };
-
