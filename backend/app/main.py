@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import logging
 from contextlib import asynccontextmanager
+from dataclasses import dataclass
+from importlib import import_module
 import sys
 from pathlib import Path
 
-from fastapi import FastAPI, Request
+from fastapi import APIRouter, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from backend.app.core.config import settings
@@ -14,6 +16,65 @@ from backend.app.core.request_id import RequestIdMiddleware
 from backend.core.security import auth as authx_auth
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class RouterRegistrationSpec:
+    module_path: str
+    prefix: str
+    tags: tuple[str, ...]
+    router_attr: str = "router"
+    factory_attr: str | None = None
+
+
+ROUTER_REGISTRATION_SPECS: tuple[RouterRegistrationSpec, ...] = (
+    RouterRegistrationSpec("backend.app.modules.auth.router", "/api/auth", ("Authentication",)),
+    RouterRegistrationSpec("backend.app.modules.electronic_signature.router", "/api", ("Electronic Signature",)),
+    RouterRegistrationSpec("backend.app.modules.audit.router", "/api", ("Audit",)),
+    RouterRegistrationSpec("backend.app.modules.admin_notifications.router", "/api", ("Admin Notifications",)),
+    RouterRegistrationSpec("backend.app.modules.emergency_changes.router", "/api", ("Emergency Changes",)),
+    RouterRegistrationSpec("backend.app.modules.supplier_qualification.router", "/api", ("Supplier Qualification",)),
+    RouterRegistrationSpec("backend.app.modules.training_compliance.router", "/api", ("Training Compliance",)),
+    RouterRegistrationSpec("backend.app.modules.users.router", "/api/users", ("Users",)),
+    RouterRegistrationSpec("backend.app.modules.knowledge.router", "/api/knowledge", ("Knowledge Base",)),
+    RouterRegistrationSpec("backend.app.modules.operation_approvals.router", "/api", ("Operation Approvals",)),
+    RouterRegistrationSpec("backend.app.modules.inbox.router", "/api", ("Inbox",)),
+    RouterRegistrationSpec("backend.app.modules.ragflow.router", "/api/ragflow", ("RAGFlow Integration",)),
+    RouterRegistrationSpec("backend.app.modules.preview.router", "/api", ("Preview Gateway",)),
+    RouterRegistrationSpec("backend.app.modules.documents.router", "/api", ("Documents",)),
+    RouterRegistrationSpec("backend.app.modules.chat.router", "/api", ("Chat",)),
+    RouterRegistrationSpec("backend.app.modules.agents.router", "/api", ("Agents",)),
+    RouterRegistrationSpec("backend.app.modules.search_configs.router", "/api", ("Search Configs",)),
+    RouterRegistrationSpec("backend.app.modules.me.router", "/api", ("Me",)),
+    RouterRegistrationSpec("backend.app.modules.nas.router", "/api", ("NAS",)),
+    RouterRegistrationSpec("backend.app.modules.onlyoffice.router", "/api", ("ONLYOFFICE",)),
+    RouterRegistrationSpec("backend.app.modules.data_security.router", "/api", ("Data Security",)),
+    RouterRegistrationSpec(
+        "backend.app.modules.permission_groups.router",
+        "/api",
+        ("Permission Groups",),
+        factory_attr="create_router",
+    ),
+    RouterRegistrationSpec("backend.app.modules.org_directory.router", "/api", ("Org Directory",)),
+    RouterRegistrationSpec("backend.app.modules.patent_download.router", "/api", ("Patent Download",)),
+    RouterRegistrationSpec("backend.app.modules.paper_download.router", "/api", ("Paper Download",)),
+    RouterRegistrationSpec("backend.app.modules.package_drawing.router", "/api", ("Package Drawing",)),
+    RouterRegistrationSpec("backend.app.modules.drug_admin.router", "/api", ("Drug Admin",)),
+    RouterRegistrationSpec("backend.app.modules.diagnostics.router", "/api", ("Diagnostics",)),
+)
+
+
+def _resolve_router(spec: RouterRegistrationSpec) -> APIRouter:
+    module = import_module(spec.module_path)
+    if spec.factory_attr:
+        router_factory = getattr(module, spec.factory_attr)
+        return router_factory()
+    return getattr(module, spec.router_attr)
+
+
+def _register_application_routers(app: FastAPI) -> None:
+    for spec in ROUTER_REGISTRATION_SPECS:
+        app.include_router(_resolve_router(spec), prefix=spec.prefix, tags=list(spec.tags))
 
 
 @asynccontextmanager
@@ -94,64 +155,7 @@ def create_app() -> FastAPI:
 
     register_exception_handlers(app)
     authx_auth.handle_errors(app)
-
-    from backend.app.modules.admin_notifications.router import router as admin_notifications_router
-    from backend.app.modules.agents.router import router as agents_router
-    from backend.app.modules.audit.router import router as audit_router
-    from backend.app.modules.auth.router import router as auth_router
-    from backend.app.modules.chat.router import router as chat_router
-    from backend.app.modules.data_security.router import router as data_security_router
-    from backend.app.modules.diagnostics.router import router as diagnostics_router
-    from backend.app.modules.documents.router import router as documents_router
-    from backend.app.modules.drug_admin.router import router as drug_admin_router
-    from backend.app.modules.electronic_signature.router import router as electronic_signature_router
-    from backend.app.modules.emergency_changes.router import router as emergency_changes_router
-    from backend.app.modules.inbox.router import router as inbox_router
-    from backend.app.modules.knowledge.router import router as knowledge_router
-    from backend.app.modules.me.router import router as me_router
-    from backend.app.modules.nas.router import router as nas_router
-    from backend.app.modules.onlyoffice.router import router as onlyoffice_router
-    from backend.app.modules.operation_approvals.router import router as operation_approvals_router
-    from backend.app.modules.org_directory.router import router as org_directory_router
-    from backend.app.modules.package_drawing.router import router as package_drawing_router
-    from backend.app.modules.paper_download.router import router as paper_download_router
-    from backend.app.modules.patent_download.router import router as patent_download_router
-    from backend.app.modules.permission_groups.router import create_router as create_permission_groups_router
-    from backend.app.modules.preview.router import router as preview_router
-    from backend.app.modules.ragflow.router import router as ragflow_router
-    from backend.app.modules.search_configs.router import router as search_configs_router
-    from backend.app.modules.supplier_qualification.router import router as supplier_qualification_router
-    from backend.app.modules.training_compliance.router import router as training_compliance_router
-    from backend.app.modules.users.router import router as users_router
-
-    app.include_router(auth_router, prefix="/api/auth", tags=["Authentication"])
-    app.include_router(electronic_signature_router, prefix="/api", tags=["Electronic Signature"])
-    app.include_router(audit_router, prefix="/api", tags=["Audit"])
-    app.include_router(admin_notifications_router, prefix="/api", tags=["Admin Notifications"])
-    app.include_router(emergency_changes_router, prefix="/api", tags=["Emergency Changes"])
-    app.include_router(supplier_qualification_router, prefix="/api", tags=["Supplier Qualification"])
-    app.include_router(training_compliance_router, prefix="/api", tags=["Training Compliance"])
-    app.include_router(users_router, prefix="/api/users", tags=["Users"])
-    app.include_router(knowledge_router, prefix="/api/knowledge", tags=["Knowledge Base"])
-    app.include_router(operation_approvals_router, prefix="/api", tags=["Operation Approvals"])
-    app.include_router(inbox_router, prefix="/api", tags=["Inbox"])
-    app.include_router(ragflow_router, prefix="/api/ragflow", tags=["RAGFlow Integration"])
-    app.include_router(preview_router, prefix="/api", tags=["Preview Gateway"])
-    app.include_router(documents_router, prefix="/api", tags=["Documents"])
-    app.include_router(chat_router, prefix="/api", tags=["Chat"])
-    app.include_router(agents_router, prefix="/api", tags=["Agents"])
-    app.include_router(search_configs_router, prefix="/api", tags=["Search Configs"])
-    app.include_router(me_router, prefix="/api", tags=["Me"])
-    app.include_router(nas_router, prefix="/api", tags=["NAS"])
-    app.include_router(onlyoffice_router, prefix="/api", tags=["ONLYOFFICE"])
-    app.include_router(data_security_router, prefix="/api", tags=["Data Security"])
-    app.include_router(create_permission_groups_router(), prefix="/api", tags=["Permission Groups"])
-    app.include_router(org_directory_router, prefix="/api", tags=["Org Directory"])
-    app.include_router(patent_download_router, prefix="/api", tags=["Patent Download"])
-    app.include_router(paper_download_router, prefix="/api", tags=["Paper Download"])
-    app.include_router(package_drawing_router, prefix="/api", tags=["Package Drawing"])
-    app.include_router(drug_admin_router, prefix="/api", tags=["Drug Admin"])
-    app.include_router(diagnostics_router, prefix="/api", tags=["Diagnostics"])
+    _register_application_routers(app)
 
     @app.get("/health")
     async def health_check():

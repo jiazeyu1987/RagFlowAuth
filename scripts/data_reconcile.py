@@ -25,10 +25,18 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def run_mode(service: DataReconcileService, mode: str) -> dict:
+    if mode == "report":
+        return service.report().to_dict()
+    if mode == "apply":
+        return service.apply()
+    raise ValueError(f"Unsupported reconcile mode: {mode}")
+
+
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     service = DataReconcileService(db_path=args.db_path)
-    payload = service.report().to_dict() if args.mode == "report" else service.apply()
+    payload = run_mode(service, args.mode)
     sys.stdout.write(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True))
     sys.stdout.write("\n")
     return 0

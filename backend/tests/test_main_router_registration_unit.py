@@ -10,11 +10,21 @@ class MainRouterRegistrationUnitTests(unittest.TestCase):
         app = create_app()
         paths = {route.path for route in app.routes}
 
-        self.assertIn("/api/auth/login", paths)
-        self.assertIn("/api/knowledge/documents", paths)
-        self.assertIn("/api/package-drawing/by-model", paths)
-        self.assertIn("/api/nas/files", paths)
-        self.assertIn("/health", paths)
+        expected_paths = {
+            "/",
+            "/health",
+            "/api/auth/login",
+            "/api/knowledge/documents",
+            "/api/package-drawing/by-model",
+            "/api/nas/files",
+            "/api/permission-groups",
+            "/api/paper-download/sessions",
+            "/api/patent-download/sessions",
+        }
+
+        for path in expected_paths:
+            with self.subTest(path=path):
+                self.assertIn(path, paths)
 
 
 if __name__ == "__main__":
