@@ -1,18 +1,15 @@
 import React from 'react';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { AuthProvider, useAuth } from './useAuth';
-import authClient from '../api/authClient';
+import authApi from '../api/auth/authApi';
 import { meApi } from '../features/me/api';
+import tokenStore from '../shared/auth/tokenStore';
 
-jest.mock('../api/authClient', () => ({
+jest.mock('../api/auth/authApi', () => ({
   __esModule: true,
   default: {
-    accessToken: null,
-    refreshToken: null,
-    user: null,
     login: jest.fn(),
     logout: jest.fn(),
-    clearAuth: jest.fn(),
     getCurrentUser: jest.fn(),
     refreshAccessToken: jest.fn(),
   },
@@ -28,18 +25,26 @@ jest.mock('../features/me/api', () => ({
 jest.mock('../shared/auth/tokenStore', () => ({
   __esModule: true,
   default: {
+    getAccessToken: jest.fn(),
+    getRefreshToken: jest.fn(),
+    getUser: jest.fn(),
+    setAuth: jest.fn(),
+    setUser: jest.fn(),
     clearAuth: jest.fn(),
   },
 }));
 
-describe('useAuth login error mapping', () => {
+describe('useAuth', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    tokenStore.getAccessToken.mockReturnValue(null);
+    tokenStore.getRefreshToken.mockReturnValue(null);
+    tokenStore.getUser.mockReturnValue(null);
     meApi.listMyKnowledgeBases.mockResolvedValue({ kb_ids: [] });
   });
 
   it('shows a clear invalid-credentials message', async () => {
-    authClient.login.mockRejectedValue(new Error('invalid_username_or_password'));
+    authApi.login.mockRejectedValue(new Error('invalid_username_or_password'));
 
     const { result } = renderHook(() => useAuth(), {
       wrapper: ({ children }) => <AuthProvider>{children}</AuthProvider>,
@@ -53,5 +58,37 @@ describe('useAuth login error mapping', () => {
     });
 
     expect(loginResult).toEqual({ success: false, error: '用户名或密码错误' });
+  });
+
+  it('hydrates the current user from the stored session', async () => {
+    tokenStore.getAccessToken.mockReturnValue('access-1');
+    tokenStore.getRefreshToken.mockReturnValue('refresh-1');
+    authApi.getCurrentUser.mockResolvedValue({
+      user_id: 'u-1',
+      username: 'alice',
+      role: 'admin',
+      permissions: {
+        can_upload: true,
+        can_review: true,
+        can_download: true,
+        can_copy: true,
+        can_delete: true,
+        can_manage_kb_directory: true,
+        can_view_kb_config: true,
+        can_view_tools: true,
+        accessible_tools: ['nas-browser'],
+      },
+    });
+
+    const { result } = renderHook(() => useAuth(), {
+      wrapper: ({ children }) => <AuthProvider>{children}</AuthProvider>,
+    });
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    expect(authApi.getCurrentUser).toHaveBeenCalledTimes(1);
+    expect(tokenStore.setUser).toHaveBeenCalledWith(expect.objectContaining({ user_id: 'u-1' }));
+    expect(result.current.user).toEqual(expect.objectContaining({ user_id: 'u-1', username: 'alice' }));
+    expect(result.current.isAuthenticated).toBe(true);
   });
 });

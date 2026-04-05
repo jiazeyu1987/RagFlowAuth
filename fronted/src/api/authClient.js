@@ -1,37 +1,42 @@
 import tokenStore from '../shared/auth/tokenStore';
 import authApi from './auth/authApi';
 
-const syncFromStore = (client) => {
-  client.accessToken = tokenStore.getAccessToken();
-  client.refreshToken = tokenStore.getRefreshToken();
-  client.user = client.accessToken ? tokenStore.getUser() : null;
-  return client;
-};
-
 const authClient = {
-  accessToken: null,
-  refreshToken: null,
-  user: null,
+  get accessToken() {
+    return tokenStore.getAccessToken();
+  },
+
+  set accessToken(token) {
+    tokenStore.setAccessToken(token);
+  },
+
+  get refreshToken() {
+    return tokenStore.getRefreshToken();
+  },
+
+  set refreshToken(token) {
+    tokenStore.setRefreshToken(token);
+  },
+
+  get user() {
+    return this.accessToken ? tokenStore.getUser() : null;
+  },
+
+  set user(user) {
+    tokenStore.setUser(user);
+  },
 
   setAuth(accessToken, refreshToken, user) {
-    this.accessToken = accessToken;
-    this.refreshToken = refreshToken;
-    this.user = user;
     tokenStore.setAuth(accessToken, refreshToken, user);
   },
 
   clearAuth() {
-    this.accessToken = null;
-    this.refreshToken = null;
-    this.user = null;
     tokenStore.clearAuth();
   },
 
   async refreshAccessToken() {
     try {
-      const token = await authApi.refreshAccessToken();
-      syncFromStore(this);
-      return token;
+      return await authApi.refreshAccessToken();
     } catch (error) {
       this.clearAuth();
       window.location.href = '/login';
@@ -39,10 +44,8 @@ const authClient = {
     }
   },
 
-  async fetchWithAuth(url, options = {}) {
-    const response = await authApi.fetchWithAuth(url, options);
-    syncFromStore(this);
-    return response;
+  fetchWithAuth(url, options = {}) {
+    return authApi.fetchWithAuth(url, options);
   },
 
   async login(username, password) {
@@ -63,11 +66,9 @@ const authClient = {
 
   async getCurrentUser() {
     const user = await authApi.getCurrentUser();
-    syncFromStore(this);
+    this.user = user;
     return user;
   },
 };
-
-syncFromStore(authClient);
 
 export default authClient;

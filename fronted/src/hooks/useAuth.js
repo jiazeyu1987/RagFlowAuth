@@ -1,21 +1,24 @@
 import { useState, useEffect, useCallback, createContext, useContext, useRef } from 'react';
-import authClient from '../api/authClient';
+import authApi from '../api/auth/authApi';
 import { STORAGE_KEYS } from '../constants/storageKeys';
 import { meApi } from '../features/me/api';
 import tokenStore from '../shared/auth/tokenStore';
 
 const AuthContext = createContext(null);
 
-export const useAuth = () => {
-  const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
-  return context;
-};
-
-// 应用版本号。权限或文案更新后递增，用于强制清理旧缓存。
 const APP_VERSION = '7';
+
+const createDefaultPermissions = () => ({
+  can_upload: false,
+  can_review: false,
+  can_download: false,
+  can_copy: false,
+  can_delete: false,
+  can_manage_kb_directory: false,
+  can_view_kb_config: false,
+  can_view_tools: false,
+  accessible_tools: []
+});
 
 const mapLoginErrorMessage = (message) => {
   const code = String(message || '').trim();
@@ -34,106 +37,84 @@ const mapLoginErrorMessage = (message) => {
   return code || '登录失败';
 };
 
+export const useAuth = () => {
+  const context = useContext(AuthContext);
+  if (!context) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
+  return context;
+};
+
 export const AuthProvider = ({ children }) => {
-  // 使用当前登录用户信息，等待 checkAuth 完成后再落定。
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [accessibleKbs, setAccessibleKbs] = useState([]);
-  const [permissions, setPermissions] = useState({
-    can_upload: false,
-    can_review: false,
-    can_download: false,
-    can_copy: false,
-    can_delete: false,
-    can_manage_kb_directory: false,
-    can_view_kb_config: false,
-    can_view_tools: false,
-    accessible_tools: []
-  });
+  const [permissions, setPermissions] = useState(createDefaultPermissions);
   const idleRedirectingRef = useRef(false);
   const currentUserId = user?.user_id;
   const currentIdleTimeoutMinutes = user?.idle_timeout_minutes;
 
   const invalidateAuth = useCallback(() => {
-    authClient.clearAuth();
+    tokenStore.clearAuth();
     setUser(null);
     setAccessibleKbs([]);
-    setPermissions({
-      can_upload: false,
-      can_review: false,
-      can_download: false,
-      can_copy: false,
-      can_delete: false,
-      can_manage_kb_directory: false,
-      can_view_kb_config: false,
-      can_view_tools: false,
-      accessible_tools: []
-    });
+    setPermissions(createDefaultPermissions());
+  }, []);
+
+  const applyAuthenticatedUser = useCallback((nextUser) => {
+    tokenStore.setUser(nextUser);
+    setUser(nextUser);
+    setPermissions(nextUser?.permissions ? nextUser.permissions : createDefaultPermissions());
   }, []);
 
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        // 迁移或清理旧 key，避免跨账号角色缓存相互污染。
         localStorage.removeItem('lastUserRole');
         localStorage.removeItem(STORAGE_KEYS.AUTH_TOKEN);
 
-        // 检查应用版本。
         const lastVersion = localStorage.getItem(STORAGE_KEYS.APP_VERSION);
         if (lastVersion !== APP_VERSION) {
           console.log(`[App Version Update] ${lastVersion} -> ${APP_VERSION}, clearing all caches`);
           localStorage.setItem(STORAGE_KEYS.APP_VERSION, APP_VERSION);
-
-          // 清除所有认证相关的 localStorage 数据。
           tokenStore.clearAuth();
 
-          // 清除 Cache Storage。
           if ('caches' in window) {
             try {
               const names = await caches.keys();
               await Promise.all(names.map((name) => caches.delete(name)));
-            } catch (e) {
-              console.warn('Failed to clear Cache Storage:', e);
+            } catch (cacheError) {
+              console.warn('Failed to clear Cache Storage:', cacheError);
             }
           }
         }
 
-        // 检查是否已有可用令牌。
-        if (authClient.accessToken) {
+        const accessToken = tokenStore.getAccessToken();
+        const refreshToken = tokenStore.getRefreshToken();
+        const storedUser = accessToken ? tokenStore.getUser() : null;
+
+        if (accessToken) {
           try {
-            const currentUser = await authClient.getCurrentUser();
-            // 更新当前用户信息。
-            authClient.setAuth(authClient.accessToken, authClient.refreshToken, currentUser);
-            setUser(currentUser);
-            // 更新权限组操作权限。
-            if (currentUser.permissions) {
-              setPermissions(currentUser.permissions);
-            }
-          } catch (err) {
-            // 令牌可能已过期，尝试刷新。
-            if (authClient.refreshToken) {
+            const currentUser = await authApi.getCurrentUser();
+            applyAuthenticatedUser(currentUser);
+          } catch (currentUserError) {
+            if (!refreshToken) {
+              invalidateAuth();
+            } else {
               try {
-                await authClient.refreshAccessToken();
-                const currentUser = await authClient.getCurrentUser();
-                setUser(currentUser);
-                // 更新权限组操作权限。
-                if (currentUser.permissions) {
-                  setPermissions(currentUser.permissions);
-                }
-              } catch (refreshErr) {
+                await authApi.refreshAccessToken();
+                const currentUser = await authApi.getCurrentUser();
+                applyAuthenticatedUser(currentUser);
+              } catch (refreshError) {
                 invalidateAuth();
               }
-            } else {
-              invalidateAuth();
             }
           }
-        } else {
-          if (authClient.user) {
-            invalidateAuth();
-          }
+        } else if (refreshToken || storedUser) {
+          invalidateAuth();
         }
-      } catch (err) {
+      } catch (error) {
         invalidateAuth();
       } finally {
         setLoading(false);
@@ -141,7 +122,7 @@ export const AuthProvider = ({ children }) => {
     };
 
     checkAuth();
-  }, [invalidateAuth]);
+  }, [applyAuthenticatedUser, invalidateAuth]);
 
   useEffect(() => {
     if (!currentUserId) {
@@ -182,15 +163,14 @@ export const AuthProvider = ({ children }) => {
     };
   }, [currentUserId, currentIdleTimeoutMinutes, invalidateAuth]);
 
-  // 加载用户可访问的知识库列表。
   useEffect(() => {
     const fetchAccessibleKbs = async () => {
       if (user) {
         try {
           const data = await meApi.listMyKnowledgeBases();
           setAccessibleKbs(data.kb_ids || []);
-        } catch (err) {
-          console.error('Failed to fetch accessible KBs:', err);
+        } catch (fetchError) {
+          console.error('Failed to fetch accessible KBs:', fetchError);
           setAccessibleKbs([]);
         }
       } else {
@@ -204,17 +184,13 @@ export const AuthProvider = ({ children }) => {
   const login = async (username, password) => {
     try {
       setError(null);
-      const data = await authClient.login(username, password);
-      // 新后端的 login 已在内部调用 /me 并写入 user。
+      const data = await authApi.login(username, password);
+      tokenStore.setAuth(data.access_token, data.refresh_token, data.user);
       console.log('[Login] Logged in user:', data.user);
-      setUser(data.user);
-      // 更新权限组操作权限。
-      if (data.user.permissions) {
-        setPermissions(data.user.permissions);
-      }
+      applyAuthenticatedUser(data.user);
       return { success: true };
-    } catch (err) {
-      const message = mapLoginErrorMessage(err?.message);
+    } catch (loginError) {
+      const message = mapLoginErrorMessage(loginError?.message);
       setError(message);
       return { success: false, error: message };
     }
@@ -222,11 +198,12 @@ export const AuthProvider = ({ children }) => {
 
   const logout = async () => {
     try {
-      await authClient.logout();
-      setUser(null);
+      await authApi.logout();
       setError(null);
-    } catch (err) {
-      setError(err.message);
+    } catch (logoutError) {
+      setError(logoutError.message);
+    } finally {
+      invalidateAuth();
     }
   };
 
@@ -244,10 +221,6 @@ export const AuthProvider = ({ children }) => {
   const isOperator = () => user?.role === 'admin' || !!permissions.can_upload || !!permissions.can_review;
   const canManageKnowledgeTree = () => user?.role === 'admin' || !!permissions.can_manage_kb_directory;
 
-  /**
-   * 前端 UI 权限检查。
-   * 后端以权限组 resolver 为准，这里只用于 UI 显示控制。
-   */
   const can = useCallback((resource, action, target = null) => {
     if (!user) return false;
 
@@ -268,9 +241,6 @@ export const AuthProvider = ({ children }) => {
     }
 
     if (resource === 'ragflow_documents') {
-      // 说明：查看/预览不等于下载。
-      // 目标：没有下载权限的用户也可以查看预览，但不能直接下载。
-      // 后端仍会在下载接口做最终权限校验。
       if (action === 'view' || action === 'preview') return accessibleKbs.length > 0;
       if (action === 'download') return user.role === 'admin' || !!ops.can_download;
       if (action === 'copy') return user.role === 'admin' || !!ops.can_copy;
@@ -305,11 +275,6 @@ export const AuthProvider = ({ children }) => {
     return false;
   }, [user, permissions, accessibleKbs]);
 
-  /**
-   * 检查用户是否有某个知识库的访问权限。
-   * @param {string} kbId - 知识库 ID
-   * @returns {boolean} 是否有权限
-   */
   const canAccessKb = useCallback((kbId) => {
     if (!user) return false;
     return accessibleKbs.includes(kbId);
