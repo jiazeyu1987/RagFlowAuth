@@ -6,7 +6,6 @@ import {
   getDatasetIdsKeyForUpdate,
   getSelectedDatasetIdsFromChatJson,
   HIDDEN_CHAT_NAMES,
-  normalizeDatasetListResponse,
   parseJson,
   prettyJson,
   sanitizeChatPayload,
@@ -103,8 +102,8 @@ export function ChatConfigsPanel() {
     setKbError('');
     setKbLoading(true);
     try {
-      const res = await knowledgeApi.listRagflowDatasets();
-      setKbList(normalizeDatasetListResponse(res));
+      const datasets = await knowledgeApi.listRagflowDatasets();
+      setKbList(datasets);
     } catch (error) {
       setKbList([]);
       setKbError(error?.message || '加载知识库列表失败');

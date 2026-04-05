@@ -53,12 +53,10 @@ describe('useDocumentBrowserPage', () => {
       canDownload: jest.fn(() => true),
       accessibleKbs: ['KB-1', 'KB-2'],
     });
-    knowledgeApi.listRagflowDatasets.mockResolvedValue({
-      datasets: [
-        { id: 'ds-1', name: 'KB-1' },
-        { id: 'ds-2', name: 'KB-2' },
-      ],
-    });
+    knowledgeApi.listRagflowDatasets.mockResolvedValue([
+      { id: 'ds-1', name: 'KB-1' },
+      { id: 'ds-2', name: 'KB-2' },
+    ]);
     knowledgeApi.listKnowledgeDirectories.mockResolvedValue({
       nodes: [],
       datasets: [],

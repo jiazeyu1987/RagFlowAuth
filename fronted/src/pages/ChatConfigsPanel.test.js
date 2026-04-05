@@ -24,9 +24,9 @@ describe('ChatConfigsPanel', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     knowledgeApi.listRagflowChats.mockResolvedValue([{ id: 'c1', name: 'Chat 1', description: 'desc' }]);
-    knowledgeApi.listRagflowDatasets.mockResolvedValue({
-      datasets: [{ id: 'ds1', name: 'KB 1', chunk_count: 3, document_count: 1 }],
-    });
+    knowledgeApi.listRagflowDatasets.mockResolvedValue([
+      { id: 'ds1', name: 'KB 1', chunk_count: 3, document_count: 1 },
+    ]);
     knowledgeApi.getRagflowChat.mockResolvedValue({
       id: 'c1',
       name: 'Chat 1',
@@ -94,9 +94,9 @@ describe('ChatConfigsPanel', () => {
 
   it('disables unparsed knowledge bases in the selection list', async () => {
     useAuth.mockReturnValue({ user: { role: 'sub_admin' } });
-    knowledgeApi.listRagflowDatasets.mockResolvedValue({
-      datasets: [{ id: 'ds_unready', name: 'KB Unready', chunk_count: 0, document_count: 0 }],
-    });
+    knowledgeApi.listRagflowDatasets.mockResolvedValue([
+      { id: 'ds_unready', name: 'KB Unready', chunk_count: 0, document_count: 0 },
+    ]);
     knowledgeApi.getRagflowChat.mockResolvedValue({
       id: 'c1',
       name: 'Chat 1',

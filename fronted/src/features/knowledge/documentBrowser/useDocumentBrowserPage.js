@@ -187,7 +187,7 @@ export default function useDocumentBrowserPage() {
             .listKnowledgeDirectories()
             .catch(() => ({ nodes: [], datasets: [] })),
         ]);
-        const nextDatasets = datasetResponse?.datasets || [];
+        const nextDatasets = datasetResponse;
         setDatasets(nextDatasets);
         setDirectoryTree(
           treeResponse && typeof treeResponse === 'object'

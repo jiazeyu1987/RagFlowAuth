@@ -9,14 +9,6 @@ export function pickAllowed(obj, keys) {
   return output;
 }
 
-export function normalizeListResponse(res) {
-  if (!res) return [];
-  if (Array.isArray(res.datasets)) return res.datasets;
-  if (res.data && Array.isArray(res.data.datasets)) return res.data.datasets;
-  if (Array.isArray(res.data)) return res.data;
-  return [];
-}
-
 export function fmtTime(ms) {
   const value = Number(ms || 0);
   if (!value) return '-';

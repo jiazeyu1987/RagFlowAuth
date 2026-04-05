@@ -11,7 +11,6 @@ import {
   buildIndexes,
   datasetEmpty,
   fmtTime,
-  normalizeListResponse,
   pathNodes,
   pickAllowed,
 } from '../features/knowledge/knowledgeBases/utils';
@@ -127,8 +126,8 @@ export default function KnowledgeBases() {
 
   async function fetchKbList() {
     setKbError('');
-    const res = await knowledgeApi.listRagflowDatasets();
-    setKbList(normalizeListResponse(res));
+    const datasets = await knowledgeApi.listRagflowDatasets();
+    setKbList(datasets);
   }
 
   async function fetchTree() {

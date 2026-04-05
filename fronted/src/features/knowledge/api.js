@@ -29,8 +29,12 @@ function withCompanyId(path, companyId) {
 }
 
 export const knowledgeApi = {
-  listRagflowDatasets() {
-    return httpClient.requestJson(authBackendUrl('/api/datasets'), { method: 'GET' });
+  async listRagflowDatasets() {
+    const response = await httpClient.requestJson(authBackendUrl('/api/datasets'), { method: 'GET' });
+    if (!Array.isArray(response?.datasets)) {
+      throw new Error('ragflow_dataset_list_invalid_payload');
+    }
+    return response.datasets;
   },
 
   async listRagflowDocuments(datasetName = '灞曞巺') {

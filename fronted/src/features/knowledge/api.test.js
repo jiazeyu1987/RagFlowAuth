@@ -28,11 +28,13 @@ describe('knowledgeApi', () => {
     jest.clearAllMocks();
   });
 
-  it('unwraps chat lists and search config lists to stable arrays', async () => {
+  it('unwraps list endpoints to stable arrays', async () => {
     httpClient.requestJson
+      .mockResolvedValueOnce({ datasets: [{ id: 'ds-1' }] })
       .mockResolvedValueOnce({ chats: [{ id: 'chat-1' }] })
       .mockResolvedValueOnce({ configs: [{ id: 'cfg-1' }] });
 
+    await expect(knowledgeApi.listRagflowDatasets()).resolves.toEqual([{ id: 'ds-1' }]);
     await expect(knowledgeApi.listRagflowChats({ page_size: 1000 })).resolves.toEqual([{ id: 'chat-1' }]);
     await expect(knowledgeApi.listSearchConfigs()).resolves.toEqual([{ id: 'cfg-1' }]);
   });
@@ -40,8 +42,10 @@ describe('knowledgeApi', () => {
   it('fails fast when list payloads do not match the backend contract', async () => {
     httpClient.requestJson
       .mockResolvedValueOnce({ data: [] })
+      .mockResolvedValueOnce({ data: [] })
       .mockResolvedValueOnce({ data: { configs: [] } });
 
+    await expect(knowledgeApi.listRagflowDatasets()).rejects.toThrow('ragflow_dataset_list_invalid_payload');
     await expect(knowledgeApi.listRagflowChats()).rejects.toThrow('ragflow_chat_list_invalid_payload');
     await expect(knowledgeApi.listSearchConfigs()).rejects.toThrow('search_config_list_invalid_payload');
   });

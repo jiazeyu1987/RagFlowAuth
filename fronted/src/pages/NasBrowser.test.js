@@ -34,9 +34,9 @@ describe('NasBrowser', () => {
     useAuth.mockReturnValue({
       isAdmin: () => true,
     });
-    knowledgeApi.listRagflowDatasets.mockResolvedValue({
-      datasets: [{ id: 'kb-1', name: 'KB-1' }],
-    });
+    knowledgeApi.listRagflowDatasets.mockResolvedValue([
+      { id: 'kb-1', name: 'KB-1' },
+    ]);
     nasApi.listFiles.mockResolvedValue({
       current_path: '',
       parent_path: null,

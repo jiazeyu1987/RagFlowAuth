@@ -82,10 +82,3 @@ export function sanitizeChatPayload(payload) {
   return body;
 }
 
-export function normalizeDatasetListResponse(res) {
-  if (!res) return [];
-  if (Array.isArray(res.datasets)) return res.datasets;
-  if (res.data && Array.isArray(res.data.datasets)) return res.data.datasets;
-  if (Array.isArray(res.data)) return res.data;
-  return [];
-}

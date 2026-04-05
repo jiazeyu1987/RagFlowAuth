@@ -149,7 +149,7 @@ const KnowledgeUpload = () => {
           knowledgeApi.listRagflowDatasets(),
           knowledgeApi.listKnowledgeDirectories(),
         ]);
-        const allDatasets = mergeDatasetDirectoryInfo(data?.datasets, directoryData);
+        const allDatasets = mergeDatasetDirectoryInfo(data, directoryData);
         const visibleKbRefs = new Set(
           (Array.isArray(accessibleKbs) ? accessibleKbs : [])
             .map(normalizeKbRef)

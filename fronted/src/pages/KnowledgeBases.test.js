@@ -50,7 +50,7 @@ describe('KnowledgeBases', () => {
       canManageKbDirectory: () => true,
       canManageKnowledgeTree: () => true,
     });
-    knowledgeApi.listRagflowDatasets.mockResolvedValue({ datasets: [dataset] });
+    knowledgeApi.listRagflowDatasets.mockResolvedValue([dataset]);
     knowledgeApi.listKnowledgeDirectories.mockResolvedValue({
       nodes: [],
       datasets: [{ id: 'ds-existing', name: 'Existing KB', node_id: null }],

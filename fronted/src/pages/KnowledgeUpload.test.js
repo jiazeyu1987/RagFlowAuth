@@ -51,9 +51,9 @@ describe('KnowledgeUpload', () => {
       loading: false,
       canViewKbConfig: () => false,
     });
-    knowledgeApi.listRagflowDatasets.mockResolvedValue({
-      datasets: [{ id: 'ds-kb-1', name: 'KB-1' }],
-    });
+    knowledgeApi.listRagflowDatasets.mockResolvedValue([
+      { id: 'ds-kb-1', name: 'KB-1' },
+    ]);
     knowledgeApi.listKnowledgeDirectories.mockResolvedValue({
       nodes: [],
       datasets: [{ id: 'ds-kb-1', name: 'KB-1', node_id: null }],

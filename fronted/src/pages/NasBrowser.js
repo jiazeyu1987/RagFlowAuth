@@ -132,8 +132,7 @@ export default function NasBrowser() {
   useEffect(() => {
     const loadDatasets = async () => {
       try {
-        const data = await knowledgeApi.listRagflowDatasets();
-        const nextDatasets = Array.isArray(data?.datasets) ? data.datasets : [];
+        const nextDatasets = await knowledgeApi.listRagflowDatasets();
         setDatasets(nextDatasets);
         if (nextDatasets.length > 0) {
           setSelectedKb((current) => current || nextDatasets[0].name);
