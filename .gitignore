@@ -141,3 +141,7 @@ desktop.ini
 /backend/nul
 /data/patent_downloads
 /tobedeleted/
+
+# Generated test reports
+doc/test/reports/doc_e2e_report_*.md
+doc/test/reports/doc_e2e_report_latest.md
