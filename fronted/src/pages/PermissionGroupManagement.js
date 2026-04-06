@@ -1,16 +1,14 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo } from 'react';
+
 import FolderTree from '../features/permissionGroups/management/components/FolderTree';
 import GroupEditorForm from '../features/permissionGroups/management/components/GroupEditorForm';
-import { ROOT } from '../features/permissionGroups/management/constants';
-import usePermissionGroupManagement from '../features/permissionGroups/management/usePermissionGroupManagement';
+import usePermissionGroupManagementPage from '../features/permissionGroups/management/usePermissionGroupManagementPage';
 
 const panelStyle = {
   border: '1px solid #e5e7eb',
   borderRadius: 10,
   background: '#fff',
 };
-
-const MOBILE_BREAKPOINT = 768;
 
 const iconButtonPalette = {
   neutral: {
@@ -137,13 +135,10 @@ function ToolbarIconButton({
 }
 
 export default function PermissionGroupManagement() {
-  const [isMobile, setIsMobile] = useState(() => {
-    if (typeof window === 'undefined') return false;
-    return window.innerWidth <= MOBILE_BREAKPOINT;
-  });
-  const [pendingDeleteGroup, setPendingDeleteGroup] = useState(null);
-
   const {
+    isMobile,
+    pendingDeleteGroup,
+    hasEditableFolder,
     groups,
     loading,
     saving,
@@ -169,12 +164,8 @@ export default function PermissionGroupManagement() {
     createFolder,
     renameFolder,
     deleteFolder,
-    startCreateGroup,
-    viewGroup,
-    activateGroup,
     saveForm,
     cancelEdit,
-    removeGroup,
     toggleKbAuth,
     toggleChatAuth,
     openFolder,
@@ -183,18 +174,13 @@ export default function PermissionGroupManagement() {
     onDragLeaveFolder,
     startGroupDrag,
     endGroupDrag,
-  } = usePermissionGroupManagement();
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return undefined;
-
-    const handleResize = () => setIsMobile(window.innerWidth <= MOBILE_BREAKPOINT);
-    handleResize();
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
-
-  const hasEditableFolder = !!selectedFolderId && selectedFolderId !== ROOT;
+    handleCreateGroup,
+    handleViewGroup,
+    handleEditGroup,
+    handleRequestDeleteGroup,
+    handleCancelDeleteGroup,
+    handleConfirmDeleteGroup,
+  } = usePermissionGroupManagementPage();
 
   const toolbarButtons = useMemo(
     () => [
@@ -235,7 +221,11 @@ export default function PermissionGroupManagement() {
   return (
     <div style={{ padding: isMobile ? 10 : 12 }}>
       <div
-        style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '320px 1fr', gap: 12 }}
+        style={{
+          display: 'grid',
+          gridTemplateColumns: isMobile ? '1fr' : '320px 1fr',
+          gap: 12,
+        }}
       >
         <section style={panelStyle}>
           <div
@@ -304,15 +294,9 @@ export default function PermissionGroupManagement() {
               onDragOverFolder={onDragOverFolder}
               onDropFolder={onDropFolder}
               onDragLeaveFolder={onDragLeaveFolder}
-              onViewGroup={(group) => {
-                setPendingDeleteGroup(null);
-                viewGroup(group);
-              }}
-              onStartEditGroup={(group) => {
-                setPendingDeleteGroup(null);
-                activateGroup(group);
-              }}
-              onRequestDeleteGroup={setPendingDeleteGroup}
+              onViewGroup={handleViewGroup}
+              onStartEditGroup={handleEditGroup}
+              onRequestDeleteGroup={handleRequestDeleteGroup}
               onStartGroupDrag={startGroupDrag}
               onEndGroupDrag={endGroupDrag}
             />
@@ -330,10 +314,7 @@ export default function PermissionGroupManagement() {
             <button
               type="button"
               data-testid="pg-create-open"
-              onClick={() => {
-                setPendingDeleteGroup(null);
-                startCreateGroup();
-              }}
+              onClick={handleCreateGroup}
               style={{
                 border: '1px solid #10b981',
                 borderRadius: 8,
@@ -350,14 +331,16 @@ export default function PermissionGroupManagement() {
             </button>
           </div>
 
-          {(error || hint) && (
+          {(error || hint) ? (
             <div style={{ padding: '10px 12px', borderBottom: '1px solid #e5e7eb' }}>
-              {error && <div style={{ color: '#b91c1c' }}>{error}</div>}
-              {hint && <div style={{ color: '#047857', marginTop: error ? 8 : 0 }}>{hint}</div>}
+              {error ? <div style={{ color: '#b91c1c' }}>{error}</div> : null}
+              {hint ? (
+                <div style={{ color: '#047857', marginTop: error ? 8 : 0 }}>{hint}</div>
+              ) : null}
             </div>
-          )}
+          ) : null}
 
-          {pendingDeleteGroup && (
+          {pendingDeleteGroup ? (
             <div
               style={{
                 borderTop: '1px solid #e5e7eb',
@@ -375,7 +358,7 @@ export default function PermissionGroupManagement() {
               <div style={{ display: 'flex', gap: 8 }}>
                 <button
                   type="button"
-                  onClick={() => setPendingDeleteGroup(null)}
+                  onClick={handleCancelDeleteGroup}
                   style={{
                     border: '1px solid #d1d5db',
                     borderRadius: 8,
@@ -389,17 +372,7 @@ export default function PermissionGroupManagement() {
                 <button
                   type="button"
                   data-testid="pg-delete-confirm"
-                  onClick={async () => {
-                    const group = pendingDeleteGroup;
-                    setPendingDeleteGroup(null);
-                    const rawConfirm = window.confirm;
-                    window.confirm = () => true;
-                    try {
-                      await removeGroup(group);
-                    } finally {
-                      window.confirm = rawConfirm;
-                    }
-                  }}
+                  onClick={handleConfirmDeleteGroup}
                   style={{
                     border: '1px solid #ef4444',
                     borderRadius: 8,
@@ -413,7 +386,7 @@ export default function PermissionGroupManagement() {
                 </button>
               </div>
             </div>
-          )}
+          ) : null}
 
           <div style={{ borderTop: '1px solid #e5e7eb', padding: 12 }}>
             <div data-testid="pg-modal">

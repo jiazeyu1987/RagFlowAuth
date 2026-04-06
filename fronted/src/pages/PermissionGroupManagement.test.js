@@ -1,9 +1,10 @@
 import React from 'react';
 import { fireEvent, render, screen } from '@testing-library/react';
-import PermissionGroupManagement from './PermissionGroupManagement';
-import usePermissionGroupManagement from '../features/permissionGroups/management/usePermissionGroupManagement';
 
-jest.mock('../features/permissionGroups/management/usePermissionGroupManagement');
+import PermissionGroupManagement from './PermissionGroupManagement';
+import usePermissionGroupManagementPage from '../features/permissionGroups/management/usePermissionGroupManagementPage';
+
+jest.mock('../features/permissionGroups/management/usePermissionGroupManagementPage', () => jest.fn());
 jest.mock('../features/permissionGroups/management/components/FolderTree', () => () => (
   <div data-testid="pg-folder-tree" />
 ));
@@ -12,15 +13,18 @@ jest.mock('../features/permissionGroups/management/components/GroupEditorForm', 
 ));
 
 const LABELS = {
-  refresh: '\u5237\u65b0',
-  createFolder: '\u65b0\u5efa\u6587\u4ef6\u5939',
-  renameFolder: '\u91cd\u547d\u540d\u6587\u4ef6\u5939',
-  deleteFolder: '\u5220\u9664\u6587\u4ef6\u5939',
-  createGroup: '\u65b0\u5efa\u5206\u7ec4',
+  refresh: '刷新',
+  createFolder: '新建文件夹',
+  renameFolder: '重命名文件夹',
+  deleteFolder: '删除文件夹',
+  createGroup: '新建分组',
 };
 
 function buildHookState(overrides = {}) {
   return {
+    isMobile: false,
+    pendingDeleteGroup: null,
+    hasEditableFolder: false,
     groups: [{ group_id: 1, group_name: 'G1' }, { group_id: 2, group_name: 'G2' }],
     loading: false,
     saving: false,
@@ -46,12 +50,8 @@ function buildHookState(overrides = {}) {
     createFolder: jest.fn(),
     renameFolder: jest.fn(),
     deleteFolder: jest.fn(),
-    startCreateGroup: jest.fn(),
-    viewGroup: jest.fn(),
-    activateGroup: jest.fn(),
     saveForm: jest.fn(),
     cancelEdit: jest.fn(),
-    removeGroup: jest.fn(),
     toggleKbAuth: jest.fn(),
     toggleChatAuth: jest.fn(),
     openFolder: jest.fn(),
@@ -60,6 +60,12 @@ function buildHookState(overrides = {}) {
     onDragLeaveFolder: jest.fn(),
     startGroupDrag: jest.fn(),
     endGroupDrag: jest.fn(),
+    handleCreateGroup: jest.fn(),
+    handleViewGroup: jest.fn(),
+    handleEditGroup: jest.fn(),
+    handleRequestDeleteGroup: jest.fn(),
+    handleCancelDeleteGroup: jest.fn(),
+    handleConfirmDeleteGroup: jest.fn(),
     ...overrides,
   };
 }
@@ -70,7 +76,7 @@ describe('PermissionGroupManagement', () => {
   });
 
   it('renders toolbar buttons with accessible names and keeps icon labels hidden', () => {
-    usePermissionGroupManagement.mockReturnValue(buildHookState());
+    usePermissionGroupManagementPage.mockReturnValue(buildHookState());
 
     render(<PermissionGroupManagement />);
 
@@ -88,9 +94,11 @@ describe('PermissionGroupManagement', () => {
     expect(screen.getByText(LABELS.createGroup)).toBeInTheDocument();
   });
 
-  it('disables folder rename and delete when root is selected and keeps other actions clickable', () => {
-    const hookState = buildHookState();
-    usePermissionGroupManagement.mockReturnValue(hookState);
+  it('disables folder rename and delete when no editable folder is selected and keeps other actions clickable', () => {
+    const hookState = buildHookState({
+      hasEditableFolder: false,
+    });
+    usePermissionGroupManagementPage.mockReturnValue(hookState);
 
     render(<PermissionGroupManagement />);
 
@@ -109,6 +117,6 @@ describe('PermissionGroupManagement', () => {
 
     expect(hookState.fetchAll).toHaveBeenCalledTimes(1);
     expect(hookState.createFolder).toHaveBeenCalledTimes(1);
-    expect(hookState.startCreateGroup).toHaveBeenCalledTimes(1);
+    expect(hookState.handleCreateGroup).toHaveBeenCalledTimes(1);
   });
 });
