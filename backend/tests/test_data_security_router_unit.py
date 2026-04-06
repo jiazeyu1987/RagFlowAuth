@@ -39,9 +39,6 @@ class TestDataSecurityRouterUnit(unittest.TestCase):
             router,
             "_backup_pack_stats",
             return_value={
-                "backup_target_path": "/backup/local",
-                "backup_pack_count": 2,
-                "backup_pack_count_skipped": False,
                 "local_backup_target_path": "/backup/local",
                 "local_backup_pack_count": 2,
                 "local_backup_pack_count_skipped": False,

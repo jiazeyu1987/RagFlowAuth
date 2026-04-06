@@ -48,9 +48,6 @@ def _backup_pack_stats(s) -> dict[str, Any]:
     local_stats = _pack_stats_for_target(str(local_target or ""))
     windows_stats = _pack_stats_for_target(str(windows_target or ""))
     return {
-        "backup_target_path": local_stats["target_path"],
-        "backup_pack_count": local_stats["pack_count"],
-        "backup_pack_count_skipped": local_stats.get("pack_count_skipped", False),
         "local_backup_target_path": local_stats["target_path"],
         "local_backup_pack_count": local_stats["pack_count"],
         "local_backup_pack_count_skipped": local_stats.get("pack_count_skipped", False),

@@ -5,9 +5,9 @@ const normalizeSettings = (payload) => {
   const data = payload && typeof payload === 'object' ? payload : {};
   return {
     ...data,
-    local_backup_target_path: String(data.local_backup_target_path || data.backup_target_path || ''),
-    local_backup_pack_count: Number(data.local_backup_pack_count ?? data.backup_pack_count ?? 0) || 0,
-    windows_backup_target_path: String(data.windows_backup_target_path || data.replica_target_path || ''),
+    local_backup_target_path: String(data.local_backup_target_path || ''),
+    local_backup_pack_count: Number(data.local_backup_pack_count ?? 0) || 0,
+    windows_backup_target_path: String(data.windows_backup_target_path || ''),
     windows_backup_pack_count: Number(data.windows_backup_pack_count ?? 0) || 0,
     windows_backup_pack_count_skipped: Boolean(data.windows_backup_pack_count_skipped),
   };

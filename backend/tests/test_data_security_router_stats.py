@@ -40,8 +40,6 @@ class TestDataSecurityRouterStats(unittest.TestCase):
             (base / "other").mkdir(parents=True, exist_ok=True)
             s = _SettingsStub(str(base))
             data = router._backup_pack_stats(s)
-            self.assertEqual(data.get("backup_target_path"), str(base))
-            self.assertEqual(data.get("backup_pack_count"), 2)
             self.assertEqual(data.get("local_backup_target_path"), str(base))
             self.assertEqual(data.get("local_backup_pack_count"), 2)
             self.assertEqual(data.get("windows_backup_target_path"), "")
