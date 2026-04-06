@@ -3,7 +3,7 @@ import { useEscapeClose } from '../../hooks/useEscapeClose';
 import { ensureTablePreviewStyles } from '../../preview/tablePreviewStyles';
 import { isMarkdownFilename, MarkdownPreview } from '../../preview/markdownPreview';
 import { loadDocumentPreview } from '../../preview/ragflowPreviewManager';
-import { DOCUMENT_SOURCE } from '../documentClient';
+import { DOCUMENT_SOURCE } from '../constants';
 import OnlyOfficeViewer from './OnlyOfficeViewer';
 import { ControlledPreviewBadge, WatermarkedPreviewFrame } from './watermarkOverlay';
 import {
