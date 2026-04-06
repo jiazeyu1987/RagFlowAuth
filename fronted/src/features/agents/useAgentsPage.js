@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { DOCUMENT_SOURCE, documentsApi } from '../documents/api';
+import { DOCUMENT_SOURCE } from '../../shared/documents/constants';
+import { documentsApi } from '../documents/api';
 import { useAuth } from '../../hooks/useAuth';
 import { agentsApi } from './api';
 import { knowledgeApi } from '../knowledge/api';

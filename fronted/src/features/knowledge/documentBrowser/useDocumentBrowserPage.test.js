@@ -17,10 +17,6 @@ jest.mock('../../documents/api', () => ({
     deleteDocument: jest.fn(),
     batchDownloadRagflowToBrowser: jest.fn(),
   },
-  DOCUMENT_SOURCE: {
-    RAGFLOW: 'ragflow',
-    KNOWLEDGE: 'knowledge',
-  },
 }));
 
 jest.mock('./api', () => ({

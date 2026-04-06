@@ -1,5 +1,5 @@
 import patentDownloadApi from './api';
-import { DOCUMENT_SOURCE } from '../documents/api';
+import { DOCUMENT_SOURCE } from '../../shared/documents/constants';
 import { httpClient } from '../../shared/http/httpClient';
 
 jest.mock('../../config/backend', () => ({

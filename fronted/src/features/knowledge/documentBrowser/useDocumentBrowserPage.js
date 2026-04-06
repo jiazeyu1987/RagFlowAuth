@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useAuth } from '../../../hooks/useAuth';
-import { DOCUMENT_SOURCE, documentsApi } from '../../documents/api';
+import { DOCUMENT_SOURCE } from '../../../shared/documents/constants';
+import { documentsApi } from '../../documents/api';
 import { knowledgeApi } from '../api';
 import { documentBrowserApi } from './api';
 import { ROOT, TEXT } from './constants';

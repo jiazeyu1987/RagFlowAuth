@@ -6,9 +6,6 @@ jest.mock('../../config/backend', () => ({
 }));
 
 jest.mock('../documents/api', () => ({
-  DOCUMENT_SOURCE: {
-    KNOWLEDGE: 'knowledge',
-  },
   documentsApi: {
     uploadKnowledge: jest.fn(),
     deleteDocument: jest.fn(),

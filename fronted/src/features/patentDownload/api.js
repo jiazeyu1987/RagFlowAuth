@@ -1,5 +1,5 @@
 import { authBackendUrl } from '../../config/backend';
-import { DOCUMENT_SOURCE } from '../documents/api';
+import { DOCUMENT_SOURCE } from '../../shared/documents/constants';
 import { httpClient } from '../../shared/http/httpClient';
 
 const DEFAULT_LOCAL_KB = '[鏈湴涓撳埄]';

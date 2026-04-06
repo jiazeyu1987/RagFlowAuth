@@ -1,6 +1,7 @@
 import { authBackendUrl } from '../../config/backend';
-import { DOCUMENT_SOURCE, documentsApi } from '../documents/api';
+import { DOCUMENT_SOURCE } from '../../shared/documents/constants';
 import { httpClient } from '../../shared/http/httpClient';
+import { documentsApi } from '../documents/api';
 
 function unwrapEnvelope(res) {
   if (!res || typeof res !== 'object') return res;

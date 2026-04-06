@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { useAuth } from '../../hooks/useAuth';
+import { DOCUMENT_SOURCE } from '../../shared/documents/constants';
 import { useEscapeClose } from '../../shared/hooks/useEscapeClose';
 import { ensureTablePreviewStyles } from '../../shared/preview/tablePreviewStyles';
-import { DOCUMENT_SOURCE, documentsApi } from '../documents/api';
+import { documentsApi } from '../documents/api';
 import { useChatSessions } from './hooks/useChatSessions';
 import { useChatStream } from './hooks/useChatStream';
 import {

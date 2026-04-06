@@ -1,8 +1,9 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { useAuth } from '../../hooks/useAuth';
+import { DOCUMENT_SOURCE } from '../../shared/documents/constants';
 import { agentsApi } from './api';
 import { knowledgeApi } from '../knowledge/api';
-import { DOCUMENT_SOURCE, documentsApi } from '../documents/api';
+import { documentsApi } from '../documents/api';
 import { ensureTablePreviewStyles } from '../../shared/preview/tablePreviewStyles';
 import { useEscapeClose } from '../../shared/hooks/useEscapeClose';
 import useSearchHistory from './hooks/useSearchHistory';
@@ -26,9 +27,6 @@ jest.mock('../knowledge/api', () => ({
 
 jest.mock('../documents/api', () => ({
   __esModule: true,
-  DOCUMENT_SOURCE: {
-    RAGFLOW: 'ragflow',
-  },
   documentsApi: {
     downloadToBrowser: jest.fn(),
   },
