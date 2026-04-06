@@ -1,12 +1,5 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../hooks/useAuth';
-import drugAdminApi from '../features/drugAdmin/api';
-
-const PAGE_SIZE = 12;
-const MOBILE_BREAKPOINT = 768;
-
-const toolPermissionKey = (tool) => String(tool?.permissionKey || tool?.id || '').trim();
+import React from 'react';
+import useToolsPage from '../features/drugAdmin/useToolsPage';
 
 const toProvinceToolId = (name) => (
   `drug_admin_${String(name || '')
@@ -31,7 +24,7 @@ const baseToolDefinitions = [
   {
     id: 'package_drawing',
     name: '包装图纸',
-    description: '按型号查询包装图纸信息，支持通过 Excel 录入型号、条形码、产品参数和示意图。',
+    description: '按型号查询包装图纸信息，支持通过 Excel 导入型号、条形码、产品参数和示意图。',
     route: '/tools/package-drawing',
   },
   {
@@ -98,17 +91,17 @@ const ToolCard = ({ id, name, description, onClick, disabled, background, isMobi
       flexDirection: 'column',
       justifyContent: 'space-between',
     }}
-    onMouseEnter={(e) => {
+    onMouseEnter={(event) => {
       if (disabled || isMobile) return;
-      e.currentTarget.style.transform = 'translateY(-1px)';
-      e.currentTarget.style.boxShadow = '0 6px 18px rgba(0,0,0,0.08)';
-      e.currentTarget.style.borderColor = '#c7d2fe';
+      event.currentTarget.style.transform = 'translateY(-1px)';
+      event.currentTarget.style.boxShadow = '0 6px 18px rgba(0,0,0,0.08)';
+      event.currentTarget.style.borderColor = '#c7d2fe';
     }}
-    onMouseLeave={(e) => {
+    onMouseLeave={(event) => {
       if (disabled || isMobile) return;
-      e.currentTarget.style.transform = 'translateY(0px)';
-      e.currentTarget.style.boxShadow = '0 1px 2px rgba(0,0,0,0.04)';
-      e.currentTarget.style.borderColor = '#e5e7eb';
+      event.currentTarget.style.transform = 'translateY(0px)';
+      event.currentTarget.style.boxShadow = '0 1px 2px rgba(0,0,0,0.04)';
+      event.currentTarget.style.borderColor = '#e5e7eb';
     }}
     data-testid={`tool-card-${id}`}
   >
@@ -146,83 +139,21 @@ const ToolCard = ({ id, name, description, onClick, disabled, background, isMobi
 );
 
 const Tools = () => {
-  const navigate = useNavigate();
-  const { isAdmin, canAccessTool } = useAuth();
-  const [page, setPage] = useState(1);
-  const [provinceTools, setProvinceTools] = useState([]);
-  const [provinceError, setProvinceError] = useState('');
-  const [isMobile, setIsMobile] = useState(() => {
-    if (typeof window === 'undefined') return false;
-    return window.innerWidth <= MOBILE_BREAKPOINT;
+  const {
+    isMobile,
+    provinceError,
+    pageItems,
+    safePage,
+    pageCount,
+    canGoPrev,
+    canGoNext,
+    goPrevPage,
+    goNextPage,
+    openTool,
+  } = useToolsPage({
+    baseTools: baseToolDefinitions,
+    buildProvinceTools,
   });
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return undefined;
-    const handleResize = () => setIsMobile(window.innerWidth <= MOBILE_BREAKPOINT);
-    handleResize();
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
-
-  useEffect(() => {
-    let active = true;
-
-    const loadProvinceTools = async () => {
-      try {
-        const response = await drugAdminApi.listProvinces();
-        if (!active) return;
-        setProvinceTools(buildProvinceTools(response?.provinces));
-        setProvinceError('');
-      } catch (error) {
-        if (!active) return;
-        setProvinceTools([]);
-        setProvinceError(error?.message || '药监入口加载失败');
-      }
-    };
-
-    loadProvinceTools();
-    return () => {
-      active = false;
-    };
-  }, []);
-
-  const tools = useMemo(() => {
-    const list = [
-      ...(isAdmin()
-        ? [{
-            id: 'nas_browser',
-            name: 'NAS 云盘',
-            description: '浏览 NAS 共享中的文件夹和文件，仅管理员可见。',
-            route: '/tools/nas-browser',
-          }]
-        : []),
-      ...baseToolDefinitions,
-      ...provinceTools,
-    ];
-    return list;
-  }, [isAdmin, provinceTools]);
-
-  const visibleTools = useMemo(
-    () => tools.filter((tool) => canAccessTool(toolPermissionKey(tool))),
-    [tools, canAccessTool]
-  );
-
-  const pageCount = Math.max(1, Math.ceil(visibleTools.length / PAGE_SIZE));
-  const safePage = Math.min(Math.max(1, page), pageCount);
-  const start = (safePage - 1) * PAGE_SIZE;
-  const pageItems = visibleTools.slice(start, start + PAGE_SIZE);
-
-  const openTool = (tool) => {
-    if (!canAccessTool(toolPermissionKey(tool))) return;
-    if (tool.route) {
-      navigate(tool.route);
-      return;
-    }
-    if (tool.href) {
-      window.open(tool.href, '_blank', 'noopener,noreferrer');
-      return;
-    }
-  };
 
   return (
     <div
@@ -249,15 +180,15 @@ const Tools = () => {
         >
           <button
             type="button"
-            onClick={() => setPage((p) => Math.max(1, p - 1))}
-            disabled={safePage <= 1}
+            onClick={goPrevPage}
+            disabled={!canGoPrev}
             data-testid="tools-prev-page"
             style={{
               padding: '8px 12px',
               borderRadius: '10px',
               border: '1px solid #e5e7eb',
-              background: safePage <= 1 ? '#f3f4f6' : 'white',
-              cursor: safePage <= 1 ? 'not-allowed' : 'pointer',
+              background: canGoPrev ? 'white' : '#f3f4f6',
+              cursor: canGoPrev ? 'pointer' : 'not-allowed',
               width: isMobile ? '100%' : 'auto',
             }}
           >
@@ -268,15 +199,15 @@ const Tools = () => {
           </div>
           <button
             type="button"
-            onClick={() => setPage((p) => Math.min(pageCount, p + 1))}
-            disabled={safePage >= pageCount}
+            onClick={goNextPage}
+            disabled={!canGoNext}
             data-testid="tools-next-page"
             style={{
               padding: '8px 12px',
               borderRadius: '10px',
               border: '1px solid #e5e7eb',
-              background: safePage >= pageCount ? '#f3f4f6' : 'white',
-              cursor: safePage >= pageCount ? 'not-allowed' : 'pointer',
+              background: canGoNext ? 'white' : '#f3f4f6',
+              cursor: canGoNext ? 'pointer' : 'not-allowed',
               width: isMobile ? '100%' : 'auto',
             }}
           >
@@ -311,7 +242,7 @@ const Tools = () => {
             暂无可访问的实用工具
           </div>
         ) : null}
-        {pageItems.map((tool, idx) => (
+        {pageItems.map((tool, index) => (
           <ToolCard
             key={tool.id}
             id={tool.id}
@@ -319,7 +250,7 @@ const Tools = () => {
             description={tool.description}
             disabled={!(tool.href || tool.route)}
             onClick={() => openTool(tool)}
-            background={idx % 2 === 0 ? '#ffffff' : '#f8fafc'}
+            background={index % 2 === 0 ? '#ffffff' : '#f8fafc'}
             isMobile={isMobile}
           />
         ))}
