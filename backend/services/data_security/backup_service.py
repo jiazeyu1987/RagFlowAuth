@@ -130,7 +130,7 @@ class DataSecurityBackupService:
 
         settings = self.store.get_settings()
         if include_images is None:
-            include_images = bool(getattr(settings, "full_backup_include_images", 1))
+            include_images = bool(settings.full_backup_include_images)
 
         now_ms = int(time.time() * 1000)
         self.store.update_job(
@@ -139,7 +139,7 @@ class DataSecurityBackupService:
             progress=1,
             message="backup_started",
             started_at_ms=now_ms,
-            replication_status=("pending" if bool(getattr(settings, "replica_enabled", False)) else "skipped"),
+            replication_status=("pending" if settings.replica_enabled else "skipped"),
             verification_status="not_verified",
         )
 
@@ -176,7 +176,7 @@ class DataSecurityBackupService:
         package_hash = _compute_backup_package_hash(staged_pack_dir)
         self.store.update_job(job_id, package_hash=package_hash)
 
-        keep_max = int(getattr(settings, "backup_retention_max", 30) or 30)
+        keep_max = int(settings.backup_retention_max or 30)
         keep_max = max(1, min(100, keep_max))
 
         local_output_dir: Path | None = None
@@ -254,7 +254,7 @@ class DataSecurityBackupService:
         if current_replication_status in ("", "pending"):
             if replicated:
                 final_replication_status = "succeeded"
-            elif replication_error or bool(getattr(settings, "replica_enabled", False)):
+            elif replication_error or settings.replica_enabled:
                 final_replication_status = "failed"
             else:
                 final_replication_status = "skipped"
@@ -305,4 +305,4 @@ class DataSecurityBackupService:
 
     def run_full_backup_job(self, job_id: int) -> None:
         settings = self.store.get_settings()
-        self.run_job(job_id, include_images=bool(getattr(settings, "full_backup_include_images", 1)))
+        self.run_job(job_id, include_images=bool(settings.full_backup_include_images))

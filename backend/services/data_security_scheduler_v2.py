@@ -189,7 +189,7 @@ class BackupSchedulerV2:
         if self._has_running_backup():
             return False, "已有备份任务正在运行", None
 
-        if not getattr(settings, "full_backup_enabled", False):
+        if not settings.full_backup_enabled:
             return False, "全量备份未启用", None
 
         # Only run if full backup schedule is configured

@@ -24,7 +24,7 @@ class BackupReplicaService:
         logger.info("[REPLICATION START] Job ID: %s, Pack: %s", job_id, pack_dir.name)
         settings = self.store.get_settings()
 
-        if not getattr(settings, "replica_enabled", False):
+        if not settings.replica_enabled:
             self.store.update_job(
                 job_id,
                 message="backup_windows_skipped",
