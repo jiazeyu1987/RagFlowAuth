@@ -5,7 +5,7 @@ Run:
     python -m backend.migrations.add_chat_sessions
 
 Note:
-    The canonical schema is managed by database.schema_migrations.ensure_schema().
+    The canonical schema is managed by database.schema.ensure.ensure_schema().
     This script remains for backward compatibility with older operations.
 """
 

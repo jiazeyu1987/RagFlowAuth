@@ -5,7 +5,7 @@ import sqlite3
 from pathlib import Path
 
 from backend.database.paths import resolve_auth_db_path
-from backend.database.schema_migrations import ensure_schema
+from backend.database.schema.ensure import ensure_schema
 from backend.database.sqlite import connect_sqlite
 
 
@@ -31,7 +31,7 @@ def migrate_database(old_db_path: Path, new_db_path: Path | None = None) -> bool
     Migrate data from an old auth.db into the current schema.
 
     Notes:
-    - Uses database.schema_migrations.ensure_schema() to create/upgrade the destination schema.
+    - Uses database.schema.ensure.ensure_schema() to create/upgrade the destination schema.
     - Does NOT treat legacy users.group_id as authoritative; it assigns user_permission_groups based on role.
     """
     if not old_db_path.exists():

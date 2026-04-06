@@ -3,7 +3,7 @@ from typing import Any, Callable
 
 from backend.database.paths import resolve_auth_db_path
 from backend.database.tenant_paths import normalize_company_id, resolve_tenant_auth_db_path
-from backend.database.schema_migrations import ensure_schema
+from backend.database.schema.ensure import ensure_schema
 from backend.services.chat_session_store import ChatSessionStore
 from backend.services.chat_management import ChatManagementManager, ChatOwnershipStore
 from backend.services.auth_session_store import AuthSessionStore

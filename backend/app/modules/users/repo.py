@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any, Optional
 
 from backend.app.dependencies import AppDependencies
-from backend.database.schema_migrations import ensure_schema
+from backend.database.schema.ensure import ensure_schema
 from backend.database.tenant_paths import resolve_tenant_auth_db_path
 from backend.services.knowledge_directory.store import KnowledgeDirectoryStore
 from backend.services.knowledge_tree import KnowledgeTreeManager

@@ -11,7 +11,7 @@ from backend.app.core.config import settings
 from backend.app.core.paths import repo_root, resolve_repo_path
 from backend.runtime.backup import run_backup, write_default_backup_config
 from backend.database.paths import resolve_auth_db_path
-from backend.database.schema_migrations import ensure_schema
+from backend.database.schema.ensure import ensure_schema
 from backend.database.sqlite import connect_sqlite
 from backend.services.user_store import hash_password
 
