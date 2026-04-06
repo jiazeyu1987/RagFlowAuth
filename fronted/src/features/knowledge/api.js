@@ -46,6 +46,43 @@ const normalizeDirectoryNodeEnvelope = (payload, action) => {
   return envelope.node;
 };
 
+const normalizeResultEnvelope = (payload, action) => {
+  const envelope = assertObjectPayload(payload, action);
+  if (!envelope.result || typeof envelope.result !== 'object' || Array.isArray(envelope.result)) {
+    throw new Error(`${action}_invalid_payload`);
+  }
+  if (typeof envelope.result.message !== 'string' || !envelope.result.message.trim()) {
+    throw new Error(`${action}_invalid_payload`);
+  }
+  return envelope.result;
+};
+
+const normalizeDirectoryAssignmentResult = (payload, action) => {
+  const result = normalizeResultEnvelope(payload, action);
+  if (typeof result.dataset_id !== 'string' || !result.dataset_id.trim()) {
+    throw new Error(`${action}_invalid_payload`);
+  }
+  if (!Object.prototype.hasOwnProperty.call(result, 'node_id')) {
+    throw new Error(`${action}_invalid_payload`);
+  }
+  if (result.node_id !== null && typeof result.node_id !== 'string') {
+    throw new Error(`${action}_invalid_payload`);
+  }
+  return result;
+};
+
+const normalizeApprovalRequestEnvelope = (payload, action) => {
+  const envelope = assertObjectPayload(payload, action);
+  const request = envelope.request;
+  if (!request || typeof request !== 'object' || Array.isArray(request)) {
+    throw new Error(`${action}_invalid_payload`);
+  }
+  if (typeof request.request_id !== 'string' || !request.request_id.trim()) {
+    throw new Error(`${action}_invalid_payload`);
+  }
+  return request;
+};
+
 function withCompanyId(path, companyId) {
   if (companyId === undefined || companyId === null || companyId === '') return path;
   const query = new URLSearchParams({ company_id: String(companyId) }).toString();
@@ -90,10 +127,13 @@ export const knowledgeApi = {
     );
   },
 
-  deleteRagflowDataset(datasetRef) {
-    return httpClient.requestJson(authBackendUrl(`/api/datasets/${encodeURIComponent(datasetRef)}`), {
-      method: 'DELETE',
-    });
+  async deleteRagflowDataset(datasetRef) {
+    return normalizeApprovalRequestEnvelope(
+      await httpClient.requestJson(authBackendUrl(`/api/datasets/${encodeURIComponent(datasetRef)}`), {
+        method: 'DELETE',
+      }),
+      'ragflow_dataset_delete'
+    );
   },
 
   async listKnowledgeDirectories(options = {}) {
@@ -125,19 +165,25 @@ export const knowledgeApi = {
     );
   },
 
-  deleteKnowledgeDirectory(nodeId) {
-    return httpClient.requestJson(authBackendUrl(`/api/knowledge/directories/${encodeURIComponent(nodeId)}`), {
-      method: 'DELETE',
-    });
+  async deleteKnowledgeDirectory(nodeId) {
+    return normalizeResultEnvelope(
+      await httpClient.requestJson(authBackendUrl(`/api/knowledge/directories/${encodeURIComponent(nodeId)}`), {
+        method: 'DELETE',
+      }),
+      'knowledge_directory_delete'
+    );
   },
 
-  assignDatasetDirectory(datasetRef, nodeId) {
-    return httpClient.requestJson(
-      authBackendUrl(`/api/knowledge/directories/datasets/${encodeURIComponent(datasetRef)}/node`),
-      {
-        method: 'PUT',
-        body: JSON.stringify({ node_id: nodeId || null }),
-      }
+  async assignDatasetDirectory(datasetRef, nodeId) {
+    return normalizeDirectoryAssignmentResult(
+      await httpClient.requestJson(
+        authBackendUrl(`/api/knowledge/directories/datasets/${encodeURIComponent(datasetRef)}/node`),
+        {
+          method: 'PUT',
+          body: JSON.stringify({ node_id: nodeId || null }),
+        }
+      ),
+      'knowledge_directory_assign'
     );
   },
 

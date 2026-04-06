@@ -23,6 +23,7 @@ jest.mock('./api', () => ({
   __esModule: true,
   documentBrowserApi: {
     listDocuments: jest.fn(),
+    deleteDocument: jest.fn(),
     transferDocument: jest.fn(),
     transferDocumentsBatch: jest.fn(),
   },
@@ -71,6 +72,7 @@ describe('useDocumentBrowserPage', () => {
       }
       return [];
     });
+    documentBrowserApi.deleteDocument.mockResolvedValue({ message: 'document_deleted' });
     documentBrowserApi.transferDocument.mockResolvedValue({ success: true });
     documentBrowserApi.transferDocumentsBatch.mockResolvedValue({
       ok: true,
@@ -95,6 +97,7 @@ describe('useDocumentBrowserPage', () => {
       failed: [],
     });
     window.alert = jest.fn();
+    window.confirm = jest.fn(() => true);
   });
 
   it('loads datasets/documents and transfers through the document browser API', async () => {
@@ -151,6 +154,23 @@ describe('useDocumentBrowserPage', () => {
     expect(documentsApi.batchDownloadRagflowToBrowser).toHaveBeenCalledWith([
       { doc_id: 'doc-1', dataset: 'KB-1', name: 'Doc 1' },
     ]);
+  });
+
+  it('routes ragflow deletes through the document browser feature API', async () => {
+    const { result } = renderHook(() => useDocumentBrowserPage(), { wrapper });
+
+    await waitFor(() => {
+      expect(documentBrowserApi.listDocuments).toHaveBeenCalledWith('KB-1');
+    });
+
+    await act(async () => {
+      await result.current.handleDelete('doc-1', 'KB-1');
+    });
+
+    expect(window.confirm).toHaveBeenCalled();
+    expect(documentBrowserApi.deleteDocument).toHaveBeenCalledWith('doc-1', 'KB-1');
+    expect(documentsApi.deleteDocument).not.toHaveBeenCalled();
+    expect(result.current.documents['KB-1']).toEqual([]);
   });
 
   it('routes batch transfers through the document browser batch API', async () => {

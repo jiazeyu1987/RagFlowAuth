@@ -62,12 +62,18 @@ describe('searchConfigsApi', () => {
     );
   });
 
-  it('requires ok=true on delete operations', async () => {
+  it('unwraps delete result envelopes and propagates backend failures', async () => {
     httpClient.requestJson
-      .mockResolvedValueOnce({ ok: true })
-      .mockResolvedValueOnce({ ok: false, detail: 'config_not_found' });
+      .mockResolvedValueOnce({ result: { message: 'search_config_deleted' } })
+      .mockRejectedValueOnce(new Error('config_not_found'));
 
-    await expect(searchConfigsApi.deleteConfig('cfg-1')).resolves.toBeUndefined();
+    await expect(searchConfigsApi.deleteConfig('cfg-1')).resolves.toEqual({ message: 'search_config_deleted' });
     await expect(searchConfigsApi.deleteConfig('cfg-2')).rejects.toThrow('config_not_found');
+  });
+
+  it('fails fast when the delete payload does not include a result message', async () => {
+    httpClient.requestJson.mockResolvedValue({ ok: true });
+
+    await expect(searchConfigsApi.deleteConfig('cfg-1')).rejects.toThrow('search_config_delete_invalid_payload');
   });
 });

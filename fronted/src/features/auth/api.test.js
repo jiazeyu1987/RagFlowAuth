@@ -51,11 +51,11 @@ describe('authApi', () => {
   it('delegates session operations to the shared http client', async () => {
     httpClient.refreshAccessToken.mockResolvedValue({ access_token: 'access-2' });
     httpClient.requestJson
-      .mockResolvedValueOnce({ ok: true })
+      .mockResolvedValueOnce({ result: { message: 'logout_ok' } })
       .mockResolvedValueOnce({ user_id: 'u-2' });
 
     await expect(authApi.refreshAccessToken()).resolves.toEqual({ access_token: 'access-2' });
-    await expect(authApi.logout()).resolves.toEqual({ ok: true });
+    await expect(authApi.logout()).resolves.toEqual({ message: 'logout_ok' });
     await expect(authApi.getCurrentUser({ skipRefresh: true })).resolves.toEqual({ user_id: 'u-2' });
 
     expect(httpClient.refreshAccessToken).toHaveBeenCalledTimes(1);
@@ -75,5 +75,11 @@ describe('authApi', () => {
         skipRefresh: true,
       }
     );
+  });
+
+  it('fails fast when logout returns an invalid payload', async () => {
+    httpClient.requestJson.mockResolvedValue({ message: 'logout_ok' });
+
+    await expect(authApi.logout()).rejects.toThrow('auth_logout_invalid_payload');
   });
 });

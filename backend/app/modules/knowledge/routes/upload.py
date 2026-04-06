@@ -6,27 +6,44 @@ from backend.app.core.permission_resolver import (
     assert_can_upload,
     assert_kb_allowed,
 )
-from backend.models.operation_approval import OperationApprovalRequestBrief
+from backend.app.core.request_params import require_non_empty_query_param
+from backend.models.knowledge import UploadAllowedExtensionsResponse
+from backend.models.operation_approval import OperationApprovalRequestBrief, OperationApprovalRequestEnvelope
 from backend.services.audit_helpers import actor_fields_from_ctx
 
 
 router = APIRouter()
 
 
-def _get_allowed_extensions_payload(ctx: AuthContextDep) -> dict:
-    settings_obj = ctx.deps.upload_settings_store.get()
+def _wrap_operation_request(brief: dict) -> dict[str, dict]:
+    return {"request": OperationApprovalRequestBrief(**brief).model_dump()}
+
+
+def _serialize_allowed_extensions_payload(settings_obj: object) -> dict[str, object]:
+    allowed_extensions = getattr(settings_obj, "allowed_extensions", None)
+    updated_at_ms = getattr(settings_obj, "updated_at_ms", None)
+    if not isinstance(allowed_extensions, list):
+        raise HTTPException(status_code=502, detail="upload_allowed_extensions_invalid_payload")
+    if any(not isinstance(item, str) or not item.strip() for item in allowed_extensions):
+        raise HTTPException(status_code=502, detail="upload_allowed_extensions_invalid_payload")
+    if type(updated_at_ms) is not int:
+        raise HTTPException(status_code=502, detail="upload_allowed_extensions_invalid_payload")
     return {
-        "allowed_extensions": settings_obj.allowed_extensions,
-        "updated_at_ms": settings_obj.updated_at_ms,
+        "allowed_extensions": allowed_extensions,
+        "updated_at_ms": updated_at_ms,
     }
 
 
-@router.get("/settings/allowed-extensions")
+def _get_allowed_extensions_payload(ctx: AuthContextDep) -> dict[str, object]:
+    return _serialize_allowed_extensions_payload(ctx.deps.upload_settings_store.get())
+
+
+@router.get("/settings/allowed-extensions", response_model=UploadAllowedExtensionsResponse)
 def get_allowed_extensions(ctx: AuthContextDep):
     return _get_allowed_extensions_payload(ctx)
 
 
-@router.put("/settings/allowed-extensions")
+@router.put("/settings/allowed-extensions", response_model=UploadAllowedExtensionsResponse)
 def update_allowed_extensions(request: Request, ctx: AuthContextDep, body: dict):
     if not ctx.snapshot.is_admin:
         raise HTTPException(status_code=403, detail="admin_required")
@@ -60,19 +77,16 @@ def update_allowed_extensions(request: Request, ctx: AuthContextDep, body: dict)
         meta={"changed_keys": ["allowed_extensions"]},
         **actor_fields_from_ctx(ctx.deps, ctx),
     )
-    return {
-        "allowed_extensions": updated.allowed_extensions,
-        "updated_at_ms": updated.updated_at_ms,
-    }
+    return _serialize_allowed_extensions_payload(updated)
 
 
-@router.post("/upload", response_model=OperationApprovalRequestBrief, status_code=202)
+@router.post("/upload", response_model=OperationApprovalRequestEnvelope, status_code=202)
 async def upload_document(
     request: Request,
     ctx: AuthContextDep,
     file: UploadFile = File(...),
 ):
-    kb_ref = request.query_params.get("kb_id", "灞曞巺")
+    kb_ref = require_non_empty_query_param(request, name="kb_id", detail="missing_kb_id")
     snapshot = ctx.snapshot
     kb_info = resolve_kb_ref(ctx.deps, kb_ref)
     assert_can_upload(snapshot)
@@ -91,4 +105,4 @@ async def upload_document(
         detail = getattr(e, "code", None) or str(e) or "operation_approval_create_failed"
         status_code = getattr(e, "status_code", 400)
         raise HTTPException(status_code=status_code, detail=detail) from e
-    return OperationApprovalRequestBrief(**brief)
+    return _wrap_operation_request(brief)

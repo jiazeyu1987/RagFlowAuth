@@ -28,3 +28,11 @@ class SignatureChallengeRequest(BaseModel):
 class SignatureChallengeResponse(BaseModel):
     sign_token: str
     expires_at_ms: int
+
+
+class ResultMessage(BaseModel):
+    message: str
+
+
+class ResultEnvelope(BaseModel):
+    result: ResultMessage

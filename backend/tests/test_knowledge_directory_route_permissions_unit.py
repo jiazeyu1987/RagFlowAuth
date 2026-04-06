@@ -55,7 +55,10 @@ class _RagflowService:
         }
 
     def normalize_dataset_id(self, dataset_ref: str):
-        return dataset_ref
+        index = self.get_dataset_index()
+        if dataset_ref in index["by_id"]:
+            return dataset_ref
+        return index["by_name"].get(dataset_ref)
 
     def list_datasets(self):
         return [{"id": "ds_1", "name": "KB-1"}]
@@ -65,6 +68,7 @@ class _DirectoryManager:
     def __init__(self):
         self.create_calls = []
         self.assign_calls = []
+        self.delete_calls = []
         self.nodes = []
 
     def create_node(self, *, name: str, parent_id: str | None, created_by: str):
@@ -95,6 +99,10 @@ class _DirectoryManager:
         self.assign_calls.append({"dataset_id": dataset_id, "node_id": node_id})
         return True
 
+    def delete_node(self, node_id: str):
+        self.delete_calls.append(node_id)
+        return True
+
 
 class _Deps:
     def __init__(self, *, user: _User, can_manage_kb_directory: bool, accessible_kbs=None, can_view_kb_config: bool = False):
@@ -105,7 +113,8 @@ class _Deps:
             can_view_kb_config=can_view_kb_config,
         )
         self.ragflow_service = _RagflowService()
-        self.knowledge_directory_manager = _DirectoryManager()
+        self.knowledge_tree_manager = _DirectoryManager()
+        self.knowledge_directory_manager = self.knowledge_tree_manager
 
 
 def _override_get_current_payload(_: Request) -> TokenPayload:
@@ -184,11 +193,48 @@ class TestKnowledgeDirectoryRoutePermissionsUnit(unittest.TestCase):
             )
 
         self.assertEqual(resp.status_code, 200)
-        self.assertEqual(resp.json().get("ok"), True)
+        self.assertEqual(
+            resp.json(),
+            {
+                "result": {
+                    "message": "knowledge_dataset_directory_assigned",
+                    "dataset_id": "ds_1",
+                    "node_id": "node_1",
+                }
+            },
+        )
         self.assertEqual(
             deps.knowledge_directory_manager.assign_calls,
             [{"dataset_id": "ds_1", "node_id": "node_1"}],
         )
+
+    def test_assign_dataset_rejects_unknown_dataset_ref(self):
+        client, _deps = _make_client(role="viewer", can_manage_kb_directory=True)
+        with client:
+            resp = client.put(
+                "/api/knowledge/directories/datasets/unknown-ds/node",
+                json={"node_id": "node_1"},
+            )
+
+        self.assertEqual(resp.status_code, 404)
+        self.assertEqual(resp.json().get("detail"), "dataset_not_found")
+
+    def test_delete_directory_returns_result_envelope(self):
+        client, deps = _make_client(role="viewer", can_manage_kb_directory=True)
+        with client:
+            deps.knowledge_directory_manager.create_node(
+                name="Folder A",
+                parent_id=None,
+                created_by="seed",
+            )
+            resp = client.delete("/api/knowledge/directories/node_1")
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(
+            resp.json(),
+            {"result": {"message": "knowledge_directory_deleted", "node_id": "node_1"}},
+        )
+        self.assertEqual(deps.knowledge_directory_manager.delete_calls, ["node_1"])
 
     def test_admin_company_override_lists_and_creates_target_company_directories(self):
         client, deps = _make_client(role="admin", can_manage_kb_directory=False)
@@ -227,6 +273,55 @@ class TestKnowledgeDirectoryRoutePermissionsUnit(unittest.TestCase):
 
         self.assertEqual(resp.status_code, 403)
         self.assertEqual(resp.json().get("detail"), "admin_required")
+
+    def test_list_directories_fails_fast_on_invalid_tree_payload(self):
+        client, deps = _make_client(
+            role="viewer",
+            can_manage_kb_directory=False,
+            accessible_kbs=["ds_1"],
+            can_view_kb_config=False,
+        )
+        deps.knowledge_directory_manager.snapshot = lambda datasets, prune_unknown=False: {"nodes": {}, "datasets": [], "bindings": {}}  # noqa: ARG005
+        with client:
+            resp = client.get("/api/knowledge/directories")
+
+        self.assertEqual(resp.status_code, 502)
+        self.assertEqual(resp.json().get("detail"), "knowledge_directory_tree_invalid_payload")
+
+    def test_admin_list_directories_fails_fast_on_invalid_dataset_list_payload(self):
+        client, deps = _make_client(role="admin", can_manage_kb_directory=False)
+        deps.ragflow_service.list_datasets = lambda: "bad-datasets"
+        with client:
+            resp = client.get("/api/knowledge/directories")
+
+        self.assertEqual(resp.status_code, 502)
+        self.assertEqual(resp.json().get("detail"), "knowledge_directory_dataset_list_invalid_payload")
+
+    def test_create_directory_fails_fast_on_invalid_node_payload(self):
+        client, deps = _make_client(role="viewer", can_manage_kb_directory=True)
+        deps.knowledge_directory_manager.create_node = lambda **kwargs: "bad-node"
+        with client:
+            resp = client.post(
+                "/api/knowledge/directories",
+                json={"name": "Folder A", "parent_id": None},
+            )
+
+        self.assertEqual(resp.status_code, 502)
+        self.assertEqual(resp.json().get("detail"), "knowledge_directory_node_invalid_payload")
+
+    def test_list_directories_requires_knowledge_tree_manager(self):
+        client, deps = _make_client(
+            role="viewer",
+            can_manage_kb_directory=False,
+            accessible_kbs=["ds_1"],
+            can_view_kb_config=False,
+        )
+        del deps.knowledge_tree_manager
+        with client:
+            resp = client.get("/api/knowledge/directories")
+
+        self.assertEqual(resp.status_code, 500)
+        self.assertEqual(resp.json().get("detail"), "knowledge_tree_manager_unavailable")
 
 
 if __name__ == "__main__":

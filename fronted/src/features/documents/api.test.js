@@ -68,9 +68,12 @@ describe('documentsApi', () => {
 
   it('uploads knowledge documents through the feature api boundary', async () => {
     const file = new File(['hello'], 'demo.txt', { type: 'text/plain' });
-    httpClient.requestJson.mockResolvedValue({ request_id: 'req-3' });
+    httpClient.requestJson.mockResolvedValue({ request: { request_id: 'req-3', status: 'in_approval' } });
 
-    await expect(documentsApi.uploadKnowledge(file, 'KB-1')).resolves.toEqual({ request_id: 'req-3' });
+    await expect(documentsApi.uploadKnowledge(file, 'KB-1')).resolves.toEqual({
+      request_id: 'req-3',
+      status: 'in_approval',
+    });
 
     expect(httpClient.requestJson).toHaveBeenCalledTimes(1);
     const [url, options] = httpClient.requestJson.mock.calls[0];
@@ -79,5 +82,58 @@ describe('documentsApi', () => {
     expect(options.includeContentType).toBe(false);
     expect(options.body).toBeInstanceOf(FormData);
     expect(options.body.get('file')).toBe(file);
+  });
+
+  it('deletes knowledge documents through the unified knowledge endpoint', async () => {
+    httpClient.requestJson.mockResolvedValue({ request: { request_id: 'req-4', status: 'in_approval' } });
+
+    await expect(
+      documentsApi.deleteDocument({
+        source: DOCUMENT_SOURCE.KNOWLEDGE,
+        docId: 'doc-3',
+      })
+    ).resolves.toEqual({ request_id: 'req-4', status: 'in_approval' });
+
+    expect(httpClient.requestJson).toHaveBeenCalledWith(
+      'http://auth.local/api/documents/knowledge/doc-3',
+      { method: 'DELETE' }
+    );
+  });
+
+  it('requires dataset on ragflow batch downloads before sending the request', async () => {
+    await expect(
+      documentsApi.batchDownloadRagflowToBrowser([{ doc_id: 'doc-1', name: 'Doc 1' }])
+    ).rejects.toThrow('missing_dataset');
+
+    expect(httpClient.request).not.toHaveBeenCalled();
+  });
+
+  it('fails fast when approval request envelopes are invalid', async () => {
+    const file = new File(['hello'], 'demo.txt', { type: 'text/plain' });
+    httpClient.requestJson
+      .mockResolvedValueOnce({ request_id: 'req-3' })
+      .mockResolvedValueOnce({ request: { status: 'in_approval' } });
+
+    await expect(documentsApi.uploadKnowledge(file, 'KB-1')).rejects.toThrow(
+      'knowledge_document_upload_invalid_payload'
+    );
+    await expect(
+      documentsApi.deleteDocument({
+        source: DOCUMENT_SOURCE.KNOWLEDGE,
+        docId: 'doc-3',
+      })
+    ).rejects.toThrow('knowledge_document_delete_invalid_payload');
+  });
+
+  it('rejects ragflow deletes because that behavior now belongs to the document browser feature api', async () => {
+    expect(() =>
+      documentsApi.deleteDocument({
+        source: DOCUMENT_SOURCE.RAGFLOW,
+        docId: 'doc-4',
+        datasetName: 'KB-1',
+      })
+    ).toThrow('invalid_source');
+
+    expect(httpClient.requestJson).not.toHaveBeenCalled();
   });
 });

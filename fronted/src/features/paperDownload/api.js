@@ -2,6 +2,34 @@ import { authBackendUrl } from '../../config/backend';
 import { DOCUMENT_SOURCE } from '../../shared/documents/constants';
 import { httpClient } from '../../shared/http/httpClient';
 
+const assertObjectPayload = (payload, action) => {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    throw new Error(`${action}_invalid_payload`);
+  }
+  return payload;
+};
+
+const normalizeStopSessionResult = (payload) => {
+  const envelope = assertObjectPayload(payload, 'paper_download_stop_session');
+  if (!envelope.result || typeof envelope.result !== 'object' || Array.isArray(envelope.result)) {
+    throw new Error('paper_download_stop_session_invalid_payload');
+  }
+  const result = envelope.result;
+  if (typeof result.message !== 'string' || !result.message.trim()) {
+    throw new Error('paper_download_stop_session_invalid_payload');
+  }
+  if (typeof result.session_id !== 'string' || !result.session_id.trim()) {
+    throw new Error('paper_download_stop_session_invalid_payload');
+  }
+  if (typeof result.status !== 'string' || !result.status.trim()) {
+    throw new Error('paper_download_stop_session_invalid_payload');
+  }
+  if (typeof result.already_finished !== 'boolean') {
+    throw new Error('paper_download_stop_session_invalid_payload');
+  }
+  return result;
+};
+
 const DEFAULT_LOCAL_KB = '[鏈湴璁烘枃]';
 
 export const paperDownloadApi = {
@@ -30,10 +58,12 @@ export const paperDownloadApi = {
     });
   },
 
-  stopSession(sessionId) {
-    return httpClient.requestJson(authBackendUrl(`/api/paper-download/sessions/${encodeURIComponent(sessionId)}/stop`), {
-      method: 'POST',
-    });
+  async stopSession(sessionId) {
+    return normalizeStopSessionResult(
+      await httpClient.requestJson(authBackendUrl(`/api/paper-download/sessions/${encodeURIComponent(sessionId)}/stop`), {
+        method: 'POST',
+      })
+    );
   },
 
   listHistoryKeywords() {

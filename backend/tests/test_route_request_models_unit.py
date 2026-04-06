@@ -61,6 +61,7 @@ class _FakeSearchConfigService:
     def __init__(self):
         self.created = []
         self.updated = []
+        self.deleted = []
 
     def list_agents(self, *args, **kwargs):  # noqa: ARG002
         return []
@@ -77,6 +78,7 @@ class _FakeSearchConfigService:
         return {"id": agent_id, "title": payload.get("title"), "create_time": 1, "update_time": 2, **payload}
 
     def delete_agent(self, agent_id):  # noqa: ARG002
+        self.deleted.append(agent_id)
         return True
 
 
@@ -102,6 +104,9 @@ class _FakeRagflowService:
     def update_dataset(self, dataset_ref, updates):
         self.updated.append((dataset_ref, updates))
         return {"id": dataset_ref, **updates}
+
+    def get_dataset_detail(self, dataset_ref):
+        return {"id": dataset_ref, "name": f"kb-{dataset_ref}"}
 
 
 class _FakeKnowledgeManagementManager:
@@ -134,6 +139,35 @@ class _FakeSearchChatService:
         if self.raise_error:
             raise RuntimeError("upstream_failed")
         return {"chunks": [], "count": 0}
+
+
+class _FakeOperationApprovalService:
+    def __init__(self):
+        self.calls = []
+
+    async def create_request(self, *, operation_type, ctx, **kwargs):
+        self.calls.append(
+            {
+                "operation_type": operation_type,
+                "actor": ctx.payload.sub,
+                **dict(kwargs or {}),
+            }
+        )
+        return {
+            "request_id": "req-1",
+            "operation_type": operation_type,
+            "operation_label": operation_type,
+            "status": "in_approval",
+            "current_step_no": 1,
+            "current_step_name": "review",
+            "submitted_at_ms": 1,
+            "target_ref": str(kwargs.get("dataset_ref") or ""),
+            "target_label": str(kwargs.get("dataset_ref") or ""),
+            "applicant_user_id": ctx.payload.sub,
+            "applicant_username": "u1",
+            "summary": {},
+            "last_error": None,
+        }
 
 
 def _make_client(*, router, deps, prefix="/api") -> TestClient:
@@ -197,6 +231,58 @@ class TestSearchConfigRequestModelsUnit(unittest.TestCase):
             self.assertEqual(r4.status_code, 200)
             self.assertEqual(svc.created[0].get("title"), "n1")
 
+    def test_search_config_delete_returns_result_envelope(self):
+        svc = _FakeSearchConfigService()
+        deps = SimpleNamespace(
+            user_store=_FakeUserStore(role="admin"),
+            permission_group_store=_FakePermissionGroupStore(),
+            ragflow_chat_service=svc,
+        )
+        with _make_client(router=search_configs_router, deps=deps) as client:
+            resp = client.delete("/api/search/configs/a1")
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json(), {"result": {"message": "search_config_deleted"}})
+        self.assertEqual(svc.deleted, ["a1"])
+
+    def test_search_config_list_fails_fast_on_invalid_service_payload(self):
+        svc = _FakeSearchConfigService()
+        svc.list_agents = lambda *args, **kwargs: ["bad"]  # noqa: ARG005
+        deps = SimpleNamespace(
+            user_store=_FakeUserStore(role="admin"),
+            permission_group_store=_FakePermissionGroupStore(),
+            ragflow_chat_service=svc,
+        )
+        with _make_client(router=search_configs_router, deps=deps) as client:
+            resp = client.get("/api/search/configs")
+        self.assertEqual(resp.status_code, 502)
+        self.assertEqual(resp.json().get("detail"), "config_list_invalid_payload")
+
+    def test_search_config_get_fails_fast_on_invalid_service_payload(self):
+        svc = _FakeSearchConfigService()
+        svc.get_agent = lambda config_id: "bad"  # noqa: ARG005
+        deps = SimpleNamespace(
+            user_store=_FakeUserStore(role="admin"),
+            permission_group_store=_FakePermissionGroupStore(),
+            ragflow_chat_service=svc,
+        )
+        with _make_client(router=search_configs_router, deps=deps) as client:
+            resp = client.get("/api/search/configs/a1")
+        self.assertEqual(resp.status_code, 502)
+        self.assertEqual(resp.json().get("detail"), "config_invalid_payload")
+
+    def test_search_config_create_fails_fast_on_invalid_service_payload(self):
+        svc = _FakeSearchConfigService()
+        svc.create_agent = lambda payload: "bad"  # noqa: ARG005
+        deps = SimpleNamespace(
+            user_store=_FakeUserStore(role="admin"),
+            permission_group_store=_FakePermissionGroupStore(),
+            ragflow_chat_service=svc,
+        )
+        with _make_client(router=search_configs_router, deps=deps) as client:
+            resp = client.post("/api/search/configs", json={"name": "n1", "config": {}})
+        self.assertEqual(resp.status_code, 502)
+        self.assertEqual(resp.json().get("detail"), "config_create_invalid_payload")
+
 
 class TestDatasetRequestModelsUnit(unittest.TestCase):
     def test_dataset_create_and_update_validate_body(self):
@@ -206,6 +292,7 @@ class TestDatasetRequestModelsUnit(unittest.TestCase):
             permission_group_store=_FakePermissionGroupStore(),
             ragflow_service=ragflow,
             knowledge_management_manager=_FakeKnowledgeManagementManager(ragflow),
+            operation_approval_service=_FakeOperationApprovalService(),
         )
         with _make_client(router=agents_router, deps=deps) as client:
             r1 = client.post("/api/datasets", json="invalid")
@@ -232,6 +319,60 @@ class TestDatasetRequestModelsUnit(unittest.TestCase):
             self.assertEqual(ragflow.updated[0][0], "d1")
             self.assertEqual(ragflow.updated[0][1].get("id"), None)
             self.assertEqual(ragflow.updated[0][1].get("dataset_id"), None)
+
+    def test_dataset_delete_returns_request_envelope(self):
+        ragflow = _FakeRagflowService()
+        approval = _FakeOperationApprovalService()
+        deps = SimpleNamespace(
+            user_store=_FakeUserStore(role="admin"),
+            permission_group_store=_FakePermissionGroupStore(),
+            ragflow_service=ragflow,
+            knowledge_management_manager=_FakeKnowledgeManagementManager(ragflow),
+            operation_approval_service=approval,
+        )
+        with _make_client(router=agents_router, deps=deps) as client:
+            resp = client.delete("/api/datasets/d1")
+        self.assertEqual(resp.status_code, 202)
+        self.assertEqual(resp.json()["request"]["request_id"], "req-1")
+        self.assertEqual(resp.json()["request"]["operation_type"], "knowledge_base_delete")
+        self.assertEqual(
+            approval.calls,
+            [
+                {
+                    "operation_type": "knowledge_base_delete",
+                    "actor": "u1",
+                    "dataset_ref": "d1",
+                }
+            ],
+        )
+
+    def test_dataset_get_fails_fast_when_detail_lookup_errors(self):
+        ragflow = _FakeRagflowService()
+        ragflow.get_dataset_detail = lambda dataset_ref: (_ for _ in ()).throw(RuntimeError("dataset_detail_unavailable"))  # noqa: ARG005
+        deps = SimpleNamespace(
+            user_store=_FakeUserStore(role="admin"),
+            permission_group_store=_FakePermissionGroupStore(),
+            ragflow_service=ragflow,
+            knowledge_management_manager=_FakeKnowledgeManagementManager(ragflow),
+        )
+        with _make_client(router=agents_router, deps=deps) as client:
+            resp = client.get("/api/datasets/d1")
+        self.assertEqual(resp.status_code, 502)
+        self.assertEqual(resp.json().get("detail"), "dataset_detail_unavailable")
+
+    def test_dataset_get_fails_fast_on_invalid_payload(self):
+        ragflow = _FakeRagflowService()
+        ragflow.get_dataset_detail = lambda dataset_ref: "bad"  # noqa: ARG005
+        deps = SimpleNamespace(
+            user_store=_FakeUserStore(role="admin"),
+            permission_group_store=_FakePermissionGroupStore(),
+            ragflow_service=ragflow,
+            knowledge_management_manager=_FakeKnowledgeManagementManager(ragflow),
+        )
+        with _make_client(router=agents_router, deps=deps) as client:
+            resp = client.get("/api/datasets/d1")
+        self.assertEqual(resp.status_code, 502)
+        self.assertEqual(resp.json().get("detail"), "dataset_invalid_payload")
 
 
 class TestDatasetListingRoutesUnit(unittest.TestCase):

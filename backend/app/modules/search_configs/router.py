@@ -9,6 +9,8 @@ from pydantic import BaseModel, ValidationError
 from backend.app.core.authz import AuthContextDep
 from backend.app.core.pydantic_compat import model_dump, model_validate
 from backend.app.core.permission_resolver import ResourceScope, normalize_accessible_chat_ids
+from backend.models.auth import ResultEnvelope
+from backend.models.search_config import SearchConfigEnvelope, SearchConfigListEnvelope
 
 
 router = APIRouter()
@@ -21,6 +23,27 @@ class SearchConfigBody(BaseModel):
 
     class Config:
         extra = "allow"
+
+
+def _wrap_result(message: str, **extra: object) -> dict[str, dict[str, object]]:
+    result: dict[str, object] = {"message": message}
+    result.update(extra)
+    return {"result": result}
+
+
+def _require_config_item(value: object, *, detail: str) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        raise HTTPException(status_code=502, detail=detail)
+    return value
+
+
+def _require_config_list(value: object, *, detail: str) -> list[dict[str, Any]]:
+    if not isinstance(value, list):
+        raise HTTPException(status_code=502, detail=detail)
+    for item in value:
+        if not isinstance(item, dict):
+            raise HTTPException(status_code=502, detail=detail)
+    return value
 
 
 def _assert_admin(ctx: AuthContextDep) -> None:
@@ -39,13 +62,12 @@ def _assert_agent_access(ctx: AuthContextDep, agent_id: str) -> None:
         raise HTTPException(status_code=403, detail="no_chat_permission")
 
 
-@router.get("/search/configs")
+@router.get("/search/configs", response_model=SearchConfigListEnvelope)
 async def list_search_configs(ctx: AuthContextDep):
     # Read is allowed for any authenticated user (same as other "config panels").
     snapshot = ctx.snapshot
     items = ctx.deps.ragflow_chat_service.list_agents(page_size=1000)
-    if not isinstance(items, list):
-        items = []
+    items = _require_config_list(items, detail="config_list_invalid_payload")
 
     if not snapshot.is_admin:
         if snapshot.chat_scope == ResourceScope.NONE:
@@ -71,13 +93,14 @@ async def list_search_configs(ctx: AuthContextDep):
     return {"configs": configs, "count": len(configs)}
 
 
-@router.get("/search/configs/{config_id}")
+@router.get("/search/configs/{config_id}", response_model=SearchConfigEnvelope)
 async def get_search_config(config_id: str, ctx: AuthContextDep):
     _assert_agent_access(ctx, config_id)
 
     item = ctx.deps.ragflow_chat_service.get_agent(config_id)
     if not item:
         raise HTTPException(status_code=404, detail="config_not_found")
+    item = _require_config_item(item, detail="config_invalid_payload")
     return {
         "config": {
             "id": item.get("id"),
@@ -89,7 +112,7 @@ async def get_search_config(config_id: str, ctx: AuthContextDep):
     }
 
 
-@router.post("/search/configs")
+@router.post("/search/configs", response_model=SearchConfigEnvelope)
 async def create_search_config(
     ctx: AuthContextDep,
     body: object = Body(...),
@@ -126,8 +149,9 @@ async def create_search_config(
         logger.error("[search_configs.create] error: %s", e, exc_info=True)
         raise HTTPException(status_code=502, detail="config_create_failed")
 
-    if not isinstance(created, dict) or not created.get("id"):
-        raise HTTPException(status_code=500, detail="config_create_failed")
+    created = _require_config_item(created, detail="config_create_invalid_payload")
+    if not created.get("id"):
+        raise HTTPException(status_code=502, detail="config_create_invalid_payload")
 
     return {
         "config": {
@@ -140,7 +164,7 @@ async def create_search_config(
     }
 
 
-@router.put("/search/configs/{config_id}")
+@router.put("/search/configs/{config_id}", response_model=SearchConfigEnvelope)
 async def update_search_config(
     config_id: str,
     ctx: AuthContextDep,
@@ -180,8 +204,9 @@ async def update_search_config(
         logger.error("[search_configs.update] error: %s", e, exc_info=True)
         raise HTTPException(status_code=502, detail="config_update_failed")
 
-    if not isinstance(updated, dict) or not updated.get("id"):
-        raise HTTPException(status_code=500, detail="config_update_failed")
+    updated = _require_config_item(updated, detail="config_update_invalid_payload")
+    if not updated.get("id"):
+        raise HTTPException(status_code=502, detail="config_update_invalid_payload")
 
     return {
         "config": {
@@ -194,7 +219,7 @@ async def update_search_config(
     }
 
 
-@router.delete("/search/configs/{config_id}")
+@router.delete("/search/configs/{config_id}", response_model=ResultEnvelope)
 async def delete_search_config(config_id: str, ctx: AuthContextDep):
     _assert_admin(ctx)
     try:
@@ -209,4 +234,4 @@ async def delete_search_config(config_id: str, ctx: AuthContextDep):
         raise HTTPException(status_code=502, detail="config_delete_failed")
     if not ok:
         raise HTTPException(status_code=404, detail="config_not_found")
-    return {"ok": True}
+    return _wrap_result("search_config_deleted")

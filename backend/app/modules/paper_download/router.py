@@ -5,6 +5,7 @@ from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
 from backend.app.core.authz import AuthContextDep
+from backend.models.download import DownloadSessionStopResultEnvelope
 from backend.services.paper_download.manager import LOCAL_PAPERS_KB_REF, PaperDownloadManager
 
 router = APIRouter()
@@ -49,7 +50,7 @@ async def get_paper_download_session(session_id: str, ctx: AuthContextDep):
     return mgr.get_session_payload(session_id=session_id, ctx=ctx)
 
 
-@router.post("/paper-download/sessions/{session_id}/stop")
+@router.post("/paper-download/sessions/{session_id}/stop", response_model=DownloadSessionStopResultEnvelope)
 async def stop_paper_download_session(session_id: str, ctx: AuthContextDep):
     mgr = PaperDownloadManager(ctx.deps)
     return mgr.stop_session_download(session_id=session_id, ctx=ctx)

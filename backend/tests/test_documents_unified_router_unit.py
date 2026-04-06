@@ -2,6 +2,7 @@
 import os
 import unittest
 import zipfile
+from unittest.mock import patch
 
 from authx import TokenPayload
 from fastapi import FastAPI, Request
@@ -89,6 +90,40 @@ class _DeletionLogStore:
         return None
 
 
+class _OperationApprovalService:
+    def __init__(self):
+        self.calls = []
+
+    async def create_request(self, *, operation_type, ctx, **kwargs):
+        self.calls.append(
+            {
+                "operation_type": operation_type,
+                "actor": ctx.payload.sub,
+                **dict(kwargs or {}),
+            }
+        )
+        target_ref = str(kwargs.get("doc_id") or kwargs.get("kb_ref") or "")
+        target_label = ""
+        upload_file = kwargs.get("upload_file")
+        if upload_file is not None:
+            target_label = getattr(upload_file, "filename", "") or ""
+        return {
+            "request_id": "req-1",
+            "operation_type": operation_type,
+            "operation_label": operation_type,
+            "status": "in_approval",
+            "current_step_no": 1,
+            "current_step_name": "review",
+            "submitted_at_ms": 1,
+            "target_ref": target_ref,
+            "target_label": target_label,
+            "applicant_user_id": ctx.payload.sub,
+            "applicant_username": "u1",
+            "summary": {},
+            "last_error": None,
+        }
+
+
 class _PermissionGroupStore:
     def get_group(self, group_id: int):
         if group_id == 1:
@@ -149,6 +184,7 @@ class _Deps:
         self.org_directory_store = _OrgDirectoryStore()
         self.org_structure_manager = self.org_directory_store
         self.watermark_policy_store = _WatermarkPolicyStore()
+        self.operation_approval_service = _OperationApprovalService()
 
 
 def _override_get_current_payload(_: Request) -> TokenPayload:
@@ -209,6 +245,27 @@ class TestDocumentsUnifiedRouterUnit(unittest.TestCase):
         finally:
             cleanup_dir(td)
 
+    def test_unified_download_ragflow_requires_dataset(self):
+        td = make_temp_dir(prefix="ragflowauth_documents_router")
+        try:
+            path = os.path.join(str(td), "x.txt")
+            with open(path, "wb") as f:
+                f.write(b"x")
+
+            kb_doc = _KbDoc(doc_id="k1", kb_id="kb1", file_path=path, filename="x.txt")
+            app = FastAPI()
+            app.state.deps = _Deps(kb_doc)
+            app.include_router(documents_router, prefix="/api")
+            app.dependency_overrides[auth_module.get_current_payload] = _override_get_current_payload
+
+            with TestClient(app) as client:
+                resp = client.get("/api/documents/ragflow/r1/download")
+
+            self.assertEqual(resp.status_code, 400)
+            self.assertEqual(resp.json()["detail"], "missing_dataset")
+        finally:
+            cleanup_dir(td)
+
     def test_unified_batch_download_knowledge(self):
         td = make_temp_dir(prefix="ragflowauth_documents_router")
         try:
@@ -244,7 +301,9 @@ class TestDocumentsUnifiedRouterUnit(unittest.TestCase):
 
             kb_doc = _KbDoc(doc_id="k1", kb_id="ds1", file_path=path, filename="a.txt")
             app = FastAPI()
-            app.state.deps = _Deps(kb_doc)
+            deps = _Deps(kb_doc)
+            deps.user_store = _UserStore(_User(role="admin"))
+            app.state.deps = deps
             app.include_router(documents_router, prefix="/api")
             app.dependency_overrides[auth_module.get_current_payload] = _override_get_current_payload
 
@@ -262,5 +321,130 @@ class TestDocumentsUnifiedRouterUnit(unittest.TestCase):
                 self.assertIn("watermark_manifest.json", zf.namelist())
                 self.assertIn("a.txt", zf.namelist())
                 self.assertEqual(zf.read("a.txt"), b"hello")
+        finally:
+            cleanup_dir(td)
+
+    def test_unified_upload_knowledge_returns_request_envelope(self):
+        td = make_temp_dir(prefix="ragflowauth_documents_router")
+        try:
+            path = os.path.join(str(td), "a.txt")
+            with open(path, "wb") as f:
+                f.write(b"hello")
+
+            kb_doc = _KbDoc(doc_id="k1", kb_id="kb1", file_path=path, filename="a.txt")
+            app = FastAPI()
+            app.state.deps = _Deps(kb_doc)
+            app.include_router(documents_router, prefix="/api")
+            app.dependency_overrides[auth_module.get_current_payload] = _override_get_current_payload
+
+            with TestClient(app) as client:
+                resp = client.post(
+                    "/api/documents/knowledge/upload?kb_id=kb1",
+                    files={"file": ("demo.txt", b"hello", "text/plain")},
+                )
+
+            self.assertEqual(resp.status_code, 202, resp.text)
+            self.assertEqual(resp.json()["request"]["request_id"], "req-1")
+            self.assertEqual(resp.json()["request"]["operation_type"], "knowledge_file_upload")
+        finally:
+            cleanup_dir(td)
+
+    def test_unified_upload_knowledge_requires_kb_id(self):
+        td = make_temp_dir(prefix="ragflowauth_documents_router")
+        try:
+            path = os.path.join(str(td), "a.txt")
+            with open(path, "wb") as f:
+                f.write(b"hello")
+
+            kb_doc = _KbDoc(doc_id="k1", kb_id="kb1", file_path=path, filename="a.txt")
+            app = FastAPI()
+            app.state.deps = _Deps(kb_doc)
+            app.include_router(documents_router, prefix="/api")
+            app.dependency_overrides[auth_module.get_current_payload] = _override_get_current_payload
+
+            with TestClient(app) as client:
+                resp = client.post(
+                    "/api/documents/knowledge/upload",
+                    files={"file": ("demo.txt", b"hello", "text/plain")},
+                )
+
+            self.assertEqual(resp.status_code, 400, resp.text)
+            self.assertEqual(resp.json()["detail"], "missing_kb_id")
+        finally:
+            cleanup_dir(td)
+
+    def test_unified_delete_knowledge_returns_request_envelope(self):
+        td = make_temp_dir(prefix="ragflowauth_documents_router")
+        try:
+            path = os.path.join(str(td), "a.txt")
+            with open(path, "wb") as f:
+                f.write(b"hello")
+
+            kb_doc = _KbDoc(doc_id="k1", kb_id="kb1", file_path=path, filename="a.txt")
+            app = FastAPI()
+            deps = _Deps(kb_doc)
+            app.state.deps = deps
+            app.include_router(documents_router, prefix="/api")
+            app.dependency_overrides[auth_module.get_current_payload] = _override_get_current_payload
+
+            with TestClient(app) as client:
+                resp = client.delete("/api/documents/knowledge/k1")
+
+            self.assertEqual(resp.status_code, 202, resp.text)
+            self.assertEqual(resp.json()["request"]["request_id"], "req-1")
+            self.assertEqual(
+                deps.operation_approval_service.calls,
+                [
+                    {
+                        "operation_type": "knowledge_file_delete",
+                        "actor": "u1",
+                        "doc_id": "k1",
+                    }
+                ],
+            )
+        finally:
+            cleanup_dir(td)
+
+    def test_unified_delete_ragflow_returns_result_envelope(self):
+        td = make_temp_dir(prefix="ragflowauth_documents_router")
+        try:
+            path = os.path.join(str(td), "a.txt")
+            with open(path, "wb") as f:
+                f.write(b"hello")
+
+            kb_doc = _KbDoc(doc_id="k1", kb_id="ds1", file_path=path, filename="a.txt")
+            app = FastAPI()
+            app.state.deps = _Deps(kb_doc)
+            app.include_router(documents_router, prefix="/api")
+            app.dependency_overrides[auth_module.get_current_payload] = _override_get_current_payload
+
+            with patch("backend.app.modules.documents.router.DocumentManager.delete_ragflow_document") as delete_mock:
+                with TestClient(app) as client:
+                    resp = client.delete("/api/documents/ragflow/r1?dataset_name=ds1")
+
+            self.assertEqual(resp.status_code, 202, resp.text)
+            self.assertEqual(resp.json(), {"result": {"message": "document_deleted"}})
+            delete_mock.assert_called_once()
+        finally:
+            cleanup_dir(td)
+
+    def test_unified_delete_ragflow_requires_dataset_name(self):
+        td = make_temp_dir(prefix="ragflowauth_documents_router")
+        try:
+            path = os.path.join(str(td), "a.txt")
+            with open(path, "wb") as f:
+                f.write(b"hello")
+
+            kb_doc = _KbDoc(doc_id="k1", kb_id="ds1", file_path=path, filename="a.txt")
+            app = FastAPI()
+            app.state.deps = _Deps(kb_doc)
+            app.include_router(documents_router, prefix="/api")
+            app.dependency_overrides[auth_module.get_current_payload] = _override_get_current_payload
+
+            with TestClient(app) as client:
+                resp = client.delete("/api/documents/ragflow/r1")
+
+            self.assertEqual(resp.status_code, 400, resp.text)
+            self.assertEqual(resp.json()["detail"], "missing_dataset_name")
         finally:
             cleanup_dir(td)

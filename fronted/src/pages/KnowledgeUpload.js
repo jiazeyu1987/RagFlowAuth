@@ -4,7 +4,6 @@ import SelectedFilesList from '../features/knowledge/upload/components/SelectedF
 import UploadDropzone from '../features/knowledge/upload/components/UploadDropzone';
 import UploadExtensionsPanel from '../features/knowledge/upload/components/UploadExtensionsPanel';
 import {
-  DEFAULT_KB_NAME,
   uploadPanelStyle,
 } from '../features/knowledge/upload/constants';
 import useKnowledgeUploadPage from '../features/knowledge/upload/useKnowledgeUploadPage';
@@ -159,7 +158,7 @@ const KnowledgeUpload = () => {
               ) : datasetOptions.length > 0 ? (
                 <option value="">没有匹配到知识库，请调整搜索关键词</option>
               ) : (
-                <option value={DEFAULT_KB_NAME}>{DEFAULT_KB_NAME}</option>
+                <option value="">No available knowledge base</option>
               )}
             </select>
           </div>
@@ -209,21 +208,39 @@ const KnowledgeUpload = () => {
 
             <button
               type="submit"
-              disabled={selectedFiles.length === 0 || uploading}
+              disabled={
+                selectedFiles.length === 0 ||
+                !kbId ||
+                uploading ||
+                loadingExtensions ||
+                allowedExtensions.length === 0
+              }
               data-testid="upload-submit"
               style={{
                 width: '100%',
                 marginTop: 12,
                 padding: 12,
                 backgroundColor:
-                  selectedFiles.length === 0 || uploading ? '#9ca3af' : '#3b82f6',
+                  selectedFiles.length === 0 ||
+                  !kbId ||
+                  uploading ||
+                  loadingExtensions ||
+                  allowedExtensions.length === 0
+                    ? '#9ca3af'
+                    : '#3b82f6',
                 color: 'white',
                 border: 'none',
                 borderRadius: 4,
                 fontSize: '1rem',
                 fontWeight: 500,
                 cursor:
-                  selectedFiles.length === 0 || uploading ? 'not-allowed' : 'pointer',
+                  selectedFiles.length === 0 ||
+                  !kbId ||
+                  uploading ||
+                  loadingExtensions ||
+                  allowedExtensions.length === 0
+                    ? 'not-allowed'
+                    : 'pointer',
               }}
             >
               {uploading

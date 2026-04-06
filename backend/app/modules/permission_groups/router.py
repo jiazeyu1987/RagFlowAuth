@@ -1,13 +1,25 @@
 from __future__ import annotations
 
 import logging
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
 
 from backend.app.core.auth import get_deps
-from backend.app.core.authz import AdminOnly, AuthContextDep
+from backend.app.core.authz import AuthContextDep
 from backend.app.core.permission_resolver import group_tool_scope_within_snapshot
 from backend.app.dependencies import AppDependencies
+from backend.models.auth import ResultEnvelope
+from backend.models.permission_group import (
+    PermissionGroupChatsEnvelope,
+    PermissionGroupCreateResultEnvelope,
+    PermissionGroupEnvelope,
+    PermissionGroupFolderEnvelope,
+    PermissionGroupFolderSnapshotEnvelope,
+    PermissionGroupKnowledgeBasesEnvelope,
+    PermissionGroupKnowledgeTreeEnvelope,
+    PermissionGroupListEnvelope,
+)
 
 from backend.app.modules.permission_groups.schemas import (
     PermissionGroupCreate,
@@ -22,6 +34,51 @@ logger = logging.getLogger(__name__)
 
 def get_service(deps: AppDependencies = Depends(get_deps)) -> PermissionGroupsService:
     return PermissionGroupsService(deps)
+
+
+def _require_object_payload(value: object, *, detail: str) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        raise HTTPException(status_code=502, detail=detail)
+    return value
+
+
+def _require_object_list(value: object, *, detail: str) -> list[dict[str, Any]]:
+    if not isinstance(value, list):
+        raise HTTPException(status_code=502, detail=detail)
+    for item in value:
+        if not isinstance(item, dict):
+            raise HTTPException(status_code=502, detail=detail)
+    return value
+
+
+def _require_knowledge_tree(value: object, *, detail: str) -> dict[str, Any]:
+    payload = _require_object_payload(value, detail=detail)
+    if not isinstance(payload.get("nodes"), list) or not isinstance(payload.get("datasets"), list):
+        raise HTTPException(status_code=502, detail=detail)
+    bindings = payload.get("bindings")
+    if not isinstance(bindings, dict):
+        raise HTTPException(status_code=502, detail=detail)
+    _require_object_list(payload["nodes"], detail=detail)
+    _require_object_list(payload["datasets"], detail=detail)
+    return payload
+
+
+def _require_folder_snapshot(value: object, *, detail: str) -> dict[str, Any]:
+    payload = _require_object_payload(value, detail=detail)
+    folders = payload.get("folders")
+    group_bindings = payload.get("group_bindings")
+    root_group_count = payload.get("root_group_count")
+    _require_object_list(folders, detail=detail)
+    if not isinstance(group_bindings, dict):
+        raise HTTPException(status_code=502, detail=detail)
+    if not isinstance(root_group_count, int) or isinstance(root_group_count, bool):
+        raise HTTPException(status_code=502, detail=detail)
+    for key, folder_id in group_bindings.items():
+        if not isinstance(key, str):
+            raise HTTPException(status_code=502, detail=detail)
+        if folder_id is not None and not isinstance(folder_id, str):
+            raise HTTPException(status_code=502, detail=detail)
+    return payload
 
 
 def _assert_group_management(ctx: AuthContextDep) -> None:
@@ -62,18 +119,21 @@ def _validate_group_scope(ctx: AuthContextDep, *, accessible_kbs, accessible_kb_
 
 
 def _list_manageable_groups(ctx: AuthContextDep, service: PermissionGroupsService) -> list[dict]:
-    groups = service.list_groups()
+    groups = _require_object_list(service.list_groups(), detail="permission_group_list_invalid_payload")
     groups = service.filter_manageable_groups(user=ctx.user, groups=groups)
+    groups = _require_object_list(groups, detail="permission_group_list_invalid_payload")
     manager = getattr(ctx.deps, "knowledge_management_manager", None)
     if manager is None:
-        return []
+        raise HTTPException(status_code=500, detail="knowledge_management_manager_unavailable")
     groups = manager.filter_manageable_permission_groups(user=ctx.user, groups=groups)
-    return _chat_management_manager(ctx).filter_manageable_permission_groups(user=ctx.user, groups=groups)
+    groups = _require_object_list(groups, detail="permission_group_list_invalid_payload")
+    groups = _chat_management_manager(ctx).filter_manageable_permission_groups(user=ctx.user, groups=groups)
+    return _require_object_list(groups, detail="permission_group_list_invalid_payload")
 
 
 def _list_assignable_groups(ctx: AuthContextDep, service: PermissionGroupsService) -> list[dict]:
     if ctx.snapshot.is_admin:
-        return service.list_groups()
+        return _require_object_list(service.list_groups(), detail="permission_group_list_invalid_payload")
     _assert_group_management(ctx)
     groups = _list_manageable_groups(ctx, service)
     return [group for group in groups if group_tool_scope_within_snapshot(ctx.snapshot, group)]
@@ -82,8 +142,10 @@ def _list_assignable_groups(ctx: AuthContextDep, service: PermissionGroupsServic
 def _get_manageable_group(ctx: AuthContextDep, service: PermissionGroupsService, group_id: int) -> dict:
     group = service.get_group(group_id)
     if not group:
-        raise HTTPException(status_code=404, detail="Permission group not found")
+        raise HTTPException(status_code=404, detail="permission_group_not_found")
+    group = _require_object_payload(group, detail="permission_group_invalid_payload")
     group = service.assert_group_manageable(user=ctx.user, group=group)
+    group = _require_object_payload(group, detail="permission_group_invalid_payload")
     try:
         group = ctx.deps.knowledge_management_manager.assert_permission_group_manageable(
             user=ctx.user,
@@ -92,19 +154,23 @@ def _get_manageable_group(ctx: AuthContextDep, service: PermissionGroupsService,
     except Exception as exc:
         raise HTTPException(status_code=int(getattr(exc, "status_code", 403) or 403), detail=str(exc)) from exc
     try:
-        return _chat_management_manager(ctx).assert_permission_group_manageable(
+        group = _chat_management_manager(ctx).assert_permission_group_manageable(
             user=ctx.user,
             group=group,
         )
+        return _require_object_payload(group, detail="permission_group_invalid_payload")
     except Exception as exc:
         raise HTTPException(status_code=int(getattr(exc, "status_code", 403) or 403), detail=str(exc)) from exc
 
 
 def _list_manageable_folder_snapshot(ctx: AuthContextDep, service: PermissionGroupsService) -> dict:
     groups = _list_manageable_groups(ctx, service)
-    snapshot = service.list_group_folders()
+    snapshot = _require_folder_snapshot(
+        service.list_group_folders(),
+        detail="permission_group_folder_snapshot_invalid_payload",
+    )
     clean_user_id = str(getattr(ctx.user, "user_id", "") or "").strip()
-    folders = [folder for folder in (snapshot or {}).get("folders", []) if isinstance(folder, dict)]
+    folders = list(snapshot.get("folders", []))
     by_id = {
         str(folder.get("id")): folder
         for folder in folders
@@ -139,7 +205,7 @@ def _list_manageable_folder_snapshot(ctx: AuthContextDep, service: PermissionGro
             _include_with_ancestors(folder.get("id"))
 
     return {
-        **(snapshot or {}),
+        **snapshot,
         "folders": [folder for folder in folders if str(folder.get("id") or "") in visible_ids],
         "group_bindings": group_bindings,
         "root_group_count": root_group_count,
@@ -154,27 +220,68 @@ def _visible_folder_ids(folder_snapshot: dict) -> set[str]:
     }
 
 
+def _wrap_groups(groups: list[dict]) -> dict[str, list[dict]]:
+    return {"groups": groups}
+
+
+def _wrap_group(group: dict) -> dict[str, dict]:
+    return {"group": group}
+
+
+def _wrap_result(message: str, **extra: object) -> dict[str, dict[str, object]]:
+    result: dict[str, object] = {"message": message}
+    result.update(extra)
+    return {"result": result}
+
+
+def _wrap_knowledge_bases(knowledge_bases: list[dict]) -> dict[str, list[dict]]:
+    return {"knowledge_bases": knowledge_bases}
+
+
+def _wrap_knowledge_tree(knowledge_tree: dict) -> dict[str, dict]:
+    return {"knowledge_tree": knowledge_tree}
+
+
+def _wrap_chats(chats: list[dict]) -> dict[str, list[dict]]:
+    return {"chats": chats}
+
+
+def _wrap_folder_snapshot(folder_snapshot: dict) -> dict[str, dict]:
+    return {"folder_snapshot": folder_snapshot}
+
+
+def _wrap_folder(folder: dict) -> dict[str, dict]:
+    return {"folder": folder}
+
+
+def _raise_resource_error(action: str, exc: Exception, *, default_detail: str) -> None:
+    logger.error("Failed to %s: %s", action, exc, exc_info=True)
+    status_code = int(getattr(exc, "status_code", 500) or 500)
+    detail = str(exc).strip() or default_detail
+    raise HTTPException(status_code=status_code, detail=detail) from exc
+
+
 def create_router() -> APIRouter:
     router = APIRouter()
 
-    @router.get("/permission-groups")
+    @router.get("/permission-groups", response_model=PermissionGroupListEnvelope)
     async def list_permission_groups(
         ctx: AuthContextDep,
         service: PermissionGroupsService = Depends(get_service),
     ):
         _assert_group_management(ctx)
         groups = _list_manageable_groups(ctx, service)
-        return {"ok": True, "data": groups}
+        return _wrap_groups(groups)
 
-    @router.get("/permission-groups/assignable")
+    @router.get("/permission-groups/assignable", response_model=PermissionGroupListEnvelope)
     async def list_assignable_permission_groups(
         ctx: AuthContextDep,
         service: PermissionGroupsService = Depends(get_service),
     ):
         groups = _list_assignable_groups(ctx, service)
-        return {"ok": True, "data": groups}
+        return _wrap_groups(groups)
 
-    @router.get("/permission-groups/{group_id}")
+    @router.get("/permission-groups/{group_id}", response_model=PermissionGroupEnvelope)
     async def get_permission_group(
         group_id: int,
         ctx: AuthContextDep,
@@ -182,9 +289,9 @@ def create_router() -> APIRouter:
     ):
         _assert_group_management(ctx)
         group = _get_manageable_group(ctx, service, group_id)
-        return {"ok": True, "data": group}
+        return _wrap_group(group)
 
-    @router.post("/permission-groups")
+    @router.post("/permission-groups", response_model=PermissionGroupCreateResultEnvelope)
     async def create_permission_group(
         data: PermissionGroupCreate,
         ctx: AuthContextDep,
@@ -200,11 +307,11 @@ def create_router() -> APIRouter:
             accessible_chats=payload.get("accessible_chats"),
         )
         group_id = service.create_group(payload)
-        if not group_id:
-            raise HTTPException(status_code=400, detail="Failed to create permission group")
-        return {"ok": True, "data": {"group_id": group_id}}
+        if type(group_id) is not int:
+            raise HTTPException(status_code=502, detail="permission_group_create_invalid_payload")
+        return _wrap_result("permission_group_created", group_id=group_id)
 
-    @router.put("/permission-groups/{group_id}")
+    @router.put("/permission-groups/{group_id}", response_model=ResultEnvelope)
     async def update_permission_group(
         group_id: int,
         data: PermissionGroupUpdate,
@@ -227,10 +334,10 @@ def create_router() -> APIRouter:
         )
         success = service.update_group(group_id, payload)
         if not success:
-            raise HTTPException(status_code=400, detail="Failed to update permission group")
-        return {"ok": True}
+            raise HTTPException(status_code=400, detail="permission_group_update_failed")
+        return _wrap_result("permission_group_updated")
 
-    @router.delete("/permission-groups/{group_id}")
+    @router.delete("/permission-groups/{group_id}", response_model=ResultEnvelope)
     async def delete_permission_group(
         group_id: int,
         ctx: AuthContextDep,
@@ -240,10 +347,10 @@ def create_router() -> APIRouter:
         _get_manageable_group(ctx, service, group_id)
         success = service.delete_group(group_id)
         if not success:
-            raise HTTPException(status_code=400, detail="Failed to delete permission group")
-        return {"ok": True}
+            raise HTTPException(status_code=400, detail="permission_group_delete_failed")
+        return _wrap_result("permission_group_deleted")
 
-    @router.get("/permission-groups/resources/knowledge-bases")
+    @router.get("/permission-groups/resources/knowledge-bases", response_model=PermissionGroupKnowledgeBasesEnvelope)
     async def get_knowledge_bases(
         ctx: AuthContextDep,
         service: PermissionGroupsService = Depends(get_service),
@@ -251,14 +358,18 @@ def create_router() -> APIRouter:
         try:
             _assert_group_management(ctx)
             kb_list = ctx.deps.knowledge_management_manager.list_manageable_datasets(ctx.user)
-            return {"ok": True, "data": kb_list}
+            kb_list = _require_object_list(kb_list, detail="permission_group_knowledge_bases_invalid_payload")
+            return _wrap_knowledge_bases(kb_list)
         except HTTPException:
             raise
-        except Exception as e:
-            logger.error("Failed to get knowledge bases: %s", e, exc_info=True)
-            return {"ok": False, "error": str(e), "data": []}
+        except Exception as exc:
+            _raise_resource_error(
+                "get permission group knowledge bases",
+                exc,
+                default_detail="permission_group_knowledge_bases_unavailable",
+            )
 
-    @router.get("/permission-groups/resources/knowledge-tree")
+    @router.get("/permission-groups/resources/knowledge-tree", response_model=PermissionGroupKnowledgeTreeEnvelope)
     async def get_knowledge_tree(
         ctx: AuthContextDep,
         service: PermissionGroupsService = Depends(get_service),
@@ -266,14 +377,18 @@ def create_router() -> APIRouter:
         try:
             _assert_group_management(ctx)
             tree_data = ctx.deps.knowledge_management_manager.list_visible_tree(ctx.user)
-            return {"ok": True, "data": tree_data}
+            tree_data = _require_knowledge_tree(tree_data, detail="permission_group_knowledge_tree_invalid_payload")
+            return _wrap_knowledge_tree(tree_data)
         except HTTPException:
             raise
-        except Exception as e:
-            logger.error("Failed to get knowledge tree: %s", e, exc_info=True)
-            return {"ok": False, "error": str(e), "data": {"nodes": [], "datasets": [], "bindings": {}}}
+        except Exception as exc:
+            _raise_resource_error(
+                "get permission group knowledge tree",
+                exc,
+                default_detail="permission_group_knowledge_tree_unavailable",
+            )
 
-    @router.get("/permission-groups/resources/chats")
+    @router.get("/permission-groups/resources/chats", response_model=PermissionGroupChatsEnvelope)
     async def get_chat_agents(
         ctx: AuthContextDep,
         service: PermissionGroupsService = Depends(get_service),
@@ -281,28 +396,35 @@ def create_router() -> APIRouter:
         try:
             _assert_group_management(ctx)
             chat_list = _chat_management_manager(ctx).list_manageable_chat_resources(ctx.user)
-            return {"ok": True, "data": chat_list}
+            chat_list = _require_object_list(chat_list, detail="permission_group_chats_invalid_payload")
+            return _wrap_chats(chat_list)
         except HTTPException:
             raise
-        except Exception as e:
-            logger.error("Failed to get chat agents: %s", e, exc_info=True)
-            return {"ok": False, "error": str(e), "data": []}
+        except Exception as exc:
+            _raise_resource_error(
+                "get permission group chats",
+                exc,
+                default_detail="permission_group_chats_unavailable",
+            )
 
-    @router.get("/permission-groups/resources/group-folders")
+    @router.get("/permission-groups/resources/group-folders", response_model=PermissionGroupFolderSnapshotEnvelope)
     async def get_group_folders(
         ctx: AuthContextDep,
         service: PermissionGroupsService = Depends(get_service),
     ):
         try:
             _assert_group_management(ctx)
-            return {"ok": True, "data": _list_manageable_folder_snapshot(ctx, service)}
+            return _wrap_folder_snapshot(_list_manageable_folder_snapshot(ctx, service))
         except HTTPException:
             raise
-        except Exception as e:
-            logger.error("Failed to get group folders: %s", e, exc_info=True)
-            return {"ok": False, "error": str(e), "data": {"folders": [], "group_bindings": {}, "root_group_count": 0}}
+        except Exception as exc:
+            _raise_resource_error(
+                "get permission group folders",
+                exc,
+                default_detail="permission_group_folders_unavailable",
+            )
 
-    @router.post("/permission-groups/folders")
+    @router.post("/permission-groups/folders", response_model=PermissionGroupFolderEnvelope)
     async def create_group_folder(
         data: PermissionGroupFolderCreate,
         ctx: AuthContextDep,
@@ -314,9 +436,10 @@ def create_router() -> APIRouter:
             if data.parent_id not in _visible_folder_ids(folder_snapshot):
                 raise HTTPException(status_code=403, detail="permission_group_folder_out_of_management_scope")
         folder = service.create_group_folder(name=data.name, parent_id=data.parent_id, created_by=ctx.payload.sub)
-        return {"ok": True, "data": folder}
+        folder = _require_object_payload(folder, detail="permission_group_folder_invalid_payload")
+        return _wrap_folder(folder)
 
-    @router.put("/permission-groups/folders/{folder_id}")
+    @router.put("/permission-groups/folders/{folder_id}", response_model=PermissionGroupFolderEnvelope)
     async def update_group_folder(
         folder_id: str,
         data: PermissionGroupFolderUpdate,
@@ -339,9 +462,10 @@ def create_router() -> APIRouter:
                 raise HTTPException(status_code=403, detail="permission_group_folder_out_of_management_scope")
             payload["parent_id"] = data.parent_id
         folder = service.update_group_folder(folder_id, payload)
-        return {"ok": True, "data": folder}
+        folder = _require_object_payload(folder, detail="permission_group_folder_invalid_payload")
+        return _wrap_folder(folder)
 
-    @router.delete("/permission-groups/folders/{folder_id}")
+    @router.delete("/permission-groups/folders/{folder_id}", response_model=ResultEnvelope)
     async def delete_group_folder(
         folder_id: str,
         ctx: AuthContextDep,
@@ -354,6 +478,6 @@ def create_router() -> APIRouter:
         ok = service.delete_group_folder(folder_id)
         if not ok:
             raise HTTPException(status_code=404, detail="folder_not_found")
-        return {"ok": True}
+        return _wrap_result("permission_group_folder_deleted")
 
     return router

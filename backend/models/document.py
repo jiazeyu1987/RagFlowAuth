@@ -36,3 +36,41 @@ class DocumentResponse(BaseModel):
 class BatchDownloadRequest(BaseModel):
     """Batch download request model"""
     doc_ids: List[str]
+
+
+class RagflowDocumentTransferResult(BaseModel):
+    ok: bool
+    operation: str
+    source_dataset_name: str
+    target_dataset_name: str
+    source_doc_id: str
+    target_doc_id: str
+    filename: str
+    source_deleted: bool
+    parse_triggered: bool
+    parse_error: str
+
+
+class RagflowDocumentTransferFailure(BaseModel):
+    doc_id: str
+    source_dataset_name: str
+    target_dataset_name: str
+    detail: str
+
+
+class RagflowDocumentTransferResultEnvelope(BaseModel):
+    result: RagflowDocumentTransferResult
+
+
+class RagflowDocumentTransferBatchResult(BaseModel):
+    ok: bool
+    operation: str
+    total: int
+    success_count: int
+    failed_count: int
+    results: List[RagflowDocumentTransferResult]
+    failed: List[RagflowDocumentTransferFailure]
+
+
+class RagflowDocumentTransferBatchResultEnvelope(BaseModel):
+    result: RagflowDocumentTransferBatchResult

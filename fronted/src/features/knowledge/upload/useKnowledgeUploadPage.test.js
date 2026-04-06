@@ -59,11 +59,13 @@ describe('useKnowledgeUploadPage', () => {
     });
 
     knowledgeUploadApi.getAllowedExtensions.mockResolvedValue({
-      allowed_extensions: ['.txt', '.pdf'],
+      allowedExtensions: ['.txt', '.pdf'],
+      updatedAtMs: 1,
     });
 
     knowledgeUploadApi.updateAllowedExtensions.mockResolvedValue({
-      allowed_extensions: ['.txt', '.pdf'],
+      allowedExtensions: ['.txt', '.pdf'],
+      updatedAtMs: 2,
     });
 
     knowledgeUploadApi.uploadDocument.mockResolvedValue({
@@ -119,5 +121,68 @@ describe('useKnowledgeUploadPage', () => {
     expect(result.current.selectedFiles).toHaveLength(0);
 
     unmount();
+  });
+
+  it('disables upload capability when allowed extensions cannot be loaded', async () => {
+    knowledgeUploadApi.getAllowedExtensions.mockRejectedValue(new Error('upload_extensions_unavailable'));
+
+    const { result } = renderHook(() => useKnowledgeUploadPage());
+
+    await waitFor(() => {
+      expect(result.current.loadingExtensions).toBe(false);
+    });
+
+    expect(result.current.allowedExtensions).toEqual([]);
+    expect(result.current.extensionsMessage).toEqual(
+      expect.objectContaining({ type: 'error' })
+    );
+
+    const file = new File(['hello'], 'demo.txt', { type: 'text/plain' });
+    act(() => {
+      result.current.handleFileSelect({
+        target: {
+          files: [file],
+          value: 'demo.txt',
+        },
+      });
+    });
+
+    expect(result.current.error).toBe('upload_extensions_unavailable');
+    expect(knowledgeUploadApi.uploadDocument).not.toHaveBeenCalled();
+  });
+
+  it('clears kbId and fails fast when the user has no visible knowledge base', async () => {
+    useAuth.mockReturnValue({
+      accessibleKbs: [],
+      loading: false,
+      canViewKbConfig: () => false,
+    });
+
+    const { result } = renderHook(() => useKnowledgeUploadPage());
+
+    await waitFor(() => {
+      expect(result.current.loadingDatasets).toBe(false);
+    });
+
+    expect(result.current.kbId).toBe('');
+
+    const file = new File(['hello'], 'demo.txt', { type: 'text/plain' });
+    act(() => {
+      result.current.handleFileSelect({
+        target: {
+          files: [file],
+          value: 'demo.txt',
+        },
+      });
+    });
+
+    await act(async () => {
+      await result.current.handleUpload({
+        preventDefault() {},
+      });
+    });
+
+    expect(result.current.error).toBe('missing_kb_id');
+    expect(knowledgeUploadApi.uploadDocument).not.toHaveBeenCalled();
   });
 });

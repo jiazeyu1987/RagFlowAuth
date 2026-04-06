@@ -127,7 +127,7 @@ class TestChatAdminCrudUnit(unittest.TestCase):
 
             r3 = client.delete("/api/chats/c1")
             self.assertEqual(r3.status_code, 200)
-            self.assertEqual(r3.json(), {"ok": True})
+            self.assertEqual(r3.json(), {"result": {"message": "chat_deleted"}})
             self.assertEqual(deps.ragflow_chat_service.deleted, ["c1"])
 
     def test_get_chat_returns_named_chat_envelope(self):
@@ -136,6 +136,22 @@ class TestChatAdminCrudUnit(unittest.TestCase):
             resp = client.get("/api/chats/c1")
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.json(), {"chat": {"id": "c1", "name": "chat-c1"}})
+
+    def test_chat_list_fails_fast_on_invalid_service_payload(self):
+        client, deps = self._make_client(role="admin")
+        deps.ragflow_chat_service.list_chats = lambda *args, **kwargs: ["bad"]  # noqa: ARG005
+        with client:
+            resp = client.get("/api/chats")
+        self.assertEqual(resp.status_code, 502)
+        self.assertEqual(resp.json()["detail"], "chat_list_invalid_payload")
+
+    def test_get_chat_fails_fast_on_invalid_service_payload(self):
+        client, deps = self._make_client(role="admin")
+        deps.ragflow_chat_service.get_chat = lambda chat_id: "bad-payload"  # noqa: ARG005
+        with client:
+            resp = client.get("/api/chats/c1")
+        self.assertEqual(resp.status_code, 502)
+        self.assertEqual(resp.json()["detail"], "chat_invalid_payload")
 
     def test_non_admin_forbidden(self):
         client, _deps = self._make_client(role="user")
@@ -168,7 +184,7 @@ class TestChatAdminCrudUnit(unittest.TestCase):
 
             r3 = client.delete("/api/chats/c1")
             self.assertEqual(r3.status_code, 200)
-            self.assertEqual(r3.json(), {"ok": True})
+            self.assertEqual(r3.json(), {"result": {"message": "chat_deleted"}})
             self.assertEqual(deps.chat_management_manager.cleaned, ["c1"])
 
     def test_sub_admin_cannot_create_chat_with_out_of_scope_dataset(self):

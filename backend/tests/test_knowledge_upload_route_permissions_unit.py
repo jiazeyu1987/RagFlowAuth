@@ -124,6 +124,18 @@ def _make_client(*, accessible_kbs=None) -> tuple[TestClient, _Deps]:
 
 
 class TestKnowledgeUploadRoutePermissionsUnit(unittest.TestCase):
+    def test_upload_requires_explicit_kb_id(self):
+        client, deps = _make_client(accessible_kbs=["KB-1"])
+        with client:
+            resp = client.post(
+                "/api/knowledge/upload",
+                files={"file": ("demo.txt", b"hello", "text/plain")},
+            )
+
+        self.assertEqual(resp.status_code, 400, resp.text)
+        self.assertEqual(resp.json().get("detail"), "missing_kb_id")
+        self.assertEqual(deps.operation_approval_service.calls, [])
+
     def test_upload_accepts_dataset_id_variant_when_group_scope_stores_name(self):
         client, deps = _make_client(accessible_kbs=["KB-1"])
         with client:
@@ -133,7 +145,7 @@ class TestKnowledgeUploadRoutePermissionsUnit(unittest.TestCase):
             )
 
         self.assertEqual(resp.status_code, 202, resp.text)
-        self.assertEqual(resp.json()["request_id"], "req-1")
+        self.assertEqual(resp.json()["request"]["request_id"], "req-1")
         self.assertEqual(
             deps.operation_approval_service.calls,
             [

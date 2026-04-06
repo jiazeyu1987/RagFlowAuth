@@ -7,17 +7,22 @@ from pydantic import BaseModel
 from backend.app.core.authz import AuthContextDep
 from backend.app.core.kb_refs import resolve_kb_ref
 from backend.app.core.permission_resolver import (
-    assert_can_upload,
     assert_can_delete,
     assert_can_download,
+    assert_can_upload,
     assert_kb_allowed,
+)
+from backend.models.document import (
+    RagflowDocumentTransferBatchResult,
+    RagflowDocumentTransferBatchResultEnvelope,
+    RagflowDocumentTransferResult,
+    RagflowDocumentTransferResultEnvelope,
 )
 from backend.services.documents.document_manager import DocumentManager
 from backend.services.documents.models import DocumentRef
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
-
 
 class RagflowDocumentTransferRequest(BaseModel):
     source_dataset_name: str
@@ -36,6 +41,13 @@ class RagflowBatchTransferRequest(BaseModel):
     items: list[RagflowDocumentTransferItem]
 
 
+def _require_non_empty_value(value: str | None, detail: str) -> str:
+    normalized = str(value or "").strip()
+    if not normalized:
+        raise HTTPException(status_code=400, detail=detail)
+    return normalized
+
+
 def _normalize_document_list(documents: object) -> list:
     if not isinstance(documents, list):
         raise HTTPException(status_code=500, detail="documents_invalid_payload")
@@ -48,7 +60,47 @@ def _wrap_result(item: object) -> dict[str, object]:
     return {"result": item}
 
 
-def _transfer_one_document(*, doc_id: str, source_dataset: str, target_dataset: str, operation: str, deps, snapshot) -> dict:
+def _wrap_status(doc_id: str, status: object) -> dict[str, dict[str, str]]:
+    if not isinstance(status, str) or not status.strip():
+        raise HTTPException(status_code=500, detail="document_status_invalid_payload")
+    return {"status": {"doc_id": doc_id, "status": status}}
+
+
+def _wrap_document(detail: object) -> dict[str, dict]:
+    if not isinstance(detail, dict):
+        raise HTTPException(status_code=500, detail="document_detail_invalid_payload")
+    return {"document": detail}
+
+
+def _wrap_transfer_result(item: object) -> dict[str, dict]:
+    if not isinstance(item, dict):
+        raise HTTPException(status_code=500, detail="ragflow_document_transfer_invalid_payload")
+    try:
+        result = RagflowDocumentTransferResult.model_validate(item)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail="ragflow_document_transfer_invalid_payload") from exc
+    return {"result": result.model_dump()}
+
+
+def _wrap_transfer_batch_result(item: object) -> dict[str, dict]:
+    if not isinstance(item, dict):
+        raise HTTPException(status_code=500, detail="ragflow_document_transfer_batch_invalid_payload")
+    try:
+        result = RagflowDocumentTransferBatchResult.model_validate(item)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail="ragflow_document_transfer_batch_invalid_payload") from exc
+    return {"result": result.model_dump()}
+
+
+def _transfer_one_document(
+    *,
+    doc_id: str,
+    source_dataset: str,
+    target_dataset: str,
+    operation: str,
+    deps,
+    snapshot,
+) -> dict:
     op = str(operation or "").strip().lower()
     if op not in {"copy", "move"}:
         raise HTTPException(status_code=400, detail="invalid_operation")
@@ -78,7 +130,9 @@ def _transfer_one_document(*, doc_id: str, source_dataset: str, target_dataset: 
     parse_error = ""
     if isinstance(target_doc_id, str) and target_doc_id and target_doc_id != "uploaded":
         try:
-            parse_triggered = bool(deps.ragflow_service.parse_document(dataset_ref=target_dataset, document_id=target_doc_id))
+            parse_triggered = bool(
+                deps.ragflow_service.parse_document(dataset_ref=target_dataset, document_id=target_doc_id)
+            )
             if not parse_triggered:
                 parse_error = "target_parse_trigger_failed"
         except Exception as exc:
@@ -115,10 +169,11 @@ def _transfer_one_document(*, doc_id: str, source_dataset: str, target_dataset: 
 @router.get("/documents")
 def list_ragflow_documents(
     ctx: AuthContextDep,
-    dataset_name: str = "展厅",
+    dataset_name: str | None = None,
 ):
     deps = ctx.deps
     snapshot = ctx.snapshot
+    dataset_name = _require_non_empty_value(dataset_name, "missing_dataset_name")
     assert_kb_allowed(snapshot, resolve_kb_ref(deps, dataset_name).variants)
     documents = _normalize_document_list(deps.ragflow_service.list_documents(dataset_name))
     return {"documents": documents, "dataset": dataset_name}
@@ -128,39 +183,42 @@ def list_ragflow_documents(
 def get_document_status(
     doc_id: str,
     ctx: AuthContextDep,
-    dataset_name: str = "展厅",
+    dataset_name: str | None = None,
 ):
     deps = ctx.deps
     snapshot = ctx.snapshot
+    dataset_name = _require_non_empty_value(dataset_name, "missing_dataset_name")
     assert_kb_allowed(snapshot, resolve_kb_ref(deps, dataset_name).variants)
     status = deps.ragflow_service.get_document_status(doc_id, dataset_name)
     if status is None:
-        raise HTTPException(status_code=404, detail="文档不存在")
-    return {"doc_id": doc_id, "status": status}
+        raise HTTPException(status_code=404, detail="document_not_found")
+    return _wrap_status(doc_id, status)
 
 
 @router.get("/documents/{doc_id}")
 def get_document_detail(
     doc_id: str,
     ctx: AuthContextDep,
-    dataset_name: str = "展厅",
+    dataset_name: str | None = None,
 ):
     deps = ctx.deps
     snapshot = ctx.snapshot
+    dataset_name = _require_non_empty_value(dataset_name, "missing_dataset_name")
     assert_kb_allowed(snapshot, resolve_kb_ref(deps, dataset_name).variants)
     detail = deps.ragflow_service.get_document_detail(doc_id, dataset_name)
     if detail is None:
-        raise HTTPException(status_code=404, detail="文档不存在")
-    return detail
+        raise HTTPException(status_code=404, detail="document_not_found")
+    return _wrap_document(detail)
 
 
 @router.get("/documents/{doc_id}/download")
 def download_document(
     doc_id: str,
     ctx: AuthContextDep,
-    dataset: str = "展厅",
+    dataset: str | None = None,
     filename: str = None,
 ):
+    dataset = _require_non_empty_value(dataset, "missing_dataset")
     logger.info("[DOWNLOAD] doc_id=%s dataset=%s user=%s", doc_id, dataset, ctx.payload.sub)
     mgr = DocumentManager(ctx.deps)
     return mgr.download_ragflow_response(doc_id=doc_id, dataset=dataset, filename=filename, ctx=ctx)
@@ -170,12 +228,13 @@ def download_document(
 def preview_document(
     doc_id: str,
     ctx: AuthContextDep,
-    dataset: str = "展厅",
+    dataset: str | None = None,
 ):
+    dataset = _require_non_empty_value(dataset, "missing_dataset")
     logger.info("[PREVIEW] doc_id=%s dataset=%s user=%s", doc_id, dataset, ctx.payload.sub)
 
     snapshot = ctx.snapshot
-    assert_kb_allowed(snapshot, dataset)
+    assert_kb_allowed(snapshot, resolve_kb_ref(ctx.deps, dataset).variants)
     mgr = DocumentManager(ctx.deps)
     return mgr.preview_payload(DocumentRef(source="ragflow", doc_id=doc_id, dataset_name=dataset))
 
@@ -184,15 +243,16 @@ def preview_document(
 def delete_ragflow_document(
     doc_id: str,
     ctx: AuthContextDep,
-    dataset_name: str = "展厅",
+    dataset_name: str | None = None,
 ):
+    dataset_name = _require_non_empty_value(dataset_name, "missing_dataset_name")
     logger.info("[DELETE] doc_id=%s dataset=%s user=%s", doc_id, dataset_name, ctx.payload.sub)
     mgr = DocumentManager(ctx.deps)
     mgr.delete_ragflow_document(doc_id=doc_id, dataset_name=dataset_name, ctx=ctx)
-    return {"message": "文档已从RAGFlow删除"}
+    return _wrap_result({"message": "document_deleted"})
 
 
-@router.post("/documents/{doc_id}/transfer")
+@router.post("/documents/{doc_id}/transfer", response_model=RagflowDocumentTransferResultEnvelope)
 def transfer_ragflow_document(
     doc_id: str,
     body: RagflowDocumentTransferRequest,
@@ -201,19 +261,19 @@ def transfer_ragflow_document(
     deps = ctx.deps
     snapshot = ctx.snapshot
 
-    return _wrap_result(
+    return _wrap_transfer_result(
         _transfer_one_document(
-        doc_id=doc_id,
-        source_dataset=str(body.source_dataset_name or "").strip(),
-        target_dataset=str(body.target_dataset_name or "").strip(),
-        operation=str(body.operation or "").strip().lower(),
-        deps=deps,
-        snapshot=snapshot,
+            doc_id=doc_id,
+            source_dataset=str(body.source_dataset_name or "").strip(),
+            target_dataset=str(body.target_dataset_name or "").strip(),
+            operation=str(body.operation or "").strip().lower(),
+            deps=deps,
+            snapshot=snapshot,
         )
     )
 
 
-@router.post("/documents/transfer/batch")
+@router.post("/documents/transfer/batch", response_model=RagflowDocumentTransferBatchResultEnvelope)
 def transfer_ragflow_documents_batch(
     body: RagflowBatchTransferRequest,
     ctx: AuthContextDep,
@@ -264,7 +324,7 @@ def transfer_ragflow_documents_batch(
                 }
             )
 
-    return _wrap_result(
+    return _wrap_transfer_batch_result(
         {
             "ok": len(failed) == 0,
             "operation": operation,
@@ -293,19 +353,23 @@ def batch_download_documents(
     if not documents_info:
         raise HTTPException(status_code=400, detail="no_documents_selected")
 
+    normalized_documents_info: list[dict] = []
     for doc_info in documents_info:
-        dataset = doc_info.get("dataset", "展厅")
-        assert_kb_allowed(snapshot, dataset)
+        if not isinstance(doc_info, dict):
+            raise HTTPException(status_code=400, detail="invalid_document_item")
+        dataset = _require_non_empty_value(doc_info.get("dataset"), "missing_dataset")
+        assert_kb_allowed(snapshot, resolve_kb_ref(deps, dataset).variants)
+        normalized_documents_info.append({**doc_info, "dataset": dataset})
 
-    zip_content, filename = deps.ragflow_service.batch_download_documents(documents_info)
+    zip_content, filename = deps.ragflow_service.batch_download_documents(normalized_documents_info)
     if zip_content is None:
         logger.error("[BATCH DOWNLOAD] Failed to create zip - service returned None")
-        raise HTTPException(status_code=500, detail="批量下载失败")
+        raise HTTPException(status_code=500, detail="\u6279\u91cf\u4e0b\u8f7d\u5931\u8d25")
 
-    for doc_info in documents_info:
+    for doc_info in normalized_documents_info:
         doc_id = doc_info.get("doc_id") or doc_info.get("id")
         doc_name = doc_info.get("name", "unknown")
-        dataset = doc_info.get("dataset", "展厅")
+        dataset = doc_info["dataset"]
         kb_info = resolve_kb_ref(deps, dataset)
 
         deps.download_log_store.log_download(

@@ -5,10 +5,6 @@ import { useAuth } from '../../../hooks/useAuth';
 import { knowledgeApi } from '../api';
 import { knowledgeUploadApi } from './api';
 import {
-  DEFAULT_ACCEPTED_EXTENSIONS,
-  DEFAULT_KB_NAME,
-} from './constants';
-import {
   getDisplayPath,
   getFileExtensionLower,
   getFileUniqueKey,
@@ -77,7 +73,7 @@ export default function useKnowledgeUploadPage() {
   const canManageExtensions = canViewKbConfig();
   const [isMobile, setIsMobile] = useState(getInitialIsMobile);
   const [selectedFiles, setSelectedFiles] = useState([]);
-  const [kbId, setKbId] = useState(DEFAULT_KB_NAME);
+  const [kbId, setKbId] = useState('');
   const [kbSearchKeyword, setKbSearchKeyword] = useState('');
   const [datasets, setDatasets] = useState([]);
   const [loadingDatasets, setLoadingDatasets] = useState(true);
@@ -86,17 +82,14 @@ export default function useKnowledgeUploadPage() {
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
   const [dragActive, setDragActive] = useState(false);
-  const [allowedExtensions, setAllowedExtensions] = useState(DEFAULT_ACCEPTED_EXTENSIONS);
+  const [allowedExtensions, setAllowedExtensions] = useState([]);
   const [loadingExtensions, setLoadingExtensions] = useState(true);
   const [savingExtensions, setSavingExtensions] = useState(false);
   const [extensionDraft, setExtensionDraft] = useState('');
   const [extensionsMessage, setExtensionsMessage] = useState(null);
 
   const acceptAttr = useMemo(() => {
-    const values =
-      Array.isArray(allowedExtensions) && allowedExtensions.length > 0
-        ? allowedExtensions
-        : DEFAULT_ACCEPTED_EXTENSIONS;
+    const values = Array.isArray(allowedExtensions) ? allowedExtensions : [];
     return values.join(',');
   }, [allowedExtensions]);
 
@@ -181,16 +174,17 @@ export default function useKnowledgeUploadPage() {
         setDatasets(visibleDatasets);
 
         if (visibleDatasets.length > 0) {
-          const fallbackKb = getDatasetValue(visibleDatasets[0]) || DEFAULT_KB_NAME;
-          setKbId((current) => (current && datasetValues.has(current) ? current : fallbackKb));
+          const firstVisibleKb = getDatasetValue(visibleDatasets[0]);
+          setKbId((current) => (current && datasetValues.has(current) ? current : firstVisibleKb));
           setError(null);
         } else {
-          setKbId(DEFAULT_KB_NAME);
+          setKbId('');
           setError('您没有被分配任何知识库权限，请联系管理员');
         }
       } catch (requestError) {
         if (!active) return;
         setDatasets([]);
+        setKbId('');
         setError(requestError?.message || '无法加载知识库列表，请检查网络连接');
       } finally {
         if (active) {
@@ -215,15 +209,15 @@ export default function useKnowledgeUploadPage() {
         const payload = await knowledgeUploadApi.getAllowedExtensions();
         if (!active) return;
 
-        const normalizedExtensions =
-          Array.isArray(payload?.allowed_extensions) && payload.allowed_extensions.length > 0
-            ? payload.allowed_extensions.map(normalizeExtension).filter(Boolean)
-            : DEFAULT_ACCEPTED_EXTENSIONS;
+        const normalizedExtensions = payload.allowedExtensions
+          .map(normalizeExtension)
+          .filter(Boolean);
 
         setAllowedExtensions(Array.from(new Set(normalizedExtensions)).sort());
+        setExtensionsMessage(null);
       } catch (requestError) {
         if (!active) return;
-        setAllowedExtensions(DEFAULT_ACCEPTED_EXTENSIONS);
+        setAllowedExtensions([]);
         setExtensionsMessage({
           type: 'error',
           text:
@@ -244,6 +238,14 @@ export default function useKnowledgeUploadPage() {
   }, []);
 
   const addFiles = (filesLike) => {
+    if (loadingExtensions) {
+      setError('upload_extensions_loading');
+      return;
+    }
+    if (allowedExtensions.length === 0) {
+      setError('upload_extensions_unavailable');
+      return;
+    }
     const incomingFiles = Array.from(filesLike || []);
     if (incomingFiles.length === 0) return;
 
@@ -283,6 +285,19 @@ export default function useKnowledgeUploadPage() {
 
   const handleUpload = async (event) => {
     event.preventDefault();
+    if (loadingExtensions) {
+      setError('upload_extensions_loading');
+      return;
+    }
+    if (allowedExtensions.length === 0) {
+      setError('upload_extensions_unavailable');
+      return;
+    }
+    const normalizedKbId = normalizeKbRef(kbId);
+    if (!normalizedKbId) {
+      setError('missing_kb_id');
+      return;
+    }
 
     if (selectedFiles.length === 0) {
       setError('请选择文件');
@@ -306,7 +321,7 @@ export default function useKnowledgeUploadPage() {
         });
 
         try {
-          const result = await knowledgeUploadApi.uploadDocument(file, kbId);
+          const result = await knowledgeUploadApi.uploadDocument(file, normalizedKbId);
           results.push({
             ok: true,
             filename: getDisplayPath(file),
@@ -460,9 +475,9 @@ export default function useKnowledgeUploadPage() {
         allowedExtensions,
         trimmedReason
       );
-      const nextExtensions = Array.isArray(payload?.allowed_extensions)
-        ? payload.allowed_extensions.map(normalizeExtension).filter(Boolean)
-        : allowedExtensions;
+      const nextExtensions = payload.allowedExtensions
+        .map(normalizeExtension)
+        .filter(Boolean);
 
       setAllowedExtensions(Array.from(new Set(nextExtensions)).sort());
       setExtensionsMessage({

@@ -45,3 +45,26 @@ class OperationApprovalRequestBrief(BaseModel):
     applicant_username: Optional[str] = None
     summary: dict
     last_error: Optional[str] = None
+
+
+class OperationApprovalRequestEnvelope(BaseModel):
+    request: OperationApprovalRequestBrief
+
+
+class OperationApprovalWorkflowResult(BaseModel):
+    message: str
+    operation_type: str
+
+
+class OperationApprovalWorkflowResultEnvelope(BaseModel):
+    result: OperationApprovalWorkflowResult
+
+
+class OperationApprovalActionResult(BaseModel):
+    message: str
+    request_id: str
+    status: str
+
+
+class OperationApprovalActionResultEnvelope(BaseModel):
+    result: OperationApprovalActionResult

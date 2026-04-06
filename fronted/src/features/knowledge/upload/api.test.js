@@ -25,12 +25,16 @@ describe('knowledgeUploadApi', () => {
 
   it('loads and updates allowed extensions through the shared http client', async () => {
     httpClient.requestJson
-      .mockResolvedValueOnce({ allowed_extensions: ['.pdf'] })
-      .mockResolvedValueOnce({ allowed_extensions: ['.pdf', '.txt'] });
+      .mockResolvedValueOnce({ allowed_extensions: ['.pdf'], updated_at_ms: 1 })
+      .mockResolvedValueOnce({ allowed_extensions: ['.pdf', '.txt'], updated_at_ms: 2 });
 
-    await expect(knowledgeUploadApi.getAllowedExtensions()).resolves.toEqual({ allowed_extensions: ['.pdf'] });
+    await expect(knowledgeUploadApi.getAllowedExtensions()).resolves.toEqual({
+      allowedExtensions: ['.pdf'],
+      updatedAtMs: 1,
+    });
     await expect(knowledgeUploadApi.updateAllowedExtensions(['.pdf', '.txt'], 'test reason')).resolves.toEqual({
-      allowed_extensions: ['.pdf', '.txt'],
+      allowedExtensions: ['.pdf', '.txt'],
+      updatedAtMs: 2,
     });
 
     expect(httpClient.requestJson).toHaveBeenNthCalledWith(
@@ -58,5 +62,17 @@ describe('knowledgeUploadApi', () => {
     await expect(knowledgeUploadApi.uploadDocument(file, 'KB-1')).resolves.toEqual({ request_id: 'req-1' });
     expect(documentsApi.uploadKnowledge).toHaveBeenCalledWith(file, 'KB-1');
   });
-});
 
+  it('fails fast when allowed-extensions payload does not match the backend contract', async () => {
+    httpClient.requestJson
+      .mockResolvedValueOnce({ allowed_extensions: '.pdf', updated_at_ms: 1 })
+      .mockResolvedValueOnce({ allowed_extensions: ['.pdf'], updated_at_ms: '1' });
+
+    await expect(knowledgeUploadApi.getAllowedExtensions()).rejects.toThrow(
+      'knowledge_upload_allowed_extensions_get_invalid_payload'
+    );
+    await expect(knowledgeUploadApi.updateAllowedExtensions(['.pdf'], 'reason')).rejects.toThrow(
+      'knowledge_upload_allowed_extensions_update_invalid_payload'
+    );
+  });
+});

@@ -60,10 +60,18 @@ class _UserStore:
 
 
 class _KnowledgeManagementManager:
-    def __init__(self, *, can_manage: bool = True):
+    def __init__(
+        self,
+        *,
+        can_manage: bool = True,
+        knowledge_bases_error: Exception | None = None,
+        knowledge_tree_error: Exception | None = None,
+    ):
         self.validated_group_scope = []
         self.validated_group_ids = []
         self.can_manage = can_manage
+        self.knowledge_bases_error = knowledge_bases_error
+        self.knowledge_tree_error = knowledge_tree_error
 
     def assert_can_manage(self, user):  # noqa: ARG002
         if not self.can_manage:
@@ -103,6 +111,20 @@ class _KnowledgeManagementManager:
                 continue
         return filtered
 
+    def list_manageable_datasets(self, user):  # noqa: ARG002
+        if self.knowledge_bases_error is not None:
+            raise self.knowledge_bases_error
+        return [{"id": "ds-in", "name": "Managed KB"}]
+
+    def list_visible_tree(self, user):  # noqa: ARG002
+        if self.knowledge_tree_error is not None:
+            raise self.knowledge_tree_error
+        return {
+            "nodes": [{"id": "node-root", "name": "Root", "parent_id": None, "path": "/Root"}],
+            "datasets": [{"id": "ds-in", "name": "Managed KB", "node_path": "/Root"}],
+            "bindings": {},
+        }
+
 
 class _ChatManagementError(Exception):
     def __init__(self, code: str, *, status_code: int = 403):
@@ -111,9 +133,10 @@ class _ChatManagementError(Exception):
 
 
 class _ChatManagementManager:
-    def __init__(self):
+    def __init__(self, *, chat_list_error: Exception | None = None):
         self.validated_group_scope = []
         self.validated_group_ids = []
+        self.chat_list_error = chat_list_error
 
     def validate_group_chat_scope(self, *, user, accessible_chats):  # noqa: ARG002
         chats = list(accessible_chats or [])
@@ -140,6 +163,8 @@ class _ChatManagementManager:
         return filtered
 
     def list_manageable_chat_resources(self, user):  # noqa: ARG002
+        if self.chat_list_error is not None:
+            raise self.chat_list_error
         return [{"id": "chat_c_in", "name": "Owned Chat", "type": "chat"}]
 
     def validate_permission_group_ids(self, *, user, group_ids, permission_group_store):  # noqa: ARG002
@@ -238,6 +263,8 @@ class _PermissionGroupStore:
 class _PermissionGroupsService:
     def __init__(self):
         self.created_payloads = []
+        self.updated_calls = []
+        self.deleted_group_ids = []
 
     def list_groups(self):
         return [
@@ -287,9 +314,11 @@ class _PermissionGroupsService:
         return 1
 
     def update_group(self, group_id, payload):  # noqa: ARG002
+        self.updated_calls.append((group_id, dict(payload)))
         return True
 
     def delete_group(self, group_id):  # noqa: ARG002
+        self.deleted_group_ids.append(group_id)
         return True
 
     def list_knowledge_bases(self):
@@ -421,10 +450,20 @@ def _override_get_current_payload(_: Request) -> TokenPayload:
     return TokenPayload(sub="u_sub")
 
 
-def _make_permission_group_client(role: str = "sub_admin", *, group_ids: list[int] | None = None):
+def _make_permission_group_client(
+    role: str = "sub_admin",
+    *,
+    group_ids: list[int] | None = None,
+    knowledge_bases_error: Exception | None = None,
+    knowledge_tree_error: Exception | None = None,
+    chat_list_error: Exception | None = None,
+):
     user = _User(role=role, group_ids=group_ids)
-    km = _KnowledgeManagementManager()
-    cm = _ChatManagementManager()
+    km = _KnowledgeManagementManager(
+        knowledge_bases_error=knowledge_bases_error,
+        knowledge_tree_error=knowledge_tree_error,
+    )
+    cm = _ChatManagementManager(chat_list_error=chat_list_error)
     service = _PermissionGroupsService()
     app = FastAPI()
     app.state.deps = SimpleNamespace(
@@ -473,22 +512,22 @@ class TestSubAdminPermissionGroupRoutesUnit(unittest.TestCase):
         with client:
             resp = client.get("/api/permission-groups")
         self.assertEqual(resp.status_code, 200)
-        self.assertEqual([item["group_id"] for item in resp.json()["data"]], [1, 41, 42, 43])
-        self.assertEqual([item["group_name"] for item in resp.json()["data"]], ["in-scope", "tool-subset", "tool-out", "tool-global"])
+        self.assertEqual([item["group_id"] for item in resp.json()["groups"]], [1, 41, 42, 43])
+        self.assertEqual([item["group_name"] for item in resp.json()["groups"]], ["in-scope", "tool-subset", "tool-out", "tool-global"])
 
     def test_admin_can_list_assignable_permission_groups(self):
         client, _, _, _ = _make_permission_group_client(role="admin")
         with client:
             resp = client.get("/api/permission-groups/assignable")
         self.assertEqual(resp.status_code, 200)
-        self.assertEqual([item["group_id"] for item in resp.json()["data"]], [1, 41, 42, 43, 77, 98, 99])
+        self.assertEqual([item["group_id"] for item in resp.json()["groups"]], [1, 41, 42, 43, 77, 98, 99])
 
     def test_sub_admin_assignable_groups_are_filtered_by_own_tool_scope(self):
         client, _, _, _ = _make_permission_group_client(group_ids=[301])
         with client:
             resp = client.get("/api/permission-groups/assignable")
         self.assertEqual(resp.status_code, 200)
-        self.assertEqual([item["group_id"] for item in resp.json()["data"]], [1, 41])
+        self.assertEqual([item["group_id"] for item in resp.json()["groups"]], [1, 41])
 
     def test_sub_admin_can_create_group_with_in_scope_kb_resources(self):
         client, km, cm, service = _make_permission_group_client()
@@ -503,11 +542,19 @@ class TestSubAdminPermissionGroupRoutesUnit(unittest.TestCase):
                 },
             )
         self.assertEqual(resp.status_code, 200)
-        self.assertEqual(resp.json()["data"]["group_id"], 1)
+        self.assertEqual(resp.json(), {"result": {"message": "permission_group_created", "group_id": 1}})
         self.assertEqual(service.created_payloads[0]["accessible_kbs"], ["ds-in"])
         self.assertEqual(service.created_payloads[0]["created_by"], "u_sub")
         self.assertEqual(km.validated_group_scope[0]["accessible_kb_nodes"], ["node-root"])
         self.assertEqual(cm.validated_group_scope[0], ["chat_c_in"])
+
+    def test_sub_admin_can_get_manageable_group(self):
+        client, _, _, _ = _make_permission_group_client()
+        with client:
+            resp = client.get("/api/permission-groups/41")
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json()["group"]["group_id"], 41)
+        self.assertEqual(resp.json()["group"]["group_name"], "tool-subset")
 
     def test_sub_admin_cannot_create_group_with_out_of_scope_kb_resources(self):
         client, _, _, _ = _make_permission_group_client()
@@ -552,19 +599,81 @@ class TestSubAdminPermissionGroupRoutesUnit(unittest.TestCase):
         self.assertEqual(resp.status_code, 403)
         self.assertEqual(resp.json()["detail"], "permission_group_out_of_management_scope")
 
+    def test_sub_admin_can_update_group_returns_result_envelope(self):
+        client, _, _, service = _make_permission_group_client()
+        with client:
+            resp = client.put("/api/permission-groups/41", json={"group_name": "Renamed"})
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json(), {"result": {"message": "permission_group_updated"}})
+        self.assertEqual(service.updated_calls, [(41, {"group_name": "Renamed"})])
+
+    def test_sub_admin_can_delete_group_returns_result_envelope(self):
+        client, _, _, service = _make_permission_group_client()
+        with client:
+            resp = client.delete("/api/permission-groups/41")
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json(), {"result": {"message": "permission_group_deleted"}})
+        self.assertEqual(service.deleted_group_ids, [41])
+
+    def test_sub_admin_gets_knowledge_tree_envelope(self):
+        client, _, _, _ = _make_permission_group_client()
+        with client:
+            resp = client.get("/api/permission-groups/resources/knowledge-tree")
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json()["knowledge_tree"]["datasets"][0]["id"], "ds-in")
+
+    def test_sub_admin_knowledge_tree_route_fails_fast_on_manager_error(self):
+        client, _, _, _ = _make_permission_group_client(knowledge_tree_error=RuntimeError("knowledge_tree_unavailable"))
+        with client:
+            resp = client.get("/api/permission-groups/resources/knowledge-tree")
+        self.assertEqual(resp.status_code, 500)
+        self.assertEqual(resp.json()["detail"], "knowledge_tree_unavailable")
+
     def test_sub_admin_only_gets_owned_chat_resources(self):
         client, _, _, _ = _make_permission_group_client()
         with client:
             resp = client.get("/api/permission-groups/resources/chats")
         self.assertEqual(resp.status_code, 200)
-        self.assertEqual(resp.json()["data"], [{"id": "chat_c_in", "name": "Owned Chat", "type": "chat"}])
+        self.assertEqual(resp.json()["chats"], [{"id": "chat_c_in", "name": "Owned Chat", "type": "chat"}])
 
     def test_sub_admin_only_gets_manageable_group_folders(self):
         client, _, _, _ = _make_permission_group_client()
         with client:
             resp = client.get("/api/permission-groups/resources/group-folders")
         self.assertEqual(resp.status_code, 200)
-        self.assertEqual([item["id"] for item in resp.json()["data"]["folders"]], ["folder-visible", "folder-hidden"])
+        self.assertEqual([item["id"] for item in resp.json()["folder_snapshot"]["folders"]], ["folder-visible", "folder-hidden"])
+
+    def test_permission_group_list_fails_fast_on_invalid_service_payload(self):
+        client, _, _, service = _make_permission_group_client()
+        service.list_groups = lambda: ["bad"]
+        with client:
+            resp = client.get("/api/permission-groups")
+        self.assertEqual(resp.status_code, 502)
+        self.assertEqual(resp.json()["detail"], "permission_group_list_invalid_payload")
+
+    def test_permission_group_knowledge_tree_fails_fast_on_invalid_payload(self):
+        client, km, _, _ = _make_permission_group_client()
+        km.list_visible_tree = lambda user: {"nodes": {}, "datasets": [], "bindings": {}}  # noqa: ARG005
+        with client:
+            resp = client.get("/api/permission-groups/resources/knowledge-tree")
+        self.assertEqual(resp.status_code, 502)
+        self.assertEqual(resp.json()["detail"], "permission_group_knowledge_tree_invalid_payload")
+
+    def test_permission_group_folders_fail_fast_on_invalid_snapshot_payload(self):
+        client, _, _, service = _make_permission_group_client()
+        service.list_group_folders = lambda groups=None: {"folders": {}, "group_bindings": {}, "root_group_count": 0}  # noqa: ARG005
+        with client:
+            resp = client.get("/api/permission-groups/resources/group-folders")
+        self.assertEqual(resp.status_code, 502)
+        self.assertEqual(resp.json()["detail"], "permission_group_folder_snapshot_invalid_payload")
+
+    def test_permission_group_folder_create_fails_fast_on_invalid_payload(self):
+        client, _, _, service = _make_permission_group_client()
+        service.create_group_folder = lambda name, parent_id, created_by: "bad-folder"  # noqa: ARG005
+        with client:
+            resp = client.post("/api/permission-groups/folders", json={"name": "Root Folder"})
+        self.assertEqual(resp.status_code, 502)
+        self.assertEqual(resp.json()["detail"], "permission_group_folder_invalid_payload")
 
 
 class TestSubAdminUserGroupAssignmentRoutesUnit(unittest.TestCase):

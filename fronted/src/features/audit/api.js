@@ -68,11 +68,9 @@ export const auditApi = {
   async listDeletions(params = {}) {
     const query = new URLSearchParams(params).toString();
     const path = query ? `/api/knowledge/deletions?${query}` : '/api/knowledge/deletions';
-    return normalizeArrayField(
-      await httpClient.requestJson(authBackendUrl(path), { method: 'GET' }),
-      'deletions',
-      'audit_deletions_list'
-    );
+    const payload = await httpClient.requestJson(authBackendUrl(path), { method: 'GET' });
+    normalizeCountField(payload, 'count', 'audit_deletions_list');
+    return normalizeArrayField(payload, 'deletions', 'audit_deletions_list');
   },
 
   async listDownloads(params = {}) {

@@ -242,6 +242,27 @@ class DownloadManagerDelegationMixin:
     def _add_to_kb_failed_prefix(self) -> str:
         return f"{self._DM_KIND}_add_to_kb_failed:"
 
+    def _wrap_stop_session_result(
+        self,
+        *,
+        session_id: str,
+        status: str,
+        already_finished: bool,
+    ) -> dict[str, dict[str, Any]]:
+        message = (
+            f"{self._DM_KIND}_download_session_already_finished"
+            if already_finished
+            else f"{self._DM_KIND}_download_session_stop_requested"
+        )
+        return {
+            "result": {
+                "message": message,
+                "session_id": session_id,
+                "status": status,
+                "already_finished": already_finished,
+            }
+        }
+
     def _assert_session_access(self, session: Any, ctx: Any) -> None:
         if bool(getattr(ctx.snapshot, "is_admin", False)):
             return
@@ -267,7 +288,7 @@ class DownloadManagerDelegationMixin:
         except Exception as e:
             raise HTTPException(status_code=500, detail=self._file_read_failed_detail(e)) from e
 
-    def stop_session_download(self, *, session_id: str, ctx: Any) -> dict[str, Any]:
+    def stop_session_download(self, *, session_id: str, ctx: Any) -> dict[str, dict[str, Any]]:
         session = self.store.get_session(session_id)
         if not session:
             raise HTTPException(status_code=404, detail=self._session_not_found_detail())
@@ -275,17 +296,29 @@ class DownloadManagerDelegationMixin:
 
         status = str(getattr(session, "status", "") or "")
         if status in {"completed", "failed", "stopped"}:
-            return {"ok": True, "already_finished": True, "status": status, "session_id": session_id}
+            return self._wrap_stop_session_result(
+                session_id=session_id,
+                status=status,
+                already_finished=True,
+            )
 
         job = self._request_stop(session_id)
         if job is not None and job.is_alive():
             self.store.update_session_runtime(session_id=session_id, status="stopping")
-            return {"ok": True, "already_finished": False, "status": "stopping", "session_id": session_id}
+            return self._wrap_stop_session_result(
+                session_id=session_id,
+                status="stopping",
+                already_finished=False,
+            )
 
-        # Multi-worker fallback: current process may not own the worker thread.
-        # Persisting "stopping" lets the active worker cooperate and exit.
+        # Multi-worker coordination: current process may not own the worker thread.
+        # Persisting "stopping" lets the active worker observe the stop request and exit.
         self.store.update_session_runtime(session_id=session_id, status="stopping")
-        return {"ok": True, "already_finished": False, "status": "stopping", "session_id": session_id}
+        return self._wrap_stop_session_result(
+            session_id=session_id,
+            status="stopping",
+            already_finished=False,
+        )
 
     @classmethod
     def _build_summary(cls, items: list[Any], status: str | None) -> dict[str, Any]:

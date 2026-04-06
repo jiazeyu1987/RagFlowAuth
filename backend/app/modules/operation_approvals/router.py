@@ -6,8 +6,10 @@ from backend.app.core.authz import AdminOnly, AuthContextDep
 from backend.app.core.training_support import assert_user_training_for_action
 from backend.models.operation_approval import (
     OperationApprovalActionBody,
+    OperationApprovalActionResultEnvelope,
     OperationApprovalRequestBrief,
     OperationApprovalWithdrawBody,
+    OperationApprovalWorkflowResultEnvelope,
     OperationApprovalWorkflowBody,
 )
 from backend.services.operation_approval import OperationApprovalServiceError
@@ -23,13 +25,32 @@ def _service(ctx: AuthContextDep):
     return service
 
 
+def _wrap_workflow_result(*, workflow: dict, message: str) -> dict[str, dict[str, str]]:
+    return {
+        "result": {
+            "message": message,
+            "operation_type": str(workflow["operation_type"]),
+        }
+    }
+
+
+def _wrap_request_result(*, request_data: dict, message: str) -> dict[str, dict[str, str]]:
+    return {
+        "result": {
+            "message": message,
+            "request_id": str(request_data["request_id"]),
+            "status": str(request_data["status"]),
+        }
+    }
+
+
 @router.get("/operation-approvals/workflows")
 def list_operation_approval_workflows(ctx: AuthContextDep, _: AdminOnly):
     items = _service(ctx).list_workflows()
     return {"items": items, "count": len(items)}
 
 
-@router.put("/operation-approvals/workflows/{operation_type}")
+@router.put("/operation-approvals/workflows/{operation_type}", response_model=OperationApprovalWorkflowResultEnvelope)
 def upsert_operation_approval_workflow(
     operation_type: str,
     body: OperationApprovalWorkflowBody,
@@ -37,10 +58,14 @@ def upsert_operation_approval_workflow(
     _: AdminOnly,
 ):
     try:
-        return _service(ctx).upsert_workflow(
+        workflow = _service(ctx).upsert_workflow(
             operation_type=operation_type,
             name=body.name,
             steps=[item.model_dump() for item in body.steps],
+        )
+        return _wrap_workflow_result(
+            workflow=workflow,
+            message="operation_approval_workflow_updated",
         )
     except OperationApprovalServiceError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.code) from exc
@@ -75,11 +100,14 @@ def get_operation_approval_stats(ctx: AuthContextDep):
         raise HTTPException(status_code=exc.status_code, detail=exc.code) from exc
 
 
-@router.post("/operation-approvals/requests/{request_id}/approve")
+@router.post(
+    "/operation-approvals/requests/{request_id}/approve",
+    response_model=OperationApprovalActionResultEnvelope,
+)
 def approve_operation_approval_request(request_id: str, body: OperationApprovalActionBody, ctx: AuthContextDep):
     try:
         assert_user_training_for_action(deps=ctx.deps, user=ctx.user, controlled_action="document_review")
-        return _service(ctx).approve_request(
+        request_data = _service(ctx).approve_request(
             request_id=request_id,
             actor_user=ctx.user,
             sign_token=body.sign_token,
@@ -87,15 +115,22 @@ def approve_operation_approval_request(request_id: str, body: OperationApprovalA
             signature_reason=body.signature_reason,
             notes=body.notes,
         )
+        return _wrap_request_result(
+            request_data=request_data,
+            message="operation_approval_request_approved",
+        )
     except OperationApprovalServiceError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.code) from exc
 
 
-@router.post("/operation-approvals/requests/{request_id}/reject")
+@router.post(
+    "/operation-approvals/requests/{request_id}/reject",
+    response_model=OperationApprovalActionResultEnvelope,
+)
 def reject_operation_approval_request(request_id: str, body: OperationApprovalActionBody, ctx: AuthContextDep):
     try:
         assert_user_training_for_action(deps=ctx.deps, user=ctx.user, controlled_action="document_review")
-        return _service(ctx).reject_request(
+        request_data = _service(ctx).reject_request(
             request_id=request_id,
             actor_user=ctx.user,
             sign_token=body.sign_token,
@@ -103,14 +138,29 @@ def reject_operation_approval_request(request_id: str, body: OperationApprovalAc
             signature_reason=body.signature_reason,
             notes=body.notes,
         )
+        return _wrap_request_result(
+            request_data=request_data,
+            message="operation_approval_request_rejected",
+        )
     except OperationApprovalServiceError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.code) from exc
 
 
-@router.post("/operation-approvals/requests/{request_id}/withdraw")
+@router.post(
+    "/operation-approvals/requests/{request_id}/withdraw",
+    response_model=OperationApprovalActionResultEnvelope,
+)
 def withdraw_operation_approval_request(request_id: str, body: OperationApprovalWithdrawBody, ctx: AuthContextDep):
     try:
-        return _service(ctx).withdraw_request(request_id=request_id, actor_user=ctx.user, reason=body.reason)
+        request_data = _service(ctx).withdraw_request(
+            request_id=request_id,
+            actor_user=ctx.user,
+            reason=body.reason,
+        )
+        return _wrap_request_result(
+            request_data=request_data,
+            message="operation_approval_request_withdrawn",
+        )
     except OperationApprovalServiceError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.code) from exc
 

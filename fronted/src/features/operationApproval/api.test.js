@@ -60,23 +60,83 @@ describe('operationApprovalApi', () => {
     );
   });
 
-  it('passes through detail and mutation endpoints with auth backend urls', async () => {
+  it('normalizes detail and mutation endpoints to explicit result objects', async () => {
     httpClient.requestJson
       .mockResolvedValueOnce({ request_id: 'req/1' })
       .mockResolvedValueOnce({ in_approval_count: 3 })
-      .mockResolvedValueOnce({ ok: true })
-      .mockResolvedValueOnce({ ok: true })
-      .mockResolvedValueOnce({ ok: true })
-      .mockResolvedValueOnce({ ok: true })
-      .mockResolvedValueOnce({ ok: true });
+      .mockResolvedValueOnce({
+        result: {
+          message: 'operation_approval_workflow_updated',
+          operation_type: 'knowledge/file',
+        },
+      })
+      .mockResolvedValueOnce({
+        result: {
+          message: 'operation_approval_request_approved',
+          request_id: 'req/1',
+          status: 'approved',
+        },
+      })
+      .mockResolvedValueOnce({
+        result: {
+          message: 'operation_approval_request_rejected',
+          request_id: 'req/1',
+          status: 'rejected',
+        },
+      })
+      .mockResolvedValueOnce({
+        result: {
+          message: 'operation_approval_request_withdrawn',
+          request_id: 'req/1',
+          status: 'withdrawn',
+        },
+      })
+      .mockResolvedValueOnce({
+        result: {
+          message: 'inbox_notification_marked_read',
+          inbox_id: 'inbox/1',
+          status: 'read',
+        },
+      })
+      .mockResolvedValueOnce({
+        result: {
+          message: 'inbox_notifications_marked_read',
+          updated: 2,
+          unread_count: 0,
+        },
+      });
 
     await expect(operationApprovalApi.getRequest('req/1')).resolves.toEqual({ request_id: 'req/1' });
     await expect(operationApprovalApi.getStats()).resolves.toEqual({ in_approval_count: 3 });
-    await expect(operationApprovalApi.updateWorkflow('knowledge/file', { name: 'demo' })).resolves.toEqual({ ok: true });
-    await expect(operationApprovalApi.approveRequest('req/1', { notes: 'ok' })).resolves.toEqual({ ok: true });
-    await expect(operationApprovalApi.rejectRequest('req/1', { notes: 'no' })).resolves.toEqual({ ok: true });
-    await expect(operationApprovalApi.markInboxRead('inbox/1')).resolves.toEqual({ ok: true });
-    await expect(operationApprovalApi.markAllInboxRead()).resolves.toEqual({ ok: true });
+    await expect(operationApprovalApi.updateWorkflow('knowledge/file', { name: 'demo' })).resolves.toEqual({
+      message: 'operation_approval_workflow_updated',
+      operation_type: 'knowledge/file',
+    });
+    await expect(operationApprovalApi.approveRequest('req/1', { notes: 'ok' })).resolves.toEqual({
+      message: 'operation_approval_request_approved',
+      request_id: 'req/1',
+      status: 'approved',
+    });
+    await expect(operationApprovalApi.rejectRequest('req/1', { notes: 'no' })).resolves.toEqual({
+      message: 'operation_approval_request_rejected',
+      request_id: 'req/1',
+      status: 'rejected',
+    });
+    await expect(operationApprovalApi.withdrawRequest('req/1', { reason: 'changed' })).resolves.toEqual({
+      message: 'operation_approval_request_withdrawn',
+      request_id: 'req/1',
+      status: 'withdrawn',
+    });
+    await expect(operationApprovalApi.markInboxRead('inbox/1')).resolves.toEqual({
+      message: 'inbox_notification_marked_read',
+      inbox_id: 'inbox/1',
+      status: 'read',
+    });
+    await expect(operationApprovalApi.markAllInboxRead()).resolves.toEqual({
+      message: 'inbox_notifications_marked_read',
+      updated: 2,
+      unread_count: 0,
+    });
 
     expect(httpClient.requestJson).toHaveBeenNthCalledWith(
       1,
@@ -114,6 +174,14 @@ describe('operationApprovalApi', () => {
     );
     expect(httpClient.requestJson).toHaveBeenNthCalledWith(
       6,
+      'http://auth.local/api/operation-approvals/requests/req%2F1/withdraw',
+      {
+        method: 'POST',
+        body: JSON.stringify({ reason: 'changed' }),
+      }
+    );
+    expect(httpClient.requestJson).toHaveBeenNthCalledWith(
+      7,
       'http://auth.local/api/inbox/inbox%2F1/read',
       {
         method: 'POST',
@@ -121,7 +189,7 @@ describe('operationApprovalApi', () => {
       }
     );
     expect(httpClient.requestJson).toHaveBeenNthCalledWith(
-      7,
+      8,
       'http://auth.local/api/inbox/read-all',
       {
         method: 'POST',
@@ -144,6 +212,27 @@ describe('operationApprovalApi', () => {
     );
     await expect(operationApprovalApi.getRequest('req-1')).rejects.toThrow(
       'operation_approval_request_get_invalid_payload'
+    );
+  });
+
+  it('fails fast when mutation result payloads are invalid', async () => {
+    httpClient.requestJson
+      .mockResolvedValueOnce({ result: { message: 'operation_approval_workflow_updated' } })
+      .mockResolvedValueOnce({ result: { message: 'operation_approval_request_approved', status: 'approved' } })
+      .mockResolvedValueOnce({ result: { message: 'inbox_notification_marked_read', status: 'read' } })
+      .mockResolvedValueOnce({ result: { message: 'inbox_notifications_marked_read', updated: 1 } });
+
+    await expect(operationApprovalApi.updateWorkflow('knowledge/file', { name: 'demo' })).rejects.toThrow(
+      'operation_approval_workflow_update_invalid_payload'
+    );
+    await expect(operationApprovalApi.approveRequest('req-1', { notes: 'ok' })).rejects.toThrow(
+      'operation_approval_request_approve_invalid_payload'
+    );
+    await expect(operationApprovalApi.markInboxRead('inbox-1')).rejects.toThrow(
+      'operation_approval_inbox_read_invalid_payload'
+    );
+    await expect(operationApprovalApi.markAllInboxRead()).rejects.toThrow(
+      'operation_approval_inbox_read_all_invalid_payload'
     );
   });
 });

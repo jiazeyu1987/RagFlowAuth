@@ -344,11 +344,7 @@ export default function useDocumentBrowserPage() {
     if (!window.confirm(TEXT.deleteConfirm)) return;
     try {
       setActionLoading((previous) => ({ ...previous, [`${docId}-delete`]: true }));
-      await documentsApi.deleteDocument({
-        source: DOCUMENT_SOURCE.RAGFLOW,
-        docId,
-        datasetName,
-      });
+      await documentBrowserApi.deleteDocument(docId, datasetName);
       setDocuments((previous) => ({
         ...previous,
         [datasetName]: (previous[datasetName] || []).filter((item) => item.id !== docId),

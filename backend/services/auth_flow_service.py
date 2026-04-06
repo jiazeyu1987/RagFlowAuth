@@ -249,7 +249,7 @@ async def refresh(*, request: Request, deps: AppDependencies) -> dict[str, str]:
     return {"access_token": access_token, "token_type": "bearer"}
 
 
-async def logout(*, request: Request, response: Response, deps: AppDependencies) -> dict[str, str]:
+async def logout(*, request: Request, response: Response, deps: AppDependencies) -> dict[str, dict[str, str]]:
     actor = None
     sid = ""
 
@@ -289,4 +289,4 @@ async def logout(*, request: Request, response: Response, deps: AppDependencies)
         except Exception:
             pass
     auth.unset_cookies(response)
-    return {"message": "logout_ok"}
+    return {"result": {"message": "logout_ok"}}

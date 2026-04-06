@@ -81,6 +81,13 @@ class TestPasswordChangeAPI(unittest.TestCase):
         self.assertTrue(self.deps.user_store.update_called)
         self.assertTrue(verify_password("NewPass456", self.deps.user_store.update_password_hash)[0])
 
+    def test_logout_returns_result_envelope(self):
+        with TestClient(self.app) as client:
+            resp = client.post("/api/auth/logout")
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json(), {"result": {"message": "logout_ok"}})
+
     def test_change_password_wrong_old_password(self):
         with TestClient(self.app) as client:
             resp = client.put(

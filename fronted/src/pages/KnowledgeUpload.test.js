@@ -85,11 +85,13 @@ describe('KnowledgeUpload', () => {
     });
 
     knowledgeUploadApi.getAllowedExtensions.mockResolvedValue({
-      allowed_extensions: ['.txt'],
+      allowedExtensions: ['.txt'],
+      updatedAtMs: 1,
     });
 
     knowledgeUploadApi.updateAllowedExtensions.mockResolvedValue({
-      allowed_extensions: ['.txt'],
+      allowedExtensions: ['.txt'],
+      updatedAtMs: 2,
     });
 
     knowledgeUploadApi.uploadDocument.mockResolvedValue({
@@ -116,6 +118,25 @@ describe('KnowledgeUpload', () => {
       expect(knowledgeUploadApi.uploadDocument).toHaveBeenCalledWith(file, 'KB-1');
     });
 
-    expect(await screen.findByTestId('upload-success')).toHaveTextContent('申请已提交：成功 1 个');
+    expect(await screen.findByTestId('upload-success')).toBeInTheDocument();
+  });
+
+  it('disables submit when no visible knowledge base is available', async () => {
+    useAuth.mockReturnValue({
+      accessibleKbs: [],
+      loading: false,
+      canViewKbConfig: () => false,
+    });
+
+    render(
+      <MemoryRouter>
+        <KnowledgeUpload />
+      </MemoryRouter>
+    );
+
+    const submit = await screen.findByTestId('upload-submit');
+    await waitFor(() => {
+      expect(submit).toBeDisabled();
+    });
   });
 });

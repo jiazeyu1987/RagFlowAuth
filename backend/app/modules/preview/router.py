@@ -8,6 +8,7 @@ from fastapi import APIRouter, HTTPException, Request
 from backend.app.core.authz import AuthContextDep
 from backend.app.core.kb_refs import resolve_kb_ref
 from backend.app.core.permission_resolver import assert_kb_allowed
+from backend.app.core.request_params import require_non_empty_query_param
 from backend.services.audit_helpers import actor_fields_from_ctx
 from backend.services.documents.document_manager import DocumentManager
 from backend.services.documents.models import DocumentRef
@@ -22,7 +23,6 @@ def preview_gateway(
     doc_id: str,
     request: Request,
     ctx: AuthContextDep,
-    dataset: str = "展厅",
     render: str = "default",
 ):
     """
@@ -31,11 +31,13 @@ def preview_gateway(
     deps = ctx.deps
     snapshot = ctx.snapshot
     src = (source or "").strip().lower()
+    dataset = str(request.query_params.get("dataset") or "").strip()
     request_id = getattr(getattr(request, "state", None), "request_id", "") or "-"
     t0 = time.perf_counter()
 
     try:
         if src == "ragflow":
+            dataset = require_non_empty_query_param(request, name="dataset", detail="missing_dataset")
             assert_kb_allowed(snapshot, resolve_kb_ref(deps, dataset).variants)
             mgr = DocumentManager(deps)
             payload = mgr.preview_payload(

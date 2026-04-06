@@ -44,6 +44,26 @@ def _serialize_inbox_item(item: dict) -> dict:
     }
 
 
+def _wrap_mark_all_result(*, updated: int, unread_count: int) -> dict[str, dict[str, int | str]]:
+    return {
+        "result": {
+            "message": "inbox_notifications_marked_read",
+            "updated": updated,
+            "unread_count": unread_count,
+        }
+    }
+
+
+def _wrap_mark_read_result(*, inbox_id: str) -> dict[str, dict[str, str]]:
+    return {
+        "result": {
+            "message": "inbox_notification_marked_read",
+            "inbox_id": inbox_id,
+            "status": "read",
+        }
+    }
+
+
 @router.get("/inbox")
 def list_inbox(ctx: AuthContextDep, unread_only: bool = False, limit: int = Query(default=100, ge=1, le=500)):
     manager = _resolve_notification_manager(ctx)
@@ -84,8 +104,10 @@ def mark_inbox_read_all(ctx: AuthContextDep):
     except NotificationManagerError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.code) from exc
     return InboxMarkAllReadResponse(
-        updated=int(result.get("updated_count") or 0),
-        unread_count=int(unread_snapshot.get("unread_count") or 0),
+        result=_wrap_mark_all_result(
+            updated=int(result.get("updated_count") or 0),
+            unread_count=int(unread_snapshot.get("unread_count") or 0),
+        )["result"],
     )
 
 
@@ -104,4 +126,4 @@ def mark_inbox_read(inbox_id: str, ctx: AuthContextDep):
         detail = "inbox_notification_not_found" if exc.code == "notification_message_not_found" else exc.code
         status_code = 404 if detail == "inbox_notification_not_found" else exc.status_code
         raise HTTPException(status_code=status_code, detail=detail) from exc
-    return InboxMarkReadResponse(inbox_id=str(updated["job_id"]), status="read")
+    return InboxMarkReadResponse(result=_wrap_mark_read_result(inbox_id=str(updated["job_id"]))["result"])

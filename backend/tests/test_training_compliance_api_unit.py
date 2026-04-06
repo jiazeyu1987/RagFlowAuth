@@ -356,7 +356,7 @@ class TestTrainingComplianceApiUnit(unittest.TestCase):
                     json=_issue_review_request(signature_service, reviewer, reason="retrained"),
                 )
             self.assertEqual(approved_resp.status_code, 200, approved_resp.text)
-            self.assertEqual(approved_resp.json()["status"], "approved")
+            self.assertEqual(approved_resp.json()["result"]["status"], "approved")
             self.assertEqual(len(fake_operation_approval_service.calls), 1)
         finally:
             cleanup_dir(td)
@@ -462,7 +462,7 @@ class TestTrainingComplianceApiUnit(unittest.TestCase):
                     json=_issue_review_request(signature_service, admin, reason="admin approval after qualification"),
                 )
             self.assertEqual(approved_resp.status_code, 200, approved_resp.text)
-            self.assertEqual(approved_resp.json()["status"], "approved")
+            self.assertEqual(approved_resp.json()["result"]["status"], "approved")
             self.assertEqual(len(fake_operation_approval_service.calls), 1)
         finally:
             cleanup_dir(td)

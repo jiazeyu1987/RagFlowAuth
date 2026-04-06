@@ -1,20 +1,3 @@
-export const DEFAULT_ACCEPTED_EXTENSIONS = [
-  '.txt',
-  '.pdf',
-  '.docx',
-  '.md',
-  '.xlsx',
-  '.xls',
-  '.ppt',
-  '.pptx',
-  '.csv',
-  '.png',
-  '.jpg',
-  '.jpeg',
-];
-
-export const DEFAULT_KB_NAME = '展厅';
-
 export const uploadPanelStyle = {
   backgroundColor: 'white',
   padding: '32px',

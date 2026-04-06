@@ -244,6 +244,19 @@ class TestPreviewGatewayUnit(unittest.TestCase):
         self.assertIn("content", data)
         self.assertIn("文档ID:r1", data.get("watermark", {}).get("text", ""))
 
+    def test_gateway_ragflow_requires_dataset(self):
+        app = FastAPI()
+        kb_doc = _KbDoc(doc_id="k1", kb_id="kb1", file_path=__file__, filename="a.txt")
+        app.state.deps = _Deps(kb_doc)
+        app.include_router(preview_router, prefix="/api")
+        app.dependency_overrides[auth_module.get_current_payload] = _override_get_current_payload
+
+        with TestClient(app) as client:
+            resp = client.get("/api/preview/documents/ragflow/r1/preview")
+
+        self.assertEqual(resp.status_code, 400)
+        self.assertEqual(resp.json()["detail"], "missing_dataset")
+
     def test_gateway_knowledge_excel_default_is_table_mode(self):
         td = make_temp_dir(prefix="ragflowauth_preview_gateway")
         try:

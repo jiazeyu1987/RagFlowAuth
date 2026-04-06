@@ -119,7 +119,16 @@ class TestInboxApiUnit(unittest.TestCase):
 
                 read_resp = client.post(f"/api/inbox/{inbox_id}/read", json={})
                 self.assertEqual(read_resp.status_code, 200, read_resp.text)
-                self.assertEqual(read_resp.json(), {"inbox_id": inbox_id, "status": "read"})
+                self.assertEqual(
+                    read_resp.json(),
+                    {
+                        "result": {
+                            "message": "inbox_notification_marked_read",
+                            "inbox_id": inbox_id,
+                            "status": "read",
+                        }
+                    },
+                )
 
                 after_read_resp = client.get("/api/inbox?unread_only=true")
                 self.assertEqual(after_read_resp.status_code, 200, after_read_resp.text)
@@ -148,8 +157,8 @@ class TestInboxApiUnit(unittest.TestCase):
 
                 mark_all_resp = client.post("/api/inbox/read-all", json={})
                 self.assertEqual(mark_all_resp.status_code, 200, mark_all_resp.text)
-                self.assertEqual(int(mark_all_resp.json().get("updated") or 0), 1)
-                self.assertEqual(int(mark_all_resp.json().get("unread_count") or 0), 0)
+                self.assertEqual(int(mark_all_resp.json()["result"].get("updated") or 0), 1)
+                self.assertEqual(int(mark_all_resp.json()["result"].get("unread_count") or 0), 0)
         finally:
             cleanup_dir(td)
 

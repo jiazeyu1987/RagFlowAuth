@@ -11,11 +11,17 @@ from backend.app.core.datasets import list_visible_datasets
 from backend.app.core.permdbg import permdbg
 from backend.app.core.permission_resolver import allowed_dataset_ids, assert_kb_allowed
 from backend.app.core.pydantic_compat import model_dump, model_validate
+from backend.models.knowledge import DatasetEnvelope, DatasetListEnvelope
 from backend.services.audit_helpers import actor_fields_from_ctx
+from backend.models.operation_approval import OperationApprovalRequestBrief, OperationApprovalRequestEnvelope
 
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+
+def _wrap_operation_request(brief: dict) -> dict[str, dict]:
+    return {"request": OperationApprovalRequestBrief(**brief).model_dump()}
 
 
 class SearchRequest(BaseModel):
@@ -100,7 +106,7 @@ async def search_chunks(
         raise HTTPException(status_code=500, detail="search_failed")
 
 
-@router.get("/datasets")
+@router.get("/datasets", response_model=DatasetListEnvelope)
 async def list_available_datasets(
     ctx: AuthContextDep,
 ):
@@ -122,7 +128,7 @@ async def list_available_datasets(
     return {"datasets": datasets, "count": len(datasets)}
 
 
-@router.get("/datasets/{dataset_ref}")
+@router.get("/datasets/{dataset_ref}", response_model=DatasetEnvelope)
 async def get_dataset_detail(
     dataset_ref: str,
     ctx: AuthContextDep,
@@ -139,20 +145,24 @@ async def get_dataset_detail(
     else:
         assert_kb_allowed(snapshot, dataset_ref)
 
-    detail = None
     try:
         detail = deps.ragflow_service.get_dataset_detail(dataset_ref)
     except Exception as exc:
         logger.error("[datasets.get] error: %s", exc, exc_info=True)
-        detail = None
+        raise HTTPException(
+            status_code=int(getattr(exc, "status_code", 502) or 502),
+            detail=str(exc).strip() or "dataset_detail_failed",
+        ) from exc
 
     if not detail:
         raise HTTPException(status_code=404, detail="dataset_not_found")
+    if not isinstance(detail, dict):
+        raise HTTPException(status_code=502, detail="dataset_invalid_payload")
 
     return {"dataset": detail}
 
 
-@router.put("/datasets/{dataset_ref}")
+@router.put("/datasets/{dataset_ref}", response_model=DatasetEnvelope)
 async def update_dataset_detail(
     dataset_ref: str,
     ctx: AuthContextDep,
@@ -217,7 +227,7 @@ async def update_dataset_detail(
     return {"dataset": updated}
 
 
-@router.post("/datasets")
+@router.post("/datasets", response_model=DatasetEnvelope)
 async def create_dataset(
     ctx: AuthContextDep,
     body: object = Body(...),
@@ -273,7 +283,7 @@ async def create_dataset(
     return {"dataset": created}
 
 
-@router.delete("/datasets/{dataset_ref}", status_code=202)
+@router.delete("/datasets/{dataset_ref}", response_model=OperationApprovalRequestEnvelope, status_code=202)
 async def delete_dataset(
     dataset_ref: str,
     ctx: AuthContextDep,
@@ -288,7 +298,7 @@ async def delete_dataset(
     if service is None:
         raise HTTPException(status_code=500, detail="operation_approval_service_unavailable")
     try:
-        return await service.create_request(
+        brief = await service.create_request(
             operation_type="knowledge_base_delete",
             ctx=ctx,
             dataset_ref=dataset_ref,
@@ -298,3 +308,4 @@ async def delete_dataset(
             status_code=int(getattr(exc, "status_code", 400) or 400),
             detail=getattr(exc, "code", None) or str(exc) or "operation_approval_create_failed",
         ) from exc
+    return _wrap_operation_request(brief)

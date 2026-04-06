@@ -279,7 +279,7 @@ export default function useDownloadPageController({
     setError('');
     try {
       const response = await manager.stopSession(sessionId);
-      setInfo(response?.status === 'stopped' ? msg.stopDoneInfo : msg.stopRequestedInfo);
+      setInfo(response?.already_finished || response?.status === 'stopped' ? msg.stopDoneInfo : msg.stopRequestedInfo);
       await refreshSession(sessionId);
     } catch (stopError) {
       setError(stopError?.message || msg.stopFailed);

@@ -18,14 +18,13 @@ describe('permissionGroupsApi', () => {
 
   it('unwraps successful envelopes into stable feature-level values', async () => {
     httpClient.requestJson
-      .mockResolvedValueOnce({ ok: true, data: [{ group_id: 1, group_name: 'G1' }] })
+      .mockResolvedValueOnce({ groups: [{ group_id: 1, group_name: 'G1' }] })
       .mockResolvedValueOnce({
-        ok: true,
-        data: { folders: [], group_bindings: {}, root_group_count: 0 },
+        folder_snapshot: { folders: [], group_bindings: {}, root_group_count: 0 },
       })
-      .mockResolvedValueOnce({ ok: true, data: { group_id: 9 } })
-      .mockResolvedValueOnce({ ok: true })
-      .mockResolvedValueOnce({ ok: true, data: { id: 'folder-1', name: 'Root Folder' } });
+      .mockResolvedValueOnce({ result: { message: 'permission_group_created', group_id: 9 } })
+      .mockResolvedValueOnce({ result: { message: 'permission_group_deleted' } })
+      .mockResolvedValueOnce({ folder: { id: 'folder-1', name: 'Root Folder' } });
 
     await expect(permissionGroupsApi.list()).resolves.toEqual([{ group_id: 1, group_name: 'G1' }]);
     await expect(permissionGroupsApi.listGroupFolders()).resolves.toEqual({
@@ -33,28 +32,42 @@ describe('permissionGroupsApi', () => {
       group_bindings: {},
       root_group_count: 0,
     });
-    await expect(permissionGroupsApi.create({ group_name: 'G9' })).resolves.toEqual({ group_id: 9 });
-    await expect(permissionGroupsApi.remove(9)).resolves.toBeUndefined();
+    await expect(permissionGroupsApi.create({ group_name: 'G9' })).resolves.toEqual({
+      message: 'permission_group_created',
+      group_id: 9,
+    });
+    await expect(permissionGroupsApi.remove(9)).resolves.toEqual({
+      message: 'permission_group_deleted',
+    });
     await expect(permissionGroupsApi.createFolder({ name: 'Root Folder' })).resolves.toEqual({
       id: 'folder-1',
       name: 'Root Folder',
     });
   });
 
-  it('fails fast when the backend envelope is not successful', async () => {
-    httpClient.requestJson.mockResolvedValue({ ok: false, error: 'permission_denied' });
+  it('propagates backend request failures without swallowing details', async () => {
+    httpClient.requestJson.mockRejectedValue(new Error('permission_denied'));
 
     await expect(permissionGroupsApi.listAssignable()).rejects.toThrow('permission_denied');
   });
 
   it('fails fast when the backend returns an invalid knowledge tree shape', async () => {
     httpClient.requestJson.mockResolvedValue({
-      ok: true,
-      data: { nodes: {}, datasets: [], bindings: {} },
+      knowledge_tree: { nodes: {}, datasets: [], bindings: {} },
     });
 
     await expect(permissionGroupsApi.listKnowledgeTree()).rejects.toThrow(
-      'permission_groups_knowledge_tree_invalid_data'
+      'permission_groups_knowledge_tree_invalid_payload'
+    );
+  });
+
+  it('fails fast when the backend returns an invalid create result payload', async () => {
+    httpClient.requestJson.mockResolvedValue({
+      result: { message: 'permission_group_created' },
+    });
+
+    await expect(permissionGroupsApi.create({ group_name: 'G9' })).rejects.toThrow(
+      'permission_groups_create_invalid_payload'
     );
   });
 });

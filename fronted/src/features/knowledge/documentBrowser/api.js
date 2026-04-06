@@ -12,6 +12,47 @@ const normalizeObjectField = (response, fieldName, action) => {
   return value;
 };
 
+const requireDatasetName = (datasetName) => {
+  const normalized = String(datasetName || '').trim();
+  if (!normalized) {
+    throw new Error('missing_dataset_name');
+  }
+  return normalized;
+};
+
+const normalizeStatusEnvelope = (response, action) => {
+  const status = normalizeObjectField(response, 'status', action);
+  if (typeof status.doc_id !== 'string' || !status.doc_id.trim()) {
+    throw new Error(`${action}_invalid_payload`);
+  }
+  if (typeof status.status !== 'string' || !status.status.trim()) {
+    throw new Error(`${action}_invalid_payload`);
+  }
+  return {
+    docId: status.doc_id,
+    status: status.status,
+  };
+};
+
+const normalizeDocumentEnvelope = (response, action) => {
+  return normalizeObjectField(response, 'document', action);
+};
+
+const normalizeDeleteResult = (response, action) => {
+  const result = normalizeObjectField(response, 'result', action);
+  if (typeof result.message !== 'string' || !result.message.trim()) {
+    throw new Error(`${action}_invalid_payload`);
+  }
+  return {
+    message: result.message,
+  };
+};
+
+const normalizeTransferResult = (response, action) => {
+  const result = normalizeObjectField(response, 'result', action);
+  return normalizeBatchTransferItem(result, action);
+};
+
 const normalizeBatchTransferItem = (item, action) => {
   if (!item || typeof item !== 'object' || Array.isArray(item)) {
     throw new Error(`${action}_invalid_payload`);
@@ -101,9 +142,10 @@ const normalizeBatchTransferResult = (response, action) => {
 };
 
 export const documentBrowserApi = {
-  async listDocuments(datasetName = '\u5c55\u5385') {
+  async listDocuments(datasetName) {
+    const normalizedDatasetName = requireDatasetName(datasetName);
     const query = new URLSearchParams({
-      dataset_name: String(datasetName || ''),
+      dataset_name: normalizedDatasetName,
     }).toString();
     const response = await httpClient.requestJson(authBackendUrl(`/api/ragflow/documents?${query}`), {
       method: 'GET',
@@ -112,6 +154,48 @@ export const documentBrowserApi = {
       throw new Error('ragflow_document_list_invalid_payload');
     }
     return response.documents;
+  },
+
+  async getDocumentStatus(docId, datasetName) {
+    const normalizedDatasetName = requireDatasetName(datasetName);
+    const query = new URLSearchParams({
+      dataset_name: normalizedDatasetName,
+    }).toString();
+    const response = await httpClient.requestJson(
+      authBackendUrl(`/api/ragflow/documents/${encodeURIComponent(docId)}/status?${query}`),
+      {
+        method: 'GET',
+      }
+    );
+    return normalizeStatusEnvelope(response, 'ragflow_document_status_get');
+  },
+
+  async getDocumentDetail(docId, datasetName) {
+    const normalizedDatasetName = requireDatasetName(datasetName);
+    const query = new URLSearchParams({
+      dataset_name: normalizedDatasetName,
+    }).toString();
+    const response = await httpClient.requestJson(
+      authBackendUrl(`/api/ragflow/documents/${encodeURIComponent(docId)}?${query}`),
+      {
+        method: 'GET',
+      }
+    );
+    return normalizeDocumentEnvelope(response, 'ragflow_document_detail_get');
+  },
+
+  async deleteDocument(docId, datasetName) {
+    const normalizedDatasetName = requireDatasetName(datasetName);
+    const query = new URLSearchParams({
+      dataset_name: normalizedDatasetName,
+    }).toString();
+    const response = await httpClient.requestJson(
+      authBackendUrl(`/api/ragflow/documents/${encodeURIComponent(docId)}?${query}`),
+      {
+        method: 'DELETE',
+      }
+    );
+    return normalizeDeleteResult(response, 'ragflow_document_delete');
   },
 
   async transferDocument(docId, sourceDatasetName, targetDatasetName, operation = 'copy') {
@@ -126,7 +210,7 @@ export const documentBrowserApi = {
         }),
       }
     );
-    return normalizeObjectField(response, 'result', 'ragflow_document_transfer');
+    return normalizeTransferResult(response, 'ragflow_document_transfer');
   },
 
   async transferDocumentsBatch(items, operation = 'copy') {

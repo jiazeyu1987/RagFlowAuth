@@ -18,8 +18,7 @@ describe('patentDownloadApi', () => {
   });
 
   it('sends patent download session requests through the feature API and keeps helper behavior stable', async () => {
-    const response = { session: { session_id: 'patent-session-1' } };
-    httpClient.requestJson.mockResolvedValue(response);
+    httpClient.requestJson.mockResolvedValueOnce({ session: { session_id: 'patent-session-1' } });
 
     expect(patentDownloadApi.parseKeywords('Alpha, beta\nalpha;Beta')).toEqual(['Alpha', 'beta']);
 
@@ -30,7 +29,7 @@ describe('patentDownloadApi', () => {
       sources: { google_patents: { enabled: true, limit: 20 } },
     });
 
-    expect(result).toBe(response);
+    expect(result).toEqual({ session: { session_id: 'patent-session-1' } });
     expect(httpClient.requestJson).toHaveBeenCalledWith(
       'http://auth.local/api/patent-download/sessions',
       {
@@ -56,5 +55,34 @@ describe('patentDownloadApi', () => {
       title: 'Patent Title',
       filename: 'patent.pdf',
     });
+  });
+
+  it('normalizes stop-session responses and fails fast on invalid payloads', async () => {
+    httpClient.requestJson
+      .mockResolvedValueOnce({
+        result: {
+          message: 'patent_download_session_already_finished',
+          session_id: 'patent-session-1',
+          status: 'completed',
+          already_finished: true,
+        },
+      })
+      .mockResolvedValueOnce({ result: { message: 'patent_download_session_stop_requested' } });
+
+    await expect(patentDownloadApi.stopSession('patent-session-1')).resolves.toEqual({
+      message: 'patent_download_session_already_finished',
+      session_id: 'patent-session-1',
+      status: 'completed',
+      already_finished: true,
+    });
+    expect(httpClient.requestJson).toHaveBeenNthCalledWith(
+      1,
+      'http://auth.local/api/patent-download/sessions/patent-session-1/stop',
+      { method: 'POST' }
+    );
+
+    await expect(patentDownloadApi.stopSession('patent-session-2')).rejects.toThrow(
+      'patent_download_stop_session_invalid_payload'
+    );
   });
 });

@@ -2,10 +2,16 @@ import { authBackendUrl } from '../../../config/backend';
 import { httpClient } from '../../../shared/http/httpClient';
 
 function assertOkResponse(response, action) {
-  if (response?.ok !== true) {
-    const detail = String(response?.detail || response?.error || '').trim();
-    throw new Error(detail || `${action}_failed`);
+  if (!response || typeof response !== 'object' || Array.isArray(response)) {
+    throw new Error(`${action}_invalid_payload`);
   }
+  if (!response.result || typeof response.result !== 'object' || Array.isArray(response.result)) {
+    throw new Error(`${action}_invalid_payload`);
+  }
+  if (typeof response.result.message !== 'string' || !response.result.message.trim()) {
+    throw new Error(`${action}_invalid_payload`);
+  }
+  return response.result;
 }
 
 function normalizeConfigEnvelope(response, action) {
@@ -54,6 +60,6 @@ export const searchConfigsApi = {
     const response = await httpClient.requestJson(authBackendUrl(`/api/search/configs/${encodeURIComponent(configId)}`), {
       method: 'DELETE',
     });
-    assertOkResponse(response, 'search_config_delete');
+    return assertOkResponse(response, 'search_config_delete');
   },
 };

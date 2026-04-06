@@ -5,6 +5,7 @@ from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
 from backend.app.core.authz import AuthContextDep
+from backend.models.download import DownloadSessionStopResultEnvelope
 from backend.services.patent_download.manager import LOCAL_PATENTS_KB_REF, PatentDownloadManager
 
 router = APIRouter()
@@ -55,7 +56,7 @@ async def get_patent_download_session(
     return mgr.get_session_payload(session_id=session_id, ctx=ctx)
 
 
-@router.post("/patent-download/sessions/{session_id}/stop")
+@router.post("/patent-download/sessions/{session_id}/stop", response_model=DownloadSessionStopResultEnvelope)
 async def stop_patent_download_session(
     session_id: str,
     ctx: AuthContextDep,

@@ -35,6 +35,23 @@ const requestJsonWithResponse = async (path, options = {}) => {
   return { data, response };
 };
 
+const normalizeRagflowBatchDownloadDocuments = (documents) => {
+  const items = Array.isArray(documents) ? documents : [];
+  if (items.length === 0) {
+    throw new Error('no_documents_selected');
+  }
+  return items.map((item) => {
+    const dataset = String(item?.dataset || '').trim();
+    if (!dataset) {
+      throw new Error('missing_dataset');
+    }
+    return {
+      ...item,
+      dataset,
+    };
+  });
+};
+
 const parseContentDispositionFilename = (contentDisposition, fallbackName) => {
   let filename = fallbackName;
   const header = String(contentDisposition || '');
@@ -47,6 +64,20 @@ const parseContentDispositionFilename = (contentDisposition, fallbackName) => {
   if (filenameMatch?.[1]) return filenameMatch[1].replace(/['"]/g, '');
 
   return filename;
+};
+
+const normalizeApprovalRequestEnvelope = (payload, action) => {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    throw new Error(`${action}_invalid_payload`);
+  }
+  const request = payload.request;
+  if (!request || typeof request !== 'object' || Array.isArray(request)) {
+    throw new Error(`${action}_invalid_payload`);
+  }
+  if (typeof request.request_id !== 'string' || !request.request_id.trim()) {
+    throw new Error(`${action}_invalid_payload`);
+  }
+  return request;
 };
 
 const nowMs = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
@@ -263,8 +294,7 @@ export const documentsApi = {
   },
 
   async batchDownloadRagflowToBrowser(documents) {
-    const items = Array.isArray(documents) ? documents : [];
-    if (items.length === 0) throw new Error('no_documents_selected');
+    const items = normalizeRagflowBatchDownloadDocuments(documents);
 
     const response = await httpClient.request(authBackendUrl('/api/documents/ragflow/batch/download'), {
       method: 'POST',
@@ -287,22 +317,12 @@ export const documentsApi = {
     const docId = ref?.docId;
     if (!docId) throw new Error('missing_doc_id');
 
-    if (source === DOCUMENT_SOURCE.RAGFLOW) {
-      const datasetName = ref?.datasetName || ref?.dataset || '';
-      if (!datasetName) throw new Error('missing_dataset');
-      return httpClient.requestJson(
-        authBackendUrl(
-          `/api/documents/ragflow/${encodeURIComponent(docId)}${buildQuery({ dataset_name: datasetName })}`
-        ),
-        { method: 'DELETE' }
-      );
-    }
-
     if (source === DOCUMENT_SOURCE.KNOWLEDGE) {
-      return httpClient.requestJson(
-        authBackendUrl(`/api/documents/knowledge/${encodeURIComponent(docId)}`),
-        { method: 'DELETE' }
-      );
+      return httpClient
+        .requestJson(authBackendUrl(`/api/documents/knowledge/${encodeURIComponent(docId)}`), {
+          method: 'DELETE',
+        })
+        .then((payload) => normalizeApprovalRequestEnvelope(payload, 'knowledge_document_delete'));
     }
 
     throw new Error('invalid_source');
@@ -313,14 +333,13 @@ export const documentsApi = {
     if (!kbId) throw new Error('missing_kb_id');
     const formData = new FormData();
     formData.append('file', file);
-    return httpClient.requestJson(
-      authBackendUrl(`/api/documents/knowledge/upload${buildQuery({ kb_id: kbId })}`),
-      {
+    return httpClient
+      .requestJson(authBackendUrl(`/api/documents/knowledge/upload${buildQuery({ kb_id: kbId })}`), {
         method: 'POST',
         body: formData,
         includeContentType: false,
-      }
-    );
+      })
+      .then((payload) => normalizeApprovalRequestEnvelope(payload, 'knowledge_document_upload'));
   },
 
   async onlyofficeEditorConfig(ref) {

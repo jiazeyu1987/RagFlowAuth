@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from backend.app.core.auth import get_deps, get_global_deps
 from backend.app.core.authz import AuthContextDep
 from backend.app.dependencies import AppDependencies
-from backend.models.auth import ChangePasswordRequest, LoginRequest, TokenResponse
+from backend.models.auth import ChangePasswordRequest, LoginRequest, ResultEnvelope, TokenResponse
 from backend.services.auth_flow_service import login as auth_login
 from backend.services.auth_flow_service import logout as auth_logout
 from backend.services.auth_flow_service import refresh as auth_refresh
@@ -18,7 +18,7 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
-def _password_change_result(message: str) -> dict[str, dict[str, str]]:
+def _result_envelope(message: str) -> dict[str, dict[str, str]]:
     return {"result": {"message": message}}
 
 
@@ -56,7 +56,7 @@ async def refresh_token(
     return await auth_refresh(request=request, deps=deps)
 
 
-@router.post("/logout")
+@router.post("/logout", response_model=ResultEnvelope)
 async def logout(request: Request, response: Response, deps: AppDependencies = Depends(get_deps)):
     return await auth_logout(request=request, response=response, deps=deps)
 
@@ -68,7 +68,7 @@ def get_current_user(
     return build_auth_me_payload(deps=ctx.deps, user=ctx.user, snapshot=ctx.snapshot)
 
 
-@router.put("/password")
+@router.put("/password", response_model=ResultEnvelope)
 def change_password(
     request_data: ChangePasswordRequest,
     request: Request,
@@ -97,4 +97,4 @@ def change_password(
 
     logger.info("Password changed for user %s", user.username)
 
-    return _password_change_result("password_changed")
+    return _result_envelope("password_changed")

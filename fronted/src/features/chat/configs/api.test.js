@@ -56,12 +56,18 @@ describe('chatConfigsApi', () => {
     await expect(chatConfigsApi.createChat({ name: 'Chat 1' })).rejects.toThrow('ragflow_chat_create_invalid_payload');
   });
 
-  it('requires ok=true on delete operations', async () => {
+  it('unwraps delete result envelopes and propagates backend failures', async () => {
     httpClient.requestJson
-      .mockResolvedValueOnce({ ok: true })
-      .mockResolvedValueOnce({ ok: false, detail: 'chat_not_found' });
+      .mockResolvedValueOnce({ result: { message: 'chat_deleted' } })
+      .mockRejectedValueOnce(new Error('chat_not_found'));
 
-    await expect(chatConfigsApi.deleteChat('chat-1')).resolves.toBeUndefined();
+    await expect(chatConfigsApi.deleteChat('chat-1')).resolves.toEqual({ message: 'chat_deleted' });
     await expect(chatConfigsApi.deleteChat('chat-2')).rejects.toThrow('chat_not_found');
+  });
+
+  it('fails fast when the delete payload does not include a result message', async () => {
+    httpClient.requestJson.mockResolvedValue({ ok: true });
+
+    await expect(chatConfigsApi.deleteChat('chat-1')).rejects.toThrow('ragflow_chat_delete_invalid_payload');
   });
 });

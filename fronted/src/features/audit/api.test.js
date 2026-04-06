@@ -20,7 +20,7 @@ describe('auditApi', () => {
     httpClient.requestJson
       .mockResolvedValueOnce({ total: 2, items: [{ id: 'event-1' }, { id: 'event-2' }] })
       .mockResolvedValueOnce({ documents: [{ doc_id: 'doc-1' }] })
-      .mockResolvedValueOnce({ deletions: [{ doc_id: 'doc-2' }] })
+      .mockResolvedValueOnce({ deletions: [{ doc_id: 'doc-2' }], count: 1 })
       .mockResolvedValueOnce({ downloads: [{ doc_id: 'doc-3' }] });
 
     await expect(auditApi.listEvents({ limit: 10, offset: 5 })).resolves.toEqual({
@@ -71,7 +71,7 @@ describe('auditApi', () => {
     httpClient.requestJson
       .mockResolvedValueOnce({ total: '2', items: [] })
       .mockResolvedValueOnce({ items: [] })
-      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce({ deletions: [], count: '1' })
       .mockResolvedValueOnce({ downloads: {} })
       .mockResolvedValueOnce({ current_doc_id: 'doc-1' });
 

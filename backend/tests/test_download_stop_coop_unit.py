@@ -53,7 +53,8 @@ class TestDownloadStopCoopUnit(unittest.TestCase):
         ctx = SimpleNamespace(snapshot=SimpleNamespace(is_admin=True), payload=SimpleNamespace(sub="admin"))
         resp = mgr.stop_session_download(session_id="s1", ctx=ctx)
 
-        self.assertEqual(resp["status"], "stopping")
+        self.assertEqual(resp["result"]["status"], "stopping")
+        self.assertFalse(resp["result"]["already_finished"])
         self.assertEqual(store.runtime_updates[-1]["status"], "stopping")
 
     def test_stop_session_download_finished_session_returns_already_finished(self):
@@ -63,8 +64,8 @@ class TestDownloadStopCoopUnit(unittest.TestCase):
 
         resp = mgr.stop_session_download(session_id="s1", ctx=ctx)
 
-        self.assertTrue(resp["already_finished"])
-        self.assertEqual(resp["status"], "completed")
+        self.assertTrue(resp["result"]["already_finished"])
+        self.assertEqual(resp["result"]["status"], "completed")
 
 
 if __name__ == "__main__":

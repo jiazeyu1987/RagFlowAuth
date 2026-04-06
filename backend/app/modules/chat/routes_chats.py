@@ -9,6 +9,8 @@ from pydantic import BaseModel, ValidationError
 from backend.app.core.authz import AuthContextDep
 from backend.app.core.pydantic_compat import model_dump, model_validate
 from backend.app.core.permission_resolver import ResourceScope, normalize_accessible_chat_ids
+from backend.models.auth import ResultEnvelope
+from backend.models.chat import ChatEnvelope, ChatListEnvelope
 
 from .shared import assert_chat_access
 
@@ -31,15 +33,25 @@ class ChatUpdateBody(BaseModel):
         extra = "allow"
 
 
-def _coerce_chat_list(value: object, *, source: str) -> list[dict]:
+def _wrap_result(message: str, **extra: object) -> dict[str, dict[str, object]]:
+    result: dict[str, object] = {"message": message}
+    result.update(extra)
+    return {"result": result}
+
+
+def _require_chat_payload(value: object, *, detail: str) -> dict:
+    if not isinstance(value, dict):
+        raise HTTPException(status_code=502, detail=detail)
+    return value
+
+
+def _require_chat_list(value: object, *, detail: str) -> list[dict]:
     if not isinstance(value, list):
-        logger.warning("ragflow_chat_service.%s returned non-list: %s", source, type(value).__name__)
-        return []
-    out = [chat for chat in value if isinstance(chat, dict)]
-    filtered = len(value) - len(out)
-    if filtered > 0:
-        logger.warning("ragflow_chat_service.%s dropped non-dict chat items: %d", source, filtered)
-    return out
+        raise HTTPException(status_code=502, detail=detail)
+    for chat in value:
+        if not isinstance(chat, dict):
+            raise HTTPException(status_code=502, detail=detail)
+    return value
 
 
 def _chat_management_manager(ctx: AuthContextDep):
@@ -65,7 +77,7 @@ def _assert_sub_admin_chat_management(ctx: AuthContextDep, *, chat_id: str | Non
         raise HTTPException(status_code=int(getattr(exc, "status_code", 403) or 403), detail=str(exc)) from exc
 
 
-@router.post("/chats/{chat_id}/clear-parsed-files")
+@router.post("/chats/{chat_id}/clear-parsed-files", response_model=ChatEnvelope)
 def clear_parsed_files(
     chat_id: str,
     ctx: AuthContextDep,
@@ -87,13 +99,12 @@ def clear_parsed_files(
         logger.error("[chats.clear_parsed] error: %s", e, exc_info=True)
         raise HTTPException(status_code=502, detail=str(e) or "chat_clear_parsed_failed")
 
-    if not updated:
-        raise HTTPException(status_code=500, detail="chat_clear_parsed_failed")
+    updated = _require_chat_payload(updated, detail="chat_clear_parsed_invalid_payload")
 
     return {"chat": updated}
 
 
-@router.post("/chats")
+@router.post("/chats", response_model=ChatEnvelope)
 def create_chat(
     ctx: AuthContextDep,
     body: object = Body(...),
@@ -130,8 +141,7 @@ def create_chat(
         logger.error("[chats.create] error: %s", e, exc_info=True)
         raise HTTPException(status_code=502, detail=str(e) or "chat_create_failed")
 
-    if not created:
-        raise HTTPException(status_code=500, detail="chat_create_failed")
+    created = _require_chat_payload(created, detail="chat_create_invalid_payload")
 
     if not snapshot.is_admin:
         manager = _chat_management_manager(ctx)
@@ -143,7 +153,7 @@ def create_chat(
     return {"chat": created}
 
 
-@router.put("/chats/{chat_id}")
+@router.put("/chats/{chat_id}", response_model=ChatEnvelope)
 def update_chat(
     chat_id: str,
     ctx: AuthContextDep,
@@ -175,13 +185,12 @@ def update_chat(
         logger.error("[chats.update] error: %s", e, exc_info=True)
         raise HTTPException(status_code=502, detail=str(e) or "chat_update_failed")
 
-    if not updated:
-        raise HTTPException(status_code=500, detail="chat_update_failed")
+    updated = _require_chat_payload(updated, detail="chat_update_invalid_payload")
 
     return {"chat": updated}
 
 
-@router.delete("/chats/{chat_id}")
+@router.delete("/chats/{chat_id}", response_model=ResultEnvelope)
 def delete_chat(
     chat_id: str,
     ctx: AuthContextDep,
@@ -206,10 +215,10 @@ def delete_chat(
     manager = getattr(ctx.deps, "chat_management_manager", None)
     if manager is not None:
         manager.cleanup_deleted_chat(chat_id)
-    return {"ok": True}
+    return _wrap_result("chat_deleted")
 
 
-@router.get("/chats")
+@router.get("/chats", response_model=ChatListEnvelope)
 def list_chats(
     ctx: AuthContextDep,
     page: int = 1,
@@ -230,7 +239,7 @@ def list_chats(
         name=name,
         chat_id=chat_id,
     )
-    all_chats = _coerce_chat_list(all_chats, source="list_chats")
+    all_chats = _require_chat_list(all_chats, detail="chat_list_invalid_payload")
 
     role = str(getattr(ctx.user, "role", "") or "").strip().lower()
     if snapshot.is_admin:
@@ -251,7 +260,7 @@ def list_chats(
     return {"chats": all_chats, "count": len(all_chats)}
 
 
-@router.get("/chats/my")
+@router.get("/chats/my", response_model=ChatListEnvelope)
 def get_my_chats(
     ctx: AuthContextDep,
 ):
@@ -259,7 +268,7 @@ def get_my_chats(
     snapshot = ctx.snapshot
 
     all_chats = deps.ragflow_chat_service.list_chats(page_size=1000)
-    all_chats = _coerce_chat_list(all_chats, source="list_chats")
+    all_chats = _require_chat_list(all_chats, detail="chat_list_invalid_payload")
 
     if snapshot.is_admin:
         allowed_ids = None
@@ -276,7 +285,7 @@ def get_my_chats(
     return {"chats": filtered_chats, "count": len(filtered_chats)}
 
 
-@router.get("/chats/{chat_id}")
+@router.get("/chats/{chat_id}", response_model=ChatEnvelope)
 def get_chat(
     chat_id: str,
     ctx: AuthContextDep,
@@ -293,5 +302,6 @@ def get_chat(
     chat = deps.ragflow_chat_service.get_chat(chat_id)
     if not chat:
         raise HTTPException(status_code=404, detail="chat_not_found")
+    chat = _require_chat_payload(chat, detail="chat_invalid_payload")
 
     return {"chat": chat}

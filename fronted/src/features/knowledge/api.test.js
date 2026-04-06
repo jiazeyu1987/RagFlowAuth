@@ -31,9 +31,18 @@ describe('knowledgeApi', () => {
       .mockResolvedValueOnce({ dataset: { id: 'ds-1', name: 'KB 1' } })
       .mockResolvedValueOnce({ dataset: { id: 'ds-1', name: 'KB 1 updated' } })
       .mockResolvedValueOnce({ dataset: { id: 'ds-2', name: 'KB 2' } })
+      .mockResolvedValueOnce({ request: { request_id: 'req-delete-1', status: 'in_approval' } })
       .mockResolvedValueOnce({ nodes: [{ id: 'root-1' }], datasets: [{ id: 'ds-1' }] })
       .mockResolvedValueOnce({ node: { id: 'node-1', name: 'Folder 1' } })
-      .mockResolvedValueOnce({ node: { id: 'node-1', name: 'Folder 1 renamed' } });
+      .mockResolvedValueOnce({ node: { id: 'node-1', name: 'Folder 1 renamed' } })
+      .mockResolvedValueOnce({ result: { message: 'knowledge_directory_deleted', node_id: 'node-1' } })
+      .mockResolvedValueOnce({
+        result: {
+          message: 'knowledge_dataset_directory_assigned',
+          dataset_id: 'ds-1',
+          node_id: 'node-1',
+        },
+      });
 
     await expect(knowledgeApi.listRagflowDatasets()).resolves.toEqual([{ id: 'ds-1' }]);
     await expect(knowledgeApi.getRagflowDataset('ds-1')).resolves.toEqual({
@@ -47,6 +56,10 @@ describe('knowledgeApi', () => {
     await expect(knowledgeApi.createRagflowDataset({ name: 'KB 2' })).resolves.toEqual({
       id: 'ds-2',
       name: 'KB 2',
+    });
+    await expect(knowledgeApi.deleteRagflowDataset('ds-2')).resolves.toEqual({
+      request_id: 'req-delete-1',
+      status: 'in_approval',
     });
     await expect(knowledgeApi.listKnowledgeDirectories({ companyId: 7 })).resolves.toEqual({
       nodes: [{ id: 'root-1' }],
@@ -63,6 +76,15 @@ describe('knowledgeApi', () => {
     ).resolves.toEqual({
       id: 'node-1',
       name: 'Folder 1 renamed',
+    });
+    await expect(knowledgeApi.deleteKnowledgeDirectory('node-1')).resolves.toEqual({
+      message: 'knowledge_directory_deleted',
+      node_id: 'node-1',
+    });
+    await expect(knowledgeApi.assignDatasetDirectory('ds-1', 'node-1')).resolves.toEqual({
+      message: 'knowledge_dataset_directory_assigned',
+      dataset_id: 'ds-1',
+      node_id: 'node-1',
     });
 
     expect(httpClient.requestJson).toHaveBeenNthCalledWith(
@@ -93,11 +115,16 @@ describe('knowledgeApi', () => {
     );
     expect(httpClient.requestJson).toHaveBeenNthCalledWith(
       5,
+      'http://auth.local/api/datasets/ds-2',
+      { method: 'DELETE' }
+    );
+    expect(httpClient.requestJson).toHaveBeenNthCalledWith(
+      6,
       'http://auth.local/api/knowledge/directories?company_id=7',
       { method: 'GET' }
     );
     expect(httpClient.requestJson).toHaveBeenNthCalledWith(
-      6,
+      7,
       'http://auth.local/api/knowledge/directories?company_id=7',
       {
         method: 'POST',
@@ -105,11 +132,24 @@ describe('knowledgeApi', () => {
       }
     );
     expect(httpClient.requestJson).toHaveBeenNthCalledWith(
-      7,
+      8,
       'http://auth.local/api/knowledge/directories/node-1',
       {
         method: 'PUT',
         body: JSON.stringify({ name: 'Folder 1 renamed' }),
+      }
+    );
+    expect(httpClient.requestJson).toHaveBeenNthCalledWith(
+      9,
+      'http://auth.local/api/knowledge/directories/node-1',
+      { method: 'DELETE' }
+    );
+    expect(httpClient.requestJson).toHaveBeenNthCalledWith(
+      10,
+      'http://auth.local/api/knowledge/directories/datasets/ds-1/node',
+      {
+        method: 'PUT',
+        body: JSON.stringify({ node_id: 'node-1' }),
       }
     );
   });
@@ -120,9 +160,12 @@ describe('knowledgeApi', () => {
       .mockResolvedValueOnce({ dataset: [] })
       .mockResolvedValueOnce({ dataset: null })
       .mockResolvedValueOnce({})
+      .mockResolvedValueOnce({ request_id: 'req-delete-1' })
       .mockResolvedValueOnce({ nodes: {}, datasets: [] })
       .mockResolvedValueOnce({ ok: true })
-      .mockResolvedValueOnce([]);
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce({ ok: true })
+      .mockResolvedValueOnce({ result: { message: 'knowledge_dataset_directory_assigned', dataset_id: '' } });
 
     await expect(knowledgeApi.listRagflowDatasets()).rejects.toThrow('ragflow_dataset_list_invalid_payload');
     await expect(knowledgeApi.getRagflowDataset('ds-1')).rejects.toThrow('ragflow_dataset_get_invalid_payload');
@@ -132,6 +175,9 @@ describe('knowledgeApi', () => {
     await expect(knowledgeApi.createRagflowDataset({})).rejects.toThrow(
       'ragflow_dataset_create_invalid_payload'
     );
+    await expect(knowledgeApi.deleteRagflowDataset('ds-1')).rejects.toThrow(
+      'ragflow_dataset_delete_invalid_payload'
+    );
     await expect(knowledgeApi.listKnowledgeDirectories()).rejects.toThrow(
       'knowledge_directory_tree_invalid_payload'
     );
@@ -140,6 +186,12 @@ describe('knowledgeApi', () => {
     );
     await expect(knowledgeApi.updateKnowledgeDirectory('node-1', { name: 'Folder 1' })).rejects.toThrow(
       'knowledge_directory_update_invalid_payload'
+    );
+    await expect(knowledgeApi.deleteKnowledgeDirectory('node-1')).rejects.toThrow(
+      'knowledge_directory_delete_invalid_payload'
+    );
+    await expect(knowledgeApi.assignDatasetDirectory('ds-1', null)).rejects.toThrow(
+      'knowledge_directory_assign_invalid_payload'
     );
   });
 });
