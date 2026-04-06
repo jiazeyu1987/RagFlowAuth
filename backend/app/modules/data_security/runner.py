@@ -3,7 +3,7 @@ from __future__ import annotations
 import threading
 import time
 
-from backend.services.data_security_backup import DataSecurityBackupService
+from backend.services.data_security.backup_service import DataSecurityBackupService
 from backend.services.data_security_store import DataSecurityStore
 
 _lock = threading.Lock()
