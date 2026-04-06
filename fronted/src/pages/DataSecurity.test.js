@@ -68,12 +68,12 @@ const createRestoreDrill = (overrides = {}) => ({
 
 const renderPage = async ({ settings = settingsResponse, jobs = [createJob()], drills = [] } = {}) => {
   dataSecurityApi.getSettings.mockResolvedValue(settings);
-  dataSecurityApi.listJobs.mockResolvedValue({ jobs });
-  dataSecurityApi.listRestoreDrills.mockResolvedValue({ items: drills });
+  dataSecurityApi.listJobs.mockResolvedValue(jobs);
+  dataSecurityApi.listRestoreDrills.mockResolvedValue(drills);
   dataSecurityApi.createRestoreDrill.mockResolvedValue(createRestoreDrill());
   dataSecurityApi.runBackup.mockResolvedValue({ job_id: 101 });
   dataSecurityApi.runFullBackup.mockResolvedValue({ job_id: 101 });
-  dataSecurityApi.getJob.mockResolvedValue(jobs[0] || null);
+  dataSecurityApi.getJob.mockResolvedValue(jobs[0] || createJob());
 
   render(
     <MemoryRouter>

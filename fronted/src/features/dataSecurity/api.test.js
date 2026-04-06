@@ -79,9 +79,9 @@ describe('dataSecurityApi', () => {
       .mockResolvedValueOnce({ items: [] })
       .mockResolvedValueOnce({ drill_id: 'drill-1' });
 
-    await expect(dataSecurityApi.listJobs('30&all=true')).resolves.toEqual({ jobs: [] });
+    await expect(dataSecurityApi.listJobs('30&all=true')).resolves.toEqual([]);
     await expect(dataSecurityApi.getJob('job/1')).resolves.toEqual({ id: 'job/1' });
-    await expect(dataSecurityApi.listRestoreDrills('20&kind=all')).resolves.toEqual({ items: [] });
+    await expect(dataSecurityApi.listRestoreDrills('20&kind=all')).resolves.toEqual([]);
     await expect(dataSecurityApi.createRestoreDrill({ job_id: 1 })).resolves.toEqual({ drill_id: 'drill-1' });
 
     expect(httpClient.requestJson).toHaveBeenNthCalledWith(
@@ -103,6 +103,19 @@ describe('dataSecurityApi', () => {
         method: 'POST',
         body: JSON.stringify({ job_id: 1 }),
       }
+    );
+  });
+
+  it('fails fast when list or settings payloads are invalid', async () => {
+    httpClient.requestJson
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ items: [] })
+      .mockResolvedValueOnce([]);
+
+    await expect(dataSecurityApi.getSettings()).rejects.toThrow('data_security_settings_get_invalid_payload');
+    await expect(dataSecurityApi.listJobs(30)).rejects.toThrow('data_security_jobs_list_invalid_payload');
+    await expect(dataSecurityApi.createRestoreDrill({ job_id: 1 })).rejects.toThrow(
+      'data_security_restore_drill_create_invalid_payload'
     );
   });
 });

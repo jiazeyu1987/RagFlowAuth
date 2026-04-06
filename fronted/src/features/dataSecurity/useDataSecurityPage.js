@@ -55,12 +55,10 @@ export default function useDataSecurityPage() {
   }, []);
 
   const refreshJobsAndDrills = useCallback(async () => {
-    const [jobsResp, drillsResp] = await Promise.all([
+    const [nextJobs, nextDrills] = await Promise.all([
       dataSecurityApi.listJobs(30),
       dataSecurityApi.listRestoreDrills(30),
     ]);
-    const nextJobs = Array.isArray(jobsResp?.jobs) ? jobsResp.jobs : [];
-    const nextDrills = Array.isArray(drillsResp?.items) ? drillsResp.items : [];
     setJobs(nextJobs);
     setRestoreDrills(nextDrills);
     setSelectedRestoreJobId((prev) => pickRestoreJobId(nextJobs, prev));
@@ -89,16 +87,14 @@ export default function useDataSecurityPage() {
     setError(null);
     setLoading(true);
     try {
-      const [settingsResp, jobsResp, drillsResp] = await Promise.all([
+      const [settingsResp, nextJobs, nextDrills] = await Promise.all([
         dataSecurityApi.getSettings(),
         dataSecurityApi.listJobs(30),
         dataSecurityApi.listRestoreDrills(30),
       ]);
-      const nextJobs = Array.isArray(jobsResp?.jobs) ? jobsResp.jobs : [];
-      const nextDrills = Array.isArray(drillsResp?.items) ? drillsResp.items : [];
       const latest = nextJobs[0] || null;
 
-      setSettings(settingsResp || {});
+      setSettings(settingsResp);
       setJobs(nextJobs);
       setRestoreDrills(nextDrills);
       setActiveJob(latest);

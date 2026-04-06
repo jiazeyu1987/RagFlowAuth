@@ -47,8 +47,8 @@ describe('useDataSecurityPage', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     dataSecurityApi.getSettings.mockResolvedValue(settingsResponse);
-    dataSecurityApi.listJobs.mockResolvedValue({ jobs: [createJob()] });
-    dataSecurityApi.listRestoreDrills.mockResolvedValue({ items: [] });
+    dataSecurityApi.listJobs.mockResolvedValue([createJob()]);
+    dataSecurityApi.listRestoreDrills.mockResolvedValue([]);
     dataSecurityApi.createRestoreDrill.mockResolvedValue({
       drill_id: 'drill-1',
       job_id: 101,
