@@ -2,6 +2,7 @@ import React from 'react';
 import { MemoryRouter } from 'react-router-dom';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+
 import KnowledgeBases from './KnowledgeBases';
 import { knowledgeApi } from '../features/knowledge/api';
 import { useAuth } from '../hooks/useAuth';
@@ -26,9 +27,12 @@ jest.mock('../features/knowledge/api', () => ({
   },
 }));
 
-jest.mock('../features/knowledge/knowledgeBases/components/DirectoryTreeView', () => function MockDirectoryTreeView() {
-  return <div data-testid="mock-directory-tree" />;
-});
+jest.mock(
+  '../features/knowledge/knowledgeBases/components/DirectoryTreeView',
+  () => function MockDirectoryTreeView() {
+    return <div data-testid="mock-directory-tree" />;
+  }
+);
 
 jest.mock('./ChatConfigsPanel', () => ({
   ChatConfigsPanel: function MockChatConfigsPanel() {
@@ -39,6 +43,7 @@ jest.mock('./ChatConfigsPanel', () => ({
 const dataset = {
   id: 'ds-existing',
   name: 'Existing KB',
+  description: 'copied description',
   document_count: 0,
   chunk_count: 0,
 };
@@ -46,10 +51,12 @@ const dataset = {
 describe('KnowledgeBases', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+
     useAuth.mockReturnValue({
       canManageKbDirectory: () => true,
       canManageKnowledgeTree: () => true,
     });
+
     knowledgeApi.listRagflowDatasets.mockResolvedValue([dataset]);
     knowledgeApi.listKnowledgeDirectories.mockResolvedValue({
       nodes: [],
@@ -59,7 +66,10 @@ describe('KnowledgeBases', () => {
     knowledgeApi.getRagflowDataset.mockResolvedValue(dataset);
     knowledgeApi.updateRagflowDataset.mockResolvedValue(dataset);
     knowledgeApi.assignDatasetDirectory.mockResolvedValue({});
-    knowledgeApi.createRagflowDataset.mockResolvedValue({ id: 'ds-created-1', name: 'Approved KB' });
+    knowledgeApi.createRagflowDataset.mockResolvedValue({
+      id: 'ds-created-1',
+      name: 'Approved KB',
+    });
     knowledgeApi.deleteRagflowDataset.mockResolvedValue({ request_id: 'req-delete-1' });
   });
 
@@ -76,12 +86,15 @@ describe('KnowledgeBases', () => {
     await user.click(screen.getByTestId('kbs-create-kb'));
     await screen.findByTestId('create-kb-dialog');
 
-    await user.type(screen.getByPlaceholderText('输入知识库名称'), 'Approved KB');
-    await user.click(screen.getByText('创建'));
+    await user.type(screen.getByTestId('create-kb-name-input'), 'Approved KB');
+    await user.click(screen.getByTestId('create-kb-confirm'));
 
     await waitFor(() => {
-      expect(knowledgeApi.createRagflowDataset).toHaveBeenCalledWith(expect.objectContaining({ name: 'Approved KB' }));
+      expect(knowledgeApi.createRagflowDataset).toHaveBeenCalledWith(
+        expect.objectContaining({ name: 'Approved KB' })
+      );
     });
+
     expect(await screen.findByText('新建知识库成功')).toBeInTheDocument();
   });
 
@@ -98,12 +111,13 @@ describe('KnowledgeBases', () => {
     await screen.findByTestId('kbs-row-dataset-ds-existing');
     await user.click(screen.getByTestId('kbs-row-dataset-ds-existing'));
     await screen.findByText('知识库属性');
-    await user.click(screen.getByText('删除知识库'));
+    await user.click(screen.getByTestId('kbs-delete-kb'));
 
     await waitFor(() => {
       expect(knowledgeApi.deleteRagflowDataset).toHaveBeenCalledWith('ds-existing');
     });
-    expect(await screen.findByText(/删除申请已提交/)).toBeInTheDocument();
+
+    expect(await screen.findByText('删除申请已提交：req-delete-1')).toBeInTheDocument();
 
     confirmSpy.mockRestore();
   });
