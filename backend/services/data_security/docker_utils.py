@@ -64,17 +64,8 @@ def container_path_to_host_str(path: str | Path) -> str:
         suffix = s[len(dst) :]
         return f"{src}{suffix}"
 
-    # Backward-compatible fallback for older deployments that used fixed host paths.
-    host_backups = (os.environ.get("RAGFLOWAUTH_HOST_BACKUPS_DIR") or "/opt/ragflowauth/backups").rstrip("/")
-    host_data = (os.environ.get("RAGFLOWAUTH_HOST_DATA_DIR") or "/opt/ragflowauth/data").rstrip("/")
-    host_uploads = (os.environ.get("RAGFLOWAUTH_HOST_UPLOADS_DIR") or "/opt/ragflowauth/uploads").rstrip("/")
-
-    if s.startswith("/app/data/backups"):
-        return s.replace("/app/data/backups", host_backups, 1)
-    if s.startswith("/app/data/") or s == "/app/data":
-        return s.replace("/app/data", host_data, 1)
-    if s.startswith("/app/uploads/") or s == "/app/uploads":
-        return s.replace("/app/uploads", host_uploads, 1)
+    if s.startswith("/app/data/") or s == "/app/data" or s.startswith("/app/uploads/") or s == "/app/uploads":
+        raise RuntimeError(f"container_mount_mapping_not_found:{s}")
     return s
 
 

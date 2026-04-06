@@ -1,35 +1,35 @@
-import os
 import unittest
 from unittest import mock
 
 
 class TestDataSecurityPathMapping(unittest.TestCase):
-    def setUp(self):
-        self._old_env = dict(os.environ)
-
-    def tearDown(self):
-        os.environ.clear()
-        os.environ.update(self._old_env)
-
-    def test_container_path_to_host_str_fallback_uses_env(self):
+    def test_container_path_to_host_str_uses_mount_mapping(self):
         from backend.services.data_security.docker_utils import container_path_to_host_str
 
-        os.environ["RAGFLOWAUTH_HOST_BACKUPS_DIR"] = "/host/backups"
-        os.environ["RAGFLOWAUTH_HOST_DATA_DIR"] = "/host/data"
-        os.environ["RAGFLOWAUTH_HOST_UPLOADS_DIR"] = "/host/uploads"
+        mounts = [
+            {"Destination": "/app/data", "Source": "/host/data"},
+            {"Destination": "/app/uploads", "Source": "/host/uploads"},
+        ]
+        with mock.patch("backend.services.data_security.docker_utils._docker_self_mounts", return_value=mounts):
+            self.assertEqual(
+                container_path_to_host_str("/app/data/backups/migration_pack_x/volumes/a.tar.gz"),
+                "/host/data/backups/migration_pack_x/volumes/a.tar.gz",
+            )
+            self.assertEqual(
+                container_path_to_host_str("/app/data/auth.db"),
+                "/host/data/auth.db",
+            )
+            self.assertEqual(
+                container_path_to_host_str("/app/uploads/file.bin"),
+                "/host/uploads/file.bin",
+            )
 
-        self.assertEqual(
-            container_path_to_host_str("/app/data/backups/migration_pack_x/volumes/a.tar.gz"),
-            "/host/backups/migration_pack_x/volumes/a.tar.gz",
-        )
-        self.assertEqual(
-            container_path_to_host_str("/app/data/auth.db"),
-            "/host/data/auth.db",
-        )
-        self.assertEqual(
-            container_path_to_host_str("/app/uploads/file.bin"),
-            "/host/uploads/file.bin",
-        )
+    def test_container_path_to_host_str_rejects_managed_paths_without_mapping(self):
+        from backend.services.data_security.docker_utils import container_path_to_host_str
+
+        with mock.patch("backend.services.data_security.docker_utils._docker_self_mounts", return_value=[]):
+            with self.assertRaisesRegex(RuntimeError, "container_mount_mapping_not_found:/app/data/auth.db"):
+                container_path_to_host_str("/app/data/auth.db")
 
     def test_docker_save_images_uses_container_path_not_host_path(self):
         from pathlib import Path
