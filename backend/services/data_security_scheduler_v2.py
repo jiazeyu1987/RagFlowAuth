@@ -319,11 +319,6 @@ class BackupSchedulerV2:
 _scheduler_v2: BackupSchedulerV2 | None = None
 
 
-def get_scheduler_v2() -> BackupSchedulerV2 | None:
-    """Get the global scheduler instance"""
-    return _scheduler_v2
-
-
 def init_scheduler_v2(store: DataSecurityStore) -> BackupSchedulerV2:
     """
     Initialize the global scheduler instance.
@@ -337,12 +332,6 @@ def init_scheduler_v2(store: DataSecurityStore) -> BackupSchedulerV2:
     global _scheduler_v2
     _scheduler_v2 = BackupSchedulerV2(store)
     return _scheduler_v2
-
-
-def start_scheduler_v2():
-    """Start the global scheduler"""
-    if _scheduler_v2:
-        _scheduler_v2.start()
 
 
 def stop_scheduler_v2():
