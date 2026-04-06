@@ -1,11 +1,11 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { orgDirectoryApi } from '../features/orgDirectory/api';
+import React from 'react';
 
-const MOBILE_BREAKPOINT = 768;
+import useOrgDirectoryManagementPage from '../features/orgDirectory/useOrgDirectoryManagementPage';
+
 const SEARCH_RESULT_LIMIT = 50;
 const OVERVIEW_TAB = 'overview';
 const AUDIT_TAB = 'audit';
-const SUPPORTED_EXCEL_EXTENSIONS = ['.xls', '.xlsx'];
+
 const panelStyle = {
   backgroundColor: '#ffffff',
   border: '1px solid #e5e7eb',
@@ -86,77 +86,6 @@ const formatDateTime = (value) => {
   }
 };
 
-const countNodeType = (nodes, nodeType) => {
-  let count = 0;
-  const stack = [...(Array.isArray(nodes) ? nodes : [])];
-  while (stack.length > 0) {
-    const current = stack.shift();
-    if (!current) continue;
-    if (current.node_type === nodeType) count += 1;
-    if (Array.isArray(current.children) && current.children.length > 0) {
-      stack.unshift(...current.children);
-    }
-  }
-  return count;
-};
-
-const collectBranchKeys = (nodes) => {
-  const keys = [];
-  const walk = (items) => {
-    items.forEach((node) => {
-      if (!node || node.node_type === 'person') return;
-      const children = Array.isArray(node.children) ? node.children : [];
-      const branchChildren = children.filter((child) => child && child.node_type !== 'person');
-      if (node.node_type === 'company' || branchChildren.length > 0) {
-        keys.push(toNodeKey(node));
-      }
-      if (branchChildren.length > 0) {
-        walk(branchChildren);
-      }
-    });
-  };
-  walk(Array.isArray(nodes) ? nodes : []);
-  return keys;
-};
-
-const flattenSearchEntries = (nodes) => {
-  const entries = [];
-  const walk = (items, branchPathKeys = []) => {
-    items.forEach((node) => {
-      const key = toNodeKey(node);
-      const nextBranchPathKeys = node.node_type === 'person' ? branchPathKeys : [...branchPathKeys, key];
-
-      entries.push({
-        key,
-        node,
-        nodeType: node.node_type,
-        name: String(node.name || ''),
-        pathName: String(node.path_name || node.name || ''),
-        employeeUserId: String(node.employee_user_id || ''),
-        branchPathKeys: nextBranchPathKeys,
-      });
-
-      if (Array.isArray(node.children) && node.children.length > 0) {
-        walk(node.children, nextBranchPathKeys);
-      }
-    });
-  };
-  walk(Array.isArray(nodes) ? nodes : []);
-  return entries;
-};
-
-const matchesSearchTerm = (entry, searchTerm) => {
-  const haystack = [entry.name, entry.pathName, entry.employeeUserId].join(' ').toLowerCase();
-  return haystack.includes(searchTerm);
-};
-
-const buildAuditParams = (filter) => {
-  const params = { limit: filter.limit || 200 };
-  if (filter.entity_type) params.entity_type = filter.entity_type;
-  if (filter.action) params.action = filter.action;
-  return params;
-};
-
 const chunkItems = (items, size) => {
   const normalizedSize = Math.max(1, Number(size) || 1);
   const rows = [];
@@ -164,11 +93,6 @@ const chunkItems = (items, size) => {
     rows.push(items.slice(idx, idx + normalizedSize));
   }
   return rows;
-};
-
-const isSupportedExcelFilename = (filename) => {
-  const normalizedName = String(filename || '').trim().toLowerCase();
-  return SUPPORTED_EXCEL_EXTENSIONS.some((extension) => normalizedName.endsWith(extension));
 };
 
 const AuditChangeText = ({ log }) => {
@@ -185,9 +109,9 @@ const AuditChangeText = ({ log }) => {
     );
   }
 
-  if (log.action === 'create') return <span>新增：{log.after_name || '-'}</span>;
+  if (log.action === 'create') return <span>新增: {log.after_name || '-'}</span>;
   if (log.action === 'update') return <span>{log.before_name || '-'} {'->'} {log.after_name || '-'}</span>;
-  if (log.action === 'delete') return <span>删除：{log.before_name || '-'}</span>;
+  if (log.action === 'delete') return <span>删除: {log.before_name || '-'}</span>;
   return <span>{log.after_name || log.before_name || '-'}</span>;
 };
 
@@ -249,7 +173,7 @@ const TreeNode = ({
         node.email ? node.email : null,
       ]
         .filter(Boolean)
-        .join(' · ') || '-'
+        .join(' / ') || '-'
     : `更新时间 ${formatDateTime(node.updated_at_ms)}`;
 
   return (
@@ -368,9 +292,7 @@ const TreeNode = ({
                             style={{
                               width: `${100 / personColumnCount}%`,
                               borderBottom:
-                                rowIndex === peopleRows.length - 1
-                                  ? 'none'
-                                  : '1px solid #e5e7eb',
+                                rowIndex === peopleRows.length - 1 ? 'none' : '1px solid #e5e7eb',
                               borderRight: columnIndex === row.length - 1 ? 'none' : '1px solid #e5e7eb',
                               padding: 0,
                             }}
@@ -408,11 +330,11 @@ const TreeNode = ({
                           style={{
                             width: `${100 / personColumnCount}%`,
                             borderBottom:
-                              rowIndex === peopleRows.length - 1
+                              rowIndex === peopleRows.length - 1 ? 'none' : '1px solid #e5e7eb',
+                            borderRight:
+                              fillerIndex === personColumnCount - row.length - 1
                                 ? 'none'
                                 : '1px solid #e5e7eb',
-                            borderRight:
-                              fillerIndex === personColumnCount - row.length - 1 ? 'none' : '1px solid #e5e7eb',
                           }}
                         />
                       ))}
@@ -429,274 +351,48 @@ const TreeNode = ({
 };
 
 const OrgDirectoryManagement = () => {
-  const nodeRefs = useRef(new Map());
-  const excelFileInputRef = useRef(null);
-  const [isMobile, setIsMobile] = useState(() => {
-    if (typeof window === 'undefined') return false;
-    return window.innerWidth <= MOBILE_BREAKPOINT;
-  });
-  const [activeTab, setActiveTab] = useState(OVERVIEW_TAB);
-  const [loading, setLoading] = useState(true);
-  const [rebuilding, setRebuilding] = useState(false);
-  const [error, setError] = useState(null);
-  const [auditError, setAuditError] = useState(null);
-  const [tree, setTree] = useState([]);
-  const [companies, setCompanies] = useState([]);
-  const [departments, setDepartments] = useState([]);
-  const [auditLogs, setAuditLogs] = useState([]);
-  const [overviewAuditLogs, setOverviewAuditLogs] = useState([]);
-  const [auditFilter, setAuditFilter] = useState({ entity_type: '', action: '', limit: 200 });
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedSearchKey, setSelectedSearchKey] = useState(null);
-  const [selectedPersonNodeKey, setSelectedPersonNodeKey] = useState(null);
-  const [highlightedNodeKey, setHighlightedNodeKey] = useState(null);
-  const [expandedKeys, setExpandedKeys] = useState(new Set());
-  const [selectedExcelFile, setSelectedExcelFile] = useState(null);
-
-  const personColumnCount = isMobile ? 2 : 4;
-  const personCount = useMemo(() => countNodeType(tree, 'person'), [tree]);
-  const latestOverviewAudit = useMemo(
-    () => (overviewAuditLogs.length > 0 ? overviewAuditLogs[0] : null),
-    [overviewAuditLogs],
-  );
-  const hasOrgData = tree.length > 0 || companies.length > 0 || departments.length > 0;
-  const isMissingPersonNodes = hasOrgData && personCount === 0;
-  const canTriggerRebuild = !!selectedExcelFile && !rebuilding;
-  const searchEntries = useMemo(() => flattenSearchEntries(tree), [tree]);
-  const selectedPersonEntry = useMemo(
-    () =>
-      searchEntries.find((entry) => entry.key === selectedPersonNodeKey && entry.nodeType === 'person') || null,
-    [searchEntries, selectedPersonNodeKey],
-  );
-  const trimmedSearchTerm = searchTerm.trim().toLowerCase();
-  const totalSearchMatches = useMemo(() => {
-    if (!trimmedSearchTerm) return 0;
-    return searchEntries.filter((entry) => matchesSearchTerm(entry, trimmedSearchTerm)).length;
-  }, [searchEntries, trimmedSearchTerm]);
-  const searchResults = useMemo(() => {
-    if (!trimmedSearchTerm) return [];
-    return searchEntries.filter((entry) => matchesSearchTerm(entry, trimmedSearchTerm)).slice(0, SEARCH_RESULT_LIMIT);
-  }, [searchEntries, trimmedSearchTerm]);
-
-  const loadAll = async () => {
-    setLoading(true);
-    setError(null);
-    setAuditError(null);
-
-    try {
-      const [treeResult, companyResult, departmentResult, tableAuditResult, overviewAuditResult] =
-        await Promise.allSettled([
-          orgDirectoryApi.getTree(),
-          orgDirectoryApi.listCompanies(),
-          orgDirectoryApi.listDepartments(),
-          orgDirectoryApi.listAudit(buildAuditParams(auditFilter)),
-          orgDirectoryApi.listAudit({ limit: 200 }),
-        ]);
-
-      if (treeResult.status === 'fulfilled') {
-        setTree(Array.isArray(treeResult.value) ? treeResult.value : []);
-      } else {
-        setTree([]);
-      }
-
-      if (companyResult.status === 'fulfilled') {
-        setCompanies(Array.isArray(companyResult.value) ? companyResult.value : []);
-      } else {
-        setCompanies([]);
-      }
-
-      if (departmentResult.status === 'fulfilled') {
-        setDepartments(Array.isArray(departmentResult.value) ? departmentResult.value : []);
-      } else {
-        setDepartments([]);
-      }
-
-      if (tableAuditResult.status === 'fulfilled') {
-        setAuditLogs(Array.isArray(tableAuditResult.value) ? tableAuditResult.value : []);
-      } else {
-        setAuditLogs([]);
-        setAuditError(
-          tableAuditResult.reason?.message || String(tableAuditResult.reason || '加载组织审计失败'),
-        );
-      }
-
-      if (overviewAuditResult.status === 'fulfilled') {
-        setOverviewAuditLogs(Array.isArray(overviewAuditResult.value) ? overviewAuditResult.value : []);
-      } else {
-        setOverviewAuditLogs([]);
-      }
-
-      if (
-        treeResult.status === 'rejected' ||
-        companyResult.status === 'rejected' ||
-        departmentResult.status === 'rejected'
-      ) {
-        const firstError =
-          treeResult.status === 'rejected'
-            ? treeResult.reason
-            : companyResult.status === 'rejected'
-              ? companyResult.reason
-              : departmentResult.reason;
-        setError(firstError?.message || String(firstError || '加载组织架构失败'));
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const refreshAudit = async (nextFilter = auditFilter) => {
-    setAuditError(null);
-    try {
-      const data = await orgDirectoryApi.listAudit(buildAuditParams(nextFilter));
-      setAuditLogs(Array.isArray(data) ? data : []);
-    } catch (err) {
-      setAuditLogs([]);
-      setAuditError(err.message || String(err));
-    }
-  };
-
-  useEffect(() => {
-    loadAll();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return undefined;
-    const handleResize = () => setIsMobile(window.innerWidth <= MOBILE_BREAKPOINT);
-    handleResize();
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
-
-  useEffect(() => {
-    setExpandedKeys(new Set());
-  }, [tree]);
-
-  useEffect(() => {
-    if (!highlightedNodeKey) return undefined;
-    const target = nodeRefs.current.get(highlightedNodeKey);
-    if (target && typeof target.scrollIntoView === 'function') {
-      target.scrollIntoView({ block: 'center', behavior: 'smooth' });
-    }
-    const timerId = window.setTimeout(() => setHighlightedNodeKey(null), 2200);
-    return () => window.clearTimeout(timerId);
-  }, [highlightedNodeKey]);
-
-  const registerNodeRef = (key, element) => {
-    if (element) {
-      nodeRefs.current.set(key, element);
-    } else {
-      nodeRefs.current.delete(key);
-    }
-  };
-
-  const resetTreeView = () => {
-    setExpandedKeys(new Set());
-    setSelectedSearchKey(null);
-    setHighlightedNodeKey(null);
-  };
-
-  const handleSearchInputChange = (event) => {
-    setSearchTerm(event.target.value);
-    resetTreeView();
-  };
-
-  const handleClearSearch = () => {
-    setSearchTerm('');
-    resetTreeView();
-  };
-
-  const handleSelectSearchResult = (entry) => {
-    if (!entry) return;
-    setSelectedSearchKey(entry.key);
-
-    if (entry.nodeType === 'company') {
-      setExpandedKeys(new Set(collectBranchKeys([entry.node])));
-      setSelectedPersonNodeKey(null);
-    } else if (entry.nodeType === 'department') {
-      setExpandedKeys(new Set(entry.branchPathKeys));
-      setSelectedPersonNodeKey(null);
-    } else {
-      setExpandedKeys(new Set(entry.branchPathKeys));
-      setSelectedPersonNodeKey(entry.key);
-      setActiveTab(OVERVIEW_TAB);
-    }
-
-    setHighlightedNodeKey(entry.key);
-  };
-
-  const handleSelectPerson = (personNode) => {
-    if (!personNode || personNode.node_type !== 'person') return;
-    const nodeKey = toNodeKey(personNode);
-    setSelectedPersonNodeKey(nodeKey);
-    setSelectedSearchKey(null);
-    setHighlightedNodeKey(nodeKey);
-    setActiveTab(OVERVIEW_TAB);
-  };
-
-  const handleToggleBranch = (nodeKey) => {
-    setExpandedKeys((prev) => {
-      const next = new Set(prev);
-      if (next.has(nodeKey)) next.delete(nodeKey);
-      else next.add(nodeKey);
-      return next;
-    });
-  };
-
-  const handleChooseExcelFile = () => {
-    excelFileInputRef.current?.click();
-  };
-
-  const handleClearExcelFile = () => {
-    setSelectedExcelFile(null);
-    setError(null);
-    if (excelFileInputRef.current) {
-      excelFileInputRef.current.value = '';
-    }
-  };
-
-  const handleExcelFileChange = (event) => {
-    const nextFile = event.target.files?.[0] || null;
-    if (!nextFile) {
-      return;
-    }
-    if (!isSupportedExcelFilename(nextFile.name)) {
-      setSelectedExcelFile(null);
-      setError('仅支持上传 .xls 或 .xlsx 格式的组织架构文档');
-      if (excelFileInputRef.current) {
-        excelFileInputRef.current.value = '';
-      }
-      return;
-    }
-    setError(null);
-    setSelectedExcelFile(nextFile);
-  };
-
-  const handleRebuild = async () => {
-    if (!selectedExcelFile) {
-      setError('请先选择组织架构 Excel 文档');
-      return;
-    }
-
-    if (!window.confirm(`确定使用 ${selectedExcelFile.name} 重建组织架构吗？这会重建公司、部门和人员树。`)) {
-      return;
-    }
-
-    setRebuilding(true);
-    setError(null);
-    try {
-      await orgDirectoryApi.rebuildFromExcel(selectedExcelFile);
-      setSearchTerm('');
-      setSelectedSearchKey(null);
-      setSelectedPersonNodeKey(null);
-      setHighlightedNodeKey(null);
-      await loadAll();
-    } catch (err) {
-      setError(err.message || String(err));
-    } finally {
-      setRebuilding(false);
-    }
-  };
+  const {
+    excelFileInputRef,
+    isMobile,
+    activeTab,
+    setActiveTab,
+    loading,
+    rebuilding,
+    error,
+    auditError,
+    tree,
+    companies,
+    departments,
+    auditLogs,
+    latestOverviewAudit,
+    auditFilter,
+    setAuditFilter,
+    searchTerm,
+    selectedSearchKey,
+    selectedPersonNodeKey,
+    selectedPersonEntry,
+    highlightedNodeKey,
+    expandedKeys,
+    selectedExcelFile,
+    personColumnCount,
+    personCount,
+    isMissingPersonNodes,
+    canTriggerRebuild,
+    trimmedSearchTerm,
+    totalSearchMatches,
+    searchResults,
+    registerNodeRef,
+    refreshAudit,
+    handleSearchInputChange,
+    handleClearSearch,
+    handleSelectSearchResult,
+    handleSelectPerson,
+    handleToggleBranch,
+    handleChooseExcelFile,
+    handleClearExcelFile,
+    handleExcelFileChange,
+    handleRebuild,
+  } = useOrgDirectoryManagementPage();
 
   if (loading) return <div>加载中...</div>;
 
@@ -741,7 +437,7 @@ const OrgDirectoryManagement = () => {
                 lineHeight: 1.6,
               }}
             >
-              当前组织库缺少员工叶子，树暂时只能显示到部门。请先在右侧选择组织架构 Excel 文档，再执行重建后展开到个人。
+              当前组织库缺少人员叶子节点，树暂时只能展示到部门。请先在右侧选择组织架构 Excel 文件，再执行重建后展开到个人。
             </div>
           ) : null}
 
@@ -810,9 +506,9 @@ const OrgDirectoryManagement = () => {
                     color: '#9a3412',
                   }}
                 >
-                  <div style={{ fontWeight: 700 }}>当前组织库缺少员工叶子</div>
+                  <div style={{ fontWeight: 700 }}>当前组织库缺少人员叶子节点</div>
                   <div style={{ marginTop: 6, fontSize: '0.82rem', lineHeight: 1.7 }}>
-                    当前树数据里没有任何 `person` 节点，请先选择组织架构 Excel 文档，再点击下方“从 Excel 重建组织架构”，把员工节点写入当前活动库后再查看个人叶子。
+                    当前树数据里没有任何 `person` 节点，请先选择组织架构 Excel 文件，再点击下方“从 Excel 重建组织架构”，把员工节点写入当前活动库后再查看个人叶子。
                   </div>
                 </div>
               ) : null}
@@ -984,9 +680,9 @@ const OrgDirectoryManagement = () => {
                   style={{ display: 'none' }}
                 />
                 <div>
-                  <div style={{ color: '#111827', fontSize: '0.9rem', fontWeight: 700 }}>组织架构文档</div>
+                  <div style={{ color: '#111827', fontSize: '0.9rem', fontWeight: 700 }}>组织架构文件</div>
                   <div style={{ marginTop: 4, color: '#6b7280', fontSize: '0.78rem' }}>
-                    请选择 Excel 文档，仅支持 .xls / .xlsx。
+                    请选择 Excel 文件，仅支持 .xls / .xlsx。
                   </div>
                 </div>
                 <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
@@ -1005,7 +701,7 @@ const OrgDirectoryManagement = () => {
                       fontWeight: 600,
                     }}
                   >
-                    选择组织架构文档
+                    选择组织架构文件
                   </button>
                   {selectedExcelFile ? (
                     <button
@@ -1038,7 +734,7 @@ const OrgDirectoryManagement = () => {
                     wordBreak: 'break-word',
                   }}
                 >
-                  {selectedExcelFile ? selectedExcelFile.name : '未加载组织架构文档'}
+                  {selectedExcelFile ? selectedExcelFile.name : '未加载组织架构文件'}
                 </div>
                 <button
                   type="button"
@@ -1089,7 +785,6 @@ const OrgDirectoryManagement = () => {
                   </div>
                 </div>
               </div>
-
             </div>
           ) : (
             <div style={{ display: 'grid', gap: 12 }}>
@@ -1127,9 +822,7 @@ const OrgDirectoryManagement = () => {
                 </select>
                 <select
                   value={String(auditFilter.limit)}
-                  onChange={(event) =>
-                    setAuditFilter((prev) => ({ ...prev, limit: Number(event.target.value) }))
-                  }
+                  onChange={(event) => setAuditFilter((prev) => ({ ...prev, limit: Number(event.target.value) }))}
                   data-testid="org-audit-limit"
                   style={{ padding: '8px 10px', borderRadius: 8, border: '1px solid #d1d5db' }}
                 >
