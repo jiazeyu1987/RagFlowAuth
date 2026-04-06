@@ -33,9 +33,9 @@ export default function useMessagesPage() {
     setLoading(true);
     try {
       const res = await notificationApi.listMyMessages({ limit: 100, offset: 0, unreadOnly: onlyUnread });
-      setItems(Array.isArray(res.items) ? res.items : []);
-      setTotal(Number(res.total || 0));
-      syncUnreadCount(Number(res.unread_count || 0));
+      setItems(res.items);
+      setTotal(res.total);
+      syncUnreadCount(res.unreadCount);
     } catch (e) {
       setError(e.message || '加载站内信失败');
     } finally {

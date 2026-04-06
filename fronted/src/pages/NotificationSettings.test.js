@@ -18,54 +18,50 @@ jest.mock('../features/notification/api', () => ({
   },
 }));
 
-const rulesResponse = {
-  groups: [
-    {
-      group_key: 'operation_approval',
-      group_label: '操作审批',
-      items: [
-        {
-          event_type: 'operation_approval_todo',
-          event_label: '审批待处理',
-          enabled_channel_types: ['in_app'],
-          has_enabled_channel_config_by_type: { email: true, dingtalk: false, in_app: true },
-        },
-      ],
-    },
-  ],
-};
+const rulesGroups = [
+  {
+    group_key: 'operation_approval',
+    group_label: 'Operation Approval',
+    items: [
+      {
+        event_type: 'operation_approval_todo',
+        event_label: 'Approval Pending',
+        enabled_channel_types: ['in_app'],
+        has_enabled_channel_config_by_type: { email: true, dingtalk: false, in_app: true },
+      },
+    ],
+  },
+];
 
 describe('NotificationSettings', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    notificationApi.listChannels.mockResolvedValue({
-      items: [
-        {
-          channel_id: 'email-main',
-          channel_type: 'email',
-          name: '邮件通知',
-          enabled: true,
-          updated_at_ms: 1710000000000,
-          config: { host: 'smtp.example.com', from_email: 'noreply@example.com', use_tls: true },
-        },
-        {
-          channel_id: 'inapp-main',
-          channel_type: 'in_app',
-          name: '站内信',
-          enabled: true,
-          updated_at_ms: 1710000000000,
-          config: {},
-        },
-      ],
-    });
-    notificationApi.listRules.mockResolvedValue(rulesResponse);
+    notificationApi.listChannels.mockResolvedValue([
+      {
+        channel_id: 'email-main',
+        channel_type: 'email',
+        name: 'Email Notice',
+        enabled: true,
+        updated_at_ms: 1710000000000,
+        config: { host: 'smtp.example.com', from_email: 'noreply@example.com', use_tls: true },
+      },
+      {
+        channel_id: 'inapp-main',
+        channel_type: 'in_app',
+        name: 'Inbox Notice',
+        enabled: true,
+        updated_at_ms: 1710000000000,
+        config: {},
+      },
+    ]);
+    notificationApi.listRules.mockResolvedValue(rulesGroups);
     notificationApi.listJobs.mockResolvedValue({
       items: [
         {
           job_id: 11,
           channel_id: 'email-main',
           channel_type: 'email',
-          channel_name: '邮件通知',
+          channel_name: 'Email Notice',
           event_type: 'operation_approval_todo',
           recipient_username: 'wangxin',
           status: 'queued',
@@ -73,12 +69,13 @@ describe('NotificationSettings', () => {
           created_at_ms: 1710000000000,
         },
       ],
+      count: 1,
     });
-    notificationApi.listJobLogs.mockResolvedValue({
-      items: [{ id: 1, status: 'queued', attempted_at_ms: 1710000000000, error: null }],
-    });
+    notificationApi.listJobLogs.mockResolvedValue([
+      { id: 1, status: 'queued', attempted_at_ms: 1710000000000, error: null },
+    ]);
     notificationApi.upsertChannel.mockResolvedValue({});
-    notificationApi.upsertRules.mockResolvedValue(rulesResponse);
+    notificationApi.upsertRules.mockResolvedValue(rulesGroups);
     notificationApi.retryJob.mockResolvedValue({});
     notificationApi.resendJob.mockResolvedValue({});
     notificationApi.dispatchPending.mockResolvedValue({});
@@ -149,14 +146,14 @@ describe('NotificationSettings', () => {
   it('filters history and loads delivery logs in history tab', async () => {
     const user = userEvent.setup();
     notificationApi.listJobs
-      .mockResolvedValueOnce({ items: [] })
+      .mockResolvedValueOnce({ items: [], count: 0 })
       .mockResolvedValueOnce({
         items: [
           {
             job_id: 11,
             channel_id: 'email-main',
             channel_type: 'email',
-            channel_name: '邮件通知',
+            channel_name: 'Email Notice',
             event_type: 'operation_approval_todo',
             recipient_username: 'wangxin',
             status: 'queued',
@@ -164,6 +161,7 @@ describe('NotificationSettings', () => {
             created_at_ms: 1710000000000,
           },
         ],
+        count: 1,
       });
 
     render(<NotificationSettings />);

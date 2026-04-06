@@ -135,7 +135,7 @@ export default function useNotificationSettingsPage() {
         channelType: filters.channelType,
         status: filters.status,
       });
-      setJobs(Array.isArray(response?.items) ? response.items : []);
+      setJobs(response.items);
     } finally {
       setHistoryLoading(false);
     }
@@ -146,14 +146,13 @@ export default function useNotificationSettingsPage() {
     setError('');
     setLoading(true);
     try {
-      const [channelResponse, rulesResponse] = await Promise.all([
+      const [nextChannels, nextRulesGroups] = await Promise.all([
         notificationApi.listChannels(false),
         notificationApi.listRules(),
       ]);
-      const nextChannels = Array.isArray(channelResponse?.items) ? channelResponse.items : [];
       setChannels(nextChannels);
       setForms(buildForms(nextChannels));
-      setRulesGroups(Array.isArray(rulesResponse?.groups) ? rulesResponse.groups : []);
+      setRulesGroups(nextRulesGroups);
       await loadHistory(historyFiltersRef.current);
     } catch (requestError) {
       setError(requestError?.message || '加载通知设置失败');
@@ -276,13 +275,13 @@ export default function useNotificationSettingsPage() {
     setNotice('');
     setRulesSaving(true);
     try {
-      const response = await notificationApi.upsertRules({
+      const nextRulesGroups = await notificationApi.upsertRules({
         items: flattenRules(rulesGroups).map((item) => ({
           event_type: item.event_type,
           enabled_channel_types: item.enabled_channel_types || [],
         })),
       });
-      setRulesGroups(Array.isArray(response?.groups) ? response.groups : []);
+      setRulesGroups(nextRulesGroups);
       setNotice('通知规则已保存');
     } catch (requestError) {
       setError(requestError?.message || '保存通知规则失败');
@@ -317,8 +316,8 @@ export default function useNotificationSettingsPage() {
     }
     try {
       if (!logsByJob[key]) {
-        const response = await notificationApi.listJobLogs(jobId, 20);
-        setLogsByJob((prev) => ({ ...prev, [key]: Array.isArray(response?.items) ? response.items : [] }));
+        const items = await notificationApi.listJobLogs(jobId, 20);
+        setLogsByJob((prev) => ({ ...prev, [key]: items }));
       }
       setExpandedLogs((prev) => ({ ...prev, [key]: true }));
     } catch (requestError) {

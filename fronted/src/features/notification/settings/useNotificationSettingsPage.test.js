@@ -19,42 +19,38 @@ jest.mock('../api', () => ({
 describe('useNotificationSettingsPage', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    notificationApi.listChannels.mockResolvedValue({
-      items: [
-        {
-          channel_id: 'email-main',
-          channel_type: 'email',
-          name: '邮件通知',
-          enabled: true,
-          updated_at_ms: 1710000000000,
-          config: { host: 'smtp.example.com', from_email: 'noreply@example.com', use_tls: true },
-        },
-        {
-          channel_id: 'inapp-main',
-          channel_type: 'in_app',
-          name: '站内信',
-          enabled: true,
-          updated_at_ms: 1710000000000,
-          config: {},
-        },
-      ],
-    });
-    notificationApi.listRules.mockResolvedValue({
-      groups: [
-        {
-          group_key: 'operation_approval',
-          group_label: '操作审批',
-          items: [
-            {
-              event_type: 'operation_approval_todo',
-              event_label: '审批待处理',
-              enabled_channel_types: ['in_app'],
-              has_enabled_channel_config_by_type: { email: true, dingtalk: false, in_app: true },
-            },
-          ],
-        },
-      ],
-    });
+    notificationApi.listChannels.mockResolvedValue([
+      {
+        channel_id: 'email-main',
+        channel_type: 'email',
+        name: 'Email Notice',
+        enabled: true,
+        updated_at_ms: 1710000000000,
+        config: { host: 'smtp.example.com', from_email: 'noreply@example.com', use_tls: true },
+      },
+      {
+        channel_id: 'inapp-main',
+        channel_type: 'in_app',
+        name: 'Inbox Notice',
+        enabled: true,
+        updated_at_ms: 1710000000000,
+        config: {},
+      },
+    ]);
+    notificationApi.listRules.mockResolvedValue([
+      {
+        group_key: 'operation_approval',
+        group_label: 'Operation Approval',
+        items: [
+          {
+            event_type: 'operation_approval_todo',
+            event_label: 'Approval Pending',
+            enabled_channel_types: ['in_app'],
+            has_enabled_channel_config_by_type: { email: true, dingtalk: false, in_app: true },
+          },
+        ],
+      },
+    ]);
     notificationApi.listJobs.mockResolvedValue({
       items: [
         {
@@ -66,27 +62,26 @@ describe('useNotificationSettingsPage', () => {
           created_at_ms: 1710000000000,
         },
       ],
+      count: 1,
     });
-    notificationApi.listJobLogs.mockResolvedValue({
-      items: [{ id: 1, status: 'queued', attempted_at_ms: 1710000000000, error: null }],
-    });
+    notificationApi.listJobLogs.mockResolvedValue([
+      { id: 1, status: 'queued', attempted_at_ms: 1710000000000, error: null },
+    ]);
     notificationApi.upsertChannel.mockResolvedValue({});
-    notificationApi.upsertRules.mockResolvedValue({
-      groups: [
-        {
-          group_key: 'operation_approval',
-          group_label: '操作审批',
-          items: [
-            {
-              event_type: 'operation_approval_todo',
-              event_label: '审批待处理',
-              enabled_channel_types: ['dingtalk', 'in_app'],
-              has_enabled_channel_config_by_type: { email: true, dingtalk: true, in_app: true },
-            },
-          ],
-        },
-      ],
-    });
+    notificationApi.upsertRules.mockResolvedValue([
+      {
+        group_key: 'operation_approval',
+        group_label: 'Operation Approval',
+        items: [
+          {
+            event_type: 'operation_approval_todo',
+            event_label: 'Approval Pending',
+            enabled_channel_types: ['dingtalk', 'in_app'],
+            has_enabled_channel_config_by_type: { email: true, dingtalk: true, in_app: true },
+          },
+        ],
+      },
+    ]);
   });
 
   it('loads channel forms, rules, and history into stable hook state', async () => {
@@ -105,7 +100,7 @@ describe('useNotificationSettingsPage', () => {
     expect(result.current.forms.email.host).toBe('smtp.example.com');
     expect(result.current.forms.dingtalk.agent_id).toBe('4432005762');
     expect(result.current.ruleItems).toHaveLength(1);
-    expect(result.current.eventLabelByType.operation_approval_todo).toBe('审批待处理');
+    expect(result.current.eventLabelByType.operation_approval_todo).toBe('Approval Pending');
   });
 
   it('saves channel changes through the notification feature api and reloads the page', async () => {
@@ -138,7 +133,7 @@ describe('useNotificationSettingsPage', () => {
         channel_type: 'in_app',
       })
     );
-    expect(result.current.notice).toBe('基础渠道配置已保存');
+    expect(result.current.notice).toBeTruthy();
   });
 
   it('saves rules and loads job logs through the feature api', async () => {

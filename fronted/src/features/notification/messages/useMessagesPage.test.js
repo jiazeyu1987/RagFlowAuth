@@ -25,11 +25,12 @@ describe('useMessagesPage', () => {
           event_type: 'approval',
           created_at_ms: 1710000000000,
           read_at_ms: null,
-          payload: { filename: 'demo.txt', current_step_name: '审核中' },
+          payload: { filename: 'demo.txt', current_step_name: 'Review' },
         },
       ],
+      count: 1,
       total: 1,
-      unread_count: 1,
+      unreadCount: 1,
     });
     notificationApi.updateMyMessageReadState.mockResolvedValue({});
     notificationApi.markAllMyMessagesRead.mockResolvedValue({});
@@ -62,8 +63,9 @@ describe('useMessagesPage', () => {
           payload: {},
         },
       ],
+      count: 1,
       total: 1,
-      unread_count: 1,
+      unreadCount: 1,
     });
 
     await act(async () => {

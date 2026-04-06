@@ -16,26 +16,26 @@ describe('notificationApi', () => {
     jest.clearAllMocks();
   });
 
-  it('routes admin notification endpoints through the auth backend base url', async () => {
+  it('routes admin notification endpoints through the auth backend base url and normalizes list payloads', async () => {
     httpClient.requestJson
       .mockResolvedValueOnce({ items: [] })
       .mockResolvedValueOnce({ ok: true })
-      .mockResolvedValueOnce({ items: [] })
-      .mockResolvedValueOnce({ ok: true })
-      .mockResolvedValueOnce({ items: [] })
-      .mockResolvedValueOnce({ items: [] })
+      .mockResolvedValueOnce({ groups: [] })
+      .mockResolvedValueOnce({ groups: [] })
+      .mockResolvedValueOnce({ items: [], count: 0 })
+      .mockResolvedValueOnce({ items: [], count: 0 })
       .mockResolvedValueOnce({ ok: true })
       .mockResolvedValueOnce({ ok: true })
       .mockResolvedValueOnce({ ok: true });
 
-    await expect(notificationApi.listChannels(true)).resolves.toEqual({ items: [] });
+    await expect(notificationApi.listChannels(true)).resolves.toEqual([]);
     await expect(notificationApi.upsertChannel('email/main', { enabled: true })).resolves.toEqual({ ok: true });
-    await expect(notificationApi.listRules()).resolves.toEqual({ items: [] });
-    await expect(notificationApi.upsertRules({ items: [] })).resolves.toEqual({ ok: true });
+    await expect(notificationApi.listRules()).resolves.toEqual([]);
+    await expect(notificationApi.upsertRules({ items: [] })).resolves.toEqual([]);
     await expect(
       notificationApi.listJobs({ limit: 10, status: 'queued', eventType: 'approval', channelType: 'email' })
-    ).resolves.toEqual({ items: [] });
-    await expect(notificationApi.listJobLogs('job/1', '20&all=true')).resolves.toEqual({ items: [] });
+    ).resolves.toEqual({ items: [], count: 0 });
+    await expect(notificationApi.listJobLogs('job/1', '20&all=true')).resolves.toEqual([]);
     await expect(notificationApi.retryJob('job/1')).resolves.toEqual({ ok: true });
     await expect(notificationApi.dispatchPending('50&all=true')).resolves.toEqual({ ok: true });
     await expect(notificationApi.resendJob('job/1')).resolves.toEqual({ ok: true });
@@ -98,16 +98,17 @@ describe('notificationApi', () => {
     );
   });
 
-  it('routes personal message endpoints through the auth backend base url', async () => {
+  it('routes personal message endpoints through the auth backend base url and normalizes inbox payloads', async () => {
     httpClient.requestJson
-      .mockResolvedValueOnce({ items: [], unread_count: 0, total: 0 })
+      .mockResolvedValueOnce({ items: [], count: 0, total: 0, unread_count: 0 })
       .mockResolvedValueOnce({ ok: true })
       .mockResolvedValueOnce({ ok: true });
 
     await expect(notificationApi.listMyMessages({ limit: 30, offset: 5, unreadOnly: true })).resolves.toEqual({
       items: [],
-      unread_count: 0,
+      count: 0,
       total: 0,
+      unreadCount: 0,
     });
     await expect(notificationApi.updateMyMessageReadState('job/2', true)).resolves.toEqual({ ok: true });
     await expect(notificationApi.markAllMyMessagesRead()).resolves.toEqual({ ok: true });
@@ -132,5 +133,14 @@ describe('notificationApi', () => {
         body: JSON.stringify({}),
       }
     );
+  });
+
+  it('fails fast when list endpoints return invalid payloads', async () => {
+    httpClient.requestJson
+      .mockResolvedValueOnce({ groups: [] })
+      .mockResolvedValueOnce({ items: [], count: '0', total: 0, unread_count: 0 });
+
+    await expect(notificationApi.listChannels()).rejects.toThrow('notification_channels_list_invalid_payload');
+    await expect(notificationApi.listMyMessages()).rejects.toThrow('notification_messages_list_invalid_payload');
   });
 });
