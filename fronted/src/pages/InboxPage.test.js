@@ -31,36 +31,24 @@ describe('InboxPage', () => {
 
   it('marks inbox item as read and navigates to approval detail', async () => {
     const user = userEvent.setup();
-    operationApprovalApi.listInbox
-      .mockResolvedValueOnce({
-        items: [
-          {
-            inbox_id: 'inbox-1',
-            title: '需要审批',
-            body: '请审批申请单',
-            status: 'unread',
-            event_type: 'operation_approval_todo',
-            created_at_ms: 1_710_000_000_000,
-            payload: { request_id: 'req-1' },
-          },
-        ],
-        unread_count: 1,
-      })
-      .mockResolvedValueOnce({
-        items: [
-          {
-            inbox_id: 'inbox-1',
-            title: '需要审批',
-            body: '请审批申请单',
-            status: 'read',
-            event_type: 'operation_approval_todo',
-            created_at_ms: 1_710_000_000_000,
-            payload: { request_id: 'req-1' },
-          },
-        ],
-        unread_count: 0,
-      });
-    operationApprovalApi.markInboxRead.mockResolvedValue({ inbox_id: 'inbox-1', status: 'read' });
+    operationApprovalApi.listInbox.mockResolvedValue({
+      items: [
+        {
+          inbox_id: 'inbox-1',
+          title: '需要审批',
+          body: '请审批申请单',
+          status: 'unread',
+          event_type: 'operation_approval_todo',
+          created_at_ms: 1_710_000_000_000,
+          payload: { request_id: 'req-1' },
+        },
+      ],
+      unread_count: 1,
+    });
+    operationApprovalApi.markInboxRead.mockResolvedValue({
+      inbox_id: 'inbox-1',
+      status: 'read',
+    });
 
     render(
       <MemoryRouter>
@@ -84,9 +72,18 @@ describe('InboxPage', () => {
 
   it('marks all items as read', async () => {
     const user = userEvent.setup();
-    operationApprovalApi.listInbox
-      .mockResolvedValueOnce({ items: [], unread_count: 2 })
-      .mockResolvedValueOnce({ items: [], unread_count: 0 });
+    operationApprovalApi.listInbox.mockResolvedValue({
+      items: [
+        {
+          inbox_id: 'inbox-1',
+          title: '需要审批',
+          status: 'unread',
+          event_type: 'operation_approval_todo',
+          payload: { request_id: 'req-1' },
+        },
+      ],
+      unread_count: 2,
+    });
     operationApprovalApi.markAllInboxRead.mockResolvedValue({ updated: 2, unread_count: 0 });
 
     render(

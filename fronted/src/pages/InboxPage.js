@@ -1,7 +1,5 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import operationApprovalApi from '../features/operationApproval/api';
-import { publishInboxUnreadCount } from '../features/notification/inboxUnreadSync';
+import React from 'react';
+import useInboxPage from '../features/operationApproval/useInboxPage';
 
 const cardStyle = {
   background: '#ffffff',
@@ -38,119 +36,36 @@ const TEXT = {
   processing: '处理中...',
   loading: '正在加载站内信...',
   empty: '当前没有站内信。',
-  loadError: '加载站内信失败',
-  updateError: '更新站内信状态失败',
-  markAllError: '全部标记已读失败',
   viewDetail: '查看详情',
   markRead: '标记已读',
 };
 
-const resolveApprovalLink = (item) => {
-  if (item?.link_path) return item.link_path;
-  const requestId = String(item?.payload?.request_id || '').trim();
-  return requestId ? `/approvals?request_id=${encodeURIComponent(requestId)}` : '/approvals';
-};
-
 export default function InboxPage() {
-  const navigate = useNavigate();
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [items, setItems] = useState([]);
-  const [unreadOnly, setUnreadOnly] = useState(false);
-  const [unreadCount, setUnreadCount] = useState(0);
-  const [busyId, setBusyId] = useState('');
-  const [markAllBusy, setMarkAllBusy] = useState(false);
-  const unreadCountRef = useRef(0);
-
-  useEffect(() => {
-    unreadCountRef.current = Number(unreadCount || 0);
-  }, [unreadCount]);
-
-  const syncUnreadCount = useCallback((valueOrUpdater) => {
-    const base = Number(unreadCountRef.current || 0);
-    const rawValue = typeof valueOrUpdater === 'function' ? valueOrUpdater(base) : valueOrUpdater;
-    const normalized = Number.isFinite(Number(rawValue)) && Number(rawValue) > 0 ? Number(rawValue) : 0;
-    unreadCountRef.current = normalized;
-    setUnreadCount(normalized);
-    publishInboxUnreadCount(normalized);
-    return normalized;
-  }, []);
-
-  const loadData = useCallback(async (nextUnreadOnly = unreadOnly) => {
-    setLoading(true);
-    setError('');
-    try {
-      const response = await operationApprovalApi.listInbox({ unreadOnly: nextUnreadOnly, limit: 100 });
-      setItems(Array.isArray(response?.items) ? response.items : []);
-      syncUnreadCount(Number(response?.unread_count || 0));
-    } catch (requestError) {
-      setError(requestError?.message || TEXT.loadError);
-      setItems([]);
-      syncUnreadCount(0);
-    } finally {
-      setLoading(false);
-    }
-  }, [syncUnreadCount, unreadOnly]);
-
-  useEffect(() => {
-    loadData(unreadOnly);
-  }, [loadData, unreadOnly]);
-
-  const handleMarkRead = useCallback(async (item) => {
-    const inboxId = String(item?.inbox_id || '');
-    if (!inboxId) return;
-    setBusyId(inboxId);
-    setError('');
-    try {
-      await operationApprovalApi.markInboxRead(inboxId);
-      if (String(item?.status || '') === 'unread') {
-        setItems((prev) => {
-          if (unreadOnly) {
-            return prev.filter((entry) => String(entry?.inbox_id || '') !== inboxId);
-          }
-          return prev.map((entry) => (
-            String(entry?.inbox_id || '') === inboxId
-              ? { ...entry, status: 'read' }
-              : entry
-          ));
-        });
-        syncUnreadCount((prev) => Math.max(0, Number(prev || 0) - 1));
-      }
-    } catch (requestError) {
-      setError(requestError?.message || TEXT.updateError);
-    } finally {
-      setBusyId('');
-    }
-  }, [syncUnreadCount, unreadOnly]);
-
-  const handleOpen = useCallback(async (item) => {
-    if (String(item?.status || '') === 'unread') {
-      await handleMarkRead(item);
-    }
-    navigate(resolveApprovalLink(item));
-  }, [handleMarkRead, navigate]);
-
-  const handleMarkAllRead = useCallback(async () => {
-    setMarkAllBusy(true);
-    setError('');
-    try {
-      await operationApprovalApi.markAllInboxRead();
-      setItems((prev) => (
-        unreadOnly
-          ? []
-          : prev.map((entry) => ({ ...entry, status: 'read' }))
-      ));
-      syncUnreadCount(0);
-    } catch (requestError) {
-      setError(requestError?.message || TEXT.markAllError);
-    } finally {
-      setMarkAllBusy(false);
-    }
-  }, [syncUnreadCount, unreadOnly]);
+  const {
+    loading,
+    error,
+    items,
+    unreadOnly,
+    unreadCount,
+    busyId,
+    markAllBusy,
+    toggleUnreadOnly,
+    handleMarkRead,
+    handleOpen,
+    handleMarkAllRead,
+  } = useInboxPage();
 
   return (
     <div style={{ display: 'grid', gap: '16px' }} data-testid="inbox-page">
-      <div style={{ ...cardStyle, display: 'flex', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
+      <div
+        style={{
+          ...cardStyle,
+          display: 'flex',
+          justifyContent: 'space-between',
+          gap: '12px',
+          flexWrap: 'wrap',
+        }}
+      >
         <div>
           <div style={{ fontSize: '1.2rem', fontWeight: 700, color: '#111827' }}>{TEXT.title}</div>
           <div style={{ color: '#4b5563', marginTop: '4px' }}>{TEXT.subtitle}</div>
@@ -160,7 +75,7 @@ export default function InboxPage() {
           <button
             type="button"
             data-testid="inbox-toggle-unread"
-            onClick={() => setUnreadOnly((prev) => !prev)}
+            onClick={toggleUnreadOnly}
             style={buttonStyle}
           >
             {unreadOnly ? TEXT.showAll : TEXT.unreadOnly}
@@ -178,7 +93,15 @@ export default function InboxPage() {
       </div>
 
       {error ? (
-        <div data-testid="inbox-error" style={{ ...cardStyle, borderColor: '#fecaca', background: '#fef2f2', color: '#991b1b' }}>
+        <div
+          data-testid="inbox-error"
+          style={{
+            ...cardStyle,
+            borderColor: '#fecaca',
+            background: '#fef2f2',
+            color: '#991b1b',
+          }}
+        >
           {error}
         </div>
       ) : null}
@@ -203,14 +126,29 @@ export default function InboxPage() {
                     background: unread ? '#eff6ff' : '#ffffff',
                   }}
                 >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
+                  <div
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      gap: '12px',
+                      flexWrap: 'wrap',
+                    }}
+                  >
                     <div>
-                      <div style={{ fontWeight: 700, color: '#111827' }}>{item.title || item.event_type}</div>
+                      <div style={{ fontWeight: 700, color: '#111827' }}>
+                        {item.title || item.event_type}
+                      </div>
                     </div>
-                    <div style={{ color: unread ? '#1d4ed8' : '#6b7280' }}>{unread ? TEXT.unread : TEXT.read}</div>
+                    <div style={{ color: unread ? '#1d4ed8' : '#6b7280' }}>
+                      {unread ? TEXT.unread : TEXT.read}
+                    </div>
                   </div>
                   <div style={{ marginTop: '12px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                    <button type="button" onClick={() => handleOpen(item)} style={primaryButtonStyle}>
+                    <button
+                      type="button"
+                      onClick={() => handleOpen(item)}
+                      style={primaryButtonStyle}
+                    >
                       {TEXT.viewDetail}
                     </button>
                     {unread ? (
