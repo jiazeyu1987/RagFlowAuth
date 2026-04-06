@@ -43,7 +43,8 @@ describe('InboxPage', () => {
           payload: { request_id: 'req-1' },
         },
       ],
-      unread_count: 1,
+      count: 1,
+      unreadCount: 1,
     });
     operationApprovalApi.markInboxRead.mockResolvedValue({
       inbox_id: 'inbox-1',
@@ -82,7 +83,8 @@ describe('InboxPage', () => {
           payload: { request_id: 'req-1' },
         },
       ],
-      unread_count: 2,
+      count: 1,
+      unreadCount: 2,
     });
     operationApprovalApi.markAllInboxRead.mockResolvedValue({ updated: 2, unread_count: 0 });
 

@@ -70,7 +70,7 @@ const activeUsers = [
 describe('ApprovalConfig', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    operationApprovalApi.listWorkflows.mockResolvedValue(workflowResponse);
+    operationApprovalApi.listWorkflows.mockResolvedValue(workflowResponse.items);
     operationApprovalApi.updateWorkflow.mockResolvedValue({});
     usersApi.search.mockImplementation(async (keyword) => {
       const normalized = String(keyword || '').trim().toLowerCase();

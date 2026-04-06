@@ -1,6 +1,36 @@
 import { authBackendUrl } from '../../config/backend';
 import { httpClient } from '../../shared/http/httpClient';
 
+const assertObjectPayload = (payload, action) => {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    throw new Error(`${action}_invalid_payload`);
+  }
+  return payload;
+};
+
+const normalizeArrayField = (payload, field, action) => {
+  const envelope = assertObjectPayload(payload, action);
+  if (!Array.isArray(envelope[field])) {
+    throw new Error(`${action}_invalid_payload`);
+  }
+  return envelope[field];
+};
+
+const normalizeCountField = (payload, field, action) => {
+  const envelope = assertObjectPayload(payload, action);
+  const value = envelope[field];
+  if (!Number.isInteger(value) || value < 0) {
+    throw new Error(`${action}_invalid_payload`);
+  }
+  return value;
+};
+
+const normalizeInboxPayload = (payload) => ({
+  items: normalizeArrayField(payload, 'items', 'operation_approval_inbox_list'),
+  count: normalizeCountField(payload, 'count', 'operation_approval_inbox_list'),
+  unreadCount: normalizeCountField(payload, 'unread_count', 'operation_approval_inbox_list'),
+});
+
 const buildQuery = (params = {}) => {
   const search = new URLSearchParams();
   Object.entries(params || {}).forEach(([key, value]) => {
@@ -12,8 +42,12 @@ const buildQuery = (params = {}) => {
 };
 
 export const operationApprovalApi = {
-  listWorkflows() {
-    return httpClient.requestJson(authBackendUrl('/api/operation-approvals/workflows'), { method: 'GET' });
+  async listWorkflows() {
+    return normalizeArrayField(
+      await httpClient.requestJson(authBackendUrl('/api/operation-approvals/workflows'), { method: 'GET' }),
+      'items',
+      'operation_approval_workflows_list'
+    );
   },
 
   updateWorkflow(operationType, payload) {
@@ -26,35 +60,49 @@ export const operationApprovalApi = {
     );
   },
 
-  listRequests({ view = 'mine', status = 'all', limit = 100 } = {}) {
-    return httpClient.requestJson(
-      authBackendUrl(
-        `/api/operation-approvals/requests${buildQuery({
-          view,
-          status: status && status !== 'all' ? status : '',
-          limit,
-        })}`
+  async listRequests({ view = 'mine', status = 'all', limit = 100 } = {}) {
+    return normalizeArrayField(
+      await httpClient.requestJson(
+        authBackendUrl(
+          `/api/operation-approvals/requests${buildQuery({
+            view,
+            status: status && status !== 'all' ? status : '',
+            limit,
+          })}`
+        ),
+        { method: 'GET' }
       ),
-      { method: 'GET' }
+      'items',
+      'operation_approval_requests_list'
     );
   },
 
-  listTodos({ limit = 100 } = {}) {
-    return httpClient.requestJson(
-      authBackendUrl(`/api/operation-approvals/todos${buildQuery({ limit })}`),
-      { method: 'GET' }
+  async listTodos({ limit = 100 } = {}) {
+    return normalizeArrayField(
+      await httpClient.requestJson(
+        authBackendUrl(`/api/operation-approvals/todos${buildQuery({ limit })}`),
+        { method: 'GET' }
+      ),
+      'items',
+      'operation_approval_todos_list'
     );
   },
 
-  getRequest(requestId) {
-    return httpClient.requestJson(
-      authBackendUrl(`/api/operation-approvals/requests/${encodeURIComponent(requestId)}`),
-      { method: 'GET' }
+  async getRequest(requestId) {
+    return assertObjectPayload(
+      await httpClient.requestJson(
+        authBackendUrl(`/api/operation-approvals/requests/${encodeURIComponent(requestId)}`),
+        { method: 'GET' }
+      ),
+      'operation_approval_request_get'
     );
   },
 
-  getStats() {
-    return httpClient.requestJson(authBackendUrl('/api/operation-approvals/stats'), { method: 'GET' });
+  async getStats() {
+    return assertObjectPayload(
+      await httpClient.requestJson(authBackendUrl('/api/operation-approvals/stats'), { method: 'GET' }),
+      'operation_approval_stats_get'
+    );
   },
 
   approveRequest(requestId, payload) {
@@ -87,10 +135,12 @@ export const operationApprovalApi = {
     );
   },
 
-  listInbox({ unreadOnly = false, limit = 100 } = {}) {
-    return httpClient.requestJson(
-      authBackendUrl(`/api/inbox${buildQuery({ unread_only: unreadOnly ? 'true' : '', limit })}`),
-      { method: 'GET' }
+  async listInbox({ unreadOnly = false, limit = 100 } = {}) {
+    return normalizeInboxPayload(
+      await httpClient.requestJson(
+        authBackendUrl(`/api/inbox${buildQuery({ unread_only: unreadOnly ? 'true' : '', limit })}`),
+        { method: 'GET' }
+      )
     );
   },
 

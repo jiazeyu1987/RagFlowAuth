@@ -152,8 +152,7 @@ export default function useApprovalConfigPage() {
     setLoading(true);
     setError('');
     try {
-      const workflowResponse = await operationApprovalApi.listWorkflows();
-      const workflowItems = Array.isArray(workflowResponse?.items) ? workflowResponse.items : [];
+      const workflowItems = await operationApprovalApi.listWorkflows();
       const nextDrafts = workflowItems.map(createDraftFromWorkflow);
       setDrafts(nextDrafts);
       await hydrateConfiguredUsers(nextDrafts);

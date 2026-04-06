@@ -48,8 +48,8 @@ export default function useInboxPage() {
         unreadOnly: nextUnreadOnly,
         limit: 100,
       });
-      setItems(Array.isArray(response?.items) ? response.items : []);
-      syncUnreadCount(Number(response?.unread_count || 0));
+      setItems(response.items);
+      syncUnreadCount(response.unreadCount);
     } catch (requestError) {
       setError(requestError?.message || DEFAULT_LOAD_ERROR);
       setItems([]);

@@ -108,7 +108,7 @@ describe('ApprovalCenter', () => {
         role: 'reviewer',
       },
     });
-    operationApprovalApi.listRequests.mockResolvedValue({ items: [requestBrief] });
+    operationApprovalApi.listRequests.mockResolvedValue([requestBrief]);
     operationApprovalApi.getRequest.mockResolvedValue(requestDetail);
   });
 
@@ -323,8 +323,7 @@ describe('ApprovalCenter', () => {
         role: 'reviewer',
       },
     });
-    operationApprovalApi.listRequests.mockResolvedValue({
-      items: [
+    operationApprovalApi.listRequests.mockResolvedValue([
         {
           ...requestBrief,
           request_id: 'req-withdrawn',
@@ -336,8 +335,7 @@ describe('ApprovalCenter', () => {
           request_id: 'req-approval',
           status: 'in_approval',
         },
-      ],
-    });
+      ]);
     operationApprovalApi.getRequest.mockResolvedValue({
       ...requestDetail,
       request_id: 'req-withdrawn',
@@ -362,18 +360,16 @@ describe('ApprovalCenter', () => {
     const user = userEvent.setup();
     operationApprovalApi.listRequests.mockImplementation(({ status }) => {
       if (status === 'rejected') {
-        return Promise.resolve({
-          items: [
+        return Promise.resolve([
             {
               ...requestBrief,
               request_id: 'req-rejected',
               status: 'rejected',
               current_step_name: '第一层',
             },
-          ],
-        });
+          ]);
       }
-      return Promise.resolve({ items: [requestBrief] });
+      return Promise.resolve([requestBrief]);
     });
     operationApprovalApi.getRequest
       .mockResolvedValueOnce(requestDetail)

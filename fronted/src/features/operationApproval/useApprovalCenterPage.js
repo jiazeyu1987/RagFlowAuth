@@ -176,12 +176,11 @@ export default function useApprovalCenterPage({ getOperationLabel }) {
       setError('');
       setErrorCode('');
       try {
-        const response = await operationApprovalApi.listRequests({
+        const nextItems = await operationApprovalApi.listRequests({
           view: nextView,
           status: nextStatus,
           limit: 100,
         });
-        const nextItems = Array.isArray(response?.items) ? response.items : [];
         setItems(nextItems);
 
         const currentSelectedRequestId = String(selectedRequestIdRef.current || '');
@@ -223,8 +222,7 @@ export default function useApprovalCenterPage({ getOperationLabel }) {
     setError('');
     setErrorCode('');
     try {
-      const response = await operationApprovalApi.getRequest(nextRequestId);
-      setDetail(response || null);
+      setDetail(await operationApprovalApi.getRequest(nextRequestId));
     } catch (requestError) {
       setDetail(null);
       const nextErrorCode = String(requestError?.message || '').trim();

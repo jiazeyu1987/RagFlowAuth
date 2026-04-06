@@ -102,7 +102,7 @@ describe('useApprovalCenterPage', () => {
       },
     });
     useSignaturePrompt.mockReturnValue(signaturePromptState);
-    operationApprovalApi.listRequests.mockResolvedValue({ items: [requestBrief] });
+    operationApprovalApi.listRequests.mockResolvedValue([requestBrief]);
     operationApprovalApi.getRequest.mockResolvedValue(requestDetail);
     operationApprovalApi.withdrawRequest.mockResolvedValue({
       ...requestDetail,
@@ -156,9 +156,9 @@ describe('useApprovalCenterPage', () => {
 
     await waitFor(() => expect(result.current.loading).toBe(false));
 
-    operationApprovalApi.listRequests.mockResolvedValueOnce({
-      items: [{ ...requestBrief, request_id: 'req-rejected', status: 'rejected' }],
-    });
+    operationApprovalApi.listRequests.mockResolvedValueOnce([
+      { ...requestBrief, request_id: 'req-rejected', status: 'rejected' },
+    ]);
     operationApprovalApi.getRequest.mockResolvedValueOnce({
       ...requestDetail,
       request_id: 'req-rejected',

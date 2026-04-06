@@ -12,7 +12,7 @@ jest.mock('../hooks/useAuth', () => ({
 jest.mock('../features/operationApproval/api', () => ({
   __esModule: true,
   default: {
-    listInbox: jest.fn().mockResolvedValue({ unread_count: 0 }),
+    listInbox: jest.fn().mockResolvedValue({ items: [], count: 0, unreadCount: 0 }),
   },
 }));
 
@@ -148,7 +148,7 @@ describe('Layout permission group navigation visibility', () => {
   });
 
   it('updates inbox unread badge immediately when unread count event is published', async () => {
-    operationApprovalApi.listInbox.mockResolvedValue({ unread_count: 0 });
+    operationApprovalApi.listInbox.mockResolvedValue({ items: [], count: 0, unreadCount: 0 });
     useAuth.mockReturnValue({
       user: { user_id: 'viewer-1', username: 'viewer', role: 'viewer', permission_groups: [] },
       logout: jest.fn(),

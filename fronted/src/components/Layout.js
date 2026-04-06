@@ -108,7 +108,7 @@ const Layout = ({ children }) => {
       try {
         const response = await operationApprovalApi.listInbox({ limit: 1 });
         if (!cancelled) {
-          const nextCount = Number(response?.unread_count || 0);
+          const nextCount = response.unreadCount;
           setInboxUnreadCount(nextCount);
           publishInboxUnreadCount(nextCount);
         }
