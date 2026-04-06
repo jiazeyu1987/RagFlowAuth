@@ -1,23 +1,7 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { auditApi } from '../features/audit/api';
-import { orgDirectoryApi } from '../features/orgDirectory/api';
+import React, { useEffect, useState } from 'react';
+import useAuditLogsPage from '../features/audit/useAuditLogsPage';
 
 const MOBILE_BREAKPOINT = 768;
-
-const parseDateTimeLocalToMs = (value) => {
-  if (!value) return null;
-  const ms = Date.parse(value);
-  return Number.isFinite(ms) ? ms : null;
-};
-
-const formatMs = (ms) => {
-  if (!ms) return '';
-  try {
-    return new Date(ms).toLocaleString();
-  } catch {
-    return String(ms);
-  }
-};
 
 const ACTION_LABELS = {
   auth_login: '登录',
@@ -26,12 +10,12 @@ const ACTION_LABELS = {
   document_upload: '上传文档',
   document_download: '下载文档',
   document_delete: '删除文档',
-  patent_kb_add: '专利添加到本地专利',
-  patent_kb_add_all: '专利批量添加到本地专利',
+  patent_kb_add: '专利添加到本地专利库',
+  patent_kb_add_all: '专利批量添加到本地专利库',
   patent_item_delete: '删除专利条目',
   patent_session_delete: '删除专利会话',
-  paper_kb_add: '论文添加到本地论文',
-  paper_kb_add_all: '论文批量添加到本地论文',
+  paper_kb_add: '论文添加到本地论文库',
+  paper_kb_add_all: '论文批量添加到本地论文库',
   paper_item_delete: '删除论文条目',
   paper_session_delete: '删除论文会话',
   datasets_create: '新建知识库',
@@ -50,9 +34,6 @@ const SOURCE_LABELS = {
   paper: '论文',
 };
 
-const actionLabel = (value) => ACTION_LABELS[String(value || '').trim()] || String(value || '');
-const sourceLabel = (value) => SOURCE_LABELS[String(value || '').trim()] || String(value || '');
-
 const ACTION_OPTIONS = [
   { value: '', label: '全部' },
   { value: 'auth_login', label: '登录' },
@@ -61,12 +42,12 @@ const ACTION_OPTIONS = [
   { value: 'document_upload', label: '上传文档' },
   { value: 'document_download', label: '下载文档' },
   { value: 'document_delete', label: '删除文档' },
-  { value: 'patent_kb_add', label: '专利添加到本地专利' },
-  { value: 'patent_kb_add_all', label: '专利批量添加到本地专利' },
+  { value: 'patent_kb_add', label: '专利添加到本地专利库' },
+  { value: 'patent_kb_add_all', label: '专利批量添加到本地专利库' },
   { value: 'patent_item_delete', label: '删除专利条目' },
   { value: 'patent_session_delete', label: '删除专利会话' },
-  { value: 'paper_kb_add', label: '论文添加到本地论文' },
-  { value: 'paper_kb_add_all', label: '论文批量添加到本地论文' },
+  { value: 'paper_kb_add', label: '论文添加到本地论文库' },
+  { value: 'paper_kb_add_all', label: '论文批量添加到本地论文库' },
   { value: 'paper_item_delete', label: '删除论文条目' },
   { value: 'paper_session_delete', label: '删除论文会话' },
   { value: 'datasets_create', label: '新建知识库' },
@@ -96,79 +77,41 @@ const tdStyle = {
   fontSize: '0.9rem',
 };
 
+const actionLabel = (value) =>
+  ACTION_LABELS[String(value || '').trim()] || String(value || '');
+
+const sourceLabel = (value) =>
+  SOURCE_LABELS[String(value || '').trim()] || String(value || '');
+
+const formatMs = (value) => {
+  if (!value) return '';
+  try {
+    return new Date(value).toLocaleString();
+  } catch {
+    return String(value);
+  }
+};
+
 const AuditLogs = () => {
   const [isMobile, setIsMobile] = useState(() => {
     if (typeof window === 'undefined') return false;
     return window.innerWidth <= MOBILE_BREAKPOINT;
   });
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-
-  const [companies, setCompanies] = useState([]);
-  const [departments, setDepartments] = useState([]);
-
-  const [filters, setFilters] = useState({
-    action: '',
-    company_id: '',
-    department_id: '',
-    username: '',
-    from: '',
-    to: '',
-    limit: 200,
-    offset: 0,
-  });
-
-  const [result, setResult] = useState({ total: 0, items: [] });
-
-  const loadDirectory = async () => {
-    const [c, d] = await Promise.all([orgDirectoryApi.listCompanies(), orgDirectoryApi.listDepartments()]);
-    setCompanies(Array.isArray(c) ? c : []);
-    setDepartments(Array.isArray(d) ? d : []);
-  };
-
-  const loadLogs = async (nextFilters) => {
-    const f = nextFilters || filters;
-    setLoading(true);
-    setError(null);
-    try {
-      const params = {
-        limit: f.limit || 200,
-        offset: f.offset || 0,
-      };
-      if (f.action) params.action = f.action;
-      if (f.username) params.username = f.username;
-      if (f.company_id) params.company_id = f.company_id;
-      if (f.department_id) params.department_id = f.department_id;
-
-      const fromMs = parseDateTimeLocalToMs(f.from);
-      const toMs = parseDateTimeLocalToMs(f.to);
-      if (fromMs != null) params.from_ms = String(fromMs);
-      if (toMs != null) params.to_ms = String(toMs);
-
-      const data = await auditApi.listEvents(params);
-      setResult({
-        total: data?.total || 0,
-        items: Array.isArray(data?.items) ? data.items : [],
-      });
-    } catch (e) {
-      setError(e.message || String(e));
-      setResult({ total: 0, items: [] });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    (async () => {
-      try {
-        await loadDirectory();
-      } catch {
-        // best effort
-      }
-      await loadLogs(filters);
-    })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  const {
+    loading,
+    error,
+    companies,
+    filters,
+    result,
+    rows,
+    visibleDepartments,
+    canGoPrev,
+    canGoNext,
+    updateFilter,
+    applyFilters,
+    goPrev,
+    goNext,
+  } = useAuditLogsPage();
 
   useEffect(() => {
     if (typeof window === 'undefined') return undefined;
@@ -178,33 +121,6 @@ const AuditLogs = () => {
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
-
-  const rows = useMemo(() => result.items || [], [result.items]);
-  const visibleDepartments = useMemo(() => {
-    const companyId = filters.company_id ? Number(filters.company_id) : null;
-    if (companyId == null) return departments;
-    return departments.filter((department) => department.company_id == null || department.company_id === companyId);
-  }, [departments, filters.company_id]);
-
-  const onApply = async () => {
-    const next = { ...filters, offset: 0 };
-    setFilters(next);
-    await loadLogs(next);
-  };
-
-  const onPrev = async () => {
-    const nextOffset = Math.max(0, (filters.offset || 0) - (filters.limit || 200));
-    const next = { ...filters, offset: nextOffset };
-    setFilters(next);
-    await loadLogs(next);
-  };
-
-  const onNext = async () => {
-    const nextOffset = (filters.offset || 0) + (filters.limit || 200);
-    const next = { ...filters, offset: nextOffset };
-    setFilters(next);
-    await loadLogs(next);
-  };
 
   return (
     <div data-testid="audit-logs-page" style={{ padding: isMobile ? '0 0 12px' : 0 }}>
@@ -232,13 +148,13 @@ const AuditLogs = () => {
             <div style={{ fontSize: '0.85rem', color: '#6b7280', marginBottom: 4 }}>类型</div>
             <select
               value={filters.action}
-              onChange={(e) => setFilters((s) => ({ ...s, action: e.target.value }))}
+              onChange={(event) => updateFilter('action', event.target.value)}
               style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: 6 }}
               data-testid="audit-filter-action"
             >
-              {ACTION_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
+              {ACTION_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
                 </option>
               ))}
             </select>
@@ -248,14 +164,14 @@ const AuditLogs = () => {
             <div style={{ fontSize: '0.85rem', color: '#6b7280', marginBottom: 4 }}>公司</div>
             <select
               value={filters.company_id}
-              onChange={(e) => setFilters((s) => ({ ...s, company_id: e.target.value }))}
+              onChange={(event) => updateFilter('company_id', event.target.value)}
               style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: 6 }}
               data-testid="audit-filter-company"
             >
               <option value="">全部</option>
-              {companies.map((c) => (
-                <option key={c.id} value={String(c.id)}>
-                  {c.name}
+              {companies.map((company) => (
+                <option key={company.id} value={String(company.id)}>
+                  {company.name}
                 </option>
               ))}
             </select>
@@ -265,14 +181,14 @@ const AuditLogs = () => {
             <div style={{ fontSize: '0.85rem', color: '#6b7280', marginBottom: 4 }}>部门</div>
             <select
               value={filters.department_id}
-              onChange={(e) => setFilters((s) => ({ ...s, department_id: e.target.value }))}
+              onChange={(event) => updateFilter('department_id', event.target.value)}
               style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: 6 }}
               data-testid="audit-filter-department"
             >
               <option value="">全部</option>
-              {visibleDepartments.map((d) => (
-                <option key={d.id} value={String(d.id)}>
-                  {d.path_name || d.name}
+              {visibleDepartments.map((department) => (
+                <option key={department.id} value={String(department.id)}>
+                  {department.path_name || department.name}
                 </option>
               ))}
             </select>
@@ -282,7 +198,7 @@ const AuditLogs = () => {
             <div style={{ fontSize: '0.85rem', color: '#6b7280', marginBottom: 4 }}>账号</div>
             <input
               value={filters.username}
-              onChange={(e) => setFilters((s) => ({ ...s, username: e.target.value }))}
+              onChange={(event) => updateFilter('username', event.target.value)}
               placeholder="用户名精确匹配"
               style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: 6 }}
               data-testid="audit-filter-username"
@@ -293,7 +209,7 @@ const AuditLogs = () => {
             <div style={{ fontSize: '0.85rem', color: '#6b7280', marginBottom: 4 }}>每页条数</div>
             <select
               value={String(filters.limit)}
-              onChange={(e) => setFilters((s) => ({ ...s, limit: Number(e.target.value) }))}
+              onChange={(event) => updateFilter('limit', Number(event.target.value))}
               style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: 6 }}
               data-testid="audit-filter-limit"
             >
@@ -309,7 +225,7 @@ const AuditLogs = () => {
             <input
               type="datetime-local"
               value={filters.from}
-              onChange={(e) => setFilters((s) => ({ ...s, from: e.target.value }))}
+              onChange={(event) => updateFilter('from', event.target.value)}
               style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: 6 }}
               data-testid="audit-filter-from"
             />
@@ -320,21 +236,41 @@ const AuditLogs = () => {
             <input
               type="datetime-local"
               value={filters.to}
-              onChange={(e) => setFilters((s) => ({ ...s, to: e.target.value }))}
+              onChange={(event) => updateFilter('to', event.target.value)}
               style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: 6 }}
               data-testid="audit-filter-to"
             />
           </div>
         </div>
 
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: isMobile ? 'stretch' : 'center', flexDirection: isMobile ? 'column' : 'row', gap: 10, marginTop: 10 }}>
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: isMobile ? 'stretch' : 'center',
+            flexDirection: isMobile ? 'column' : 'row',
+            gap: 10,
+            marginTop: 10,
+          }}
+        >
           <div style={{ color: '#6b7280', fontSize: '0.9rem' }}>
-            总条数: <span data-testid="audit-total" style={{ fontWeight: 700, color: '#111827' }}>{result.total}</span>
+            总条数{' '}
+            <span data-testid="audit-total" style={{ fontWeight: 700, color: '#111827' }}>
+              {result.total}
+            </span>
           </div>
-          <div style={{ display: 'flex', gap: 8, flexDirection: isMobile ? 'column' : 'row', width: isMobile ? '100%' : 'auto' }}>
+
+          <div
+            style={{
+              display: 'flex',
+              gap: 8,
+              flexDirection: isMobile ? 'column' : 'row',
+              width: isMobile ? '100%' : 'auto',
+            }}
+          >
             <button
               type="button"
-              onClick={onApply}
+              onClick={applyFilters}
               disabled={loading}
               style={{
                 padding: '8px 12px',
@@ -352,8 +288,8 @@ const AuditLogs = () => {
             </button>
             <button
               type="button"
-              onClick={onPrev}
-              disabled={loading || (filters.offset || 0) <= 0}
+              onClick={goPrev}
+              disabled={loading || !canGoPrev}
               style={{
                 padding: '8px 12px',
                 backgroundColor: '#f3f4f6',
@@ -369,8 +305,8 @@ const AuditLogs = () => {
             </button>
             <button
               type="button"
-              onClick={onNext}
-              disabled={loading || (filters.offset || 0) + rows.length >= result.total}
+              onClick={goNext}
+              disabled={loading || !canGoNext}
               style={{
                 padding: '8px 12px',
                 backgroundColor: '#f3f4f6',
@@ -388,7 +324,7 @@ const AuditLogs = () => {
         </div>
       </div>
 
-      {error && <div style={{ color: '#ef4444', marginBottom: 12 }}>错误：{error}</div>}
+      {error ? <div style={{ color: '#ef4444', marginBottom: 12 }}>错误: {error}</div> : null}
 
       <div
         style={{
@@ -400,7 +336,10 @@ const AuditLogs = () => {
         }}
       >
         <div style={{ overflowX: 'auto' }}>
-          <table style={{ ...tableStyle, minWidth: isMobile ? '900px' : '100%' }} data-testid="audit-table">
+          <table
+            style={{ ...tableStyle, minWidth: isMobile ? '900px' : '100%' }}
+            data-testid="audit-table"
+          >
             <thead>
               <tr>
                 <th style={thStyle}>时间</th>
@@ -414,31 +353,47 @@ const AuditLogs = () => {
               </tr>
             </thead>
             <tbody>
-              {loading && (
+              {loading ? (
                 <tr>
-                  <td style={tdStyle} colSpan={8}>加载中...</td>
-                </tr>
-              )}
-              {!loading && rows.length === 0 && (
-                <tr>
-                  <td style={tdStyle} colSpan={8}>暂无日志</td>
-                </tr>
-              )}
-              {!loading && rows.map((r) => (
-                <tr key={r.id} data-testid={`audit-row-${r.id}`}>
-                  <td style={tdStyle}>{formatMs(r.created_at_ms)}</td>
-                  <td style={tdStyle}>{actionLabel(r.action)}</td>
-                  <td style={tdStyle}>{r.full_name || r.username || r.actor}</td>
-                  <td style={tdStyle}>{r.company_name || (r.company_id != null ? String(r.company_id) : '')}</td>
-                  <td style={tdStyle}>{r.department_name || (r.department_id != null ? String(r.department_id) : '')}</td>
-                  <td style={tdStyle}>{sourceLabel(r.source)}</td>
-                  <td style={tdStyle}>{r.kb_name || r.kb_id || ''}</td>
-                  <td style={tdStyle}>
-                    <div style={{ fontWeight: 600 }}>{r.filename || ''}</div>
-                    <div style={{ color: '#6b7280', fontSize: '0.8rem' }}>{r.doc_id || ''}</div>
+                  <td style={tdStyle} colSpan={8}>
+                    加载中...
                   </td>
                 </tr>
-              ))}
+              ) : null}
+              {!loading && rows.length === 0 ? (
+                <tr>
+                  <td style={tdStyle} colSpan={8}>
+                    暂无日志
+                  </td>
+                </tr>
+              ) : null}
+              {!loading
+                ? rows.map((item) => (
+                    <tr key={item.id} data-testid={`audit-row-${item.id}`}>
+                      <td style={tdStyle}>{formatMs(item.created_at_ms)}</td>
+                      <td style={tdStyle}>{actionLabel(item.action)}</td>
+                      <td style={tdStyle}>
+                        {item.full_name || item.username || item.actor}
+                      </td>
+                      <td style={tdStyle}>
+                        {item.company_name ||
+                          (item.company_id != null ? String(item.company_id) : '')}
+                      </td>
+                      <td style={tdStyle}>
+                        {item.department_name ||
+                          (item.department_id != null ? String(item.department_id) : '')}
+                      </td>
+                      <td style={tdStyle}>{sourceLabel(item.source)}</td>
+                      <td style={tdStyle}>{item.kb_name || item.kb_id || ''}</td>
+                      <td style={tdStyle}>
+                        <div style={{ fontWeight: 600 }}>{item.filename || ''}</div>
+                        <div style={{ color: '#6b7280', fontSize: '0.8rem' }}>
+                          {item.doc_id || ''}
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                : null}
             </tbody>
           </table>
         </div>
