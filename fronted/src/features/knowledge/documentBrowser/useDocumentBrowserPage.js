@@ -490,9 +490,9 @@ export default function useDocumentBrowserPage() {
             return;
           }
           items.push({
-            doc_id: docId,
-            source_dataset_name: sourceDatasetName,
-            target_dataset_name: targetDatasetName,
+            docId,
+            sourceDatasetName,
+            targetDatasetName,
           });
         });
       });
@@ -500,6 +500,25 @@ export default function useDocumentBrowserPage() {
     },
     [selectedDocs]
   );
+
+  const clearTransferredMoveSelections = useCallback((results) => {
+    const movedItems = Array.isArray(results) ? results : [];
+    if (movedItems.length === 0) return;
+    setSelectedDocs((previous) => {
+      const next = { ...previous };
+      let changed = false;
+      movedItems.forEach((item) => {
+        const sourceDatasetName = String(item?.sourceDatasetName || '').trim();
+        const sourceDocId = String(item?.sourceDocId || '').trim();
+        if (!sourceDatasetName || !sourceDocId) return;
+        const current = Array.isArray(next[sourceDatasetName]) ? next[sourceDatasetName] : [];
+        if (!current.includes(sourceDocId)) return;
+        next[sourceDatasetName] = current.filter((id) => id !== sourceDocId);
+        changed = true;
+      });
+      return changed ? next : previous;
+    });
+  }, []);
 
   const openBatchTransferDialog = useCallback(
     (operation) => {
@@ -566,59 +585,53 @@ export default function useDocumentBrowserPage() {
         processed: 0,
         success: 0,
         failed: 0,
-        current: '',
+        current: targetDatasetName,
         done: false,
       };
 
       setBatchTransferProgress(progress);
       setActionLoading((previous) => ({ ...previous, [loadingKey]: true }));
 
-      const failedItems = [];
-      const affected = new Set([targetDatasetName]);
+      try {
+        const result = await documentBrowserApi.transferDocumentsBatch(items, operation);
+        const affected = new Set([targetDatasetName]);
+        items.forEach((item) => affected.add(item.sourceDatasetName));
 
-      for (const item of items) {
-        progress.current = `${item.source_dataset_name} / ${item.doc_id}`;
-        setBatchTransferProgress({ ...progress });
-        try {
-          await documentBrowserApi.transferDocument(
-            item.doc_id,
-            item.source_dataset_name,
-            item.target_dataset_name,
-            operation
-          );
-          progress.success += 1;
-        } catch (requestError) {
-          progress.failed += 1;
-          failedItems.push({
-            source_dataset_name: item.source_dataset_name,
-            doc_id: item.doc_id,
-            detail: requestError?.message || 'transfer_failed',
-          });
-        } finally {
-          progress.processed += 1;
-          affected.add(item.source_dataset_name);
-          setBatchTransferProgress({ ...progress });
-        }
-      }
-
-      await Promise.all(
-        Array.from(affected).map((datasetName) => fetchDocumentsForDataset(datasetName))
-      );
-      if (operation === 'move') clearAllSelections();
-
-      setActionLoading((previous) => ({ ...previous, [loadingKey]: false }));
-      setBatchTransferProgress((previous) =>
-        previous ? { ...previous, current: '', done: true } : null
-      );
-
-      if (failedItems.length > 0) {
-        const firstFailed = failedItems[0];
-        window.alert(
-          `Done ${progress.success}/${progress.total}, failed ${failedItems.length}\nSample: ${firstFailed.source_dataset_name}/${firstFailed.doc_id}: ${firstFailed.detail}`
+        await Promise.all(
+          Array.from(affected).map((datasetName) => fetchDocumentsForDataset(datasetName))
         );
+
+        if (operation === 'move') {
+          clearTransferredMoveSelections(result.results);
+        }
+
+        setBatchTransferProgress({
+          ...progress,
+          processed: result.total,
+          success: result.successCount,
+          failed: result.failedCount,
+          current: '',
+          done: true,
+        });
+
+        if (result.failedCount > 0) {
+          const firstFailed = result.failed[0];
+          window.alert(
+            `Done ${result.successCount}/${result.total}, failed ${result.failedCount}\nSample: ${firstFailed.sourceDatasetName}/${firstFailed.docId}: ${firstFailed.detail}`
+          );
+        }
+      } catch (requestError) {
+        setError(requestError?.message || (operation === 'move' ? TEXT.moveFail : TEXT.copyFail));
+        setBatchTransferProgress({
+          ...progress,
+          current: '',
+          done: true,
+        });
+      } finally {
+        setActionLoading((previous) => ({ ...previous, [loadingKey]: false }));
       }
     },
-    [clearAllSelections, collectSelectedTransferItems, fetchDocumentsForDataset]
+    [clearTransferredMoveSelections, collectSelectedTransferItems, fetchDocumentsForDataset]
   );
 
   const handleTransferConfirm = useCallback(async () => {

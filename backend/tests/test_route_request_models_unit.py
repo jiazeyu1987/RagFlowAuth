@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 from backend.app.core import auth as auth_module
 from backend.app.modules.agents.router import router as agents_router
 from backend.app.modules.chat.router import router as chat_router
+from backend.app.modules.ragflow.routes.datasets import router as ragflow_datasets_router
 from backend.app.modules.search_configs.router import router as search_configs_router
 
 
@@ -104,8 +105,17 @@ class _FakeRagflowService:
 
 
 class _FakeKnowledgeManagementManager:
-    def __init__(self, ragflow_service):
+    def __init__(self, ragflow_service, manageable_datasets=None):
         self._ragflow_service = ragflow_service
+        self._manageable_datasets = list(manageable_datasets or [])
+        self.list_manageable_calls = []
+
+    def get_management_scope(self, user):  # noqa: ARG002
+        return SimpleNamespace(can_manage=True, dataset_ids=frozenset({"d1"}))
+
+    def list_manageable_datasets(self, user):  # noqa: ARG002
+        self.list_manageable_calls.append(getattr(user, "role", None))
+        return list(self._manageable_datasets)
 
     def create_dataset(self, *, user, payload):  # noqa: ARG002
         body = dict(payload or {})
@@ -126,10 +136,10 @@ class _FakeSearchChatService:
         return {"chunks": [], "count": 0}
 
 
-def _make_client(*, router, deps) -> TestClient:
+def _make_client(*, router, deps, prefix="/api") -> TestClient:
     app = FastAPI()
     app.state.deps = deps
-    app.include_router(router, prefix="/api")
+    app.include_router(router, prefix=prefix)
 
     def _override_get_current_payload(request: Request) -> TokenPayload:  # noqa: ARG001
         return TokenPayload(sub="u1")
@@ -222,6 +232,51 @@ class TestDatasetRequestModelsUnit(unittest.TestCase):
             self.assertEqual(ragflow.updated[0][0], "d1")
             self.assertEqual(ragflow.updated[0][1].get("id"), None)
             self.assertEqual(ragflow.updated[0][1].get("dataset_id"), None)
+
+
+class TestDatasetListingRoutesUnit(unittest.TestCase):
+    def test_sub_admin_dataset_listing_requires_management_manager(self):
+        deps = SimpleNamespace(
+            user_store=_FakeUserStore(role="sub_admin"),
+            permission_group_store=_FakePermissionGroupStore(),
+            ragflow_service=_FakeRagflowService(),
+        )
+        with _make_client(router=agents_router, deps=deps) as client:
+            resp = client.get("/api/datasets")
+        self.assertEqual(resp.status_code, 500)
+        self.assertEqual(resp.json().get("detail"), "knowledge_management_manager_unavailable")
+
+    def test_dataset_listing_routes_align_on_manageable_dataset_contract(self):
+        ragflow = _FakeRagflowService()
+        manager = _FakeKnowledgeManagementManager(
+            ragflow,
+            manageable_datasets=[{"id": "managed-1", "name": "Managed KB"}],
+        )
+        deps = SimpleNamespace(
+            user_store=_FakeUserStore(role="sub_admin"),
+            permission_group_store=_FakePermissionGroupStore(),
+            ragflow_service=ragflow,
+            knowledge_management_manager=manager,
+        )
+
+        with _make_client(router=agents_router, deps=deps) as primary_client:
+            primary_resp = primary_client.get("/api/datasets")
+        self.assertEqual(primary_resp.status_code, 200, primary_resp.text)
+        self.assertEqual(
+            primary_resp.json(),
+            {"datasets": [{"id": "managed-1", "name": "Managed KB"}], "count": 1},
+        )
+
+        with _make_client(router=ragflow_datasets_router, deps=deps, prefix="/api/ragflow") as legacy_client:
+            legacy_resp = legacy_client.get("/api/ragflow/datasets")
+        self.assertEqual(legacy_resp.status_code, 200, legacy_resp.text)
+        self.assertEqual(
+            legacy_resp.json(),
+            {"datasets": [{"id": "managed-1", "name": "Managed KB"}], "count": 1},
+        )
+        self.assertNotIn("Deprecation", legacy_resp.headers)
+        self.assertNotIn("X-Replaced-By", legacy_resp.headers)
+        self.assertEqual(manager.list_manageable_calls, ["sub_admin", "sub_admin"])
 
 
 class TestSearchChunksUnit(unittest.TestCase):

@@ -26,7 +26,7 @@ describe('ChangePassword', () => {
         full_name: 'Alice',
       },
     });
-    meApi.changePassword.mockResolvedValue({ ok: true });
+    meApi.changePassword.mockResolvedValue({ message: 'password_changed' });
   });
 
   it('submits password changes through the me feature API', async () => {
@@ -42,6 +42,6 @@ describe('ChangePassword', () => {
     await waitFor(() => {
       expect(meApi.changePassword).toHaveBeenCalledWith('OldPass123', 'NewPass123');
     });
-    expect(screen.getByTestId('change-password-success')).toBeInTheDocument();
+    expect(screen.getByTestId('change-password-success')).toHaveTextContent('密码修改成功');
   });
 });

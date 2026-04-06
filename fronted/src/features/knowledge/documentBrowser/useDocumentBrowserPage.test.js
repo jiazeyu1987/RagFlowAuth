@@ -24,6 +24,7 @@ jest.mock('./api', () => ({
   documentBrowserApi: {
     listDocuments: jest.fn(),
     transferDocument: jest.fn(),
+    transferDocumentsBatch: jest.fn(),
   },
 }));
 
@@ -71,6 +72,29 @@ describe('useDocumentBrowserPage', () => {
       return [];
     });
     documentBrowserApi.transferDocument.mockResolvedValue({ success: true });
+    documentBrowserApi.transferDocumentsBatch.mockResolvedValue({
+      ok: true,
+      operation: 'copy',
+      total: 1,
+      successCount: 1,
+      failedCount: 0,
+      results: [
+        {
+          ok: true,
+          operation: 'copy',
+          sourceDatasetName: 'KB-1',
+          targetDatasetName: 'KB-2',
+          sourceDocId: 'doc-1',
+          targetDocId: 'doc-target-1',
+          filename: 'Doc 1',
+          sourceDeleted: false,
+          parseTriggered: true,
+          parseError: '',
+        },
+      ],
+      failed: [],
+    });
+    window.alert = jest.fn();
   });
 
   it('loads datasets/documents and transfers through the document browser API', async () => {
@@ -127,5 +151,54 @@ describe('useDocumentBrowserPage', () => {
     expect(documentsApi.batchDownloadRagflowToBrowser).toHaveBeenCalledWith([
       { doc_id: 'doc-1', dataset: 'KB-1', name: 'Doc 1' },
     ]);
+  });
+
+  it('routes batch transfers through the document browser batch API', async () => {
+    const { result } = renderHook(() => useDocumentBrowserPage(), { wrapper });
+
+    await waitFor(() => {
+      expect(documentBrowserApi.listDocuments).toHaveBeenCalledWith('KB-1');
+    });
+
+    act(() => {
+      result.current.handleSelectDoc('doc-1', 'KB-1');
+      result.current.openBatchTransferDialog('copy');
+    });
+
+    await waitFor(() => {
+      expect(result.current.transferDialog).toEqual(
+        expect.objectContaining({
+          scope: 'batch',
+          operation: 'copy',
+          targetDatasetName: 'KB-1',
+        })
+      );
+    });
+
+    act(() => {
+      result.current.setTransferDialog((previous) => ({
+        ...previous,
+        targetDatasetName: 'KB-2',
+      }));
+    });
+
+    await act(async () => {
+      await result.current.handleTransferConfirm();
+    });
+
+    expect(documentBrowserApi.transferDocumentsBatch).toHaveBeenCalledWith(
+      [{ docId: 'doc-1', sourceDatasetName: 'KB-1', targetDatasetName: 'KB-2' }],
+      'copy'
+    );
+    expect(result.current.batchTransferProgress).toEqual(
+      expect.objectContaining({
+        operation: 'copy',
+        total: 1,
+        processed: 1,
+        success: 1,
+        failed: 0,
+        done: true,
+      })
+    );
   });
 });

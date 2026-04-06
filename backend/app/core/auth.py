@@ -133,7 +133,7 @@ async def get_current_payload(request: Request) -> TokenPayload:
 
     user = user_store.get_by_user_id(payload.sub)
     if not user:
-        raise HTTPException(status_code=401, detail="User not found")
+        raise HTTPException(status_code=401, detail="user_not_found")
     blocked, code = resolve_login_block(user)
     if blocked:
         raise HTTPException(status_code=403, detail=code or "account_disabled")

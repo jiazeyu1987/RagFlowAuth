@@ -7,7 +7,7 @@ from fastapi import APIRouter, Body, HTTPException
 from pydantic import BaseModel, Field, ValidationError
 
 from backend.app.core.authz import AuthContextDep
-from backend.app.core.datasets import list_accessible_datasets
+from backend.app.core.datasets import list_visible_datasets
 from backend.app.core.permdbg import permdbg
 from backend.app.core.permission_resolver import allowed_dataset_ids, assert_kb_allowed
 from backend.app.core.pydantic_compat import model_dump, model_validate
@@ -104,32 +104,22 @@ async def search_chunks(
 async def list_available_datasets(
     ctx: AuthContextDep,
 ):
-    deps = ctx.deps
-    snapshot = ctx.snapshot
-    management_manager = getattr(deps, "knowledge_management_manager", None)
-    if str(getattr(ctx.user, "role", "") or "") == "sub_admin" and management_manager is not None:
-        try:
-            datasets = management_manager.list_manageable_datasets(ctx.user)
-        except Exception as exc:
-            raise HTTPException(status_code=int(getattr(exc, "status_code", 400) or 400), detail=str(exc)) from exc
-        return {"datasets": datasets, "count": len(datasets)}
-    datasets = list_accessible_datasets(deps, snapshot)
-    if snapshot.is_admin:
+    datasets = list_visible_datasets(ctx.deps, ctx.snapshot, ctx.user)
+    if ctx.snapshot.is_admin or str(getattr(ctx.user, "role", "") or "") == "sub_admin":
         return {"datasets": datasets, "count": len(datasets)}
 
-    filtered = datasets
     try:
         permdbg(
             "datasets.list",
             user=ctx.user.username,
             role=ctx.user.role,
-            kb_scope=snapshot.kb_scope,
-            kb_refs=sorted(list(snapshot.kb_names))[:50],
-            datasets=[d.get("name") for d in filtered[:50] if isinstance(d, dict)],
+            kb_scope=ctx.snapshot.kb_scope,
+            kb_refs=sorted(list(ctx.snapshot.kb_names))[:50],
+            datasets=[d.get("name") for d in datasets[:50] if isinstance(d, dict)],
         )
     except Exception:
         pass
-    return {"datasets": filtered, "count": len(filtered)}
+    return {"datasets": datasets, "count": len(datasets)}
 
 
 @router.get("/datasets/{dataset_ref}")

@@ -8,11 +8,14 @@ function assertOkResponse(response, action) {
   }
 }
 
-function unwrapEnvelope(response) {
-  if (!response || typeof response !== 'object') return response;
-  if (response.chat && typeof response.chat === 'object') return response.chat;
-  if (response.data?.chat && typeof response.data.chat === 'object') return response.data.chat;
-  return response;
+function normalizeChatEnvelope(response, action) {
+  if (!response || typeof response !== 'object' || Array.isArray(response)) {
+    throw new Error(`${action}_invalid_payload`);
+  }
+  if (!response.chat || typeof response.chat !== 'object' || Array.isArray(response.chat)) {
+    throw new Error(`${action}_invalid_payload`);
+  }
+  return response.chat;
 }
 
 export const chatConfigsApi = {
@@ -30,7 +33,7 @@ export const chatConfigsApi = {
     const response = await httpClient.requestJson(authBackendUrl(`/api/chats/${encodeURIComponent(chatId)}`), {
       method: 'GET',
     });
-    return unwrapEnvelope(response);
+    return normalizeChatEnvelope(response, 'ragflow_chat_get');
   },
 
   async createChat(payload) {
@@ -38,7 +41,7 @@ export const chatConfigsApi = {
       method: 'POST',
       body: JSON.stringify(payload || {}),
     });
-    return unwrapEnvelope(response);
+    return normalizeChatEnvelope(response, 'ragflow_chat_create');
   },
 
   async updateChat(chatId, updates) {
@@ -46,7 +49,7 @@ export const chatConfigsApi = {
       method: 'PUT',
       body: JSON.stringify(updates || {}),
     });
-    return unwrapEnvelope(response);
+    return normalizeChatEnvelope(response, 'ragflow_chat_update');
   },
 
   async deleteChat(chatId) {
@@ -61,7 +64,6 @@ export const chatConfigsApi = {
       method: 'POST',
       body: JSON.stringify({}),
     });
-    return unwrapEnvelope(response);
+    return normalizeChatEnvelope(response, 'ragflow_chat_clear_parsed_files');
   },
 };
-

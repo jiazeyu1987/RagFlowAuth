@@ -88,7 +88,7 @@ class TestAdminNotificationsApiUnit(unittest.TestCase):
                     },
                 )
                 self.assertEqual(put_resp.status_code, 200, put_resp.text)
-                self.assertEqual(put_resp.json().get("channel_id"), "email-main")
+                self.assertEqual(put_resp.json()["channel"].get("channel_id"), "email-main")
 
                 list_channels_resp = client.get("/api/admin/notifications/channels")
                 self.assertEqual(list_channels_resp.status_code, 200, list_channels_resp.text)
@@ -110,6 +110,10 @@ class TestAdminNotificationsApiUnit(unittest.TestCase):
                     },
                 )
                 self.assertEqual(update_rules_resp.status_code, 200, update_rules_resp.text)
+
+                dispatch_empty_resp = client.post("/api/admin/notifications/dispatch?limit=10")
+                self.assertEqual(dispatch_empty_resp.status_code, 200, dispatch_empty_resp.text)
+                self.assertEqual(dispatch_empty_resp.json()["dispatch"], {"total": 0, "items": []})
 
                 jobs = deps.notification_manager.notify_event(
                     event_type="review_todo_approval",
@@ -139,12 +143,12 @@ class TestAdminNotificationsApiUnit(unittest.TestCase):
 
                 retry_resp = client.post(f"/api/admin/notifications/jobs/{job_id}/retry")
                 self.assertEqual(retry_resp.status_code, 200, retry_resp.text)
-                self.assertEqual(retry_resp.json().get("status"), "sent")
+                self.assertEqual(retry_resp.json()["job"].get("status"), "sent")
 
                 resend_resp = client.post(f"/api/admin/notifications/jobs/{job_id}/resend")
                 self.assertEqual(resend_resp.status_code, 200, resend_resp.text)
-                self.assertEqual(resend_resp.json().get("status"), "sent")
-                self.assertEqual(resend_resp.json().get("source_job_id"), job_id)
+                self.assertEqual(resend_resp.json()["job"].get("status"), "sent")
+                self.assertEqual(resend_resp.json()["job"].get("source_job_id"), job_id)
 
                 logs_resp = client.get(f"/api/admin/notifications/jobs/{job_id}/logs?limit=10")
                 self.assertEqual(logs_resp.status_code, 200, logs_resp.text)

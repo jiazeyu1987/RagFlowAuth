@@ -25,6 +25,15 @@ const normalizeCountField = (payload, field, action) => {
   return value;
 };
 
+const normalizeObjectField = (payload, field, action) => {
+  const envelope = assertObjectPayload(payload, action);
+  const value = envelope[field];
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error(`${action}_invalid_payload`);
+  }
+  return value;
+};
+
 const normalizeJobList = (payload) => ({
   items: normalizeArrayField(payload, 'items', 'notification_jobs_list'),
   count: normalizeCountField(payload, 'count', 'notification_jobs_list'),
@@ -48,12 +57,16 @@ export const notificationApi = {
     ),
 
   upsertChannel: async (channelId, payload) =>
-    httpClient.requestJson(
-      authBackendUrl(`/api/admin/notifications/channels/${encodeURIComponent(channelId)}`),
-      {
-        method: 'PUT',
-        body: JSON.stringify(payload || {}),
-      }
+    normalizeObjectField(
+      await httpClient.requestJson(
+        authBackendUrl(`/api/admin/notifications/channels/${encodeURIComponent(channelId)}`),
+        {
+          method: 'PUT',
+          body: JSON.stringify(payload || {}),
+        }
+      ),
+      'channel',
+      'notification_channel_upsert'
     ),
 
   listRules: async () =>
@@ -96,22 +109,34 @@ export const notificationApi = {
     ),
 
   retryJob: async (jobId) =>
-    httpClient.requestJson(authBackendUrl(`/api/admin/notifications/jobs/${encodeURIComponent(jobId)}/retry`), {
-      method: 'POST',
-      body: JSON.stringify({}),
-    }),
+    normalizeObjectField(
+      await httpClient.requestJson(authBackendUrl(`/api/admin/notifications/jobs/${encodeURIComponent(jobId)}/retry`), {
+        method: 'POST',
+        body: JSON.stringify({}),
+      }),
+      'job',
+      'notification_job_retry'
+    ),
 
   dispatchPending: async (limit = 100) =>
-    httpClient.requestJson(authBackendUrl(`/api/admin/notifications/dispatch?limit=${encodeURIComponent(limit)}`), {
-      method: 'POST',
-      body: JSON.stringify({}),
-    }),
+    normalizeObjectField(
+      await httpClient.requestJson(authBackendUrl(`/api/admin/notifications/dispatch?limit=${encodeURIComponent(limit)}`), {
+        method: 'POST',
+        body: JSON.stringify({}),
+      }),
+      'dispatch',
+      'notification_dispatch'
+    ),
 
   resendJob: async (jobId) =>
-    httpClient.requestJson(authBackendUrl(`/api/admin/notifications/jobs/${encodeURIComponent(jobId)}/resend`), {
-      method: 'POST',
-      body: JSON.stringify({}),
-    }),
+    normalizeObjectField(
+      await httpClient.requestJson(authBackendUrl(`/api/admin/notifications/jobs/${encodeURIComponent(jobId)}/resend`), {
+        method: 'POST',
+        body: JSON.stringify({}),
+      }),
+      'job',
+      'notification_job_resend'
+    ),
 
   listMyMessages: async ({ limit = 50, offset = 0, unreadOnly = false } = {}) => {
     const qs = new URLSearchParams();
@@ -124,14 +149,22 @@ export const notificationApi = {
   },
 
   updateMyMessageReadState: async (jobId, read) =>
-    httpClient.requestJson(authBackendUrl(`/api/me/messages/${encodeURIComponent(jobId)}/read-state`), {
-      method: 'PATCH',
-      body: JSON.stringify({ read: !!read }),
-    }),
+    normalizeObjectField(
+      await httpClient.requestJson(authBackendUrl(`/api/me/messages/${encodeURIComponent(jobId)}/read-state`), {
+        method: 'PATCH',
+        body: JSON.stringify({ read: !!read }),
+      }),
+      'message',
+      'notification_message_read_state_update'
+    ),
 
   markAllMyMessagesRead: async () =>
-    httpClient.requestJson(authBackendUrl('/api/me/messages/mark-all-read'), {
-      method: 'POST',
-      body: JSON.stringify({}),
-    }),
+    normalizeObjectField(
+      await httpClient.requestJson(authBackendUrl('/api/me/messages/mark-all-read'), {
+        method: 'POST',
+        body: JSON.stringify({}),
+      }),
+      'result',
+      'notification_messages_mark_all_read'
+    ),
 };

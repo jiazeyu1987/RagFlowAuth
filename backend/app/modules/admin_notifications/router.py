@@ -47,6 +47,12 @@ def _audit_payload(ctx: AuthContextDep, request: Request) -> dict[str, Any]:
     }
 
 
+def _wrap_payload(field: str, item: object) -> dict[str, object]:
+    if not isinstance(item, dict):
+        raise HTTPException(status_code=500, detail=f"{field}_invalid_payload")
+    return {field: item}
+
+
 @router.get("/admin/notifications/channels")
 def list_channels(ctx: AuthContextDep, _: AdminOnly, enabled_only: bool = False):
     manager = _resolve_notification_manager(ctx)
@@ -68,7 +74,7 @@ def upsert_channel(channel_id: str, body: ChannelUpsertBody, request: Request, c
         )
     except NotificationManagerError as e:
         raise HTTPException(status_code=e.status_code, detail=e.code) from e
-    return item
+    return _wrap_payload("channel", item)
 
 
 @router.get("/admin/notifications/jobs")
@@ -128,21 +134,24 @@ def list_job_logs(ctx: AuthContextDep, _: AdminOnly, job_id: int, limit: int = 5
 def retry_job(ctx: AuthContextDep, request: Request, _: AdminOnly, job_id: int):
     manager = _resolve_notification_manager(ctx)
     try:
-        return manager.retry_job(job_id=job_id, audit=_audit_payload(ctx, request))
+        item = manager.retry_job(job_id=job_id, audit=_audit_payload(ctx, request))
     except NotificationManagerError as e:
         raise HTTPException(status_code=e.status_code, detail=e.code) from e
+    return _wrap_payload("job", item)
 
 
 @router.post("/admin/notifications/jobs/{job_id}/resend")
 def resend_job(ctx: AuthContextDep, request: Request, _: AdminOnly, job_id: int):
     manager = _resolve_notification_manager(ctx)
     try:
-        return manager.resend_job(job_id=job_id, audit=_audit_payload(ctx, request))
+        item = manager.resend_job(job_id=job_id, audit=_audit_payload(ctx, request))
     except NotificationManagerError as e:
         raise HTTPException(status_code=e.status_code, detail=e.code) from e
+    return _wrap_payload("job", item)
 
 
 @router.post("/admin/notifications/dispatch")
 def dispatch_pending(ctx: AuthContextDep, request: Request, _: AdminOnly, limit: int = 100):
     manager = _resolve_notification_manager(ctx)
-    return manager.dispatch_pending(limit=limit, audit=_audit_payload(ctx, request))
+    item = manager.dispatch_pending(limit=limit, audit=_audit_payload(ctx, request))
+    return _wrap_payload("dispatch", item)

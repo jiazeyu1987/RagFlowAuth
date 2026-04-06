@@ -31,6 +31,7 @@ class _FakeRagflowChatService:
         self._sessions_result = sessions_result
         self._create_session_result = create_session_result
         self.create_session_calls = []
+        self.delete_session_calls = []
 
     def list_sessions(self, *args, **kwargs):
         return self._sessions_result
@@ -47,13 +48,38 @@ class _FakeRagflowChatService:
             "messages": [],
         }
 
+    def delete_sessions(self, *, chat_id: str, session_ids, user_id: str):
+        self.delete_session_calls.append(
+            {
+                "chat_id": chat_id,
+                "session_ids": session_ids,
+                "user_id": user_id,
+            }
+        )
+        return True
+
 
 class _FakeChatSessionStore:
     def __init__(self, *, sessions_result):
         self._sessions_result = sessions_result
+        self.rename_calls = []
 
     def get_user_sessions(self, chat_id: str, user_id: str):
         return self._sessions_result
+
+    def check_ownership(self, *, session_id: str, chat_id: str, user_id: str):
+        return True
+
+    def set_session_name(self, *, session_id: str, chat_id: str, user_id: str, name: str):
+        self.rename_calls.append(
+            {
+                "session_id": session_id,
+                "chat_id": chat_id,
+                "user_id": user_id,
+                "name": name,
+            }
+        )
+        return True
 
 
 class _FakeChatMessageSourcesStore:
@@ -121,9 +147,63 @@ class TestChatSessionsEndpoint(unittest.TestCase):
         self.assertEqual(
             resp.json(),
             {
-                "id": "session-created",
-                "name": "Created From Body",
-                "messages": [],
+                "session": {
+                    "id": "session-created",
+                    "name": "Created From Body",
+                    "messages": [],
+                },
+            },
+        )
+
+    def test_rename_session_returns_session_envelope(self):
+        with self._make_client(ragflow_sessions=[], local_sessions=[]) as client:
+            resp = client.put("/api/chats/chat-1/sessions/session-1", json={"name": "Renamed Session"})
+
+            self.assertEqual(
+                client.app.state.deps.chat_session_store.rename_calls,
+                [
+                    {
+                        "session_id": "session-1",
+                        "chat_id": "chat-1",
+                        "user_id": "u1",
+                        "name": "Renamed Session",
+                    }
+                ],
+            )
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(
+            resp.json(),
+            {
+                "session": {
+                    "id": "session-1",
+                    "name": "Renamed Session",
+                }
+            },
+        )
+
+    def test_delete_sessions_returns_result_envelope(self):
+        with self._make_client(ragflow_sessions=[], local_sessions=[]) as client:
+            resp = client.request("DELETE", "/api/chats/chat-1/sessions", json={"ids": ["session-1"]})
+
+            self.assertEqual(
+                client.app.state.deps.ragflow_chat_service.delete_session_calls,
+                [
+                    {
+                        "chat_id": "chat-1",
+                        "session_ids": ["session-1"],
+                        "user_id": "u1",
+                    }
+                ],
+            )
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(
+            resp.json(),
+            {
+                "result": {
+                    "message": "sessions_deleted",
+                }
             },
         )
 

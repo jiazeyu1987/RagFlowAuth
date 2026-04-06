@@ -36,6 +36,18 @@ class RagflowBatchTransferRequest(BaseModel):
     items: list[RagflowDocumentTransferItem]
 
 
+def _normalize_document_list(documents: object) -> list:
+    if not isinstance(documents, list):
+        raise HTTPException(status_code=500, detail="documents_invalid_payload")
+    return documents
+
+
+def _wrap_result(item: object) -> dict[str, object]:
+    if not isinstance(item, dict):
+        raise HTTPException(status_code=500, detail="result_invalid_payload")
+    return {"result": item}
+
+
 def _transfer_one_document(*, doc_id: str, source_dataset: str, target_dataset: str, operation: str, deps, snapshot) -> dict:
     op = str(operation or "").strip().lower()
     if op not in {"copy", "move"}:
@@ -108,7 +120,7 @@ def list_ragflow_documents(
     deps = ctx.deps
     snapshot = ctx.snapshot
     assert_kb_allowed(snapshot, resolve_kb_ref(deps, dataset_name).variants)
-    documents = deps.ragflow_service.list_documents(dataset_name)
+    documents = _normalize_document_list(deps.ragflow_service.list_documents(dataset_name))
     return {"documents": documents, "dataset": dataset_name}
 
 
@@ -189,13 +201,15 @@ def transfer_ragflow_document(
     deps = ctx.deps
     snapshot = ctx.snapshot
 
-    return _transfer_one_document(
+    return _wrap_result(
+        _transfer_one_document(
         doc_id=doc_id,
         source_dataset=str(body.source_dataset_name or "").strip(),
         target_dataset=str(body.target_dataset_name or "").strip(),
         operation=str(body.operation or "").strip().lower(),
         deps=deps,
         snapshot=snapshot,
+        )
     )
 
 
@@ -250,15 +264,17 @@ def transfer_ragflow_documents_batch(
                 }
             )
 
-    return {
-        "ok": len(failed) == 0,
-        "operation": operation,
-        "total": len(items),
-        "success_count": len(results),
-        "failed_count": len(failed),
-        "results": results,
-        "failed": failed,
-    }
+    return _wrap_result(
+        {
+            "ok": len(failed) == 0,
+            "operation": operation,
+            "total": len(items),
+            "success_count": len(results),
+            "failed_count": len(failed),
+            "results": results,
+            "failed": failed,
+        }
+    )
 
 
 @router.post("/documents/batch/download")

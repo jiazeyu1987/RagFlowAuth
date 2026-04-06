@@ -46,6 +46,9 @@ class _FakeRagflowChatService:
         self.updated.append((chat_id, payload))
         return {"id": chat_id, **payload}
 
+    def get_chat(self, chat_id):
+        return {"id": chat_id, "name": f"chat-{chat_id}"}
+
     def delete_chat(self, chat_id):
         self.deleted.append(chat_id)
         return True
@@ -126,6 +129,13 @@ class TestChatAdminCrudUnit(unittest.TestCase):
             self.assertEqual(r3.status_code, 200)
             self.assertEqual(r3.json(), {"ok": True})
             self.assertEqual(deps.ragflow_chat_service.deleted, ["c1"])
+
+    def test_get_chat_returns_named_chat_envelope(self):
+        client, _deps = self._make_client(role="admin")
+        with client:
+            resp = client.get("/api/chats/c1")
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json(), {"chat": {"id": "c1", "name": "chat-c1"}})
 
     def test_non_admin_forbidden(self):
         client, _deps = self._make_client(role="user")

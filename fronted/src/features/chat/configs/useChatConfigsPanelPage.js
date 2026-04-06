@@ -98,7 +98,7 @@ export default function useChatConfigsPanelPage() {
     setKbLoading(true);
     try {
       const datasets = await knowledgeApi.listRagflowDatasets();
-      setKbList(Array.isArray(datasets) ? datasets : []);
+      setKbList(datasets);
     } catch (error) {
       setKbList([]);
       setKbError(error?.message || '加载知识库列表失败');
@@ -202,15 +202,6 @@ export default function useChatConfigsPanelPage() {
       setChatSaveStatus('已保存');
       await fetchChatList();
 
-      try {
-        const fresh = await chatConfigsApi.getChat(chatSelected.id);
-        if (fresh && fresh.id) {
-          setChatSelected(fresh);
-          setChatNameText(String(fresh?.name || name));
-          setChatJsonText(prettyJson(sanitizeChatPayload(fresh)));
-        }
-      } catch (_) {
-      }
     } catch (error) {
       const message = String(error?.message || '');
       if (message.includes('chat_dataset_not_ready')) {

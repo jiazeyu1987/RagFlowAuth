@@ -35,13 +35,23 @@ describe('chatApi', () => {
     await expect(chatApi.listChatSessions('chat-1')).rejects.toThrow('chat_session_list_invalid_payload');
   });
 
-  it('sends create session requests as the explicit backend body contract', async () => {
-    httpClient.requestJson.mockResolvedValue({ id: 'session-1', name: 'New Session', messages: [] });
+  it('unwraps session mutation envelopes to stable objects', async () => {
+    httpClient.requestJson
+      .mockResolvedValueOnce({ session: { id: 'session-1', name: 'New Session', messages: [] } })
+      .mockResolvedValueOnce({ session: { id: 'session-1', name: 'Renamed Session' } })
+      .mockResolvedValueOnce({ result: { message: 'sessions_deleted' } });
 
     await expect(chatApi.createChatSession('chat-1', 'New Session')).resolves.toEqual({
       id: 'session-1',
       name: 'New Session',
       messages: [],
+    });
+    await expect(chatApi.renameChatSession('chat-1', 'session-1', 'Renamed Session')).resolves.toEqual({
+      id: 'session-1',
+      name: 'Renamed Session',
+    });
+    await expect(chatApi.deleteChatSessions('chat-1', ['session-1'])).resolves.toEqual({
+      message: 'sessions_deleted',
     });
 
     expect(httpClient.requestJson).toHaveBeenCalledWith(
@@ -50,6 +60,37 @@ describe('chatApi', () => {
         method: 'POST',
         body: JSON.stringify({ name: 'New Session' }),
       }
+    );
+    expect(httpClient.requestJson).toHaveBeenCalledWith(
+      'http://auth.local/api/chats/chat-1/sessions/session-1',
+      {
+        method: 'PUT',
+        body: JSON.stringify({ name: 'Renamed Session' }),
+      }
+    );
+    expect(httpClient.requestJson).toHaveBeenCalledWith(
+      'http://auth.local/api/chats/chat-1/sessions',
+      {
+        method: 'DELETE',
+        body: JSON.stringify({ ids: ['session-1'] }),
+      }
+    );
+  });
+
+  it('fails fast when session mutation envelopes do not match the backend contract', async () => {
+    httpClient.requestJson
+      .mockResolvedValueOnce({ id: 'session-1' })
+      .mockResolvedValueOnce({ id: 'session-1' })
+      .mockResolvedValueOnce({ ok: true });
+
+    await expect(chatApi.createChatSession('chat-1', 'New Session')).rejects.toThrow(
+      'chat_session_create_invalid_payload'
+    );
+    await expect(chatApi.renameChatSession('chat-1', 'session-1', 'Renamed Session')).rejects.toThrow(
+      'chat_session_rename_invalid_payload'
+    );
+    await expect(chatApi.deleteChatSessions('chat-1', ['session-1'])).rejects.toThrow(
+      'chat_session_delete_invalid_payload'
     );
   });
 

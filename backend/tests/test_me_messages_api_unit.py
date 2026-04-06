@@ -40,15 +40,16 @@ class _NoopAdapter:
 
 
 class _Deps:
-    def __init__(self, db_path: str):
+    def __init__(self, db_path: str, *, datasets: list[dict] | None = None):
+        all_datasets = list(datasets or [])
         self.user_store = _UserStore(_User())
         self.permission_group_store = SimpleNamespace(get_group=lambda *_args, **_kwargs: None)
         self.user_kb_permission_store = SimpleNamespace(get_user_kbs=lambda *_args, **_kwargs: [])
         self.user_chat_permission_store = SimpleNamespace(get_user_chats=lambda *_args, **_kwargs: [])
         self.kb_store = SimpleNamespace(db_path=db_path)
         self.ragflow_service = SimpleNamespace(
-            list_datasets=lambda: [],
-            list_all_datasets=lambda: [],
+            list_datasets=lambda: list(all_datasets),
+            list_all_datasets=lambda: list(all_datasets),
             normalize_dataset_ids=lambda refs: list(refs),
             resolve_dataset_names=lambda refs: list(refs),
             get_dataset_index=lambda: {"by_id": {}, "by_name": {}},
@@ -73,6 +74,42 @@ def _override_get_current_payload(_: Request) -> TokenPayload:
 
 
 class TestMeMessagesApiUnit(unittest.TestCase):
+    def test_kbs_list_returns_wrapped_payload(self):
+        td = make_temp_dir(prefix="ragflowauth_me_kbs_api")
+        try:
+            db_path = os.path.join(str(td), "auth.db")
+            ensure_schema(db_path)
+
+            app = FastAPI()
+            deps = _Deps(
+                db_path=db_path,
+                datasets=[
+                    {"id": "kb-2", "name": "KB B"},
+                    {"id": "kb-1", "name": "KB A"},
+                    {"id": "kb-1", "name": "KB A"},
+                    {"id": "", "name": ""},
+                ],
+            )
+            app.state.deps = deps
+            app.include_router(me_router, prefix="/api")
+            app.dependency_overrides[auth_module.get_current_payload] = _override_get_current_payload
+
+            with TestClient(app) as client:
+                resp = client.get("/api/me/kbs")
+
+            self.assertEqual(resp.status_code, 200, resp.text)
+            self.assertEqual(
+                resp.json(),
+                {
+                    "kbs": {
+                        "kb_ids": ["kb-1", "kb-2"],
+                        "kb_names": ["KB A", "KB B"],
+                    }
+                },
+            )
+        finally:
+            cleanup_dir(td)
+
     def test_messages_list_read_state_and_mark_all(self):
         td = make_temp_dir(prefix="ragflowauth_me_messages_api")
         try:
@@ -113,7 +150,7 @@ class TestMeMessagesApiUnit(unittest.TestCase):
                     json={"read": True},
                 )
                 self.assertEqual(read_resp.status_code, 200, read_resp.text)
-                self.assertIsNotNone(read_resp.json().get("read_at_ms"))
+                self.assertIsNotNone(read_resp.json()["message"].get("read_at_ms"))
 
                 unread_resp = client.get("/api/me/messages?unread_only=true")
                 self.assertEqual(unread_resp.status_code, 200, unread_resp.text)
@@ -126,11 +163,11 @@ class TestMeMessagesApiUnit(unittest.TestCase):
                     json={"read": False},
                 )
                 self.assertEqual(unread_again_resp.status_code, 200, unread_again_resp.text)
-                self.assertIsNone(unread_again_resp.json().get("read_at_ms"))
+                self.assertIsNone(unread_again_resp.json()["message"].get("read_at_ms"))
 
                 mark_all_resp = client.post("/api/me/messages/mark-all-read", json={})
                 self.assertEqual(mark_all_resp.status_code, 200, mark_all_resp.text)
-                self.assertEqual(int(mark_all_resp.json().get("updated_count") or 0), 1)
+                self.assertEqual(int(mark_all_resp.json()["result"].get("updated_count") or 0), 1)
 
                 final_resp = client.get("/api/me/messages?unread_only=true")
                 self.assertEqual(final_resp.status_code, 200, final_resp.text)

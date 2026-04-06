@@ -43,17 +43,17 @@ describe('usersApi', () => {
     );
   });
 
-  it('passes through user mutation endpoints', async () => {
+  it('unwraps user mutation envelopes to stable objects', async () => {
     httpClient.requestJson
-      .mockResolvedValueOnce({ user_id: 'u-1' })
-      .mockResolvedValueOnce({ user_id: 'u-1' })
-      .mockResolvedValueOnce({ ok: true })
-      .mockResolvedValueOnce({ ok: true });
+      .mockResolvedValueOnce({ user: { user_id: 'u-1' } })
+      .mockResolvedValueOnce({ user: { user_id: 'u-1' } })
+      .mockResolvedValueOnce({ result: { message: 'user_deleted' } })
+      .mockResolvedValueOnce({ result: { message: 'password_reset' } });
 
     await expect(usersApi.create({ username: 'alice' })).resolves.toEqual({ user_id: 'u-1' });
     await expect(usersApi.update('u/1', { full_name: 'Alice' })).resolves.toEqual({ user_id: 'u-1' });
-    await expect(usersApi.remove('u/1')).resolves.toEqual({ ok: true });
-    await expect(usersApi.resetPassword('u/1', 'Secret123')).resolves.toEqual({ ok: true });
+    await expect(usersApi.remove('u/1')).resolves.toEqual({ message: 'user_deleted' });
+    await expect(usersApi.resetPassword('u/1', 'Secret123')).resolves.toEqual({ message: 'password_reset' });
 
     expect(httpClient.requestJson).toHaveBeenNthCalledWith(
       1,
@@ -97,5 +97,18 @@ describe('usersApi', () => {
     await expect(usersApi.list()).rejects.toThrow('users_list_invalid_payload');
     await expect(usersApi.items()).rejects.toThrow('users_items_invalid_payload');
     await expect(usersApi.search('alice')).rejects.toThrow('users_search_invalid_payload');
+  });
+
+  it('fails fast when user mutation endpoints do not return the expected envelopes', async () => {
+    httpClient.requestJson
+      .mockResolvedValueOnce({ user_id: 'u-1' })
+      .mockResolvedValueOnce({ user_id: 'u-1' })
+      .mockResolvedValueOnce({ ok: true })
+      .mockResolvedValueOnce({ ok: true });
+
+    await expect(usersApi.create({ username: 'alice' })).rejects.toThrow('users_create_invalid_payload');
+    await expect(usersApi.update('u/1', { full_name: 'Alice' })).rejects.toThrow('users_update_invalid_payload');
+    await expect(usersApi.remove('u/1')).rejects.toThrow('users_remove_invalid_payload');
+    await expect(usersApi.resetPassword('u/1', 'Secret123')).rejects.toThrow('users_reset_password_invalid_payload');
   });
 });

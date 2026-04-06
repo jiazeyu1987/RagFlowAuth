@@ -25,7 +25,11 @@ def _resolve_notification_manager(ctx: AuthContextDep) -> NotificationManager:
     return manager
 
 
-def _to_legacy_inbox_item(item: dict) -> dict:
+def _is_visible_inbox_item(item: dict) -> bool:
+    return str(item.get("event_type") or "") not in HIDDEN_OPERATION_APPROVAL_EVENT_TYPES
+
+
+def _serialize_inbox_item(item: dict) -> dict:
     payload = item.get("payload") or {}
     approval_target = payload.get("approval_target") or {}
     return {
@@ -54,9 +58,9 @@ def list_inbox(ctx: AuthContextDep, unread_only: bool = False, limit: int = Quer
         raise HTTPException(status_code=exc.status_code, detail=exc.code) from exc
 
     items = [
-        _to_legacy_inbox_item(item)
+        _serialize_inbox_item(item)
         for item in (data.get("items") or [])
-        if str(item.get("event_type") or "") not in HIDDEN_OPERATION_APPROVAL_EVENT_TYPES
+        if _is_visible_inbox_item(item)
     ]
     unread_count = sum(1 for item in items if item.get("status") == "unread")
     return {

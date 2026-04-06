@@ -330,11 +330,38 @@ class _PermissionGroupsService:
 
 class _UsersService:
     def __init__(self):
+        self.created = []
         self.updated = []
+        self.deleted = []
         self.reset_password_calls = []
 
     def list_users(self, **kwargs):  # noqa: ARG002
         return []
+
+    def create_user(self, *, user_data, created_by):
+        self.created.append({"created_by": created_by, "user_data": user_data})
+        return {
+            "user_id": "u_created",
+            "username": user_data.username,
+            "full_name": user_data.full_name,
+            "email": user_data.email,
+            "manager_user_id": user_data.manager_user_id,
+            "company_id": user_data.company_id,
+            "department_id": user_data.department_id,
+            "group_id": user_data.group_id,
+            "group_ids": list(user_data.group_ids or []),
+            "permission_groups": [],
+            "role": user_data.role or "viewer",
+            "status": user_data.status,
+            "can_change_password": user_data.can_change_password,
+            "disable_login_enabled": user_data.disable_login_enabled,
+            "disable_login_until_ms": user_data.disable_login_until_ms,
+            "max_login_sessions": user_data.max_login_sessions,
+            "idle_timeout_minutes": user_data.idle_timeout_minutes,
+            "created_at_ms": 1,
+            "managed_kb_root_node_id": user_data.managed_kb_root_node_id,
+            "electronic_signature_enabled": user_data.electronic_signature_enabled,
+        }
 
     def get_user(self, user_id: str):
         return {
@@ -355,15 +382,28 @@ class _UsersService:
         return {
             "user_id": user_id,
             "username": "target",
+            "full_name": user_data.full_name,
+            "email": user_data.email,
+            "manager_user_id": user_data.manager_user_id,
+            "company_id": user_data.company_id,
+            "department_id": user_data.department_id,
             "role": "viewer",
             "status": "active",
             "group_id": None,
             "group_ids": list(user_data.group_ids or []),
             "permission_groups": [],
+            "can_change_password": True,
+            "disable_login_enabled": False,
+            "disable_login_until_ms": None,
             "max_login_sessions": 3,
             "idle_timeout_minutes": 120,
             "created_at_ms": 1,
+            "managed_kb_root_node_id": None,
+            "electronic_signature_enabled": True,
         }
+
+    def delete_user(self, user_id: str):
+        self.deleted.append(user_id)
 
     def reset_password(self, user_id: str, new_password: str):
         self.reset_password_calls.append((user_id, new_password))
@@ -400,8 +440,8 @@ def _make_permission_group_client(role: str = "sub_admin", *, group_ids: list[in
     return TestClient(app), km, cm, service
 
 
-def _make_users_client(*, can_manage: bool = True, actor_group_ids: list[int] | None = None):
-    user = _User(role="sub_admin", group_ids=actor_group_ids)
+def _make_users_client(*, role: str = "sub_admin", can_manage: bool = True, actor_group_ids: list[int] | None = None):
+    user = _User(role=role, group_ids=actor_group_ids)
     km = _KnowledgeManagementManager(can_manage=can_manage)
     cm = _ChatManagementManager()
     service = _UsersService()
@@ -528,6 +568,34 @@ class TestSubAdminPermissionGroupRoutesUnit(unittest.TestCase):
 
 
 class TestSubAdminUserGroupAssignmentRoutesUnit(unittest.TestCase):
+    def test_admin_create_returns_user_envelope(self):
+        client, _, _, service, _ = _make_users_client(role="admin")
+        with client:
+            resp = client.post(
+                "/api/users",
+                json={
+                    "username": "alice",
+                    "password": "Secret123",
+                    "role": "viewer",
+                    "company_id": 1,
+                    "department_id": 11,
+                    "max_login_sessions": 3,
+                    "idle_timeout_minutes": 120,
+                },
+            )
+        self.assertEqual(resp.status_code, 201)
+        self.assertEqual(service.created[0]["created_by"], "u_sub")
+        self.assertEqual(resp.json()["user"]["user_id"], "u_created")
+        self.assertEqual(resp.json()["user"]["username"], "alice")
+
+    def test_admin_delete_returns_result_envelope(self):
+        client, _, _, service, _ = _make_users_client(role="admin")
+        with client:
+            resp = client.delete("/api/users/u_target")
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(service.deleted, ["u_target"])
+        self.assertEqual(resp.json(), {"result": {"message": "user_deleted"}})
+
     def test_sub_admin_can_assign_in_scope_permission_groups(self):
         client, km, cm, service, _ = _make_users_client()
         with client:
@@ -536,6 +604,8 @@ class TestSubAdminUserGroupAssignmentRoutesUnit(unittest.TestCase):
         self.assertEqual(km.validated_group_ids[0], [1, 2])
         self.assertEqual(cm.validated_group_ids[0], [1, 2])
         self.assertEqual(service.updated[0][0], "u_target")
+        self.assertEqual(resp.json()["user"]["user_id"], "u_target")
+        self.assertEqual(resp.json()["user"]["group_ids"], [1, 2])
 
     def test_sub_admin_group_assignment_does_not_require_assert_can_manage(self):
         client, km, cm, service, _ = _make_users_client(can_manage=False)
@@ -545,6 +615,7 @@ class TestSubAdminUserGroupAssignmentRoutesUnit(unittest.TestCase):
         self.assertEqual(km.validated_group_ids[0], [1])
         self.assertEqual(cm.validated_group_ids[0], [1])
         self.assertEqual(service.updated[0][0], "u_target")
+        self.assertEqual(resp.json()["user"]["group_ids"], [1])
 
     def test_sub_admin_cannot_assign_out_of_scope_permission_groups(self):
         client, _, _, _, _ = _make_users_client()
@@ -618,6 +689,7 @@ class TestSubAdminUserGroupAssignmentRoutesUnit(unittest.TestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(service.reset_password_calls, [("u_target", "OwnedPass123")])
         self.assertEqual(audit.events[0]["meta"]["target_user_id"], "u_target")
+        self.assertEqual(resp.json(), {"result": {"message": "password_reset"}})
 
     def test_sub_admin_can_reset_own_password(self):
         client, _, _, service, audit = _make_users_client()
@@ -626,6 +698,7 @@ class TestSubAdminUserGroupAssignmentRoutesUnit(unittest.TestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(service.reset_password_calls, [("u_sub", "SelfPass123")])
         self.assertEqual(audit.events[0]["meta"]["target_user_id"], "u_sub")
+        self.assertEqual(resp.json(), {"result": {"message": "password_reset"}})
 
     def test_sub_admin_cannot_reset_unowned_viewer_password(self):
         client, _, _, service, _ = _make_users_client()

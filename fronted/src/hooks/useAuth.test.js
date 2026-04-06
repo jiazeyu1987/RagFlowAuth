@@ -18,7 +18,7 @@ jest.mock('../features/auth/api', () => ({
 jest.mock('../features/me/api', () => ({
   __esModule: true,
   meApi: {
-    listMyKnowledgeBases: jest.fn().mockResolvedValue({ kb_ids: [] }),
+    listMyKnowledgeBases: jest.fn().mockResolvedValue({ kbIds: [], kbNames: [] }),
   },
 }));
 
@@ -40,7 +40,7 @@ describe('useAuth', () => {
     tokenStore.getAccessToken.mockReturnValue(null);
     tokenStore.getRefreshToken.mockReturnValue(null);
     tokenStore.getUser.mockReturnValue(null);
-    meApi.listMyKnowledgeBases.mockResolvedValue({ kb_ids: [] });
+    meApi.listMyKnowledgeBases.mockResolvedValue({ kbIds: [], kbNames: [] });
   });
 
   it('shows a clear invalid-credentials message', async () => {
@@ -90,5 +90,36 @@ describe('useAuth', () => {
     expect(tokenStore.setUser).toHaveBeenCalledWith(expect.objectContaining({ user_id: 'u-1' }));
     expect(result.current.user).toEqual(expect.objectContaining({ user_id: 'u-1', username: 'alice' }));
     expect(result.current.isAuthenticated).toBe(true);
+  });
+
+  it('hydrates accessible KB ids through the me feature api contract', async () => {
+    tokenStore.getAccessToken.mockReturnValue('access-1');
+    tokenStore.getRefreshToken.mockReturnValue('refresh-1');
+    authApi.getCurrentUser.mockResolvedValue({
+      user_id: 'u-1',
+      username: 'alice',
+      role: 'admin',
+      permissions: {
+        can_upload: true,
+        can_review: true,
+        can_download: true,
+        can_copy: true,
+        can_delete: true,
+        can_manage_kb_directory: true,
+        can_view_kb_config: true,
+        can_view_tools: true,
+        accessible_tools: [],
+      },
+    });
+    meApi.listMyKnowledgeBases.mockResolvedValue({ kbIds: ['kb-1', 'kb-2'], kbNames: ['KB 1', 'KB 2'] });
+
+    const { result } = renderHook(() => useAuth(), {
+      wrapper: ({ children }) => <AuthProvider>{children}</AuthProvider>,
+    });
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    await waitFor(() => expect(meApi.listMyKnowledgeBases).toHaveBeenCalledTimes(1));
+
+    expect(result.current.accessibleKbs).toEqual(['kb-1', 'kb-2']);
   });
 });

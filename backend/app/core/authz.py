@@ -1,11 +1,11 @@
 from __future__ import annotations
 
+import sqlite3
 from dataclasses import dataclass
 from typing import Annotated, Any
 
 from authx import TokenPayload
 from fastapi import Depends, HTTPException, Request
-import sqlite3
 
 from backend.app.core.auth import get_current_payload, resolve_scoped_deps
 from backend.app.core.permission_resolver import PermissionSnapshot, resolve_permissions
@@ -37,12 +37,10 @@ def get_auth_context(
     else:
         try:
             user = deps.user_store.get_by_user_id(payload.sub)
-        except sqlite3.OperationalError as e:
-            # Avoid leaking transient sqlite errors as 500s (e.g. during backup/restore IO).
-            raise HTTPException(status_code=503, detail=f"db_unavailable: {e}") from e
+        except sqlite3.OperationalError as exc:
+            raise HTTPException(status_code=503, detail=f"db_unavailable: {exc}") from exc
     if not user:
-        # Treat missing user for an authenticated token as unauthorized.
-        raise HTTPException(status_code=401, detail="用户不存在")
+        raise HTTPException(status_code=401, detail="user_not_found")
     snapshot = resolve_permissions(deps, user)
     return AuthContext(deps=deps, payload=payload, user=user, snapshot=snapshot)
 

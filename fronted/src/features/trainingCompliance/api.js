@@ -16,6 +16,15 @@ const normalizeArrayField = (payload, field, action) => {
   return envelope[field];
 };
 
+const normalizeObjectField = (payload, field, action) => {
+  const envelope = assertObjectPayload(payload, action);
+  const value = envelope[field];
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error(`${action}_invalid_payload`);
+  }
+  return value;
+};
+
 const buildQuery = (params = {}) => {
   const search = new URLSearchParams();
   Object.entries(params || {}).forEach(([key, value]) => {
@@ -45,11 +54,12 @@ export const trainingComplianceApi = {
   },
 
   async createRecord(payload) {
-    return assertObjectPayload(
+    return normalizeObjectField(
       await httpClient.requestJson(authBackendUrl('/api/training-compliance/records'), {
         method: 'POST',
         body: JSON.stringify(payload || {}),
       }),
+      'record',
       'training_compliance_record_create'
     );
   },
@@ -72,11 +82,12 @@ export const trainingComplianceApi = {
   },
 
   async createCertification(payload) {
-    return assertObjectPayload(
+    return normalizeObjectField(
       await httpClient.requestJson(authBackendUrl('/api/training-compliance/certifications'), {
         method: 'POST',
         body: JSON.stringify(payload || {}),
       }),
+      'certification',
       'training_compliance_certification_create'
     );
   },

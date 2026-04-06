@@ -168,7 +168,7 @@ export const AuthProvider = ({ children }) => {
       if (user) {
         try {
           const data = await meApi.listMyKnowledgeBases();
-          setAccessibleKbs(data.kb_ids || []);
+          setAccessibleKbs(Array.isArray(data?.kbIds) ? data.kbIds : []);
         } catch (fetchError) {
           console.error('Failed to fetch accessible KBs:', fetchError);
           setAccessibleKbs([]);

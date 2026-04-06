@@ -34,6 +34,19 @@ def _notification_audit_payload(ctx: AuthContextDep, request: Request) -> dict[s
     }
 
 
+def _wrap_payload(field: str, item: object) -> dict[str, object]:
+    if not isinstance(item, dict):
+        raise HTTPException(status_code=500, detail=f"{field}_invalid_payload")
+    return {field: item}
+
+
+def _build_kbs_payload(*, kb_ids: list[str], kb_names: list[str]) -> dict[str, list[str]]:
+    return {
+        "kb_ids": sorted(set([item for item in kb_ids if isinstance(item, str) and item])),
+        "kb_names": sorted(set([item for item in kb_names if isinstance(item, str) and item])),
+    }
+
+
 @router.get("/me/kbs")
 def get_my_kbs(ctx: AuthContextDep):
     """
@@ -56,10 +69,10 @@ def get_my_kbs(ctx: AuthContextDep):
         )
         kb_ids = [ds.get("id") for ds in (datasets or []) if isinstance(ds, dict) and ds.get("id")]
         kb_names = [ds.get("name") for ds in (datasets or []) if isinstance(ds, dict) and ds.get("name")]
-        return {"kb_ids": sorted(set(kb_ids)), "kb_names": sorted(set(kb_names))}
+        return _wrap_payload("kbs", _build_kbs_payload(kb_ids=kb_ids, kb_names=kb_names))
 
     if snapshot.kb_scope == ResourceScope.NONE:
-        return {"kb_ids": [], "kb_names": []}
+        return _wrap_payload("kbs", _build_kbs_payload(kb_ids=[], kb_names=[]))
 
     refs = set(snapshot.kb_names)
     kb_ids = (
@@ -76,7 +89,7 @@ def get_my_kbs(ctx: AuthContextDep):
         else sorted(refs)
     )
 
-    return {"kb_ids": sorted(set([x for x in kb_ids if isinstance(x, str) and x])), "kb_names": sorted(set([x for x in kb_names if isinstance(x, str) and x]))}
+    return _wrap_payload("kbs", _build_kbs_payload(kb_ids=kb_ids, kb_names=kb_names))
 
 
 @router.get("/me/messages")
@@ -114,7 +127,7 @@ def update_message_read_state(
 ):
     manager = _resolve_notification_manager(ctx)
     try:
-        return manager.update_inbox_read_state(
+        item = manager.update_inbox_read_state(
             job_id=job_id,
             recipient_user_id=str(ctx.payload.sub),
             read=bool(body.read),
@@ -122,6 +135,7 @@ def update_message_read_state(
         )
     except NotificationManagerError as e:
         raise HTTPException(status_code=e.status_code, detail=e.code) from e
+    return _wrap_payload("message", item)
 
 
 @router.post("/me/messages/mark-all-read")
@@ -131,9 +145,10 @@ def mark_all_messages_read(
 ):
     manager = _resolve_notification_manager(ctx)
     try:
-        return manager.mark_all_inbox_read(
+        item = manager.mark_all_inbox_read(
             recipient_user_id=str(ctx.payload.sub),
             audit=_notification_audit_payload(ctx, request),
         )
     except NotificationManagerError as e:
         raise HTTPException(status_code=e.status_code, detail=e.code) from e
+    return _wrap_payload("result", item)

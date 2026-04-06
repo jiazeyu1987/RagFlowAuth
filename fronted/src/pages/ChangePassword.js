@@ -92,7 +92,7 @@ const ChangePassword = () => {
                   fontSize: '0.9rem',
                 }}
               >
-                <span style={{ fontWeight: 700 }}>{item.passed ? '✓' : '✗'}</span>
+                <span style={{ fontWeight: 700 }}>{item.passed ? '✓' : '✕'}</span>
                 <span>{item.label}</span>
               </div>
             ))}

@@ -20,6 +20,14 @@ class ResetPasswordRequest(BaseModel):
     new_password: str
 
 
+class UserEnvelope(BaseModel):
+    user: UserResponse
+
+
+class ResultEnvelope(BaseModel):
+    result: dict[str, str]
+
+
 router = APIRouter()
 
 
@@ -118,6 +126,22 @@ def _validate_permission_group_tool_scope(
         assert_group_tool_scope_within_snapshot(ctx.snapshot, group)
 
 
+def _normalize_user_payload(item: object) -> dict:
+    if isinstance(item, BaseModel):
+        item = item.model_dump()
+    if not isinstance(item, dict):
+        raise HTTPException(status_code=500, detail="user_invalid_payload")
+    return item
+
+
+def _wrap_user(item: object) -> dict[str, dict]:
+    return {"user": _normalize_user_payload(item)}
+
+
+def _wrap_result(message: str) -> dict[str, dict[str, str]]:
+    return {"result": {"message": message}}
+
+
 @router.get("", response_model=list[UserResponse])
 async def list_users(
     ctx: AuthContextDep,
@@ -151,13 +175,13 @@ async def list_users(
     )
 
 
-@router.post("", response_model=UserResponse, status_code=201)
+@router.post("", response_model=UserEnvelope, status_code=201)
 async def create_user(
     user_data: UserCreate,
     payload: AdminOnly,
     service: UsersService = Depends(get_service),
 ):
-    return service.create_user(user_data=user_data, created_by=payload.sub)
+    return _wrap_user(service.create_user(user_data=user_data, created_by=payload.sub))
 
 
 @router.get("/{user_id}", response_model=UserResponse)
@@ -174,7 +198,7 @@ async def get_user(
     return service.get_user(user_id)
 
 
-@router.put("/{user_id}", response_model=UserResponse)
+@router.put("/{user_id}", response_model=UserEnvelope)
 async def update_user(
     user_id: str,
     user_data: UserUpdate,
@@ -183,7 +207,7 @@ async def update_user(
     service: UsersService = Depends(get_service),
 ):
     if ctx.snapshot.is_admin:
-        return service.update_user(user_id=user_id, user_data=user_data)
+        return _wrap_user(service.update_user(user_id=user_id, user_data=user_data))
 
     fields_set = set(getattr(user_data, "model_fields_set", set()) or set())
     allowed_fields = {"group_id", "group_ids"}
@@ -239,20 +263,20 @@ async def update_user(
             ctx,
             group_ids=[int(group_id) for group_id in target_group_ids],
         )
-    return service.update_user(user_id=user_id, user_data=user_data)
+    return _wrap_user(service.update_user(user_id=user_id, user_data=user_data))
 
 
-@router.delete("/{user_id}")
+@router.delete("/{user_id}", response_model=ResultEnvelope)
 async def delete_user(
     user_id: str,
     _: AdminOnly,
     service: UsersService = Depends(get_service),
 ):
     service.delete_user(user_id)
-    return {"message": "用户已删除"}
+    return _wrap_result("user_deleted")
 
 
-@router.put("/{user_id}/password")
+@router.put("/{user_id}/password", response_model=ResultEnvelope)
 async def reset_password(
     user_id: str,
     body: ResetPasswordRequest,
@@ -261,7 +285,9 @@ async def reset_password(
     deps: AppDependencies = Depends(get_global_deps),
     service: UsersService = Depends(get_service),
 ):
-    target_user = ctx.user if str(user_id) == str(getattr(ctx.user, "user_id", "") or "") else deps.user_store.get_by_user_id(user_id)
+    target_user = (
+        ctx.user if str(user_id) == str(getattr(ctx.user, "user_id", "") or "") else deps.user_store.get_by_user_id(user_id)
+    )
     _assert_can_reset_password(ctx, target_user)
 
     service.reset_password(user_id, body.new_password)
@@ -286,4 +312,4 @@ async def reset_password(
         },
         **actor_fields_from_user(deps, actor_user),
     )
-    return {"message": "密码已重置"}
+    return _wrap_result("password_reset")

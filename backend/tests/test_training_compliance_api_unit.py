@@ -238,6 +238,23 @@ class TestTrainingComplianceApiUnit(unittest.TestCase):
             app = self._build_app(current_user_id="admin-1", deps=deps)
 
             with TestClient(app) as client:
+                requirement_resp = client.post(
+                    "/api/training-compliance/requirements",
+                    json={
+                        "requirement_code": "TR-001",
+                        "requirement_name": "文件审批培训",
+                        "role_code": "reviewer",
+                        "controlled_action": "document_review",
+                        "curriculum_version": "2026.04",
+                        "training_material_ref": "doc/compliance/training_matrix.md#tr-001",
+                        "effectiveness_required": True,
+                        "recertification_interval_days": 365,
+                        "active": True,
+                    },
+                )
+                self.assertEqual(requirement_resp.status_code, 200, requirement_resp.text)
+                self.assertEqual(requirement_resp.json()["requirement"]["requirement_code"], "TR-001")
+
                 record_resp = client.post(
                     "/api/training-compliance/records",
                     json={
@@ -256,7 +273,7 @@ class TestTrainingComplianceApiUnit(unittest.TestCase):
                     },
                 )
                 self.assertEqual(record_resp.status_code, 200, record_resp.text)
-                self.assertEqual(record_resp.json()["effectiveness_status"], "effective")
+                self.assertEqual(record_resp.json()["record"]["effectiveness_status"], "effective")
 
                 cert_resp = client.post(
                     "/api/training-compliance/certifications",
@@ -271,11 +288,11 @@ class TestTrainingComplianceApiUnit(unittest.TestCase):
                     },
                 )
                 self.assertEqual(cert_resp.status_code, 200, cert_resp.text)
-                self.assertEqual(cert_resp.json()["certification_status"], "active")
+                self.assertEqual(cert_resp.json()["certification"]["certification_status"], "active")
 
                 status_resp = client.get("/api/training-compliance/actions/document_review/users/reviewer-1")
                 self.assertEqual(status_resp.status_code, 200, status_resp.text)
-                status_data = status_resp.json()
+                status_data = status_resp.json()["status"]
                 self.assertTrue(status_data["allowed"])
                 self.assertEqual(status_data["requirements"][0]["failure_code"], None)
         finally:
@@ -385,7 +402,7 @@ class TestTrainingComplianceApiUnit(unittest.TestCase):
                     f"/api/training-compliance/actions/document_review/users/{stored_reviewer.user_id}"
                 )
                 self.assertEqual(status_resp.status_code, 200, status_resp.text)
-                self.assertTrue(status_resp.json()["allowed"])
+                self.assertTrue(status_resp.json()["status"]["allowed"])
         finally:
             cleanup_dir(td)
 

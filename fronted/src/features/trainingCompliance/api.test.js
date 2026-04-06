@@ -21,8 +21,8 @@ describe('trainingComplianceApi', () => {
       .mockResolvedValueOnce({ items: [{ requirement_code: 'TR-001' }] })
       .mockResolvedValueOnce({ items: [{ record_id: 'record-1' }] })
       .mockResolvedValueOnce({ items: [{ certification_id: 'cert-1' }] })
-      .mockResolvedValueOnce({ record_id: 'record-2' })
-      .mockResolvedValueOnce({ certification_id: 'cert-2' });
+      .mockResolvedValueOnce({ record: { record_id: 'record-2' } })
+      .mockResolvedValueOnce({ certification: { certification_id: 'cert-2' } });
 
     await expect(
       trainingComplianceApi.listRequirements({

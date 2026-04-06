@@ -73,7 +73,7 @@ def _override_get_current_payload(_: Request) -> TokenPayload:
 
 
 class TestInboxApiUnit(unittest.TestCase):
-    def test_legacy_inbox_routes_proxy_unified_message_center(self):
+    def test_inbox_routes_keep_message_center_contract(self):
         td = make_temp_dir(prefix="ragflowauth_inbox_api")
         try:
             db_path = os.path.join(str(td), "auth.db")

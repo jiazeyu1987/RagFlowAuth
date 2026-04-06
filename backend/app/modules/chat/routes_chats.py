@@ -294,4 +294,4 @@ def get_chat(
     if not chat:
         raise HTTPException(status_code=404, detail="chat_not_found")
 
-    return chat
+    return {"chat": chat}

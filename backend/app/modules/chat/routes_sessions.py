@@ -14,6 +14,10 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
+def _wrap_payload(field_name: str, value: object) -> dict[str, object]:
+    return {field_name: value}
+
+
 def _normalize_session_messages(session: dict) -> dict:
     messages = session.get("messages")
     if not isinstance(messages, list):
@@ -65,10 +69,10 @@ def create_session(
         user_id=user.user_id,
     )
 
-    if not session:
+    if not isinstance(session, dict):
         raise HTTPException(status_code=500, detail="create_session_failed")
 
-    return _normalize_session_messages(session) if isinstance(session, dict) else session
+    return _wrap_payload("session", _normalize_session_messages(session))
 
 
 @router.get("/chats/{chat_id}/sessions")
@@ -192,7 +196,7 @@ def rename_session(
     if not ok:
         raise HTTPException(status_code=500, detail="rename_failed")
 
-    return {"id": session_id, "name": new_name}
+    return _wrap_payload("session", {"id": session_id, "name": new_name})
 
 
 @router.delete("/chats/{chat_id}/sessions")
@@ -228,4 +232,4 @@ def delete_sessions(
     if not success:
         raise HTTPException(status_code=500, detail="delete_sessions_failed")
 
-    return {"message": "sessions_deleted"}
+    return _wrap_payload("result", {"message": "sessions_deleted"})

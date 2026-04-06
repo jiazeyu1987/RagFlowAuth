@@ -18,6 +18,23 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
+def _password_change_result(message: str) -> dict[str, dict[str, str]]:
+    return {"result": {"message": message}}
+
+
+def _password_validation_error(request_data: ChangePasswordRequest) -> str | None:
+    if validate_password_requirements(
+        password=request_data.new_password,
+        old_password=request_data.old_password,
+    ):
+        return None
+    if len(request_data.new_password) < 6:
+        return "new_password_too_short"
+    if request_data.new_password == request_data.old_password:
+        return "new_password_same_as_old"
+    return "new_password_requirements_not_met"
+
+
 @router.post("/login", response_model=TokenResponse)
 def login(
     credentials: LoginRequest,
@@ -67,17 +84,11 @@ def change_password(
 
     old_password_ok, _ = verify_password(request_data.old_password, user.password_hash)
     if not old_password_ok:
-        raise HTTPException(status_code=400, detail="旧密码错误")
+        raise HTTPException(status_code=400, detail="old_password_incorrect")
 
-    if not validate_password_requirements(
-        password=request_data.new_password,
-        old_password=request_data.old_password,
-    ):
-        if len(request_data.new_password) < 6:
-            raise HTTPException(status_code=400, detail="密码不符合要求：密码长度至少6个字符")
-        if request_data.new_password == request_data.old_password:
-            raise HTTPException(status_code=400, detail="新密码不能与旧密码相同")
-        raise HTTPException(status_code=400, detail="密码不符合要求：必须包含字母和数字，且不能使用常见密码")
+    validation_error = _password_validation_error(request_data)
+    if validation_error is not None:
+        raise HTTPException(status_code=400, detail=validation_error)
 
     if deps.user_store.password_matches_recent_history(user.user_id, request_data.new_password, limit=5):
         raise HTTPException(status_code=400, detail="new_password_reused_from_recent_history")
@@ -86,4 +97,4 @@ def change_password(
 
     logger.info("Password changed for user %s", user.username)
 
-    return {"message": "密码修改成功"}
+    return _password_change_result("password_changed")

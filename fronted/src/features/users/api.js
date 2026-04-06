@@ -8,6 +8,17 @@ const assertArrayPayload = (payload, action) => {
   return payload;
 };
 
+const normalizeObjectField = (response, fieldName, action) => {
+  if (!response || typeof response !== 'object' || Array.isArray(response)) {
+    throw new Error(`${action}_invalid_payload`);
+  }
+  const value = response[fieldName];
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error(`${action}_invalid_payload`);
+  }
+  return value;
+};
+
 const requestUsersList = async (params = {}, action = 'users_list') => {
   const query = new URLSearchParams(params).toString();
   const path = query ? `/api/users?${query}` : '/api/users';
@@ -30,30 +41,34 @@ export const usersApi = {
     return requestUsersList({ q: keyword, limit }, 'users_search');
   },
 
-  create(payload) {
-    return httpClient.requestJson(authBackendUrl('/api/users'), {
+  async create(payload) {
+    const response = await httpClient.requestJson(authBackendUrl('/api/users'), {
       method: 'POST',
       body: JSON.stringify(payload),
     });
+    return normalizeObjectField(response, 'user', 'users_create');
   },
 
-  update(userId, payload) {
-    return httpClient.requestJson(authBackendUrl(`/api/users/${userId}`), {
+  async update(userId, payload) {
+    const response = await httpClient.requestJson(authBackendUrl(`/api/users/${userId}`), {
       method: 'PUT',
       body: JSON.stringify(payload),
     });
+    return normalizeObjectField(response, 'user', 'users_update');
   },
 
-  remove(userId) {
-    return httpClient.requestJson(authBackendUrl(`/api/users/${userId}`), {
+  async remove(userId) {
+    const response = await httpClient.requestJson(authBackendUrl(`/api/users/${userId}`), {
       method: 'DELETE',
     });
+    return normalizeObjectField(response, 'result', 'users_remove');
   },
 
-  resetPassword(userId, newPassword) {
-    return httpClient.requestJson(authBackendUrl(`/api/users/${userId}/password`), {
+  async resetPassword(userId, newPassword) {
+    const response = await httpClient.requestJson(authBackendUrl(`/api/users/${userId}/password`), {
       method: 'PUT',
       body: JSON.stringify({ new_password: newPassword }),
     });
+    return normalizeObjectField(response, 'result', 'users_reset_password');
   },
 };

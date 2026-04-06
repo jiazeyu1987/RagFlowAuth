@@ -8,11 +8,14 @@ function assertOkResponse(response, action) {
   }
 }
 
-function unwrapEnvelope(response) {
-  if (!response || typeof response !== 'object') return response;
-  if (response.config && typeof response.config === 'object') return response.config;
-  if (response.data?.config && typeof response.data.config === 'object') return response.data.config;
-  return response;
+function normalizeConfigEnvelope(response, action) {
+  if (!response || typeof response !== 'object' || Array.isArray(response)) {
+    throw new Error(`${action}_invalid_payload`);
+  }
+  if (!response.config || typeof response.config !== 'object' || Array.isArray(response.config)) {
+    throw new Error(`${action}_invalid_payload`);
+  }
+  return response.config;
 }
 
 export const searchConfigsApi = {
@@ -28,7 +31,7 @@ export const searchConfigsApi = {
     const response = await httpClient.requestJson(authBackendUrl(`/api/search/configs/${encodeURIComponent(configId)}`), {
       method: 'GET',
     });
-    return unwrapEnvelope(response);
+    return normalizeConfigEnvelope(response, 'search_config_get');
   },
 
   async createConfig(payload) {
@@ -36,7 +39,7 @@ export const searchConfigsApi = {
       method: 'POST',
       body: JSON.stringify(payload || {}),
     });
-    return unwrapEnvelope(response);
+    return normalizeConfigEnvelope(response, 'search_config_create');
   },
 
   async updateConfig(configId, updates) {
@@ -44,7 +47,7 @@ export const searchConfigsApi = {
       method: 'PUT',
       body: JSON.stringify(updates || {}),
     });
-    return unwrapEnvelope(response);
+    return normalizeConfigEnvelope(response, 'search_config_update');
   },
 
   async deleteConfig(configId) {
@@ -54,4 +57,3 @@ export const searchConfigsApi = {
     assertOkResponse(response, 'search_config_delete');
   },
 };
-

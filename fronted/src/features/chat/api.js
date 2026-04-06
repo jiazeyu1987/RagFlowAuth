@@ -1,6 +1,17 @@
 import { authBackendUrl } from '../../config/backend';
 import { httpClient } from '../../shared/http/httpClient';
 
+const normalizeObjectField = (response, fieldName, action) => {
+  if (!response || typeof response !== 'object' || Array.isArray(response)) {
+    throw new Error(`${action}_invalid_payload`);
+  }
+  const value = response[fieldName];
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error(`${action}_invalid_payload`);
+  }
+  return value;
+};
+
 export const chatApi = {
   async listMyChats() {
     const response = await httpClient.requestJson(authBackendUrl('/api/chats/my'), { method: 'GET' });
@@ -18,25 +29,28 @@ export const chatApi = {
     return response.sessions;
   },
 
-  createChatSession(chatId, name = '新会话') {
-    return httpClient.requestJson(authBackendUrl(`/api/chats/${chatId}/sessions`), {
+  async createChatSession(chatId, name = '\u65b0\u4f1a\u8bdd') {
+    const response = await httpClient.requestJson(authBackendUrl(`/api/chats/${chatId}/sessions`), {
       method: 'POST',
       body: JSON.stringify({ name }),
     });
+    return normalizeObjectField(response, 'session', 'chat_session_create');
   },
 
-  deleteChatSessions(chatId, ids) {
-    return httpClient.requestJson(authBackendUrl(`/api/chats/${chatId}/sessions`), {
+  async deleteChatSessions(chatId, ids) {
+    const response = await httpClient.requestJson(authBackendUrl(`/api/chats/${chatId}/sessions`), {
       method: 'DELETE',
       body: JSON.stringify({ ids }),
     });
+    return normalizeObjectField(response, 'result', 'chat_session_delete');
   },
 
-  renameChatSession(chatId, sessionId, name) {
-    return httpClient.requestJson(authBackendUrl(`/api/chats/${chatId}/sessions/${encodeURIComponent(sessionId)}`), {
+  async renameChatSession(chatId, sessionId, name) {
+    const response = await httpClient.requestJson(authBackendUrl(`/api/chats/${chatId}/sessions/${encodeURIComponent(sessionId)}`), {
       method: 'PUT',
       body: JSON.stringify({ name }),
     });
+    return normalizeObjectField(response, 'session', 'chat_session_rename');
   },
 
   requestCompletionStream(chatId, { question, sessionId, traceId } = {}) {

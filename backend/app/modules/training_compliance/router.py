@@ -69,6 +69,12 @@ def _ensure_user_exists(ctx: AuthContextDep, user_id: str, *, field_name: str):
     return user
 
 
+def _wrap_payload(field: str, item: object) -> dict[str, object]:
+    if not isinstance(item, dict):
+        raise HTTPException(status_code=500, detail=f"{field}_invalid_payload")
+    return {field: item}
+
+
 @router.post("/training-compliance/requirements")
 def upsert_training_requirement(body: TrainingRequirementBody, ctx: AuthContextDep, _: AdminOnly):
     service = _service_from_ctx(ctx)
@@ -103,7 +109,7 @@ def upsert_training_requirement(body: TrainingRequirementBody, ctx: AuthContextD
                 "active": item["active"],
             },
         )
-    return item
+    return _wrap_payload("requirement", item)
 
 
 @router.get("/training-compliance/requirements")
@@ -164,7 +170,7 @@ def create_training_record(body: TrainingRecordBody, ctx: AuthContextDep, _: Adm
                 "effectiveness_status": item["effectiveness_status"],
             },
         )
-    return item
+    return _wrap_payload("record", item)
 
 
 @router.get("/training-compliance/records")
@@ -216,7 +222,7 @@ def create_operator_certification(body: OperatorCertificationBody, ctx: AuthCont
                 "valid_until_ms": item["valid_until_ms"],
             },
         )
-    return item
+    return _wrap_payload("certification", item)
 
 
 @router.get("/training-compliance/certifications")
@@ -242,10 +248,11 @@ def get_action_training_status(
     user = _ensure_user_exists(ctx, user_id, field_name="user_id")
     service = _service_from_ctx(ctx)
     try:
-        return service.evaluate_action_status(
+        item = service.evaluate_action_status(
             user_id=str(user.user_id),
             role_code=str(getattr(user, "role", "") or ""),
             controlled_action=controlled_action,
         )
     except TrainingComplianceError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.code) from exc
+    return _wrap_payload("status", item)

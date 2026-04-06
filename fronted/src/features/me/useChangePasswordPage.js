@@ -4,6 +4,21 @@ import meApi from './api';
 
 const MOBILE_BREAKPOINT = 768;
 const COMMON_PASSWORDS = new Set(['password', '123456', 'abc123', 'qwerty', 'admin']);
+const DEFAULT_SUBMIT_ERROR = '修改密码失败';
+
+const CHANGE_PASSWORD_ERROR_MESSAGES = {
+  user_not_found: '用户不存在或登录状态已失效',
+  password_change_disabled: '当前账户不允许修改密码',
+  old_password_incorrect: '旧密码错误',
+  new_password_too_short: '密码不符合要求：密码长度至少 6 个字符',
+  new_password_same_as_old: '新密码不能与旧密码相同',
+  new_password_requirements_not_met: '密码不符合要求：必须包含字母和数字，且不能使用常见密码',
+  new_password_reused_from_recent_history: '新密码不能与最近使用过的密码相同',
+};
+
+const CHANGE_PASSWORD_SUCCESS_MESSAGES = {
+  password_changed: '密码修改成功',
+};
 
 const hasLetter = (value) =>
   Array.from(String(value || '')).some((character) => character.toLowerCase() !== character.toUpperCase());
@@ -11,6 +26,20 @@ const hasLetter = (value) =>
 const getInitialIsMobile = () => {
   if (typeof window === 'undefined') return false;
   return window.innerWidth <= MOBILE_BREAKPOINT;
+};
+
+const mapChangePasswordErrorMessage = (code) => {
+  if (typeof code !== 'string' || !code.trim()) {
+    return DEFAULT_SUBMIT_ERROR;
+  }
+  return CHANGE_PASSWORD_ERROR_MESSAGES[code] || code;
+};
+
+const mapChangePasswordSuccessMessage = (code) => {
+  if (typeof code !== 'string' || !code.trim()) {
+    return CHANGE_PASSWORD_SUCCESS_MESSAGES.password_changed;
+  }
+  return CHANGE_PASSWORD_SUCCESS_MESSAGES[code] || code;
 };
 
 export default function useChangePasswordPage() {
@@ -54,37 +83,40 @@ export default function useChangePasswordPage() {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  const handleSubmit = useCallback(async (event) => {
-    event.preventDefault();
-    setError(null);
-    setMessage(null);
+  const handleSubmit = useCallback(
+    async (event) => {
+      event.preventDefault();
+      setError(null);
+      setMessage(null);
 
-    if (!oldPassword || !newPassword) {
-      setError('请输入旧密码和新密码');
-      return;
-    }
-    if (!passwordPolicyPassed) {
-      setError('新密码不符合安全策略，请根据红色提示调整');
-      return;
-    }
-    if (newPassword !== confirmPassword) {
-      setError('两次输入的新密码不一致');
-      return;
-    }
+      if (!oldPassword || !newPassword) {
+        setError('请输入旧密码和新密码');
+        return;
+      }
+      if (!passwordPolicyPassed) {
+        setError('新密码不符合安全策略，请根据红色提示调整');
+        return;
+      }
+      if (newPassword !== confirmPassword) {
+        setError('两次输入的新密码不一致');
+        return;
+      }
 
-    try {
-      setSubmitting(true);
-      await meApi.changePassword(oldPassword, newPassword);
-      setMessage('密码修改成功');
-      setOldPassword('');
-      setNewPassword('');
-      setConfirmPassword('');
-    } catch (requestError) {
-      setError(requestError?.message || '修改密码失败');
-    } finally {
-      setSubmitting(false);
-    }
-  }, [confirmPassword, newPassword, oldPassword, passwordPolicyPassed]);
+      try {
+        setSubmitting(true);
+        const result = await meApi.changePassword(oldPassword, newPassword);
+        setMessage(mapChangePasswordSuccessMessage(result.message));
+        setOldPassword('');
+        setNewPassword('');
+        setConfirmPassword('');
+      } catch (requestError) {
+        setError(mapChangePasswordErrorMessage(requestError?.message));
+      } finally {
+        setSubmitting(false);
+      }
+    },
+    [confirmPassword, newPassword, oldPassword, passwordPolicyPassed]
+  );
 
   return {
     user,
