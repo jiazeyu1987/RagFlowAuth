@@ -1,6 +1,5 @@
-import React, { useMemo, useState } from 'react';
-import packageDrawingApi from '../features/packageDrawing/api';
-import { useAuth } from '../hooks/useAuth';
+import React from 'react';
+import usePackageDrawingPage from '../features/packageDrawing/usePackageDrawingPage';
 
 const tabStyle = (active) => ({
   border: '1px solid',
@@ -39,92 +38,28 @@ const valueStyle = {
   wordBreak: 'break-word',
 };
 
-const mapApiError = (message) => {
-  const code = String(message || '').trim();
-  if (code === 'model_not_found') return '未找到该型号信息';
-  if (code === 'only_xlsx_supported') return '仅支持 .xlsx 文件';
-  if (code === 'file_required') return '请先选择导入文件';
-  if (code === 'empty_file') return '文件内容为空';
-  if (code.startsWith('invalid_xlsx')) return 'Excel 文件无法解析，请确认文件格式';
-  return code || '操作失败';
-};
-
 const PackageDrawingTool = () => {
-  const { isAdmin } = useAuth();
-  const admin = isAdmin();
-
-  const [activeTab, setActiveTab] = useState('query');
-  const [model, setModel] = useState('');
-  const [querying, setQuerying] = useState(false);
-  const [queryResult, setQueryResult] = useState(null);
-  const [queryError, setQueryError] = useState('');
-  const [notFound, setNotFound] = useState(false);
-
-  const [importFile, setImportFile] = useState(null);
-  const [importing, setImporting] = useState(false);
-  const [importResult, setImportResult] = useState(null);
-  const [importError, setImportError] = useState('');
-
-  const resultParameters = useMemo(() => {
-    const source = queryResult?.parameters;
-    if (!source || typeof source !== 'object') return [];
-    return Object.entries(source);
-  }, [queryResult]);
-
-  const resultImages = useMemo(() => {
-    const source = queryResult?.images;
-    if (!Array.isArray(source)) return [];
-    return source;
-  }, [queryResult]);
-
-  const onQuerySubmit = async (event) => {
-    event.preventDefault();
-    const clean = String(model || '').trim();
-    if (!clean) {
-      setQueryError('请输入型号');
-      setNotFound(false);
-      setQueryResult(null);
-      return;
-    }
-
-    setQuerying(true);
-    setQueryError('');
-    setNotFound(false);
-    setQueryResult(null);
-    try {
-      const data = await packageDrawingApi.queryByModel(clean);
-      setQueryResult(data);
-    } catch (error) {
-      const message = String(error?.message || '');
-      if (message === 'model_not_found') {
-        setNotFound(true);
-      } else {
-        setQueryError(mapApiError(message));
-      }
-    } finally {
-      setQuerying(false);
-    }
-  };
-
-  const onImportSubmit = async (event) => {
-    event.preventDefault();
-    if (!importFile) {
-      setImportError('请先选择 .xlsx 文件');
-      setImportResult(null);
-      return;
-    }
-    setImporting(true);
-    setImportError('');
-    setImportResult(null);
-    try {
-      const result = await packageDrawingApi.importExcel(importFile);
-      setImportResult(result);
-    } catch (error) {
-      setImportError(mapApiError(error?.message));
-    } finally {
-      setImporting(false);
-    }
-  };
+  const {
+    admin,
+    activeTab,
+    model,
+    querying,
+    queryResult,
+    queryError,
+    notFound,
+    importing,
+    importResult,
+    importError,
+    resultParameters,
+    resultImages,
+    setModel,
+    handleTabChange,
+    handleQuerySubmit,
+    handleImportFileChange,
+    handleImportSubmit,
+    queryTab,
+    importTab,
+  } = usePackageDrawingPage();
 
   return (
     <div data-testid="package-drawing-page" style={{ display: 'grid', gap: 14 }}>
@@ -132,8 +67,8 @@ const PackageDrawingTool = () => {
         <button
           type="button"
           data-testid="package-drawing-tab-query"
-          style={tabStyle(activeTab === 'query')}
-          onClick={() => setActiveTab('query')}
+          style={tabStyle(activeTab === queryTab)}
+          onClick={() => handleTabChange(queryTab)}
         >
           查询信息
         </button>
@@ -141,19 +76,21 @@ const PackageDrawingTool = () => {
           <button
             type="button"
             data-testid="package-drawing-tab-import"
-            style={tabStyle(activeTab === 'import')}
-            onClick={() => setActiveTab('import')}
+            style={tabStyle(activeTab === importTab)}
+            onClick={() => handleTabChange(importTab)}
           >
             录入信息
           </button>
         ) : null}
       </div>
 
-      {activeTab === 'query' ? (
+      {activeTab === queryTab ? (
         <section style={sectionStyle}>
-          <form onSubmit={onQuerySubmit} style={{ display: 'grid', gap: 10 }}>
+          <form onSubmit={handleQuerySubmit} style={{ display: 'grid', gap: 10 }}>
             <div>
-              <label htmlFor="package-drawing-model" style={fieldLabelStyle}>型号</label>
+              <label htmlFor="package-drawing-model" style={fieldLabelStyle}>
+                型号
+              </label>
               <input
                 id="package-drawing-model"
                 data-testid="package-drawing-query-model"
@@ -189,18 +126,27 @@ const PackageDrawingTool = () => {
           </form>
 
           {queryError ? (
-            <div data-testid="package-drawing-query-error" style={{ marginTop: 12, color: '#b91c1c' }}>
+            <div
+              data-testid="package-drawing-query-error"
+              style={{ marginTop: 12, color: '#b91c1c' }}
+            >
               {queryError}
             </div>
           ) : null}
           {notFound ? (
-            <div data-testid="package-drawing-query-not-found" style={{ marginTop: 12, color: '#6b7280' }}>
+            <div
+              data-testid="package-drawing-query-not-found"
+              style={{ marginTop: 12, color: '#6b7280' }}
+            >
               未找到该型号信息
             </div>
           ) : null}
 
           {queryResult ? (
-            <div data-testid="package-drawing-query-result" style={{ marginTop: 14, display: 'grid', gap: 12 }}>
+            <div
+              data-testid="package-drawing-query-result"
+              style={{ marginTop: 14, display: 'grid', gap: 12 }}
+            >
               <div style={{ display: 'flex', gap: 8 }}>
                 <span style={keyStyle}>型号</span>
                 <span style={valueStyle}>{queryResult.model || '-'}</span>
@@ -233,17 +179,33 @@ const PackageDrawingTool = () => {
                 ) : (
                   <div
                     data-testid="package-drawing-image-list"
-                    style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10 }}
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+                      gap: 10,
+                    }}
                   >
                     {resultImages.map((img, idx) => {
                       const src = String(img?.data_url || img?.url || '').trim();
                       if (!src) return null;
                       return (
-                        <div key={`${src}-${idx}`} style={{ border: '1px solid #e5e7eb', borderRadius: 8, padding: 8 }}>
+                        <div
+                          key={`${src}-${idx}`}
+                          style={{
+                            border: '1px solid #e5e7eb',
+                            borderRadius: 8,
+                            padding: 8,
+                          }}
+                        >
                           <img
-                            alt={`示意图-${idx + 1}`}
+                            alt={`示意图 ${idx + 1}`}
                             src={src}
-                            style={{ width: '100%', height: 160, objectFit: 'contain', background: '#f8fafc' }}
+                            style={{
+                              width: '100%',
+                              height: 160,
+                              objectFit: 'contain',
+                              background: '#f8fafc',
+                            }}
                           />
                         </div>
                       );
@@ -256,18 +218,22 @@ const PackageDrawingTool = () => {
         </section>
       ) : null}
 
-      {activeTab === 'import' ? (
+      {activeTab === importTab ? (
         <section style={sectionStyle}>
           {admin ? (
-            <form onSubmit={onImportSubmit} style={{ display: 'grid', gap: 10 }}>
+            <form onSubmit={handleImportSubmit} style={{ display: 'grid', gap: 10 }}>
               <div>
-                <label htmlFor="package-drawing-import-file" style={fieldLabelStyle}>导入文件（仅支持 .xlsx）</label>
+                <label htmlFor="package-drawing-import-file" style={fieldLabelStyle}>
+                  导入文件（仅支持 .xlsx）
+                </label>
                 <input
                   id="package-drawing-import-file"
                   type="file"
                   accept=".xlsx"
                   data-testid="package-drawing-import-file"
-                  onChange={(event) => setImportFile(event.target.files?.[0] || null)}
+                  onChange={(event) =>
+                    handleImportFileChange(event.target.files?.[0] || null)
+                  }
                 />
               </div>
               <div>
@@ -293,13 +259,19 @@ const PackageDrawingTool = () => {
           )}
 
           {importError ? (
-            <div data-testid="package-drawing-import-error" style={{ marginTop: 12, color: '#b91c1c' }}>
+            <div
+              data-testid="package-drawing-import-error"
+              style={{ marginTop: 12, color: '#b91c1c' }}
+            >
               {importError}
             </div>
           ) : null}
 
           {importResult ? (
-            <div data-testid="package-drawing-import-summary" style={{ marginTop: 12, display: 'grid', gap: 6 }}>
+            <div
+              data-testid="package-drawing-import-summary"
+              style={{ marginTop: 12, display: 'grid', gap: 6 }}
+            >
               <div>扫描行数：{importResult.rows_scanned || 0}</div>
               <div>导入模型数：{importResult.total || 0}</div>
               <div>成功：{importResult.success || 0}</div>
@@ -307,8 +279,12 @@ const PackageDrawingTool = () => {
               {Array.isArray(importResult.errors) && importResult.errors.length ? (
                 <div data-testid="package-drawing-import-errors" style={{ marginTop: 6 }}>
                   {importResult.errors.map((item, index) => (
-                    <div key={`${item.sheet || 'sheet'}-${item.row || 0}-${index}`} style={{ color: '#92400e' }}>
-                      [{item.sheet || '-'}:{item.row || '-'}] {item.model || '-'} {item.reason || 'error'}
+                    <div
+                      key={`${item.sheet || 'sheet'}-${item.row || 0}-${index}`}
+                      style={{ color: '#92400e' }}
+                    >
+                      [{item.sheet || '-'}:{item.row || '-'}] {item.model || '-'}{' '}
+                      {item.reason || 'error'}
                     </div>
                   ))}
                 </div>
