@@ -1,4 +1,7 @@
-import { useCallback, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+
+import { useAuth } from '../../hooks/useAuth';
 import {
   isDownloadedItem,
   isSessionActive,
@@ -14,7 +17,19 @@ import {
   PATENT_SOURCE_LABEL_MAP,
 } from './patentDownloadPageUtils';
 
+const MOBILE_BREAKPOINT = 768;
+
+const getInitialIsMobile = () => {
+  if (typeof window === 'undefined') return false;
+  return window.innerWidth <= MOBILE_BREAKPOINT;
+};
+
 export default function usePatentDownloadPage() {
+  const navigate = useNavigate();
+  const { canDownload } = useAuth();
+  const canDownloadFiles = typeof canDownload === 'function' ? !!canDownload() : false;
+  const [isMobile, setIsMobile] = useState(getInitialIsMobile);
+
   const normalizePatentHistoryKeywords = useCallback(
     async (rawList) =>
       enrichPatentHistoryKeywords(rawList, patentDownloadApi, isDownloadedItem),
@@ -30,6 +45,16 @@ export default function usePatentDownloadPage() {
     normalizeHistoryKeywords: normalizePatentHistoryKeywords,
     strictCompletionValidation: true,
   });
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+
+    const handleResize = () => setIsMobile(window.innerWidth <= MOBILE_BREAKPOINT);
+    handleResize();
+    window.addEventListener('resize', handleResize);
+
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   const frontendLogs = useMemo(
     () =>
@@ -48,8 +73,15 @@ export default function usePatentDownloadPage() {
     ]
   );
 
+  const handleBackToTools = () => {
+    navigate('/tools');
+  };
+
   return {
     ...controller,
+    isMobile,
+    canDownloadFiles,
+    handleBackToTools,
     frontendLogs,
   };
 }
