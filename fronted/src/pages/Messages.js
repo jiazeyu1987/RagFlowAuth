@@ -1,6 +1,5 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { notificationApi } from '../features/notification/api';
-import { publishInboxUnreadCount } from '../features/notification/inboxUnreadSync';
+import React from 'react';
+import useMessagesPage from '../features/notification/messages/useMessagesPage';
 
 const cardStyle = {
   background: 'white',
@@ -79,102 +78,19 @@ const messageStepText = (item) => {
 };
 
 const Messages = () => {
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [items, setItems] = useState([]);
-  const [total, setTotal] = useState(0);
-  const [unreadCount, setUnreadCount] = useState(0);
-  const [unreadOnly, setUnreadOnly] = useState(false);
-  const [busyMap, setBusyMap] = useState({});
-  const [markAllBusy, setMarkAllBusy] = useState(false);
-  const unreadCountRef = useRef(0);
-
-  useEffect(() => {
-    unreadCountRef.current = Number(unreadCount || 0);
-  }, [unreadCount]);
-
-  const syncUnreadCount = useCallback((valueOrUpdater) => {
-    const base = Number(unreadCountRef.current || 0);
-    const rawValue = typeof valueOrUpdater === 'function' ? valueOrUpdater(base) : valueOrUpdater;
-    const normalized = Number.isFinite(Number(rawValue)) && Number(rawValue) > 0 ? Number(rawValue) : 0;
-    unreadCountRef.current = normalized;
-    setUnreadCount(normalized);
-    publishInboxUnreadCount(normalized);
-    return normalized;
-  }, []);
-
-  const loadData = useCallback(async (opts = {}) => {
-    const onlyUnread = Object.prototype.hasOwnProperty.call(opts, 'unreadOnly') ? !!opts.unreadOnly : unreadOnly;
-    setError('');
-    setLoading(true);
-    try {
-      const res = await notificationApi.listMyMessages({ limit: 100, offset: 0, unreadOnly: onlyUnread });
-      setItems(Array.isArray(res.items) ? res.items : []);
-      setTotal(Number(res.total || 0));
-      syncUnreadCount(Number(res.unread_count || 0));
-    } catch (e) {
-      setError(e.message || TEXT.loadError);
-    } finally {
-      setLoading(false);
-    }
-  }, [syncUnreadCount, unreadOnly]);
-
-  useEffect(() => {
-    loadData({ unreadOnly });
-  }, [loadData, unreadOnly]);
-
-  const setRowBusy = (jobId, busy) => {
-    setBusyMap((prev) => ({ ...prev, [String(jobId)]: !!busy }));
-  };
-
-  const handleToggleRead = async (item) => {
-    const jobId = item.job_id;
-    const nextRead = !item.read_at_ms;
-    setError('');
-    setRowBusy(jobId, true);
-    try {
-      await notificationApi.updateMyMessageReadState(jobId, nextRead);
-      setItems((prev) => {
-        if (unreadOnly && nextRead) {
-          return prev.filter((entry) => entry.job_id !== jobId);
-        }
-        return prev.map((entry) => (
-          entry.job_id === jobId
-            ? { ...entry, read_at_ms: nextRead ? Date.now() : null }
-            : entry
-        ));
-      });
-      syncUnreadCount((prev) => Math.max(0, Number(prev || 0) + (nextRead ? -1 : 1)));
-      if (unreadOnly && nextRead) {
-        setTotal((prev) => Math.max(0, Number(prev || 0) - 1));
-      }
-    } catch (e) {
-      setError(e.message || TEXT.markError);
-    } finally {
-      setRowBusy(jobId, false);
-    }
-  };
-
-  const handleMarkAllRead = async () => {
-    setError('');
-    setMarkAllBusy(true);
-    try {
-      await notificationApi.markAllMyMessagesRead();
-      setItems((prev) => (
-        unreadOnly
-          ? []
-          : prev.map((entry) => ({ ...entry, read_at_ms: entry.read_at_ms || Date.now() }))
-      ));
-      syncUnreadCount(0);
-      if (unreadOnly) {
-        setTotal(0);
-      }
-    } catch (e) {
-      setError(e.message || TEXT.markAllError);
-    } finally {
-      setMarkAllBusy(false);
-    }
-  };
+  const {
+    loading,
+    error,
+    items,
+    total,
+    unreadCount,
+    unreadOnly,
+    busyMap,
+    markAllBusy,
+    handleToggleUnreadOnly,
+    handleToggleRead,
+    handleMarkAllRead,
+  } = useMessagesPage();
 
   if (loading) {
     return <div style={{ padding: '12px' }}>{TEXT.loading}</div>;
@@ -189,7 +105,7 @@ const Messages = () => {
           <button
             type="button"
             data-testid="messages-toggle-unread"
-            onClick={() => setUnreadOnly((v) => !v)}
+            onClick={handleToggleUnreadOnly}
             style={buttonStyle}
           >
             {unreadOnly ? TEXT.showAll : TEXT.unreadOnly}
