@@ -1,14 +1,12 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { auditApi } from '../features/audit/api';
-import { usersApi } from '../features/users/api';
-import { useAuth } from '../hooks/useAuth';
+import React, { useEffect, useState } from 'react';
+import useDocumentAuditPage from '../features/audit/useDocumentAuditPage';
 
 const MOBILE_BREAKPOINT = 768;
 
 const STATUS_LABELS = {
-  pending: '\u5f85\u5ba1\u6838',
-  approved: '\u5df2\u901a\u8fc7',
-  rejected: '\u5df2\u9a73\u56de',
+  pending: '待审核',
+  approved: '已通过',
+  rejected: '已驳回',
 };
 
 const STATUS_STYLES = {
@@ -45,8 +43,8 @@ const manifestValueStyle = {
 };
 
 const VERIFIED_TEXT = {
-  yes: '\u901a\u8fc7',
-  no: '\u5931\u8d25',
+  yes: '通过',
+  no: '失败',
   unknown: '-',
 };
 
@@ -69,33 +67,50 @@ const renderSignatureManifestation = (item) => {
   return (
     <div style={{ display: 'grid', gap: '6px' }}>
       <div>
-        <div style={manifestLabelStyle}>{'\u7b7e\u540d\u4eba'}</div>
-        <div style={manifestValueStyle}>{item.signed_by_full_name || item.signed_by_username || item.reviewed_by_name || item.reviewed_by || '-'}</div>
+        <div style={manifestLabelStyle}>签名人</div>
+        <div style={manifestValueStyle}>
+          {item.signed_by_full_name ||
+            item.signed_by_username ||
+            item.reviewed_by_name ||
+            item.reviewed_by ||
+            '-'}
+        </div>
       </div>
       <div>
-        <div style={manifestLabelStyle}>{'\u7b7e\u540d\u65f6\u95f4'}</div>
+        <div style={manifestLabelStyle}>签名时间</div>
         <div style={manifestValueStyle}>{formatTime(item.signed_at_ms)}</div>
       </div>
       <div>
-        <div style={manifestLabelStyle}>{'\u7b7e\u540d\u542b\u4e49'}</div>
+        <div style={manifestLabelStyle}>签名含义</div>
         <div style={manifestValueStyle}>{item.signature_meaning || '-'}</div>
       </div>
       <div>
-        <div style={manifestLabelStyle}>{'\u7b7e\u7f72\u539f\u56e0'}</div>
+        <div style={manifestLabelStyle}>签署原因</div>
         <div style={manifestValueStyle}>{item.signature_reason || '-'}</div>
       </div>
       <div>
-        <div style={manifestLabelStyle}>{'\u7b7e\u540d ID'}</div>
-        <div style={{ ...manifestValueStyle, fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace" }}>
+        <div style={manifestLabelStyle}>签名 ID</div>
+        <div
+          style={{
+            ...manifestValueStyle,
+            fontFamily:
+              "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace",
+          }}
+        >
           {item.signature_id}
         </div>
       </div>
       <div>
-        <div style={manifestLabelStyle}>{'\u9a8c\u7b7e\u7ed3\u679c'}</div>
+        <div style={manifestLabelStyle}>验签结果</div>
         <div
           style={{
             ...manifestValueStyle,
-            color: item.signature_verified === true ? '#166534' : item.signature_verified === false ? '#b91c1c' : manifestValueStyle.color,
+            color:
+              item.signature_verified === true
+                ? '#166534'
+                : item.signature_verified === false
+                  ? '#b91c1c'
+                  : manifestValueStyle.color,
             fontWeight: 600,
           }}
         >
@@ -111,58 +126,32 @@ const renderSignatureManifestation = (item) => {
 };
 
 const DocumentAudit = ({ embedded = false }) => {
-  const { user } = useAuth();
   const [isMobile, setIsMobile] = useState(() => {
     if (typeof window === 'undefined') return false;
     return window.innerWidth <= MOBILE_BREAKPOINT;
   });
-  const [documents, setDocuments] = useState([]);
-  const [deletions, setDeletions] = useState([]);
-  const [downloads, setDownloads] = useState([]);
-  const [users, setUsers] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [activeTab, setActiveTab] = useState('documents');
-  const [filterKb, setFilterKb] = useState('');
-  const [filterStatus, setFilterStatus] = useState('');
-  const [versionsDialog, setVersionsDialog] = useState({
-    open: false,
-    loading: false,
-    error: '',
-    doc: null,
-    items: [],
-    currentDocId: '',
-    logicalDocId: '',
-  });
-
-  useEffect(() => {
-    const fetchData = async () => {
-      setLoading(true);
-      setError('');
-      try {
-        const [usersResp, docsResp, deletionsResp, downloadsResp] = await Promise.all([
-          usersApi.items({ limit: 2000 }).catch(() => []),
-          auditApi.listDocuments({ limit: 2000 }).catch(() => []),
-          auditApi.listDeletions({ limit: 2000 }).catch(() => []),
-          auditApi.listDownloads({ limit: 2000 }).catch(() => []),
-        ]);
-
-        const docs = Array.isArray(docsResp) ? docsResp : [];
-        docs.sort((a, b) => Number(b.reviewed_at_ms || b.uploaded_at_ms || 0) - Number(a.reviewed_at_ms || a.uploaded_at_ms || 0));
-
-        setUsers(Array.isArray(usersResp) ? usersResp : []);
-        setDocuments(docs);
-        setDeletions(Array.isArray(deletionsResp) ? deletionsResp : []);
-        setDownloads(Array.isArray(downloadsResp) ? downloadsResp : []);
-      } catch (err) {
-        setError(err?.message || 'load_failed');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchData();
-  }, []);
+  const {
+    documents,
+    deletions,
+    downloads,
+    loading,
+    error,
+    activeTab,
+    filterKb,
+    filterStatus,
+    versionsDialog,
+    knowledgeBases,
+    filteredDocuments,
+    filteredDeletions,
+    filteredDownloads,
+    setActiveTab,
+    setFilterKb,
+    setFilterStatus,
+    resetFilters,
+    resolveDisplayName,
+    closeVersionsDialog,
+    openVersionsDialog,
+  } = useDocumentAuditPage();
 
   useEffect(() => {
     if (typeof window === 'undefined') return undefined;
@@ -173,100 +162,21 @@ const DocumentAudit = ({ embedded = false }) => {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  const userMap = useMemo(() => {
-    const map = new Map();
-    users.forEach((item) => {
-      const displayName = item?.full_name || item?.username || '';
-      if (item?.user_id && displayName) map.set(item.user_id, displayName);
-      if (item?.username && displayName) map.set(item.username, displayName);
-    });
-    return map;
-  }, [users]);
-
-  const currentUserId = user?.user_id || '';
-  const currentUsername = user?.username || '';
-  const currentDisplayName = user?.full_name || currentUsername;
-
-  const resolveDisplayName = (ref, explicitName) => {
-    if (ref && userMap.has(ref)) return userMap.get(ref);
-    if (explicitName) return explicitName;
-    if (ref && currentUsername && (ref === currentUserId || ref === currentUsername)) return currentDisplayName;
-    return ref || '\u5176\u4ed6';
-  };
-
-  const closeVersionsDialog = () => {
-    setVersionsDialog({
-      open: false,
-      loading: false,
-      error: '',
-      doc: null,
-      items: [],
-      currentDocId: '',
-      logicalDocId: '',
-    });
-  };
-
-  const openVersionsDialog = async (doc) => {
-    setVersionsDialog({
-      open: true,
-      loading: true,
-      error: '',
-      doc,
-      items: [],
-      currentDocId: '',
-      logicalDocId: '',
-    });
-    try {
-      const payload = await auditApi.listDocumentVersions(doc.doc_id);
-      setVersionsDialog({
-        open: true,
-        loading: false,
-        error: '',
-        doc,
-        items: Array.isArray(payload?.versions) ? payload.versions : [],
-        currentDocId: payload?.currentDocId || '',
-        logicalDocId: payload?.logicalDocId || '',
-      });
-    } catch (err) {
-      setVersionsDialog((prev) => ({
-        ...prev,
-        loading: false,
-        error: err?.message || '加载版本历史失败',
-      }));
-    }
-  };
-
-  const knowledgeBases = useMemo(() => {
-    const kbSet = new Set();
-    documents.forEach((item) => item?.kb_id && kbSet.add(item.kb_id));
-    deletions.forEach((item) => item?.kb_id && kbSet.add(item.kb_id));
-    downloads.forEach((item) => item?.kb_id && kbSet.add(item.kb_id));
-    return Array.from(kbSet);
-  }, [documents, deletions, downloads]);
-
-  const filteredDocuments = useMemo(() => documents.filter((doc) => {
-    if (filterKb && doc.kb_id !== filterKb) return false;
-    if (filterStatus && doc.status !== filterStatus) return false;
-    return true;
-  }), [documents, filterKb, filterStatus]);
-
-  const filteredDeletions = useMemo(() => deletions.filter((item) => {
-    if (filterKb && item.kb_id !== filterKb) return false;
-    return true;
-  }), [deletions, filterKb]);
-
-  const filteredDownloads = useMemo(() => downloads.filter((item) => {
-    if (filterKb && item.kb_id !== filterKb) return false;
-    return true;
-  }), [downloads, filterKb]);
-
   const renderKbFilter = (withStatus = false) => (
-    <div style={{ display: 'flex', gap: '16px', alignItems: isMobile ? 'stretch' : 'center', flexDirection: isMobile ? 'column' : 'row', flexWrap: 'wrap' }}>
+    <div
+      style={{
+        display: 'flex',
+        gap: '16px',
+        alignItems: isMobile ? 'stretch' : 'center',
+        flexDirection: isMobile ? 'column' : 'row',
+        flexWrap: 'wrap',
+      }}
+    >
       <div>
-        <label style={{ marginRight: '8px', fontSize: '0.9rem', color: '#6b7280' }}>{'\u77e5\u8bc6\u5e93'}</label>
+        <label style={{ marginRight: '8px', fontSize: '0.9rem', color: '#6b7280' }}>知识库</label>
         <select
           value={filterKb}
-          onChange={(e) => setFilterKb(e.target.value)}
+          onChange={(event) => setFilterKb(event.target.value)}
           data-testid={withStatus ? 'audit-filter-kb' : undefined}
           style={{
             padding: '8px 12px',
@@ -278,19 +188,21 @@ const DocumentAudit = ({ embedded = false }) => {
             width: isMobile ? '100%' : 'auto',
           }}
         >
-          <option value="">{'\u5168\u90e8\u77e5\u8bc6\u5e93'}</option>
+          <option value="">全部知识库</option>
           {knowledgeBases.map((kb) => (
-            <option key={kb} value={kb}>{kb}</option>
+            <option key={kb} value={kb}>
+              {kb}
+            </option>
           ))}
         </select>
       </div>
 
-      {withStatus && (
+      {withStatus ? (
         <div>
-          <label style={{ marginRight: '8px', fontSize: '0.9rem', color: '#6b7280' }}>{'\u72b6\u6001'}</label>
+          <label style={{ marginRight: '8px', fontSize: '0.9rem', color: '#6b7280' }}>状态</label>
           <select
             value={filterStatus}
-            onChange={(e) => setFilterStatus(e.target.value)}
+            onChange={(event) => setFilterStatus(event.target.value)}
             data-testid="audit-filter-status"
             style={{
               padding: '8px 12px',
@@ -302,20 +214,18 @@ const DocumentAudit = ({ embedded = false }) => {
               width: isMobile ? '100%' : 'auto',
             }}
           >
-            <option value="">{'\u5168\u90e8\u72b6\u6001'}</option>
-            <option value="pending">{'\u5f85\u5ba1\u6838'}</option>
-            <option value="approved">{'\u5df2\u901a\u8fc7'}</option>
-            <option value="rejected">{'\u5df2\u9a73\u56de'}</option>
+            <option value="">全部状态</option>
+            <option value="pending">待审核</option>
+            <option value="approved">已通过</option>
+            <option value="rejected">已驳回</option>
           </select>
         </div>
-      )}
+      ) : null}
 
-      {((withStatus && (filterKb || filterStatus)) || (!withStatus && filterKb)) && (
+      {((withStatus && (filterKb || filterStatus)) || (!withStatus && filterKb)) ? (
         <button
-          onClick={() => {
-            setFilterKb('');
-            setFilterStatus('');
-          }}
+          type="button"
+          onClick={resetFilters}
           data-testid={withStatus ? 'audit-filter-reset' : undefined}
           style={{
             padding: '8px 16px',
@@ -328,27 +238,47 @@ const DocumentAudit = ({ embedded = false }) => {
             width: isMobile ? '100%' : 'auto',
           }}
         >
-          {'\u91cd\u7f6e'}
+          重置
         </button>
-      )}
+      ) : null}
 
-      <span style={{ marginLeft: isMobile ? 0 : 'auto', fontSize: '0.9rem', color: '#6b7280', alignSelf: isMobile ? 'flex-start' : 'auto' }}>
-        {withStatus ? `\u5171 ${filteredDocuments.length} \u6761\u8bb0\u5f55` : activeTab === 'deletions' ? `\u5171 ${filteredDeletions.length} \u6761\u8bb0\u5f55` : `\u5171 ${filteredDownloads.length} \u6761\u8bb0\u5f55`}
+      <span
+        style={{
+          marginLeft: isMobile ? 0 : 'auto',
+          fontSize: '0.9rem',
+          color: '#6b7280',
+          alignSelf: isMobile ? 'flex-start' : 'auto',
+        }}
+      >
+        {withStatus
+          ? `共 ${filteredDocuments.length} 条记录`
+          : activeTab === 'deletions'
+            ? `共 ${filteredDeletions.length} 条记录`
+            : `共 ${filteredDownloads.length} 条记录`}
       </span>
     </div>
   );
 
   if (loading) {
-    return <div style={{ padding: '48px', textAlign: 'center', color: '#6b7280' }}>{'\u52a0\u8f7d\u4e2d...'}</div>;
+    return <div style={{ padding: '48px', textAlign: 'center', color: '#6b7280' }}>加载中...</div>;
   }
 
   return (
     <div data-testid="audit-page">
       <div style={{ marginBottom: '24px' }}>
-        {!embedded && <h2 style={{ margin: '0 0 16px 0' }}>{'\u6587\u6863\u8bb0\u5f55'}</h2>}
+        {!embedded ? <h2 style={{ margin: '0 0 16px 0' }}>文档记录</h2> : null}
 
-        <div style={{ marginBottom: '16px', borderBottom: '1px solid #e5e7eb', display: 'flex', flexWrap: 'wrap', gap: isMobile ? '8px' : 0 }}>
+        <div
+          style={{
+            marginBottom: '16px',
+            borderBottom: '1px solid #e5e7eb',
+            display: 'flex',
+            flexWrap: 'wrap',
+            gap: isMobile ? '8px' : 0,
+          }}
+        >
           <button
+            type="button"
             onClick={() => setActiveTab('documents')}
             data-testid="audit-tab-documents"
             style={{
@@ -356,16 +286,18 @@ const DocumentAudit = ({ embedded = false }) => {
               backgroundColor: activeTab === 'documents' ? '#3b82f6' : 'transparent',
               color: activeTab === 'documents' ? 'white' : '#6b7280',
               border: 'none',
-              borderBottom: activeTab === 'documents' ? '2px solid #3b82f6' : '2px solid transparent',
+              borderBottom:
+                activeTab === 'documents' ? '2px solid #3b82f6' : '2px solid transparent',
               cursor: 'pointer',
               fontSize: '0.95rem',
               fontWeight: activeTab === 'documents' ? '600' : '400',
-               marginRight: isMobile ? 0 : '8px',
+              marginRight: isMobile ? 0 : '8px',
             }}
           >
-            {`\u6587\u6863\u5217\u8868 (${documents.length})`}
+            {`文档列表 (${documents.length})`}
           </button>
           <button
+            type="button"
             onClick={() => setActiveTab('deletions')}
             data-testid="audit-tab-deletions"
             style={{
@@ -373,16 +305,18 @@ const DocumentAudit = ({ embedded = false }) => {
               backgroundColor: activeTab === 'deletions' ? '#ef4444' : 'transparent',
               color: activeTab === 'deletions' ? 'white' : '#6b7280',
               border: 'none',
-              borderBottom: activeTab === 'deletions' ? '2px solid #ef4444' : '2px solid transparent',
+              borderBottom:
+                activeTab === 'deletions' ? '2px solid #ef4444' : '2px solid transparent',
               cursor: 'pointer',
               fontSize: '0.95rem',
               fontWeight: activeTab === 'deletions' ? '600' : '400',
-               marginRight: isMobile ? 0 : '8px',
+              marginRight: isMobile ? 0 : '8px',
             }}
           >
-            {`\u5220\u9664\u8bb0\u5f55 (${deletions.length})`}
+            {`删除记录 (${deletions.length})`}
           </button>
           <button
+            type="button"
             onClick={() => setActiveTab('downloads')}
             data-testid="audit-tab-downloads"
             style={{
@@ -390,24 +324,23 @@ const DocumentAudit = ({ embedded = false }) => {
               backgroundColor: activeTab === 'downloads' ? '#10b981' : 'transparent',
               color: activeTab === 'downloads' ? 'white' : '#6b7280',
               border: 'none',
-              borderBottom: activeTab === 'downloads' ? '2px solid #10b981' : '2px solid transparent',
+              borderBottom:
+                activeTab === 'downloads' ? '2px solid #10b981' : '2px solid transparent',
               cursor: 'pointer',
               fontSize: '0.95rem',
               fontWeight: activeTab === 'downloads' ? '600' : '400',
             }}
           >
-            {`\u4e0b\u8f7d\u8bb0\u5f55 (${downloads.length})`}
+            {`下载记录 (${downloads.length})`}
           </button>
         </div>
 
         {activeTab === 'documents' ? renderKbFilter(true) : renderKbFilter(false)}
       </div>
 
-      {error && (
-        <div style={{ marginBottom: '16px', color: '#dc2626', fontSize: '0.95rem' }}>
-          {error}
-        </div>
-      )}
+      {error ? (
+        <div style={{ marginBottom: '16px', color: '#dc2626', fontSize: '0.95rem' }}>{error}</div>
+      ) : null}
 
       {activeTab === 'documents' ? (
         <>
@@ -415,14 +348,14 @@ const DocumentAudit = ({ embedded = false }) => {
             <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '1120px' }}>
               <thead style={{ backgroundColor: '#f9fafb' }}>
                 <tr>
-                  <th style={{ ...baseHeaderCell, color: '#374151' }}>{'\u77e5\u8bc6\u5e93'}</th>
-                  <th style={{ ...baseHeaderCell, color: '#374151' }}>{'\u6587\u4ef6\u540d'}</th>
-                  <th style={{ ...baseHeaderCell, color: '#374151' }}>{'\u4e0a\u4f20\u8005'}</th>
-                  <th style={{ ...baseHeaderCell, color: '#374151' }}>{'\u5ba1\u6838\u8005'}</th>
-                  <th style={{ ...baseHeaderCell, color: '#374151' }}>{'\u72b6\u6001'}</th>
-                  <th style={{ ...baseHeaderCell, color: '#374151' }}>{'\u4e0a\u4f20\u65f6\u95f4'}</th>
-                  <th style={{ ...baseHeaderCell, color: '#374151' }}>{'\u5ba1\u6838\u65f6\u95f4'}</th>
-                  <th style={{ ...baseHeaderCell, color: '#374151' }}>{'\u7248\u672c\u5386\u53f2'}</th>
+                  <th style={{ ...baseHeaderCell, color: '#374151' }}>知识库</th>
+                  <th style={{ ...baseHeaderCell, color: '#374151' }}>文件名</th>
+                  <th style={{ ...baseHeaderCell, color: '#374151' }}>上传者</th>
+                  <th style={{ ...baseHeaderCell, color: '#374151' }}>审核者</th>
+                  <th style={{ ...baseHeaderCell, color: '#374151' }}>状态</th>
+                  <th style={{ ...baseHeaderCell, color: '#374151' }}>上传时间</th>
+                  <th style={{ ...baseHeaderCell, color: '#374151' }}>审核时间</th>
+                  <th style={{ ...baseHeaderCell, color: '#374151' }}>版本历史</th>
                 </tr>
               </thead>
               <tbody>
@@ -447,25 +380,31 @@ const DocumentAudit = ({ embedded = false }) => {
                       {resolveDisplayName(doc.uploaded_by, doc.uploaded_by_name)}
                     </td>
                     <td style={{ padding: '12px 16px', fontSize: '0.9rem', color: '#6b7280' }}>
-                      {doc.reviewed_by ? resolveDisplayName(doc.reviewed_by, doc.reviewed_by_name) : '\u5176\u4ed6'}
+                      {doc.reviewed_by
+                        ? resolveDisplayName(doc.reviewed_by, doc.reviewed_by_name)
+                        : '其他'}
                     </td>
                     <td style={{ padding: '12px 16px' }}>
-                      <span style={{
-                        display: 'inline-block',
-                        padding: '4px 8px',
-                        borderRadius: '4px',
-                        color: 'white',
-                        fontSize: '0.85rem',
-                        ...(STATUS_STYLES[doc.status] || { backgroundColor: '#6b7280' }),
-                      }}>
+                      <span
+                        style={{
+                          display: 'inline-block',
+                          padding: '4px 8px',
+                          borderRadius: '4px',
+                          color: 'white',
+                          fontSize: '0.85rem',
+                          ...(STATUS_STYLES[doc.status] || { backgroundColor: '#6b7280' }),
+                        }}
+                      >
                         {STATUS_LABELS[doc.status] || doc.status}
                       </span>
                     </td>
-                    <td style={{ padding: '12px 16px', fontSize: '0.9rem', color: '#6b7280' }}>{formatTime(doc.uploaded_at_ms)}</td>
-                    <td style={{ padding: '12px 16px', fontSize: '0.9rem', color: '#6b7280' }}>{doc.reviewed_at_ms ? formatTime(doc.reviewed_at_ms) : '-'}</td>
-                    <td style={{ display: 'none' }}>
-                      {renderSignatureManifestation(doc)}
+                    <td style={{ padding: '12px 16px', fontSize: '0.9rem', color: '#6b7280' }}>
+                      {formatTime(doc.uploaded_at_ms)}
                     </td>
+                    <td style={{ padding: '12px 16px', fontSize: '0.9rem', color: '#6b7280' }}>
+                      {doc.reviewed_at_ms ? formatTime(doc.reviewed_at_ms) : '-'}
+                    </td>
+                    <td style={{ display: 'none' }}>{renderSignatureManifestation(doc)}</td>
                     <td style={{ padding: '12px 16px', fontSize: '0.9rem' }}>
                       <button
                         type="button"
@@ -489,11 +428,11 @@ const DocumentAudit = ({ embedded = false }) => {
             </table>
           </div>
 
-          {filteredDocuments.length === 0 && (
+          {filteredDocuments.length === 0 ? (
             <div style={{ padding: '48px', textAlign: 'center', color: '#6b7280' }}>
-              {filterKb || filterStatus ? '\u6ca1\u6709\u7b26\u5408\u6761\u4ef6\u7684\u8bb0\u5f55' : '\u6682\u65e0\u5ba1\u6838\u8bb0\u5f55'}
+              {filterKb || filterStatus ? '没有符合条件的记录' : '暂无审核记录'}
             </div>
-          )}
+          ) : null}
         </>
       ) : activeTab === 'deletions' ? (
         <>
@@ -501,12 +440,12 @@ const DocumentAudit = ({ embedded = false }) => {
             <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '1000px' }}>
               <thead style={{ backgroundColor: '#fee2e2' }}>
                 <tr>
-                  <th style={{ ...baseHeaderCell, color: '#991b1b' }}>{'\u77e5\u8bc6\u5e93'}</th>
-                  <th style={{ ...baseHeaderCell, color: '#991b1b' }}>{'\u6587\u4ef6\u540d'}</th>
-                  <th style={{ ...baseHeaderCell, color: '#991b1b' }}>{'\u539f\u4e0a\u4f20\u8005'}</th>
-                  <th style={{ ...baseHeaderCell, color: '#991b1b' }}>{'\u539f\u5ba1\u6838\u8005'}</th>
-                  <th style={{ ...baseHeaderCell, color: '#991b1b' }}>{'\u5220\u9664\u8005'}</th>
-                  <th style={{ ...baseHeaderCell, color: '#991b1b' }}>{'\u5220\u9664\u65f6\u95f4'}</th>
+                  <th style={{ ...baseHeaderCell, color: '#991b1b' }}>知识库</th>
+                  <th style={{ ...baseHeaderCell, color: '#991b1b' }}>文件名</th>
+                  <th style={{ ...baseHeaderCell, color: '#991b1b' }}>原上传者</th>
+                  <th style={{ ...baseHeaderCell, color: '#991b1b' }}>原审核者</th>
+                  <th style={{ ...baseHeaderCell, color: '#991b1b' }}>删除者</th>
+                  <th style={{ ...baseHeaderCell, color: '#991b1b' }}>删除时间</th>
                 </tr>
               </thead>
               <tbody>
@@ -525,23 +464,34 @@ const DocumentAudit = ({ embedded = false }) => {
                       {resolveDisplayName(del.original_uploader, del.original_uploader_name)}
                     </td>
                     <td style={{ padding: '12px 16px', fontSize: '0.9rem', color: '#6b7280' }}>
-                      {del.original_reviewer ? resolveDisplayName(del.original_reviewer, del.original_reviewer_name) : '\u5176\u4ed6'}
+                      {del.original_reviewer
+                        ? resolveDisplayName(del.original_reviewer, del.original_reviewer_name)
+                        : '其他'}
                     </td>
-                    <td style={{ padding: '12px 16px', fontSize: '0.9rem', color: '#dc2626', fontWeight: '500' }}>
+                    <td
+                      style={{
+                        padding: '12px 16px',
+                        fontSize: '0.9rem',
+                        color: '#dc2626',
+                        fontWeight: '500',
+                      }}
+                    >
                       {resolveDisplayName(del.deleted_by, del.deleted_by_name)}
                     </td>
-                    <td style={{ padding: '12px 16px', fontSize: '0.9rem', color: '#6b7280' }}>{formatTime(del.deleted_at_ms)}</td>
+                    <td style={{ padding: '12px 16px', fontSize: '0.9rem', color: '#6b7280' }}>
+                      {formatTime(del.deleted_at_ms)}
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
 
-          {filteredDeletions.length === 0 && (
+          {filteredDeletions.length === 0 ? (
             <div style={{ padding: '48px', textAlign: 'center', color: '#6b7280' }}>
-              {filterKb ? '\u6ca1\u6709\u7b26\u5408\u6761\u4ef6\u7684\u5220\u9664\u8bb0\u5f55' : '\u6682\u65e0\u5220\u9664\u8bb0\u5f55'}
+              {filterKb ? '没有符合条件的删除记录' : '暂无删除记录'}
             </div>
-          )}
+          ) : null}
         </>
       ) : (
         <>
@@ -549,11 +499,11 @@ const DocumentAudit = ({ embedded = false }) => {
             <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '1000px' }}>
               <thead style={{ backgroundColor: '#d1fae5' }}>
                 <tr>
-                  <th style={{ ...baseHeaderCell, color: '#065f46' }}>{'\u77e5\u8bc6\u5e93'}</th>
-                  <th style={{ ...baseHeaderCell, color: '#065f46' }}>{'\u6587\u4ef6\u540d'}</th>
-                  <th style={{ ...baseHeaderCell, color: '#065f46' }}>{'\u4e0b\u8f7d\u8005'}</th>
-                  <th style={{ ...baseHeaderCell, color: '#065f46' }}>{'\u4e0b\u8f7d\u65f6\u95f4'}</th>
-                  <th style={{ ...baseHeaderCell, color: '#065f46' }}>{'\u7c7b\u578b'}</th>
+                  <th style={{ ...baseHeaderCell, color: '#065f46' }}>知识库</th>
+                  <th style={{ ...baseHeaderCell, color: '#065f46' }}>文件名</th>
+                  <th style={{ ...baseHeaderCell, color: '#065f46' }}>下载者</th>
+                  <th style={{ ...baseHeaderCell, color: '#065f46' }}>下载时间</th>
+                  <th style={{ ...baseHeaderCell, color: '#065f46' }}>类型</th>
                 </tr>
               </thead>
               <tbody>
@@ -568,20 +518,31 @@ const DocumentAudit = ({ embedded = false }) => {
                   >
                     <td style={{ padding: '12px 16px', fontSize: '0.9rem' }}>{down.kb_id}</td>
                     <td style={{ padding: '12px 16px', fontSize: '0.9rem' }}>{down.filename}</td>
-                    <td style={{ padding: '12px 16px', fontSize: '0.9rem', color: '#059669', fontWeight: '500' }}>
+                    <td
+                      style={{
+                        padding: '12px 16px',
+                        fontSize: '0.9rem',
+                        color: '#059669',
+                        fontWeight: '500',
+                      }}
+                    >
                       {resolveDisplayName(down.downloaded_by, down.downloaded_by_name)}
                     </td>
-                    <td style={{ padding: '12px 16px', fontSize: '0.9rem', color: '#6b7280' }}>{formatTime(down.downloaded_at_ms)}</td>
+                    <td style={{ padding: '12px 16px', fontSize: '0.9rem', color: '#6b7280' }}>
+                      {formatTime(down.downloaded_at_ms)}
+                    </td>
                     <td style={{ padding: '12px 16px' }}>
-                      <span style={{
-                        display: 'inline-block',
-                        padding: '4px 8px',
-                        borderRadius: '4px',
-                        color: 'white',
-                        fontSize: '0.85rem',
-                        backgroundColor: down.is_batch ? '#059669' : '#10b981',
-                      }}>
-                        {down.is_batch ? '\u6279\u91cf\u4e0b\u8f7d' : '\u5355\u4e2a\u4e0b\u8f7d'}
+                      <span
+                        style={{
+                          display: 'inline-block',
+                          padding: '4px 8px',
+                          borderRadius: '4px',
+                          color: 'white',
+                          fontSize: '0.85rem',
+                          backgroundColor: down.is_batch ? '#059669' : '#10b981',
+                        }}
+                      >
+                        {down.is_batch ? '批量下载' : '单个下载'}
                       </span>
                     </td>
                   </tr>
@@ -590,11 +551,11 @@ const DocumentAudit = ({ embedded = false }) => {
             </table>
           </div>
 
-          {filteredDownloads.length === 0 && (
+          {filteredDownloads.length === 0 ? (
             <div style={{ padding: '48px', textAlign: 'center', color: '#6b7280' }}>
-              {filterKb ? '\u6ca1\u6709\u7b26\u5408\u6761\u4ef6\u7684\u4e0b\u8f7d\u8bb0\u5f55' : '\u6682\u65e0\u4e0b\u8f7d\u8bb0\u5f55'}
+              {filterKb ? '没有符合条件的下载记录' : '暂无下载记录'}
             </div>
-          )}
+          ) : null}
         </>
       )}
 
@@ -625,7 +586,15 @@ const DocumentAudit = ({ embedded = false }) => {
             }}
             onClick={(event) => event.stopPropagation()}
           >
-            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start', marginBottom: 12 }}>
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                gap: 12,
+                alignItems: 'flex-start',
+                marginBottom: 12,
+              }}
+            >
               <div>
                 <div style={{ fontWeight: 700, fontSize: '1.05rem' }}>
                   版本历史: {versionsDialog.doc?.filename || '-'}
@@ -637,16 +606,30 @@ const DocumentAudit = ({ embedded = false }) => {
               <button
                 type="button"
                 onClick={closeVersionsDialog}
-                style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontSize: '1.2rem' }}
+                style={{
+                  border: 'none',
+                  background: 'transparent',
+                  cursor: 'pointer',
+                  fontSize: '0.95rem',
+                  color: '#374151',
+                }}
               >
-                ×
+                关闭
               </button>
             </div>
 
             {versionsDialog.loading ? (
               <div style={{ padding: '24px 8px', color: '#6b7280' }}>加载版本历史中...</div>
             ) : versionsDialog.error ? (
-              <div data-testid="audit-versions-error" style={{ padding: '12px 14px', background: '#fee2e2', color: '#991b1b', borderRadius: 8 }}>
+              <div
+                data-testid="audit-versions-error"
+                style={{
+                  padding: '12px 14px',
+                  background: '#fee2e2',
+                  color: '#991b1b',
+                  borderRadius: 8,
+                }}
+              >
                 {versionsDialog.error}
               </div>
             ) : versionsDialog.items.length === 0 ? (
@@ -656,21 +639,24 @@ const DocumentAudit = ({ embedded = false }) => {
                 <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '1260px' }}>
                   <thead style={{ backgroundColor: '#f9fafb' }}>
                     <tr>
-                      <th style={{ ...baseHeaderCell, color: '#374151' }}>{'\u7248\u672c'}</th>
-                      <th style={{ ...baseHeaderCell, color: '#374151' }}>{'\u6587\u4ef6\u540d'}</th>
-                      <th style={{ ...baseHeaderCell, color: '#374151' }}>{'\u751f\u6548\u72b6\u6001'}</th>
-                      <th style={{ ...baseHeaderCell, color: '#374151' }}>{'\u4e0a\u4f20\u8005'}</th>
-                      <th style={{ ...baseHeaderCell, color: '#374151' }}>{'\u4e0a\u4f20\u65f6\u95f4'}</th>
-                      <th style={{ ...baseHeaderCell, color: '#374151' }}>{'\u5f52\u6863\u65f6\u95f4'}</th>
-                      <th style={{ ...baseHeaderCell, color: '#374151' }}>{'\u7535\u5b50\u7b7e\u540d'}</th>
-                      <th style={{ ...baseHeaderCell, color: '#374151' }}>{'SHA256'}</th>
+                      <th style={{ ...baseHeaderCell, color: '#374151' }}>版本</th>
+                      <th style={{ ...baseHeaderCell, color: '#374151' }}>文件名</th>
+                      <th style={{ ...baseHeaderCell, color: '#374151' }}>生效状态</th>
+                      <th style={{ ...baseHeaderCell, color: '#374151' }}>上传者</th>
+                      <th style={{ ...baseHeaderCell, color: '#374151' }}>上传时间</th>
+                      <th style={{ ...baseHeaderCell, color: '#374151' }}>归档时间</th>
+                      <th style={{ ...baseHeaderCell, color: '#374151' }}>电子签名</th>
+                      <th style={{ ...baseHeaderCell, color: '#374151' }}>SHA256</th>
                     </tr>
                   </thead>
                   <tbody>
                     {versionsDialog.items.map((item, index) => {
                       const effectiveLabel = item.is_current
                         ? '当前生效'
-                        : (EFFECTIVE_STATUS_LABELS[item.effective_status] || item.effective_status || '历史版本');
+                        : EFFECTIVE_STATUS_LABELS[item.effective_status] ||
+                          item.effective_status ||
+                          '历史版本';
+
                       return (
                         <tr
                           key={item.doc_id}
@@ -680,16 +666,26 @@ const DocumentAudit = ({ embedded = false }) => {
                             backgroundColor: index % 2 === 0 ? 'white' : '#f9fafb',
                           }}
                         >
-                          <td style={{ padding: '12px 16px', fontWeight: 600 }}>v{item.version_no || 1}</td>
-                          <td style={{ padding: '12px 16px', fontSize: '0.9rem' }}>{item.filename}</td>
+                          <td style={{ padding: '12px 16px', fontWeight: 600 }}>
+                            v{item.version_no || 1}
+                          </td>
+                          <td style={{ padding: '12px 16px', fontSize: '0.9rem' }}>
+                            {item.filename}
+                          </td>
                           <td style={{ padding: '12px 16px' }}>
                             <span
                               style={{
                                 display: 'inline-block',
                                 padding: '4px 8px',
                                 borderRadius: '999px',
-                                backgroundColor: item.doc_id === versionsDialog.currentDocId ? '#dcfce7' : '#f3f4f6',
-                                color: item.doc_id === versionsDialog.currentDocId ? '#166534' : '#374151',
+                                backgroundColor:
+                                  item.doc_id === versionsDialog.currentDocId
+                                    ? '#dcfce7'
+                                    : '#f3f4f6',
+                                color:
+                                  item.doc_id === versionsDialog.currentDocId
+                                    ? '#166534'
+                                    : '#374151',
                                 fontSize: '0.85rem',
                               }}
                             >
@@ -699,12 +695,24 @@ const DocumentAudit = ({ embedded = false }) => {
                           <td style={{ padding: '12px 16px', color: '#6b7280' }}>
                             {resolveDisplayName(item.uploaded_by, item.uploaded_by_name)}
                           </td>
-                          <td style={{ padding: '12px 16px', color: '#6b7280' }}>{formatTime(item.uploaded_at_ms)}</td>
-                          <td style={{ padding: '12px 16px', color: '#6b7280' }}>{formatTime(item.archived_at_ms)}</td>
+                          <td style={{ padding: '12px 16px', color: '#6b7280' }}>
+                            {formatTime(item.uploaded_at_ms)}
+                          </td>
+                          <td style={{ padding: '12px 16px', color: '#6b7280' }}>
+                            {formatTime(item.archived_at_ms)}
+                          </td>
                           <td style={{ padding: '12px 16px', minWidth: '260px' }}>
                             {renderSignatureManifestation(item)}
                           </td>
-                          <td style={{ padding: '12px 16px', fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace", fontSize: '0.82rem', wordBreak: 'break-all' }}>
+                          <td
+                            style={{
+                              padding: '12px 16px',
+                              fontFamily:
+                                "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace",
+                              fontSize: '0.82rem',
+                              wordBreak: 'break-all',
+                            }}
+                          >
                             {item.file_sha256 || '-'}
                           </td>
                         </tr>
