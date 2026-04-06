@@ -1,14 +1,10 @@
 #!/usr/bin/env python3
 """
-增强型权限组脚本（兼容历史脚本名）
+Seed resolver-first permission group relations for an existing auth DB.
 
-目标：
-- 统一到当前项目的“权限组（resolver）为准”的模型；
-- 使用 database.schema_migrations.ensure_schema() 作为唯一建表/升级入口；
-- 不再写入/依赖 users.group_id（已废弃），而是写入 user_permission_groups 关系表。
-
-执行方式：
-    python -m backend.scripts.migrate_to_enhanced_permission_groups --db-path data/auth.db
+This script keeps the historical command name, but the schema bootstrap is
+owned by `backend.database.schema.ensure.ensure_schema()` via
+`backend.runtime.runner.ensure_database()`.
 """
 
 from __future__ import annotations
@@ -36,7 +32,7 @@ def _table_exists(conn: sqlite3.Connection, table_name: str) -> bool:
 
 def migrate_database(db_path: Path, *, dry_run: bool = False) -> bool:
     if not db_path.exists():
-        print(f"[ERROR] 数据库文件不存在: {db_path}")
+        print(f"[ERROR] Database not found: {db_path}")
         return False
 
     ensure_database(db_path=db_path)
@@ -44,10 +40,10 @@ def migrate_database(db_path: Path, *, dry_run: bool = False) -> bool:
     conn = connect_sqlite(db_path)
     try:
         if not _table_exists(conn, "users"):
-            print("[SKIP] users 表不存在")
+            print("[SKIP] users table not found")
             return True
         if not _table_exists(conn, "permission_groups") or not _table_exists(conn, "user_permission_groups"):
-            print("[ERROR] permission_groups/user_permission_groups 表不存在（schema ensure 失败）")
+            print("[ERROR] permission_groups/user_permission_groups table not found after schema ensure")
             return False
 
         role_to_group_id: dict[str, int] = {}
@@ -83,12 +79,12 @@ def migrate_database(db_path: Path, *, dry_run: bool = False) -> bool:
         if not dry_run:
             conn.commit()
 
-        print(f"[OK] 完成: 处理 {len(users)} 个用户，写入关系（尝试）{changed} 条 (dry_run={dry_run})")
+        print(f"[OK] Processed {len(users)} users; attempted relation writes={changed} (dry_run={dry_run})")
         return True
-    except Exception as e:
+    except Exception as exc:
         if not dry_run:
             conn.rollback()
-        print(f"[ERROR] 迁移失败: {e}")
+        print(f"[ERROR] Migration failed: {exc}")
         import traceback
 
         traceback.print_exc()
@@ -98,7 +94,7 @@ def migrate_database(db_path: Path, *, dry_run: bool = False) -> bool:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Migrate/seed enhanced permission groups (resolver-first)")
+    parser = argparse.ArgumentParser(description="Seed enhanced permission groups (resolver-first)")
     parser.add_argument(
         "--db-path",
         default=None,
