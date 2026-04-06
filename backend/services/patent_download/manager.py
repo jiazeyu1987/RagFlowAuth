@@ -65,8 +65,8 @@ class PatentDownloadManager(BaseDownloadManager):
 
     def _download_root(self) -> Path:
         return self._execution_manager.download_root(
-            setting_value=getattr(settings, "PATENT_DOWNLOAD_DIR", "data/patent_downloads"),
-            fallback_dir="data/patent_downloads",
+            setting_value=settings.PATENT_DOWNLOAD_DIR,
+            setting_name="PATENT_DOWNLOAD_DIR",
         )
 
     @staticmethod

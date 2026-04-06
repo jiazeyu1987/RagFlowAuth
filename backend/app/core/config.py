@@ -35,6 +35,7 @@ class Settings(BaseSettings):
 
     # File Upload
     UPLOAD_DIR: str = "data/uploads"
+    PAPER_DOWNLOAD_DIR: str = "data/paper_downloads"
     PATENT_DOWNLOAD_DIR: str = "data/patent_downloads"
     MAX_FILE_SIZE: int = 16 * 1024 * 1024  # deprecated: no longer enforced
     ALLOWED_EXTENSIONS: set = {

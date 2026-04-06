@@ -78,13 +78,19 @@ class TestDownloadExecutionManagerUnit(unittest.TestCase):
         temp_dir = tempfile.mkdtemp(prefix="download-exec-")
         self.addCleanup(lambda: shutil.rmtree(temp_dir, ignore_errors=True))
 
-        root = mgr.download_root(setting_value=temp_dir, fallback_dir="unused")
+        root = mgr.download_root(setting_value=temp_dir, setting_name="UNIT_DOWNLOAD_DIR")
         session_dir = mgr.session_dir(root=root, actor_id="user-1", session_id="sess-1")
 
         self.assertEqual(root, Path(temp_dir))
         self.assertTrue(root.exists())
         self.assertTrue(session_dir.exists())
         self.assertEqual(session_dir, Path(temp_dir) / "user-1" / "sess-1")
+
+    def test_download_root_rejects_missing_setting_value(self):
+        mgr = DownloadExecutionManager(namespace="unit_exec_missing_dir")
+
+        with self.assertRaisesRegex(ValueError, "UNIT_DOWNLOAD_DIR_required"):
+            mgr.download_root(setting_value="   ", setting_name="UNIT_DOWNLOAD_DIR")
 
     def test_start_job_prevents_duplicate_active_session(self):
         mgr = DownloadExecutionManager(namespace="unit_exec_duplicate")

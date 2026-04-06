@@ -80,8 +80,8 @@ class PaperDownloadManager(BaseDownloadManager):
 
     def _download_root(self) -> Path:
         return self._execution_manager.download_root(
-            setting_value=getattr(settings, "PAPER_DOWNLOAD_DIR", "data/paper_downloads"),
-            fallback_dir="data/paper_downloads",
+            setting_value=settings.PAPER_DOWNLOAD_DIR,
+            setting_name="PAPER_DOWNLOAD_DIR",
         )
 
     @staticmethod

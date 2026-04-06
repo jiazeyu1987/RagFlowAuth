@@ -87,8 +87,11 @@ class DownloadExecutionManager:
             for key in enabled_sources
         }
 
-    def download_root(self, *, setting_value: str | None, fallback_dir: str) -> Path:
-        root = resolve_repo_path(setting_value or fallback_dir)
+    def download_root(self, *, setting_value: str | None, setting_name: str) -> Path:
+        configured_path = str(setting_value or "").strip()
+        if not configured_path:
+            raise ValueError(f"{setting_name}_required")
+        root = resolve_repo_path(configured_path)
         root.mkdir(parents=True, exist_ok=True)
         return root
 
