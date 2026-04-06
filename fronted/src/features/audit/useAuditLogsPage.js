@@ -52,10 +52,7 @@ export default function useAuditLogsPage() {
     setError('');
     try {
       const data = await auditApi.listEvents(buildEventParams(nextFilters));
-      setResult({
-        total: Number(data?.total || 0),
-        items: Array.isArray(data?.items) ? data.items : [],
-      });
+      setResult(data);
     } catch (requestError) {
       setError(requestError?.message || String(requestError));
       setResult({ total: 0, items: [] });
@@ -76,10 +73,7 @@ export default function useAuditLogsPage() {
 
       setCompanies(Array.isArray(companyItems) ? companyItems : []);
       setDepartments(Array.isArray(departmentItems) ? departmentItems : []);
-      setResult({
-        total: Number(logs?.total || 0),
-        items: Array.isArray(logs?.items) ? logs.items : [],
-      });
+      setResult(logs);
     } catch (requestError) {
       setCompanies([]);
       setDepartments([]);

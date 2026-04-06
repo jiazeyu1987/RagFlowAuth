@@ -112,9 +112,9 @@ export default function useDocumentAuditPage() {
         loading: false,
         error: '',
         doc,
-        items: Array.isArray(payload?.versions) ? payload.versions : [],
-        currentDocId: payload?.currentDocId || '',
-        logicalDocId: payload?.logicalDocId || '',
+        items: payload.versions,
+        currentDocId: payload.currentDocId,
+        logicalDocId: payload.logicalDocId,
       });
     } catch (requestError) {
       setVersionsDialog((previous) => ({
