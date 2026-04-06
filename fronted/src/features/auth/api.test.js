@@ -8,7 +8,6 @@ jest.mock('../../config/backend', () => ({
 jest.mock('../../shared/http/httpClient', () => ({
   httpClient: {
     refreshAccessToken: jest.fn(),
-    request: jest.fn(),
     requestJson: jest.fn(),
   },
 }));
@@ -51,18 +50,15 @@ describe('authApi', () => {
 
   it('delegates session operations to the shared http client', async () => {
     httpClient.refreshAccessToken.mockResolvedValue({ access_token: 'access-2' });
-    httpClient.request.mockResolvedValue({ ok: true });
     httpClient.requestJson
       .mockResolvedValueOnce({ ok: true })
       .mockResolvedValueOnce({ user_id: 'u-2' });
 
     await expect(authApi.refreshAccessToken()).resolves.toEqual({ access_token: 'access-2' });
-    await expect(authApi.fetchWithAuth('/api/demo', { method: 'GET' })).resolves.toEqual({ ok: true });
     await expect(authApi.logout()).resolves.toEqual({ ok: true });
     await expect(authApi.getCurrentUser({ skipRefresh: true })).resolves.toEqual({ user_id: 'u-2' });
 
     expect(httpClient.refreshAccessToken).toHaveBeenCalledTimes(1);
-    expect(httpClient.request).toHaveBeenCalledWith('/api/demo', { method: 'GET' });
     expect(httpClient.requestJson).toHaveBeenNthCalledWith(
       1,
       'http://auth.local/api/auth/logout',

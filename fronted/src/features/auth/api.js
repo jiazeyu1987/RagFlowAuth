@@ -6,10 +6,6 @@ export const authApi = {
     return httpClient.refreshAccessToken();
   },
 
-  fetchWithAuth(url, options = {}) {
-    return httpClient.request(url, options);
-  },
-
   async login(username, password) {
     const data = await httpClient.requestJson(authBackendUrl('/api/auth/login'), {
       method: 'POST',
