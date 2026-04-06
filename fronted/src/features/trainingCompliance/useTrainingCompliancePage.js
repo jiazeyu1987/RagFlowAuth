@@ -14,12 +14,6 @@ const createUserSearchState = () => ({
   error: '',
 });
 
-const normalizeUsersResponse = (response) => {
-  if (Array.isArray(response)) return response;
-  if (Array.isArray(response?.items)) return response.items;
-  return [];
-};
-
 const toDateTimeLocalValue = (value) => {
   const date = value ? new Date(Number(value)) : new Date();
   if (Number.isNaN(date.getTime())) return '';
@@ -261,7 +255,7 @@ export default function useTrainingCompliancePage({
 
   const runUserSearch = useCallback(
     async (keyword) => {
-      const items = normalizeUsersResponse(await usersApi.search(keyword, USER_SEARCH_LIMIT));
+      const items = await usersApi.search(keyword, USER_SEARCH_LIMIT);
       mergeUsersIntoDirectory(items);
       return items;
     },

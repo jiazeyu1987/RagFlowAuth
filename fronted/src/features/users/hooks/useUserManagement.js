@@ -173,7 +173,7 @@ export const useUserManagement = () => {
     try {
       setLoading(true);
       const data = await usersApi.list(buildListParams(DEFAULT_FILTERS));
-      setAllUsers(Array.isArray(data) ? data : []);
+      setAllUsers(data);
       setError(null);
     } catch (err) {
       setError(mapUserManagementErrorMessage(err?.message || '加载用户失败'));

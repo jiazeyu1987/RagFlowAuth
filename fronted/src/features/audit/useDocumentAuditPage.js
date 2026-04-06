@@ -46,10 +46,10 @@ export default function useDocumentAuditPage() {
         auditApi.listDownloads({ limit: LIST_LIMIT }),
       ]);
 
-      setUsers(Array.isArray(userItems) ? userItems : []);
-      setDocuments(sortDocuments(Array.isArray(documentItems) ? documentItems : []));
-      setDeletions(Array.isArray(deletionItems) ? deletionItems : []);
-      setDownloads(Array.isArray(downloadItems) ? downloadItems : []);
+      setUsers(userItems);
+      setDocuments(sortDocuments(documentItems));
+      setDeletions(deletionItems);
+      setDownloads(downloadItems);
     } catch (requestError) {
       setError(
         requestError?.message || '\u52a0\u8f7d\u6587\u6863\u5ba1\u8ba1\u8bb0\u5f55\u5931\u8d25'

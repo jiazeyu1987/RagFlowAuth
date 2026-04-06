@@ -1,23 +1,33 @@
 import { authBackendUrl } from '../../config/backend';
 import { httpClient } from '../../shared/http/httpClient';
 
+const assertArrayPayload = (payload, action) => {
+  if (!Array.isArray(payload)) {
+    throw new Error(`${action}_invalid_payload`);
+  }
+  return payload;
+};
+
+const requestUsersList = async (params = {}, action = 'users_list') => {
+  const query = new URLSearchParams(params).toString();
+  const path = query ? `/api/users?${query}` : '/api/users';
+  return assertArrayPayload(
+    await httpClient.requestJson(authBackendUrl(path), { method: 'GET' }),
+    action
+  );
+};
+
 export const usersApi = {
   list(params = {}) {
-    const query = new URLSearchParams(params).toString();
-    const path = query ? `/api/users?${query}` : '/api/users';
-    return httpClient.requestJson(authBackendUrl(path), { method: 'GET' });
+    return requestUsersList(params, 'users_list');
   },
 
-  async items(params = {}) {
-    const response = await this.list(params);
-    if (Array.isArray(response)) return response;
-    if (Array.isArray(response?.items)) return response.items;
-    if (Array.isArray(response?.users)) return response.users;
-    return [];
+  items(params = {}) {
+    return requestUsersList(params, 'users_items');
   },
 
   search(keyword, limit = 20) {
-    return this.items({ q: keyword, limit });
+    return requestUsersList({ q: keyword, limit }, 'users_search');
   },
 
   create(payload) {

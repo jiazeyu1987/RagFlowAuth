@@ -27,12 +27,6 @@ export const createUserSearchState = () => ({
   error: '',
 });
 
-const normalizeUsers = (response) => {
-  if (Array.isArray(response)) return response;
-  if (Array.isArray(response?.items)) return response.items;
-  return [];
-};
-
 export const buildUserLabel = (user) => {
   if (!user) return '-';
   const fullName = String(user.full_name || '').trim();
@@ -120,7 +114,7 @@ export default function useApprovalConfigPage() {
   }, []);
 
   const searchUsers = useCallback(async (keyword) => {
-    const items = normalizeUsers(await usersApi.search(keyword, USER_SEARCH_LIMIT));
+    const items = await usersApi.search(keyword, USER_SEARCH_LIMIT);
     mergeUsersIntoDirectory(items);
     return items;
   }, [mergeUsersIntoDirectory]);
