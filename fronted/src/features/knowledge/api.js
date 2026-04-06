@@ -3,14 +3,48 @@ import { DOCUMENT_SOURCE } from '../../shared/documents/constants';
 import { httpClient } from '../../shared/http/httpClient';
 import { documentsApi } from '../documents/api';
 
-function unwrapEnvelope(res) {
-  if (!res || typeof res !== 'object') return res;
-  if (res.dataset && typeof res.dataset === 'object') return res.dataset;
-  if (res.data && typeof res.data === 'object') {
-    if (res.data.dataset && typeof res.data.dataset === 'object') return res.data.dataset;
+const assertObjectPayload = (payload, action) => {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    throw new Error(`${action}_invalid_payload`);
   }
-  return res;
-}
+  return payload;
+};
+
+const normalizeArrayField = (payload, field, action) => {
+  const envelope = assertObjectPayload(payload, action);
+  if (!Array.isArray(envelope[field])) {
+    throw new Error(`${action}_invalid_payload`);
+  }
+  return envelope[field];
+};
+
+const normalizeDatasetEnvelope = (payload, action) => {
+  const envelope = assertObjectPayload(payload, action);
+  if (!envelope.dataset || typeof envelope.dataset !== 'object' || Array.isArray(envelope.dataset)) {
+    throw new Error(`${action}_invalid_payload`);
+  }
+  return envelope.dataset;
+};
+
+const normalizeDirectoryTree = (payload, action) => {
+  const envelope = assertObjectPayload(payload, action);
+  if (!Array.isArray(envelope.nodes) || !Array.isArray(envelope.datasets)) {
+    throw new Error(`${action}_invalid_payload`);
+  }
+  return {
+    ...envelope,
+    nodes: envelope.nodes,
+    datasets: envelope.datasets,
+  };
+};
+
+const normalizeDirectoryNodeEnvelope = (payload, action) => {
+  const envelope = assertObjectPayload(payload, action);
+  if (!envelope.node || typeof envelope.node !== 'object' || Array.isArray(envelope.node)) {
+    throw new Error(`${action}_invalid_payload`);
+  }
+  return envelope.node;
+};
 
 function withCompanyId(path, companyId) {
   if (companyId === undefined || companyId === null || companyId === '') return path;
@@ -20,34 +54,40 @@ function withCompanyId(path, companyId) {
 
 export const knowledgeApi = {
   async listRagflowDatasets() {
-    const response = await httpClient.requestJson(authBackendUrl('/api/datasets'), { method: 'GET' });
-    if (!Array.isArray(response?.datasets)) {
-      throw new Error('ragflow_dataset_list_invalid_payload');
-    }
-    return response.datasets;
+    return normalizeArrayField(
+      await httpClient.requestJson(authBackendUrl('/api/datasets'), { method: 'GET' }),
+      'datasets',
+      'ragflow_dataset_list'
+    );
   },
 
   async getRagflowDataset(datasetRef) {
-    const res = await httpClient.requestJson(authBackendUrl(`/api/datasets/${encodeURIComponent(datasetRef)}`), {
-      method: 'GET',
-    });
-    return unwrapEnvelope(res);
+    return normalizeDatasetEnvelope(
+      await httpClient.requestJson(authBackendUrl(`/api/datasets/${encodeURIComponent(datasetRef)}`), {
+        method: 'GET',
+      }),
+      'ragflow_dataset_get'
+    );
   },
 
   async updateRagflowDataset(datasetRef, updates) {
-    const res = await httpClient.requestJson(authBackendUrl(`/api/datasets/${encodeURIComponent(datasetRef)}`), {
-      method: 'PUT',
-      body: JSON.stringify(updates || {}),
-    });
-    return unwrapEnvelope(res);
+    return normalizeDatasetEnvelope(
+      await httpClient.requestJson(authBackendUrl(`/api/datasets/${encodeURIComponent(datasetRef)}`), {
+        method: 'PUT',
+        body: JSON.stringify(updates || {}),
+      }),
+      'ragflow_dataset_update'
+    );
   },
 
   async createRagflowDataset(payload) {
-    const res = await httpClient.requestJson(authBackendUrl('/api/datasets'), {
-      method: 'POST',
-      body: JSON.stringify(payload || {}),
-    });
-    return unwrapEnvelope(res);
+    return normalizeDatasetEnvelope(
+      await httpClient.requestJson(authBackendUrl('/api/datasets'), {
+        method: 'POST',
+        body: JSON.stringify(payload || {}),
+      }),
+      'ragflow_dataset_create'
+    );
   },
 
   deleteRagflowDataset(datasetRef) {
@@ -56,24 +96,33 @@ export const knowledgeApi = {
     });
   },
 
-  listKnowledgeDirectories(options = {}) {
+  async listKnowledgeDirectories(options = {}) {
     const path = withCompanyId('/api/knowledge/directories', options.companyId);
-    return httpClient.requestJson(authBackendUrl(path), { method: 'GET' });
+    return normalizeDirectoryTree(
+      await httpClient.requestJson(authBackendUrl(path), { method: 'GET' }),
+      'knowledge_directory_tree'
+    );
   },
 
-  createKnowledgeDirectory(payload, options = {}) {
+  async createKnowledgeDirectory(payload, options = {}) {
     const path = withCompanyId('/api/knowledge/directories', options.companyId);
-    return httpClient.requestJson(authBackendUrl(path), {
-      method: 'POST',
-      body: JSON.stringify(payload || {}),
-    });
+    return normalizeDirectoryNodeEnvelope(
+      await httpClient.requestJson(authBackendUrl(path), {
+        method: 'POST',
+        body: JSON.stringify(payload || {}),
+      }),
+      'knowledge_directory_create'
+    );
   },
 
-  updateKnowledgeDirectory(nodeId, payload) {
-    return httpClient.requestJson(authBackendUrl(`/api/knowledge/directories/${encodeURIComponent(nodeId)}`), {
-      method: 'PUT',
-      body: JSON.stringify(payload || {}),
-    });
+  async updateKnowledgeDirectory(nodeId, payload) {
+    return normalizeDirectoryNodeEnvelope(
+      await httpClient.requestJson(authBackendUrl(`/api/knowledge/directories/${encodeURIComponent(nodeId)}`), {
+        method: 'PUT',
+        body: JSON.stringify(payload || {}),
+      }),
+      'knowledge_directory_update'
+    );
   },
 
   deleteKnowledgeDirectory(nodeId) {

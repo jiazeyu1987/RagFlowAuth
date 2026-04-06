@@ -184,7 +184,7 @@ export default function useKnowledgeBasesPage() {
   async function fetchKbList() {
     setKbError('');
     const datasets = await knowledgeApi.listRagflowDatasets();
-    setKbList(Array.isArray(datasets) ? datasets : []);
+    setKbList(datasets);
   }
 
   async function fetchTree() {
@@ -192,10 +192,6 @@ export default function useKnowledgeBasesPage() {
 
     try {
       const tree = await knowledgeApi.listKnowledgeDirectories();
-      if (!Array.isArray(tree?.nodes) || !Array.isArray(tree?.datasets)) {
-        throw new Error('knowledge_directory_tree_invalid_payload');
-      }
-
       setDirectoryTree(tree);
       const validIds = new Set(tree.nodes.map((node) => node.id));
 
@@ -388,11 +384,11 @@ export default function useKnowledgeBasesPage() {
     if (!name || !name.trim()) return;
 
     try {
-      const response = await knowledgeApi.createKnowledgeDirectory({
+      const node = await knowledgeApi.createKnowledgeDirectory({
         name: name.trim(),
         parent_id: currentDirId || null,
       });
-      const newNodeId = response?.node?.id;
+      const newNodeId = node?.id;
       await fetchTree();
 
       if (newNodeId) {

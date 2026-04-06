@@ -236,7 +236,7 @@ export const useUserManagement = () => {
         const data = await knowledgeApi.listKnowledgeDirectories({
           companyId: isAdminUser ? normalizedCompanyId : undefined,
         });
-        const nodes = Array.isArray(data?.nodes) ? data.nodes : [];
+        const nodes = data.nodes;
         setKbDirectoryNodes(nodes);
         setKbDirectoryError(null);
         return nodes;
@@ -412,11 +412,11 @@ export const useUserManagement = () => {
       try {
         setKbDirectoryCreatingRoot(true);
         setKbDirectoryCreateError(null);
-        const response = await knowledgeApi.createKnowledgeDirectory(
+        const node = await knowledgeApi.createKnowledgeDirectory(
           { name: cleanName, parent_id: null },
           { companyId: isAdminUser ? normalizedCompanyId : undefined }
         );
-        const createdNodeId = String(response?.node?.id || '').trim();
+        const createdNodeId = String(node?.id || '').trim();
         await fetchKnowledgeDirectories(normalizedCompanyId);
         if (createdNodeId && typeof onCreated === 'function') {
           onCreated(createdNodeId);

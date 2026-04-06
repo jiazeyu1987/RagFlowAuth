@@ -34,11 +34,7 @@ const getDatasetLabel = (dataset) => {
   return `${nodePath}/${name}`;
 };
 
-const mergeDatasetDirectoryInfo = (datasetsPayload, directoryPayload) => {
-  const list = Array.isArray(datasetsPayload) ? datasetsPayload : [];
-  const directoryDatasets = Array.isArray(directoryPayload?.datasets)
-    ? directoryPayload.datasets
-    : [];
+const mergeDatasetDirectoryInfo = (datasets, directoryDatasets) => {
   const nodePathById = new Map();
   const nodePathByName = new Map();
 
@@ -51,7 +47,7 @@ const mergeDatasetDirectoryInfo = (datasetsPayload, directoryPayload) => {
     if (name) nodePathByName.set(name, nodePath);
   });
 
-  return list.map((dataset) => {
+  return datasets.map((dataset) => {
     const id = normalizeKbRef(dataset?.id);
     const name = normalizeKbRef(dataset?.name);
     const nodePath = nodePathById.get(id) || nodePathByName.get(name) || dataset?.node_path || '/';
@@ -164,14 +160,14 @@ export default function useKnowledgeUploadPage() {
       try {
         setLoadingDatasets(true);
 
-        const [datasetPayload, directoryPayload] = await Promise.all([
+        const [datasetItems, directoryTree] = await Promise.all([
           knowledgeApi.listRagflowDatasets(),
           knowledgeApi.listKnowledgeDirectories(),
         ]);
 
         if (!active) return;
 
-        const allDatasets = mergeDatasetDirectoryInfo(datasetPayload, directoryPayload);
+        const allDatasets = mergeDatasetDirectoryInfo(datasetItems, directoryTree.datasets);
         const visibleKbRefs = new Set(
           (Array.isArray(accessibleKbs) ? accessibleKbs : [])
             .map(normalizeKbRef)

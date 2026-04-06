@@ -260,7 +260,7 @@ describe('useUserManagement user type payloads', () => {
       nodes: [{ id: 'node-1', name: '目录A', parent_id: '', path: '/目录A' }],
       datasets: [],
     });
-    knowledgeApi.createKnowledgeDirectory.mockResolvedValue({ node: { id: 'node-created' } });
+    knowledgeApi.createKnowledgeDirectory.mockResolvedValue({ id: 'node-created' });
   });
 
   it('requires manager user when creating normal user', async () => {

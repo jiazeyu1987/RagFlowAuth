@@ -185,17 +185,11 @@ export default function useDocumentBrowserPage() {
         setLoading(true);
         const [datasetResponse, treeResponse] = await Promise.all([
           knowledgeApi.listRagflowDatasets(),
-          knowledgeApi
-            .listKnowledgeDirectories()
-            .catch(() => ({ nodes: [], datasets: [] })),
+          knowledgeApi.listKnowledgeDirectories(),
         ]);
         const nextDatasets = datasetResponse;
         setDatasets(nextDatasets);
-        setDirectoryTree(
-          treeResponse && typeof treeResponse === 'object'
-            ? treeResponse
-            : { nodes: [], datasets: [] }
-        );
+        setDirectoryTree(treeResponse);
         setError(nextDatasets.length ? null : TEXT.noPermission);
       } catch (requestError) {
         setError(requestError?.message || TEXT.loadKbFail);
