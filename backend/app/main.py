@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import logging
+import sys
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
-from importlib import import_module
-import sys
+from functools import lru_cache
 from pathlib import Path
+from typing import Callable
 
 from fastapi import APIRouter, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -17,64 +18,94 @@ from backend.core.security import auth as authx_auth
 
 logger = logging.getLogger(__name__)
 
+RouterFactory = Callable[[], APIRouter]
+
 
 @dataclass(frozen=True)
 class RouterRegistrationSpec:
-    module_path: str
     prefix: str
     tags: tuple[str, ...]
-    router_attr: str = "router"
-    factory_attr: str | None = None
+    router: APIRouter | None = None
+    router_factory: RouterFactory | None = None
+
+    def resolve_router(self) -> APIRouter:
+        if self.router_factory is not None:
+            return self.router_factory()
+        if self.router is None:
+            raise RuntimeError("router_registration_spec_missing_target")
+        return self.router
 
 
-ROUTER_REGISTRATION_SPECS: tuple[RouterRegistrationSpec, ...] = (
-    RouterRegistrationSpec("backend.app.modules.auth.router", "/api/auth", ("Authentication",)),
-    RouterRegistrationSpec("backend.app.modules.electronic_signature.router", "/api", ("Electronic Signature",)),
-    RouterRegistrationSpec("backend.app.modules.audit.router", "/api", ("Audit",)),
-    RouterRegistrationSpec("backend.app.modules.admin_notifications.router", "/api", ("Admin Notifications",)),
-    RouterRegistrationSpec("backend.app.modules.emergency_changes.router", "/api", ("Emergency Changes",)),
-    RouterRegistrationSpec("backend.app.modules.supplier_qualification.router", "/api", ("Supplier Qualification",)),
-    RouterRegistrationSpec("backend.app.modules.training_compliance.router", "/api", ("Training Compliance",)),
-    RouterRegistrationSpec("backend.app.modules.users.router", "/api/users", ("Users",)),
-    RouterRegistrationSpec("backend.app.modules.knowledge.router", "/api/knowledge", ("Knowledge Base",)),
-    RouterRegistrationSpec("backend.app.modules.operation_approvals.router", "/api", ("Operation Approvals",)),
-    RouterRegistrationSpec("backend.app.modules.inbox.router", "/api", ("Inbox",)),
-    RouterRegistrationSpec("backend.app.modules.ragflow.router", "/api/ragflow", ("RAGFlow Integration",)),
-    RouterRegistrationSpec("backend.app.modules.preview.router", "/api", ("Preview Gateway",)),
-    RouterRegistrationSpec("backend.app.modules.documents.router", "/api", ("Documents",)),
-    RouterRegistrationSpec("backend.app.modules.chat.router", "/api", ("Chat",)),
-    RouterRegistrationSpec("backend.app.modules.agents.router", "/api", ("Agents",)),
-    RouterRegistrationSpec("backend.app.modules.search_configs.router", "/api", ("Search Configs",)),
-    RouterRegistrationSpec("backend.app.modules.me.router", "/api", ("Me",)),
-    RouterRegistrationSpec("backend.app.modules.nas.router", "/api", ("NAS",)),
-    RouterRegistrationSpec("backend.app.modules.onlyoffice.router", "/api", ("ONLYOFFICE",)),
-    RouterRegistrationSpec("backend.app.modules.data_security.router", "/api", ("Data Security",)),
-    RouterRegistrationSpec(
-        "backend.app.modules.permission_groups.router",
-        "/api",
-        ("Permission Groups",),
-        factory_attr="create_router",
-    ),
-    RouterRegistrationSpec("backend.app.modules.org_directory.router", "/api", ("Org Directory",)),
-    RouterRegistrationSpec("backend.app.modules.patent_download.router", "/api", ("Patent Download",)),
-    RouterRegistrationSpec("backend.app.modules.paper_download.router", "/api", ("Paper Download",)),
-    RouterRegistrationSpec("backend.app.modules.package_drawing.router", "/api", ("Package Drawing",)),
-    RouterRegistrationSpec("backend.app.modules.drug_admin.router", "/api", ("Drug Admin",)),
-    RouterRegistrationSpec("backend.app.modules.diagnostics.router", "/api", ("Diagnostics",)),
-)
+@lru_cache(maxsize=1)
+def _build_router_registration_specs() -> tuple[RouterRegistrationSpec, ...]:
+    from backend.app.modules.admin_notifications.router import router as admin_notifications_router
+    from backend.app.modules.agents.router import router as agents_router
+    from backend.app.modules.audit.router import router as audit_router
+    from backend.app.modules.auth.router import router as auth_router
+    from backend.app.modules.chat.router import router as chat_router
+    from backend.app.modules.data_security.router import router as data_security_router
+    from backend.app.modules.diagnostics.router import router as diagnostics_router
+    from backend.app.modules.documents.router import router as documents_router
+    from backend.app.modules.drug_admin.router import router as drug_admin_router
+    from backend.app.modules.electronic_signature.router import router as electronic_signature_router
+    from backend.app.modules.emergency_changes.router import router as emergency_changes_router
+    from backend.app.modules.inbox.router import router as inbox_router
+    from backend.app.modules.knowledge.router import router as knowledge_router
+    from backend.app.modules.me.router import router as me_router
+    from backend.app.modules.nas.router import router as nas_router
+    from backend.app.modules.onlyoffice.router import router as onlyoffice_router
+    from backend.app.modules.operation_approvals.router import router as operation_approvals_router
+    from backend.app.modules.org_directory.router import router as org_directory_router
+    from backend.app.modules.package_drawing.router import router as package_drawing_router
+    from backend.app.modules.paper_download.router import router as paper_download_router
+    from backend.app.modules.patent_download.router import router as patent_download_router
+    from backend.app.modules.permission_groups.router import create_router as create_permission_groups_router
+    from backend.app.modules.preview.router import router as preview_router
+    from backend.app.modules.ragflow.router import router as ragflow_router
+    from backend.app.modules.search_configs.router import router as search_configs_router
+    from backend.app.modules.supplier_qualification.router import router as supplier_qualification_router
+    from backend.app.modules.training_compliance.router import router as training_compliance_router
+    from backend.app.modules.users.router import router as users_router
 
-
-def _resolve_router(spec: RouterRegistrationSpec) -> APIRouter:
-    module = import_module(spec.module_path)
-    if spec.factory_attr:
-        router_factory = getattr(module, spec.factory_attr)
-        return router_factory()
-    return getattr(module, spec.router_attr)
+    return (
+        RouterRegistrationSpec(prefix="/api/auth", tags=("Authentication",), router=auth_router),
+        RouterRegistrationSpec(prefix="/api", tags=("Electronic Signature",), router=electronic_signature_router),
+        RouterRegistrationSpec(prefix="/api", tags=("Audit",), router=audit_router),
+        RouterRegistrationSpec(prefix="/api", tags=("Admin Notifications",), router=admin_notifications_router),
+        RouterRegistrationSpec(prefix="/api", tags=("Emergency Changes",), router=emergency_changes_router),
+        RouterRegistrationSpec(prefix="/api", tags=("Supplier Qualification",), router=supplier_qualification_router),
+        RouterRegistrationSpec(prefix="/api", tags=("Training Compliance",), router=training_compliance_router),
+        RouterRegistrationSpec(prefix="/api/users", tags=("Users",), router=users_router),
+        RouterRegistrationSpec(prefix="/api/knowledge", tags=("Knowledge Base",), router=knowledge_router),
+        RouterRegistrationSpec(prefix="/api", tags=("Operation Approvals",), router=operation_approvals_router),
+        RouterRegistrationSpec(prefix="/api", tags=("Inbox",), router=inbox_router),
+        RouterRegistrationSpec(prefix="/api/ragflow", tags=("RAGFlow Integration",), router=ragflow_router),
+        RouterRegistrationSpec(prefix="/api", tags=("Preview Gateway",), router=preview_router),
+        RouterRegistrationSpec(prefix="/api", tags=("Documents",), router=documents_router),
+        RouterRegistrationSpec(prefix="/api", tags=("Chat",), router=chat_router),
+        RouterRegistrationSpec(prefix="/api", tags=("Agents",), router=agents_router),
+        RouterRegistrationSpec(prefix="/api", tags=("Search Configs",), router=search_configs_router),
+        RouterRegistrationSpec(prefix="/api", tags=("Me",), router=me_router),
+        RouterRegistrationSpec(prefix="/api", tags=("NAS",), router=nas_router),
+        RouterRegistrationSpec(prefix="/api", tags=("ONLYOFFICE",), router=onlyoffice_router),
+        RouterRegistrationSpec(prefix="/api", tags=("Data Security",), router=data_security_router),
+        RouterRegistrationSpec(
+            prefix="/api",
+            tags=("Permission Groups",),
+            router_factory=create_permission_groups_router,
+        ),
+        RouterRegistrationSpec(prefix="/api", tags=("Org Directory",), router=org_directory_router),
+        RouterRegistrationSpec(prefix="/api", tags=("Patent Download",), router=patent_download_router),
+        RouterRegistrationSpec(prefix="/api", tags=("Paper Download",), router=paper_download_router),
+        RouterRegistrationSpec(prefix="/api", tags=("Package Drawing",), router=package_drawing_router),
+        RouterRegistrationSpec(prefix="/api", tags=("Drug Admin",), router=drug_admin_router),
+        RouterRegistrationSpec(prefix="/api", tags=("Diagnostics",), router=diagnostics_router),
+    )
 
 
 def _register_application_routers(app: FastAPI) -> None:
-    for spec in ROUTER_REGISTRATION_SPECS:
-        app.include_router(_resolve_router(spec), prefix=spec.prefix, tags=list(spec.tags))
+    for spec in _build_router_registration_specs():
+        app.include_router(spec.resolve_router(), prefix=spec.prefix, tags=list(spec.tags))
 
 
 @asynccontextmanager
@@ -92,22 +123,23 @@ async def lifespan(app: FastAPI):
     )
     logger.info("Dependencies initialized")
 
-    # Help diagnose "stale code" / wrong interpreter issues on Windows.
+    # Help diagnose stale code / wrong interpreter issues on Windows.
     try:
         import backend.services.ragflow_chat_service as rcs
 
-        p = Path(getattr(rcs, "__file__", "") or "")
-        m = None
+        service_path = Path(getattr(rcs, "__file__", "") or "")
+        modified_ns = None
         try:
-            if p and p.exists():
-                m = getattr(p.stat(), "st_mtime_ns", None) or int(p.stat().st_mtime * 1_000_000_000)
+            if service_path and service_path.exists():
+                stat = service_path.stat()
+                modified_ns = getattr(stat, "st_mtime_ns", None) or int(stat.st_mtime * 1_000_000_000)
         except Exception:
-            m = None
+            modified_ns = None
         logging.getLogger("uvicorn.error").warning(
             "Runtime python=%s ragflow_chat_service=%s mtime_ns=%s",
             sys.executable,
-            str(p) if p else "(unknown)",
-            str(m) if m is not None else "(unknown)",
+            str(service_path) if service_path else "(unknown)",
+            str(modified_ns) if modified_ns is not None else "(unknown)",
         )
     except Exception:
         pass
@@ -120,17 +152,18 @@ async def lifespan(app: FastAPI):
             logger.info("Backup scheduler V2 started")
         else:
             logger.info("Backup scheduler V2 disabled by BACKUP_SCHEDULER_ENABLED=false")
-    except Exception as e:
-        logger.error(f"Failed to start improved backup scheduler V2: {e}", exc_info=True)
+    except Exception as exc:
+        logger.error(f"Failed to start improved backup scheduler V2: {exc}", exc_info=True)
         raise
 
     yield
+
     try:
         if settings.BACKUP_SCHEDULER_ENABLED:
             stop_scheduler_v2()
             logger.info("Backup scheduler V2 stopped")
-    except Exception as e:
-        logger.error(f"Error stopping scheduler V2: {e}", exc_info=True)
+    except Exception as exc:
+        logger.error(f"Error stopping scheduler V2: {exc}", exc_info=True)
 
     logger.info("Shutting down...")
 
