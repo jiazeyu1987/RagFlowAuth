@@ -1,6 +1,21 @@
 import { authBackendUrl } from '../../config/backend';
 import { httpClient } from '../../shared/http/httpClient';
 
+const assertObjectPayload = (payload, action) => {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    throw new Error(`${action}_invalid_payload`);
+  }
+  return payload;
+};
+
+const normalizeArrayField = (payload, field, action) => {
+  const envelope = assertObjectPayload(payload, action);
+  if (!Array.isArray(envelope[field])) {
+    throw new Error(`${action}_invalid_payload`);
+  }
+  return envelope[field];
+};
+
 const buildQuery = (params = {}) => {
   const search = new URLSearchParams();
   Object.entries(params || {}).forEach(([key, value]) => {
@@ -12,56 +27,74 @@ const buildQuery = (params = {}) => {
 };
 
 export const trainingComplianceApi = {
-  listRequirements({ limit = 100, controlledAction, roleCode } = {}) {
-    return httpClient.requestJson(
-      authBackendUrl(
-        `/api/training-compliance/requirements${buildQuery({
-          limit,
-          controlled_action: controlledAction,
-          role_code: roleCode,
-        })}`
+  async listRequirements({ limit = 100, controlledAction, roleCode } = {}) {
+    return normalizeArrayField(
+      await httpClient.requestJson(
+        authBackendUrl(
+          `/api/training-compliance/requirements${buildQuery({
+            limit,
+            controlled_action: controlledAction,
+            role_code: roleCode,
+          })}`
+        ),
+        { method: 'GET' }
       ),
-      { method: 'GET' }
+      'items',
+      'training_compliance_requirements_list'
     );
   },
 
-  createRecord(payload) {
-    return httpClient.requestJson(authBackendUrl('/api/training-compliance/records'), {
-      method: 'POST',
-      body: JSON.stringify(payload || {}),
-    });
-  },
-
-  listRecords({ limit = 100, requirementCode, userId } = {}) {
-    return httpClient.requestJson(
-      authBackendUrl(
-        `/api/training-compliance/records${buildQuery({
-          limit,
-          requirement_code: requirementCode,
-          user_id: userId,
-        })}`
-      ),
-      { method: 'GET' }
+  async createRecord(payload) {
+    return assertObjectPayload(
+      await httpClient.requestJson(authBackendUrl('/api/training-compliance/records'), {
+        method: 'POST',
+        body: JSON.stringify(payload || {}),
+      }),
+      'training_compliance_record_create'
     );
   },
 
-  createCertification(payload) {
-    return httpClient.requestJson(authBackendUrl('/api/training-compliance/certifications'), {
-      method: 'POST',
-      body: JSON.stringify(payload || {}),
-    });
+  async listRecords({ limit = 100, requirementCode, userId } = {}) {
+    return normalizeArrayField(
+      await httpClient.requestJson(
+        authBackendUrl(
+          `/api/training-compliance/records${buildQuery({
+            limit,
+            requirement_code: requirementCode,
+            user_id: userId,
+          })}`
+        ),
+        { method: 'GET' }
+      ),
+      'items',
+      'training_compliance_records_list'
+    );
   },
 
-  listCertifications({ limit = 100, requirementCode, userId } = {}) {
-    return httpClient.requestJson(
-      authBackendUrl(
-        `/api/training-compliance/certifications${buildQuery({
-          limit,
-          requirement_code: requirementCode,
-          user_id: userId,
-        })}`
+  async createCertification(payload) {
+    return assertObjectPayload(
+      await httpClient.requestJson(authBackendUrl('/api/training-compliance/certifications'), {
+        method: 'POST',
+        body: JSON.stringify(payload || {}),
+      }),
+      'training_compliance_certification_create'
+    );
+  },
+
+  async listCertifications({ limit = 100, requirementCode, userId } = {}) {
+    return normalizeArrayField(
+      await httpClient.requestJson(
+        authBackendUrl(
+          `/api/training-compliance/certifications${buildQuery({
+            limit,
+            requirement_code: requirementCode,
+            user_id: userId,
+          })}`
+        ),
+        { method: 'GET' }
       ),
-      { method: 'GET' }
+      'items',
+      'training_compliance_certifications_list'
     );
   },
 };

@@ -203,13 +203,9 @@ export default function useTrainingCompliancePage({
           trainingComplianceApi.listCertifications({ limit: 100 }),
         ]);
 
-      setRequirements(
-        Array.isArray(requirementsResponse?.items) ? requirementsResponse.items : []
-      );
-      setRecords(Array.isArray(recordsResponse?.items) ? recordsResponse.items : []);
-      setCertifications(
-        Array.isArray(certificationsResponse?.items) ? certificationsResponse.items : []
-      );
+      setRequirements(requirementsResponse);
+      setRecords(recordsResponse);
+      setCertifications(certificationsResponse);
     } catch (requestError) {
       setError(mapErrorMessage(requestError?.message, text.loadError));
     } finally {

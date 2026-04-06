@@ -36,47 +36,41 @@ const currentAdmin = {
   role: 'admin',
 };
 
-const requirementsResponse = {
-  items: [
-    {
-      requirement_code: 'TR-001',
-      requirement_name: '审批与发布操作员培训',
-      controlled_action: 'document_review',
-      role_code: '*',
-      curriculum_version: 'v2026.04',
-      recertification_interval_days: 365,
-      active: true,
-    },
-  ],
-};
+const requirementsResponse = [
+  {
+    requirement_code: 'TR-001',
+    requirement_name: '审批与发布操作员培训',
+    controlled_action: 'document_review',
+    role_code: '*',
+    curriculum_version: 'v2026.04',
+    recertification_interval_days: 365,
+    active: true,
+  },
+];
 
-const recordsResponse = {
-  items: [
-    {
-      record_id: 'record-1',
-      user_id: 'user-1',
-      requirement_code: 'TR-001',
-      curriculum_version: 'v2026.04',
-      training_outcome: 'passed',
-      effectiveness_status: 'effective',
-      completed_at_ms: 1712203200000,
-    },
-  ],
-};
+const recordsResponse = [
+  {
+    record_id: 'record-1',
+    user_id: 'user-1',
+    requirement_code: 'TR-001',
+    curriculum_version: 'v2026.04',
+    training_outcome: 'passed',
+    effectiveness_status: 'effective',
+    completed_at_ms: 1712203200000,
+  },
+];
 
-const certificationsResponse = {
-  items: [
-    {
-      certification_id: 'cert-1',
-      user_id: 'user-1',
-      requirement_code: 'TR-001',
-      curriculum_version: 'v2026.04',
-      certification_status: 'active',
-      valid_until_ms: 1743739200000,
-      granted_at_ms: 1712203200000,
-    },
-  ],
-};
+const certificationsResponse = [
+  {
+    certification_id: 'cert-1',
+    user_id: 'user-1',
+    requirement_code: 'TR-001',
+    curriculum_version: 'v2026.04',
+    certification_status: 'active',
+    valid_until_ms: 1743739200000,
+    granted_at_ms: 1712203200000,
+  },
+];
 
 const searchUsers = [
   { user_id: 'user-1', username: 'alice', full_name: 'Alice' },
