@@ -28,13 +28,10 @@ export default function useDataSecurityPage() {
     return sub ? `\\\\${ip}\\${share}\\${sub}` : `\\\\${ip}\\${share}`;
   }, [settings]);
 
-  const localBackupTargetPath = useMemo(
-    () => settings?.local_backup_target_path || settings?.backup_target_path || '/app/data/backups',
-    [settings]
-  );
+  const localBackupTargetPath = useMemo(() => settings?.local_backup_target_path || '', [settings]);
 
   const windowsBackupTargetPath = useMemo(
-    () => settings?.windows_backup_target_path || settings?.replica_target_path || targetPreview || '',
+    () => settings?.windows_backup_target_path || targetPreview || '',
     [settings, targetPreview]
   );
 

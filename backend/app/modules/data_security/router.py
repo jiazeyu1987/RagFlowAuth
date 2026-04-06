@@ -113,14 +113,14 @@ def _settings_response(s) -> dict[str, Any]:
         "auth_db_path": s.auth_db_path,
         "updated_at_ms": s.updated_at_ms,
         "last_run_at_ms": s.last_run_at_ms,
-        "full_backup_enabled": getattr(s, "full_backup_enabled", False),
-        "full_backup_include_images": getattr(s, "full_backup_include_images", True),
-        "incremental_schedule": getattr(s, "incremental_schedule", None),
-        "full_backup_schedule": getattr(s, "full_backup_schedule", None),
-        "replica_enabled": getattr(s, "replica_enabled", False),
-        "replica_target_path": getattr(s, "replica_target_path") or "",
-        "replica_subdir_format": getattr(s, "replica_subdir_format") or "flat",
-        "backup_retention_max": int(getattr(s, "backup_retention_max", 30) or 30),
+        "full_backup_enabled": s.full_backup_enabled,
+        "full_backup_include_images": s.full_backup_include_images,
+        "incremental_schedule": s.incremental_schedule,
+        "full_backup_schedule": s.full_backup_schedule,
+        "replica_enabled": s.replica_enabled,
+        "replica_target_path": s.replica_target_path or "",
+        "replica_subdir_format": s.replica_subdir_format or "flat",
+        "backup_retention_max": int(s.backup_retention_max or 30),
     }
     resp.update(_backup_pack_stats(s))
     return resp

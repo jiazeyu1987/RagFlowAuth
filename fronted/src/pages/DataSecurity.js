@@ -212,7 +212,7 @@ const DataSecurity = () => {
               <div style={{ marginTop: '8px', color: '#6b7280', fontSize: '0.85rem' }}>
                 备份数量:{' '}
                 <span style={{ color: '#111827', fontWeight: 700 }}>
-                  {Number(settings?.local_backup_pack_count ?? settings?.backup_pack_count ?? 0)}
+                  {Number(settings?.local_backup_pack_count ?? 0)}
                 </span>
               </div>
             </div>

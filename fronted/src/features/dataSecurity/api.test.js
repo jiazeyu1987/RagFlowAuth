@@ -18,13 +18,29 @@ describe('dataSecurityApi', () => {
 
   it('routes settings and backup actions through the auth backend base url', async () => {
     httpClient.requestJson
-      .mockResolvedValueOnce({ enabled: true })
-      .mockResolvedValueOnce({ enabled: false })
+      .mockResolvedValueOnce({ enabled: true, backup_target_path: '/app/data/backups' })
+      .mockResolvedValueOnce({ enabled: false, replica_target_path: '/mnt/replica/RagflowAuth' })
       .mockResolvedValueOnce({ job_id: 101 })
       .mockResolvedValueOnce({ job_id: 102 });
 
-    await expect(dataSecurityApi.getSettings()).resolves.toEqual({ enabled: true });
-    await expect(dataSecurityApi.updateSettings({ enabled: false })).resolves.toEqual({ enabled: false });
+    await expect(dataSecurityApi.getSettings()).resolves.toEqual({
+      enabled: true,
+      backup_target_path: '/app/data/backups',
+      local_backup_target_path: '/app/data/backups',
+      local_backup_pack_count: 0,
+      windows_backup_target_path: '',
+      windows_backup_pack_count: 0,
+      windows_backup_pack_count_skipped: false,
+    });
+    await expect(dataSecurityApi.updateSettings({ enabled: false })).resolves.toEqual({
+      enabled: false,
+      replica_target_path: '/mnt/replica/RagflowAuth',
+      local_backup_target_path: '',
+      local_backup_pack_count: 0,
+      windows_backup_target_path: '/mnt/replica/RagflowAuth',
+      windows_backup_pack_count: 0,
+      windows_backup_pack_count_skipped: false,
+    });
     await expect(dataSecurityApi.runBackup()).resolves.toEqual({ job_id: 101 });
     await expect(dataSecurityApi.runFullBackup()).resolves.toEqual({ job_id: 102 });
 

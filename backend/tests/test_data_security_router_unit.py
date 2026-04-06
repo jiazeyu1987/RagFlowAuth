@@ -6,6 +6,60 @@ from unittest.mock import Mock, patch
 
 
 class TestDataSecurityRouterUnit(unittest.TestCase):
+    def test_settings_response_uses_explicit_data_security_fields(self) -> None:
+        from backend.app.modules.data_security import router
+
+        settings = SimpleNamespace(
+            enabled=True,
+            interval_minutes=60,
+            target_mode="local",
+            target_ip="",
+            target_share_name="",
+            target_subdir="",
+            target_local_dir="/backup/local",
+            ragflow_compose_path="docker-compose.yml",
+            ragflow_project_name="ragflow",
+            ragflow_stop_services=False,
+            auth_db_path="data/auth.db",
+            updated_at_ms=123,
+            last_run_at_ms=456,
+            full_backup_enabled=True,
+            full_backup_include_images=False,
+            backup_retention_max=9,
+            incremental_schedule="0 * * * *",
+            full_backup_schedule="0 1 * * *",
+            last_incremental_backup_time_ms=None,
+            last_full_backup_time_ms=None,
+            replica_enabled=True,
+            replica_target_path="/mnt/replica/RagflowAuth",
+            replica_subdir_format="date",
+        )
+
+        with patch.object(
+            router,
+            "_backup_pack_stats",
+            return_value={
+                "backup_target_path": "/backup/local",
+                "backup_pack_count": 2,
+                "backup_pack_count_skipped": False,
+                "local_backup_target_path": "/backup/local",
+                "local_backup_pack_count": 2,
+                "local_backup_pack_count_skipped": False,
+                "windows_backup_target_path": "/mnt/replica/RagflowAuth",
+                "windows_backup_pack_count": 1,
+                "windows_backup_pack_count_skipped": False,
+            },
+        ):
+            payload = router._settings_response(settings)
+
+        self.assertTrue(payload["full_backup_enabled"])
+        self.assertFalse(payload["full_backup_include_images"])
+        self.assertEqual(payload["replica_target_path"], "/mnt/replica/RagflowAuth")
+        self.assertEqual(payload["replica_subdir_format"], "date")
+        self.assertEqual(payload["backup_retention_max"], 9)
+        self.assertEqual(payload["local_backup_target_path"], "/backup/local")
+        self.assertEqual(payload["windows_backup_target_path"], "/mnt/replica/RagflowAuth")
+
     def test_backup_prerequisites_fail_fast_when_backup_worker_image_missing(self) -> None:
         from backend.app.modules.data_security import router
 

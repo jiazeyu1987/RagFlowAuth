@@ -22,7 +22,6 @@ const settingsResponse = {
   enabled: true,
   backup_retention_max: 7,
   local_backup_target_path: '/app/data/backups',
-  backup_target_path: '/app/data/backups',
   local_backup_pack_count: 2,
   windows_backup_target_path: '/mnt/replica/RagflowAuth',
   windows_backup_pack_count: 1,
