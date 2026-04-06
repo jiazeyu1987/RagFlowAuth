@@ -1,14 +1,14 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
+
 import ConfigDetailPanel from '../features/knowledge/searchConfigs/components/ConfigDetailPanel';
 import ConfigListPanel from '../features/knowledge/searchConfigs/components/ConfigListPanel';
 import CreateConfigDialog from '../features/knowledge/searchConfigs/components/CreateConfigDialog';
-import useSearchConfigsPanel from '../features/knowledge/searchConfigs/useSearchConfigsPanel';
-
-const MOBILE_BREAKPOINT = 768;
+import useSearchConfigsPanelPage from '../features/knowledge/searchConfigs/useSearchConfigsPanelPage';
 
 export function SearchConfigsPanel() {
   const {
     isAdmin,
+    isMobile,
     list,
     loading,
     error,
@@ -30,9 +30,7 @@ export function SearchConfigsPanel() {
     setFilter,
     setNameText,
     setJsonText,
-    setCreateMode,
     setCreateName,
-    setCreateFromId,
     setCreateJsonText,
     fetchList,
     loadDetail,
@@ -40,26 +38,15 @@ export function SearchConfigsPanel() {
     removeItem,
     openCreate,
     closeCreate,
-    syncCreateJsonFromCopy,
     create,
     resetDetailToSelected,
-  } = useSearchConfigsPanel();
-
-  const [isMobile, setIsMobile] = useState(() => {
-    if (typeof window === 'undefined') return false;
-    return window.innerWidth <= MOBILE_BREAKPOINT;
-  });
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return undefined;
-    const handleResize = () => setIsMobile(window.innerWidth <= MOBILE_BREAKPOINT);
-    handleResize();
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
+    handleCreateModeChange,
+    handleCreateSourceChange,
+  } = useSearchConfigsPanelPage();
 
   return (
     <div
+      data-testid="search-configs-page"
       style={{
         padding: isMobile ? '12px' : '16px',
         display: 'grid',
@@ -68,9 +55,38 @@ export function SearchConfigsPanel() {
         alignItems: 'start',
       }}
     >
-      <ConfigListPanel list={list} filteredList={filteredList} selectedId={selected?.id} filter={filter} loading={loading} error={error} busy={busy} isAdmin={isAdmin} isMobile={isMobile} onChangeFilter={setFilter} onOpenCreate={openCreate} onRefresh={fetchList} onSelect={loadDetail} onDelete={removeItem} />
+      <ConfigListPanel
+        list={list}
+        filteredList={filteredList}
+        selectedId={selected?.id}
+        filter={filter}
+        loading={loading}
+        error={error}
+        busy={busy}
+        isAdmin={isAdmin}
+        isMobile={isMobile}
+        onChangeFilter={setFilter}
+        onOpenCreate={openCreate}
+        onRefresh={fetchList}
+        onSelect={loadDetail}
+        onDelete={removeItem}
+      />
 
-      <ConfigDetailPanel selected={selected} detailLoading={detailLoading} detailError={detailError} nameText={nameText} jsonText={jsonText} saveStatus={saveStatus} busy={busy} isAdmin={isAdmin} isMobile={isMobile} onChangeName={setNameText} onChangeJson={setJsonText} onReset={resetDetailToSelected} onSave={save} />
+      <ConfigDetailPanel
+        selected={selected}
+        detailLoading={detailLoading}
+        detailError={detailError}
+        nameText={nameText}
+        jsonText={jsonText}
+        saveStatus={saveStatus}
+        busy={busy}
+        isAdmin={isAdmin}
+        isMobile={isMobile}
+        onChangeName={setNameText}
+        onChangeJson={setJsonText}
+        onReset={resetDetailToSelected}
+        onSave={save}
+      />
 
       <CreateConfigDialog
         open={createOpen}
@@ -83,18 +99,9 @@ export function SearchConfigsPanel() {
         error={createError}
         isMobile={isMobile}
         onClose={closeCreate}
-        onChangeMode={(mode) => {
-          setCreateMode(mode);
-          if (mode === 'blank') {
-            setCreateFromId('');
-            setCreateJsonText('{}');
-          }
-        }}
+        onChangeMode={handleCreateModeChange}
         onChangeName={setCreateName}
-        onChangeFromId={(id) => {
-          setCreateFromId(id);
-          syncCreateJsonFromCopy(id);
-        }}
+        onChangeFromId={handleCreateSourceChange}
         onChangeJsonText={setCreateJsonText}
         onCreate={create}
       />
