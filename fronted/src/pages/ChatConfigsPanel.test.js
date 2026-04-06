@@ -92,7 +92,9 @@ describe('ChatConfigsPanel', () => {
 
     await waitFor(() => expect(screen.getByTestId('chat-config-name')).toHaveValue('Chat 1'));
     fireEvent.click(screen.getByTestId('chat-config-new'));
-    fireEvent.change(screen.getByTestId('chat-config-create-name'), { target: { value: 'New Chat' } });
+    fireEvent.change(screen.getByTestId('chat-config-create-name'), {
+      target: { value: 'New Chat' },
+    });
     fireEvent.click(screen.getByTestId('chat-config-create-confirm'));
 
     await waitFor(() => expect(chatConfigsApi.createChat).toHaveBeenCalledWith({ name: 'New Chat' }));
