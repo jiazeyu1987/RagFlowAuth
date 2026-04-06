@@ -153,7 +153,6 @@ class TestPreviewWatermarkUnit(unittest.TestCase):
     @patch("backend.app.modules.onlyoffice.router.settings.ONLYOFFICE_JWT_SECRET", "")
     @patch("backend.app.modules.onlyoffice.router.settings.ONLYOFFICE_FILE_TOKEN_TTL_SECONDS", 300)
     @patch("backend.services.onlyoffice_security.settings.ONLYOFFICE_FILE_TOKEN_SECRET", "unit-test-secret")
-    @patch("backend.services.onlyoffice_security.settings.JWT_SECRET_KEY", "fallback-secret")
     def test_onlyoffice_editor_config_contains_watermark_and_token_claims(self):
         td = make_temp_dir(prefix="ragflowauth_onlyoffice_watermark")
         try:

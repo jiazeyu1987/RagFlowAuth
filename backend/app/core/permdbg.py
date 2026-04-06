@@ -14,7 +14,7 @@ def permdbg(event: str, **fields: Any) -> None:
     - Enable: set `PERMDBG_ENABLED=true`
     - Output: uses `uvicorn.error` logger so it shows up in the same console stream.
     """
-    if not getattr(settings, "PERMDBG_ENABLED", False):
+    if not settings.PERMDBG_ENABLED:
         return
     payload = {"event": f"PERMDBG.{event}", **fields}
     try:

@@ -21,10 +21,7 @@ def _b64url_decode(text: str) -> bytes:
 
 
 def _file_token_secret() -> str:
-    return (
-        str(getattr(settings, "ONLYOFFICE_FILE_TOKEN_SECRET", "") or "").strip()
-        or str(getattr(settings, "JWT_SECRET_KEY", "") or "")
-    )
+    return str(settings.ONLYOFFICE_FILE_TOKEN_SECRET or "").strip()
 
 
 def create_file_access_token(claims: dict[str, Any], ttl_seconds: int | None = None) -> str:

@@ -30,7 +30,7 @@ SUPPORTED_EXTENSIONS = {".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx
 
 
 def _build_public_api_base(request: Request) -> str:
-    configured = str(getattr(settings, "ONLYOFFICE_PUBLIC_API_BASE_URL", "") or "").strip()
+    configured = str(settings.ONLYOFFICE_PUBLIC_API_BASE_URL or "").strip()
     if configured:
         return configured.rstrip("/")
     return str(request.base_url).rstrip("/")
@@ -46,7 +46,7 @@ def _document_type_for_extension(ext: str) -> str:
 
 
 def _encode_onlyoffice_token(payload: dict[str, Any]) -> str:
-    secret = str(getattr(settings, "ONLYOFFICE_JWT_SECRET", "") or "").strip()
+    secret = str(settings.ONLYOFFICE_JWT_SECRET or "").strip()
     if not secret:
         return ""
     try:
@@ -73,10 +73,10 @@ def build_editor_config(body: dict, request: Request, ctx: AuthContextDep):
         dataset,
         filename,
     )
-    if not bool(getattr(settings, "ONLYOFFICE_ENABLED", False)):
+    if not settings.ONLYOFFICE_ENABLED:
         raise HTTPException(status_code=400, detail="onlyoffice_not_enabled")
 
-    server_url = str(getattr(settings, "ONLYOFFICE_SERVER_URL", "") or "").strip().rstrip("/")
+    server_url = str(settings.ONLYOFFICE_SERVER_URL or "").strip().rstrip("/")
     if not server_url:
         raise HTTPException(status_code=400, detail="onlyoffice_server_url_missing")
 
@@ -129,7 +129,7 @@ def build_editor_config(body: dict, request: Request, ctx: AuthContextDep):
             "watermark_text": watermark.get("text"),
             "watermark_purpose": watermark.get("purpose"),
         },
-        ttl_seconds=int(getattr(settings, "ONLYOFFICE_FILE_TOKEN_TTL_SECONDS", 300) or 300),
+        ttl_seconds=int(settings.ONLYOFFICE_FILE_TOKEN_TTL_SECONDS or 300),
     )
     api_base = _build_public_api_base(request)
     file_url = f"{api_base}/api/onlyoffice/file?token={quote(file_token, safe='')}"
