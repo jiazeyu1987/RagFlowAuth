@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import UserFiltersPanel from '../features/users/components/UserFiltersPanel';
 import DepartmentCards from '../features/users/components/DepartmentCards';
 import UsersTable from '../features/users/components/UsersTable';
@@ -7,17 +7,11 @@ import ResetPasswordModal from '../features/users/components/modals/ResetPasswor
 import PolicyModal from '../features/users/components/modals/PolicyModal';
 import GroupModal from '../features/users/components/modals/GroupModal';
 import DisableUserModal from '../features/users/components/modals/DisableUserModal';
-import { useUserManagement } from '../features/users/hooks/useUserManagement';
-
-const MOBILE_BREAKPOINT = 768;
+import useUserManagementPage from '../features/users/useUserManagementPage';
 
 const UserManagement = () => {
-  const [isMobile, setIsMobile] = useState(() => {
-    if (typeof window === 'undefined') return false;
-    return window.innerWidth <= MOBILE_BREAKPOINT;
-  });
-
   const {
+    isMobile,
     loading,
     error,
     isSubAdminUser,
@@ -96,16 +90,7 @@ const UserManagement = () => {
     handleResetFilters,
     handleCreateModalRootDirectory,
     handlePolicyRootDirectory,
-  } = useUserManagement();
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return undefined;
-
-    const handleResize = () => setIsMobile(window.innerWidth <= MOBILE_BREAKPOINT);
-    handleResize();
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
+  } = useUserManagementPage();
 
   if (loading) return <div>鍔犺浇涓?..</div>;
   if (error) return <div>閿欒: {error}</div>;

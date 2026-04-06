@@ -2,11 +2,9 @@ import React from 'react';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import UserManagement from './UserManagement';
-import { useUserManagement } from '../features/users/hooks/useUserManagement';
+import useUserManagementPage from '../features/users/useUserManagementPage';
 
-jest.mock('../features/users/hooks/useUserManagement', () => ({
-  useUserManagement: jest.fn(),
-}));
+jest.mock('../features/users/useUserManagementPage', () => jest.fn());
 
 jest.mock('../features/users/components/UserFiltersPanel', () => () => <div data-testid="users-filters-panel" />);
 jest.mock('../features/users/components/DepartmentCards', () => () => <div data-testid="users-department-cards" />);
@@ -16,6 +14,7 @@ jest.mock('../features/users/components/modals/GroupModal', () => () => null);
 jest.mock('../features/users/components/modals/DisableUserModal', () => () => null);
 
 const createHookState = (overrides = {}) => ({
+  isMobile: false,
   loading: false,
   error: null,
   isSubAdminUser: false,
@@ -146,7 +145,7 @@ describe('UserManagement simplified user ownership forms', () => {
   });
 
   it('renders the users table in the left column and support panels in the right column', () => {
-    useUserManagement.mockReturnValue(createHookState());
+    useUserManagementPage.mockReturnValue(createHookState());
 
     render(<UserManagement />);
 
@@ -161,7 +160,7 @@ describe('UserManagement simplified user ownership forms', () => {
   });
 
   it('does not render a duplicate page heading inside the content area', () => {
-    useUserManagement.mockReturnValue(createHookState());
+    useUserManagementPage.mockReturnValue(createHookState());
 
     render(<UserManagement />);
 
@@ -169,7 +168,7 @@ describe('UserManagement simplified user ownership forms', () => {
   });
 
   it('hides the department summary panel for sub admins', () => {
-    useUserManagement.mockReturnValue(
+    useUserManagementPage.mockReturnValue(
       createHookState({
         isSubAdminUser: true,
         canCreateUsers: false,
@@ -183,7 +182,7 @@ describe('UserManagement simplified user ownership forms', () => {
   });
 
   it('renders normal user create modal with sub admin selector and no permission groups', async () => {
-    useUserManagement.mockReturnValue(createHookState({ showCreateModal: true }));
+    useUserManagementPage.mockReturnValue(createHookState({ showCreateModal: true }));
 
     render(<UserManagement />);
 
@@ -198,7 +197,7 @@ describe('UserManagement simplified user ownership forms', () => {
   });
 
   it('shows username when sub admin label only has account name', async () => {
-    useUserManagement.mockReturnValue(
+    useUserManagementPage.mockReturnValue(
       createHookState({
         showCreateModal: true,
         subAdminOptions: [{ value: 'sub-1', label: 'wangxin', username: 'wangxin', company_id: 1 }],
@@ -221,7 +220,7 @@ describe('UserManagement simplified user ownership forms', () => {
         user_type: 'sub_admin',
       },
     });
-    useUserManagement.mockReturnValue(hookState);
+    useUserManagementPage.mockReturnValue(hookState);
 
     render(<UserManagement />);
 
@@ -234,7 +233,7 @@ describe('UserManagement simplified user ownership forms', () => {
   });
 
   it('renders normal user edit modal with sub admin selector and no permission groups', () => {
-    useUserManagement.mockReturnValue(
+    useUserManagementPage.mockReturnValue(
       createHookState({
         showPolicyModal: true,
         policyUser: {
@@ -271,7 +270,7 @@ describe('UserManagement simplified user ownership forms', () => {
         manager_user_id: '',
       },
     });
-    useUserManagement.mockReturnValue(hookState);
+    useUserManagementPage.mockReturnValue(hookState);
 
     render(<UserManagement />);
 
@@ -298,7 +297,7 @@ describe('UserManagement simplified user ownership forms', () => {
         user_type: 'sub_admin',
       },
     });
-    useUserManagement.mockReturnValue(hookState);
+    useUserManagementPage.mockReturnValue(hookState);
 
     render(<UserManagement />);
 
@@ -306,7 +305,7 @@ describe('UserManagement simplified user ownership forms', () => {
   });
 
   it('shows org directory error in create modal when departments are unavailable', () => {
-    useUserManagement.mockReturnValue(
+    useUserManagementPage.mockReturnValue(
       createHookState({
         showCreateModal: true,
         departments: [],
