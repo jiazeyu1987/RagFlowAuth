@@ -6,7 +6,7 @@ import shutil
 import time
 from pathlib import Path
 
-from backend.services.data_security_store import DataSecurityStore
+from .store import DataSecurityStore
 
 from .backup_steps import (
     BackupCancelledError,

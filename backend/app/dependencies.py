@@ -7,15 +7,16 @@ from backend.database.schema.ensure import ensure_schema
 from backend.services.chat_session_store import ChatSessionStore
 from backend.services.chat_management import ChatManagementManager, ChatOwnershipStore
 from backend.services.auth_session_store import AuthSessionStore
-from backend.services.data_security import DataSecurityStore
+from backend.services.data_security.store import DataSecurityStore
 from backend.services.audit_log_store import AuditLogStore
 from backend.services.chat_message_sources_store import ChatMessageSourcesStore
 from backend.services.deletion_log_store import DeletionLogStore
 from backend.services.download_log_store import DownloadLogStore
-from backend.services.kb_store import KbStore
-from backend.services.knowledge_directory_store import KnowledgeDirectoryStore
-from backend.services.permission_group_store import PermissionGroupStore
-from backend.services.permission_group_folder_store import PermissionGroupFolderManager, PermissionGroupFolderStore
+from backend.services.kb.store import KbStore
+from backend.services.knowledge_directory.store import KnowledgeDirectoryStore
+from backend.services.permission_groups.store import PermissionGroupStore
+from backend.services.permission_group_folders.manager import PermissionGroupFolderManager
+from backend.services.permission_group_folders.store import PermissionGroupFolderStore
 from backend.services.patent_download.store import PatentDownloadStore
 from backend.services.paper_download.store import PaperDownloadStore
 from backend.services.package_drawing.store import PackageDrawingStore
@@ -23,7 +24,7 @@ from backend.services.ragflow_connection import create_ragflow_connection
 from backend.services.ragflow_chat_service import RagflowChatService
 from backend.services.ragflow_service import RagflowService
 from backend.services.org_directory_store import OrgDirectoryStore, OrgStructureManager
-from backend.services.user_store import UserStore
+from backend.services.users.store import UserStore
 from backend.services.search_config_store import SearchConfigStore
 from backend.services.upload_settings_store import UploadSettingsStore
 from backend.services.audit import AuditLogManager

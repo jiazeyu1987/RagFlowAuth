@@ -6,7 +6,7 @@ from pydantic import BaseModel
 from backend.app.core.authz import AdminOnly, AuthContextDep
 from backend.app.core.training_support import resolve_training_compliance_service
 from backend.services.training_compliance import TrainingComplianceError
-from backend.services.user_store import UserStore
+from backend.services.users.store import UserStore
 
 router = APIRouter()
 

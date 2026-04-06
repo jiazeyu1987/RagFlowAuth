@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from backend.database.tenant_paths import resolve_tenant_db_root
-from backend.services.user_store import UserStore
+from backend.services.users.store import UserStore
 
 
 def resolve_user_display_names(deps, user_ids: set[str] | list[str] | tuple[str, ...]) -> dict[str, str]:

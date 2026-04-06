@@ -12,7 +12,7 @@ from backend.database.tenant_paths import resolve_tenant_db_root
 from backend.services.electronic_signature import ElectronicSignatureService, ElectronicSignatureStore
 from backend.services.electronic_signature import ElectronicSignatureError
 from backend.services.audit_helpers import actor_fields_from_user
-from backend.services.user_store import UserStore
+from backend.services.users.store import UserStore
 
 
 router = APIRouter()

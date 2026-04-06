@@ -13,7 +13,7 @@ from backend.runtime.backup import run_backup, write_default_backup_config
 from backend.database.paths import resolve_auth_db_path
 from backend.database.schema.ensure import ensure_schema
 from backend.database.sqlite import connect_sqlite
-from backend.services.user_store import hash_password
+from backend.services.users.password import hash_password
 
 logger = logging.getLogger(__name__)
 

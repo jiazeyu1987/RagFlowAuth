@@ -5,7 +5,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from backend.services.data_security_store import DataSecuritySettings, DataSecurityStore
+from ..models import DataSecuritySettings
+from ..store import DataSecurityStore
 
 
 class BackupCancelledError(RuntimeError):

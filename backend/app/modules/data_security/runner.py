@@ -4,7 +4,7 @@ import threading
 import time
 
 from backend.services.data_security.backup_service import DataSecurityBackupService
-from backend.services.data_security_store import DataSecurityStore
+from backend.services.data_security.store import DataSecurityStore
 
 _lock = threading.Lock()
 _running_job_id: int | None = None

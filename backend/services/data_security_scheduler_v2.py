@@ -16,7 +16,7 @@ import time
 from datetime import datetime
 
 from backend.app.modules.data_security.runner import start_job_if_idle
-from backend.services.data_security_store import DataSecurityStore
+from backend.services.data_security.store import DataSecurityStore
 
 
 logger = logging.getLogger(__name__)

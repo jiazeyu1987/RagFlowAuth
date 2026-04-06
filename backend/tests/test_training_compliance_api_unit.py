@@ -19,7 +19,7 @@ from backend.services.audit_log_store import AuditLogStore
 from backend.services.data_security.store import DataSecurityStore
 from backend.services.electronic_signature import ElectronicSignatureService, ElectronicSignatureStore
 from backend.services.training_compliance import TrainingComplianceService
-from backend.services.user_store import UserStore
+from backend.services.users.store import UserStore
 from backend.services.users import hash_password
 from backend.tests._training_test_utils import qualify_user_for_action
 from backend.tests._util_tempdir import cleanup_dir, make_temp_dir
