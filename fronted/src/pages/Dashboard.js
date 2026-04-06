@@ -1,9 +1,5 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import operationApprovalApi from '../features/operationApproval/api';
-import { useAuth } from '../hooks/useAuth';
-
-const MOBILE_BREAKPOINT = 768;
+import React from 'react';
+import useDashboardPage from '../features/operationApproval/useDashboardPage';
 
 const cardGridStyle = (isMobile) => ({
   display: 'grid',
@@ -31,102 +27,7 @@ const quickButtonStyle = (bg, isMobile) => ({
 });
 
 export default function Dashboard() {
-  const { user, can } = useAuth();
-  const navigate = useNavigate();
-  const [isMobile, setIsMobile] = useState(() => {
-    if (typeof window === 'undefined') return false;
-    return window.innerWidth <= MOBILE_BREAKPOINT;
-  });
-  const [loading, setLoading] = useState(true);
-  const [statsError, setStatsError] = useState('');
-  const [stats, setStats] = useState({
-    in_approval_count: 0,
-    executed_count: 0,
-    rejected_count: 0,
-    execution_failed_count: 0,
-  });
-
-  const capabilities = useMemo(
-    () => ({
-      canBrowse: can('ragflow_documents', 'view'),
-      canViewDocumentHistory: can('kb_documents', 'view'),
-      canUploadKb: can('kb_documents', 'upload'),
-    }),
-    [can]
-  );
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return undefined;
-    const handleResize = () => setIsMobile(window.innerWidth <= MOBILE_BREAKPOINT);
-    handleResize();
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
-
-  useEffect(() => {
-    let cancelled = false;
-    const run = async () => {
-      setLoading(true);
-      setStatsError('');
-      try {
-        const data = await operationApprovalApi.getStats();
-        if (!cancelled) {
-          setStats({
-            in_approval_count: Number(data?.in_approval_count || 0),
-            executed_count: Number(data?.executed_count || 0),
-            rejected_count: Number(data?.rejected_count || 0),
-            execution_failed_count: Number(data?.execution_failed_count || 0),
-          });
-        }
-      } catch (error) {
-        if (!cancelled) {
-          setStatsError(error?.message || '加载审批统计失败');
-        }
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
-      }
-    };
-    run();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  const cards = useMemo(
-    () => [
-      {
-        key: 'in_approval',
-        title: '审批中',
-        value: stats.in_approval_count,
-        color: '#2563eb',
-        onClick: () => navigate('/approvals?status=in_approval'),
-      },
-      {
-        key: 'executed',
-        title: '已执行',
-        value: stats.executed_count,
-        color: '#15803d',
-        onClick: () => navigate('/approvals?status=executed'),
-      },
-      {
-        key: 'rejected',
-        title: '已驳回',
-        value: stats.rejected_count,
-        color: '#dc2626',
-        onClick: () => navigate('/approvals?status=rejected'),
-      },
-      {
-        key: 'execution_failed',
-        title: '执行失败',
-        value: stats.execution_failed_count,
-        color: '#b91c1c',
-        onClick: () => navigate('/approvals?status=execution_failed'),
-      },
-    ],
-    [navigate, stats]
-  );
+  const { user, isMobile, loading, statsError, cards, quickActions } = useDashboardPage();
 
   if (loading) {
     return <div data-testid="dashboard-loading">加载中...</div>;
@@ -167,44 +68,17 @@ export default function Dashboard() {
       <div style={{ ...cardStyle, marginTop: '14px' }}>
         <div style={{ marginBottom: '10px', fontWeight: 900, color: '#111827' }}>快捷操作</div>
         <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', flexDirection: isMobile ? 'column' : 'row' }}>
-          <button
-            type="button"
-            data-testid="dashboard-quick-approvals"
-            onClick={() => navigate('/approvals')}
-            style={quickButtonStyle('#2563eb', isMobile)}
-          >
-            查看审批
-          </button>
-          {capabilities.canUploadKb ? (
+          {quickActions.map((action) => (
             <button
+              key={action.key}
               type="button"
-              data-testid="dashboard-quick-upload"
-              onClick={() => navigate('/upload')}
-              style={quickButtonStyle('#059669', isMobile)}
+              data-testid={`dashboard-quick-${action.key}`}
+              onClick={action.onClick}
+              style={quickButtonStyle(action.color, isMobile)}
             >
-              提交上传申请
+              {action.label}
             </button>
-          ) : null}
-          {capabilities.canViewDocumentHistory ? (
-            <button
-              type="button"
-              data-testid="dashboard-quick-document-history"
-              onClick={() => navigate('/document-history')}
-              style={quickButtonStyle('#7c3aed', isMobile)}
-            >
-              查看文档记录
-            </button>
-          ) : null}
-          {capabilities.canBrowse ? (
-            <button
-              type="button"
-              data-testid="dashboard-quick-browser"
-              onClick={() => navigate('/browser')}
-              style={quickButtonStyle('#0f766e', isMobile)}
-            >
-              浏览文档
-            </button>
-          ) : null}
+          ))}
         </div>
       </div>
     </div>
