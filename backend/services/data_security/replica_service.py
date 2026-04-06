@@ -9,8 +9,8 @@ import time
 from datetime import datetime
 from pathlib import Path
 
-from .common import ensure_dir, run_cmd
-from .docker_utils import container_path_to_host_str
+from .common import ensure_dir
+from .docker_utils import container_path_to_host_str, resolve_backend_helper_image
 from .store import DataSecurityStore
 
 logger = logging.getLogger(__name__)
@@ -188,13 +188,7 @@ class BackupReplicaService:
                 target.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(item, target)
 
-        helper_image = "ragflowauth-backend:latest"
-        try:
-            code, out = run_cmd(["docker", "ps", "--filter", "name=ragflowauth-backend", "--format", "{{.Image}}"])
-            if code == 0 and out and out.strip():
-                helper_image = out.strip()
-        except Exception:
-            pass
+        helper_image = resolve_backend_helper_image()
 
         volumes_on_host_str = container_path_to_host_str(src / "volumes")
         try:

@@ -16,9 +16,13 @@ from backend.app.dependencies import AppDependencies
 from backend.app.modules.data_security.runner import start_job_if_idle
 from backend.services.audit_helpers import actor_fields_from_user
 from backend.services.data_security.backup_service import _compute_backup_package_hash
-from backend.services.data_security.common import run_cmd
 from backend.services.data_security import RestoreDrillExecutionService
-from backend.services.data_security.docker_utils import docker_ok, list_docker_volumes_by_prefix, read_compose_project_name
+from backend.services.data_security.docker_utils import (
+    docker_ok,
+    list_docker_volumes_by_prefix,
+    read_compose_project_name,
+    resolve_backend_helper_image,
+)
 
 router = APIRouter()
 
@@ -131,15 +135,10 @@ def _resolve_auth_db_path(auth_db_path: str) -> Path:
 
 
 def _resolve_backup_worker_image() -> tuple[str | None, str | None]:
-    code, out = run_cmd(["docker", "ps", "--filter", "name=ragflowauth-backend", "--format", "{{.Image}}"])
-    if code == 0 and str(out or "").strip():
-        return str(out).strip(), None
-
-    fallback_image = "ragflowauth-backend:latest"
-    code, out = run_cmd(["docker", "image", "inspect", fallback_image])
-    if code == 0:
-        return fallback_image, None
-    return None, f"backup_worker_image_missing:{fallback_image}"
+    try:
+        return resolve_backend_helper_image(), None
+    except RuntimeError as exc:
+        return None, str(exc)
 
 
 def _assert_backup_prerequisites(deps: AppDependencies) -> None:

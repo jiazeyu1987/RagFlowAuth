@@ -81,12 +81,14 @@ class TestDataSecurityRouterUnit(unittest.TestCase):
             ), patch.object(
                 router, "list_docker_volumes_by_prefix", return_value=["docker_esdata01"]
             ), patch.object(
-                router, "run_cmd", side_effect=[(0, ""), (1, "missing")]
+                router, "resolve_backend_helper_image", side_effect=RuntimeError(
+                    "backup_worker_image_not_found:container=ragflowauth-backend"
+                )
             ):
                 with self.assertRaises(RuntimeError) as ctx:
                     router._assert_backup_prerequisites(deps)
 
-            self.assertEqual(str(ctx.exception), "backup_worker_image_missing:ragflowauth-backend:latest")
+            self.assertEqual(str(ctx.exception), "backup_worker_image_not_found:container=ragflowauth-backend")
 
     def test_hydrate_job_package_hash_backfills_existing_pack(self) -> None:
         from backend.app.modules.data_security import router

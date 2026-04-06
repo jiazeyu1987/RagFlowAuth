@@ -103,6 +103,24 @@ def list_docker_volumes_by_prefix(prefix: str) -> list[str]:
     return sorted(vols)
 
 
+def resolve_backend_helper_image() -> str:
+    """
+    Resolve the running backend container image used for helper `docker run` tasks.
+
+    We fail fast when the backend container image cannot be resolved instead of
+    silently falling back to a hard-coded tag that may not exist locally.
+    """
+    code, out = run_cmd(["docker", "ps", "--filter", "name=ragflowauth-backend", "--format", "{{.Image}}"])
+    if code != 0:
+        detail = str(out or "").strip() or "docker_ps_failed"
+        raise RuntimeError(f"backup_worker_image_resolve_failed:{detail}")
+
+    images = [line.strip() for line in str(out or "").splitlines() if line.strip()]
+    if not images:
+        raise RuntimeError("backup_worker_image_not_found:container=ragflowauth-backend")
+    return images[0]
+
+
 def read_compose_project_name(compose_file: Path) -> str:
     """
     Infer compose project name (best-effort):
@@ -148,15 +166,7 @@ def docker_tar_volume(
     backup_dir = dest_tar_gz.parent.resolve()
 
     backup_dir_str = container_path_to_host_str(backup_dir)
-
-    # Get current running backend container's image (instead of hardcoded version)
-    image = "ragflowauth-backend:latest"  # Fallback default
-    try:
-        code, out = run_cmd(["docker", "ps", "--filter", "name=ragflowauth-backend", "--format", "{{.Image}}"])
-        if code == 0 and out and out.strip():
-            image = out.strip()
-    except Exception:
-        pass  # Use fallback default
+    image = resolve_backend_helper_image()
 
     cmd = [
         "docker",

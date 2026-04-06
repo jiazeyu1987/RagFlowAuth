@@ -3,6 +3,50 @@ from unittest import mock
 
 
 class TestDataSecurityPathMapping(unittest.TestCase):
+    def test_resolve_backend_helper_image_fails_fast_when_backend_container_missing(self):
+        from backend.services.data_security import docker_utils
+
+        with mock.patch.object(docker_utils, "run_cmd", return_value=(0, "")):
+            with self.assertRaisesRegex(
+                RuntimeError,
+                "backup_worker_image_not_found:container=ragflowauth-backend",
+            ):
+                docker_utils.resolve_backend_helper_image()
+
+    def test_docker_tar_volume_uses_resolved_backend_helper_image(self):
+        from pathlib import Path
+
+        from backend.services.data_security import docker_utils
+
+        calls = []
+
+        def fake_run_cmd_live(argv, **_kwargs):
+            calls.append(list(argv))
+            return 0, ""
+
+        with mock.patch.object(
+            docker_utils,
+            "container_path_to_host_str",
+            return_value="/host/backups",
+        ), mock.patch.object(
+            docker_utils,
+            "resolve_backend_helper_image",
+            return_value="backend-helper:test",
+        ), mock.patch.object(
+            docker_utils,
+            "ensure_dir",
+            return_value=None,
+        ), mock.patch.object(
+            docker_utils,
+            "run_cmd_live",
+            side_effect=fake_run_cmd_live,
+        ):
+            docker_utils.docker_tar_volume("demo-volume", Path("/app/data/backups/demo.tar.gz"))
+
+        self.assertTrue(calls)
+        self.assertEqual(calls[0][0:6], ["docker", "run", "--rm", "-v", "demo-volume:/data:ro", "-v"])
+        self.assertIn("backend-helper:test", calls[0])
+
     def test_container_path_to_host_str_uses_mount_mapping(self):
         from backend.services.data_security.docker_utils import container_path_to_host_str
 
