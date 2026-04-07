@@ -5,9 +5,27 @@ from typing import Any
 
 import requests
 
+from backend.services.operation_approval.types import OPERATION_TYPE_LABELS
+
 DEFAULT_API_BASE = "https://api.dingtalk.com"
 DEFAULT_OAPI_BASE = "https://oapi.dingtalk.com"
 DEFAULT_TIMEOUT_SECONDS = 30
+
+_OPERATION_APPROVAL_EVENT_LABELS = {
+    "operation_approval_submitted": "审批已提交",
+    "operation_approval_todo": "审批待处理",
+    "operation_approval_rejected": "审批已驳回",
+    "operation_approval_withdrawn": "审批已撤回",
+    "operation_approval_executed": "审批已完成",
+    "operation_approval_execution_failed": "审批执行失败",
+}
+
+_OPERATION_APPROVAL_ACTION_LABELS = {
+    "knowledge_file_upload": "上传",
+    "knowledge_file_delete": "删除",
+    "knowledge_base_create": "新建知识库",
+    "knowledge_base_delete": "删除知识库",
+}
 
 
 def _ensure_json_response(resp: requests.Response, *, error_prefix: str) -> dict[str, Any]:
@@ -53,6 +71,17 @@ def _resolve_timeout_seconds(config: dict[str, Any]) -> int:
 
 
 class DingTalkNotificationAdapter:
+    def validate_channel(self, *, channel: dict[str, Any]) -> str:
+        resolved = self._resolve_channel_config(channel)
+        with requests.Session() as session:
+            return self._get_access_token(
+                session=session,
+                api_base=resolved["api_base"],
+                app_key=resolved["app_key"],
+                app_secret=resolved["app_secret"],
+                timeout_seconds=resolved["timeout_seconds"],
+            )
+
     def send(
         self,
         *,
@@ -61,13 +90,7 @@ class DingTalkNotificationAdapter:
         payload: dict[str, Any],
         recipient: dict[str, Any] | None = None,
     ) -> None:
-        config = channel.get("config") or {}
-        app_key = _required_config_str(config, "app_key", "dingtalk_app_key_required")
-        app_secret = _required_config_str(config, "app_secret", "dingtalk_app_secret_required")
-        agent_id = _required_agent_id(config)
-        api_base = str(config.get("api_base") or DEFAULT_API_BASE).strip() or DEFAULT_API_BASE
-        oapi_base = str(config.get("oapi_base") or DEFAULT_OAPI_BASE).strip() or DEFAULT_OAPI_BASE
-        timeout_seconds = _resolve_timeout_seconds(config)
+        resolved = self._resolve_channel_config(channel)
 
         recipient_address = str((recipient or {}).get("address") or "").strip()
         if not recipient_address:
@@ -77,20 +100,32 @@ class DingTalkNotificationAdapter:
         with requests.Session() as session:
             token = self._get_access_token(
                 session=session,
-                api_base=api_base,
-                app_key=app_key,
-                app_secret=app_secret,
-                timeout_seconds=timeout_seconds,
+                api_base=resolved["api_base"],
+                app_key=resolved["app_key"],
+                app_secret=resolved["app_secret"],
+                timeout_seconds=resolved["timeout_seconds"],
             )
             self._send_text_work_notification(
                 session=session,
-                oapi_base=oapi_base,
+                oapi_base=resolved["oapi_base"],
                 access_token=token,
-                agent_id=agent_id,
+                agent_id=resolved["agent_id"],
                 recipient_userid=recipient_address,
                 text=message,
-                timeout_seconds=timeout_seconds,
+                timeout_seconds=resolved["timeout_seconds"],
             )
+
+    @staticmethod
+    def _resolve_channel_config(channel: dict[str, Any]) -> dict[str, Any]:
+        config = channel.get("config") or {}
+        return {
+            "app_key": _required_config_str(config, "app_key", "dingtalk_app_key_required"),
+            "app_secret": _required_config_str(config, "app_secret", "dingtalk_app_secret_required"),
+            "agent_id": _required_agent_id(config),
+            "api_base": str(config.get("api_base") or DEFAULT_API_BASE).strip() or DEFAULT_API_BASE,
+            "oapi_base": str(config.get("oapi_base") or DEFAULT_OAPI_BASE).strip() or DEFAULT_OAPI_BASE,
+            "timeout_seconds": _resolve_timeout_seconds(config),
+        }
 
     @staticmethod
     def _get_access_token(
@@ -145,6 +180,8 @@ class DingTalkNotificationAdapter:
 
     @staticmethod
     def _message(*, event_type: str, payload: dict[str, Any], recipient: dict[str, Any] | None) -> str:
+        if event_type.startswith("operation_approval_"):
+            return DingTalkNotificationAdapter._operation_approval_message(event_type=event_type, payload=payload)
         approval_target = payload.get("approval_target") or {}
         return "\n".join(
             [
@@ -156,3 +193,47 @@ class DingTalkNotificationAdapter:
                 json.dumps(payload or {}, ensure_ascii=False, sort_keys=True),
             ]
         )
+
+    @staticmethod
+    def _operation_approval_message(*, event_type: str, payload: dict[str, Any]) -> str:
+        lines = [DingTalkNotificationAdapter._operation_approval_summary(event_type=event_type, payload=payload)]
+
+        target_label = str(payload.get("target_label") or "").strip()
+        if target_label:
+            lines.append(f"审批对象：{target_label}")
+
+        current_step_name = str(payload.get("current_step_name") or "").strip()
+        if current_step_name and event_type == "operation_approval_todo":
+            lines.append(f"当前步骤：{current_step_name}")
+
+        request_id = str(payload.get("request_id") or "").strip()
+        if request_id:
+            lines.append(f"申请单号：{request_id}")
+
+        return "\n".join(lines)
+
+    @staticmethod
+    def _operation_approval_summary(*, event_type: str, payload: dict[str, Any]) -> str:
+        operation_type = str(payload.get("operation_type") or "").strip()
+        action_label = _OPERATION_APPROVAL_ACTION_LABELS.get(operation_type) or str(
+            OPERATION_TYPE_LABELS.get(operation_type) or operation_type or "审批"
+        )
+
+        if event_type == "operation_approval_todo":
+            if operation_type == "knowledge_file_upload":
+                return "您在知识库有一条上传信息需要审批。"
+            if operation_type == "knowledge_file_delete":
+                return "您在知识库有一条删除信息需要审批。"
+            return f"您在知识库有一条{action_label}信息需要审批。"
+
+        if event_type == "operation_approval_submitted":
+            return f"您的{action_label}申请已提交审批。"
+        if event_type == "operation_approval_rejected":
+            return f"您的{action_label}申请已被驳回。"
+        if event_type == "operation_approval_withdrawn":
+            return f"您的{action_label}申请已撤回。"
+        if event_type == "operation_approval_executed":
+            return f"您的{action_label}申请已审批通过并执行完成。"
+        if event_type == "operation_approval_execution_failed":
+            return f"您的{action_label}申请审批通过，但执行失败。"
+        return f"您有一条{action_label}审批通知，请及时处理。"

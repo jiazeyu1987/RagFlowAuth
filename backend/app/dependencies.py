@@ -225,11 +225,18 @@ def create_dependencies(
     if operation_approval_db_path == db_path:
         operation_approval_user_store = user_store
         operation_approval_notification_service = notification_manager
+        operation_approval_external_notification_service = notification_manager
         operation_approval_inbox_service = user_inbox_service
         operation_approval_signature_service = electronic_signature_service
     else:
         operation_approval_user_store = UserStore(db_path=str(operation_approval_db_path))
         operation_approval_notification_service = notification_manager
+        operation_approval_external_notification_service = NotificationManager(
+            store=NotificationStore(db_path=str(operation_approval_db_path)),
+            audit_log_manager=AuditLogManager(store=AuditLogStore(db_path=str(operation_approval_db_path))),
+            retry_interval_seconds=int(settings.NOTIFICATION_RETRY_INTERVAL_SECONDS or 60),
+        )
+        _ensure_default_notification_channels(operation_approval_external_notification_service)
         operation_approval_inbox_service = UserInboxService(
             store=UserInboxStore(db_path=str(operation_approval_db_path))
         )
@@ -241,6 +248,7 @@ def create_dependencies(
         user_store=operation_approval_user_store,
         inbox_service=operation_approval_inbox_service,
         notification_service=operation_approval_notification_service,
+        external_notification_service=operation_approval_external_notification_service,
         electronic_signature_service=operation_approval_signature_service,
         deps=deps,
         execution_deps_resolver=operation_approval_execution_deps_resolver,

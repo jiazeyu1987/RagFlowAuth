@@ -18,11 +18,13 @@ class OperationApprovalNotificationService:
         store: Any,
         user_store: Any,
         notification_service: Any | None = None,
+        external_notification_service: Any | None = None,
         operation_label_resolver: Callable[[str], str],
     ):
         self._store = store
         self._user_store = user_store
         self._notification_service = notification_service
+        self._external_notification_service = external_notification_service or notification_service
         self._operation_label = operation_label_resolver
 
     def notify_submission(self, request_data: dict) -> None:
@@ -40,10 +42,10 @@ class OperationApprovalNotificationService:
             return
         self.notify_inbox(
             recipients=recipients,
-            title=f"{self._operation_label(request_data['operation_type'])}寰呭鎵?",
+            title=f"{self._operation_label(request_data['operation_type'])}待审批",
             body=(
-                f"鐢宠鍗?{request_data['request_id']} 宸插埌绗?{request_data.get('current_step_no')} "
-                f"灞傦細{request_data.get('current_step_name')}"
+                f"申请单 {request_data['request_id']} 已到第 {request_data.get('current_step_no')} 层："
+                f"{request_data.get('current_step_name')}"
             ),
             event_type="operation_approval_todo",
             request_data=request_data,
@@ -141,7 +143,8 @@ class OperationApprovalNotificationService:
     def notify_external(self, *, recipients: list[dict], event_type: str, request_data: dict) -> None:
         if not recipients:
             return
-        if self._notification_service is None:
+        service = self._external_notification_service
+        if service is None:
             self._store.add_event(
                 request_id=request_data["request_id"],
                 event_type="notification_external_skipped",
@@ -152,7 +155,7 @@ class OperationApprovalNotificationService:
             )
             return
         try:
-            jobs = self._notification_service.notify_event(
+            jobs = service.notify_event(
                 payload=self._notification_payload(
                     request_data=request_data,
                     title="",
@@ -175,6 +178,23 @@ class OperationApprovalNotificationService:
                     actor_username=None,
                     step_no=request_data.get("current_step_no"),
                     payload={"event_type": event_type, "reason": "notification_rule_disabled"},
+                )
+                return
+            results = [service.dispatch_job(job_id=int(job["job_id"])) for job in jobs]
+            failed = [item for item in results if str(item.get("status") or "").strip().lower() != "sent"]
+            if failed:
+                self._store.add_event(
+                    request_id=request_data["request_id"],
+                    event_type="notification_external_failed",
+                    actor_user_id=None,
+                    actor_username=None,
+                    step_no=request_data.get("current_step_no"),
+                    payload={
+                        "event_type": event_type,
+                        "job_count": len(jobs),
+                        "failed_job_count": len(failed),
+                        "error": failed[0].get("last_error"),
+                    },
                 )
                 return
             self._store.add_event(
@@ -228,19 +248,31 @@ class OperationApprovalNotificationService:
         for step in request_data.get("steps") or []:
             if int(step["step_no"]) != int(current_step_no):
                 continue
-            return [
-                {
-                    "user_id": approver["approver_user_id"],
-                    "username": approver.get("approver_username"),
-                    "email": getattr(self._user_store.get_by_user_id(approver["approver_user_id"]), "email", None),
-                }
-                for approver in step.get("approvers") or []
-                if approver.get("status") == APPROVER_STATUS_PENDING
-            ]
+            recipients: list[dict] = []
+            for approver in step.get("approvers") or []:
+                if approver.get("status") != APPROVER_STATUS_PENDING:
+                    continue
+                user = self._user_store.get_by_user_id(approver["approver_user_id"])
+                recipients.append(
+                    {
+                        "user_id": approver["approver_user_id"],
+                        "username": approver.get("approver_username"),
+                        "employee_user_id": getattr(user, "employee_user_id", None),
+                        "email": getattr(user, "email", None),
+                    }
+                )
+            return recipients
         return []
 
     def _applicant_recipient(self, request_data: dict) -> list[dict]:
         user = self._user_store.get_by_user_id(str(request_data["applicant_user_id"]))
         if not user:
             return []
-        return [{"user_id": str(user.user_id), "username": str(user.username), "email": getattr(user, "email", None)}]
+        return [
+            {
+                "user_id": str(user.user_id),
+                "username": str(user.username),
+                "employee_user_id": getattr(user, "employee_user_id", None),
+                "email": getattr(user, "email", None),
+            }
+        ]

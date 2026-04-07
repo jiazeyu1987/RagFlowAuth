@@ -7,6 +7,7 @@ from fastapi import Depends, FastAPI
 from fastapi.testclient import TestClient
 
 from backend.app.core.auth import get_deps
+from backend.app.core.managed_paths import managed_data_root
 from backend.app.dependencies import AppDependencies, create_dependencies, get_tenant_dependencies
 from backend.core.security import auth
 from backend.services.inbox_store import UserInboxStore
@@ -18,6 +19,7 @@ from backend.tests._util_tempdir import cleanup_dir, make_temp_dir
 class TestTenantDbIsolationUnit(unittest.TestCase):
     def setUp(self):
         self._tmp = make_temp_dir(prefix="ragflowauth_tenant_iso")
+        self._managed_test_root = managed_data_root() / "test_tenant_db_isolation" / self._tmp.name
         self.global_db = self._tmp / "global" / "auth.db"
         self.global_deps = create_dependencies(db_path=str(self.global_db))
 
@@ -27,6 +29,7 @@ class TestTenantDbIsolationUnit(unittest.TestCase):
         self.app.state.tenant_deps_cache = {}
 
     def tearDown(self):
+        cleanup_dir(self._managed_test_root)
         cleanup_dir(self._tmp)
 
     def test_company_scoped_stores_are_isolated(self):
@@ -36,8 +39,9 @@ class TestTenantDbIsolationUnit(unittest.TestCase):
         user_a = deps_a.user_store.create_user(username="tenant_a", password="Pass1234", company_id=1, role="admin")
         user_b = deps_b.user_store.create_user(username="tenant_b", password="Pass1234", company_id=2, role="admin")
 
-        file_a = Path(self._tmp) / "tenant_a.txt"
-        file_b = Path(self._tmp) / "tenant_b.txt"
+        self._managed_test_root.mkdir(parents=True, exist_ok=True)
+        file_a = self._managed_test_root / "tenant_a.txt"
+        file_b = self._managed_test_root / "tenant_b.txt"
         file_a.write_text("a", encoding="utf-8")
         file_b.write_text("b", encoding="utf-8")
 
@@ -188,22 +192,28 @@ class TestTenantDbIsolationUnit(unittest.TestCase):
         inbox_db_path = str(tenant_deps.user_inbox_store.db_path).replace("\\", "/")
         self.assertTrue(inbox_db_path.endswith("/global/auth.db"))
 
-    def test_tenant_operation_approval_notifications_use_tenant_notification_manager(self):
+    def test_tenant_operation_approval_notifications_split_tenant_inbox_and_global_external_managers(self):
         tenant_deps = get_tenant_dependencies(self.app, company_id=1)
 
         self.assertIsNotNone(tenant_deps.notification_manager)
         self.assertIsNotNone(tenant_deps.operation_approval_service._notification_service)
+        self.assertIsNotNone(tenant_deps.operation_approval_service._external_notification_service)
         self.assertIs(
             tenant_deps.operation_approval_service._notification_service,
             tenant_deps.notification_manager,
         )
 
         notification_db_path = str(tenant_deps.notification_manager._store.db_path).replace("\\", "/")
-        operation_notification_db_path = str(
+        operation_inbox_notification_db_path = str(
             tenant_deps.operation_approval_service._notification_service._store.db_path
         ).replace("\\", "/")
+        operation_external_notification_db_path = str(
+            tenant_deps.operation_approval_service._external_notification_service._store.db_path
+        ).replace("\\", "/")
         self.assertIn("/tenants/company_1/auth.db", notification_db_path)
-        self.assertEqual(operation_notification_db_path, notification_db_path)
+        self.assertEqual(operation_inbox_notification_db_path, notification_db_path)
+        self.assertTrue(operation_external_notification_db_path.endswith("/global/auth.db"))
+        self.assertNotEqual(operation_external_notification_db_path, notification_db_path)
 
         channel_types = {
             str(item.get("channel_type") or "").strip().lower()

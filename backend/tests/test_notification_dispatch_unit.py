@@ -223,6 +223,104 @@ class TestNotificationDispatchUnit(unittest.TestCase):
         finally:
             cleanup_dir(td)
 
+    def test_dingtalk_alias_map_takes_priority_over_org_directory(self):
+        td = make_temp_dir(prefix="ragflowauth_notification_dingtalk_alias_priority")
+        try:
+            db_path = os.path.join(str(td), "auth.db")
+            ensure_schema(db_path)
+
+            store = NotificationStore(db_path=db_path)
+            service = NotificationService(
+                store=store,
+                email_adapter=_NoopAdapter(),
+                dingtalk_adapter=_NoopAdapter(),
+            )
+            service.upsert_channel(
+                channel_id="ding-main",
+                channel_type="dingtalk",
+                name="Main DingTalk",
+                enabled=True,
+                config={
+                    "app_key": "ding-app-key",
+                    "app_secret": "ding-app-secret",
+                    "agent_id": "4432005762",
+                    "recipient_map": {"legacy-user": "ding-target"},
+                    "recipient_directory": {
+                        "legacy-user": {"full_name": "Legacy User", "company_id": 1, "department_id": 1},
+                        "ding-target": {"full_name": "Target User", "company_id": 1, "department_id": 1},
+                    },
+                },
+            )
+
+            jobs = service.notify_event(
+                event_type="review_todo_approval",
+                payload={"doc_id": "doc-alias-priority"},
+                recipients=[self._recipient(user_id="legacy-user", username="legacy-user", email="")],
+                dedupe_key="review_todo_approval:doc-alias-priority",
+                channel_types=["dingtalk"],
+            )
+
+            self.assertEqual(len(jobs), 1)
+            self.assertEqual(jobs[0]["recipient_address"], "ding-target")
+        finally:
+            cleanup_dir(td)
+
+    def test_dingtalk_org_directory_accepts_direct_user_id_or_username_only(self):
+        channel = {
+            "channel_type": "dingtalk",
+            "config": {
+                "recipient_map": {},
+                "recipient_directory": {
+                    "ding-user": {"full_name": "Ding User", "company_id": 1, "department_id": 1},
+                },
+            },
+        }
+
+        self.assertEqual(
+            NotificationService._resolve_recipient_address(
+                channel=channel,
+                recipient={"user_id": "ding-user", "username": "not-used", "full_name": "Other"},
+            ),
+            "ding-user",
+        )
+        self.assertEqual(
+            NotificationService._resolve_recipient_address(
+                channel=channel,
+                recipient={"user_id": "", "username": "ding-user", "full_name": "Other"},
+            ),
+            "ding-user",
+        )
+        self.assertIsNone(
+            NotificationService._resolve_recipient_address(
+                channel=channel,
+                recipient={"user_id": "system-user", "username": "system-username", "full_name": "Ding User"},
+            )
+        )
+
+    def test_dingtalk_org_directory_accepts_explicit_employee_user_id(self):
+        channel = {
+            "channel_type": "dingtalk",
+            "config": {
+                "recipient_map": {},
+                "recipient_directory": {
+                    "ding-user": {"full_name": "Ding User", "company_id": 1, "department_id": 1},
+                },
+            },
+        }
+
+        self.assertEqual(
+            NotificationService._resolve_recipient_address(
+                channel=channel,
+                recipient={
+                    "user_id": "system-user",
+                    "username": "system-username",
+                    "employee_user_id": "ding-user",
+                    "full_name": "Ding User",
+                },
+            ),
+            "ding-user",
+        )
+
     def test_in_app_inbox_read_flow_and_audit_logs(self):
         td = make_temp_dir(prefix="ragflowauth_notification_in_app_inbox")
         try:

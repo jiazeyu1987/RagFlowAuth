@@ -38,7 +38,7 @@ class UserStore:
                        electronic_signature_enabled,
                        created_at_ms, last_login_at_ms, created_by, full_name, managed_kb_root_node_id,
                        password_changed_at_ms, credential_fail_count, credential_fail_window_started_at_ms,
-                       credential_locked_until_ms
+                       credential_locked_until_ms, employee_user_id
                 FROM users WHERE username = ?
                 """,
                 (username,),
@@ -52,6 +52,7 @@ class UserStore:
                     email=row[3],
                     full_name=row[19],
                     manager_user_id=row[9],
+                    employee_user_id=(str(row[25]).strip() if row[25] is not None and str(row[25]).strip() else None),
                     role=row[4],
                     group_id=row[5],
                     company_id=row[6],
@@ -92,7 +93,7 @@ class UserStore:
                        electronic_signature_enabled,
                        created_at_ms, last_login_at_ms, created_by, full_name, managed_kb_root_node_id,
                        password_changed_at_ms, credential_fail_count, credential_fail_window_started_at_ms,
-                       credential_locked_until_ms
+                       credential_locked_until_ms, employee_user_id
                 FROM users WHERE user_id = ?
                 """,
                 (user_id,),
@@ -106,6 +107,7 @@ class UserStore:
                     email=row[3],
                     full_name=row[19],
                     manager_user_id=row[9],
+                    employee_user_id=(str(row[25]).strip() if row[25] is not None and str(row[25]).strip() else None),
                     role=row[4],
                     group_id=row[5],
                     company_id=row[6],
@@ -282,6 +284,7 @@ class UserStore:
                 email=email,
                 full_name=full_name,
                 manager_user_id=manager_user_id,
+                employee_user_id=None,
                 role=role,
                 group_id=group_id,
                 company_id=company_id,
@@ -566,7 +569,7 @@ class UserStore:
                        electronic_signature_enabled,
                        created_at_ms, last_login_at_ms, created_by, full_name, managed_kb_root_node_id,
                        password_changed_at_ms, credential_fail_count, credential_fail_window_started_at_ms,
-                       credential_locked_until_ms
+                       credential_locked_until_ms, employee_user_id
                 FROM users
                 WHERE 1=1
             """
@@ -626,6 +629,7 @@ class UserStore:
                     email=row[3],
                     full_name=row[19],
                     manager_user_id=row[9],
+                    employee_user_id=(str(row[25]).strip() if row[25] is not None and str(row[25]).strip() else None),
                     role=row[4],
                     group_id=row[5],
                     company_id=row[6],
@@ -660,6 +664,31 @@ class UserStore:
             cursor.execute("DELETE FROM users WHERE user_id = ?", (user_id,))
             conn.commit()
             return cursor.rowcount > 0
+        finally:
+            conn.close()
+
+    def sync_employee_user_ids(self, assignments: dict[str, str | None]) -> None:
+        rows: list[tuple[str | None, str]] = []
+        for raw_user_id, raw_employee_user_id in (assignments or {}).items():
+            user_id = str(raw_user_id or "").strip()
+            if not user_id:
+                continue
+            employee_user_id = str(raw_employee_user_id or "").strip() or None
+            rows.append((employee_user_id, user_id))
+        if not rows:
+            return
+
+        conn = self._get_connection()
+        try:
+            conn.executemany(
+                """
+                UPDATE users
+                SET employee_user_id = ?
+                WHERE user_id = ?
+                """,
+                rows,
+            )
+            conn.commit()
         finally:
             conn.close()
 

@@ -141,6 +141,34 @@ describe('notificationApi', () => {
     );
   });
 
+  it('normalizes the dingtalk org directory rebuild response', async () => {
+    httpClient.requestJson.mockResolvedValueOnce({
+      channel_id: 'ding-main',
+      org_user_count: 2027,
+      directory_entry_count: 2027,
+      alias_entry_count: 0,
+      invalid_org_user_count: 0,
+      invalid_org_users: [],
+    });
+
+    await expect(notificationApi.rebuildDingtalkRecipientMap('ding-main')).resolves.toEqual({
+      channel_id: 'ding-main',
+      org_user_count: 2027,
+      directory_entry_count: 2027,
+      alias_entry_count: 0,
+      invalid_org_user_count: 0,
+      invalid_org_users: [],
+    });
+
+    expect(httpClient.requestJson).toHaveBeenCalledWith(
+      'http://auth.local/api/admin/notifications/channels/ding-main/recipient-map/rebuild-from-org',
+      {
+        method: 'POST',
+        body: JSON.stringify({}),
+      }
+    );
+  });
+
   it('fails fast when list endpoints return invalid payloads', async () => {
     httpClient.requestJson
       .mockResolvedValueOnce({ groups: [] })

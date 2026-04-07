@@ -498,11 +498,9 @@ export default function NotificationSettings() {
                         <td style={cell}>{formatTime(job.created_at_ms)}</td>
                         <td style={cell}>
                           <div style={{ fontWeight: 600 }}>{eventLabelByType[job.event_type] || job.event_type}</div>
-                          <div style={muted}>{job.event_type}</div>
                         </td>
                         <td style={cell}>
                           <div>{LABELS[job.channel_type] || job.channel_type || '-'}</div>
-                          <div style={muted}>{job.channel_name || job.channel_id}</div>
                         </td>
                         <td style={cell}>
                           {job.recipient_full_name || job.recipient_username || job.recipient_user_id || job.recipient_address || '-'}

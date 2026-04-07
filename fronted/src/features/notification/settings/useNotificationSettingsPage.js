@@ -17,6 +17,7 @@ const toInt = (value, label) => {
 };
 
 const clean = (value) => Object.fromEntries(Object.entries(value || {}).filter(([, item]) => item !== '' && item !== undefined && item !== null));
+const asObject = (value) => (value && typeof value === 'object' && !Array.isArray(value) ? value : {});
 
 const flattenRules = (groups) => (groups || []).flatMap((group) => (group.items || []).map((item) => ({ ...item, group_key: group.group_key })));
 
@@ -68,9 +69,10 @@ const buildForms = (items) => {
     };
   }
   if (ding) {
-    const config = ding.config || {};
-    const recipientMap = config.recipient_map && !Array.isArray(config.recipient_map) && typeof config.recipient_map === 'object' && Object.keys(config.recipient_map).length > 0
-      ? config.recipient_map
+    const config = asObject(ding.config);
+    const hasStoredRecipientMap = Object.prototype.hasOwnProperty.call(config, 'recipient_map');
+    const recipientMap = hasStoredRecipientMap
+      ? asObject(config.recipient_map)
       : DINGTALK_DEFAULT_RECIPIENT_MAP;
     forms.dingtalk = {
       channelId: ding.channel_id || DEFAULTS.dingtalk.channelId,
@@ -175,6 +177,7 @@ export default function useNotificationSettingsPage() {
     const requests = [];
     try {
       const email = forms.email;
+      const existingEmailConfig = asObject(channelBuckets.email[0]?.config);
       if (
         channelBuckets.email.length > 0
         || email.enabled
@@ -187,6 +190,7 @@ export default function useNotificationSettingsPage() {
             name: email.name,
             enabled: !!email.enabled,
             config: clean({
+              ...existingEmailConfig,
               host: String(email.host || '').trim(),
               port: toInt(email.port, '邮件端口'),
               username: String(email.username || '').trim(),
@@ -199,6 +203,7 @@ export default function useNotificationSettingsPage() {
       }
 
       const ding = forms.dingtalk;
+      const existingDingtalkConfig = asObject(channelBuckets.dingtalk[0]?.config);
       if (channelBuckets.dingtalk.length > 0 || ding.enabled || !isDefaultDingtalkForm(ding)) {
         let recipientMap = {};
         try {
@@ -216,6 +221,7 @@ export default function useNotificationSettingsPage() {
             name: ding.name,
             enabled: !!ding.enabled,
             config: clean({
+              ...existingDingtalkConfig,
               app_key: String(ding.app_key || '').trim(),
               app_secret: String(ding.app_secret || ''),
               agent_id: String(ding.agent_id || '').trim(),

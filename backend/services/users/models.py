@@ -12,6 +12,7 @@ class User:
     full_name: Optional[str] = None
     email: Optional[str] = None
     manager_user_id: Optional[str] = None
+    employee_user_id: Optional[str] = None
     role: str = "viewer"
     # Deprecated: single group id, kept for compatibility.
     group_id: Optional[int] = None

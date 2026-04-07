@@ -1413,6 +1413,30 @@ class TestOperationApprovalServiceUnit(unittest.TestCase):
         self.assertEqual(detail["status"], "execution_failed")
         self.assertEqual(detail["last_error"], "doc_not_found_at_execution")
 
+    def test_upload_request_generates_readable_todo_inbox_message(self):
+        self.ragflow_service.add_dataset(dataset_id="ds-kb-a", name="kb-a", document_count=0, chunk_count=0)
+        self._upsert_workflow(
+            "knowledge_file_upload",
+            [{"step_name": "第 1 层", "approver_user_ids": [self.approver_1.user_id]}],
+        )
+
+        request = self._create_upload_request(filename="notify-readable.txt", content=b"notify readable")
+
+        approver_inbox = self.notification_service.list_inbox(
+            recipient_user_id=str(self.approver_1.user_id),
+            limit=20,
+            offset=0,
+            unread_only=False,
+        )
+
+        self.assertEqual(approver_inbox["total"], 1)
+        self.assertEqual(approver_inbox["items"][0]["event_type"], "operation_approval_todo")
+        self.assertEqual(approver_inbox["items"][0]["payload"]["title"], "文件上传待审批")
+        self.assertEqual(
+            approver_inbox["items"][0]["payload"]["body"],
+            f"申请单 {request['request_id']} 已到第 1 层：第 1 层",
+        )
+
     def test_notifications_events_and_audit_records_are_persisted(self):
         self._upsert_workflow(
             "knowledge_base_create",
@@ -1438,9 +1462,9 @@ class TestOperationApprovalServiceUnit(unittest.TestCase):
         self.assertEqual(approver_inbox["total"], 1)
         self.assertEqual(approver_inbox["unread_count"], 1)
 
-        queued_jobs = self.notification_store.list_jobs(limit=20)
-        self.assertEqual(len(queued_jobs), 3)
-        self.assertEqual(sum(1 for item in queued_jobs if item["status"] == "queued"), 2)
+        created_jobs = self.notification_store.list_jobs(limit=20)
+        self.assertEqual(len(created_jobs), 3)
+        self.assertEqual(sum(1 for item in created_jobs if item["status"] == "sent"), 3)
 
         detail = self._approve(request_id, self.approver_1)
         self.assertEqual(detail["status"], "executed")
@@ -1462,8 +1486,8 @@ class TestOperationApprovalServiceUnit(unittest.TestCase):
         self.assertEqual(approver_inbox_after["total"], 1)
         self.assertEqual(len(self.notification_store.list_jobs(limit=20)), 4)
         self.assertEqual(
-            sum(1 for item in self.notification_store.list_jobs(limit=20) if item["status"] == "queued"),
-            3,
+            sum(1 for item in self.notification_store.list_jobs(limit=20) if item["status"] == "sent"),
+            4,
         )
 
         request_detail = self.service.get_request_detail_for_user(

@@ -5,6 +5,26 @@ import sqlite3
 from .helpers import add_column_if_missing, table_exists
 
 
+_OPERATION_APPROVAL_TODO_MOJIBAKE_REPLACEMENTS = (
+    ("寰呭鎵?", "待审批"),
+    ("鐢宠鍗?", "申请单 "),
+    ("宸插埌绗?", "已到第 "),
+    ("灞傦細", "层："),
+)
+
+
+def _repair_operation_approval_todo_text(value: str | None) -> str | None:
+    text = str(value or "")
+    if not text:
+        return None
+
+    repaired = text
+    for source, target in _OPERATION_APPROVAL_TODO_MOJIBAKE_REPLACEMENTS:
+        repaired = repaired.replace(source, target)
+
+    return repaired if repaired != text else None
+
+
 def ensure_operation_approval_tables(conn: sqlite3.Connection) -> None:
     if not table_exists(conn, "operation_approval_workflows"):
         conn.execute(
@@ -345,3 +365,48 @@ def ensure_user_inbox_tables(conn: sqlite3.Connection) -> None:
         ON user_inbox_notifications(recipient_user_id, status, created_at_ms DESC)
         """
     )
+
+
+def repair_operation_approval_notification_mojibake(conn: sqlite3.Connection) -> None:
+    if table_exists(conn, "notification_jobs"):
+        rows = conn.execute(
+            """
+            SELECT job_id, payload_json
+            FROM notification_jobs
+            WHERE event_type = 'operation_approval_todo'
+            """
+        ).fetchall()
+        for row in rows:
+            repaired_payload = _repair_operation_approval_todo_text(row["payload_json"])
+            if repaired_payload is None:
+                continue
+            conn.execute(
+                """
+                UPDATE notification_jobs
+                SET payload_json = ?
+                WHERE job_id = ?
+                """,
+                (repaired_payload, row["job_id"]),
+            )
+
+    if table_exists(conn, "user_inbox_notifications"):
+        rows = conn.execute(
+            """
+            SELECT inbox_id, title, body, payload_json
+            FROM user_inbox_notifications
+            WHERE event_type = 'operation_approval_todo'
+            """
+        ).fetchall()
+        for row in rows:
+            updates: dict[str, str] = {}
+            for column_name in ("title", "body", "payload_json"):
+                repaired_value = _repair_operation_approval_todo_text(row[column_name])
+                if repaired_value is not None:
+                    updates[column_name] = repaired_value
+            if not updates:
+                continue
+            set_clause = ", ".join(f"{column_name} = ?" for column_name in updates.keys())
+            conn.execute(
+                f"UPDATE user_inbox_notifications SET {set_clause} WHERE inbox_id = ?",
+                [*updates.values(), row["inbox_id"]],
+            )

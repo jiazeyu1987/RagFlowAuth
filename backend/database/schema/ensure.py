@@ -57,7 +57,11 @@ from .notification import ensure_notification_tables
 from .supplier_qualification import ensure_supplier_qualification_tables
 from .training_compliance import ensure_training_compliance_tables
 from .watermark_policy import ensure_watermark_policy_tables
-from .operation_approval import ensure_operation_approval_tables, ensure_user_inbox_tables
+from .operation_approval import (
+    ensure_operation_approval_tables,
+    ensure_user_inbox_tables,
+    repair_operation_approval_notification_mojibake,
+)
 from .permission_group_folders import (
     ensure_permission_group_folders_table,
     ensure_permission_groups_folder_column,
@@ -65,6 +69,7 @@ from .permission_group_folders import (
 from .users import (
     ensure_password_history_table,
     ensure_org_columns_on_users,
+    ensure_user_employee_user_id_column,
     ensure_user_full_name_column,
     ensure_user_electronic_signature_columns,
     ensure_user_login_policy_columns,
@@ -136,6 +141,7 @@ def ensure_schema(db_path: str | Path) -> None:
         ensure_org_employees_table(conn)
         ensure_org_directory_audit_logs_table(conn)
         ensure_org_columns_on_users(conn)
+        ensure_user_employee_user_id_column(conn)
 
         # Audit tables
         ensure_download_logs_table(conn)
@@ -147,6 +153,7 @@ def ensure_schema(db_path: str | Path) -> None:
         ensure_notification_tables(conn)
         ensure_operation_approval_tables(conn)
         ensure_user_inbox_tables(conn)
+        repair_operation_approval_notification_mojibake(conn)
         ensure_supplier_qualification_tables(conn)
         ensure_training_compliance_tables(conn)
         ensure_watermark_policy_tables(conn)

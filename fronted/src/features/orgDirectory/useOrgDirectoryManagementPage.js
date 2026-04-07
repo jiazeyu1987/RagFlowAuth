@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
+import { notificationApi } from '../notification/api';
 import { orgDirectoryApi } from './api';
 
 const MOBILE_BREAKPOINT = 768;
@@ -84,6 +85,11 @@ const isSupportedExcelFilename = (filename) => {
   return normalizedName.endsWith('.xls') || normalizedName.endsWith('.xlsx');
 };
 
+const isDingtalkChannel = (item) => String(item?.channel_type || '').trim().toLowerCase() === 'dingtalk';
+
+const buildDingtalkRebuildSuccessNotice = (summary) =>
+  `组织架构重建成功，钉钉 UserID 目录已重建：组织人员 ${summary.org_user_count} 人，目录写入 ${summary.directory_entry_count} 条，手工别名已清空。`;
+
 export default function useOrgDirectoryManagementPage() {
   const nodeRefs = useRef(new Map());
   const excelFileInputRef = useRef(null);
@@ -97,6 +103,7 @@ export default function useOrgDirectoryManagementPage() {
   const [loading, setLoading] = useState(true);
   const [rebuilding, setRebuilding] = useState(false);
   const [error, setError] = useState(null);
+  const [notice, setNotice] = useState(null);
   const [auditError, setAuditError] = useState(null);
   const [tree, setTree] = useState([]);
   const [companies, setCompanies] = useState([]);
@@ -110,6 +117,7 @@ export default function useOrgDirectoryManagementPage() {
   const [highlightedNodeKey, setHighlightedNodeKey] = useState(null);
   const [expandedKeys, setExpandedKeys] = useState(new Set());
   const [selectedExcelFile, setSelectedExcelFile] = useState(null);
+  const [recipientMapRebuildSummary, setRecipientMapRebuildSummary] = useState(null);
 
   useEffect(() => {
     auditFilterRef.current = auditFilter;
@@ -179,9 +187,7 @@ export default function useOrgDirectoryManagementPage() {
         setAuditLogs(Array.isArray(tableAuditResult.value) ? tableAuditResult.value : []);
       } else {
         setAuditLogs([]);
-        setAuditError(
-          tableAuditResult.reason?.message || String(tableAuditResult.reason || '加载组织审计失败')
-        );
+        setAuditError(tableAuditResult.reason?.message || String(tableAuditResult.reason || '加载组织审计失败'));
       }
 
       if (overviewAuditResult.status === 'fulfilled') {
@@ -316,6 +322,8 @@ export default function useOrgDirectoryManagementPage() {
   const handleClearExcelFile = useCallback(() => {
     setSelectedExcelFile(null);
     setError(null);
+    setNotice(null);
+    setRecipientMapRebuildSummary(null);
     if (excelFileInputRef.current) {
       excelFileInputRef.current.value = '';
     }
@@ -327,13 +335,25 @@ export default function useOrgDirectoryManagementPage() {
     if (!isSupportedExcelFilename(nextFile.name)) {
       setSelectedExcelFile(null);
       setError('仅支持上传 .xls 或 .xlsx 格式的组织架构文件');
+      setNotice(null);
+      setRecipientMapRebuildSummary(null);
       if (excelFileInputRef.current) {
         excelFileInputRef.current.value = '';
       }
       return;
     }
     setError(null);
+    setNotice(null);
     setSelectedExcelFile(nextFile);
+  }, []);
+
+  const rebuildDingtalkRecipientMap = useCallback(async () => {
+    const channels = await notificationApi.listChannels(false);
+    const dingtalkChannel = (Array.isArray(channels) ? channels : []).find(isDingtalkChannel);
+    if (!dingtalkChannel?.channel_id) {
+      throw new Error('未找到已配置的钉钉通知通道');
+    }
+    return notificationApi.rebuildDingtalkRecipientMap(dingtalkChannel.channel_id);
   }, []);
 
   const handleRebuild = useCallback(async () => {
@@ -348,19 +368,37 @@ export default function useOrgDirectoryManagementPage() {
 
     setRebuilding(true);
     setError(null);
+    setNotice(null);
+    setRecipientMapRebuildSummary(null);
     try {
       await orgDirectoryApi.rebuildFromExcel(selectedExcelFile);
+      let nextError = null;
+      let nextNotice = null;
+      let nextRecipientMapRebuildSummary = null;
+
+      try {
+        const summary = await rebuildDingtalkRecipientMap();
+        nextNotice = buildDingtalkRebuildSuccessNotice(summary);
+        nextRecipientMapRebuildSummary = summary;
+      } catch (recipientMapError) {
+        const detail = recipientMapError?.message || String(recipientMapError || '钉钉 UserID 目录重建失败');
+        nextError = `组织架构重建成功，但钉钉 UserID 目录重建失败：${detail}`;
+      }
+
       setSearchTerm('');
       setSelectedSearchKey(null);
       setSelectedPersonNodeKey(null);
       setHighlightedNodeKey(null);
       await loadAll();
+      setError(nextError);
+      setNotice(nextNotice);
+      setRecipientMapRebuildSummary(nextRecipientMapRebuildSummary);
     } catch (err) {
       setError(err?.message || String(err));
     } finally {
       setRebuilding(false);
     }
-  }, [loadAll, selectedExcelFile]);
+  }, [loadAll, rebuildDingtalkRecipientMap, selectedExcelFile]);
 
   return {
     excelFileInputRef,
@@ -370,6 +408,7 @@ export default function useOrgDirectoryManagementPage() {
     loading,
     rebuilding,
     error,
+    notice,
     auditError,
     tree,
     companies,
@@ -385,6 +424,7 @@ export default function useOrgDirectoryManagementPage() {
     highlightedNodeKey,
     expandedKeys,
     selectedExcelFile,
+    recipientMapRebuildSummary,
     personColumnCount,
     personCount,
     isMissingPersonNodes,

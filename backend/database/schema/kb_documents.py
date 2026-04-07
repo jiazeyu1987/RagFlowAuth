@@ -1,8 +1,69 @@
 from __future__ import annotations
 
 import sqlite3
+from pathlib import PurePosixPath
+
+from backend.app.core.managed_paths import to_managed_data_storage_path
 
 from .helpers import add_column_if_missing, table_exists
+
+
+def _canonical_storage_text(value: str | None) -> str:
+    return str(value or "").replace("\\", "/").strip()
+
+
+def _normalize_legacy_managed_data_storage_path(value: str | None, *, field_name: str) -> str | None:
+    text = str(value or "").strip()
+    if not text:
+        return None
+
+    try:
+        normalized = to_managed_data_storage_path(text, field_name=field_name)
+    except ValueError:
+        lowered = _canonical_storage_text(text).lower()
+        marker = "/data/"
+        index = lowered.find(marker)
+        if index < 0:
+            return None
+        suffix = _canonical_storage_text(text)[index + 1 :]
+        try:
+            normalized = to_managed_data_storage_path(suffix, field_name=field_name)
+        except ValueError:
+            return None
+
+    stored = _canonical_storage_text(text)
+    return normalized if stored != _canonical_storage_text(normalized) else None
+
+
+def _rewrite_legacy_kb_document_storage_paths(conn: sqlite3.Connection) -> None:
+    rows = conn.execute(
+        """
+        SELECT doc_id, file_path, archive_manifest_path, archive_package_path
+        FROM kb_documents
+        """
+    ).fetchall()
+
+    for row in rows:
+        updates: dict[str, str] = {}
+        for column_name in ("file_path", "archive_manifest_path", "archive_package_path"):
+            raw_value = row[column_name]
+            if raw_value is None or not str(raw_value).strip():
+                continue
+            normalized = _normalize_legacy_managed_data_storage_path(
+                raw_value,
+                field_name=f"kb_documents.{column_name}",
+            )
+            if normalized is not None:
+                updates[column_name] = PurePosixPath(normalized).as_posix()
+
+        if not updates:
+            continue
+
+        set_clause = ", ".join(f"{column_name} = ?" for column_name in updates.keys())
+        conn.execute(
+            f"UPDATE kb_documents SET {set_clause} WHERE doc_id = ?",
+            [*updates.values(), row["doc_id"]],
+        )
 
 
 def ensure_kb_documents_table(conn: sqlite3.Connection) -> None:
@@ -86,6 +147,7 @@ def ensure_kb_documents_table(conn: sqlite3.Connection) -> None:
         WHERE effective_status IS NULL OR TRIM(effective_status) = ''
         """
     )
+    _rewrite_legacy_kb_document_storage_paths(conn)
 
     conn.execute("CREATE INDEX IF NOT EXISTS idx_docs_status ON kb_documents(status)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_docs_kb ON kb_documents(kb_id)")

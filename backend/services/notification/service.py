@@ -75,6 +75,67 @@ class NotificationManager:
     def list_channels(self, *, enabled_only: bool = False) -> list[dict[str, Any]]:
         return self._store.list_channels(enabled_only=enabled_only)
 
+    def rebuild_dingtalk_recipient_map_from_org(
+        self,
+        *,
+        channel_id: str,
+        user_store: Any,
+        org_directory_store: Any,
+        audit: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        channel = self._store.get_channel(str(channel_id or "").strip())
+        if not channel:
+            raise NotificationManagerError("notification_channel_not_found", status_code=404)
+        if str(channel.get("channel_type") or "").strip().lower() != "dingtalk":
+            raise NotificationManagerError("notification_channel_not_dingtalk", status_code=400)
+
+        config = channel.get("config") or {}
+        if not isinstance(config, dict):
+            raise NotificationManagerError("notification_channel_config_invalid", status_code=400)
+
+        self._validate_dingtalk_channel_access(channel=channel)
+
+        org_employees = self._list_org_employees_for_recipient_map_rebuild(org_directory_store)
+        recipient_map: dict[str, str] = {}
+        recipient_directory, invalid_org_users = self._build_dingtalk_recipient_directory(org_employees)
+        if invalid_org_users:
+            raise NotificationManagerError("notification_dingtalk_org_directory_invalid", status_code=400)
+        user_binding_summary = self._sync_employee_user_ids_from_org(
+            user_store=user_store,
+            org_employees=org_employees,
+        )
+
+        updated_config = dict(config)
+        updated_config["recipient_map"] = recipient_map
+        updated_config["recipient_directory"] = recipient_directory
+        updated_channel = self._store.upsert_channel(
+            channel_id=str(channel["channel_id"]),
+            channel_type=str(channel["channel_type"]),
+            name=str(channel["name"]),
+            enabled=bool(channel.get("enabled")),
+            config=updated_config,
+        )
+
+        summary = {
+            "channel_id": str(updated_channel["channel_id"]),
+            "org_user_count": len(org_employees),
+            "directory_entry_count": len(recipient_directory),
+            "alias_entry_count": len(recipient_map),
+            "invalid_org_user_count": len(invalid_org_users),
+            "invalid_org_users": invalid_org_users,
+        }
+        self._emit_audit(
+            action="notification_channel_recipient_map_rebuild",
+            event_type="update",
+            resource_type="notification_channel",
+            resource_id=str(updated_channel["channel_id"]),
+            before=channel,
+            after=updated_channel,
+            meta={**summary, **user_binding_summary},
+            audit=audit,
+        )
+        return summary
+
     def list_jobs(
         self,
         *,
@@ -635,6 +696,190 @@ class NotificationManager:
             raise NotificationManagerError("notification_message_not_found", status_code=404)
         return job
 
+    def _validate_dingtalk_channel_access(self, *, channel: dict[str, Any]) -> None:
+        adapter = self._resolve_adapter("dingtalk")
+        validate_channel = getattr(adapter, "validate_channel", None)
+        if not callable(validate_channel):
+            raise NotificationManagerError("notification_dingtalk_validation_unavailable", status_code=500)
+        try:
+            validate_channel(channel=channel)
+        except NotificationManagerError:
+            raise
+        except RuntimeError as exc:
+            raise NotificationManagerError(str(exc), status_code=400) from exc
+
+    @staticmethod
+    def _list_org_employees_for_recipient_map_rebuild(org_directory_store: Any) -> list[Any]:
+        list_employees = getattr(org_directory_store, "list_employees", None)
+        if not callable(list_employees):
+            raise NotificationManagerError("notification_org_directory_unavailable", status_code=500)
+        employees = list(list_employees() or [])
+        employees.sort(
+            key=lambda item: (
+                NotificationManager._string_attr(item, "employee_user_id"),
+                NotificationManager._string_attr(item, "name"),
+                NotificationManager._optional_int_attr(item, "company_id") or 0,
+                NotificationManager._optional_int_attr(item, "department_id") or 0,
+            )
+        )
+        return employees
+
+    @staticmethod
+    def _normalize_existing_recipient_map(value: Any) -> dict[str, str]:
+        if not isinstance(value, dict):
+            return {}
+        normalized: dict[str, str] = {}
+        for raw_key, raw_target in value.items():
+            key = str(raw_key or "").strip()
+            target = str(raw_target or "").strip()
+            if not key or not target:
+                continue
+            normalized[key] = target
+        return normalized
+
+    @staticmethod
+    def _build_dingtalk_recipient_directory(org_employees: list[Any]) -> tuple[dict[str, dict[str, Any]], list[dict[str, str]]]:
+        directory: dict[str, dict[str, Any]] = {}
+        invalid_org_users: list[dict[str, str]] = []
+        duplicate_user_ids: set[str] = set()
+
+        for employee in org_employees:
+            employee_user_id = NotificationManager._string_attr(employee, "employee_user_id")
+            full_name = NotificationManager._string_attr(employee, "name")
+            if not employee_user_id:
+                invalid_org_users.append(
+                    {
+                        "employee_user_id": "",
+                        "full_name": full_name,
+                        "reason": "employee_user_id_missing",
+                    }
+                )
+                continue
+            if employee_user_id in directory:
+                duplicate_user_ids.add(employee_user_id)
+                continue
+            directory[employee_user_id] = {
+                "full_name": full_name,
+                "company_id": NotificationManager._optional_int_attr(employee, "company_id"),
+                "department_id": NotificationManager._optional_int_attr(employee, "department_id"),
+            }
+
+        if duplicate_user_ids:
+            duplicate_items: list[dict[str, str]] = []
+            seen_duplicates: set[tuple[str, str]] = set()
+            for employee in org_employees:
+                employee_user_id = NotificationManager._string_attr(employee, "employee_user_id")
+                if employee_user_id not in duplicate_user_ids:
+                    continue
+                full_name = NotificationManager._string_attr(employee, "name")
+                key = (employee_user_id, full_name)
+                if key in seen_duplicates:
+                    continue
+                seen_duplicates.add(key)
+                duplicate_items.append(
+                    {
+                        "employee_user_id": employee_user_id,
+                        "full_name": full_name,
+                        "reason": "employee_user_id_duplicate",
+                    }
+                )
+                directory.pop(employee_user_id, None)
+            invalid_org_users.extend(duplicate_items)
+
+        invalid_org_users.sort(
+            key=lambda item: (
+                str(item.get("reason") or ""),
+                str(item.get("full_name") or ""),
+                str(item.get("employee_user_id") or ""),
+            )
+        )
+        return directory, invalid_org_users
+
+    @classmethod
+    def _sync_employee_user_ids_from_org(
+        cls,
+        *,
+        user_store: Any,
+        org_employees: list[Any],
+    ) -> dict[str, int]:
+        list_users = getattr(user_store, "list_users", None)
+        sync_employee_user_ids = getattr(user_store, "sync_employee_user_ids", None)
+        if not callable(list_users) or not callable(sync_employee_user_ids):
+            raise NotificationManagerError("notification_user_store_unavailable", status_code=500)
+
+        users = list(list_users(status="active", limit=1000000) or [])
+        employees_by_name: dict[str, list[Any]] = {}
+        for employee in org_employees:
+            name = cls._normalized_name(cls._string_attr(employee, "name"))
+            if not name:
+                continue
+            employees_by_name.setdefault(name, []).append(employee)
+
+        assignments: dict[str, str | None] = {}
+        matched_user_count = 0
+        unmatched_user_count = 0
+        for user in users:
+            user_id = cls._string_attr(user, "user_id")
+            if not user_id:
+                continue
+
+            full_name = cls._normalized_name(cls._string_attr(user, "full_name"))
+            employee_user_id: str | None = None
+            if full_name:
+                candidates = list(employees_by_name.get(full_name) or [])
+                company_id = cls._optional_int_attr(user, "company_id")
+                if company_id is not None:
+                    candidates = [
+                        item
+                        for item in candidates
+                        if cls._optional_int_attr(item, "company_id") == company_id
+                    ]
+                if len(candidates) > 1:
+                    department_id = cls._optional_int_attr(user, "department_id")
+                    if department_id is not None:
+                        candidates = [
+                            item
+                            for item in candidates
+                            if cls._optional_int_attr(item, "department_id") == department_id
+                        ]
+                if len(candidates) == 1:
+                    employee_user_id = cls._string_attr(candidates[0], "employee_user_id") or None
+
+            assignments[user_id] = employee_user_id
+            if employee_user_id:
+                matched_user_count += 1
+            else:
+                unmatched_user_count += 1
+
+        sync_employee_user_ids(assignments)
+        return {
+            "matched_user_count": matched_user_count,
+            "unmatched_user_count": unmatched_user_count,
+        }
+
+    @staticmethod
+    def _normalized_name(value: Any) -> str:
+        return str(value or "").strip()
+
+    @staticmethod
+    def _string_attr(item: Any, field: str) -> str:
+        value = getattr(item, field, None)
+        if value is None and isinstance(item, dict):
+            value = item.get(field)
+        return str(value or "").strip()
+
+    @staticmethod
+    def _optional_int_attr(item: Any, field: str) -> int | None:
+        value = getattr(item, field, None)
+        if value is None and isinstance(item, dict):
+            value = item.get(field)
+        if value is None or str(value).strip() == "":
+            return None
+        try:
+            return int(value)
+        except Exception as exc:  # noqa: BLE001
+            raise NotificationManagerError(f"notification_invalid_{field}", status_code=500) from exc
+
     @staticmethod
     def _normalize_recipients(recipients: list[dict[str, Any]] | None) -> list[dict[str, str | None]]:
         normalized: list[dict[str, str | None]] = []
@@ -650,6 +895,7 @@ class NotificationManager:
                 {
                     "user_id": user_id,
                     "username": username,
+                    "employee_user_id": (str(item.get("employee_user_id")).strip() if item.get("employee_user_id") else None),
                     "full_name": (str(item.get("full_name")) if item.get("full_name") else None),
                     "email": (str(item.get("email")).strip() if item.get("email") else None),
                 }
@@ -664,16 +910,30 @@ class NotificationManager:
             return email or None
         if channel_type == "dingtalk":
             config = channel.get("config") or {}
-            recipient_map = config.get("recipient_map") or {}
+            recipient_map = config.get("recipient_map")
+            if not isinstance(recipient_map, dict):
+                recipient_map = {}
+            recipient_directory = config.get("recipient_directory")
+            if not isinstance(recipient_directory, dict):
+                recipient_directory = {}
             user_id = str(recipient.get("user_id") or "").strip()
             username = str(recipient.get("username") or "").strip()
+            employee_user_id = str(recipient.get("employee_user_id") or "").strip()
             value = None
             if user_id:
                 value = recipient_map.get(user_id)
             if value is None and username:
                 value = recipient_map.get(username)
-            target = str(value or "").strip()
-            return target or None
+            if value is not None:
+                target = str(value or "").strip()
+                return target or None
+            if employee_user_id and employee_user_id in recipient_directory:
+                return employee_user_id
+            if user_id and user_id in recipient_directory:
+                return user_id
+            if username and username in recipient_directory:
+                return username
+            return None
         if channel_type == "in_app":
             user_id = str(recipient.get("user_id") or "").strip()
             return user_id or None

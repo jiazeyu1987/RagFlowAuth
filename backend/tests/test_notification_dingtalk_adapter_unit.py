@@ -43,6 +43,23 @@ class TestNotificationDingTalkAdapterUnit(unittest.TestCase):
     def _recipient(address: str = "ding-u1"):
         return {"user_id": "u1", "username": "alice", "address": address}
 
+    @staticmethod
+    def _approval_payload(**overrides):
+        payload = {
+            "request_id": "req-1",
+            "operation_type": "knowledge_file_upload",
+            "target_label": "ICE",
+            "current_step_name": "第 1 层",
+            "link_path": "/approvals?request_id=req-1",
+            "approval_target": {
+                "request_id": "req-1",
+                "operation_type": "knowledge_file_upload",
+                "route_path": "/approvals?request_id=req-1",
+            },
+        }
+        payload.update(overrides)
+        return payload
+
     def test_fail_fast_on_missing_required_config(self):
         adapter = DingTalkNotificationAdapter()
 
@@ -166,3 +183,62 @@ class TestNotificationDingTalkAdapterUnit(unittest.TestCase):
         self.assertEqual(send_call["json"]["msg"]["msgtype"], "text")
         self.assertIn("[RagflowAuth] review_todo_approval", send_call["json"]["msg"]["text"]["content"])
         self.assertEqual(send_call["timeout"], 15)
+
+    def test_operation_approval_todo_message_uses_business_copy(self):
+        message = DingTalkNotificationAdapter._message(
+            event_type="operation_approval_todo",
+            payload=self._approval_payload(),
+            recipient={"user_id": "u2", "username": "jiazeyu"},
+        )
+
+        self.assertIn("您在知识库有一条上传信息需要审批。", message)
+        self.assertIn("审批对象：ICE", message)
+        self.assertIn("当前步骤：第 1 层", message)
+        self.assertIn("申请单号：req-1", message)
+        self.assertNotIn('"approval_target"', message)
+        self.assertNotIn("recipient=", message)
+        self.assertNotIn("[RagflowAuth]", message)
+        self.assertNotIn("审批入口：", message)
+
+    def test_operation_approval_messages_render_expected_operation_labels(self):
+        cases = [
+            (
+                "operation_approval_todo",
+                "knowledge_file_delete",
+                "您在知识库有一条删除信息需要审批。",
+            ),
+            (
+                "operation_approval_submitted",
+                "knowledge_base_create",
+                "您的新建知识库申请已提交审批。",
+            ),
+            (
+                "operation_approval_rejected",
+                "knowledge_base_delete",
+                "您的删除知识库申请已被驳回。",
+            ),
+            (
+                "operation_approval_withdrawn",
+                "knowledge_file_upload",
+                "您的上传申请已撤回。",
+            ),
+            (
+                "operation_approval_executed",
+                "knowledge_file_upload",
+                "您的上传申请已审批通过并执行完成。",
+            ),
+            (
+                "operation_approval_execution_failed",
+                "knowledge_file_upload",
+                "您的上传申请审批通过，但执行失败。",
+            ),
+        ]
+
+        for event_type, operation_type, expected_line in cases:
+            with self.subTest(event_type=event_type, operation_type=operation_type):
+                message = DingTalkNotificationAdapter._message(
+                    event_type=event_type,
+                    payload=self._approval_payload(operation_type=operation_type),
+                    recipient=None,
+                )
+                self.assertIn(expected_line, message)

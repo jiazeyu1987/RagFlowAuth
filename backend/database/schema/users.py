@@ -66,6 +66,13 @@ def ensure_org_columns_on_users(conn: sqlite3.Connection) -> None:
     conn.execute("CREATE INDEX IF NOT EXISTS idx_users_department_id ON users(department_id)")
 
 
+def ensure_user_employee_user_id_column(conn: sqlite3.Connection) -> None:
+    if not table_exists(conn, "users"):
+        return
+    add_column_if_missing(conn, "users", "employee_user_id TEXT")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_users_employee_user_id ON users(employee_user_id)")
+
+
 def ensure_user_login_policy_columns(conn: sqlite3.Connection) -> None:
     if not table_exists(conn, "users"):
         return

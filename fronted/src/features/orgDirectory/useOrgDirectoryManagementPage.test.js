@@ -1,5 +1,6 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 
+import { notificationApi } from '../notification/api';
 import { orgDirectoryApi } from './api';
 import useOrgDirectoryManagementPage from './useOrgDirectoryManagementPage';
 
@@ -10,6 +11,13 @@ jest.mock('./api', () => ({
     listDepartments: jest.fn(),
     listAudit: jest.fn(),
     rebuildFromExcel: jest.fn(),
+  },
+}));
+
+jest.mock('../notification/api', () => ({
+  notificationApi: {
+    listChannels: jest.fn(),
+    rebuildDingtalkRecipientMap: jest.fn(),
   },
 }));
 
@@ -49,6 +57,17 @@ describe('useOrgDirectoryManagementPage', () => {
       .mockResolvedValueOnce([{ id: 1, action: 'update', created_at_ms: 1710000000000 }])
       .mockResolvedValueOnce([{ id: 2, action: 'rebuild', created_at_ms: 1710000001000 }]);
     orgDirectoryApi.rebuildFromExcel.mockResolvedValue({});
+    notificationApi.listChannels.mockResolvedValue([
+      { channel_id: 'ding-main', channel_type: 'dingtalk', name: 'Main DingTalk' },
+    ]);
+    notificationApi.rebuildDingtalkRecipientMap.mockResolvedValue({
+      channel_id: 'ding-main',
+      org_user_count: 3,
+      directory_entry_count: 3,
+      alias_entry_count: 0,
+      invalid_org_user_count: 0,
+      invalid_org_users: [],
+    });
   });
 
   it('loads org data on mount and exposes derived overview state', async () => {
@@ -63,9 +82,7 @@ describe('useOrgDirectoryManagementPage', () => {
     expect(orgDirectoryApi.listAudit).toHaveBeenNthCalledWith(2, { limit: 200 });
     expect(result.current.tree).toHaveLength(1);
     expect(result.current.personCount).toBe(1);
-    expect(result.current.latestOverviewAudit).toEqual(
-      expect.objectContaining({ id: 2, action: 'rebuild' })
-    );
+    expect(result.current.latestOverviewAudit).toEqual(expect.objectContaining({ id: 2, action: 'rebuild' }));
     expect(result.current.canTriggerRebuild).toBe(false);
   });
 
@@ -75,9 +92,7 @@ describe('useOrgDirectoryManagementPage', () => {
     await waitFor(() => expect(result.current.loading).toBe(false));
 
     act(() => {
-      result.current.handleSearchInputChange({
-        target: { value: 'alice' },
-      });
+      result.current.handleSearchInputChange({ target: { value: 'alice' } });
     });
 
     expect(result.current.searchResults).toHaveLength(1);
@@ -92,8 +107,72 @@ describe('useOrgDirectoryManagementPage', () => {
     expect(Array.from(result.current.expandedKeys)).toEqual(['company:company-1', 'department:dept-1']);
   });
 
-  it('validates excel uploads and rebuilds from a supported file', async () => {
+  it('runs org rebuild and dingtalk recipient map rebuild as two explicit calls', async () => {
     const confirmSpy = jest.spyOn(window, 'confirm').mockReturnValue(true);
+    const { result } = renderHook(() => useOrgDirectoryManagementPage());
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    const excelFile = new File(['xlsx'], 'org.xlsx', {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    });
+
+    act(() => {
+      result.current.handleExcelFileChange({ target: { files: [excelFile] } });
+    });
+
+    await act(async () => {
+      await result.current.handleRebuild();
+    });
+
+    expect(orgDirectoryApi.rebuildFromExcel).toHaveBeenCalledWith(excelFile);
+    expect(notificationApi.listChannels).toHaveBeenCalledWith(false);
+    expect(notificationApi.rebuildDingtalkRecipientMap).toHaveBeenCalledWith('ding-main');
+    expect(result.current.notice).toContain('钉钉 UserID 目录已重建');
+    expect(result.current.notice).toContain('手工别名已清空');
+    expect(result.current.recipientMapRebuildSummary).toEqual(
+      expect.objectContaining({
+        channel_id: 'ding-main',
+        org_user_count: 3,
+        directory_entry_count: 3,
+        alias_entry_count: 0,
+        invalid_org_user_count: 0,
+      })
+    );
+    expect(orgDirectoryApi.getTree).toHaveBeenCalledTimes(2);
+
+    confirmSpy.mockRestore();
+  });
+
+  it('shows partial success when dingtalk rebuild fails after org rebuild succeeds', async () => {
+    const confirmSpy = jest.spyOn(window, 'confirm').mockReturnValue(true);
+    notificationApi.rebuildDingtalkRecipientMap.mockRejectedValue(new Error('invalidClientIdOrSecret'));
+    const { result } = renderHook(() => useOrgDirectoryManagementPage());
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    const excelFile = new File(['xlsx'], 'org.xlsx', {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    });
+
+    act(() => {
+      result.current.handleExcelFileChange({ target: { files: [excelFile] } });
+    });
+
+    await act(async () => {
+      await result.current.handleRebuild();
+    });
+
+    expect(orgDirectoryApi.rebuildFromExcel).toHaveBeenCalledWith(excelFile);
+    expect(notificationApi.rebuildDingtalkRecipientMap).toHaveBeenCalledWith('ding-main');
+    expect(result.current.error).toBe('组织架构重建成功，但钉钉 UserID 目录重建失败：invalidClientIdOrSecret');
+    expect(result.current.notice).toBe(null);
+    expect(result.current.recipientMapRebuildSummary).toBe(null);
+
+    confirmSpy.mockRestore();
+  });
+
+  it('validates excel uploads before rebuild', async () => {
     const { result } = renderHook(() => useOrgDirectoryManagementPage());
 
     await waitFor(() => expect(result.current.loading).toBe(false));
@@ -108,29 +187,5 @@ describe('useOrgDirectoryManagementPage', () => {
 
     expect(result.current.selectedExcelFile).toBe(null);
     expect(result.current.error).toBe('仅支持上传 .xls 或 .xlsx 格式的组织架构文件');
-
-    orgDirectoryApi.listAudit.mockResolvedValue([{ id: 3, action: 'rebuild', created_at_ms: 1710000002000 }]);
-    const excelFile = new File(['xlsx'], 'org.xlsx', {
-      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-    });
-
-    act(() => {
-      result.current.handleExcelFileChange({
-        target: {
-          files: [excelFile],
-        },
-      });
-    });
-
-    expect(result.current.selectedExcelFile).toBe(excelFile);
-
-    await act(async () => {
-      await result.current.handleRebuild();
-    });
-
-    expect(orgDirectoryApi.rebuildFromExcel).toHaveBeenCalledWith(excelFile);
-    expect(orgDirectoryApi.getTree).toHaveBeenCalledTimes(2);
-
-    confirmSpy.mockRestore();
   });
 });

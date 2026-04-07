@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import NotificationSettings from './NotificationSettings';
 import { notificationApi } from '../features/notification/api';
@@ -184,5 +184,20 @@ describe('NotificationSettings', () => {
     await waitFor(() => {
       expect(notificationApi.listJobLogs).toHaveBeenCalledWith(11, 20);
     });
+  });
+
+  it('renders history with labels only and hides raw event type and channel name', async () => {
+    const user = userEvent.setup();
+    render(<NotificationSettings />);
+
+    await screen.findByTestId('notification-tab-history');
+    await user.click(screen.getByTestId('notification-tab-history'));
+
+    const row = screen.getByText('11').closest('tr');
+    expect(row).not.toBeNull();
+    expect(within(row).getByText('Approval Pending')).toBeInTheDocument();
+    expect(within(row).getByText('邮件')).toBeInTheDocument();
+    expect(screen.queryByText('operation_approval_todo')).not.toBeInTheDocument();
+    expect(screen.queryByText('Email Notice')).not.toBeInTheDocument();
   });
 });

@@ -39,6 +39,23 @@ const normalizeJobList = (payload) => ({
   count: normalizeCountField(payload, 'count', 'notification_jobs_list'),
 });
 
+const normalizeRecipientMapRebuild = (payload) => {
+  const action = 'notification_dingtalk_recipient_map_rebuild';
+  const envelope = assertObjectPayload(payload, action);
+  const channelId = String(envelope.channel_id || '').trim();
+  if (!channelId) {
+    throw new Error(`${action}_invalid_payload`);
+  }
+  return {
+    channel_id: channelId,
+    org_user_count: normalizeCountField(envelope, 'org_user_count', action),
+    directory_entry_count: normalizeCountField(envelope, 'directory_entry_count', action),
+    alias_entry_count: normalizeCountField(envelope, 'alias_entry_count', action),
+    invalid_org_user_count: normalizeCountField(envelope, 'invalid_org_user_count', action),
+    invalid_org_users: normalizeArrayField(envelope, 'invalid_org_users', action),
+  };
+};
+
 const normalizeInboxList = (payload) => ({
   items: normalizeArrayField(payload, 'items', 'notification_messages_list'),
   count: normalizeCountField(payload, 'count', 'notification_messages_list'),
@@ -67,6 +84,19 @@ export const notificationApi = {
       ),
       'channel',
       'notification_channel_upsert'
+    ),
+
+  rebuildDingtalkRecipientMap: async (channelId) =>
+    normalizeRecipientMapRebuild(
+      await httpClient.requestJson(
+        authBackendUrl(
+          `/api/admin/notifications/channels/${encodeURIComponent(channelId)}/recipient-map/rebuild-from-org`
+        ),
+        {
+          method: 'POST',
+          body: JSON.stringify({}),
+        }
+      )
     ),
 
   listRules: async () =>

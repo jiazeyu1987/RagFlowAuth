@@ -55,6 +55,7 @@ class OperationApprovalService:
         user_store: Any,
         inbox_service: Any | None = None,
         notification_service: Any | None = None,
+        external_notification_service: Any | None = None,
         electronic_signature_service: Any | None = None,
         deps: Any | None = None,
         execution_deps_resolver: Callable[[int | str], Any] | None = None,
@@ -63,6 +64,7 @@ class OperationApprovalService:
         self._user_store = user_store
         self._inbox_service = inbox_service
         self._notification_service = notification_service
+        self._external_notification_service = external_notification_service or notification_service
         self._signature_service = electronic_signature_service
         self._deps = deps
         self._execution_deps_resolver = execution_deps_resolver
@@ -75,6 +77,7 @@ class OperationApprovalService:
             store=store,
             user_store=user_store,
             notification_service=notification_service,
+            external_notification_service=self._external_notification_service,
             operation_label_resolver=self.operation_label,
         )
         self._execution_service = OperationApprovalExecutionService(

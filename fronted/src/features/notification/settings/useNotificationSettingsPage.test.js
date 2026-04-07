@@ -168,4 +168,71 @@ describe('useNotificationSettingsPage', () => {
       { id: 1, status: 'queued', attempted_at_ms: 1710000000000, error: null },
     ]);
   });
+
+  it('preserves auto-generated dingtalk directory fields when saving channel config', async () => {
+    notificationApi.listChannels.mockResolvedValue([
+      {
+        channel_id: 'email-main',
+        channel_type: 'email',
+        name: 'Email Notice',
+        enabled: true,
+        updated_at_ms: 1710000000000,
+        config: { host: 'smtp.example.com', from_email: 'noreply@example.com', use_tls: true },
+      },
+      {
+        channel_id: 'ding-main',
+        channel_type: 'dingtalk',
+        name: 'Main DingTalk',
+        enabled: true,
+        updated_at_ms: 1710000000000,
+        config: {
+          app_key: 'ding-app-key',
+          app_secret: 'ding-app-secret',
+          agent_id: '4432005762',
+          recipient_map: {},
+          recipient_directory: {
+            'ding-user': { full_name: '钉钉用户', company_id: 1, department_id: 2 },
+          },
+          custom_flag: 'keep-me',
+        },
+      },
+      {
+        channel_id: 'inapp-main',
+        channel_type: 'in_app',
+        name: 'Inbox Notice',
+        enabled: true,
+        updated_at_ms: 1710000000000,
+        config: {},
+      },
+    ]);
+
+    const { result } = renderHook(() => useNotificationSettingsPage());
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    expect(result.current.forms.dingtalk.recipient_map_text).toBe('{}');
+
+    act(() => {
+      result.current.setFormValue('dingtalk', 'app_key', 'ding-app-key-updated');
+    });
+
+    await act(async () => {
+      await result.current.saveChannels();
+    });
+
+    expect(notificationApi.upsertChannel).toHaveBeenCalledWith(
+      'ding-main',
+      expect.objectContaining({
+        channel_type: 'dingtalk',
+        config: expect.objectContaining({
+          app_key: 'ding-app-key-updated',
+          recipient_map: {},
+          recipient_directory: {
+            'ding-user': { full_name: '钉钉用户', company_id: 1, department_id: 2 },
+          },
+          custom_flag: 'keep-me',
+        }),
+      })
+    );
+  });
 });
