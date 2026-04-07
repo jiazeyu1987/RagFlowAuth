@@ -1,0 +1,155 @@
+{
+  "schema_version": 2,
+  "task_id": "docs-maintance-tool-maintenance-tool-py-20260407T233623",
+  "mode": "lite",
+  "status": "completed",
+  "current_phase": null,
+  "phase_statuses": [
+    {
+      "phase_id": "P1",
+      "title": "Create The Three Requested Maintenance Docs",
+      "status": "completed",
+      "objective": "在 `docs/maintance/` 下创建且仅创建三份目标文档。",
+      "owned_paths": [],
+      "dependencies": [],
+      "deliverables": [],
+      "evidence_expectation": "",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P1-AC1",
+          "text": "`docs/maintance/publish.md`、`docs/maintance/regression.md`、`docs/maintance/backup.md` 都已创建。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P1",
+            "test-report.md#Results"
+          ]
+        },
+        {
+          "ac_id": "P1-AC2",
+          "text": "本次任务没有在 `docs/maintance/` 下额外新增第四类主题文档。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P1",
+            "test-report.md#Results"
+          ]
+        }
+      ],
+      "evidence": [
+        "execution-log.md#Phase-P1"
+      ],
+      "notes": "",
+      "last_reviewed_at": "2026-04-07T23:47:31"
+    },
+    {
+      "phase_id": "P2",
+      "title": "Write Publish, Regression, And Backup Docs From Code",
+      "status": "completed",
+      "objective": "用维护工具真实代码写出发布、回归验证、备份文档，并把测试服与正式服信息嵌入到对应文档中。",
+      "owned_paths": [],
+      "dependencies": [],
+      "deliverables": [],
+      "evidence_expectation": "",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P2-AC1",
+          "text": "`docs/maintance/publish.md` 如实说明了本机到测试、测试到正式（镜像）、测试到正式（数据）以及正式环境回滚入口。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P2",
+            "test-report.md#Results"
+          ]
+        },
+        {
+          "ac_id": "P2-AC2",
+          "text": "`docs/maintance/regression.md` 如实说明了基于 `smoke_test.py` 与 base_url guard 的回归或冒烟检查、关键端口和只读验证边界。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P2",
+            "test-report.md#Results"
+          ]
+        },
+        {
+          "ac_id": "P2-AC3",
+          "text": "`docs/maintance/backup.md` 如实说明了本地备份目录、服务器本地备份目录、恢复只允许到测试服务器，以及 `/mnt/replica` 与服务器本地备份的区别。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P2",
+            "test-report.md#Results"
+          ]
+        }
+      ],
+      "evidence": [
+        "execution-log.md#Phase-P2"
+      ],
+      "notes": "",
+      "last_reviewed_at": "2026-04-07T23:46:58"
+    },
+    {
+      "phase_id": "P3",
+      "title": "Validate Truthfulness And Hand Off",
+      "status": "completed",
+      "objective": "验证三份文档存在、非空、内容与源码一致，并确认新文档没有复制敏感字面量。",
+      "owned_paths": [],
+      "dependencies": [],
+      "deliverables": [],
+      "evidence_expectation": "",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P3-AC1",
+          "text": "聚焦校验确认三份文档非空，且都包含测试服或正式服、固定路径、对应主题锚点。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P3",
+            "test-report.md#Results"
+          ]
+        },
+        {
+          "ac_id": "P3-AC2",
+          "text": "聚焦校验确认新文档没有复制维护工具中的已知密码、共享凭据、API key 或 JWT secret 字面量。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P3",
+            "test-report.md#Results"
+          ]
+        },
+        {
+          "ac_id": "P3-AC3",
+          "text": "`execution-log.md` 与 `test-report.md` 能为所有 acceptance ids 提供证据引用。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P3",
+            "test-report.md#Results"
+          ]
+        }
+      ],
+      "evidence": [
+        "execution-log.md#Phase-P3"
+      ],
+      "notes": "",
+      "last_reviewed_at": "2026-04-07T23:47:49"
+    }
+  ],
+  "planner_review_status": "approved",
+  "test_status": "passed",
+  "blocking_prereqs": [],
+  "iteration_counts": {
+    "planner_revisions": 0,
+    "executor_loops": 1,
+    "test_loops": 1
+  },
+  "created_at": "2026-04-07T23:36:23",
+  "updated_at": "2026-04-07T23:48:18",
+  "branch": "int_latest",
+  "baseline_revision": "387cab1f68caff40c2dd95ce25938cff4ea45ad9",
+  "workspace_root": "D:\\ProjectPackage\\RagflowAuth",
+  "tasks_root": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks",
+  "task_dir": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\docs-maintance-tool-maintenance-tool-py-20260407T233623",
+  "goal": "将运维相关信息、测试服务器、正式服务器的信息补充到 docs/maintance/ 下，基于 tool/maintenance/tool.py 及相关发布实现写出真实的发布/回滚/恢复/冒烟运维文档",
+  "artifacts": {
+    "prd": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\docs-maintance-tool-maintenance-tool-py-20260407T233623\\prd.md",
+    "test_plan": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\docs-maintance-tool-maintenance-tool-py-20260407T233623\\test-plan.md",
+    "task_state": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\docs-maintance-tool-maintenance-tool-py-20260407T233623\\task-state.json",
+    "execution_log": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\docs-maintance-tool-maintenance-tool-py-20260407T233623\\execution-log.md",
+    "test_report": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\docs-maintance-tool-maintenance-tool-py-20260407T233623\\test-report.md"
+  }
+}

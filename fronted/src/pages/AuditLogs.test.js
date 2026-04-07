@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import AuditLogs from './AuditLogs';
 import useAuditLogsPage from '../features/audit/useAuditLogsPage';
@@ -24,7 +24,7 @@ describe('AuditLogs', () => {
         offset: 0,
       },
       result: {
-        total: 1,
+        total: 2,
         items: [
           {
             id: 'event-1',
@@ -37,6 +37,18 @@ describe('AuditLogs', () => {
             kb_name: 'KB-1',
             filename: 'spec.pdf',
             doc_id: 'doc-1',
+          },
+          {
+            id: 'event-2',
+            created_at_ms: 1712206800000,
+            action: 'operation_approval_execute_failed',
+            username: 'bob',
+            company_name: 'Company A',
+            department_name: 'Dept A',
+            source: 'operation_approval',
+            kb_name: '',
+            filename: '',
+            doc_id: '',
           },
         ],
       },
@@ -52,6 +64,18 @@ describe('AuditLogs', () => {
           kb_name: 'KB-1',
           filename: 'spec.pdf',
           doc_id: 'doc-1',
+        },
+        {
+          id: 'event-2',
+          created_at_ms: 1712206800000,
+          action: 'operation_approval_execute_failed',
+          username: 'bob',
+          company_name: 'Company A',
+          department_name: 'Dept A',
+          source: 'operation_approval',
+          kb_name: '',
+          filename: '',
+          doc_id: '',
         },
       ],
       visibleDepartments: [
@@ -71,8 +95,16 @@ describe('AuditLogs', () => {
 
     render(<AuditLogs />);
 
-    expect(screen.getByTestId('audit-total')).toHaveTextContent('1');
+    expect(screen.getByTestId('audit-total')).toHaveTextContent('2');
     expect(screen.getByTestId('audit-row-event-1')).toBeInTheDocument();
+    expect(screen.getByTestId('audit-row-event-2')).toBeInTheDocument();
+    expect(within(screen.getByTestId('audit-row-event-1')).getByText('下载文档')).toBeInTheDocument();
+    expect(within(screen.getByTestId('audit-row-event-1')).getByText('本地知识库')).toBeInTheDocument();
+    expect(
+      within(screen.getByTestId('audit-row-event-2')).getByText('操作审批执行失败')
+    ).toBeInTheDocument();
+    expect(within(screen.getByTestId('audit-row-event-2')).getByText('操作审批')).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: '导出审计证据包' })).toBeInTheDocument();
 
     await user.click(screen.getByTestId('audit-apply'));
     expect(useAuditLogsPage.mock.results[0].value.applyFilters).toHaveBeenCalledTimes(1);

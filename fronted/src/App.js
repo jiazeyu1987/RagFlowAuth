@@ -1,8 +1,9 @@
 import React, { Suspense, lazy } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { AuthProvider } from './hooks/useAuth';
+import { AuthProvider, useAuth } from './hooks/useAuth';
 import Layout from './components/Layout';
 import PermissionGuard from './components/PermissionGuard';
+import { getDefaultLandingRoute } from './features/auth/defaultLandingRoute';
 
 const LoginPage = lazy(() => import('./pages/LoginPage'));
 const Dashboard = lazy(() => import('./pages/Dashboard'));
@@ -40,6 +41,12 @@ function RouteLoadingFallback() {
   return <div style={{ padding: 16 }}>加载中...</div>;
 }
 
+function DefaultRouteRedirect() {
+  const { user } = useAuth();
+
+  return <Navigate to={getDefaultLandingRoute(user)} replace />;
+}
+
 function App() {
   return (
     <AuthProvider>
@@ -52,7 +59,7 @@ function App() {
               element={
                 <PermissionGuard>
                   <Layout>
-                    <Navigate to="/chat" replace />
+                    <DefaultRouteRedirect />
                   </Layout>
                 </PermissionGuard>
               }

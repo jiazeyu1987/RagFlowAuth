@@ -25,6 +25,17 @@ const ChangePassword = () => {
     borderRadius: 6,
     boxSizing: 'border-box',
   };
+  const hiddenUsernameStyle = {
+    position: 'absolute',
+    width: 1,
+    height: 1,
+    padding: 0,
+    margin: -1,
+    overflow: 'hidden',
+    clip: 'rect(0, 0, 0, 0)',
+    whiteSpace: 'nowrap',
+    border: 0,
+  };
 
   return (
     <div style={{ maxWidth: 520, width: '100%' }}>
@@ -44,6 +55,15 @@ const ChangePassword = () => {
         }}
       >
         <form onSubmit={handleSubmit}>
+          <input
+            type="text"
+            value={user?.username || ''}
+            autoComplete="username"
+            readOnly
+            tabIndex={-1}
+            aria-hidden="true"
+            style={hiddenUsernameStyle}
+          />
           <div style={{ marginBottom: 12 }}>
             <label style={{ display: 'block', marginBottom: 6 }}>旧密码</label>
             <input

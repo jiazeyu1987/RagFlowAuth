@@ -1,0 +1,10 @@
+Status: current repository does not use Nixpacks.
+
+Observed evidence:
+- No `nixpacks.toml` exists at the repository root.
+- Deployment is described through `backend/Dockerfile`, `fronted/Dockerfile`, `fronted/nginx.conf`, and scripts under `tool/`.
+- The current frontend build assumes a CRA build step and the current backend image installs Python dependencies with pip.
+
+Guidance for future contributors:
+- Do not describe this repository as Nixpacks-ready unless a real Nixpacks config is added and verified.
+- If Nixpacks is adopted later, record build commands, start commands, health checks, and required environment variables here.

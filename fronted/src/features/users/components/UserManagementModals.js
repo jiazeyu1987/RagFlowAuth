@@ -11,6 +11,8 @@ const UserManagementModals = ({
   newUser,
   createUserError,
   availableGroups,
+  permissionGroupsLoading,
+  permissionGroupsError,
   editingGroupUser,
   showGroupModal,
   selectedGroupIds,
@@ -86,6 +88,8 @@ const UserManagementModals = ({
       departments={departments}
       policySubAdminOptions={policySubAdminOptions}
       availableGroups={availableGroups}
+      permissionGroupsLoading={permissionGroupsLoading}
+      permissionGroupsError={permissionGroupsError}
       kbDirectoryNodes={kbDirectoryNodes}
       kbDirectoryLoading={kbDirectoryLoading}
       kbDirectoryError={kbDirectoryError}
@@ -124,6 +128,8 @@ const UserManagementModals = ({
         departments={departments}
         subAdminOptions={subAdminOptions}
         availableGroups={availableGroups}
+        permissionGroupsLoading={permissionGroupsLoading}
+        permissionGroupsError={permissionGroupsError}
         kbDirectoryNodes={kbDirectoryNodes}
         kbDirectoryLoading={kbDirectoryLoading}
         kbDirectoryError={kbDirectoryError}
@@ -142,6 +148,8 @@ const UserManagementModals = ({
       open={showGroupModal}
       editingGroupUser={editingGroupUser}
       availableGroups={availableGroups}
+      permissionGroupsLoading={permissionGroupsLoading}
+      permissionGroupsError={permissionGroupsError}
       selectedGroupIds={selectedGroupIds}
       onToggleGroup={toggleSelectedGroup}
       onCancel={handleCloseGroupModal}

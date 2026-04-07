@@ -20,6 +20,7 @@ export const useUserGroupAssignment = ({
   actorRole,
   actorUserId,
   availableGroups,
+  ensureAvailableGroupsLoaded,
   mapErrorMessage,
   onError,
   onSaved,
@@ -35,7 +36,7 @@ export const useUserGroupAssignment = ({
   }, []);
 
   const handleAssignGroup = useCallback(
-    (targetUser) => {
+    async (targetUser) => {
       if (
         !canAssignManagedUserGroups({
           actorRole,
@@ -45,13 +46,23 @@ export const useUserGroupAssignment = ({
       ) {
         return;
       }
+
+      const permissionGroupsLoad = await ensureAvailableGroupsLoaded?.();
+      if (permissionGroupsLoad?.ok === false) {
+        return;
+      }
+
+      const nextAvailableGroups = Array.isArray(permissionGroupsLoad?.result)
+        ? permissionGroupsLoad.result
+        : availableGroups;
+
       runStateAction(
         applyGroupModalState,
         buildOpenedGroupAssignmentState,
-        { targetUser, availableGroups }
+        { targetUser, availableGroups: nextAvailableGroups }
       );
     },
-    [actorRole, actorUserId, applyGroupModalState, availableGroups]
+    [actorRole, actorUserId, applyGroupModalState, availableGroups, ensureAvailableGroupsLoaded]
   );
 
   const handleCloseGroupModal = useCallback(

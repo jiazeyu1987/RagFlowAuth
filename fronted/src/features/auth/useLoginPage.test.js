@@ -23,8 +23,36 @@ describe('useLoginPage', () => {
     mockNavigate.mockReset();
   });
 
-  it('logs in successfully and navigates to chat', async () => {
-    const loginMock = jest.fn().mockResolvedValue({ success: true });
+  it('logs in successfully and navigates admin users to logs', async () => {
+    const loginMock = jest.fn().mockResolvedValue({
+      success: true,
+      user: { role: 'admin' },
+    });
+    useAuth.mockReturnValue({
+      login: loginMock,
+    });
+
+    const { result } = renderHook(() => useLoginPage());
+
+    act(() => {
+      result.current.setUsername('alice');
+      result.current.setPassword('Secret123');
+    });
+
+    await act(async () => {
+      await result.current.handleSubmit({ preventDefault() {} });
+    });
+
+    expect(loginMock).toHaveBeenCalledWith('alice', 'Secret123');
+    expect(mockNavigate).toHaveBeenCalledWith('/logs');
+    expect(result.current.error).toBe('');
+  });
+
+  it('logs in successfully and keeps non-admin users on chat as the default page', async () => {
+    const loginMock = jest.fn().mockResolvedValue({
+      success: true,
+      user: { role: 'sub_admin' },
+    });
     useAuth.mockReturnValue({
       login: loginMock,
     });

@@ -25,9 +25,12 @@ describe('LoginPage', () => {
     mockNavigate.mockReset();
   });
 
-  it('submits the login form and navigates to chat on success', async () => {
+  it('submits the login form and navigates admin users to logs on success', async () => {
     const user = userEvent.setup();
-    const loginMock = jest.fn().mockResolvedValue({ success: true });
+    const loginMock = jest.fn().mockResolvedValue({
+      success: true,
+      user: { role: 'admin' },
+    });
 
     useAuth.mockReturnValue({
       login: loginMock,
@@ -42,7 +45,7 @@ describe('LoginPage', () => {
     await waitFor(() => {
       expect(loginMock).toHaveBeenCalledWith('alice', 'Secret123');
     });
-    expect(mockNavigate).toHaveBeenCalledWith('/chat');
+    expect(mockNavigate).toHaveBeenCalledWith('/logs');
   });
 
   it('shows the login error when credentials are invalid', async () => {

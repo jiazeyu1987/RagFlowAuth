@@ -1,0 +1,24 @@
+{
+  "server": {
+    "host": "172.30.30.57",
+    "user": "root",
+    "port": 22
+  },
+  "docker": {
+    "tag": "2026-01-22",
+    "frontend_port": 3001,
+    "backend_port": 8001,
+    "network": "ragflowauth-network"
+  },
+  "paths": {
+    "data_dir": "/opt/ragflowauth",
+    "compose_file": "docker/docker-compose.yml",
+    "output_dir": "dist"
+  },
+  "ragflow_config": {
+    "api_key": "ragflow-VmYjRmNjIwZjc2MzExZjBhZmMyMDI0Mm",
+    "base_url": "http://host.docker.internal:9380",
+    "dataset_name": "展厅",
+    "default_conversation_name": "展厅聊天"
+  }
+}

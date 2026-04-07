@@ -8,6 +8,7 @@ import { usersApi } from '../features/users/api';
 jest.mock('../features/users/api', () => ({
   __esModule: true,
   usersApi: {
+    get: jest.fn(),
     search: jest.fn(),
   },
 }));
@@ -72,6 +73,13 @@ describe('ApprovalConfig', () => {
     jest.clearAllMocks();
     operationApprovalApi.listWorkflows.mockResolvedValue(workflowResponse.items);
     operationApprovalApi.updateWorkflow.mockResolvedValue({});
+    usersApi.get.mockImplementation(async (userId) => {
+      const match = activeUsers.find((item) => item.user_id === userId);
+      if (!match) {
+        throw new Error(`user_not_found:${userId}`);
+      }
+      return match;
+    });
     usersApi.search.mockImplementation(async (keyword) => {
       const normalized = String(keyword || '').trim().toLowerCase();
       return activeUsers.filter((item) => (
@@ -171,7 +179,7 @@ describe('ApprovalConfig', () => {
 
     await screen.findByTestId('approval-config-card-knowledge_file_upload');
     await waitFor(() => {
-      expect(usersApi.search).toHaveBeenCalledWith('u-1', 20);
+      expect(usersApi.get).toHaveBeenCalledWith('u-1');
     });
 
     expect(await screen.findByTestId('approval-config-member-ref-knowledge_file_upload-0-0-selected')).toHaveTextContent('已选择用户: Alice');

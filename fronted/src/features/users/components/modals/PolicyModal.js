@@ -51,6 +51,8 @@ export default function PolicyModal({
   departments,
   policySubAdminOptions,
   availableGroups,
+  permissionGroupsLoading = false,
+  permissionGroupsError = null,
   kbDirectoryNodes,
   kbDirectoryLoading,
   kbDirectoryError,
@@ -149,11 +151,15 @@ export default function PolicyModal({
                 label={TEXT.permissionGroup}
                 hint={TEXT.subAdminPermissionHint}
                 groups={availableGroups}
+                loading={permissionGroupsLoading}
+                error={permissionGroupsError}
                 selectedGroupIds={policyForm.group_ids}
                 onToggleGroup={onToggleGroup}
                 testIdPrefix="users-policy-group"
                 emptyText={TEXT.noPermissionGroups}
                 selectedText={TEXT.selectedPermissionGroups}
+                loadingTestId="users-policy-groups-loading"
+                errorTestId="users-policy-groups-error"
                 marginBottom={16}
                 maxHeight={isMobile ? '220px' : '260px'}
               />

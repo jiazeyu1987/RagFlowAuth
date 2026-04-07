@@ -19,7 +19,7 @@ if errorlevel 1 (
 call :is_listening %FRONTEND_PORT%
 if errorlevel 1 (
   echo [INFO] Starting frontend on port %FRONTEND_PORT% ...
-  start "RagflowAuth Frontend" cmd /k "cd /d ""%~dp0fronted"" && set ""PORT=%FRONTEND_PORT%"" && set ""BROWSER=none"" && set ""REACT_APP_AUTH_URL=http://localhost:%BACKEND_PORT%"" && npm start"
+  start "RagflowAuth Frontend" cmd /k "cd /d ""%~dp0fronted"" && set ""PORT=%FRONTEND_PORT%"" && set ""BROWSER=none"" && npm start"
 ) else (
   echo [INFO] Frontend already listening on port %FRONTEND_PORT%.
 )

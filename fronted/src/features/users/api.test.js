@@ -43,6 +43,17 @@ describe('usersApi', () => {
     );
   });
 
+  it('loads a single user through the auth backend and returns a stable object', async () => {
+    httpClient.requestJson.mockResolvedValueOnce({ user_id: 'u-1', username: 'alice' });
+
+    await expect(usersApi.get('u-1')).resolves.toEqual({ user_id: 'u-1', username: 'alice' });
+
+    expect(httpClient.requestJson).toHaveBeenCalledWith(
+      'http://auth.local/api/users/u-1',
+      { method: 'GET' }
+    );
+  });
+
   it('unwraps user mutation envelopes to stable objects', async () => {
     httpClient.requestJson
       .mockResolvedValueOnce({ user: { user_id: 'u-1' } })
@@ -97,6 +108,15 @@ describe('usersApi', () => {
     await expect(usersApi.list()).rejects.toThrow('users_list_invalid_payload');
     await expect(usersApi.items()).rejects.toThrow('users_items_invalid_payload');
     await expect(usersApi.search('alice')).rejects.toThrow('users_search_invalid_payload');
+  });
+
+  it('fails fast when the user detail endpoint does not return an object', async () => {
+    httpClient.requestJson
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce([{ user_id: 'u-1' }]);
+
+    await expect(usersApi.get('u-1')).rejects.toThrow('users_get_invalid_payload');
+    await expect(usersApi.get('u-2')).rejects.toThrow('users_get_invalid_payload');
   });
 
   it('fails fast when user mutation endpoints do not return the expected envelopes', async () => {

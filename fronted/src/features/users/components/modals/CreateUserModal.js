@@ -45,6 +45,8 @@ export default function CreateUserModal({
   departments,
   subAdminOptions,
   availableGroups,
+  permissionGroupsLoading = false,
+  permissionGroupsError = null,
   kbDirectoryNodes,
   kbDirectoryLoading,
   kbDirectoryError,
@@ -168,11 +170,15 @@ export default function CreateUserModal({
               label={TEXT.permissionGroup}
               hint={TEXT.subAdminPermissionHint}
               groups={availableGroups}
+              loading={permissionGroupsLoading}
+              error={permissionGroupsError}
               selectedGroupIds={newUser.group_ids}
               onToggleGroup={onToggleGroup}
               testIdPrefix="users-create-group"
               emptyText={TEXT.noPermissionGroups}
               selectedText={TEXT.selectedPermissionGroups}
+              loadingTestId="users-create-groups-loading"
+              errorTestId="users-create-groups-error"
               marginBottom="24px"
               maxHeight={isMobile ? '220px' : '260px'}
             />

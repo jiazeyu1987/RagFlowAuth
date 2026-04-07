@@ -1,6 +1,9 @@
 export const shouldLoadAssignableGroups = ({ isAdminUser, isSubAdminUser }) =>
   Boolean(isAdminUser || isSubAdminUser);
 
+export const shouldLoadOrgDirectory = ({ isAdminUser }) =>
+  Boolean(isAdminUser);
+
 export const buildUsersLoadState = (userList) => ({
   allUsers: userList,
   error: null,
@@ -8,16 +11,24 @@ export const buildUsersLoadState = (userList) => ({
 
 export const buildPermissionGroupsLoadState = (availableGroups) => ({
   availableGroups,
+  error: null,
 });
 
-export const buildPermissionGroupsLoadErrorState = () => ({
+export const buildPermissionGroupsLoadErrorState = (message = null) => ({
   availableGroups: [],
+  error: message,
 });
 
 export const buildPermissionGroupsLoadErrorLogArgs = (message) => [
   'Failed to load permission groups:',
   message,
 ];
+
+export const buildOrgDirectoryDisabledState = () => ({
+  companies: [],
+  departments: [],
+  error: null,
+});
 
 export const buildOrgDirectoryErrorState = (message) => ({
   companies: [],

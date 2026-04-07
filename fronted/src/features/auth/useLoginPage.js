@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
+import { getDefaultLandingRoute } from './defaultLandingRoute';
 import { useAuth } from '../../hooks/useAuth';
 
 const MOBILE_BREAKPOINT = 768;
@@ -38,7 +39,7 @@ export default function useLoginPage() {
     setLoading(false);
 
     if (result.success) {
-      navigate('/chat');
+      navigate(getDefaultLandingRoute(result.user));
       return;
     }
 

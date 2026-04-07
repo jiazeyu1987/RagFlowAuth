@@ -90,6 +90,8 @@ const isDingtalkChannel = (item) => String(item?.channel_type || '').trim().toLo
 const buildDingtalkRebuildSuccessNotice = (summary) =>
   `组织架构重建成功，钉钉 UserID 目录已重建：组织人员 ${summary.org_user_count} 人，目录写入 ${summary.directory_entry_count} 条，手工别名已清空。`;
 
+const buildDingtalkRebuildSkippedNotice = () => '组织架构重建成功，未配置钉钉通知通道，已跳过钉钉 UserID 目录重建。';
+
 export default function useOrgDirectoryManagementPage() {
   const nodeRefs = useRef(new Map());
   const excelFileInputRef = useRef(null);
@@ -347,13 +349,10 @@ export default function useOrgDirectoryManagementPage() {
     setSelectedExcelFile(nextFile);
   }, []);
 
-  const rebuildDingtalkRecipientMap = useCallback(async () => {
+  const getConfiguredDingtalkChannelId = useCallback(async () => {
     const channels = await notificationApi.listChannels(false);
     const dingtalkChannel = (Array.isArray(channels) ? channels : []).find(isDingtalkChannel);
-    if (!dingtalkChannel?.channel_id) {
-      throw new Error('未找到已配置的钉钉通知通道');
-    }
-    return notificationApi.rebuildDingtalkRecipientMap(dingtalkChannel.channel_id);
+    return dingtalkChannel?.channel_id || null;
   }, []);
 
   const handleRebuild = useCallback(async () => {
@@ -377,9 +376,14 @@ export default function useOrgDirectoryManagementPage() {
       let nextRecipientMapRebuildSummary = null;
 
       try {
-        const summary = await rebuildDingtalkRecipientMap();
-        nextNotice = buildDingtalkRebuildSuccessNotice(summary);
-        nextRecipientMapRebuildSummary = summary;
+        const dingtalkChannelId = await getConfiguredDingtalkChannelId();
+        if (!dingtalkChannelId) {
+          nextNotice = buildDingtalkRebuildSkippedNotice();
+        } else {
+          const summary = await notificationApi.rebuildDingtalkRecipientMap(dingtalkChannelId);
+          nextNotice = buildDingtalkRebuildSuccessNotice(summary);
+          nextRecipientMapRebuildSummary = summary;
+        }
       } catch (recipientMapError) {
         const detail = recipientMapError?.message || String(recipientMapError || '钉钉 UserID 目录重建失败');
         nextError = `组织架构重建成功，但钉钉 UserID 目录重建失败：${detail}`;
@@ -398,7 +402,7 @@ export default function useOrgDirectoryManagementPage() {
     } finally {
       setRebuilding(false);
     }
-  }, [loadAll, rebuildDingtalkRecipientMap, selectedExcelFile]);
+  }, [getConfiguredDingtalkChannelId, loadAll, selectedExcelFile]);
 
   return {
     excelFileInputRef,
