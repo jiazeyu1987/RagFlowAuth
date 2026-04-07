@@ -78,8 +78,8 @@ const searchTypeLabel = (nodeType) => {
 };
 
 const reasonLabel = (reason) => {
-  if (reason === 'employee_user_id_missing') return '缁勭粐鏋舵瀯浜哄憳缂哄皯 UserID';
-  if (reason === 'employee_user_id_duplicate') return '缁勭粐鏋舵瀯浜哄憳 UserID 閲嶅';
+  if (reason === 'employee_user_id_missing') return '组织架构人员缺少 UserID';
+  if (reason === 'employee_user_id_duplicate') return '组织架构人员 UserID 重复';
   return reason || '-';
 };
 
@@ -791,14 +791,14 @@ const OrgDirectoryManagement = () => {
                   }}
                 >
                   <div style={{ fontSize: '0.78rem', color: '#2563eb', fontWeight: 700 }}>
-                    閽夐拤 UserID 鐩綍閲嶅缓缁撴灉
+                    钉钉 UserID 目录重建结果
                   </div>
                   <div style={{ marginTop: 6, color: '#111827', fontSize: '0.84rem' }}>
-                    閫氶亾: {recipientMapRebuildSummary.channel_id}
+                    通道: {recipientMapRebuildSummary.channel_id}
                   </div>
                   <div style={{ marginTop: 4, color: '#475569', fontSize: '0.82rem', lineHeight: 1.7 }}>
-                    缁勭粐浜哄憳 {recipientMapRebuildSummary.org_user_count} 浜猴紝鐩綍鍐欏叆{' '}
-                    {recipientMapRebuildSummary.directory_entry_count} 鏉★紝鎵嬪伐鍒悕宸叉竻绌恒€?
+                    组织人员 {recipientMapRebuildSummary.org_user_count} 人，目录写入{' '}
+                    {recipientMapRebuildSummary.directory_entry_count} 条，手工别名已清空。
                   </div>
                   {(recipientMapRebuildSummary.invalid_org_users || []).length > 0 ? (
                     <div style={{ display: 'grid', gap: 6, marginTop: 10 }}>

@@ -21,6 +21,7 @@ describe('patentDownloadApi', () => {
     httpClient.requestJson.mockResolvedValueOnce({ session: { session_id: 'patent-session-1' } });
 
     expect(patentDownloadApi.parseKeywords('Alpha, beta\nalpha;Beta')).toEqual(['Alpha', 'beta']);
+    expect(patentDownloadApi.parseKeywords('Alpha， beta；alpha')).toEqual(['Alpha', 'beta']);
 
     const result = await patentDownloadApi.createSession({
       keywordText: 'Alpha',
@@ -83,6 +84,20 @@ describe('patentDownloadApi', () => {
 
     await expect(patentDownloadApi.stopSession('patent-session-2')).rejects.toThrow(
       'patent_download_stop_session_invalid_payload'
+    );
+  });
+
+  it('uses the readable default local kb name when adding all patents to the local kb', async () => {
+    httpClient.requestJson.mockResolvedValueOnce({ ok: true });
+
+    await patentDownloadApi.addAllToLocalKb('patent-session-1');
+
+    expect(httpClient.requestJson).toHaveBeenCalledWith(
+      'http://auth.local/api/patent-download/sessions/patent-session-1/add-all-to-local-kb',
+      {
+        method: 'POST',
+        body: JSON.stringify({ kb_ref: '[本地专利]' }),
+      }
     );
   });
 });

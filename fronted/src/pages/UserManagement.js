@@ -10,8 +10,8 @@ import {
 const UserManagement = () => {
   const page = useUserManagementPage();
 
-  if (page.loading) return <div>闁告梻濮惧ù鍥ㄧ▔?..</div>;
-  if (page.error) return <div>闂佹寧鐟ㄩ? {page.error}</div>;
+  if (page.loading) return <div>加载中...</div>;
+  if (page.error) return <div>错误: {page.error}</div>;
 
   return (
     <div>

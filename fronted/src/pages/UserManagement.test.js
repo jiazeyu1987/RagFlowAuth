@@ -157,6 +157,17 @@ describe('UserManagement simplified user ownership forms', () => {
     expect(within(listColumn).getByTestId('users-table')).toBeInTheDocument();
     expect(within(sideColumn).getByTestId('users-filters-panel')).toBeInTheDocument();
     expect(within(sideColumn).getByTestId('users-department-cards')).toBeInTheDocument();
+    expect(screen.getByTestId('users-create-open')).toHaveTextContent('创建用户');
+  });
+
+  it('renders readable loading and error states', () => {
+    useUserManagementPage.mockReturnValue(createHookState({ loading: true }));
+    const { rerender } = render(<UserManagement />);
+    expect(screen.getByText('加载中...')).toBeInTheDocument();
+
+    useUserManagementPage.mockReturnValue(createHookState({ error: '网络异常' }));
+    rerender(<UserManagement />);
+    expect(screen.getByText('错误: 网络异常')).toBeInTheDocument();
   });
 
   it('does not render a duplicate page heading inside the content area', () => {

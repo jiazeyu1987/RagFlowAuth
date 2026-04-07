@@ -30,12 +30,12 @@ const normalizeStopSessionResult = (payload) => {
   return result;
 };
 
-const DEFAULT_LOCAL_KB = '[鏈湴璁烘枃]';
+const DEFAULT_LOCAL_KB = '[本地论文]';
 
 export const paperDownloadApi = {
   parseKeywords(keywordText) {
     return String(keywordText || '')
-      .split(/[,;\n\r锛岋紱]+/)
+      .split(/[,;\n\r，；]+/)
       .map((v) => v.trim())
       .filter((v, idx, arr) => v && arr.findIndex((x) => x.toLowerCase() === v.toLowerCase()) === idx);
   },

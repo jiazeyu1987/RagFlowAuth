@@ -21,6 +21,7 @@ describe('paperDownloadApi', () => {
     httpClient.requestJson.mockResolvedValueOnce({ session: { session_id: 'paper-session-1' } });
 
     expect(paperDownloadApi.parseKeywords('Alpha, beta\nalpha;Beta')).toEqual(['Alpha', 'beta']);
+    expect(paperDownloadApi.parseKeywords('Alpha， beta；alpha')).toEqual(['Alpha', 'beta']);
 
     const result = await paperDownloadApi.createSession({
       keywordText: 'Alpha',
@@ -83,6 +84,20 @@ describe('paperDownloadApi', () => {
 
     await expect(paperDownloadApi.stopSession('paper-session-2')).rejects.toThrow(
       'paper_download_stop_session_invalid_payload'
+    );
+  });
+
+  it('uses the readable default local kb name when adding all papers to the local kb', async () => {
+    httpClient.requestJson.mockResolvedValueOnce({ ok: true });
+
+    await paperDownloadApi.addAllToLocalKb('paper-session-1');
+
+    expect(httpClient.requestJson).toHaveBeenCalledWith(
+      'http://auth.local/api/paper-download/sessions/paper-session-1/add-all-to-local-kb',
+      {
+        method: 'POST',
+        body: JSON.stringify({ kb_ref: '[本地论文]' }),
+      }
     );
   });
 });

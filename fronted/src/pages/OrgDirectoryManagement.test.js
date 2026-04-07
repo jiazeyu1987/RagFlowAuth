@@ -81,8 +81,13 @@ describe('OrgDirectoryManagement', () => {
     expect(screen.getByTestId('org-page')).toBeInTheDocument();
     expect(screen.getByTestId('org-error')).toHaveTextContent('钉钉 UserID 目录重建失败');
     expect(screen.getByTestId('org-notice')).toHaveTextContent('钉钉 UserID 目录已重建');
-    expect(screen.getByTestId('org-dingtalk-rebuild-summary')).toHaveTextContent('ding-main');
+    expect(screen.getByTestId('org-dingtalk-rebuild-summary')).toHaveTextContent('钉钉 UserID 目录重建结果');
+    expect(screen.getByTestId('org-dingtalk-rebuild-summary')).toHaveTextContent('通道: ding-main');
+    expect(screen.getByTestId('org-dingtalk-rebuild-summary')).toHaveTextContent(
+      '组织人员 3 人，目录写入 3 条，手工别名已清空。'
+    );
     expect(screen.getByTestId('org-dingtalk-invalid-ding-bob')).toHaveTextContent('Bob');
+    expect(screen.getByTestId('org-dingtalk-invalid-ding-bob')).toHaveTextContent('组织架构人员 UserID 重复');
     expect(screen.getByTestId('org-tree')).toBeInTheDocument();
     expect(screen.getByTestId('org-search-input')).toBeInTheDocument();
     expect(screen.getByTestId('org-excel-file-name')).toBeInTheDocument();
