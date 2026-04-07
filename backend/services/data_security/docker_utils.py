@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 
 from .common import ensure_dir, run_cmd, run_cmd_live
+from .models import resolve_runtime_managed_path
 
 
 def _docker_self_mounts() -> list[dict]:
@@ -32,6 +33,65 @@ def _docker_self_mounts() -> list[dict]:
         return []
 
     return []
+
+
+def _parse_docker_image_refs(text: str | None) -> list[str]:
+    refs: list[str] = []
+    seen: set[str] = set()
+    for raw_line in (text or "").splitlines():
+        line = str(raw_line or "").strip()
+        if not line:
+            continue
+        if any(ch.isspace() for ch in line):
+            continue
+        lowered = line.lower()
+        if lowered.startswith("time=") or lowered.startswith("warning") or lowered.startswith("warn"):
+            continue
+        if line in seen:
+            continue
+        seen.add(line)
+        refs.append(line)
+    return refs
+
+
+def _list_compose_project_container_images(project_name: str) -> list[str]:
+    project = str(project_name or "").strip()
+    if not project:
+        return []
+    code, out = run_cmd(
+        [
+            "docker",
+            "ps",
+            "-a",
+            "--filter",
+            f"label=com.docker.compose.project={project}",
+            "--format",
+            "{{.Image}}",
+        ]
+    )
+    if code != 0:
+        return []
+    return _parse_docker_image_refs(out)
+
+
+def _helper_image_rank(image: str) -> tuple[int, str]:
+    text = str(image or "").strip().lower()
+    if "ragflow" in text:
+        return 0, text
+    if "backend" in text:
+        return 1, text
+    if any(token in text for token in ("python", "ubuntu", "debian", "alpine")):
+        return 2, text
+    return 10, text
+
+
+def _first_available_local_image(images: list[str]) -> str | None:
+    ordered = sorted(_parse_docker_image_refs("\n".join(images)), key=_helper_image_rank)
+    for image in ordered:
+        code, _ = run_cmd(["docker", "image", "inspect", image])
+        if code == 0:
+            return image
+    return None
 
 
 def container_path_to_host_str(path: str | Path) -> str:
@@ -63,6 +123,10 @@ def container_path_to_host_str(path: str | Path) -> str:
         dst, src = best
         suffix = s[len(dst) :]
         return f"{src}{suffix}"
+
+    mapped = resolve_runtime_managed_path(s)
+    if mapped and mapped != s:
+        return mapped
 
     if s.startswith("/app/data/") or s == "/app/data" or s.startswith("/app/uploads/") or s == "/app/uploads":
         raise RuntimeError(f"container_mount_mapping_not_found:{s}")
@@ -103,22 +167,42 @@ def list_docker_volumes_by_prefix(prefix: str) -> list[str]:
     return sorted(vols)
 
 
-def resolve_backend_helper_image() -> str:
+def resolve_backend_helper_image(*, compose_file: Path | None = None, project_name: str | None = None) -> str:
     """
     Resolve the running backend container image used for helper `docker run` tasks.
 
-    We fail fast when the backend container image cannot be resolved instead of
-    silently falling back to a hard-coded tag that may not exist locally.
+    We prefer the dedicated backend container image when it exists. When the backend
+    runs directly on the host, resolve a helper image from the active RAGFlow
+    compose project instead of relying on a fixed container name.
     """
     code, out = run_cmd(["docker", "ps", "--filter", "name=ragflowauth-backend", "--format", "{{.Image}}"])
     if code != 0:
         detail = str(out or "").strip() or "docker_ps_failed"
         raise RuntimeError(f"backup_worker_image_resolve_failed:{detail}")
 
-    images = [line.strip() for line in str(out or "").splitlines() if line.strip()]
-    if not images:
-        raise RuntimeError("backup_worker_image_not_found:container=ragflowauth-backend")
-    return images[0]
+    candidates = _parse_docker_image_refs(out)
+
+    compose_path = Path(compose_file) if compose_file is not None else None
+    resolved_project_name = str(project_name or "").strip()
+    if compose_path is not None and not resolved_project_name:
+        try:
+            resolved_project_name = read_compose_project_name(compose_path)
+        except Exception:
+            resolved_project_name = ""
+
+    if resolved_project_name:
+        candidates.extend(_list_compose_project_container_images(resolved_project_name))
+    if compose_path is not None and compose_path.exists():
+        compose_images, _ = list_compose_images(compose_path)
+        candidates.extend(compose_images)
+
+    helper_image = _first_available_local_image(candidates)
+    if helper_image:
+        return helper_image
+
+    if resolved_project_name:
+        raise RuntimeError(f"backup_worker_image_not_found:project={resolved_project_name}")
+    raise RuntimeError("backup_worker_image_not_found:container=ragflowauth-backend")
 
 
 def read_compose_project_name(compose_file: Path) -> str:
@@ -159,6 +243,9 @@ def docker_tar_volume(
     volume_name: str,
     dest_tar_gz: Path,
     *,
+    helper_image: str | None = None,
+    compose_file: Path | None = None,
+    project_name: str | None = None,
     heartbeat: callable | None = None,
     cancel_check: callable | None = None,
 ) -> None:
@@ -166,18 +253,19 @@ def docker_tar_volume(
     backup_dir = dest_tar_gz.parent.resolve()
 
     backup_dir_str = container_path_to_host_str(backup_dir)
-    image = resolve_backend_helper_image()
+    image = helper_image or resolve_backend_helper_image(compose_file=compose_file, project_name=project_name)
 
     cmd = [
         "docker",
         "run",
         "--rm",
+        "--entrypoint",
+        "sh",
         "-v",
         f"{volume_name}:/data:ro",
         "-v",
         f"{backup_dir_str}:/backup",
         image,
-        "sh",
         "-lc",
         f"tar -czf /backup/{dest_tar_gz.name} -C /data .",
     ]
@@ -190,7 +278,7 @@ def list_compose_images(compose_file: Path) -> tuple[list[str], str | None]:
     code, out = run_cmd(["docker", "compose", "-f", str(compose_file), "config", "--images"], cwd=compose_file.parent)
     if code != 0:
         return [], out or "docker compose config --images failed"
-    images = sorted({line.strip() for line in (out or "").splitlines() if line.strip()})
+    images = sorted(_parse_docker_image_refs(out))
     return images, None
 
 

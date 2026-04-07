@@ -9,6 +9,8 @@ import time
 from datetime import datetime
 from pathlib import Path
 
+from backend.app.core.paths import repo_root
+
 from .common import ensure_dir
 from .docker_utils import container_path_to_host_str, resolve_backend_helper_image
 from .store import DataSecurityStore
@@ -188,7 +190,20 @@ class BackupReplicaService:
                 target.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(item, target)
 
-        helper_image = resolve_backend_helper_image()
+        settings = self.store.get_settings()
+        compose_file: Path | None = None
+        compose_path = str(settings.ragflow_compose_path or "").strip()
+        if compose_path:
+            compose_file = Path(compose_path)
+            if not compose_file.is_absolute():
+                compose_file = repo_root() / compose_file
+            if not compose_file.exists():
+                compose_file = None
+
+        helper_image = resolve_backend_helper_image(
+            compose_file=compose_file,
+            project_name=settings.ragflow_project_name,
+        )
 
         volumes_on_host_str = container_path_to_host_str(src / "volumes")
         try:
@@ -198,10 +213,11 @@ class BackupReplicaService:
                 "docker",
                 "run",
                 "--rm",
+                "--entrypoint",
+                "sh",
                 "-v",
                 f"{volumes_on_host_str}:/src:ro",
                 helper_image,
-                "sh",
                 "-c",
                 "ls -1 /src/*.tar.gz 2>/dev/null || echo ''",
             ]
@@ -212,12 +228,13 @@ class BackupReplicaService:
                         "docker",
                         "run",
                         "--rm",
+                        "--entrypoint",
+                        "sh",
                         "-v",
                         f"{volumes_on_host_str}:/src:ro",
                         "-v",
                         f"{dst}:/dst",
                         helper_image,
-                        "sh",
                         "-c",
                         f"cp /src/{Path(filename).name} /dst/volumes/ 2>/dev/null || true",
                     ]

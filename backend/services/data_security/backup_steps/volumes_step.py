@@ -10,6 +10,7 @@ from ..docker_utils import (
     docker_compose_stop,
     list_docker_volumes_by_prefix,
     read_compose_project_name,
+    resolve_backend_helper_image,
     docker_tar_volume,
 )
 from .context import BackupContext, BackupCancelledError
@@ -35,6 +36,7 @@ def backup_ragflow_volumes(ctx: BackupContext) -> None:
     project = read_compose_project_name(compose_file)
     ctx.ragflow_project = project
     prefix = f"{project}_"
+    helper_image = resolve_backend_helper_image(compose_file=compose_file, project_name=project)
 
     if settings.ragflow_stop_services:
         ctx.update(message="停止 RAGFlow 服务（可选）", progress=38)
@@ -71,6 +73,9 @@ def backup_ragflow_volumes(ctx: BackupContext) -> None:
                 docker_tar_volume(
                     v,
                     dest_tar,
+                    helper_image=helper_image,
+                    compose_file=compose_file,
+                    project_name=project,
                     heartbeat=_hb_volume,
                     cancel_check=lambda: ctx.store.is_cancel_requested(ctx.job_id),
                 )

@@ -1,10 +1,53 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path, PurePosixPath
 from typing import Any
+
+from backend.app.core.managed_paths import managed_data_root
 
 
 LOCAL_BACKUP_TARGET_PATH = "/app/data/backups"
+STANDARD_REPLICA_MOUNT_ROOT = "/mnt/replica"
+
+
+def _normalize_path_text(path_text: str | None) -> str:
+    text = str(path_text or "").strip().replace("\\", "/")
+    while "//" in text:
+        text = text.replace("//", "/")
+    if text.startswith("/") and len(text) > 1:
+        text = text.rstrip("/")
+    return text
+
+
+def _is_standard_replica_path(path_text: str | None) -> bool:
+    text = _normalize_path_text(path_text)
+    if not text.startswith("/"):
+        return False
+    return text == STANDARD_REPLICA_MOUNT_ROOT or text.startswith(STANDARD_REPLICA_MOUNT_ROOT + "/")
+
+
+def _running_inside_container() -> bool:
+    return Path("/.dockerenv").exists()
+
+
+def resolve_runtime_managed_path(path_text: str | None) -> str | None:
+    text = _normalize_path_text(path_text)
+    if not text:
+        return None
+    if not text.startswith("/"):
+        return str(Path(str(path_text)))
+    if _running_inside_container():
+        return text
+
+    pure = PurePosixPath(text)
+    if text == "/app/data" or text.startswith("/app/data/"):
+        rel = pure.relative_to(PurePosixPath("/app/data"))
+        return str((managed_data_root() / Path(*rel.parts)).resolve())
+    if text == "/app/uploads" or text.startswith("/app/uploads/"):
+        rel = pure.relative_to(PurePosixPath("/app/uploads"))
+        return str((managed_data_root() / "uploads" / Path(*rel.parts)).resolve())
+    return str(Path(str(path_text)))
 
 
 @dataclass(frozen=True)
@@ -42,13 +85,19 @@ class DataSecuritySettings:
     replica_enabled: bool
     replica_target_path: str | None
     replica_subdir_format: str  # 'flat' or 'date'
+    standard_replica_mount_active: bool = False
 
     def local_backup_target_path(self) -> str:
-        return LOCAL_BACKUP_TARGET_PATH
+        return str(resolve_runtime_managed_path(LOCAL_BACKUP_TARGET_PATH) or LOCAL_BACKUP_TARGET_PATH)
 
     def target_path(self) -> str | None:
         if self.target_mode == "local":
-            return self.target_local_dir
+            local_target = str(self.target_local_dir or "").strip()
+            if not local_target:
+                return None
+            if _is_standard_replica_path(local_target) and not self.standard_replica_mount_active:
+                return None
+            return local_target
         ip = (self.target_ip or "").strip()
         share = (self.target_share_name or "").strip().strip("\\/")
         subdir = (self.target_subdir or "").strip().strip("\\/")
@@ -58,7 +107,9 @@ class DataSecuritySettings:
 
     def windows_target_path(self) -> str | None:
         replica_target = str(self.replica_target_path or "").strip()
-        if replica_target:
+        if replica_target and (
+            self.standard_replica_mount_active or not _is_standard_replica_path(replica_target)
+        ):
             return replica_target
         return self.target_path()
 

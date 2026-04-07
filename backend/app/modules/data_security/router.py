@@ -134,9 +134,11 @@ def _resolve_auth_db_path(auth_db_path: str) -> Path:
     return path
 
 
-def _resolve_backup_worker_image() -> tuple[str | None, str | None]:
+def _resolve_backup_worker_image(
+    *, compose_file: Path | None = None, project_name: str | None = None
+) -> tuple[str | None, str | None]:
     try:
-        return resolve_backend_helper_image(), None
+        return resolve_backend_helper_image(compose_file=compose_file, project_name=project_name), None
     except RuntimeError as exc:
         return None, str(exc)
 
@@ -180,7 +182,7 @@ def _assert_backup_prerequisites(deps: AppDependencies) -> None:
     if not volumes:
         raise RuntimeError(f"ragflow_volumes_not_found:{prefix}")
 
-    _, worker_error = _resolve_backup_worker_image()
+    _, worker_error = _resolve_backup_worker_image(compose_file=compose_file, project_name=project_name)
     if worker_error:
         raise RuntimeError(worker_error)
 

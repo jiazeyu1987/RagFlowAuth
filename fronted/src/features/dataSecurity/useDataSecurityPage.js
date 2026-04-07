@@ -10,6 +10,7 @@ export default function useDataSecurityPage() {
   const [settings, setSettings] = useState(null);
   const [jobs, setJobs] = useState([]);
   const [activeJob, setActiveJob] = useState(null);
+  const [savingSettings, setSavingSettings] = useState(false);
   const [savingRetention, setSavingRetention] = useState(false);
   const [restoreDrills, setRestoreDrills] = useState([]);
   const [selectedRestoreJobId, setSelectedRestoreJobId] = useState('');
@@ -20,6 +21,8 @@ export default function useDataSecurityPage() {
 
   const targetPreview = useMemo(() => {
     if (!settings) return '';
+    const replicaTarget = (settings.replica_target_path || '').trim();
+    if (replicaTarget) return replicaTarget;
     if (settings.target_mode === 'local') return settings.target_local_dir || '';
     const ip = (settings.target_ip || '').trim();
     const share = (settings.target_share_name || '').trim().replace(/^\\\\+|\\\\+$/g, '').replace(/^\/+|\/+$/g, '');
@@ -30,10 +33,13 @@ export default function useDataSecurityPage() {
 
   const localBackupTargetPath = useMemo(() => settings?.local_backup_target_path || '', [settings]);
 
-  const windowsBackupTargetPath = useMemo(
-    () => settings?.windows_backup_target_path || targetPreview || '',
-    [settings, targetPreview]
-  );
+  const windowsBackupTargetPath = useMemo(() => {
+    if (!settings) return '';
+    if (Object.prototype.hasOwnProperty.call(settings, 'windows_backup_target_path')) {
+      return settings.windows_backup_target_path || '';
+    }
+    return targetPreview || '';
+  }, [settings, targetPreview]);
 
   const restoreEligibleJobs = useMemo(
     () => (jobs || []).filter((job) => !!String(job?.output_dir || '').trim()),
@@ -145,6 +151,43 @@ export default function useDataSecurityPage() {
     }
   }, [settings]);
 
+  const saveSettings = useCallback(async () => {
+    if (!settings) return;
+    const changeReason = window.prompt('请输入本次 Windows 备份设置变更原因');
+    if (changeReason === null) return;
+    const trimmedReason = String(changeReason || '').trim();
+    if (!trimmedReason) {
+      setError('变更原因不能为空');
+      return;
+    }
+
+    setError(null);
+    setSavingSettings(true);
+    try {
+      const resp = await dataSecurityApi.updateSettings({
+        enabled: !!settings.enabled,
+        target_mode: settings.target_mode || 'share',
+        target_ip: String(settings.target_ip || '').trim(),
+        target_share_name: String(settings.target_share_name || '').trim(),
+        target_subdir: String(settings.target_subdir || '').trim(),
+        target_local_dir: String(settings.target_local_dir || '').trim(),
+        ragflow_compose_path: String(settings.ragflow_compose_path || '').trim(),
+        ragflow_stop_services: !!settings.ragflow_stop_services,
+        auth_db_path: String(settings.auth_db_path || 'data/auth.db').trim(),
+        full_backup_include_images: !!settings.full_backup_include_images,
+        replica_enabled: !!settings.replica_enabled,
+        replica_target_path: String(settings.replica_target_path || '').trim(),
+        replica_subdir_format: settings.replica_subdir_format || 'flat',
+        change_reason: trimmedReason,
+      });
+      setSettings((prev) => ({ ...(prev || {}), ...(resp || {}) }));
+    } catch (e) {
+      setError(e.message || '保存失败');
+    } finally {
+      setSavingSettings(false);
+    }
+  }, [settings]);
+
   const startPollingJob = useCallback(async (jobId) => {
     if (pollTimer.current) {
       clearInterval(pollTimer.current);
@@ -238,6 +281,7 @@ export default function useDataSecurityPage() {
     settings,
     jobs,
     activeJob,
+    savingSettings,
     savingRetention,
     restoreDrills,
     selectedRestoreJobId,
@@ -252,6 +296,7 @@ export default function useDataSecurityPage() {
     setSelectedRestoreJobId,
     setRestoreTarget,
     setRestoreNotes,
+    saveSettings,
     saveRetention,
     runNow,
     runFullBackupNow,

@@ -1,5 +1,6 @@
 import unittest
 from unittest import mock
+from pathlib import Path
 
 
 class TestDataSecurityPathMapping(unittest.TestCase):
@@ -13,9 +14,37 @@ class TestDataSecurityPathMapping(unittest.TestCase):
             ):
                 docker_utils.resolve_backend_helper_image()
 
-    def test_docker_tar_volume_uses_resolved_backend_helper_image(self):
-        from pathlib import Path
+    def test_resolve_backend_helper_image_uses_compose_project_image_on_host_runtime(self):
+        from backend.services.data_security import docker_utils
 
+        def fake_run_cmd(argv, cwd=None, **_kwargs):
+            if argv[:4] == ["docker", "ps", "--filter", "name=ragflowauth-backend"]:
+                return 0, ""
+            if argv[:6] == [
+                "docker",
+                "ps",
+                "-a",
+                "--filter",
+                "label=com.docker.compose.project=docker",
+                "--format",
+            ]:
+                return 0, "mysql:8.0.39\ninfiniflow/ragflow:v0.22.1\n"
+            if argv[:6] == ["docker", "compose", "-f", str(Path(r"D:\RagFlow\ragflow\docker\docker-compose.yml")), "config", "--images"]:
+                return 0, "elasticsearch:8.11.3\ninfiniflow/ragflow:v0.22.1\n"
+            if argv[:3] == ["docker", "image", "inspect"]:
+                self.assertEqual(argv[3], "infiniflow/ragflow:v0.22.1")
+                return 0, ""
+            self.fail(f"unexpected call: {argv!r}")
+
+        compose = Path(r"D:\RagFlow\ragflow\docker\docker-compose.yml")
+        with mock.patch.object(Path, "exists", return_value=True), mock.patch.object(
+            docker_utils, "run_cmd", side_effect=fake_run_cmd
+        ):
+            image = docker_utils.resolve_backend_helper_image(compose_file=compose, project_name="docker")
+
+        self.assertEqual(image, "infiniflow/ragflow:v0.22.1")
+
+    def test_docker_tar_volume_uses_resolved_backend_helper_image(self):
         from backend.services.data_security import docker_utils
 
         calls = []
@@ -44,7 +73,7 @@ class TestDataSecurityPathMapping(unittest.TestCase):
             docker_utils.docker_tar_volume("demo-volume", Path("/app/data/backups/demo.tar.gz"))
 
         self.assertTrue(calls)
-        self.assertEqual(calls[0][0:6], ["docker", "run", "--rm", "-v", "demo-volume:/data:ro", "-v"])
+        self.assertEqual(calls[0][0:8], ["docker", "run", "--rm", "--entrypoint", "sh", "-v", "demo-volume:/data:ro", "-v"])
         self.assertIn("backend-helper:test", calls[0])
 
     def test_container_path_to_host_str_uses_mount_mapping(self):
@@ -71,13 +100,28 @@ class TestDataSecurityPathMapping(unittest.TestCase):
     def test_container_path_to_host_str_rejects_managed_paths_without_mapping(self):
         from backend.services.data_security.docker_utils import container_path_to_host_str
 
-        with mock.patch("backend.services.data_security.docker_utils._docker_self_mounts", return_value=[]):
+        with mock.patch("backend.services.data_security.docker_utils._docker_self_mounts", return_value=[]), mock.patch(
+            "backend.services.data_security.models._running_inside_container",
+            return_value=True,
+        ):
             with self.assertRaisesRegex(RuntimeError, "container_mount_mapping_not_found:/app/data/auth.db"):
                 container_path_to_host_str("/app/data/auth.db")
 
-    def test_docker_save_images_uses_container_path_not_host_path(self):
-        from pathlib import Path
+    def test_container_path_to_host_str_maps_managed_paths_on_host_runtime(self):
+        from backend.services.data_security.docker_utils import container_path_to_host_str
 
+        with mock.patch("backend.services.data_security.docker_utils._docker_self_mounts", return_value=[]), mock.patch(
+            "backend.services.data_security.models._running_inside_container",
+            return_value=False,
+        ), mock.patch(
+            "backend.services.data_security.models.managed_data_root",
+            return_value=Path(r"D:\ProjectPackage\RagflowAuth\data"),
+        ):
+            mapped = container_path_to_host_str("/app/data/backups/migration_pack_x/volumes/a.tar.gz")
+
+        self.assertEqual(mapped, r"D:\ProjectPackage\RagflowAuth\data\backups\migration_pack_x\volumes\a.tar.gz")
+
+    def test_docker_save_images_uses_container_path_not_host_path(self):
         from backend.services.data_security import docker_utils
 
         calls = []

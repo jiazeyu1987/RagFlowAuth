@@ -94,6 +94,7 @@ const DataSecurity = () => {
     settings,
     jobs,
     activeJob,
+    savingSettings,
     savingRetention,
     restoreDrills,
     selectedRestoreJobId,
@@ -108,6 +109,7 @@ const DataSecurity = () => {
     setSelectedRestoreJobId,
     setRestoreTarget,
     setRestoreNotes,
+    saveSettings,
     saveRetention,
     runNow,
     runFullBackupNow,
@@ -316,6 +318,33 @@ const DataSecurity = () => {
               启用定时备份
             </label>
 
+            <label style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
+              <input
+                type="checkbox"
+                checked={!!settings?.replica_enabled}
+                onChange={(e) => setSettingField('replica_enabled', e.target.checked)}
+                data-testid="ds-replica-enabled"
+              />
+              Enable Windows replica backup
+            </label>
+
+            <label>
+              Server mounted path (optional)
+              <input
+                data-testid="ds-replica-target-path"
+                value={settings?.replica_target_path || ''}
+                onChange={(e) => setSettingField('replica_target_path', e.target.value)}
+                placeholder="/mnt/replica/RagflowAuth"
+                style={{
+                  width: '100%',
+                  padding: '8px',
+                  border: '1px solid #d1d5db',
+                  borderRadius: '8px',
+                  marginTop: '6px',
+                }}
+              />
+            </label>
+
             <div
               style={{
                 display: 'grid',
@@ -481,6 +510,24 @@ const DataSecurity = () => {
                 }}
               />
             </label>
+
+            <button
+              type="button"
+              onClick={saveSettings}
+              disabled={savingSettings}
+              data-testid="ds-settings-save"
+              style={{
+                padding: '10px 14px',
+                borderRadius: '8px',
+                border: 'none',
+                cursor: savingSettings ? 'not-allowed' : 'pointer',
+                background: savingSettings ? '#9ca3af' : '#111827',
+                color: 'white',
+                width: isMobile ? '100%' : 'fit-content',
+              }}
+            >
+              {savingSettings ? 'Saving...' : 'Save Windows Backup Settings'}
+            </button>
           </div>
         </Card>
       )}

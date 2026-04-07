@@ -144,17 +144,30 @@ class TestDataSecurityBackupStepsUnit(unittest.TestCase):
 
             vols = ["ragflow_compose_esdata01", "ragflow_compose_mysql_data"]
 
-            def _fake_tar(vol: str, dest: Path, *, heartbeat=None, cancel_check=None) -> None:
+            def _fake_tar(
+                vol: str,
+                dest: Path,
+                *,
+                helper_image=None,
+                compose_file=None,
+                project_name=None,
+                heartbeat=None,
+                cancel_check=None,
+            ) -> None:
                 if heartbeat:
                     heartbeat()
                 dest.parent.mkdir(parents=True, exist_ok=True)
                 dest.write_bytes(b"tar")
+                self.assertEqual(helper_image, "helper:test")
+                self.assertEqual(project_name, "ragflow_compose")
 
             with patch.object(volumes_step, "read_compose_project_name", return_value="ragflow_compose"), patch.object(
                 volumes_step, "list_docker_volumes_by_prefix", return_value=vols
             ), patch.object(volumes_step, "docker_compose_stop", return_value=None), patch.object(
                 volumes_step, "docker_compose_start", return_value=None
-            ), patch.object(volumes_step, "docker_tar_volume", side_effect=_fake_tar):
+            ), patch.object(volumes_step, "resolve_backend_helper_image", return_value="helper:test"), patch.object(
+                volumes_step, "docker_tar_volume", side_effect=_fake_tar
+            ):
                 volumes_step.backup_ragflow_volumes(ctx)
 
             self.assertTrue((ctx.pack_dir / "volumes" / f"{vols[0]}.tar.gz").exists())

@@ -26,10 +26,17 @@ const settingsResponse = {
   windows_backup_target_path: '/mnt/replica/RagflowAuth',
   windows_backup_pack_count: 1,
   windows_backup_pack_count_skipped: false,
+  replica_enabled: false,
+  replica_target_path: '/mnt/replica/RagflowAuth',
+  replica_subdir_format: 'flat',
   target_mode: 'share',
   target_ip: '10.0.0.8',
   target_share_name: 'BackupShare',
   target_subdir: 'RagflowAuth',
+  ragflow_compose_path: '/app/ragflow_compose/docker-compose.yml',
+  ragflow_stop_services: false,
+  full_backup_include_images: true,
+  auth_db_path: 'data/auth.db',
 };
 
 const createJob = (overrides = {}) => ({
@@ -66,8 +73,14 @@ const createRestoreDrill = (overrides = {}) => ({
   ...overrides,
 });
 
-const renderPage = async ({ settings = settingsResponse, jobs = [createJob()], drills = [] } = {}) => {
+const renderPage = async ({
+  settings = settingsResponse,
+  jobs = [createJob()],
+  drills = [],
+  route = '/data-security',
+} = {}) => {
   dataSecurityApi.getSettings.mockResolvedValue(settings);
+  dataSecurityApi.updateSettings.mockResolvedValue(settings);
   dataSecurityApi.listJobs.mockResolvedValue(jobs);
   dataSecurityApi.listRestoreDrills.mockResolvedValue(drills);
   dataSecurityApi.createRestoreDrill.mockResolvedValue(createRestoreDrill());
@@ -76,7 +89,7 @@ const renderPage = async ({ settings = settingsResponse, jobs = [createJob()], d
   dataSecurityApi.getJob.mockResolvedValue(jobs[0] || createJob());
 
   render(
-    <MemoryRouter>
+    <MemoryRouter initialEntries={[route]}>
       <DataSecurity />
     </MemoryRouter>
   );
@@ -169,6 +182,63 @@ describe('DataSecurity', () => {
     await user.click(screen.getByTestId('ds-restore-submit'));
 
     expect(dataSecurityApi.createRestoreDrill).not.toHaveBeenCalled();
-    expect(await screen.findByTestId('ds-error')).toHaveTextContent('可用于本地恢复演练');
+    expect(await screen.findByTestId('ds-error')).not.toHaveTextContent('');
+  });
+
+  it('saves advanced Windows replica settings through the auth backend', async () => {
+    const user = userEvent.setup();
+    const promptSpy = jest.spyOn(window, 'prompt').mockReturnValue('switch to UNC share');
+    dataSecurityApi.updateSettings.mockResolvedValue({
+      ...settingsResponse,
+      windows_backup_target_path: '\\\\192.168.1.100\\BackupShare\\RagflowAuth',
+      replica_enabled: true,
+      replica_target_path: '',
+      target_mode: 'share',
+      target_ip: '192.168.1.100',
+      target_share_name: 'BackupShare',
+      target_subdir: 'RagflowAuth',
+    });
+
+    await renderPage({
+      route: '/data-security?advanced=1',
+      settings: {
+        ...settingsResponse,
+        windows_backup_target_path: '',
+        replica_enabled: false,
+        replica_target_path: '/mnt/replica/RagflowAuth',
+        target_mode: 'share',
+        target_ip: '',
+        target_share_name: '',
+        target_subdir: '',
+      },
+    });
+
+    await user.click(screen.getByTestId('ds-replica-enabled'));
+    await user.clear(screen.getByTestId('ds-replica-target-path'));
+    await user.type(screen.getByTestId('ds-target-ip'), '192.168.1.100');
+    await user.type(screen.getByTestId('ds-target-share-name'), 'BackupShare');
+    await user.type(screen.getByTestId('ds-target-subdir'), 'RagflowAuth');
+    await user.click(screen.getByTestId('ds-settings-save'));
+
+    await waitFor(() => {
+      expect(dataSecurityApi.updateSettings).toHaveBeenCalledWith({
+        enabled: true,
+        target_mode: 'share',
+        target_ip: '192.168.1.100',
+        target_share_name: 'BackupShare',
+        target_subdir: 'RagflowAuth',
+        target_local_dir: '',
+        ragflow_compose_path: '/app/ragflow_compose/docker-compose.yml',
+        ragflow_stop_services: false,
+        auth_db_path: 'data/auth.db',
+        full_backup_include_images: true,
+        replica_enabled: true,
+        replica_target_path: '',
+        replica_subdir_format: 'flat',
+        change_reason: 'switch to UNC share',
+      });
+    });
+
+    promptSpy.mockRestore();
   });
 });

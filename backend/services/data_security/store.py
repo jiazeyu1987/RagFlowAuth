@@ -129,10 +129,11 @@ class DataSecurityStore:
                 backup_retention_max = 30
             backup_retention_max = max(1, min(100, backup_retention_max))
             replica_target_path = get_col("replica_target_path")
+            standard_replica_mount_active = self._has_standard_replica_mount()
 
             # If the standard mount is present (Linux server / Docker), keep key backup paths fixed.
             # This prevents "environment drift" caused by UI edits and avoids writing large backups to `/`.
-            if self._has_standard_replica_mount():
+            if standard_replica_mount_active:
                 replica_target_path = "/mnt/replica/RagflowAuth"
 
                 # These paths are inside the backend container.
@@ -170,6 +171,7 @@ class DataSecurityStore:
                 replica_enabled=bool(get_col("replica_enabled", 0)),
                 replica_target_path=replica_target_path,
                 replica_subdir_format=get_col("replica_subdir_format") or "flat",
+                standard_replica_mount_active=standard_replica_mount_active,
             )
         finally:
             conn.close()
