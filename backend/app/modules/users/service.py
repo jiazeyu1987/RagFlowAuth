@@ -18,6 +18,13 @@ class UsersService:
     def _raise(err: UserManagementError) -> None:
         raise HTTPException(status_code=err.status_code, detail=err.code) from err
 
+    def _call_manager(self, method_name: str, /, **kwargs):
+        method = getattr(self._manager, method_name)
+        try:
+            return method(**kwargs)
+        except UserManagementError as err:
+            self._raise(err)
+
     def list_users(
         self,
         *,
@@ -32,48 +39,31 @@ class UsersService:
         manager_user_id: Optional[str] = None,
         limit: int,
     ) -> list[UserResponse]:
-        try:
-            return self._manager.list_users(
-                q=q,
-                role=role,
-                group_id=group_id,
-                company_id=company_id,
-                department_id=department_id,
-                status=status,
-                created_from_ms=created_from_ms,
-                created_to_ms=created_to_ms,
-                manager_user_id=manager_user_id,
-                limit=limit,
-            )
-        except UserManagementError as e:
-            self._raise(e)
+        return self._call_manager(
+            "list_users",
+            q=q,
+            role=role,
+            group_id=group_id,
+            company_id=company_id,
+            department_id=department_id,
+            status=status,
+            created_from_ms=created_from_ms,
+            created_to_ms=created_to_ms,
+            manager_user_id=manager_user_id,
+            limit=limit,
+        )
 
     def create_user(self, *, user_data: UserCreate, created_by: str) -> UserResponse:
-        try:
-            return self._manager.create_user(user_data=user_data, created_by=created_by)
-        except UserManagementError as e:
-            self._raise(e)
+        return self._call_manager("create_user", user_data=user_data, created_by=created_by)
 
-    def get_user(self, user_id: str) -> UserResponse:
-        try:
-            return self._manager.get_user(user_id)
-        except UserManagementError as e:
-            self._raise(e)
+    def get_user(self, *, user_id: str) -> UserResponse:
+        return self._call_manager("get_user", user_id=user_id)
 
     def update_user(self, *, user_id: str, user_data: UserUpdate) -> UserResponse:
-        try:
-            return self._manager.update_user(user_id=user_id, user_data=user_data)
-        except UserManagementError as e:
-            self._raise(e)
+        return self._call_manager("update_user", user_id=user_id, user_data=user_data)
 
-    def delete_user(self, user_id: str) -> None:
-        try:
-            self._manager.delete_user(user_id)
-        except UserManagementError as e:
-            self._raise(e)
+    def delete_user(self, *, user_id: str) -> None:
+        self._call_manager("delete_user", user_id=user_id)
 
-    def reset_password(self, user_id: str, new_password: str) -> None:
-        try:
-            self._manager.reset_password(user_id, new_password)
-        except UserManagementError as e:
-            self._raise(e)
+    def reset_password(self, *, user_id: str, new_password: str) -> None:
+        self._call_manager("reset_password", user_id=user_id, new_password=new_password)

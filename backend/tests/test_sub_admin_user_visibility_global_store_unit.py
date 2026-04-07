@@ -83,6 +83,7 @@ class TestSubAdminUserVisibilityGlobalStoreUnit(unittest.TestCase):
             accessible_kb_nodes=[self.root_node_id],
             accessible_kbs=[],
             accessible_chats=[],
+            can_view_tools=False,
         )
         if not self.group_id:
             raise AssertionError("permission_group_create_failed")

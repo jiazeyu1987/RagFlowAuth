@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
+import useMobileBreakpoint from '../../../shared/hooks/useMobileBreakpoint';
 
 export default function UserFiltersPanel({
   filters,
@@ -9,19 +10,7 @@ export default function UserFiltersPanel({
   isSubAdminUser,
   onResetFilters,
 }) {
-  const [isMobile, setIsMobile] = useState(() => {
-    if (typeof window === 'undefined') return false;
-    return window.innerWidth <= 768;
-  });
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return undefined;
-
-    const handleResize = () => setIsMobile(window.innerWidth <= 768);
-    handleResize();
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
+  const isMobile = useMobileBreakpoint(768);
 
   const fieldWrapStyle = (minWidth) => ({
     minWidth: isMobile ? '100%' : minWidth,

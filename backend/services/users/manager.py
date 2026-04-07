@@ -28,8 +28,48 @@ class UsersPort(Protocol):
     ): ...
 
     def get_user(self, user_id: str): ...
-    def create_user(self, **kwargs): ...
-    def update_user(self, **kwargs): ...
+    def create_user(
+        self,
+        *,
+        username: str,
+        password: str,
+        full_name: Optional[str],
+        email: Optional[str],
+        manager_user_id: Optional[str],
+        company_id: Optional[int],
+        department_id: Optional[int],
+        role: str,
+        group_id: Optional[int],
+        status: str,
+        max_login_sessions: Optional[int],
+        idle_timeout_minutes: Optional[int],
+        can_change_password: bool,
+        disable_login_enabled: bool,
+        disable_login_until_ms: Optional[int],
+        electronic_signature_enabled: bool,
+        created_by: str,
+        managed_kb_root_node_id: Optional[str],
+    ): ...
+    def update_user(
+        self,
+        *,
+        user_id: str,
+        full_name: Optional[str],
+        email: Optional[str],
+        manager_user_id: Optional[str],
+        company_id: Optional[int],
+        department_id: Optional[int],
+        role: Optional[str],
+        group_id: Optional[int],
+        status: Optional[str],
+        max_login_sessions: Optional[int],
+        idle_timeout_minutes: Optional[int],
+        can_change_password: Optional[bool],
+        disable_login_enabled: Optional[bool],
+        disable_login_until_ms: Optional[int],
+        electronic_signature_enabled: Optional[bool],
+        managed_kb_root_node_id: Optional[str],
+    ): ...
     def delete_user(self, user_id: str) -> bool: ...
     def update_password(self, user_id: str, new_password: str) -> None: ...
     def set_user_permission_groups(self, user_id: str, group_ids: list[int]) -> None: ...

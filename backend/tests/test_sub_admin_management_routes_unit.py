@@ -359,12 +359,14 @@ class _PermissionGroupsService:
 
 class _UsersService:
     def __init__(self):
+        self.list_users_calls = []
         self.created = []
         self.updated = []
         self.deleted = []
         self.reset_password_calls = []
 
-    def list_users(self, **kwargs):  # noqa: ARG002
+    def list_users(self, **kwargs):
+        self.list_users_calls.append(dict(kwargs))
         return []
 
     def create_user(self, *, user_data, created_by):
@@ -522,6 +524,21 @@ class TestSubAdminPermissionGroupRoutesUnit(unittest.TestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertEqual([item["group_id"] for item in resp.json()["groups"]], [1, 41, 42, 43, 77, 98, 99])
 
+    def test_admin_cannot_create_permission_groups(self):
+        client, _, _, service = _make_permission_group_client(role="admin")
+        with client:
+            resp = client.post(
+                "/api/permission-groups",
+                json={
+                    "group_name": "admin-write",
+                    "accessible_kbs": ["ds-in"],
+                    "accessible_kb_nodes": ["node-root"],
+                },
+            )
+        self.assertEqual(resp.status_code, 403)
+        self.assertEqual(resp.json()["detail"], "sub_admin_only_permission_group_management")
+        self.assertEqual(service.created_payloads, [])
+
     def test_sub_admin_assignable_groups_are_filtered_by_own_tool_scope(self):
         client, _, _, _ = _make_permission_group_client(group_ids=[301])
         with client:
@@ -547,6 +564,22 @@ class TestSubAdminPermissionGroupRoutesUnit(unittest.TestCase):
         self.assertEqual(service.created_payloads[0]["created_by"], "u_sub")
         self.assertEqual(km.validated_group_scope[0]["accessible_kb_nodes"], ["node-root"])
         self.assertEqual(cm.validated_group_scope[0], ["chat_c_in"])
+
+    def test_permission_group_create_fails_fast_on_invalid_create_result(self):
+        client, _, _, service = _make_permission_group_client()
+        service.create_group = lambda payload: "bad-group-id"  # noqa: ARG005
+        with client:
+            resp = client.post(
+                "/api/permission-groups",
+                json={
+                    "group_name": "kb-subtree",
+                    "accessible_kbs": ["ds-in"],
+                    "accessible_kb_nodes": ["node-root"],
+                    "accessible_chats": ["chat_c_in"],
+                },
+            )
+        self.assertEqual(resp.status_code, 502)
+        self.assertEqual(resp.json()["detail"], "permission_group_create_invalid_payload")
 
     def test_sub_admin_can_get_manageable_group(self):
         client, _, _, _ = _make_permission_group_client()
@@ -606,6 +639,14 @@ class TestSubAdminPermissionGroupRoutesUnit(unittest.TestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.json(), {"result": {"message": "permission_group_updated"}})
         self.assertEqual(service.updated_calls, [(41, {"group_name": "Renamed"})])
+
+    def test_permission_group_update_fails_fast_when_service_rejects_update(self):
+        client, _, _, service = _make_permission_group_client()
+        service.update_group = lambda group_id, payload: False  # noqa: ARG005
+        with client:
+            resp = client.put("/api/permission-groups/41", json={"group_name": "Renamed"})
+        self.assertEqual(resp.status_code, 400)
+        self.assertEqual(resp.json()["detail"], "permission_group_update_failed")
 
     def test_sub_admin_can_delete_group_returns_result_envelope(self):
         client, _, _, service = _make_permission_group_client()
@@ -675,8 +716,57 @@ class TestSubAdminPermissionGroupRoutesUnit(unittest.TestCase):
         self.assertEqual(resp.status_code, 502)
         self.assertEqual(resp.json()["detail"], "permission_group_folder_invalid_payload")
 
+    def test_admin_cannot_create_permission_group_folders(self):
+        client, _, _, service = _make_permission_group_client(role="admin")
+        with client:
+            resp = client.post("/api/permission-groups/folders", json={"name": "Root Folder"})
+        self.assertEqual(resp.status_code, 403)
+        self.assertEqual(resp.json()["detail"], "sub_admin_only_permission_group_management")
+
+    def test_permission_group_folder_update_rejects_missing_updates(self):
+        client, _, _, _ = _make_permission_group_client()
+        with client:
+            resp = client.put("/api/permission-groups/folders/folder-visible", json={})
+        self.assertEqual(resp.status_code, 400)
+        self.assertEqual(resp.json()["detail"], "missing_updates")
+
+    def test_permission_group_folder_update_rejects_out_of_scope_parent(self):
+        client, _, _, _ = _make_permission_group_client()
+        with client:
+            resp = client.put(
+                "/api/permission-groups/folders/folder-visible",
+                json={"parent_id": "folder-other"},
+            )
+        self.assertEqual(resp.status_code, 403)
+        self.assertEqual(resp.json()["detail"], "permission_group_folder_out_of_management_scope")
+
 
 class TestSubAdminUserGroupAssignmentRoutesUnit(unittest.TestCase):
+    def test_admin_user_list_keeps_requested_company_scope(self):
+        client, _, _, service, _ = _make_users_client(role="admin")
+        with client:
+            resp = client.get("/api/users", params={"company_id": 2, "limit": 50})
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(service.list_users_calls[0]["company_id"], 2)
+        self.assertIsNone(service.list_users_calls[0]["manager_user_id"])
+        self.assertEqual(service.list_users_calls[0]["limit"], 50)
+
+    def test_sub_admin_user_list_is_scoped_to_actor_company_and_manager(self):
+        client, _, _, service, _ = _make_users_client()
+        with client:
+            resp = client.get("/api/users", params={"company_id": 1})
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(service.list_users_calls[0]["company_id"], 1)
+        self.assertEqual(service.list_users_calls[0]["manager_user_id"], "u_sub")
+
+    def test_sub_admin_user_list_rejects_cross_company_scope(self):
+        client, _, _, service, _ = _make_users_client()
+        with client:
+            resp = client.get("/api/users", params={"company_id": 2})
+        self.assertEqual(resp.status_code, 403)
+        self.assertEqual(resp.json()["detail"], "sub_admin_company_scope_violation")
+        self.assertEqual(service.list_users_calls, [])
+
     def test_admin_create_returns_user_envelope(self):
         client, _, _, service, _ = _make_users_client(role="admin")
         with client:
@@ -715,6 +805,16 @@ class TestSubAdminUserGroupAssignmentRoutesUnit(unittest.TestCase):
         self.assertEqual(service.updated[0][0], "u_target")
         self.assertEqual(resp.json()["user"]["user_id"], "u_target")
         self.assertEqual(resp.json()["user"]["group_ids"], [1, 2])
+
+    def test_sub_admin_can_assign_in_scope_permission_group_from_legacy_group_id(self):
+        client, km, cm, service, _ = _make_users_client()
+        with client:
+            resp = client.put("/api/users/u_target", json={"group_id": 1})
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(km.validated_group_ids[0], [1])
+        self.assertEqual(cm.validated_group_ids[0], [1])
+        self.assertEqual(service.updated[0][0], "u_target")
+        self.assertEqual(service.updated[0][1].group_id, 1)
 
     def test_sub_admin_group_assignment_does_not_require_assert_can_manage(self):
         client, km, cm, service, _ = _make_users_client(can_manage=False)

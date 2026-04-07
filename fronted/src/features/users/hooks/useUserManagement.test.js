@@ -7,6 +7,7 @@ import { usersApi } from '../api';
 import { permissionGroupsApi } from '../../permissionGroups/api';
 import { orgDirectoryApi } from '../../orgDirectory/api';
 import { knowledgeApi } from '../../knowledge/api';
+import { DISABLE_UNTIL_REQUIRED_MESSAGE } from '../utils/userAccessPolicy';
 
 jest.mock('../../../hooks/useAuth', () => ({
   useAuth: jest.fn(),
@@ -224,6 +225,47 @@ function HookHarness() {
       <button type="button" data-testid="close-reset" onClick={hook.handleCloseResetPassword}>
         close-reset
       </button>
+      <button
+        type="button"
+        data-testid="toggle-active-user"
+        onClick={() =>
+          hook.handleToggleUserStatus({
+            user_id: 'u-active',
+            username: 'alice',
+            role: 'viewer',
+            status: 'active',
+            disable_login_enabled: false,
+            disable_login_until_ms: null,
+          })
+        }
+      >
+        toggle-active-user
+      </button>
+      <button
+        type="button"
+        data-testid="toggle-disabled-user"
+        onClick={() =>
+          hook.handleToggleUserStatus({
+            user_id: 'u-disabled',
+            username: 'alice',
+            role: 'viewer',
+            status: 'active',
+            disable_login_enabled: true,
+            disable_login_until_ms: 4102444799000,
+          })
+        }
+      >
+        toggle-disabled-user
+      </button>
+      <button type="button" data-testid="disable-mode-until" onClick={() => hook.handleChangeDisableMode('until')}>
+        disable-mode-until
+      </button>
+      <button type="button" data-testid="disable-date-future" onClick={() => hook.handleChangeDisableUntilDate('2099-12-31')}>
+        disable-date-future
+      </button>
+      <button type="button" data-testid="confirm-disable" onClick={hook.handleConfirmDisableUser}>
+        confirm-disable
+      </button>
       <div data-testid="create-error">{hook.createUserError || ''}</div>
       <div data-testid="policy-error">{hook.policyError || ''}</div>
       <div data-testid="org-error">{hook.orgDirectoryError || ''}</div>
@@ -233,6 +275,8 @@ function HookHarness() {
       <div data-testid="reset-passwords-flag">{hook.canResetPasswords ? 'yes' : 'no'}</div>
       <div data-testid="show-group-modal">{hook.showGroupModal ? 'yes' : 'no'}</div>
       <div data-testid="show-reset-password-modal">{hook.showResetPasswordModal ? 'yes' : 'no'}</div>
+      <div data-testid="show-disable-user-modal">{hook.showDisableUserModal ? 'yes' : 'no'}</div>
+      <div data-testid="disable-user-error">{hook.disableUserError || ''}</div>
     </div>
   );
 }
@@ -497,6 +541,67 @@ describe('useUserManagement user type payloads', () => {
 
     await user.click(screen.getByTestId('open-reset-self'));
     expect(screen.getByTestId('show-reset-password-modal')).toHaveTextContent('yes');
+  });
+
+  it('requires a future date before submitting scheduled disable', async () => {
+    const user = userEvent.setup();
+    render(<HookHarness />);
+
+    await waitFor(() => expect(usersApi.list).toHaveBeenCalled());
+
+    await user.click(screen.getByTestId('toggle-active-user'));
+    expect(screen.getByTestId('show-disable-user-modal')).toHaveTextContent('yes');
+
+    await user.click(screen.getByTestId('disable-mode-until'));
+    await user.click(screen.getByTestId('confirm-disable'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('disable-user-error')).toHaveTextContent(DISABLE_UNTIL_REQUIRED_MESSAGE);
+    });
+    expect(usersApi.update).not.toHaveBeenCalledWith(
+      'u-active',
+      expect.objectContaining({ disable_login_enabled: true })
+    );
+  });
+
+  it('submits scheduled disable payload with normalized future timestamp', async () => {
+    const user = userEvent.setup();
+    render(<HookHarness />);
+
+    await waitFor(() => expect(usersApi.list).toHaveBeenCalled());
+
+    await user.click(screen.getByTestId('toggle-active-user'));
+    await user.click(screen.getByTestId('disable-mode-until'));
+    await user.click(screen.getByTestId('disable-date-future'));
+    await user.click(screen.getByTestId('confirm-disable'));
+
+    await waitFor(() =>
+      expect(usersApi.update).toHaveBeenCalledWith(
+        'u-active',
+        expect.objectContaining({
+          status: 'active',
+          disable_login_enabled: true,
+          disable_login_until_ms: expect.any(Number),
+        })
+      )
+    );
+  });
+
+  it('reenables a disabled user with a normalized active payload', async () => {
+    const user = userEvent.setup();
+    render(<HookHarness />);
+
+    await waitFor(() => expect(usersApi.list).toHaveBeenCalled());
+
+    await user.click(screen.getByTestId('toggle-disabled-user'));
+
+    await waitFor(() =>
+      expect(usersApi.update).toHaveBeenCalledWith('u-disabled', {
+        status: 'active',
+        disable_login_enabled: false,
+        disable_login_until_ms: null,
+      })
+    );
   });
 
   it('reloads knowledge directories by selected company for sub admin creation', async () => {

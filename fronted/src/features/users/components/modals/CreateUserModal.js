@@ -1,7 +1,11 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import KnowledgeRootNodeSelector from '../KnowledgeRootNodeSelector';
-
-const MOBILE_BREAKPOINT = 768;
+import React from 'react';
+import ManagedKbRootSection from './ManagedKbRootSection';
+import ModalActionRow from './ModalActionRow';
+import PermissionAssignmentHint from './PermissionAssignmentHint';
+import PermissionGroupChecklist from './PermissionGroupChecklist';
+import SessionLimitFields from './SessionLimitFields';
+import UserModalFrame from './UserModalFrame';
+import UserProfileFields from './UserProfileFields';
 
 const TEXT = {
   title: '\u65b0\u5efa\u7528\u6237',
@@ -53,19 +57,6 @@ export default function CreateUserModal({
   onToggleGroup,
   onCreateRootDirectory,
 }) {
-  const [isMobile, setIsMobile] = useState(() => {
-    if (typeof window === 'undefined') return false;
-    return window.innerWidth <= MOBILE_BREAKPOINT;
-  });
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return undefined;
-    const handleResize = () => setIsMobile(window.innerWidth <= MOBILE_BREAKPOINT);
-    handleResize();
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
-
   const inputStyle = {
     width: '100%',
     padding: '8px',
@@ -74,268 +65,134 @@ export default function CreateUserModal({
     boxSizing: 'border-box',
   };
 
-  const selectedCompanyId = newUser.company_id ? Number(newUser.company_id) : null;
-  const visibleDepartments = useMemo(() => {
-    const items = Array.isArray(departments) ? departments : [];
-    if (selectedCompanyId == null) return items;
-    return items.filter(
-      (department) => department.company_id == null || Number(department.company_id) === selectedCompanyId
-    );
-  }, [departments, selectedCompanyId]);
-
   const isSubAdmin = String(newUser.user_type || 'normal') === 'sub_admin';
-
-  if (!open) return null;
+  const handleChangeValues = (patch) => {
+    Object.entries(patch).forEach(([field, value]) => {
+      onFieldChange(field, value);
+    });
+  };
 
   return (
-    <div
-      style={{
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        backgroundColor: 'rgba(0, 0, 0, 0.5)',
-        display: 'flex',
-        justifyContent: 'center',
-        alignItems: isMobile ? 'stretch' : 'center',
-        padding: isMobile ? '16px 12px' : '24px',
-        zIndex: 1000,
-      }}
-    >
-      <div
-        style={{
-          backgroundColor: 'white',
-          padding: isMobile ? '20px 16px' : '32px',
-          borderRadius: '8px',
-          width: '100%',
-          maxWidth: '420px',
-          maxHeight: isMobile ? '100%' : '90vh',
-          overflowY: 'auto',
-          margin: isMobile ? 'auto 0' : 0,
-        }}
-      >
-        <h3 style={{ margin: '0 0 24px 0' }}>{TEXT.title}</h3>
+    <UserModalFrame open={open} title={TEXT.title} maxWidth="420px">
+      {({ isMobile }) => (
         <form onSubmit={onSubmit} data-testid="users-create-form">
-          <div style={{ marginBottom: '16px' }}>
-            <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500' }}>{TEXT.fullName}</label>
-            <input
-              type="text"
-              value={newUser.full_name || ''}
-              onChange={(event) => onFieldChange('full_name', event.target.value)}
-              data-testid="users-create-full-name"
-              style={inputStyle}
-            />
-          </div>
-
-          <div style={{ marginBottom: '16px' }}>
-            <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500' }}>{TEXT.username}</label>
-            <input
-              type="text"
-              required
-              value={newUser.username || ''}
-              onChange={(event) => onFieldChange('username', event.target.value)}
-              data-testid="users-create-username"
-              style={inputStyle}
-            />
-          </div>
-
-          <div style={{ marginBottom: '16px' }}>
-            <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500' }}>{TEXT.password}</label>
-            <input
-              type="password"
-              required
-              value={newUser.password || ''}
-              onChange={(event) => onFieldChange('password', event.target.value)}
-              data-testid="users-create-password"
-              style={inputStyle}
-            />
-          </div>
-
-          <div style={{ marginBottom: '16px' }}>
-            <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500' }}>{TEXT.userType}</label>
-            <select
-              value={newUser.user_type || 'normal'}
-              onChange={(event) => onFieldChange('user_type', event.target.value)}
-              data-testid="users-create-user-type"
-              style={{ ...inputStyle, backgroundColor: 'white' }}
-            >
-              <option value="normal">{TEXT.normalUser}</option>
-              <option value="sub_admin">{TEXT.subAdmin}</option>
-            </select>
-          </div>
-
-          <div style={{ marginBottom: '16px' }}>
-            <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500' }}>{TEXT.company}</label>
-            <select
-              required
-              value={newUser.company_id || ''}
-              onChange={(event) => onFieldChange('company_id', event.target.value)}
-              data-testid="users-create-company"
-              style={{ ...inputStyle, backgroundColor: 'white' }}
-            >
-              <option value="" disabled>
-                {TEXT.companyPlaceholder}
-              </option>
-              {(Array.isArray(companies) ? companies : []).map((company) => (
-                <option key={company.id} value={String(company.id)}>
-                  {company.name}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div style={{ marginBottom: '16px' }}>
-            <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500' }}>{TEXT.department}</label>
-            <select
-              required
-              value={newUser.department_id || ''}
-              onChange={(event) => onFieldChange('department_id', event.target.value)}
-              data-testid="users-create-department"
-              style={{ ...inputStyle, backgroundColor: 'white' }}
-            >
-              <option value="" disabled>
-                {TEXT.departmentPlaceholder}
-              </option>
-              {visibleDepartments.map((department) => (
-                <option key={department.id} value={String(department.id)}>
-                  {department.path_name || department.name}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {!isSubAdmin ? (
-            <div style={{ marginBottom: '16px' }}>
-              <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500' }}>{TEXT.ownerSubAdmin}</label>
-              <select
-                required
-                value={newUser.manager_user_id || ''}
-                onChange={(event) => onFieldChange('manager_user_id', event.target.value)}
-                data-testid="users-create-sub-admin"
-                style={{ ...inputStyle, backgroundColor: 'white' }}
-              >
-                <option value="" disabled>
-                  {TEXT.ownerSubAdminPlaceholder}
-                </option>
-                {(Array.isArray(subAdminOptions) ? subAdminOptions : []).map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-          ) : null}
-
-          <div style={{ marginBottom: '16px' }}>
-            <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500' }}>{TEXT.maxSessions}</label>
-            <input
-              type="number"
-              min={1}
-              max={1000}
-              required
-              value={newUser.max_login_sessions}
-              onChange={(event) => onFieldChange('max_login_sessions', event.target.value)}
-              data-testid="users-create-max-login-sessions"
-              style={inputStyle}
-            />
-          </div>
-
-          <div style={{ marginBottom: '16px' }}>
-            <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500' }}>{TEXT.idleTimeout}</label>
-            <input
-              type="number"
-              min={1}
-              max={43200}
-              required
-              value={newUser.idle_timeout_minutes}
-              onChange={(event) => onFieldChange('idle_timeout_minutes', event.target.value)}
-              data-testid="users-create-idle-timeout"
-              style={inputStyle}
-            />
-          </div>
-
-          {!isSubAdmin ? (
-            <div style={{ marginBottom: '24px' }}>
-              <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500' }}>{TEXT.permissionGroup}</label>
-              <div
-                style={{
-                  border: '1px solid #d1d5db',
-                  borderRadius: '4px',
-                  padding: '12px',
-                  backgroundColor: '#f9fafb',
-                  color: '#6b7280',
-                  fontSize: '0.9rem',
-                }}
-              >
-                {TEXT.normalUserHint}
-              </div>
-            </div>
-          ) : null}
-
-          {isSubAdmin ? (
-            <div style={{ marginBottom: '24px' }}>
-              <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500' }}>{TEXT.permissionGroup}</label>
-              <div style={{ marginBottom: '8px', color: '#6b7280', fontSize: '0.85rem' }}>{TEXT.subAdminPermissionHint}</div>
-              <div
-                style={{
-                  border: '1px solid #d1d5db',
-                  borderRadius: '8px',
-                  padding: '12px',
-                  backgroundColor: '#f9fafb',
-                  maxHeight: isMobile ? '220px' : '260px',
-                  overflowY: 'auto',
-                }}
-              >
-                {(Array.isArray(availableGroups) ? availableGroups : []).length === 0 ? (
-                  <div style={{ color: '#6b7280', textAlign: 'center', padding: '8px 0' }}>{TEXT.noPermissionGroups}</div>
-                ) : (
-                  (Array.isArray(availableGroups) ? availableGroups : []).map((group) => (
-                    <label
-                      key={group.group_id}
-                      style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '8px 0', cursor: 'pointer' }}
-                    >
-                      <input
-                        type="checkbox"
-                        data-testid={`users-create-group-${group.group_id}`}
-                        checked={(newUser.group_ids || []).includes(group.group_id)}
-                        onChange={(event) => onToggleGroup?.(group.group_id, event.target.checked)}
-                      />
-                      <div>
-                        <div style={{ fontWeight: 500, color: '#111827' }}>{group.group_name}</div>
-                        {group.description ? (
-                          <div style={{ fontSize: '0.85rem', color: '#6b7280' }}>{group.description}</div>
-                        ) : null}
-                      </div>
-                    </label>
-                  ))
-                )}
-              </div>
-              {(newUser.group_ids || []).length > 0 ? (
-                <div style={{ marginTop: '8px', color: '#6b7280', fontSize: '0.85rem' }}>
-                  {TEXT.selectedPermissionGroups} {(newUser.group_ids || []).length} 个权限组
+          <UserProfileFields
+            inputStyle={inputStyle}
+            values={newUser}
+            onChangeValues={handleChangeValues}
+            afterFullName={
+              <>
+                <div style={{ marginBottom: '16px' }}>
+                  <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500' }}>
+                    {TEXT.username}
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={newUser.username || ''}
+                    onChange={(event) => onFieldChange('username', event.target.value)}
+                    data-testid="users-create-username"
+                    style={inputStyle}
+                  />
                 </div>
-              ) : null}
-            </div>
+
+                <div style={{ marginBottom: '16px' }}>
+                  <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500' }}>
+                    {TEXT.password}
+                  </label>
+                  <input
+                    type="password"
+                    required
+                    value={newUser.password || ''}
+                    onChange={(event) => onFieldChange('password', event.target.value)}
+                    data-testid="users-create-password"
+                    style={inputStyle}
+                  />
+                </div>
+              </>
+            }
+            companies={companies}
+            departments={departments}
+            subAdminOptions={subAdminOptions}
+            labels={{
+              fullName: TEXT.fullName,
+              company: TEXT.company,
+              companyPlaceholder: TEXT.companyPlaceholder,
+              department: TEXT.department,
+              departmentPlaceholder: TEXT.departmentPlaceholder,
+              userType: TEXT.userType,
+              normalUser: TEXT.normalUser,
+              subAdmin: TEXT.subAdmin,
+              ownerSubAdmin: TEXT.ownerSubAdmin,
+              ownerSubAdminPlaceholder: TEXT.ownerSubAdminPlaceholder,
+            }}
+            testIds={{
+              fullName: 'users-create-full-name',
+              company: 'users-create-company',
+              department: 'users-create-department',
+              userType: 'users-create-user-type',
+              manager: 'users-create-sub-admin',
+            }}
+            companyRequired
+            departmentRequired
+            managerRequired
+            userTypeBeforeOrganization
+          />
+
+          <SessionLimitFields
+            inputStyle={inputStyle}
+            maxSessionsLabel={TEXT.maxSessions}
+            maxSessionsValue={newUser.max_login_sessions}
+            maxSessionsRequired
+            maxSessionsTestId="users-create-max-login-sessions"
+            onChangeMaxSessions={(event) => onFieldChange('max_login_sessions', event.target.value)}
+            idleTimeoutLabel={TEXT.idleTimeout}
+            idleTimeoutValue={newUser.idle_timeout_minutes}
+            idleTimeoutRequired
+            idleTimeoutTestId="users-create-idle-timeout"
+            onChangeIdleTimeout={(event) => onFieldChange('idle_timeout_minutes', event.target.value)}
+          />
+
+          {!isSubAdmin ? (
+            <PermissionAssignmentHint
+              label={TEXT.permissionGroup}
+              text={TEXT.normalUserHint}
+              marginBottom="24px"
+              panelBorderRadius="4px"
+              testId="users-create-permission-hint"
+            />
           ) : null}
 
           {isSubAdmin ? (
-            <div style={{ marginBottom: '24px' }}>
-              <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500' }}>{TEXT.kbRoot}</label>
-              <div style={{ marginBottom: '8px', color: '#6b7280', fontSize: '0.85rem' }}>{TEXT.kbRootHint}</div>
-              <KnowledgeRootNodeSelector
-                nodes={kbDirectoryNodes}
-                selectedNodeId={newUser.managed_kb_root_node_id || ''}
-                onSelect={(nodeId) => onFieldChange('managed_kb_root_node_id', nodeId)}
-                disabled={false}
-                loading={kbDirectoryLoading}
-                error={kbDirectoryError}
-                canCreateRoot={Boolean(newUser.company_id && onCreateRootDirectory)}
-                creatingRoot={kbDirectoryCreatingRoot}
-                createRootError={kbDirectoryCreateError}
-                onCreateRoot={onCreateRootDirectory}
-              />
-            </div>
+            <PermissionGroupChecklist
+              label={TEXT.permissionGroup}
+              hint={TEXT.subAdminPermissionHint}
+              groups={availableGroups}
+              selectedGroupIds={newUser.group_ids}
+              onToggleGroup={onToggleGroup}
+              testIdPrefix="users-create-group"
+              emptyText={TEXT.noPermissionGroups}
+              selectedText={TEXT.selectedPermissionGroups}
+              marginBottom="24px"
+              maxHeight={isMobile ? '220px' : '260px'}
+            />
+          ) : null}
+
+          {isSubAdmin ? (
+            <ManagedKbRootSection
+              label={TEXT.kbRoot}
+              hint={TEXT.kbRootHint}
+              nodes={kbDirectoryNodes}
+              selectedNodeId={newUser.managed_kb_root_node_id || ''}
+              onSelect={(nodeId) => onFieldChange('managed_kb_root_node_id', nodeId)}
+              loading={kbDirectoryLoading}
+              error={kbDirectoryError}
+              companyId={newUser.company_id}
+              createRootError={kbDirectoryCreateError}
+              creatingRoot={kbDirectoryCreatingRoot}
+              onCreateRootDirectory={onCreateRootDirectory}
+              marginBottom="24px"
+            />
           ) : null}
 
           {orgDirectoryError ? (
@@ -350,43 +207,25 @@ export default function CreateUserModal({
             </div>
           ) : null}
 
-          <div style={{ display: 'flex', gap: '12px', flexDirection: isMobile ? 'column' : 'row' }}>
-            <button
-              type="submit"
-              data-testid="users-create-submit"
-              style={{
-                flex: 1,
-                padding: '10px',
+          <ModalActionRow
+            isMobile={isMobile}
+            actions={[
+              {
+                type: 'submit',
+                testId: 'users-create-submit',
+                label: TEXT.submit,
                 backgroundColor: '#3b82f6',
-                color: 'white',
-                border: 'none',
-                borderRadius: '4px',
-                cursor: 'pointer',
-                width: isMobile ? '100%' : 'auto',
-              }}
-            >
-              {TEXT.submit}
-            </button>
-            <button
-              type="button"
-              onClick={onCancel}
-              data-testid="users-create-cancel"
-              style={{
-                flex: 1,
-                padding: '10px',
+              },
+              {
+                onClick: onCancel,
+                testId: 'users-create-cancel',
+                label: TEXT.cancel,
                 backgroundColor: '#6b7280',
-                color: 'white',
-                border: 'none',
-                borderRadius: '4px',
-                cursor: 'pointer',
-                width: isMobile ? '100%' : 'auto',
-              }}
-            >
-              {TEXT.cancel}
-            </button>
-          </div>
+              },
+            ]}
+          />
         </form>
-      </div>
-    </div>
+      )}
+    </UserModalFrame>
   );
 }
