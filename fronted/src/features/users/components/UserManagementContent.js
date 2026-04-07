@@ -20,8 +20,11 @@ const UserManagementContent = ({
   companies,
   departments,
   availableGroups,
+  permissionGroupsLoading,
+  permissionGroupsError,
   groupedUsers,
   setFilters,
+  handleLoadPermissionGroups,
   handleOpenCreateModal,
   handleOpenPolicyModal,
   handleAssignGroup,
@@ -54,7 +57,7 @@ const UserManagementContent = ({
             width: isMobile ? '100%' : 'auto',
           }}
         >
-          ????
+          创建用户
         </button>
       </div>
     ) : null}
@@ -109,7 +112,10 @@ const UserManagementContent = ({
           companies={companies}
           departments={departments}
           availableGroups={availableGroups}
+          permissionGroupsLoading={permissionGroupsLoading}
+          permissionGroupsError={permissionGroupsError}
           isSubAdminUser={isSubAdminUser}
+          onGroupFilterFocus={handleLoadPermissionGroups}
           onResetFilters={handleResetFilters}
         />
 

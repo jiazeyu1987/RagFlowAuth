@@ -1,18 +1,17 @@
 export const authBackendUrl = (path) => {
   const configured = process.env.REACT_APP_AUTH_URL;
+  const normalizedConfigured =
+    configured && configured.endsWith('/') ? configured.slice(0, -1) : configured;
 
-  // Dev default: talk to localhost backend.
+  // Dev default: use the CRA proxy so browser requests stay same-origin.
   if (process.env.NODE_ENV !== 'production') {
-    const baseUrl = configured || 'http://localhost:8001';
-    return `${baseUrl}${path}`;
+    if (!normalizedConfigured) return path;
+    return `${normalizedConfigured}${path}`;
   }
 
   // Production default: same-origin (recommended when served behind Nginx reverse proxy).
-  if (!configured) return path;
-
-  // Normalize trailing slash
-  const baseUrl = configured.endsWith('/') ? configured.slice(0, -1) : configured;
-  return `${baseUrl}${path}`;
+  if (!normalizedConfigured) return path;
+  return `${normalizedConfigured}${path}`;
 };
 
 export default authBackendUrl;

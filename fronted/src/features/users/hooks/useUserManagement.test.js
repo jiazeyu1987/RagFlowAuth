@@ -50,6 +50,9 @@ function HookHarness() {
       <button type="button" data-testid="open-create" onClick={hook.handleOpenCreateModal}>
         open-create
       </button>
+      <button type="button" data-testid="load-groups" onClick={hook.handleLoadPermissionGroups}>
+        load-groups
+      </button>
       <button type="button" data-testid="set-type-sub-admin" onClick={() => hook.setNewUserField('user_type', 'sub_admin')}>
         set-type-sub-admin
       </button>
@@ -466,12 +469,16 @@ describe('useUserManagement user type payloads', () => {
 
     await waitFor(() => expect(usersApi.list).toHaveBeenCalled());
     expect(screen.getByTestId('assign-groups-flag')).toHaveTextContent('yes');
+    expect(permissionGroupsApi.listAssignable).not.toHaveBeenCalled();
 
     await user.click(screen.getByTestId('assign-other-user'));
     expect(screen.getByTestId('show-group-modal')).toHaveTextContent('no');
+    expect(permissionGroupsApi.listAssignable).not.toHaveBeenCalled();
 
     await user.click(screen.getByTestId('assign-owned-user'));
-    expect(screen.getByTestId('show-group-modal')).toHaveTextContent('yes');
+
+    await waitFor(() => expect(permissionGroupsApi.listAssignable).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.getByTestId('show-group-modal')).toHaveTextContent('yes'));
   });
 
   it('filters stale permission group ids before saving owned user assignments', async () => {
@@ -483,11 +490,12 @@ describe('useUserManagement user type payloads', () => {
     render(<HookHarness />);
 
     await waitFor(() => expect(usersApi.list).toHaveBeenCalled());
-    await waitFor(() => expect(permissionGroupsApi.listAssignable).toHaveBeenCalled());
+    expect(permissionGroupsApi.listAssignable).not.toHaveBeenCalled();
 
     await user.click(screen.getByTestId('assign-owned-user-stale-groups'));
 
-    expect(screen.getByTestId('show-group-modal')).toHaveTextContent('yes');
+    await waitFor(() => expect(permissionGroupsApi.listAssignable).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.getByTestId('show-group-modal')).toHaveTextContent('yes'));
     expect(screen.getByTestId('selected-group-ids')).toHaveTextContent('7');
 
     await user.click(screen.getByTestId('save-group'));
@@ -497,23 +505,34 @@ describe('useUserManagement user type payloads', () => {
     );
   });
 
-  it('admin loads assignable permission groups for sub admin configuration', async () => {
+  it('admin loads assignable permission groups only after a sub admin flow requests them', async () => {
+    const user = userEvent.setup();
     render(<HookHarness />);
 
     await waitFor(() => expect(usersApi.list).toHaveBeenCalled());
-    await waitFor(() => expect(permissionGroupsApi.listAssignable).toHaveBeenCalled());
+    expect(permissionGroupsApi.listAssignable).not.toHaveBeenCalled();
+
+    await user.click(screen.getByTestId('open-create'));
+    await user.click(screen.getByTestId('set-type-sub-admin'));
+
+    await waitFor(() => expect(permissionGroupsApi.listAssignable).toHaveBeenCalledTimes(1));
   });
 
-  it('sub admin still loads permission groups for assignment', async () => {
+  it('sub admin still loads permission groups for assignment on demand', async () => {
     useAuth.mockReturnValue({
       user: { role: 'sub_admin', user_id: 'sub-actor' },
       can: jest.fn(() => true),
     });
+    const user = userEvent.setup();
 
     render(<HookHarness />);
 
     await waitFor(() => expect(usersApi.list).toHaveBeenCalled());
-    await waitFor(() => expect(permissionGroupsApi.listAssignable).toHaveBeenCalled());
+    expect(permissionGroupsApi.listAssignable).not.toHaveBeenCalled();
+
+    await user.click(screen.getByTestId('assign-owned-user'));
+
+    await waitFor(() => expect(permissionGroupsApi.listAssignable).toHaveBeenCalledTimes(1));
   });
 
   it('sub admin can reset own and owned user passwords only', async () => {

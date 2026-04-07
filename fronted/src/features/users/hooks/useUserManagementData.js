@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { permissionGroupsApi } from '../../permissionGroups/api';
 import { usersApi } from '../api';
 import { orgDirectoryApi } from '../../orgDirectory/api';
 import { DEFAULT_FILTERS } from '../utils/constants';
 import { buildListParams } from '../utils/userFilters';
 import {
+  buildOrgDirectoryDisabledState,
   buildOrgDirectoryErrorState,
   buildOrgDirectoryState,
   buildPermissionGroupsLoadErrorLogArgs,
@@ -12,6 +13,7 @@ import {
   buildPermissionGroupsLoadErrorState,
   buildUsersLoadState,
   shouldLoadAssignableGroups,
+  shouldLoadOrgDirectory,
 } from '../utils/userManagementDataResources';
 import {
   LOAD_ORG_DIRECTORY_ERROR,
@@ -28,9 +30,14 @@ export const useUserManagementData = ({ can, isAdminUser, isSubAdminUser }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [availableGroups, setAvailableGroups] = useState([]);
+  const [permissionGroupsLoading, setPermissionGroupsLoading] = useState(false);
+  const [permissionGroupsError, setPermissionGroupsError] = useState(null);
   const [companies, setCompanies] = useState([]);
   const [departments, setDepartments] = useState([]);
   const [orgDirectoryError, setOrgDirectoryError] = useState(null);
+  const availableGroupsRef = useRef([]);
+  const permissionGroupsLoadedRef = useRef(false);
+  const permissionGroupsRequestRef = useRef(null);
 
   const canManageUsers = useMemo(() => can('users', 'manage'), [can]);
 
@@ -46,7 +53,12 @@ export const useUserManagementData = ({ can, isAdminUser, isSubAdminUser }) => {
   }, []);
 
   const applyPermissionGroupsState = useCallback((nextState) => {
-    setAvailableGroups(nextState.availableGroups);
+    const nextAvailableGroups = Array.isArray(nextState.availableGroups)
+      ? nextState.availableGroups
+      : [];
+    availableGroupsRef.current = nextAvailableGroups;
+    setAvailableGroups(nextAvailableGroups);
+    setPermissionGroupsError(nextState.error ?? null);
   }, []);
 
   const fetchUsers = useCallback(async () => {
@@ -62,30 +74,65 @@ export const useUserManagementData = ({ can, isAdminUser, isSubAdminUser }) => {
 
   const fetchPermissionGroups = useCallback(async () => {
     if (!shouldLoadAssignableGroups({ isAdminUser, isSubAdminUser })) {
+      permissionGroupsLoadedRef.current = true;
       runStateAction(
         applyPermissionGroupsState,
         buildPermissionGroupsLoadErrorState
       );
-      return;
+      return {
+        ok: false,
+        skipped: true,
+        result: [],
+      };
     }
 
-    await runUserManagementMutation({
+    if (permissionGroupsLoadedRef.current) {
+      return {
+        ok: true,
+        cached: true,
+        result: availableGroupsRef.current,
+      };
+    }
+
+    if (permissionGroupsRequestRef.current) {
+      return permissionGroupsRequestRef.current;
+    }
+
+    const request = runUserManagementMutation({
       execute: () => permissionGroupsApi.listAssignable(),
       mapErrorMessage: (message) => message,
       fallbackMessage: 'permission_groups_load_failed',
       onMappedError: (message) => {
+        permissionGroupsLoadedRef.current = false;
         console.error(...buildPermissionGroupsLoadErrorLogArgs(message));
         runStateAction(
           applyPermissionGroupsState,
-          buildPermissionGroupsLoadErrorState
+          buildPermissionGroupsLoadErrorState,
+          message
         );
       },
-      onSuccess: (data) =>
-        runStateAction(applyPermissionGroupsState, buildPermissionGroupsLoadState, data),
+      onSuccess: (data) => {
+        permissionGroupsLoadedRef.current = true;
+        runStateAction(applyPermissionGroupsState, buildPermissionGroupsLoadState, data);
+      },
+      onFinally: () => {
+        permissionGroupsRequestRef.current = null;
+      },
+      setPending: setPermissionGroupsLoading,
     });
+    permissionGroupsRequestRef.current = request;
+    return request;
   }, [applyPermissionGroupsState, isAdminUser, isSubAdminUser]);
 
   const fetchOrgDirectory = useCallback(async () => {
+    if (!shouldLoadOrgDirectory({ isAdminUser })) {
+      runStateAction(
+        applyOrgDirectoryState,
+        buildOrgDirectoryDisabledState
+      );
+      return;
+    }
+
     await runUserManagementMutation({
       execute: () =>
         Promise.all([
@@ -109,13 +156,12 @@ export const useUserManagementData = ({ can, isAdminUser, isSubAdminUser }) => {
         );
       },
     });
-  }, [applyOrgDirectoryState]);
+  }, [applyOrgDirectoryState, isAdminUser]);
 
   useEffect(() => {
     fetchUsers();
-    fetchPermissionGroups();
     fetchOrgDirectory();
-  }, [fetchOrgDirectory, fetchPermissionGroups, fetchUsers]);
+  }, [fetchOrgDirectory, fetchUsers]);
 
   return {
     allUsers,
@@ -123,10 +169,13 @@ export const useUserManagementData = ({ can, isAdminUser, isSubAdminUser }) => {
     error,
     canManageUsers,
     availableGroups,
+    permissionGroupsLoading,
+    permissionGroupsError,
     companies,
     departments,
     orgDirectoryError,
     fetchUsers,
+    fetchPermissionGroups,
     setError,
   };
 };

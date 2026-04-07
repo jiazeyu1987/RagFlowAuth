@@ -122,14 +122,9 @@ export default function useApprovalConfigPage() {
   const hydrateConfiguredUsers = useCallback(async (nextDrafts) => {
     const configuredIds = collectConfiguredUserIds(nextDrafts);
     if (configuredIds.length === 0) return;
-    const resolvedUsers = await Promise.all(
-      configuredIds.map(async (userId) => {
-        const items = await searchUsers(userId);
-        return items.find((item) => String(item?.user_id || '') === userId) || null;
-      })
-    );
-    mergeUsersIntoDirectory(resolvedUsers.filter(Boolean));
-  }, [mergeUsersIntoDirectory, searchUsers]);
+    const resolvedUsers = await Promise.all(configuredIds.map((userId) => usersApi.get(userId)));
+    mergeUsersIntoDirectory(resolvedUsers);
+  }, [mergeUsersIntoDirectory]);
 
   const updateMemberSearchState = useCallback((searchKey, updater) => {
     setMemberSearchStates((prev) => {

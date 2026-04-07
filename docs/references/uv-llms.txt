@@ -1,0 +1,10 @@
+Status: current repository does not use uv as its Python package manager.
+
+Observed evidence:
+- No `pyproject.toml` or `uv.lock` exists at the repository root.
+- Backend dependencies are currently declared in `backend/requirements.txt`.
+- `backend/Dockerfile` installs dependencies with `python -m pip install -r /app/backend/requirements.txt`.
+
+Guidance for future contributors:
+- Do not assume `uv sync` or `uv run` workflows exist in this repository today.
+- If uv is adopted later, add `pyproject.toml`, a lock file, and a documented migration path before updating contributor guidance.

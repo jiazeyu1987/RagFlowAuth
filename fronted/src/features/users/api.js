@@ -8,6 +8,13 @@ const assertArrayPayload = (payload, action) => {
   return payload;
 };
 
+const assertObjectPayload = (payload, action) => {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    throw new Error(`${action}_invalid_payload`);
+  }
+  return payload;
+};
+
 const normalizeObjectField = (response, fieldName, action) => {
   if (!response || typeof response !== 'object' || Array.isArray(response)) {
     throw new Error(`${action}_invalid_payload`);
@@ -39,6 +46,15 @@ export const usersApi = {
 
   search(keyword, limit = 20) {
     return requestUsersList({ q: keyword, limit }, 'users_search');
+  },
+
+  async get(userId) {
+    return assertObjectPayload(
+      await httpClient.requestJson(authBackendUrl(`/api/users/${userId}`), {
+        method: 'GET',
+      }),
+      'users_get'
+    );
   },
 
   async create(payload) {

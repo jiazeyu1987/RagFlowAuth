@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { useAuth } from '../../../hooks/useAuth';
 import {
   LOAD_KNOWLEDGE_DIRECTORIES_ERROR,
@@ -30,10 +31,13 @@ export const useUserManagement = () => {
     error,
     canManageUsers,
     availableGroups,
+    permissionGroupsLoading,
+    permissionGroupsError,
     companies,
     departments,
     orgDirectoryError,
     fetchUsers,
+    fetchPermissionGroups,
     setError,
   } = useUserManagementData({
     can,
@@ -113,10 +117,37 @@ export const useUserManagement = () => {
     actorRole: capabilities.actorRole,
     actorUserId: capabilities.actorUserId,
     availableGroups,
+    ensureAvailableGroupsLoaded: fetchPermissionGroups,
     mapErrorMessage: mapUserManagementErrorMessage,
     onError: setError,
     onSaved: fetchUsers,
   });
+
+  useEffect(() => {
+    if (
+      createManagement.showCreateModal
+      && String(createManagement.newUser.user_type || 'normal') === 'sub_admin'
+    ) {
+      fetchPermissionGroups();
+    }
+  }, [
+    createManagement.newUser.user_type,
+    createManagement.showCreateModal,
+    fetchPermissionGroups,
+  ]);
+
+  useEffect(() => {
+    if (
+      policyManagement.showPolicyModal
+      && String(policyManagement.policyForm.user_type || 'normal') === 'sub_admin'
+    ) {
+      fetchPermissionGroups();
+    }
+  }, [
+    fetchPermissionGroups,
+    policyManagement.policyForm.user_type,
+    policyManagement.showPolicyModal,
+  ]);
 
   const statusManagement = useUserStatusManagement({
     fetchUsers,
@@ -138,9 +169,12 @@ export const useUserManagement = () => {
       error,
       canManageUsers,
       availableGroups,
+      permissionGroupsLoading,
+      permissionGroupsError,
       companies,
       departments,
       orgDirectoryError,
+      fetchPermissionGroups,
     },
     createManagement,
     policyManagement,

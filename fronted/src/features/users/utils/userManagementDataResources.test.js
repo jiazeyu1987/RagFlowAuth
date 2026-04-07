@@ -1,4 +1,5 @@
 import {
+  buildOrgDirectoryDisabledState,
   buildOrgDirectoryErrorState,
   buildOrgDirectoryState,
   buildPermissionGroupsLoadErrorLogArgs,
@@ -6,6 +7,7 @@ import {
   buildPermissionGroupsLoadErrorState,
   buildUsersLoadState,
   shouldLoadAssignableGroups,
+  shouldLoadOrgDirectory,
 } from './userManagementDataResources';
 
 describe('userManagementDataResources', () => {
@@ -13,6 +15,11 @@ describe('userManagementDataResources', () => {
     expect(shouldLoadAssignableGroups({ isAdminUser: true, isSubAdminUser: false })).toBe(true);
     expect(shouldLoadAssignableGroups({ isAdminUser: false, isSubAdminUser: true })).toBe(true);
     expect(shouldLoadAssignableGroups({ isAdminUser: false, isSubAdminUser: false })).toBe(false);
+  });
+
+  it('only loads the org directory for admin actors', () => {
+    expect(shouldLoadOrgDirectory({ isAdminUser: true })).toBe(true);
+    expect(shouldLoadOrgDirectory({ isAdminUser: false })).toBe(false);
   });
 
   it('builds the users, permission-group, and org-directory error states used by the hook', () => {
@@ -23,16 +30,29 @@ describe('userManagementDataResources', () => {
 
     expect(buildPermissionGroupsLoadErrorState()).toEqual({
       availableGroups: [],
+      error: null,
     });
 
     expect(buildPermissionGroupsLoadState([{ group_id: 7 }])).toEqual({
       availableGroups: [{ group_id: 7 }],
+      error: null,
+    });
+
+    expect(buildPermissionGroupsLoadErrorState('permission_groups_unavailable')).toEqual({
+      availableGroups: [],
+      error: 'permission_groups_unavailable',
     });
 
     expect(buildPermissionGroupsLoadErrorLogArgs('permission_groups_unavailable')).toEqual([
       'Failed to load permission groups:',
       'permission_groups_unavailable',
     ]);
+
+    expect(buildOrgDirectoryDisabledState()).toEqual({
+      companies: [],
+      departments: [],
+      error: null,
+    });
 
     expect(buildOrgDirectoryErrorState('org_load_failed')).toEqual({
       companies: [],

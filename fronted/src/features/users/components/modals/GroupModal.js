@@ -16,6 +16,8 @@ export default function GroupModal({
   open,
   editingGroupUser,
   availableGroups,
+  permissionGroupsLoading = false,
+  permissionGroupsError = null,
   selectedGroupIds,
   onToggleGroup,
   onCancel,
@@ -33,11 +35,15 @@ export default function GroupModal({
           <PermissionGroupChecklist
             label={TEXT.label}
             groups={availableGroups}
+            loading={permissionGroupsLoading}
+            error={permissionGroupsError}
             selectedGroupIds={selectedGroupIds}
             onToggleGroup={onToggleGroup}
             testIdPrefix="users-group-checkbox"
             emptyText={TEXT.empty}
             selectedText={TEXT.selected}
+            loadingTestId="users-group-loading"
+            errorTestId="users-group-error"
             marginBottom="24px"
             maxHeight={isMobile ? '240px' : '300px'}
             panelBorderRadius="4px"
@@ -55,6 +61,7 @@ export default function GroupModal({
               },
               {
                 onClick: onSave,
+                disabled: permissionGroupsLoading || Boolean(permissionGroupsError),
                 testId: 'users-group-save',
                 label: TEXT.save,
                 backgroundColor: '#2563eb',

@@ -1,0 +1,11 @@
+Status: current repository does not use a dedicated design-system package.
+
+Observed evidence:
+- `fronted/src/components/Layout.js` uses local inline styles.
+- Feature pages and components mostly define view logic locally instead of importing shared design tokens.
+- No component-library dependency or token package is declared in `fronted/package.json`.
+
+How to reason about UI changes in this repo:
+- Treat `Layout`, `PermissionGuard`, page wrappers, and shared preview components as the closest thing to a house style.
+- Prefer documenting existing interaction patterns instead of inventing a formal design system that the codebase does not have.
+- If a real design system is introduced later, record its component source, token source, and adoption boundary here.

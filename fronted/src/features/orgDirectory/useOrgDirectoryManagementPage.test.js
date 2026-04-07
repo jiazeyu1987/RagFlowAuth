@@ -172,6 +172,35 @@ describe('useOrgDirectoryManagementPage', () => {
     confirmSpy.mockRestore();
   });
 
+  it('skips dingtalk recipient map rebuild when no dingtalk channel is configured', async () => {
+    const confirmSpy = jest.spyOn(window, 'confirm').mockReturnValue(true);
+    notificationApi.listChannels.mockResolvedValue([]);
+    const { result } = renderHook(() => useOrgDirectoryManagementPage());
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    const excelFile = new File(['xlsx'], 'org.xlsx', {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    });
+
+    act(() => {
+      result.current.handleExcelFileChange({ target: { files: [excelFile] } });
+    });
+
+    await act(async () => {
+      await result.current.handleRebuild();
+    });
+
+    expect(orgDirectoryApi.rebuildFromExcel).toHaveBeenCalledWith(excelFile);
+    expect(notificationApi.listChannels).toHaveBeenCalledWith(false);
+    expect(notificationApi.rebuildDingtalkRecipientMap).not.toHaveBeenCalled();
+    expect(result.current.error).toBe(null);
+    expect(result.current.notice).toBe('组织架构重建成功，未配置钉钉通知通道，已跳过钉钉 UserID 目录重建。');
+    expect(result.current.recipientMapRebuildSummary).toBe(null);
+
+    confirmSpy.mockRestore();
+  });
+
   it('validates excel uploads before rebuild', async () => {
     const { result } = renderHook(() => useOrgDirectoryManagementPage());
 

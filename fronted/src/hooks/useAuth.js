@@ -188,7 +188,7 @@ export const AuthProvider = ({ children }) => {
       tokenStore.setAuth(data.access_token, data.refresh_token, data.user);
       console.log('[Login] Logged in user:', data.user);
       applyAuthenticatedUser(data.user);
-      return { success: true };
+      return { success: true, user: data.user };
     } catch (loginError) {
       const message = mapLoginErrorMessage(loginError?.message);
       setError(message);

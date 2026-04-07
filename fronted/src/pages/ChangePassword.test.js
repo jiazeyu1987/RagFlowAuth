@@ -34,6 +34,8 @@ describe('ChangePassword', () => {
 
     render(<ChangePassword />);
 
+    expect(screen.getByDisplayValue('alice')).toHaveAttribute('autocomplete', 'username');
+
     await user.type(screen.getByTestId('change-password-old'), 'OldPass123');
     await user.type(screen.getByTestId('change-password-new'), 'NewPass123');
     await user.type(screen.getByTestId('change-password-confirm'), 'NewPass123');

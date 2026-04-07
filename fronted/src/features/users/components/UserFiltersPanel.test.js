@@ -1,5 +1,6 @@
 import React from 'react';
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import UserFiltersPanel from './UserFiltersPanel';
 
 const defaultProps = {
@@ -22,8 +23,11 @@ const defaultProps = {
     { id: 11, name: 'QA', path_name: 'Acme / QA', company_id: 1 },
     { id: 12, name: 'IT', path_name: 'Other / IT', company_id: 2 },
   ],
-  availableGroups: [{ group_id: 7, group_name: '默认权限组' }],
+  availableGroups: [{ group_id: 7, group_name: 'Default' }],
+  permissionGroupsLoading: false,
+  permissionGroupsError: null,
   isSubAdminUser: false,
+  onGroupFilterFocus: jest.fn(),
   onResetFilters: jest.fn(),
 };
 
@@ -63,5 +67,14 @@ describe('UserFiltersPanel', () => {
       backgroundColor: '#dc2626',
       color: 'white',
     });
+  });
+
+  it('loads permission groups when the group filter receives focus', async () => {
+    const user = userEvent.setup();
+    render(<UserFiltersPanel {...defaultProps} />);
+
+    await user.click(screen.getByTestId('users-filter-group'));
+
+    expect(defaultProps.onGroupFilterFocus).toHaveBeenCalledTimes(1);
   });
 });

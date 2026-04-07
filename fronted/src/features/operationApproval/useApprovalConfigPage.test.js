@@ -14,6 +14,7 @@ jest.mock('./api', () => ({
 jest.mock('../users/api', () => ({
   __esModule: true,
   usersApi: {
+    get: jest.fn(),
     search: jest.fn(),
   },
 }));
@@ -46,6 +47,17 @@ describe('useApprovalConfigPage', () => {
     jest.clearAllMocks();
     operationApprovalApi.listWorkflows.mockResolvedValue(workflowResponse.items);
     operationApprovalApi.updateWorkflow.mockResolvedValue({});
+    usersApi.get.mockImplementation(async (userId) => {
+      const items = [
+        { user_id: 'u-1', username: 'alice', full_name: 'Alice' },
+        { user_id: 'u-3', username: 'carol', full_name: 'Carol' },
+      ];
+      const match = items.find((item) => item.user_id === userId);
+      if (!match) {
+        throw new Error(`user_not_found:${userId}`);
+      }
+      return match;
+    });
     usersApi.search.mockImplementation(async (keyword) => {
       const normalized = String(keyword || '').trim().toLowerCase();
       const items = [
@@ -66,7 +78,7 @@ describe('useApprovalConfigPage', () => {
     await waitFor(() => expect(result.current.loading).toBe(false));
 
     expect(operationApprovalApi.listWorkflows).toHaveBeenCalledTimes(1);
-    expect(usersApi.search).toHaveBeenCalledWith('u-1', 20);
+    expect(usersApi.get).toHaveBeenCalledWith('u-1');
     expect(result.current.currentOperationType).toBe('knowledge_file_upload');
     expect(result.current.currentDraft).toEqual(
       expect.objectContaining({

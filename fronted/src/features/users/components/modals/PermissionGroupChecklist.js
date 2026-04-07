@@ -6,11 +6,15 @@ export default function PermissionGroupChecklist({
   label,
   hint,
   groups,
+  loading = false,
+  error = null,
   selectedGroupIds,
   onToggleGroup,
   testIdPrefix,
   emptyText,
   selectedText,
+  loadingTestId,
+  errorTestId,
   marginBottom = 16,
   maxHeight = '260px',
   panelBorderRadius = '8px',
@@ -34,7 +38,21 @@ export default function PermissionGroupChecklist({
           overflowY: 'auto',
         }}
       >
-        {availableGroups.length === 0 ? (
+        {availableGroups.length === 0 && loading ? (
+          <div
+            style={{ color: '#6b7280', textAlign: 'center', padding: emptyPadding }}
+            data-testid={loadingTestId}
+          >
+            {'\u52a0\u8f7d\u4e2d...'}
+          </div>
+        ) : availableGroups.length === 0 && error ? (
+          <div
+            style={{ color: '#ef4444', textAlign: 'center', padding: emptyPadding }}
+            data-testid={errorTestId}
+          >
+            {error}
+          </div>
+        ) : availableGroups.length === 0 ? (
           <div style={{ color: '#6b7280', textAlign: 'center', padding: emptyPadding }}>{emptyText}</div>
         ) : (
           availableGroups.map((group) => (
