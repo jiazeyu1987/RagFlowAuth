@@ -1,3 +1,4 @@
+from .excel_parser import OrgStructureExcelParser
 from .manager import OrgStructureManager
 from .models import Company, Department, Employee, OrgDirectoryAuditLog, OrgStructureRebuildSummary
 from .store import OrgDirectoryStore
@@ -8,6 +9,7 @@ __all__ = [
     "Employee",
     "OrgDirectoryAuditLog",
     "OrgDirectoryStore",
+    "OrgStructureExcelParser",
     "OrgStructureManager",
     "OrgStructureRebuildSummary",
 ]

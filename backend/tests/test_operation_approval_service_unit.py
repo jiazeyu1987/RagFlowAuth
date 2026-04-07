@@ -8,6 +8,7 @@ from unittest.mock import patch
 from fastapi import HTTPException
 
 from backend.app.core.config import settings
+from backend.app.core.managed_paths import managed_data_root
 from backend.app.core.permission_resolver import PermissionSnapshot, ResourceScope
 from backend.database.schema.ensure import ensure_schema
 from backend.services.audit_log_store import AuditLogStore
@@ -20,6 +21,11 @@ from backend.services.operation_approval import (
     OperationApprovalService,
     OperationApprovalServiceError,
     OperationApprovalStore,
+)
+from backend.services.operation_approval.types import (
+    ApprovalRequestRecord,
+    ApprovalRequestStepRecord,
+    ApprovalWorkflowRecord,
 )
 from backend.services.users import hash_password
 from backend.tests._util_tempdir import cleanup_dir, make_temp_dir
@@ -263,7 +269,9 @@ class TestOperationApprovalServiceUnit(unittest.TestCase):
         self.db_path = os.path.join(str(self.temp_dir), "auth.db")
         ensure_schema(self.db_path)
 
-        self.upload_root = Path(self.temp_dir) / "uploads"
+        self.managed_test_root = managed_data_root() / "test_operation_approval" / Path(self.temp_dir).name
+        self.managed_test_root.mkdir(parents=True, exist_ok=True)
+        self.upload_root = self.managed_test_root / "uploads"
         self.upload_root.mkdir(parents=True, exist_ok=True)
         self.upload_dir_patcher = patch.object(settings, "UPLOAD_DIR", str(self.upload_root))
         self.upload_dir_patcher.start()
@@ -341,6 +349,7 @@ class TestOperationApprovalServiceUnit(unittest.TestCase):
 
     def tearDown(self):
         self.upload_dir_patcher.stop()
+        cleanup_dir(self.managed_test_root)
         cleanup_dir(self.temp_dir)
 
     def _ctx(self, user: SimpleNamespace, snapshot: PermissionSnapshot):
@@ -438,7 +447,8 @@ class TestOperationApprovalServiceUnit(unittest.TestCase):
         kb_dataset_id: str = "ds-kb-a",
         kb_name: str = "kb-a",
     ):
-        file_path = Path(self.temp_dir) / filename
+        file_path = self.managed_test_root / "seed_docs" / filename
+        file_path.parent.mkdir(parents=True, exist_ok=True)
         file_path.write_bytes(content)
         doc = self.kb_store.create_document(
             filename=filename,
@@ -513,6 +523,45 @@ class TestOperationApprovalServiceUnit(unittest.TestCase):
         self.assertEqual(first_detail["steps"][0]["approvers"][0]["approver_user_id"], self.approver_1.user_id)
         self.assertEqual(second_detail["steps"][0]["step_name"], "Director Review")
         self.assertEqual(second_detail["steps"][0]["approvers"][0]["approver_user_id"], self.approver_2.user_id)
+
+    def test_workflow_record_model_roundtrip_preserves_steps_and_members(self):
+        self._upsert_workflow_members(
+            "knowledge_base_create",
+            [
+                {
+                    "step_name": "Manager Review",
+                    "members": [{"member_type": "special_role", "member_ref": "direct_manager"}],
+                }
+            ],
+        )
+
+        stored = self.service._store.get_workflow("knowledge_base_create")
+        self.assertIsNotNone(stored)
+
+        workflow_record = ApprovalWorkflowRecord.from_dict(stored)
+
+        self.assertEqual(workflow_record.operation_type, "knowledge_base_create")
+        self.assertEqual(workflow_record.steps[0].step_name, "Manager Review")
+        self.assertEqual(workflow_record.steps[0].members[0].member_ref, "direct_manager")
+        self.assertEqual(workflow_record.to_dict()["steps"][0]["members"][0]["member_type"], "special_role")
+
+    def test_load_pending_approval_state_returns_explicit_models(self):
+        self._upsert_workflow(
+            "knowledge_base_create",
+            [{"step_name": "Step 1", "approver_user_ids": [self.approver_1.user_id]}],
+        )
+        request = self._create_dataset_request(name="Dataset Pending Model")
+
+        request_record, active_step, approver = self.service._load_pending_approval_state(
+            request_id=request["request_id"],
+            actor_user_id=self.approver_1.user_id,
+        )
+
+        self.assertIsInstance(request_record, ApprovalRequestRecord)
+        self.assertIsInstance(active_step, ApprovalRequestStepRecord)
+        self.assertEqual(request_record.request_id, request["request_id"])
+        self.assertEqual(active_step.step_no, 1)
+        self.assertEqual(approver.approver_user_id, self.approver_1.user_id)
 
     def test_request_detail_exposes_approver_full_name(self):
         self.admin_user.full_name = "Applicant User"
@@ -748,6 +797,187 @@ class TestOperationApprovalServiceUnit(unittest.TestCase):
 
         self.assertEqual(detail["status"], "rejected")
         self.assertEqual(detail["steps"][0]["status"], "rejected")
+        self.assertEqual(self.ragflow_service.created_payloads, [])
+
+    def test_approve_request_rolls_back_state_when_event_write_fails(self):
+        self._upsert_workflow(
+            "knowledge_base_create",
+            [{"step_name": "Step 1", "approver_user_ids": [self.approver_1.user_id]}],
+        )
+        request = self._create_dataset_request(name="Dataset Approve Rollback")
+        original_add_event = self.service._store.add_event
+
+        def failing_add_event(*args, **kwargs):
+            if kwargs.get("event_type") == "step_approved_by_user":
+                raise RuntimeError("step_approved_event_failed")
+            return original_add_event(*args, **kwargs)
+
+        with patch.object(self.service._store, "add_event", side_effect=failing_add_event):
+            with self.assertRaises(RuntimeError) as ctx:
+                self._approve(request["request_id"], self.approver_1)
+
+        self.assertEqual(str(ctx.exception), "step_approved_event_failed")
+        detail = self.service.get_request_detail_for_user(
+            request_id=request["request_id"],
+            requester_user=self.admin_user,
+        )
+        self.assertEqual(detail["status"], "in_approval")
+        self.assertEqual(detail["steps"][0]["status"], "active")
+        self.assertEqual(detail["steps"][0]["approvers"][0]["status"], "pending")
+        event_types = {item["event_type"] for item in detail["events"]}
+        self.assertNotIn("step_approved_by_user", event_types)
+        self.assertEqual(self.ragflow_service.created_payloads, [])
+
+    def test_reject_request_rolls_back_state_when_event_write_fails(self):
+        self._upsert_workflow(
+            "knowledge_base_create",
+            [{"step_name": "Step 1", "approver_user_ids": [self.approver_1.user_id]}],
+        )
+        request = self._create_dataset_request(name="Dataset Reject Rollback")
+        original_add_event = self.service._store.add_event
+
+        def failing_add_event(*args, **kwargs):
+            if kwargs.get("event_type") == "request_rejected":
+                raise RuntimeError("request_rejected_event_failed")
+            return original_add_event(*args, **kwargs)
+
+        with patch.object(self.service._store, "add_event", side_effect=failing_add_event):
+            with self.assertRaises(RuntimeError) as ctx:
+                self._reject(request["request_id"], self.approver_1, notes="reject")
+
+        self.assertEqual(str(ctx.exception), "request_rejected_event_failed")
+        detail = self.service.get_request_detail_for_user(
+            request_id=request["request_id"],
+            requester_user=self.admin_user,
+        )
+        self.assertEqual(detail["status"], "in_approval")
+        self.assertEqual(detail["steps"][0]["status"], "active")
+        self.assertEqual(detail["steps"][0]["approvers"][0]["status"], "pending")
+        event_types = {item["event_type"] for item in detail["events"]}
+        self.assertNotIn("request_rejected", event_types)
+        self.assertEqual(self.ragflow_service.created_payloads, [])
+
+    def test_withdraw_request_rolls_back_state_when_event_write_fails(self):
+        self._upsert_workflow(
+            "knowledge_base_create",
+            [{"step_name": "Step 1", "approver_user_ids": [self.approver_1.user_id]}],
+        )
+        request = self._create_dataset_request(name="Dataset Withdraw Rollback")
+        original_add_event = self.service._store.add_event
+
+        def failing_add_event(*args, **kwargs):
+            if kwargs.get("event_type") == "request_withdrawn":
+                raise RuntimeError("request_withdrawn_event_failed")
+            return original_add_event(*args, **kwargs)
+
+        with patch.object(self.service._store, "add_event", side_effect=failing_add_event):
+            with self.assertRaises(RuntimeError) as ctx:
+                self.service.withdraw_request(
+                    request_id=request["request_id"],
+                    actor_user=self.admin_user,
+                    reason="cancel",
+                )
+
+        self.assertEqual(str(ctx.exception), "request_withdrawn_event_failed")
+        detail = self.service.get_request_detail_for_user(
+            request_id=request["request_id"],
+            requester_user=self.admin_user,
+        )
+        self.assertEqual(detail["status"], "in_approval")
+        self.assertEqual(detail["steps"][0]["status"], "active")
+        event_types = {item["event_type"] for item in detail["events"]}
+        self.assertNotIn("request_withdrawn", event_types)
+
+    def test_approve_request_delegates_to_decision_service(self):
+        self._upsert_workflow(
+            "knowledge_base_create",
+            [{"step_name": "Step 1", "approver_user_ids": [self.approver_1.user_id]}],
+        )
+        request = self._create_dataset_request(name="Dataset Approve Delegate")
+
+        with patch.object(
+            self.service._decision_service,
+            "approve_request_state",
+            wraps=self.service._decision_service.approve_request_state,
+        ) as mocked:
+            detail = self._approve(request["request_id"], self.approver_1)
+
+        mocked.assert_called_once()
+        self.assertEqual(mocked.call_args.kwargs["request_id"], request["request_id"])
+        self.assertEqual(mocked.call_args.kwargs["actor_user_id"], self.approver_1.user_id)
+        self.assertEqual(detail["status"], "executed")
+
+    def test_reject_request_delegates_to_decision_service(self):
+        self._upsert_workflow(
+            "knowledge_base_create",
+            [{"step_name": "Step 1", "approver_user_ids": [self.approver_1.user_id]}],
+        )
+        request = self._create_dataset_request(name="Dataset Reject Delegate")
+
+        with patch.object(
+            self.service._decision_service,
+            "reject_request_state",
+            wraps=self.service._decision_service.reject_request_state,
+        ) as mocked:
+            detail = self._reject(request["request_id"], self.approver_1, notes="reject")
+
+        mocked.assert_called_once()
+        self.assertEqual(mocked.call_args.kwargs["request_id"], request["request_id"])
+        self.assertEqual(mocked.call_args.kwargs["actor_user_id"], self.approver_1.user_id)
+        self.assertEqual(detail["status"], "rejected")
+
+    def test_withdraw_request_delegates_to_decision_service(self):
+        self._upsert_workflow(
+            "knowledge_base_create",
+            [{"step_name": "Step 1", "approver_user_ids": [self.approver_1.user_id]}],
+        )
+        request = self._create_dataset_request(name="Dataset Withdraw Delegate")
+
+        with patch.object(
+            self.service._decision_service,
+            "withdraw_request_state",
+            wraps=self.service._decision_service.withdraw_request_state,
+        ) as mocked:
+            detail = self.service.withdraw_request(
+                request_id=request["request_id"],
+                actor_user=self.admin_user,
+                reason="cancel",
+            )
+
+        mocked.assert_called_once()
+        self.assertEqual(mocked.call_args.kwargs["request_id"], request["request_id"])
+        self.assertEqual(mocked.call_args.kwargs["actor_user_id"], self.admin_user.user_id)
+        self.assertTrue(mocked.call_args.kwargs["is_admin"])
+        self.assertEqual(detail["status"], "withdrawn")
+
+    def test_execution_start_rolls_back_when_event_write_fails(self):
+        self._upsert_workflow(
+            "knowledge_base_create",
+            [{"step_name": "Step 1", "approver_user_ids": [self.approver_1.user_id]}],
+        )
+        request = self._create_dataset_request(name="Dataset Execution Start Rollback")
+        original_add_event = self.service._store.add_event
+
+        def failing_add_event(*args, **kwargs):
+            if kwargs.get("event_type") == "execution_started":
+                raise RuntimeError("execution_started_event_failed")
+            return original_add_event(*args, **kwargs)
+
+        with patch.object(self.service._store, "add_event", side_effect=failing_add_event):
+            with self.assertRaises(RuntimeError) as ctx:
+                self._approve(request["request_id"], self.approver_1)
+
+        self.assertEqual(str(ctx.exception), "execution_started_event_failed")
+        detail = self.service.get_request_detail_for_user(
+            request_id=request["request_id"],
+            requester_user=self.admin_user,
+        )
+        self.assertEqual(detail["status"], "approved_pending_execution")
+        self.assertEqual(detail["steps"][0]["status"], "approved")
+        self.assertIsNone(detail["execution_started_at_ms"])
+        event_types = {item["event_type"] for item in detail["events"]}
+        self.assertIn("request_approved", event_types)
+        self.assertNotIn("execution_started", event_types)
         self.assertEqual(self.ragflow_service.created_payloads, [])
 
     def test_withdraw_respects_permissions_and_status(self):
@@ -1102,6 +1332,18 @@ class TestOperationApprovalServiceUnit(unittest.TestCase):
         self.assertEqual(control_inbox["items"][0]["event_type"], "operation_approval_todo")
         self.assertEqual(control_inbox["items"][0]["payload"]["request_id"], request["request_id"])
         self.assertEqual(len(tenant_notification_store.list_jobs(limit=20)), 0)
+
+    def test_migrate_legacy_document_reviews_delegates_to_migration_service(self):
+        expected = {"migrated": 1, "skipped": 2}
+        with patch.object(
+            self.service._migration_service,
+            "migrate_legacy_document_reviews",
+            return_value=expected,
+        ) as mocked:
+            result = self.service.migrate_legacy_document_reviews()
+
+        mocked.assert_called_once_with()
+        self.assertEqual(result, expected)
 
     def test_dataset_delete_fails_when_target_becomes_non_empty_before_execution(self):
         self.ragflow_service.add_dataset(dataset_id="ds-non-empty", name="kb-non-empty", document_count=0, chunk_count=0)

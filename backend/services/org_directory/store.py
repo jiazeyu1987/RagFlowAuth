@@ -6,6 +6,8 @@ from backend.database.paths import resolve_auth_db_path
 from backend.database.sqlite import connect_sqlite
 
 from .models import Company, Department, Employee, OrgDirectoryAuditLog
+from .rebuild_repository import OrgStructureRebuildRepository
+from .rebuild_types import ParsedOrgStructure
 
 
 class OrgDirectoryStore:
@@ -197,6 +199,22 @@ class OrgDirectoryStore:
             return [OrgDirectoryAuditLog(*row) for row in rows]
         finally:
             conn.close()
+
+    def rebuild_from_parsed(
+        self,
+        *,
+        actor_user_id: str,
+        source_display: str,
+        parsed: ParsedOrgStructure,
+        completed_at_ms: int,
+    ):
+        repository = OrgStructureRebuildRepository(db_path=self.db_path)
+        return repository.rebuild_from_parsed(
+            actor_user_id=actor_user_id,
+            source_display=source_display,
+            parsed=parsed,
+            completed_at_ms=completed_at_ms,
+        )
 
     def _log(
         self,

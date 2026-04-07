@@ -1,0 +1,91 @@
+{
+  "schema_version": 2,
+  "task_id": "doc-todolist-md-ragflowauth-store-20260407T113245",
+  "mode": "full",
+  "status": "completed",
+  "current_phase": null,
+  "phase_statuses": [
+    {
+      "phase_id": "P1",
+      "title": "Extract Org Rebuild Collaborators",
+      "status": "completed",
+      "objective": "Split Excel parsing and rebuild persistence out of `OrgStructureManager`, and replace private-store reach-through with explicit store APIs while preserving current rebuild behavior.",
+      "owned_paths": [
+        "`backend/services/org_directory/manager.py`",
+        "`backend/services/org_directory/store.py`",
+        "`backend/services/org_directory/*.py`",
+        "`backend/tests/test_org_structure_manager_unit.py`",
+        "`backend/tests/test_org_directory_api_unit.py`"
+      ],
+      "dependencies": [
+        "Existing org-directory unit and API tests",
+        "current Excel import fixture",
+        "and current database schema."
+      ],
+      "deliverables": [
+        "explicit Excel parser collaborator",
+        "explicit rebuild repository/store entrypoint",
+        "manager orchestration layer that no longer calls `_get_connection` or `_log`",
+        "and passing org-directory regression tests."
+      ],
+      "evidence_expectation": "`execution-log.md` records the extracted collaborators, the store boundary change, and the exact validation commands run.",
+      "evidence": [
+        "execution-log.md#phase-p1"
+      ],
+      "notes": "",
+      "last_reviewed_at": "2026-04-07T12:56:31",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P1-AC1",
+          "text": "`OrgStructureManager.rebuild_from_excel` no longer calls `self._store._get_connection()` or `self._store._log()` directly.",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#phase-p1",
+            "test-report.md#test-cycle-2026-04-07-org-directory"
+          ]
+        },
+        {
+          "ac_id": "P1-AC2",
+          "text": "Excel parsing is moved behind an explicit collaborator or helper module so header validation and row normalization are no longer buried in the manager hot path.",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#phase-p1",
+            "test-report.md#test-cycle-2026-04-07-org-directory"
+          ]
+        },
+        {
+          "ac_id": "P1-AC3",
+          "text": "Existing org-directory rebuild unit tests and API tests continue to pass after the refactor.",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#phase-p1",
+            "test-report.md#test-cycle-2026-04-07-org-directory"
+          ]
+        }
+      ]
+    }
+  ],
+  "planner_review_status": "approved",
+  "test_status": "passed",
+  "blocking_prereqs": [],
+  "iteration_counts": {
+    "planner_revisions": 0,
+    "executor_loops": 1,
+    "test_loops": 1
+  },
+  "created_at": "2026-04-07T11:32:45",
+  "updated_at": "2026-04-07T12:57:00",
+  "branch": "int_latest",
+  "baseline_revision": "1cd6cc3e4970af2331371cf7a7724699de4a74a1",
+  "workspace_root": "D:\\ProjectPackage\\RagflowAuth",
+  "tasks_root": "D:\\ProjectPackage\\RagflowAuth\\doc\\tasks",
+  "task_dir": "D:\\ProjectPackage\\RagflowAuth\\doc\\tasks\\doc-todolist-md-ragflowauth-store-20260407T113245",
+  "goal": "按照 doc/todolist.md 继续重构 RagflowAuth，当前阶段聚焦组织架构导入逻辑拆分与 store 边界收口",
+  "artifacts": {
+    "prd": "D:\\ProjectPackage\\RagflowAuth\\doc\\tasks\\doc-todolist-md-ragflowauth-store-20260407T113245\\prd.md",
+    "test_plan": "D:\\ProjectPackage\\RagflowAuth\\doc\\tasks\\doc-todolist-md-ragflowauth-store-20260407T113245\\test-plan.md",
+    "task_state": "D:\\ProjectPackage\\RagflowAuth\\doc\\tasks\\doc-todolist-md-ragflowauth-store-20260407T113245\\task-state.json",
+    "execution_log": "D:\\ProjectPackage\\RagflowAuth\\doc\\tasks\\doc-todolist-md-ragflowauth-store-20260407T113245\\execution-log.md",
+    "test_report": "D:\\ProjectPackage\\RagflowAuth\\doc\\tasks\\doc-todolist-md-ragflowauth-store-20260407T113245\\test-report.md"
+  }
+}

@@ -8,8 +8,10 @@ from unittest.mock import patch
 from openpyxl import Workbook
 
 from backend.database.schema.ensure import ensure_schema
+from backend.services.org_directory import OrgStructureExcelParser
 from backend.services.org_directory import manager as org_manager_module
-from backend.services.org_directory import OrgDirectoryStore, OrgStructureManager
+from backend.services.org_directory import OrgDirectoryStore, OrgStructureManager, OrgStructureRebuildSummary
+from backend.services.org_directory.rebuild_types import ParsedOrgStructure
 from backend.tests._util_tempdir import cleanup_dir, make_temp_dir
 
 
@@ -176,10 +178,10 @@ class TestOrgStructureManagerUnit(unittest.TestCase):
             ["u-1", "李四", "", "", "李四", "公司A", "部门B", "", "", "", "", "", "1002"],
         ]
 
-        self.manager._excel_path = Path(self.db_path)
-        with patch.object(OrgStructureManager, "_load_excel_rows", return_value=rows):
+        parser = OrgStructureExcelParser(excel_path=self.db_path)
+        with patch.object(OrgStructureExcelParser, "_load_excel_rows", return_value=rows):
             with self.assertRaisesRegex(RuntimeError, "org_structure_excel_employee_user_id_conflict:u-1"):
-                self.manager._parse_excel()
+                parser.parse()
 
     def test_parse_excel_supports_xlsx_upload_path(self):
         workbook_path = Path(self._tmp) / "org-structure-upload.xlsx"
@@ -201,7 +203,8 @@ class TestOrgStructureManagerUnit(unittest.TestCase):
         workbook.save(workbook_path)
         workbook.close()
 
-        companies, departments, employees = self.manager._parse_excel(excel_path=workbook_path)
+        parser = OrgStructureExcelParser()
+        companies, departments, employees = parser.parse(excel_path=workbook_path)
 
         self.assertEqual(len(companies), 1)
         self.assertEqual(companies[0].source_key, "公司A")
@@ -211,6 +214,56 @@ class TestOrgStructureManagerUnit(unittest.TestCase):
         self.assertEqual(len(employees), 1)
         self.assertEqual(employees[0].employee_user_id, "u-100")
         self.assertTrue(employees[0].is_department_manager)
+
+    def test_rebuild_from_excel_uses_public_store_entrypoint(self):
+        class _RecordingParser:
+            def __init__(self):
+                self.excel_path = Path("org-structure.xls")
+                self.parsed = ParsedOrgStructure(companies=[], departments=[], employees=[])
+
+            def resolve_excel_path(self, excel_path):
+                return Path(excel_path) if excel_path is not None else self.excel_path
+
+            def parse(self, *, excel_path=None):
+                self.last_excel_path = excel_path
+                return self.parsed
+
+        class _RecordingStore:
+            def __init__(self):
+                self.calls = []
+
+            def rebuild_from_parsed(self, **kwargs):
+                self.calls.append(kwargs)
+                return OrgStructureRebuildSummary(
+                    excel_path=kwargs["source_display"],
+                    company_count=0,
+                    department_count=0,
+                    employee_count=0,
+                    companies_created=0,
+                    companies_updated=0,
+                    companies_deleted=0,
+                    departments_created=0,
+                    departments_updated=0,
+                    departments_deleted=0,
+                    employees_created=0,
+                    employees_updated=0,
+                    employees_deleted=0,
+                    users_company_cleared=0,
+                    users_department_cleared=0,
+                    completed_at_ms=kwargs["completed_at_ms"],
+                )
+
+        parser = _RecordingParser()
+        store = _RecordingStore()
+        manager = OrgStructureManager(store=store, parser=parser)
+
+        summary = manager.rebuild_from_excel(actor_user_id="admin-1")
+
+        self.assertEqual(len(store.calls), 1)
+        self.assertEqual(store.calls[0]["actor_user_id"], "admin-1")
+        self.assertEqual(store.calls[0]["source_display"], str(parser.excel_path))
+        self.assertIs(store.calls[0]["parsed"], parser.parsed)
+        self.assertEqual(summary.excel_path, str(parser.excel_path))
 
 
 if __name__ == "__main__":

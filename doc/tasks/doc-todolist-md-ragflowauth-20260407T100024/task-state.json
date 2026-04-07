@@ -1,0 +1,241 @@
+{
+  "schema_version": 2,
+  "task_id": "doc-todolist-md-ragflowauth-20260407T100024",
+  "mode": "full",
+  "status": "completed",
+  "current_phase": null,
+  "phase_statuses": [
+    {
+      "phase_id": "P1",
+      "title": "收敛审批流事务边界",
+      "status": "completed",
+      "objective": "让批准、驳回、撤回、执行开始/结束等关键状态切换拥有显式事务边界，避免半提交状态。",
+      "owned_paths": [
+        "`backend/services/operation_approval/service.py`",
+        "`backend/services/operation_approval/store.py`",
+        "`backend/tests/test_operation_approval_service_unit.py`"
+      ],
+      "dependencies": [
+        "现有 `OperationApprovalStore` 读写接口、审批单测夹具"
+      ],
+      "deliverables": [
+        "store 显式事务入口；核心写入支持复用同一连接；事务回滚测试"
+      ],
+      "evidence_expectation": "`execution-log.md` 记录改动路径、回滚场景和验证命令。",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P1-AC1",
+          "text": "审批通过、驳回、撤回、执行开始/完成的状态写入不再依赖多个独立 `commit()` 串接。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#phase-p1",
+            "test-report.md#test-cycle-2026-04-07"
+          ]
+        },
+        {
+          "ac_id": "P1-AC2",
+          "text": "当事件写入失败时，请求、步骤、审批人状态会整体回滚。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#phase-p1",
+            "test-report.md#test-cycle-2026-04-07"
+          ]
+        },
+        {
+          "ac_id": "P1-AC3",
+          "text": "审批相关后端单测通过，且执行路径仍保持原行为。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#phase-p1",
+            "test-report.md#test-cycle-2026-04-07"
+          ]
+        }
+      ],
+      "evidence": [
+        "execution-log.md#phase-p1"
+      ],
+      "notes": "",
+      "last_reviewed_at": "2026-04-07T10:41:06"
+    },
+    {
+      "phase_id": "P2",
+      "title": "拆分执行、通知、审计、迁移协作者",
+      "status": "completed",
+      "objective": "把主 service 中边界清晰且副作用重的职责抽成独立协作者，保留主 service 为编排层。",
+      "owned_paths": [
+        "`backend/services/operation_approval/service.py`",
+        "`backend/services/operation_approval/audit_service.py`",
+        "`backend/services/operation_approval/notification_service.py`",
+        "`backend/services/operation_approval/execution_service.py`",
+        "`backend/services/operation_approval/migration_service.py`",
+        "`backend/tests/test_operation_approval_service_unit.py`"
+      ],
+      "dependencies": [
+        "P1 完成后的事务边界；现有通知/审计/执行/迁移行为回归"
+      ],
+      "deliverables": [
+        "新协作者模块；service 委托接线；迁移委托测试；审批回归通过"
+      ],
+      "evidence_expectation": "`execution-log.md` 记录新增模块、委托关系和测试结果。",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P2-AC1",
+          "text": "执行、通知、审计、legacy 迁移逻辑已从主 service 提取到独立协作者。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#phase-p2",
+            "test-report.md#test-cycle-2026-04-07"
+          ]
+        },
+        {
+          "ac_id": "P2-AC2",
+          "text": "`OperationApprovalService` 保留审批编排职责，不再直接实现上述四类细节逻辑。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#phase-p2",
+            "test-report.md#test-cycle-2026-04-07"
+          ]
+        },
+        {
+          "ac_id": "P2-AC3",
+          "text": "协作者拆分后审批相关单测和路由单测全部通过。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#phase-p2",
+            "test-report.md#test-cycle-2026-04-07"
+          ]
+        }
+      ],
+      "evidence": [
+        "execution-log.md#phase-p2"
+      ],
+      "notes": "",
+      "last_reviewed_at": "2026-04-07T10:41:31"
+    },
+    {
+      "phase_id": "P3",
+      "title": "拆分审批决策协作者",
+      "status": "completed",
+      "objective": "从主 service 中抽出 approve/reject/withdraw 的决策与状态推进逻辑，减少主类对 step/request/approver 的直接操作密度。",
+      "owned_paths": [
+        "`backend/services/operation_approval/service.py`",
+        "`backend/services/operation_approval/decision_service.py`",
+        "`backend/tests/test_operation_approval_service_unit.py`"
+      ],
+      "dependencies": [
+        "P1、P2 完成；现有审批状态流转测试"
+      ],
+      "deliverables": [
+        "`ApprovalDecisionService` 或等价协作者；主 service 改为调用决策协作者；现有行为保持不变"
+      ],
+      "evidence_expectation": "`execution-log.md` 记录决策协作者边界、覆盖的 acceptance id 和回归结果。",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P3-AC1",
+          "text": "approve/reject/withdraw 的决策逻辑迁入独立协作者，主 service 仅保留输入校验、签名编排和后置副作用触发。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#phase-p3",
+            "test-report.md#test-cycle-2026-04-07"
+          ]
+        },
+        {
+          "ac_id": "P3-AC2",
+          "text": "审批决策协作者可在不依赖通知/审计实现细节的前提下独立测试。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#phase-p3",
+            "test-report.md#test-cycle-2026-04-07"
+          ]
+        },
+        {
+          "ac_id": "P3-AC3",
+          "text": "approve/reject/withdraw 的现有回归测试继续通过。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#phase-p3",
+            "test-report.md#test-cycle-2026-04-07"
+          ]
+        }
+      ],
+      "evidence": [
+        "execution-log.md#phase-p3"
+      ],
+      "notes": "",
+      "last_reviewed_at": "2026-04-07T10:41:55"
+    },
+    {
+      "phase_id": "P4",
+      "title": "为 request/step/workflow/event 引入显式数据模型",
+      "status": "completed",
+      "objective": "用稳定的数据模型替代审批域关键路径中的大面积裸 `dict` 透传，降低字段漂移风险。",
+      "owned_paths": [
+        "`backend/services/operation_approval/types.py`",
+        "`backend/services/operation_approval/service.py`",
+        "`backend/services/operation_approval/decision_service.py`",
+        "`backend/tests/test_operation_approval_service_unit.py`"
+      ],
+      "dependencies": [
+        "P3 完成；审批决策职责已分离"
+      ],
+      "deliverables": [
+        "新的数据模型类型；关键状态机路径改用显式模型；必要单测"
+      ],
+      "evidence_expectation": "`execution-log.md` 记录模型引入范围和回归结果。",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P4-AC1",
+          "text": "request/step/workflow/event 的关键字段不再主要靠裸字符串 key 在主流程中传播。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#phase-p4"
+          ]
+        },
+        {
+          "ac_id": "P4-AC2",
+          "text": "至少关键审批路径中的模型字段变更可由类型或构造函数集中约束。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#phase-p4"
+          ]
+        },
+        {
+          "ac_id": "P4-AC3",
+          "text": "新模型引入后，审批核心单测继续通过。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#phase-p4"
+          ]
+        }
+      ],
+      "evidence": [
+        "execution-log.md#phase-p4"
+      ],
+      "notes": "",
+      "last_reviewed_at": "2026-04-07T11:12:04"
+    }
+  ],
+  "planner_review_status": "approved",
+  "test_status": "passed",
+  "blocking_prereqs": [],
+  "iteration_counts": {
+    "planner_revisions": 0,
+    "executor_loops": 2,
+    "test_loops": 1
+  },
+  "created_at": "2026-04-07T10:00:24",
+  "updated_at": "2026-04-07T11:22:54",
+  "branch": "int_latest",
+  "baseline_revision": "1cd6cc3e4970af2331371cf7a7724699de4a74a1",
+  "workspace_root": "D:\\ProjectPackage\\RagflowAuth",
+  "tasks_root": "D:\\ProjectPackage\\RagflowAuth\\doc\\tasks",
+  "task_dir": "D:\\ProjectPackage\\RagflowAuth\\doc\\tasks\\doc-todolist-md-ragflowauth-20260407T100024",
+  "goal": "按 doc/todolist.md 逐项重构 RagflowAuth，当前阶段聚焦审批域：先收敛事务边界，再拆分执行、通知、审计、迁移和审批决策职责",
+  "artifacts": {
+    "prd": "D:\\ProjectPackage\\RagflowAuth\\doc\\tasks\\doc-todolist-md-ragflowauth-20260407T100024\\prd.md",
+    "test_plan": "D:\\ProjectPackage\\RagflowAuth\\doc\\tasks\\doc-todolist-md-ragflowauth-20260407T100024\\test-plan.md",
+    "task_state": "D:\\ProjectPackage\\RagflowAuth\\doc\\tasks\\doc-todolist-md-ragflowauth-20260407T100024\\task-state.json",
+    "execution_log": "D:\\ProjectPackage\\RagflowAuth\\doc\\tasks\\doc-todolist-md-ragflowauth-20260407T100024\\execution-log.md",
+    "test_report": "D:\\ProjectPackage\\RagflowAuth\\doc\\tasks\\doc-todolist-md-ragflowauth-20260407T100024\\test-report.md"
+  }
+}

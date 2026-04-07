@@ -3,10 +3,14 @@ from __future__ import annotations
 import json
 import time
 from collections.abc import Iterable
+from typing import Any, TypeVar
 from uuid import uuid4
 
 from backend.database.paths import resolve_auth_db_path
 from backend.database.sqlite import connect_sqlite
+
+
+T = TypeVar("T")
 
 
 def _to_json_text(value) -> str:
@@ -32,6 +36,24 @@ class OperationApprovalStore:
 
     def _conn(self):
         return connect_sqlite(self.db_path)
+
+    def _borrow_connection(self, conn: Any | None):
+        if conn is not None:
+            return conn, False
+        return self._conn(), True
+
+    def run_in_transaction(self, action) -> T:
+        conn = self._conn()
+        try:
+            conn.execute("BEGIN IMMEDIATE")
+            result = action(conn)
+            conn.commit()
+            return result
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
 
     def get_workflow(self, operation_type: str) -> dict | None:
         conn = self._conn()
@@ -415,8 +437,8 @@ class OperationApprovalStore:
             "department_id": (int(row["department_id"]) if row["department_id"] is not None else None),
         }
 
-    def get_request(self, request_id: str) -> dict | None:
-        conn = self._conn()
+    def get_request(self, request_id: str, *, conn: Any | None = None) -> dict | None:
+        conn, owns_conn = self._borrow_connection(conn)
         try:
             row = conn.execute("SELECT * FROM operation_approval_requests WHERE request_id = ?", (request_id,)).fetchone()
             if not row:
@@ -527,7 +549,8 @@ class OperationApprovalStore:
             ]
             return data
         finally:
-            conn.close()
+            if owns_conn:
+                conn.close()
 
     def list_requests(
         self,
@@ -608,8 +631,8 @@ class OperationApprovalStore:
         finally:
             conn.close()
 
-    def get_active_step(self, *, request_id: str) -> dict | None:
-        conn = self._conn()
+    def get_active_step(self, *, request_id: str, conn: Any | None = None) -> dict | None:
+        conn, owns_conn = self._borrow_connection(conn)
         try:
             row = conn.execute(
                 """
@@ -632,12 +655,20 @@ class OperationApprovalStore:
                 "created_at_ms": int(row["created_at_ms"] or 0),
                 "activated_at_ms": (int(row["activated_at_ms"]) if row["activated_at_ms"] is not None else None),
                 "completed_at_ms": (int(row["completed_at_ms"]) if row["completed_at_ms"] is not None else None),
-            }
+                }
         finally:
-            conn.close()
+            if owns_conn:
+                conn.close()
 
-    def get_step_approver(self, *, request_id: str, step_no: int, approver_user_id: str) -> dict | None:
-        conn = self._conn()
+    def get_step_approver(
+        self,
+        *,
+        request_id: str,
+        step_no: int,
+        approver_user_id: str,
+        conn: Any | None = None,
+    ) -> dict | None:
+        conn, owns_conn = self._borrow_connection(conn)
         try:
             row = conn.execute(
                 """
@@ -659,9 +690,10 @@ class OperationApprovalStore:
                 "notes": row["notes"],
                 "signature_id": (str(row["signature_id"]) if row["signature_id"] else None),
                 "acted_at_ms": (int(row["acted_at_ms"]) if row["acted_at_ms"] is not None else None),
-            }
+                }
         finally:
-            conn.close()
+            if owns_conn:
+                conn.close()
 
     def mark_step_approver_action(
         self,
@@ -674,9 +706,10 @@ class OperationApprovalStore:
         action: str,
         notes: str | None,
         signature_id: str | None,
+        conn: Any | None = None,
     ) -> None:
         now_ms = int(time.time() * 1000)
-        conn = self._conn()
+        conn, owns_conn = self._borrow_connection(conn)
         try:
             conn.execute(
                 """
@@ -702,9 +735,15 @@ class OperationApprovalStore:
                     approver_user_id,
                 ),
             )
-            conn.commit()
+            if owns_conn:
+                conn.commit()
+        except Exception:
+            if owns_conn:
+                conn.rollback()
+            raise
         finally:
-            conn.close()
+            if owns_conn:
+                conn.close()
 
     def mark_remaining_step_approvers(
         self,
@@ -713,9 +752,10 @@ class OperationApprovalStore:
         status: str,
         action: str,
         notes: str | None = None,
+        conn: Any | None = None,
     ) -> int:
         now_ms = int(time.time() * 1000)
-        conn = self._conn()
+        conn, owns_conn = self._borrow_connection(conn)
         try:
             cur = conn.execute(
                 """
@@ -725,13 +765,19 @@ class OperationApprovalStore:
                 """,
                 (status, action, notes, now_ms, request_step_id),
             )
-            conn.commit()
+            if owns_conn:
+                conn.commit()
             return int(cur.rowcount or 0)
+        except Exception:
+            if owns_conn:
+                conn.rollback()
+            raise
         finally:
-            conn.close()
+            if owns_conn:
+                conn.close()
 
-    def count_pending_approvers(self, *, request_step_id: str) -> int:
-        conn = self._conn()
+    def count_pending_approvers(self, *, request_step_id: str, conn: Any | None = None) -> int:
+        conn, owns_conn = self._borrow_connection(conn)
         try:
             row = conn.execute(
                 """
@@ -743,9 +789,18 @@ class OperationApprovalStore:
             ).fetchone()
             return int(row["c"] or 0) if row else 0
         finally:
-            conn.close()
+            if owns_conn:
+                conn.close()
 
-    def set_step_status(self, *, request_step_id: str, status: str, activated: bool = False, completed: bool = False) -> None:
+    def set_step_status(
+        self,
+        *,
+        request_step_id: str,
+        status: str,
+        activated: bool = False,
+        completed: bool = False,
+        conn: Any | None = None,
+    ) -> None:
         now_ms = int(time.time() * 1000)
         updates = ["status = ?"]
         params: list[object] = [status]
@@ -756,7 +811,7 @@ class OperationApprovalStore:
             updates.append("completed_at_ms = ?")
             params.append(now_ms)
         params.append(request_step_id)
-        conn = self._conn()
+        conn, owns_conn = self._borrow_connection(conn)
         try:
             conn.execute(
                 f"""
@@ -766,9 +821,15 @@ class OperationApprovalStore:
                 """,
                 params,
             )
-            conn.commit()
+            if owns_conn:
+                conn.commit()
+        except Exception:
+            if owns_conn:
+                conn.rollback()
+            raise
         finally:
-            conn.close()
+            if owns_conn:
+                conn.close()
 
     def set_request_status(
         self,
@@ -782,6 +843,7 @@ class OperationApprovalStore:
         executed: bool = False,
         last_error: str | None = None,
         result_payload: dict | None = None,
+        conn: Any | None = None,
     ) -> None:
         now_ms = int(time.time() * 1000)
         updates = ["status = ?", "current_step_no = ?", "current_step_name = ?", "last_error = ?", "result_payload_json = ?"]
@@ -802,7 +864,7 @@ class OperationApprovalStore:
             updates.append("executed_at_ms = ?")
             params.append(now_ms)
         params.append(request_id)
-        conn = self._conn()
+        conn, owns_conn = self._borrow_connection(conn)
         try:
             conn.execute(
                 f"""
@@ -812,9 +874,15 @@ class OperationApprovalStore:
                 """,
                 params,
             )
-            conn.commit()
+            if owns_conn:
+                conn.commit()
+        except Exception:
+            if owns_conn:
+                conn.rollback()
+            raise
         finally:
-            conn.close()
+            if owns_conn:
+                conn.close()
 
     def add_event(
         self,
@@ -825,10 +893,11 @@ class OperationApprovalStore:
         actor_username: str | None,
         step_no: int | None,
         payload: dict | None,
+        conn: Any | None = None,
     ) -> dict:
         event_id = str(uuid4())
         now_ms = int(time.time() * 1000)
-        conn = self._conn()
+        conn, owns_conn = self._borrow_connection(conn)
         try:
             conn.execute(
                 """
@@ -838,9 +907,15 @@ class OperationApprovalStore:
                 """,
                 (event_id, request_id, event_type, actor_user_id, actor_username, step_no, _to_json_text(payload), now_ms),
             )
-            conn.commit()
+            if owns_conn:
+                conn.commit()
+        except Exception:
+            if owns_conn:
+                conn.rollback()
+            raise
         finally:
-            conn.close()
+            if owns_conn:
+                conn.close()
         return {
             "event_id": event_id,
             "request_id": request_id,
