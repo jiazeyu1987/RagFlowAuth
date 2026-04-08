@@ -1,0 +1,252 @@
+{
+  "schema_version": 2,
+  "task_id": "refactor-remaining-backend-dependency-assembly-a-20260408T112357",
+  "mode": "full",
+  "status": "completed",
+  "current_phase": null,
+  "phase_statuses": [
+    {
+      "phase_id": "P1",
+      "title": "Dependency assembly boundary decomposition",
+      "status": "completed",
+      "objective": "split dependency graph construction into clearer bootstrap stages so global runtime setup, app dependency packaging, and tenant dependency resolution no longer live as one cross-module control point.",
+      "owned_paths": [],
+      "dependencies": [],
+      "deliverables": [],
+      "evidence_expectation": "`execution-log.md` records the dependency-boundary changes and passing focused dependency tests.",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P1-AC1",
+          "text": "`backend/app/dependencies.py` no longer directly owns the full lifecycle of schema preparation, runtime service construction, app dependency packaging, and tenant dependency cache resolution in one module-level control path.",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P1",
+            "test-report.md#T6"
+          ]
+        },
+        {
+          "ac_id": "P1-AC2",
+          "text": "global dependency bootstrap and tenant-scoped dependency resolution use explicit bounded helpers or modules, while preserving fail-fast startup behavior and current tenant/global semantics.",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P1",
+            "test-report.md#T6"
+          ]
+        },
+        {
+          "ac_id": "P1-AC3",
+          "text": "focused dependency tests cover the new bootstrap seams and tenant-scoped behavior against the final code state.",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P1",
+            "test-report.md#T6"
+          ]
+        }
+      ],
+      "evidence": [
+        "execution-log.md#Phase-P1"
+      ],
+      "notes": "",
+      "last_reviewed_at": "2026-04-08T11:58:41"
+    },
+    {
+      "phase_id": "P2",
+      "title": "Permission resolver segmentation and legacy-default isolation",
+      "status": "completed",
+      "objective": "break permission resolution into bounded resource-specific stages and move legacy default semantics into explicit policy helpers instead of keeping them embedded in the main rule accumulator.",
+      "owned_paths": [],
+      "dependencies": [],
+      "deliverables": [],
+      "evidence_expectation": "`execution-log.md` records the permission-policy refactor and passing focused permission/auth payload tests.",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P2-AC1",
+          "text": "permission resolution is broken into narrower resource/policy stages instead of embedding KB, chat, tool, and sub-admin scope accumulation in one large rule path.",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P2",
+            "test-report.md#T6"
+          ]
+        },
+        {
+          "ac_id": "P2-AC2",
+          "text": "legacy permission defaults such as missing `can_view_tools` or `can_view_kb_config` behavior are centralized in explicit helpers/policies rather than being silently embedded in the accumulator logic.",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P2",
+            "test-report.md#T6"
+          ]
+        },
+        {
+          "ac_id": "P2-AC3",
+          "text": "`/api/auth/me` and existing permission consumers preserve the final capability/permission contract without reintroducing silent exception swallowing or menu/backend drift.",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P2",
+            "test-report.md#T6"
+          ]
+        }
+      ],
+      "evidence": [
+        "execution-log.md#Phase-P2"
+      ],
+      "notes": "",
+      "last_reviewed_at": "2026-04-08T11:58:42"
+    },
+    {
+      "phase_id": "P3",
+      "title": "UserStore responsibility split",
+      "status": "completed",
+      "objective": "keep the `UserStore` public contract stable while moving credential history/lockout handling and permission-group membership persistence behind narrower internal stores or helpers.",
+      "owned_paths": [],
+      "dependencies": [],
+      "deliverables": [],
+      "evidence_expectation": "`execution-log.md` records the user-store split and passing focused backend user/auth regressions.",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P3-AC1",
+          "text": "`backend/services/users/store.py` no longer directly owns all credential-history, lockout-state, and permission-group relationship persistence logic inline with core user CRUD operations.",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P3",
+            "test-report.md#T6"
+          ]
+        },
+        {
+          "ac_id": "P3-AC2",
+          "text": "user credential and permission-group persistence behavior remains fail-fast and transactionally consistent after the split, without adding fallback branches.",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P3",
+            "test-report.md#T6"
+          ]
+        },
+        {
+          "ac_id": "P3-AC3",
+          "text": "focused backend tests cover the refactored user-store seams against the final code state.",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P3",
+            "test-report.md#T6"
+          ]
+        }
+      ],
+      "evidence": [
+        "execution-log.md#Phase-P3"
+      ],
+      "notes": "",
+      "last_reviewed_at": "2026-04-08T11:58:42"
+    },
+    {
+      "phase_id": "P4",
+      "title": "Frontend layout shell decomposition",
+      "status": "completed",
+      "objective": "reduce `Layout` into a shell composition layer by extracting unread polling, responsive sidebar behavior, and nav rendering concerns into dedicated hooks/components.",
+      "owned_paths": [],
+      "dependencies": [],
+      "deliverables": [],
+      "evidence_expectation": "`execution-log.md` records the layout decomposition and passing focused frontend layout regressions.",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P4-AC1",
+          "text": "`fronted/src/components/Layout.js` is reduced to shell composition responsibilities, with responsive sidebar state, inbox polling, or nav rendering extracted into bounded hooks/components.",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P4",
+            "test-report.md#T6"
+          ]
+        },
+        {
+          "ac_id": "P4-AC2",
+          "text": "route metadata and shared auth evaluation still govern nav visibility after the split, with no new ad hoc shell-only access rules introduced.",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P4",
+            "test-report.md#T6"
+          ]
+        },
+        {
+          "ac_id": "P4-AC3",
+          "text": "focused frontend layout tests pass against the final decomposed shell state.",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P4",
+            "test-report.md#T6"
+          ]
+        }
+      ],
+      "evidence": [
+        "execution-log.md#Phase-P4"
+      ],
+      "notes": "",
+      "last_reviewed_at": "2026-04-08T11:58:42"
+    },
+    {
+      "phase_id": "P5",
+      "title": "Legacy compatibility isolation and focused closure",
+      "status": "completed",
+      "objective": "isolate legacy password-hash handling and deprecated user group compatibility semantics to explicit, reviewable boundaries, then run focused backend/frontend regression closure.",
+      "owned_paths": [],
+      "dependencies": [],
+      "deliverables": [],
+      "evidence_expectation": "`execution-log.md` and `test-report.md` record the legacy-boundary isolation plus final focused regression results.",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P5-AC1",
+          "text": "legacy password-hash verification and deprecated user-group compatibility semantics are isolated to explicit helpers or compatibility modules instead of being scattered across store and auth paths.",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P5",
+            "test-report.md#T6"
+          ]
+        },
+        {
+          "ac_id": "P5-AC2",
+          "text": "focused backend/frontend regression commands pass against the final integrated state for dependencies, permissions, user store, and layout.",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P5",
+            "test-report.md#T6"
+          ]
+        },
+        {
+          "ac_id": "P5-AC3",
+          "text": "task artifacts record final implementation evidence and test evidence for every acceptance id without requiring fallback behavior or undocumented prerequisites.",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P5",
+            "test-report.md#T6"
+          ]
+        }
+      ],
+      "evidence": [
+        "execution-log.md#Phase-P5"
+      ],
+      "notes": "",
+      "last_reviewed_at": "2026-04-08T11:58:43"
+    }
+  ],
+  "planner_review_status": "approved",
+  "test_status": "passed",
+  "blocking_prereqs": [],
+  "iteration_counts": {
+    "planner_revisions": 0,
+    "executor_loops": 5,
+    "test_loops": 1
+  },
+  "created_at": "2026-04-08T11:23:57",
+  "updated_at": "2026-04-08T12:00:14",
+  "branch": "int_latest",
+  "baseline_revision": "3619b8169b862232147c8e7a8d7bca3608a3d8f3",
+  "workspace_root": "D:\\ProjectPackage\\RagflowAuth",
+  "tasks_root": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks",
+  "task_dir": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\refactor-remaining-backend-dependency-assembly-a-20260408T112357",
+  "goal": "Refactor remaining backend dependency assembly and permission resolver hotspots without introducing fallback behavior",
+  "artifacts": {
+    "prd": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\refactor-remaining-backend-dependency-assembly-a-20260408T112357\\prd.md",
+    "test_plan": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\refactor-remaining-backend-dependency-assembly-a-20260408T112357\\test-plan.md",
+    "task_state": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\refactor-remaining-backend-dependency-assembly-a-20260408T112357\\task-state.json",
+    "execution_log": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\refactor-remaining-backend-dependency-assembly-a-20260408T112357\\execution-log.md",
+    "test_report": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\refactor-remaining-backend-dependency-assembly-a-20260408T112357\\test-report.md"
+  }
+}

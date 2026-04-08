@@ -4,10 +4,14 @@ import hashlib
 import hmac
 import secrets
 
+from .password_legacy import (
+    is_legacy_password_hash,
+    verify_legacy_password,
+)
+
 
 PASSWORD_HASH_SCHEME = "pbkdf2_sha256"
 PASSWORD_HASH_ITERATIONS = 600_000
-LEGACY_SHA256_HEX_LENGTH = 64
 
 
 def _pbkdf2_digest(password: str, *, salt: str, iterations: int) -> str:
@@ -24,12 +28,6 @@ def hash_password(password: str) -> str:
     digest = _pbkdf2_digest(password, salt=salt, iterations=PASSWORD_HASH_ITERATIONS)
     return f"{PASSWORD_HASH_SCHEME}${PASSWORD_HASH_ITERATIONS}${salt}${digest}"
 
-
-def is_legacy_password_hash(password_hash: str | None) -> bool:
-    value = str(password_hash or "").strip().lower()
-    return len(value) == LEGACY_SHA256_HEX_LENGTH and all(ch in "0123456789abcdef" for ch in value)
-
-
 def verify_password(password: str, password_hash: str | None) -> tuple[bool, bool]:
     stored = str(password_hash or "").strip()
     if not stored:
@@ -45,8 +43,7 @@ def verify_password(password: str, password_hash: str | None) -> tuple[bool, boo
         actual = _pbkdf2_digest(password, salt=salt, iterations=iterations)
         return hmac.compare_digest(actual, expected), False
 
-    legacy = hashlib.sha256(password.encode("utf-8")).hexdigest()
-    if is_legacy_password_hash(stored) and hmac.compare_digest(legacy, stored.lower()):
+    if verify_legacy_password(password, stored):
         return True, True
     return False, False
 

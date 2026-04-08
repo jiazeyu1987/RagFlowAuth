@@ -8,135 +8,61 @@ from typing import Optional, List, Set
 from backend.database.paths import resolve_auth_db_path
 from backend.database.sqlite import connect_sqlite
 
+from .credential_store import (
+    DEFAULT_CREDENTIAL_FAILURE_LIMIT,
+    DEFAULT_CREDENTIAL_FAILURE_WINDOW_MS,
+    DEFAULT_CREDENTIAL_LOCKOUT_MS,
+    UserCredentialStore,
+)
+from .group_membership_store import UserPermissionGroupStore
 from .models import User
-from .password import hash_password, verify_password
-
-
-DEFAULT_CREDENTIAL_FAILURE_LIMIT = 5
-DEFAULT_CREDENTIAL_FAILURE_WINDOW_MS = 15 * 60 * 1000
-DEFAULT_CREDENTIAL_LOCKOUT_MS = 15 * 60 * 1000
+from .password import hash_password
+from .store_support import (
+    USER_READ_COLUMNS,
+    build_display_name_reference_map,
+    build_user_from_row,
+    build_username_reference_map,
+    normalize_lookup_ids,
+)
+USER_LOOKUP_QUERIES = {
+    "username": f"SELECT {USER_READ_COLUMNS} FROM users WHERE username = ?",
+    "user_id": f"SELECT {USER_READ_COLUMNS} FROM users WHERE user_id = ?",
+}
 
 
 class UserStore:
     def __init__(self, db_path: str = None):
         self.db_path = resolve_auth_db_path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        self._credential_store = UserCredentialStore(connection_factory=self._get_connection)
+        self._group_membership_store = UserPermissionGroupStore(connection_factory=self._get_connection)
 
     def _get_connection(self):
         return connect_sqlite(self.db_path)
 
-    def get_by_username(self, username: str) -> Optional[User]:
+    def _fetch_user_by(self, query_key: str, value: str) -> Optional[User]:
+        query = USER_LOOKUP_QUERIES[query_key]
         conn = self._get_connection()
         cursor = conn.cursor()
         try:
-            cursor.execute(
-                """
-                SELECT user_id, username, password_hash, email, role, group_id, company_id, department_id, status,
-                       manager_user_id,
-                       max_login_sessions, idle_timeout_minutes, can_change_password,
-                       disable_login_enabled, disable_login_until_ms,
-                       electronic_signature_enabled,
-                       created_at_ms, last_login_at_ms, created_by, full_name, managed_kb_root_node_id,
-                       password_changed_at_ms, credential_fail_count, credential_fail_window_started_at_ms,
-                       credential_locked_until_ms, employee_user_id
-                FROM users WHERE username = ?
-                """,
-                (username,),
-            )
+            cursor.execute(query, (value,))
             row = cursor.fetchone()
-            if row:
-                user = User(
-                    user_id=row[0],
-                    username=row[1],
-                    password_hash=row[2],
-                    email=row[3],
-                    full_name=row[19],
-                    manager_user_id=row[9],
-                    employee_user_id=(str(row[25]).strip() if row[25] is not None and str(row[25]).strip() else None),
-                    role=row[4],
-                    group_id=row[5],
-                    company_id=row[6],
-                    department_id=row[7],
-                    status=row[8],
-                    max_login_sessions=int(row[10] or 3),
-                    idle_timeout_minutes=int(row[11] or 120),
-                    can_change_password=bool(row[12]) if row[12] is not None else True,
-                    disable_login_enabled=bool(row[13]) if row[13] is not None else False,
-                    disable_login_until_ms=int(row[14]) if row[14] is not None else None,
-                    electronic_signature_enabled=bool(row[15]) if row[15] is not None else True,
-                    created_at_ms=row[16],
-                    last_login_at_ms=row[17],
-                    created_by=row[18],
-                    managed_kb_root_node_id=row[20],
-                    password_changed_at_ms=(int(row[21]) if row[21] is not None else None),
-                    credential_fail_count=int(row[22] or 0),
-                    credential_fail_window_started_at_ms=(int(row[23]) if row[23] is not None else None),
-                    credential_locked_until_ms=(int(row[24]) if row[24] is not None else None),
-                )
-                user.group_ids = self._get_user_group_ids(user.user_id, conn)
-                user.group_id = user.group_ids[0] if user.group_ids else None
-                return user
-            return None
+            if row is None:
+                return None
+
+            group_ids = self._get_user_group_ids(str(row[0]), conn)
+            return build_user_from_row(row, group_ids=group_ids)
         finally:
             conn.close()
+
+    def get_by_username(self, username: str) -> Optional[User]:
+        return self._fetch_user_by("username", username)
 
     def get_by_user_id(self, user_id: str) -> Optional[User]:
-        conn = self._get_connection()
-        cursor = conn.cursor()
-        try:
-            cursor.execute(
-                """
-                SELECT user_id, username, password_hash, email, role, group_id, company_id, department_id, status,
-                       manager_user_id,
-                       max_login_sessions, idle_timeout_minutes, can_change_password,
-                       disable_login_enabled, disable_login_until_ms,
-                       electronic_signature_enabled,
-                       created_at_ms, last_login_at_ms, created_by, full_name, managed_kb_root_node_id,
-                       password_changed_at_ms, credential_fail_count, credential_fail_window_started_at_ms,
-                       credential_locked_until_ms, employee_user_id
-                FROM users WHERE user_id = ?
-                """,
-                (user_id,),
-            )
-            row = cursor.fetchone()
-            if row:
-                user = User(
-                    user_id=row[0],
-                    username=row[1],
-                    password_hash=row[2],
-                    email=row[3],
-                    full_name=row[19],
-                    manager_user_id=row[9],
-                    employee_user_id=(str(row[25]).strip() if row[25] is not None and str(row[25]).strip() else None),
-                    role=row[4],
-                    group_id=row[5],
-                    company_id=row[6],
-                    department_id=row[7],
-                    status=row[8],
-                    max_login_sessions=int(row[10] or 3),
-                    idle_timeout_minutes=int(row[11] or 120),
-                    can_change_password=bool(row[12]) if row[12] is not None else True,
-                    disable_login_enabled=bool(row[13]) if row[13] is not None else False,
-                    disable_login_until_ms=int(row[14]) if row[14] is not None else None,
-                    electronic_signature_enabled=bool(row[15]) if row[15] is not None else True,
-                    created_at_ms=row[16],
-                    last_login_at_ms=row[17],
-                    created_by=row[18],
-                    managed_kb_root_node_id=row[20],
-                    password_changed_at_ms=(int(row[21]) if row[21] is not None else None),
-                    credential_fail_count=int(row[22] or 0),
-                    credential_fail_window_started_at_ms=(int(row[23]) if row[23] is not None else None),
-                    credential_locked_until_ms=(int(row[24]) if row[24] is not None else None),
-                )
-                user.group_ids = self._get_user_group_ids(user.user_id, conn)
-                user.group_id = user.group_ids[0] if user.group_ids else None
-                return user
-            return None
-        finally:
-            conn.close()
+        return self._fetch_user_by("user_id", user_id)
 
     def get_usernames_by_ids(self, user_ids: Set[str]) -> dict[str, str]:
-        ids = [i for i in (user_ids or set()) if isinstance(i, str) and i]
+        ids = normalize_lookup_ids(user_ids)
         if not ids:
             return {}
         conn = self._get_connection()
@@ -151,23 +77,12 @@ class UserStore:
                 """,
                 ids + ids,
             )
-            rows = cursor.fetchall()
-            result: dict[str, str] = {}
-            for row in rows:
-                if not row or len(row) < 2:
-                    continue
-                user_id = str(row[0] or "")
-                username = str(row[1] or "")
-                if user_id:
-                    result[user_id] = username
-                if username:
-                    result[username] = username
-            return result
+            return build_username_reference_map(cursor.fetchall())
         finally:
             conn.close()
 
     def get_display_names_by_ids(self, user_ids: Set[str]) -> dict[str, str]:
-        ids = [i for i in (user_ids or set()) if isinstance(i, str) and i]
+        ids = normalize_lookup_ids(user_ids)
         if not ids:
             return {}
         conn = self._get_connection()
@@ -182,29 +97,12 @@ class UserStore:
                 """,
                 ids + ids,
             )
-            rows = cursor.fetchall()
-            result: dict[str, str] = {}
-            for row in rows:
-                if not row or len(row) < 3:
-                    continue
-                user_id = str(row[0] or "")
-                username = str(row[1] or "")
-                full_name = str(row[2] or "").strip()
-                display_name = full_name or username
-                if not display_name:
-                    continue
-                if user_id:
-                    result[user_id] = display_name
-                if username:
-                    result[username] = display_name
-            return result
+            return build_display_name_reference_map(cursor.fetchall())
         finally:
             conn.close()
 
     def _get_user_group_ids(self, user_id: str, conn) -> List[int]:
-        cursor = conn.cursor()
-        cursor.execute("SELECT group_id FROM user_permission_groups WHERE user_id = ?", (user_id,))
-        return [row[0] for row in cursor.fetchall()]
+        return self._group_membership_store.list_group_ids(user_id, conn=conn)
 
     def create_user(
         self,
@@ -403,56 +301,13 @@ class UserStore:
             conn.close()
 
     def update_password(self, user_id: str, new_password: str):
-        password_hash_value = hash_password(new_password)
-        self.update_password_hash(user_id, password_hash_value)
+        self._credential_store.update_password(user_id, new_password)
 
     def update_password_hash(self, user_id: str, password_hash_value: str):
-        now_ms = int(time.time() * 1000)
-        conn = self._get_connection()
-        cursor = conn.cursor()
-        try:
-            cursor.execute("SELECT password_hash FROM users WHERE user_id = ?", (user_id,))
-            row = cursor.fetchone()
-            if row and row[0]:
-                cursor.execute(
-                    """
-                    INSERT INTO password_history (user_id, password_hash, created_at_ms)
-                    VALUES (?, ?, ?)
-                    """,
-                    (user_id, str(row[0]), now_ms),
-                )
-            cursor.execute(
-                """
-                UPDATE users
-                SET password_hash = ?,
-                    password_changed_at_ms = ?,
-                    credential_fail_count = 0,
-                    credential_fail_window_started_at_ms = NULL,
-                    credential_locked_until_ms = NULL
-                WHERE user_id = ?
-                """,
-                (password_hash_value, now_ms, user_id),
-            )
-            conn.commit()
-        finally:
-            conn.close()
+        self._credential_store.update_password_hash(user_id, password_hash_value)
 
     def clear_credential_failures(self, user_id: str) -> None:
-        conn = self._get_connection()
-        try:
-            conn.execute(
-                """
-                UPDATE users
-                SET credential_fail_count = 0,
-                    credential_fail_window_started_at_ms = NULL,
-                    credential_locked_until_ms = NULL
-                WHERE user_id = ?
-                """,
-                (user_id,),
-            )
-            conn.commit()
-        finally:
-            conn.close()
+        self._credential_store.clear_credential_failures(user_id)
 
     def record_credential_failure(
         self,
@@ -463,87 +318,24 @@ class UserStore:
         window_ms: int = DEFAULT_CREDENTIAL_FAILURE_WINDOW_MS,
         lockout_ms: int = DEFAULT_CREDENTIAL_LOCKOUT_MS,
     ) -> tuple[int | None, bool]:
-        current_ms = int(time.time() * 1000) if now_ms is None else int(now_ms)
-        conn = self._get_connection()
-        try:
-            conn.execute("BEGIN IMMEDIATE")
-            row = conn.execute(
-                """
-                SELECT credential_fail_count, credential_fail_window_started_at_ms, credential_locked_until_ms
-                FROM users
-                WHERE user_id = ?
-                """,
-                (user_id,),
-            ).fetchone()
-            if row is None:
-                conn.commit()
-                return None, False
-
-            previous_count = int(row[0] or 0)
-            previous_window_start = int(row[1]) if row[1] is not None else None
-            previous_locked_until = int(row[2]) if row[2] is not None else None
-
-            if previous_locked_until is not None and current_ms < previous_locked_until:
-                conn.commit()
-                return previous_locked_until, False
-
-            if previous_window_start is None or current_ms - previous_window_start > int(window_ms):
-                next_count = 1
-                next_window_start = current_ms
-            else:
-                next_count = previous_count + 1
-                next_window_start = previous_window_start
-
-            next_locked_until = None
-            newly_locked = False
-            if next_count >= int(max_failures):
-                next_locked_until = current_ms + int(lockout_ms)
-                newly_locked = True
-
-            conn.execute(
-                """
-                UPDATE users
-                SET credential_fail_count = ?,
-                    credential_fail_window_started_at_ms = ?,
-                    credential_locked_until_ms = ?
-                WHERE user_id = ?
-                """,
-                (next_count, next_window_start, next_locked_until, user_id),
-            )
-            conn.commit()
-            return next_locked_until, newly_locked
-        finally:
-            conn.close()
+        return self._credential_store.record_credential_failure(
+            user_id,
+            now_ms=now_ms,
+            max_failures=max_failures,
+            window_ms=window_ms,
+            lockout_ms=lockout_ms,
+        )
 
     def password_matches_recent_history(self, user_id: str, password: str, *, limit: int = 5) -> bool:
         user = self.get_by_user_id(user_id)
         if user is None:
             return False
-        ok, _ = verify_password(password, user.password_hash)
-        if ok:
-            return True
-
-        conn = self._get_connection()
-        try:
-            rows = conn.execute(
-                """
-                SELECT password_hash
-                FROM password_history
-                WHERE user_id = ?
-                ORDER BY created_at_ms DESC, id DESC
-                LIMIT ?
-                """,
-                (user_id, int(max(1, limit))),
-            ).fetchall()
-        finally:
-            conn.close()
-
-        for row in rows:
-            stored_hash = str(row[0] or "")
-            matched, _ = verify_password(password, stored_hash)
-            if matched:
-                return True
-        return False
+        return self._credential_store.password_matches_recent_history(
+            user_id=user_id,
+            password=password,
+            current_password_hash=user.password_hash,
+            limit=limit,
+        )
 
     def list_users(
         self,
@@ -562,14 +354,7 @@ class UserStore:
         cursor = conn.cursor()
         try:
             base_query = """
-                SELECT user_id, username, password_hash, email, role, group_id, company_id, department_id, status,
-                       manager_user_id,
-                       max_login_sessions, idle_timeout_minutes, can_change_password,
-                       disable_login_enabled, disable_login_until_ms,
-                       electronic_signature_enabled,
-                       created_at_ms, last_login_at_ms, created_by, full_name, managed_kb_root_node_id,
-                       password_changed_at_ms, credential_fail_count, credential_fail_window_started_at_ms,
-                       credential_locked_until_ms, employee_user_id
+                SELECT """ + USER_READ_COLUMNS + """
                 FROM users
                 WHERE 1=1
             """
@@ -622,37 +407,8 @@ class UserStore:
             rows = cursor.fetchall()
             users: list[User] = []
             for row in rows:
-                user = User(
-                    user_id=row[0],
-                    username=row[1],
-                    password_hash=row[2],
-                    email=row[3],
-                    full_name=row[19],
-                    manager_user_id=row[9],
-                    employee_user_id=(str(row[25]).strip() if row[25] is not None and str(row[25]).strip() else None),
-                    role=row[4],
-                    group_id=row[5],
-                    company_id=row[6],
-                    department_id=row[7],
-                    status=row[8],
-                    max_login_sessions=int(row[10] or 3),
-                    idle_timeout_minutes=int(row[11] or 120),
-                    can_change_password=bool(row[12]) if row[12] is not None else True,
-                    disable_login_enabled=bool(row[13]) if row[13] is not None else False,
-                    disable_login_until_ms=int(row[14]) if row[14] is not None else None,
-                    electronic_signature_enabled=bool(row[15]) if row[15] is not None else True,
-                    created_at_ms=row[16],
-                    last_login_at_ms=row[17],
-                    created_by=row[18],
-                    managed_kb_root_node_id=row[20],
-                    password_changed_at_ms=(int(row[21]) if row[21] is not None else None),
-                    credential_fail_count=int(row[22] or 0),
-                    credential_fail_window_started_at_ms=(int(row[23]) if row[23] is not None else None),
-                    credential_locked_until_ms=(int(row[24]) if row[24] is not None else None),
-                )
-                user.group_ids = self._get_user_group_ids(user.user_id, conn)
-                user.group_id = user.group_ids[0] if user.group_ids else None
-                users.append(user)
+                group_ids = self._get_user_group_ids(str(row[0]), conn)
+                users.append(build_user_from_row(row, group_ids=group_ids))
             return users
         finally:
             conn.close()
@@ -712,37 +468,4 @@ class UserStore:
             conn.close()
 
     def set_user_permission_groups(self, user_id: str, group_ids: List[int]) -> bool:
-        conn = self._get_connection()
-        cursor = conn.cursor()
-        try:
-            now_ms = int(time.time() * 1000)
-
-            cursor.execute(
-                """
-                CREATE TABLE IF NOT EXISTS user_permission_groups (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    user_id TEXT NOT NULL,
-                    group_id INTEGER NOT NULL,
-                    created_at_ms INTEGER NOT NULL,
-                    FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
-                    FOREIGN KEY (group_id) REFERENCES permission_groups(group_id) ON DELETE CASCADE,
-                    UNIQUE(user_id, group_id)
-                )
-                """
-            )
-
-            cursor.execute("DELETE FROM user_permission_groups WHERE user_id = ?", (user_id,))
-
-            for group_id_value in group_ids:
-                cursor.execute(
-                    """
-                    INSERT OR IGNORE INTO user_permission_groups (user_id, group_id, created_at_ms)
-                    VALUES (?, ?, ?)
-                    """,
-                    (user_id, group_id_value, now_ms),
-                )
-
-            conn.commit()
-            return True
-        finally:
-            conn.close()
+        return self._group_membership_store.replace_group_ids(user_id, group_ids)
