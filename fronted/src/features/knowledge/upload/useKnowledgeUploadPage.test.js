@@ -35,9 +35,12 @@ jest.mock('./api', () => ({
 }));
 
 describe('useKnowledgeUploadPage', () => {
+  let promptSpy;
+
   beforeEach(() => {
     jest.clearAllMocks();
     mockNavigate.mockReset();
+    promptSpy = jest.spyOn(window, 'prompt').mockReturnValue('调整上传后缀');
 
     useAuth.mockReturnValue({
       accessibleKbs: ['KB-1', 'ds-kb-1'],
@@ -71,6 +74,10 @@ describe('useKnowledgeUploadPage', () => {
     knowledgeUploadApi.uploadDocument.mockResolvedValue({
       request_id: 'req-upload-1',
     });
+  });
+
+  afterEach(() => {
+    promptSpy.mockRestore();
   });
 
   it('keeps only knowledge bases visible to the current user', async () => {
@@ -149,6 +156,46 @@ describe('useKnowledgeUploadPage', () => {
 
     expect(result.current.error).toBe('upload_extensions_unavailable');
     expect(knowledgeUploadApi.uploadDocument).not.toHaveBeenCalled();
+  });
+
+  it('saves extension configuration changes for managers', async () => {
+    useAuth.mockReturnValue({
+      accessibleKbs: ['KB-1', 'ds-kb-1'],
+      loading: false,
+      canViewKbConfig: () => true,
+    });
+
+    knowledgeUploadApi.updateAllowedExtensions.mockResolvedValue({
+      allowedExtensions: ['.pdf', '.txt', '.dwg'],
+      updatedAtMs: 2,
+    });
+
+    const { result } = renderHook(() => useKnowledgeUploadPage());
+
+    await waitFor(() => {
+      expect(result.current.loadingExtensions).toBe(false);
+    });
+
+    act(() => {
+      result.current.setExtensionDraft('dwg');
+    });
+
+    act(() => {
+      result.current.handleAddExtension();
+    });
+
+    await act(async () => {
+      await result.current.handleSaveExtensions();
+    });
+
+    expect(window.prompt).toHaveBeenCalledWith('请输入本次上传后缀配置变更原因');
+    expect(knowledgeUploadApi.updateAllowedExtensions).toHaveBeenCalledWith(
+      ['.dwg', '.pdf', '.txt'],
+      '调整上传后缀'
+    );
+    expect(result.current.extensionsMessage).toEqual(
+      expect.objectContaining({ type: 'success' })
+    );
   });
 
   it('clears kbId and fails fast when the user has no visible knowledge base', async () => {

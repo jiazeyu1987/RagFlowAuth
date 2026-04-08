@@ -1,0 +1,164 @@
+{
+  "schema_version": 2,
+  "task_id": "e2e-bat-e2e-20260408T134710",
+  "mode": "full",
+  "status": "executing",
+  "current_phase": "P2",
+  "phase_statuses": [
+    {
+      "phase_id": "P1",
+      "title": "Add doc-login coverage and wire into doc batch runner",
+      "status": "completed",
+      "objective": "Ensure the doc E2E batch run includes a complete login flow spec and fails fast when manifest wiring is missing.",
+      "owned_paths": [],
+      "dependencies": [],
+      "deliverables": [],
+      "evidence_expectation": "A doc E2E report entry lists the login spec and shows pass results.",
+      "evidence": [
+        "execution-log.md#Phase-P1",
+        "doc/test/reports/doc_e2e_report_latest.md"
+      ],
+      "notes": "- Implementation completed; overall doc batch remains red due unrelated pre-existing doc spec failures documented in execution-log.md.",
+      "last_reviewed_at": "2026-04-08T14:23:25",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P1-AC1",
+          "text": "A doc E2E login spec exists under `fronted/e2e/tests/docs*.spec.js` that validates a successful UI login using the real doc bootstrap account(s).",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P1",
+            "doc/test/reports/doc_e2e_report_latest.md"
+          ]
+        },
+        {
+          "ac_id": "P1-AC2",
+          "text": "The doc login spec validates at least one failure path with user-visible error messaging (for example wrong password or disabled account) using the real doc E2E runtime.",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P1",
+            "doc/test/reports/doc_e2e_report_latest.md"
+          ]
+        },
+        {
+          "ac_id": "P1-AC3",
+          "text": "`doc/e2e/manifest.json` exists and includes the login spec so `鏂囨。E2E鑷姩娴嬭瘯.bat` runs it via `scripts/run_doc_e2e.py`.",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P1",
+            "doc/test/reports/doc_e2e_report_latest.md"
+          ]
+        }
+      ]
+    },
+    {
+      "phase_id": "P2",
+      "title": "Align shared doc E2E helpers and specs with current response envelopes",
+      "status": "in_progress",
+      "objective": "Remove stale test assumptions about top-level `request_id`, `user_id`, `group_id`, and folder ids so doc specs assert against the real current backend envelopes.",
+      "owned_paths": [],
+      "dependencies": [],
+      "deliverables": [],
+      "evidence_expectation": "Grouped Playwright runs covering the affected specs pass without modifying production API contracts.",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P2-AC1",
+          "text": "Doc upload, browser, global-search, chat, knowledge-base, and role-scope specs extract approval request ids from the current `OperationApprovalRequestEnvelope` shape and pass targeted browser validation.",
+          "status": "pending",
+          "evidence": []
+        },
+        {
+          "ac_id": "P2-AC2",
+          "text": "Doc user-management, password-change, and tools specs extract created user ids from the current `UserEnvelope` shape and pass targeted browser validation.",
+          "status": "pending",
+          "evidence": []
+        },
+        {
+          "ac_id": "P2-AC3",
+          "text": "Doc permission-groups, role-permission-menu, and tools specs extract permission-group ids and folder ids from the current `result` or `folder` envelopes and pass targeted browser validation.",
+          "status": "pending",
+          "evidence": []
+        }
+      ],
+      "evidence": [],
+      "notes": "",
+      "last_reviewed_at": "2026-04-08T16:30:56"
+    },
+    {
+      "phase_id": "P3",
+      "title": "Fix assertion-specific doc specs to match current seeded runtime behavior",
+      "status": "pending",
+      "objective": "Update doc specs whose failures are not envelope-related, but instead depend on current action response nesting or seeded initial settings.",
+      "owned_paths": [],
+      "dependencies": [],
+      "deliverables": [],
+      "evidence_expectation": "Targeted Playwright runs for the assertion-specific specs pass with current bootstrap data.",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P3-AC1",
+          "text": "`docs.approval-center.spec.js` asserts withdraw success against the current approval action envelope and passes targeted browser validation.",
+          "status": "pending",
+          "evidence": []
+        },
+        {
+          "ac_id": "P3-AC2",
+          "text": "`docs.notification-settings.spec.js` matches the current seeded notification rule defaults and still validates save, retry, and dispatch behavior in the real browser runtime.",
+          "status": "pending",
+          "evidence": []
+        }
+      ],
+      "evidence": [],
+      "notes": "",
+      "last_reviewed_at": null
+    },
+    {
+      "phase_id": "P4",
+      "title": "Restore full doc batch fidelity and verify the complete documentation run",
+      "status": "pending",
+      "objective": "Ensure the batch command reports the real suite result without false failures caused by per-spec runner churn, then verify the whole manifest passes.",
+      "owned_paths": [],
+      "dependencies": [],
+      "deliverables": [],
+      "evidence_expectation": "Latest doc batch report plus full-run command output captured in `execution-log.md` and `test-report.md`.",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P4-AC1",
+          "text": "`python scripts/run_doc_e2e.py --repo-root D:\\ProjectPackage\\RagflowAuth` completes with exit code 0 and produces a PASS report.",
+          "status": "pending",
+          "evidence": []
+        },
+        {
+          "ac_id": "P4-AC2",
+          "text": "`doc/test/reports/doc_e2e_report_latest.md` lists the full manifest and marks every doc spec PASS, without false failures caused by batch-runner port or process churn.",
+          "status": "pending",
+          "evidence": []
+        }
+      ],
+      "evidence": [],
+      "notes": "",
+      "last_reviewed_at": null
+    }
+  ],
+  "planner_review_status": "approved",
+  "test_status": "failed",
+  "blocking_prereqs": [],
+  "iteration_counts": {
+    "planner_revisions": 0,
+    "executor_loops": 1,
+    "test_loops": 1
+  },
+  "created_at": "2026-04-08T13:47:10",
+  "updated_at": "2026-04-08T16:30:56",
+  "branch": "int_latest",
+  "baseline_revision": "15832390fe4d6149784698ac3dda56f7978fb9bd",
+  "workspace_root": "D:\\ProjectPackage\\RagflowAuth",
+  "tasks_root": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks",
+  "task_dir": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\e2e-bat-e2e-20260408T134710",
+  "goal": "文档E2E自动测试.bat 补充齐全登录部分需要的e2e测试",
+  "artifacts": {
+    "prd": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\e2e-bat-e2e-20260408T134710\\prd.md",
+    "test_plan": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\e2e-bat-e2e-20260408T134710\\test-plan.md",
+    "task_state": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\e2e-bat-e2e-20260408T134710\\task-state.json",
+    "execution_log": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\e2e-bat-e2e-20260408T134710\\execution-log.md",
+    "test_report": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\e2e-bat-e2e-20260408T134710\\test-report.md"
+  }
+}

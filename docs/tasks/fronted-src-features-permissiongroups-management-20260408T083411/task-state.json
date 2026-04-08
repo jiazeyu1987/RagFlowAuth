@@ -1,0 +1,111 @@
+{
+  "schema_version": 2,
+  "task_id": "fronted-src-features-permissiongroups-management-20260408T083411",
+  "mode": "full",
+  "status": "completed",
+  "current_phase": null,
+  "phase_statuses": [
+    {
+      "phase_id": "P1",
+      "title": "Split the hook into bounded loading, derived-state, and action helpers",
+      "status": "completed",
+      "objective": "Move the densest responsibilities out of `usePermissionGroupManagement.js` without changing the page-facing hook contract.",
+      "owned_paths": [],
+      "dependencies": [],
+      "deliverables": [],
+      "evidence_expectation": "",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P1-AC1",
+          "text": "`usePermissionGroupManagement.js` becomes a composition-oriented hook instead of directly embedding initialization, derived-state building, CRUD actions, and drag/drop orchestration in one file.",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P1",
+            "test-report.md#T1"
+          ]
+        },
+        {
+          "ac_id": "P1-AC2",
+          "text": "pure or bounded local helpers own repeated mapping, filtering, and action coordination so future permission-group changes no longer require editing multiple unrelated sections of the main hook.",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P1",
+            "test-report.md#T1"
+          ]
+        },
+        {
+          "ac_id": "P1-AC3",
+          "text": "`usePermissionGroupManagementPage` and page-level consumers continue using the same return contract and do not require fallback branches or behavior changes.",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P1",
+            "test-report.md#T1"
+          ]
+        }
+      ],
+      "evidence": [
+        "execution-log.md#Phase-P1"
+      ],
+      "notes": "",
+      "last_reviewed_at": "2026-04-08T08:44:49"
+    },
+    {
+      "phase_id": "P2",
+      "title": "Focused regression validation and tranche evidence",
+      "status": "completed",
+      "objective": "Prove the hook refactor preserves current permission-group management behavior and record reviewable evidence.",
+      "owned_paths": [],
+      "dependencies": [],
+      "deliverables": [],
+      "evidence_expectation": "",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P2-AC1",
+          "text": "focused permission-group Jest suites pass against the final code state.",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P2",
+            "test-report.md#T1"
+          ]
+        },
+        {
+          "ac_id": "P2-AC2",
+          "text": "task artifacts record the exact commands run, changed paths, verified acceptance ids, and any bounded residual risk.",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P2",
+            "test-report.md#T1"
+          ]
+        }
+      ],
+      "evidence": [
+        "execution-log.md#Phase-P2"
+      ],
+      "notes": "",
+      "last_reviewed_at": "2026-04-08T08:44:58"
+    }
+  ],
+  "planner_review_status": "approved",
+  "test_status": "passed",
+  "blocking_prereqs": [],
+  "iteration_counts": {
+    "planner_revisions": 0,
+    "executor_loops": 2,
+    "test_loops": 1
+  },
+  "created_at": "2026-04-08T08:34:11",
+  "updated_at": "2026-04-08T08:45:18",
+  "branch": "int_latest",
+  "baseline_revision": "3619b8169b862232147c8e7a8d7bca3608a3d8f3",
+  "workspace_root": "D:\\ProjectPackage\\RagflowAuth",
+  "tasks_root": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks",
+  "task_dir": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\fronted-src-features-permissiongroups-management-20260408T083411",
+  "goal": "聚焦 fronted/src/features/permissionGroups/management/usePermissionGroupManagement.js，拆分初始化加载、目录/权限组选择与模式切换、权限组与文件夹变更动作、拖拽移动等共享逻辑，保持 usePermissionGroupManagementPage 和现有 Jest 行为稳定",
+  "artifacts": {
+    "prd": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\fronted-src-features-permissiongroups-management-20260408T083411\\prd.md",
+    "test_plan": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\fronted-src-features-permissiongroups-management-20260408T083411\\test-plan.md",
+    "task_state": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\fronted-src-features-permissiongroups-management-20260408T083411\\task-state.json",
+    "execution_log": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\fronted-src-features-permissiongroups-management-20260408T083411\\execution-log.md",
+    "test_report": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\fronted-src-features-permissiongroups-management-20260408T083411\\test-report.md"
+  }
+}

@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Annotated
 
 from authx import TokenPayload
+from authx.exceptions import AuthXException
 from fastapi import Depends, HTTPException, Request
 
 from backend.app.core.tenant import company_id_from_payload, company_id_from_user
@@ -83,6 +84,24 @@ def resolve_scoped_deps(
     return tenant_deps
 
 
+def _verify_access_token_or_none(request_token: object | None) -> TokenPayload | None:
+    if not request_token:
+        return None
+    try:
+        return auth.verify_token(request_token, verify_type=True)
+    except AuthXException:
+        return None
+
+
+def _verify_access_token_or_unauthorized(request_token: object | None) -> TokenPayload:
+    if not request_token:
+        raise HTTPException(status_code=401, detail="Missing access token")
+    try:
+        return auth.verify_token(request_token, verify_type=True)
+    except AuthXException as exc:
+        raise HTTPException(status_code=401, detail="Invalid access token") from exc
+
+
 async def get_deps(request: Request) -> AppDependencies:
     cached = getattr(getattr(request, "state", None), "tenant_deps", None)
     if cached is not None:
@@ -93,11 +112,7 @@ async def get_deps(request: Request) -> AppDependencies:
 
     payload: TokenPayload | None = None
     request_token = await resolve_request_token(request, token_type="access")
-    if request_token:
-        try:
-            payload = auth.verify_token(request_token, verify_type=True)
-        except Exception:
-            payload = None
+    payload = _verify_access_token_or_none(request_token)
 
     return resolve_scoped_deps(request, payload=payload, force_tenant_scope=False)
 
@@ -115,13 +130,7 @@ async def get_current_payload(request: Request) -> TokenPayload:
     """
     request_token = await resolve_request_token(request, token_type="access")
 
-    if not request_token:
-        raise HTTPException(status_code=401, detail="Missing access token")
-
-    try:
-        payload = auth.verify_token(request_token, verify_type=True)
-    except Exception:
-        raise HTTPException(status_code=401, detail="Invalid access token")
+    payload = _verify_access_token_or_unauthorized(request_token)
 
     deps = get_global_deps(request)
 

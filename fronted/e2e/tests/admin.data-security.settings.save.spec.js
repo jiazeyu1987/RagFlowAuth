@@ -1,26 +1,19 @@
 // @ts-check
 const { expect } = require('@playwright/test');
-const { adminTest } = require('../helpers/auth');
+const { realAdminTest, mockAuthMe } = require('../helpers/auth');
 
-adminTest('data security retention save persists and re-renders @regression @admin', async ({ page }) => {
+realAdminTest('data security retention save persists and re-renders @regression @admin', async ({ page }) => {
+  await mockAuthMe(page);
+
   const settings = {
-    target_mode: 'local',
-    target_local_dir: '/mnt/backup/ragflowauth',
-    target_ip: '',
-    target_share_name: '',
-    target_subdir: '',
     ragflow_compose_path: '/app/ragflow_compose/docker-compose.yml',
     ragflow_stop_services: false,
     full_backup_include_images: true,
     auth_db_path: 'data/auth.db',
     last_run_at_ms: null,
     backup_retention_max: 30,
-    backup_target_path: '/app/data/backups',
-    backup_pack_count: 6,
     local_backup_target_path: '/app/data/backups',
     local_backup_pack_count: 6,
-    windows_backup_target_path: '/mnt/backup/ragflowauth',
-    windows_backup_pack_count: 6,
   };
 
   let capturedPut = null;

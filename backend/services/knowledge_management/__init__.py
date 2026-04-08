@@ -1,8 +1,5 @@
-from .manager import (
-    KnowledgeManagementError,
-    KnowledgeManagementManager,
-    KnowledgeManagementScope,
-)
+from .contracts import KnowledgeManagementError, KnowledgeManagementScope
+from .manager import KnowledgeManagementManager
 
 __all__ = [
     "KnowledgeManagementError",

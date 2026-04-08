@@ -11,6 +11,20 @@ async function readJson(response, message) {
   return response.json();
 }
 
+function readSessionEnvelope(payload, message) {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    throw new Error(`${message}: invalid envelope`);
+  }
+  const session = payload.session;
+  if (!session || typeof session !== 'object' || Array.isArray(session)) {
+    throw new Error(`${message}: missing session`);
+  }
+  if (!String(session.id || '').trim()) {
+    throw new Error(`${message}: missing session.id`);
+  }
+  return session;
+}
+
 async function createDirectory(api, headers, { name, parentId }) {
   const response = await api.post('/api/knowledge/directories', {
     headers,
@@ -40,7 +54,7 @@ async function createDataset(api, headers, { name, nodeId }) {
 async function createPermissionGroup(api, headers, payload) {
   const response = await api.post('/api/permission-groups', { headers, data: payload });
   const body = await readJson(response, `create permission group failed for ${payload.group_name}`);
-  const groupId = Number(body?.data?.group_id || 0);
+  const groupId = Number(body?.result?.group_id || 0);
   if (!Number.isInteger(groupId) || groupId <= 0) {
     throw new Error(`create permission group did not return group_id for ${payload.group_name}`);
   }
@@ -93,11 +107,11 @@ async function createChatSessionViaApi(api, headers, chatId, name = 'doc chat e2
     params: { name },
   });
   const body = await readJson(response, `create chat session failed for ${chatId}`);
-  const sessionId = String(body?.id || '').trim();
+  const sessionId = String(readSessionEnvelope(body, `create chat session returned invalid payload for ${chatId}`).id || '').trim();
   if (!sessionId) {
     throw new Error(`create chat session did not return id for ${chatId}`);
   }
-  return body;
+  return readSessionEnvelope(body, `create chat session returned invalid payload for ${chatId}`);
 }
 
 async function deleteChatSessionViaApi(api, headers, chatId, sessionId) {
@@ -124,7 +138,7 @@ async function createChatSessionViaUi(page, chatId) {
   await page.getByTestId('chat-session-create').click();
   const response = await createSessionResponse;
   const body = await readJson(response, `create chat session via UI failed for ${chatId}`);
-  const sessionId = String(body?.id || '').trim();
+  const sessionId = String(readSessionEnvelope(body, `create chat session via UI returned invalid payload for ${chatId}`).id || '').trim();
   if (!sessionId) {
     throw new Error('create chat session via UI returned empty id');
   }

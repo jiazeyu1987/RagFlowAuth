@@ -7,6 +7,7 @@ const {
   deleteUserById,
   findUserByUsername,
   loginApiAs,
+  readUserEnvelope,
   tryLoginApi,
   uniquePassword,
   uniqueUsername,
@@ -66,7 +67,9 @@ test('Change password page uses real old/new password flow and login verificatio
     });
     await expect(createResponse.ok()).toBeTruthy();
     const createBody = await createResponse.json();
-    createdUserId = String(createBody?.user_id || '').trim();
+    createdUserId = String(
+      readUserEnvelope(createBody, `create password-change user returned invalid payload for ${username}`).user_id || ''
+    ).trim();
     expect(createdUserId).toBeTruthy();
 
     userSession = await loginApiAs(username, initialPassword);

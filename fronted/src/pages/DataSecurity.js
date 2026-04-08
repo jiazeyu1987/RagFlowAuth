@@ -1,81 +1,14 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import useDataSecurityPage from '../features/dataSecurity/useDataSecurityPage';
+import { MOBILE_BREAKPOINT } from '../features/dataSecurity/dataSecurityHelpers';
+import DataSecurityRetentionSection from '../features/dataSecurity/components/DataSecurityRetentionSection';
+import DataSecuritySettingsSection from '../features/dataSecurity/components/DataSecuritySettingsSection';
+import DataSecurityActiveJobSection from '../features/dataSecurity/components/DataSecurityActiveJobSection';
+import DataSecurityJobListSection from '../features/dataSecurity/components/DataSecurityJobListSection';
+import DataSecurityRestoreDrillsSection from '../features/dataSecurity/components/DataSecurityRestoreDrillsSection';
 
-const MOBILE_BREAKPOINT = 768;
-
-const formatTime = (ms) => {
-  if (!ms) return '';
-  const d = new Date(Number(ms));
-  return Number.isNaN(d.getTime()) ? '' : d.toLocaleString();
-};
-
-const isRunningStatus = (status) =>
-  ['queued', 'running', 'canceling'].includes(String(status || '').toLowerCase());
-
-const ProgressBar = ({ value }) => {
-  const pct = Math.max(0, Math.min(100, Number(value || 0)));
-  return (
-    <div
-      style={{
-        width: '100%',
-        background: '#e5e7eb',
-        borderRadius: '999px',
-        height: '10px',
-        overflow: 'hidden',
-      }}
-    >
-      <div
-        style={{
-          width: `${pct}%`,
-          height: '10px',
-          background: pct >= 100 ? '#10b981' : '#3b82f6',
-          transition: 'width 0.2s',
-        }}
-      />
-    </div>
-  );
-};
-
-const Card = ({ title, children }) => (
-  <div
-    style={{
-      marginTop: '16px',
-      background: 'white',
-      borderRadius: '12px',
-      padding: '16px',
-      border: '1px solid #e5e7eb',
-    }}
-  >
-    <h3 style={{ marginTop: 0 }}>{title}</h3>
-    {children}
-  </div>
-);
-
-const statusColor = (status) => {
-  const text = String(status || '').toLowerCase();
-  if (text === 'failed') return '#dc2626';
-  if (text === 'completed' || text === 'success' || text === 'succeeded') return '#059669';
-  if (isRunningStatus(text) || text === 'pending') return '#2563eb';
-  return '#374151';
-};
-
-const localBackupLabel = (job) => {
-  if (job?.output_dir) return '成功';
-  if (String(job?.status || '').toLowerCase() === 'failed') return '失败';
-  return '未生成';
-};
-
-const windowsBackupLabel = (job) => {
-  const status = String(job?.replication_status || '').toLowerCase();
-  if (status === 'succeeded') return '成功';
-  if (status === 'failed') return '失败';
-  if (status === 'skipped') return '未执行';
-  if (status === 'pending') return '进行中';
-  return '未执行';
-};
-
-const DataSecurity = () => {
+export default function DataSecurity() {
   const location = useLocation();
   const [isMobile, setIsMobile] = useState(() => {
     if (typeof window === 'undefined') return false;
@@ -97,14 +30,12 @@ const DataSecurity = () => {
     savingSettings,
     savingRetention,
     restoreDrills,
+    localBackupTargetPath,
+    restoreEligibleJobs,
     selectedRestoreJobId,
     restoreTarget,
     restoreNotes,
     creatingRestoreDrill,
-    targetPreview,
-    localBackupTargetPath,
-    windowsBackupTargetPath,
-    restoreEligibleJobs,
     setSettingField,
     setSelectedRestoreJobId,
     setRestoreTarget,
@@ -125,6 +56,18 @@ const DataSecurity = () => {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
+  const handleSaveRetention = useCallback(async () => {
+    const changeReason = window.prompt('请输入本次备份保留策略变更原因');
+    if (changeReason === null) return;
+    await saveRetention(changeReason);
+  }, [saveRetention]);
+
+  const handleSaveSettings = useCallback(async () => {
+    const changeReason = window.prompt('请输入本次备份高级设置变更原因');
+    if (changeReason === null) return;
+    await saveSettings(changeReason);
+  }, [saveSettings]);
+
   if (loading) return <div style={{ padding: '12px' }}>加载中...</div>;
 
   return (
@@ -133,12 +76,11 @@ const DataSecurity = () => {
         style={{
           display: 'flex',
           flexDirection: isMobile ? 'column' : 'row',
-          justifyContent: 'space-between',
+          justifyContent: 'flex-end',
           gap: '12px',
           alignItems: isMobile ? 'stretch' : 'center',
         }}
       >
-        <h2 style={{ margin: 0 }}>数据安全</h2>
         <div
           style={{
             display: 'flex',
@@ -182,7 +124,7 @@ const DataSecurity = () => {
         </div>
       </div>
 
-      {error && (
+      {error ? (
         <div
           data-testid="ds-error"
           style={{
@@ -195,644 +137,43 @@ const DataSecurity = () => {
         >
           {error}
         </div>
-      )}
+      ) : null}
 
-      <Card title="备份保留策略">
-        <div style={{ display: 'grid', gap: '12px' }}>
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr',
-              gap: '12px',
-            }}
-          >
-            <div style={{ padding: '12px', border: '1px solid #e5e7eb', borderRadius: '10px' }}>
-              <div style={{ color: '#6b7280', fontSize: '0.9rem' }}>本地备份路径</div>
-              <div style={{ marginTop: '6px', color: '#111827', wordBreak: 'break-all' }}>
-                {localBackupTargetPath || '-'}
-              </div>
-              <div style={{ marginTop: '8px', color: '#6b7280', fontSize: '0.85rem' }}>
-                备份数量:{' '}
-                <span style={{ color: '#111827', fontWeight: 700 }}>
-                  {Number(settings?.local_backup_pack_count ?? 0)}
-                </span>
-              </div>
-            </div>
-            <div style={{ padding: '12px', border: '1px solid #e5e7eb', borderRadius: '10px' }}>
-              <div style={{ color: '#6b7280', fontSize: '0.9rem' }}>Windows 备份路径</div>
-              <div style={{ marginTop: '6px', color: '#111827', wordBreak: 'break-all' }}>
-                {windowsBackupTargetPath || '未配置'}
-              </div>
-              <div style={{ marginTop: '8px', color: '#6b7280', fontSize: '0.85rem' }}>
-                备份数量:{' '}
-                <span style={{ color: '#111827', fontWeight: 700 }}>
-                  {Number(settings?.windows_backup_pack_count || 0)}
-                </span>
-                {settings?.windows_backup_pack_count_skipped ? '（统计已跳过）' : ''}
-              </div>
-            </div>
-          </div>
+      <DataSecurityRetentionSection
+        isMobile={isMobile}
+        settings={settings}
+        localBackupTargetPath={localBackupTargetPath}
+        onSettingFieldChange={setSettingField}
+        onSaveRetention={handleSaveRetention}
+        savingRetention={savingRetention}
+      />
 
-          <div
-            style={{
-              display: 'flex',
-              flexDirection: isMobile ? 'column' : 'row',
-              gap: '10px',
-              alignItems: isMobile ? 'stretch' : 'center',
-            }}
-          >
-            <label
-              style={{
-                display: 'flex',
-                flexDirection: isMobile ? 'column' : 'row',
-                gap: '10px',
-                alignItems: isMobile ? 'stretch' : 'center',
-              }}
-            >
-              保留最多备份至
-              <input
-                type="number"
-                min={1}
-                max={100}
-                step={1}
-                value={settings?.backup_retention_max ?? 30}
-                onChange={(e) => {
-                  const raw = Number(e.target.value);
-                  const next = Math.max(1, Math.min(100, Number.isFinite(raw) ? raw : 30));
-                  setSettingField('backup_retention_max', next);
-                }}
-                style={{
-                  width: isMobile ? '100%' : '90px',
-                  padding: '8px',
-                  border: '1px solid #d1d5db',
-                  borderRadius: '8px',
-                  boxSizing: 'border-box',
-                }}
-              />
-              个（1~100）
-            </label>
+      {showAdvanced ? (
+        <DataSecuritySettingsSection
+          isMobile={isMobile}
+          settings={settings}
+          localBackupTargetPath={localBackupTargetPath}
+          onSettingFieldChange={setSettingField}
+          onSaveSettings={handleSaveSettings}
+          savingSettings={savingSettings}
+        />
+      ) : null}
 
-            <button
-              onClick={saveRetention}
-              disabled={savingRetention}
-              data-testid="ds-retention-save"
-              style={{
-                padding: '10px 14px',
-                borderRadius: '8px',
-                border: 'none',
-                cursor: savingRetention ? 'not-allowed' : 'pointer',
-                background: savingRetention ? '#9ca3af' : '#111827',
-                color: 'white',
-                width: isMobile ? '100%' : 'auto',
-              }}
-            >
-              {savingRetention ? '保存中...' : '保存'}
-            </button>
-          </div>
-        </div>
-      </Card>
-
-      {showAdvanced && (
-        <Card title="Windows 备份设置">
-          <div style={{ display: 'grid', gap: '12px' }}>
-            <div
-              style={{
-                padding: '12px',
-                background: '#f8fafc',
-                borderRadius: '10px',
-                color: '#475569',
-                fontSize: '0.9rem',
-              }}
-            >
-              本地正式备份目录固定为 <strong>{localBackupTargetPath}</strong>。Windows
-              备份使用下方配置解析目标路径，优先使用服务器挂载路径，其次使用手动填写的共享或本地路径。
-            </div>
-
-            <label style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
-              <input
-                type="checkbox"
-                checked={!!settings?.enabled}
-                onChange={(e) => setSettingField('enabled', e.target.checked)}
-                data-testid="ds-enabled"
-              />
-              启用定时备份
-            </label>
-
-            <label style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
-              <input
-                type="checkbox"
-                checked={!!settings?.replica_enabled}
-                onChange={(e) => setSettingField('replica_enabled', e.target.checked)}
-                data-testid="ds-replica-enabled"
-              />
-              Enable Windows replica backup
-            </label>
-
-            <label>
-              Server mounted path (optional)
-              <input
-                data-testid="ds-replica-target-path"
-                value={settings?.replica_target_path || ''}
-                onChange={(e) => setSettingField('replica_target_path', e.target.value)}
-                placeholder="/mnt/replica/RagflowAuth"
-                style={{
-                  width: '100%',
-                  padding: '8px',
-                  border: '1px solid #d1d5db',
-                  borderRadius: '8px',
-                  marginTop: '6px',
-                }}
-              />
-            </label>
-
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr',
-                gap: '12px',
-              }}
-            >
-              <label>
-                目标类型
-                <select
-                  value={settings?.target_mode || 'share'}
-                  onChange={(e) => setSettingField('target_mode', e.target.value)}
-                  data-testid="ds-target-mode"
-                  style={{
-                    width: '100%',
-                    padding: '8px',
-                    border: '1px solid #d1d5db',
-                    borderRadius: '8px',
-                    marginTop: '6px',
-                  }}
-                >
-                  <option value="share">共享目录</option>
-                  <option value="local">本机目录</option>
-                </select>
-              </label>
-
-              <div style={{ color: '#6b7280', fontSize: '0.9rem', alignSelf: 'end' }}>
-                当前 Windows 目标预览:{' '}
-                <span style={{ color: '#111827' }}>{windowsBackupTargetPath || '未配置'}</span>
-              </div>
-            </div>
-
-            {(settings?.target_mode || 'share') === 'local' ? (
-              <label>
-                Windows 目标目录（绝对路径）
-                <input
-                  data-testid="ds-target-local-dir"
-                  value={settings?.target_local_dir || ''}
-                  onChange={(e) => setSettingField('target_local_dir', e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '8px',
-                    border: '1px solid #d1d5db',
-                    borderRadius: '8px',
-                    marginTop: '6px',
-                  }}
-                />
-              </label>
-            ) : (
-              <div
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr 1fr',
-                  gap: '12px',
-                }}
-              >
-                <label>
-                  目标电脑 IP
-                  <input
-                    value={settings?.target_ip || ''}
-                    onChange={(e) => setSettingField('target_ip', e.target.value)}
-                    data-testid="ds-target-ip"
-                    style={{
-                      width: '100%',
-                      padding: '8px',
-                      border: '1px solid #d1d5db',
-                      borderRadius: '8px',
-                      marginTop: '6px',
-                    }}
-                  />
-                </label>
-                <label>
-                  共享名
-                  <input
-                    value={settings?.target_share_name || ''}
-                    onChange={(e) => setSettingField('target_share_name', e.target.value)}
-                    data-testid="ds-target-share-name"
-                    style={{
-                      width: '100%',
-                      padding: '8px',
-                      border: '1px solid #d1d5db',
-                      borderRadius: '8px',
-                      marginTop: '6px',
-                    }}
-                  />
-                </label>
-                <label>
-                  子目录（可空）
-                  <input
-                    value={settings?.target_subdir || ''}
-                    onChange={(e) => setSettingField('target_subdir', e.target.value)}
-                    data-testid="ds-target-subdir"
-                    style={{
-                      width: '100%',
-                      padding: '8px',
-                      border: '1px solid #d1d5db',
-                      borderRadius: '8px',
-                      marginTop: '6px',
-                    }}
-                  />
-                </label>
-                <div
-                  data-testid="ds-target-preview"
-                  style={{
-                    gridColumn: isMobile ? 'auto' : '1 / -1',
-                    color: '#6b7280',
-                    fontSize: '0.9rem',
-                  }}
-                >
-                  预览: {targetPreview || '（未完整填写）'}
-                </div>
-              </div>
-            )}
-
-            <label>
-              RAGFlow docker-compose.yml 路径
-              <input
-                value={settings?.ragflow_compose_path || ''}
-                onChange={(e) => setSettingField('ragflow_compose_path', e.target.value)}
-                data-testid="ds-ragflow-compose-path"
-                style={{
-                  width: '100%',
-                  padding: '8px',
-                  border: '1px solid #d1d5db',
-                  borderRadius: '8px',
-                  marginTop: '6px',
-                }}
-              />
-            </label>
-
-            <label style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
-              <input
-                type="checkbox"
-                checked={!!settings?.ragflow_stop_services}
-                onChange={(e) => setSettingField('ragflow_stop_services', e.target.checked)}
-                data-testid="ds-ragflow-stop-services"
-              />
-              备份前停止 RAGFlow 服务
-            </label>
-
-            <label style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
-              <input
-                type="checkbox"
-                checked={!!settings?.full_backup_include_images}
-                onChange={(e) => setSettingField('full_backup_include_images', e.target.checked)}
-                data-testid="ds-full-backup-include-images"
-              />
-              全量备份包含 Docker 镜像
-            </label>
-
-            <label>
-              项目数据库路径
-              <input
-                value={settings?.auth_db_path || 'data/auth.db'}
-                onChange={(e) => setSettingField('auth_db_path', e.target.value)}
-                data-testid="ds-auth-db-path"
-                style={{
-                  width: '100%',
-                  padding: '8px',
-                  border: '1px solid #d1d5db',
-                  borderRadius: '8px',
-                  marginTop: '6px',
-                }}
-              />
-            </label>
-
-            <button
-              type="button"
-              onClick={saveSettings}
-              disabled={savingSettings}
-              data-testid="ds-settings-save"
-              style={{
-                padding: '10px 14px',
-                borderRadius: '8px',
-                border: 'none',
-                cursor: savingSettings ? 'not-allowed' : 'pointer',
-                background: savingSettings ? '#9ca3af' : '#111827',
-                color: 'white',
-                width: isMobile ? '100%' : 'fit-content',
-              }}
-            >
-              {savingSettings ? 'Saving...' : 'Save Windows Backup Settings'}
-            </button>
-          </div>
-        </Card>
-      )}
-
-      <Card title="备份进度">
-        {activeJob ? (
-          <>
-            <div
-              data-testid="ds-active-job"
-              style={{
-                display: 'flex',
-                flexDirection: isMobile ? 'column' : 'row',
-                justifyContent: 'space-between',
-                gap: '10px',
-                alignItems: isMobile ? 'stretch' : 'center',
-              }}
-            >
-              <div style={{ display: 'grid', gap: '6px' }}>
-                <div
-                  data-testid="ds-active-job-status"
-                  style={{ fontWeight: 600, color: statusColor(activeJob.status) }}
-                >
-                  #{activeJob.id} {activeJob.status}
-                </div>
-                <div
-                  data-testid="ds-active-job-message"
-                  style={{ color: '#6b7280', fontSize: '0.9rem' }}
-                >
-                  {activeJob.message || ''}
-                </div>
-                <div style={{ color: '#6b7280', fontSize: '0.85rem' }}>
-                  本地备份: {localBackupLabel(activeJob)}{' '}
-                  {activeJob.output_dir ? `| ${activeJob.output_dir}` : ''}
-                </div>
-                <div style={{ color: '#6b7280', fontSize: '0.85rem' }}>
-                  Windows 备份: {windowsBackupLabel(activeJob)}{' '}
-                  {activeJob.replica_path ? `| ${activeJob.replica_path}` : ''}
-                </div>
-                {activeJob.replication_error ? (
-                  <div style={{ color: '#92400e', fontSize: '0.85rem' }}>
-                    Windows 说明: {activeJob.replication_error}
-                  </div>
-                ) : null}
-              </div>
-              <div
-                style={{
-                  minWidth: isMobile ? 'auto' : '140px',
-                  textAlign: isMobile ? 'left' : 'right',
-                  color: '#6b7280',
-                }}
-              >
-                {activeJob.started_at_ms ? formatTime(activeJob.started_at_ms) : ''}
-              </div>
-            </div>
-            <div style={{ marginTop: '10px' }}>
-              <ProgressBar value={activeJob.progress} />
-              <div
-                data-testid="ds-active-job-progress"
-                style={{ marginTop: '6px', color: '#6b7280', fontSize: '0.9rem' }}
-              >
-                {activeJob.progress}%
-              </div>
-            </div>
-            {activeJob.detail && (
-              <div
-                data-testid="ds-active-job-detail"
-                style={{
-                  marginTop: '10px',
-                  padding: '10px',
-                  background: '#fef2f2',
-                  color: '#991b1b',
-                  borderRadius: '8px',
-                }}
-              >
-                {activeJob.detail}
-              </div>
-            )}
-          </>
-        ) : (
-          <div style={{ color: '#6b7280' }}>暂无备份记录</div>
-        )}
-      </Card>
-
-      <Card title="备份记录">
-        {jobs.length === 0 ? (
-          <div style={{ color: '#6b7280' }}>暂无</div>
-        ) : (
-          <div style={{ display: 'grid', gap: '10px' }}>
-            {jobs.map((job) => (
-              <div
-                key={job.id}
-                data-testid={`ds-job-row-${job.id}`}
-                style={{
-                  display: 'flex',
-                  flexDirection: isMobile ? 'column' : 'row',
-                  justifyContent: 'space-between',
-                  alignItems: isMobile ? 'stretch' : 'center',
-                  padding: '10px 12px',
-                  border: '1px solid #e5e7eb',
-                  borderRadius: '10px',
-                  cursor: 'pointer',
-                }}
-                onClick={() => handleSelectJob(job)}
-              >
-                <div style={{ display: 'grid', gap: '4px' }}>
-                  <div
-                    style={{
-                      display: 'flex',
-                      gap: '10px',
-                      alignItems: 'center',
-                      flexWrap: 'wrap',
-                    }}
-                  >
-                    <div style={{ fontWeight: 700 }}>#{job.id}</div>
-                    <div style={{ color: statusColor(job.status) }}>{job.status}</div>
-                    <div style={{ color: '#6b7280' }}>{job.message || ''}</div>
-                  </div>
-                  <div style={{ color: '#6b7280', fontSize: '0.85rem' }}>
-                    Hash: {job.package_hash || '未生成'}
-                  </div>
-                  <div style={{ color: '#6b7280', fontSize: '0.85rem' }}>
-                    本地备份: {localBackupLabel(job)} {job.output_dir ? `| ${job.output_dir}` : ''}
-                  </div>
-                  <div style={{ color: '#6b7280', fontSize: '0.85rem' }}>
-                    Windows 备份: {windowsBackupLabel(job)}{' '}
-                    {job.replica_path ? `| ${job.replica_path}` : ''}
-                  </div>
-                  <div style={{ color: '#6b7280', fontSize: '0.85rem' }}>
-                    验证:{' '}
-                    {job.verified_at_ms
-                      ? `${job.verified_by || '-'} @ ${formatTime(job.verified_at_ms)}`
-                      : '未验证'}
-                  </div>
-                </div>
-                <div
-                  style={{
-                    color: '#6b7280',
-                    fontSize: '0.9rem',
-                    textAlign: isMobile ? 'left' : 'right',
-                  }}
-                >
-                  {formatTime(job.created_at_ms)}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </Card>
-
-      <Card title="恢复演练">
-        <div style={{ display: 'grid', gap: '10px' }}>
-          <div
-            style={{
-              padding: '12px',
-              background: '#f8fafc',
-              borderRadius: '10px',
-              color: '#475569',
-              fontSize: '0.9rem',
-            }}
-          >
-            恢复演练仅从本地备份执行数据恢复，Windows 备份不会用于演练恢复。
-          </div>
-
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr',
-              gap: '10px',
-            }}
-          >
-            <label>
-              本地备份任务
-              <select
-                data-testid="ds-restore-job-select"
-                value={selectedRestoreJobId}
-                onChange={(e) => setSelectedRestoreJobId(e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '8px',
-                  border: '1px solid #d1d5db',
-                  borderRadius: '8px',
-                  marginTop: '6px',
-                }}
-              >
-                <option value="">请选择</option>
-                {restoreEligibleJobs.map((job) => (
-                  <option key={job.id} value={String(job.id)}>
-                    #{job.id} {job.kind || '-'} {job.status || '-'}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <label>
-              恢复目标
-              <input
-                data-testid="ds-restore-target"
-                value={restoreTarget}
-                onChange={(e) => setRestoreTarget(e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '8px',
-                  border: '1px solid #d1d5db',
-                  borderRadius: '8px',
-                  marginTop: '6px',
-                }}
-              />
-            </label>
-
-            <label>
-              验证备注
-              <input
-                data-testid="ds-restore-notes"
-                value={restoreNotes}
-                onChange={(e) => setRestoreNotes(e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '8px',
-                  border: '1px solid #d1d5db',
-                  borderRadius: '8px',
-                  marginTop: '6px',
-                }}
-              />
-            </label>
-          </div>
-
-          {restoreEligibleJobs.length === 0 ? (
-            <div style={{ color: '#6b7280' }}>当前没有可用于本地恢复演练的备份任务。</div>
-          ) : null}
-
-          <button
-            type="button"
-            onClick={submitRestoreDrill}
-            data-testid="ds-restore-submit"
-            disabled={creatingRestoreDrill}
-            style={{
-              padding: '10px 14px',
-              borderRadius: '8px',
-              border: 'none',
-              cursor: creatingRestoreDrill ? 'not-allowed' : 'pointer',
-              background: creatingRestoreDrill ? '#9ca3af' : '#111827',
-              color: 'white',
-              width: isMobile ? '100%' : 'fit-content',
-            }}
-          >
-            {creatingRestoreDrill ? '记录中...' : '记录恢复演练'}
-          </button>
-
-          {restoreDrills.length === 0 ? (
-            <div style={{ color: '#6b7280' }}>暂无恢复演练记录</div>
-          ) : (
-            <div style={{ display: 'grid', gap: '10px' }}>
-              {restoreDrills.map((item) => (
-                <div
-                  key={item.drill_id}
-                  data-testid={`ds-restore-row-${item.drill_id}`}
-                  style={{
-                    padding: '10px 12px',
-                    border: '1px solid #e5e7eb',
-                    borderRadius: '10px',
-                    display: 'grid',
-                    gap: '4px',
-                  }}
-                >
-                  <div style={{ fontWeight: 600 }}>
-                    {item.drill_id} / job #{item.job_id} / {item.result}
-                  </div>
-                  <div style={{ color: '#6b7280', fontSize: '0.9rem' }}>
-                    target: {item.restore_target} | by: {item.executed_by} | at:{' '}
-                    {formatTime(item.executed_at_ms)}
-                  </div>
-                  <div style={{ color: '#6b7280', fontSize: '0.85rem' }}>
-                    path: {item.backup_path} | hash: {item.backup_hash}
-                  </div>
-                  <div style={{ color: '#374151', fontSize: '0.85rem' }}>
-                    package validation: {item.package_validation_status || '-'} | acceptance:{' '}
-                    {item.acceptance_status || '-'}
-                  </div>
-                  <div style={{ color: '#374151', fontSize: '0.85rem' }}>
-                    hash match: {String(!!item.hash_match)} | compare match:{' '}
-                    {String(!!item.compare_match)}
-                  </div>
-                  {item.actual_backup_hash ? (
-                    <div style={{ color: '#6b7280', fontSize: '0.85rem' }}>
-                      actual hash: {item.actual_backup_hash}
-                    </div>
-                  ) : null}
-                  {item.restored_auth_db_path ? (
-                    <div style={{ color: '#6b7280', fontSize: '0.85rem' }}>
-                      restored auth.db: {item.restored_auth_db_path}
-                    </div>
-                  ) : null}
-                  {item.verification_notes ? (
-                    <div style={{ color: '#374151', fontSize: '0.9rem' }}>
-                      notes: {item.verification_notes}
-                    </div>
-                  ) : null}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </Card>
+      <DataSecurityActiveJobSection activeJob={activeJob} isMobile={isMobile} />
+      <DataSecurityJobListSection jobs={jobs} isMobile={isMobile} onSelectJob={handleSelectJob} />
+      <DataSecurityRestoreDrillsSection
+        isMobile={isMobile}
+        restoreEligibleJobs={restoreEligibleJobs}
+        selectedRestoreJobId={selectedRestoreJobId}
+        restoreTarget={restoreTarget}
+        restoreNotes={restoreNotes}
+        restoreDrills={restoreDrills}
+        creatingRestoreDrill={creatingRestoreDrill}
+        onSelectedRestoreJobIdChange={setSelectedRestoreJobId}
+        onRestoreTargetChange={setRestoreTarget}
+        onRestoreNotesChange={setRestoreNotes}
+        onSubmit={submitRestoreDrill}
+      />
     </div>
   );
-};
-
-export default DataSecurity;
+}

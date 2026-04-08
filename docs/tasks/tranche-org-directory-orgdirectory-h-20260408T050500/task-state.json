@@ -1,0 +1,163 @@
+{
+  "schema_version": 2,
+  "task_id": "tranche-org-directory-orgdirectory-h-20260408T050500",
+  "mode": "full",
+  "status": "completed",
+  "current_phase": null,
+  "phase_statuses": [
+    {
+      "phase_id": "P1",
+      "title": "Decompose backend org-directory rebuild and tree logic",
+      "status": "completed",
+      "objective": "Split tree-building and rebuild-persistence responsibilities out of the current manager/repository concentration while keeping `OrgStructureManager` as the stable facade.",
+      "owned_paths": [],
+      "dependencies": [],
+      "deliverables": [],
+      "evidence_expectation": "",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P1-AC1",
+          "text": "`OrgStructureManager` and org-directory rebuild persistence no longer directly own all tree projection, stale-entity cleanup, and mutation orchestration in one concentrated pair of files.",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P1",
+            "test-report.md#T1",
+            "test-report.md#T2"
+          ]
+        },
+        {
+          "ac_id": "P1-AC2",
+          "text": "existing org-directory router behavior, rebuild summaries, and stable-id rebuild semantics remain unchanged.",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P1",
+            "test-report.md#T1",
+            "test-report.md#T2"
+          ]
+        },
+        {
+          "ac_id": "P1-AC3",
+          "text": "org-directory rebuild/tree logic still fails fast on missing actor, broken relationships, and invalid Excel-derived state.",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P1",
+            "test-report.md#T1",
+            "test-report.md#T2"
+          ]
+        }
+      ],
+      "evidence": [
+        "execution-log.md#Phase-P1"
+      ],
+      "notes": "- Backend org-directory tree and rebuild logic extracted into tree_builder, rebuild_support, and rebuild_mutator with focused pytest coverage.",
+      "last_reviewed_at": "2026-04-08T05:26:14"
+    },
+    {
+      "phase_id": "P2",
+      "title": "Decompose frontend org-directory page and hook",
+      "status": "completed",
+      "objective": "Split the page shell and hook into smaller units for tree rendering, search UI, rebuild controls, and page-state orchestration without changing current page behavior.",
+      "owned_paths": [],
+      "dependencies": [],
+      "deliverables": [],
+      "evidence_expectation": "",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P2-AC1",
+          "text": "`OrgDirectoryManagement.js` no longer mixes page shell, tab layout, tree rendering, search result rendering, selected-person cards, rebuild widgets, and audit panel markup in one file.",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P2",
+            "test-report.md#T1",
+            "test-report.md#T2"
+          ]
+        },
+        {
+          "ac_id": "P2-AC2",
+          "text": "`useOrgDirectoryManagementPage.js` no longer directly owns all search derivation, rebuild orchestration, responsive state, and audit loading logic in one file.",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P2",
+            "test-report.md#T1",
+            "test-report.md#T2"
+          ]
+        },
+        {
+          "ac_id": "P2-AC3",
+          "text": "current page interactions, test ids, rebuild behavior, and overview/audit tab behavior remain stable after extraction.",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P2",
+            "test-report.md#T1",
+            "test-report.md#T2"
+          ]
+        }
+      ],
+      "evidence": [
+        "execution-log.md#Phase-P2"
+      ],
+      "notes": "- Frontend org-directory page and page hook decomposed into focused data, search, rebuild, tree, overview, and audit units while preserving the hook contract and test ids.",
+      "last_reviewed_at": "2026-04-08T05:26:29"
+    },
+    {
+      "phase_id": "P3",
+      "title": "Focused regression validation and task evidence",
+      "status": "completed",
+      "objective": "Prove the bounded org-directory refactor preserved both backend and frontend behavior.",
+      "owned_paths": [],
+      "dependencies": [],
+      "deliverables": [],
+      "evidence_expectation": "",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P3-AC1",
+          "text": "focused backend and frontend org-directory tests pass against the final code state.",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P3",
+            "test-report.md#T1",
+            "test-report.md#T2"
+          ]
+        },
+        {
+          "ac_id": "P3-AC2",
+          "text": "task artifacts record the exact commands run, verified acceptance coverage, and bounded residual risk.",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P3",
+            "test-report.md#T1",
+            "test-report.md#T2"
+          ]
+        }
+      ],
+      "evidence": [
+        "execution-log.md#Phase-P3"
+      ],
+      "notes": "- Focused backend pytest and frontend Jest org-directory regressions both passed against the final refactored code state, and the task artifacts now capture commands, acceptance coverage, and residual risk.",
+      "last_reviewed_at": "2026-04-08T05:26:41"
+    }
+  ],
+  "planner_review_status": "approved",
+  "test_status": "passed",
+  "blocking_prereqs": [],
+  "iteration_counts": {
+    "planner_revisions": 0,
+    "executor_loops": 3,
+    "test_loops": 1
+  },
+  "created_at": "2026-04-08T04:49:24",
+  "updated_at": "2026-04-08T05:27:43",
+  "branch": "int_latest",
+  "baseline_revision": "3619b8169b862232147c8e7a8d7bca3608a3d8f3",
+  "workspace_root": "D:\\ProjectPackage\\RagflowAuth",
+  "tasks_root": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks",
+  "task_dir": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\tranche-org-directory-orgdirectory-h-20260408T050500",
+  "goal": "继续进行前后端重构：以下一 tranche 聚焦 org directory 模块，拆分后端 org_directory rebuild/tree 逻辑与前端 OrgDirectoryManagement 页面和 hook，保持行为稳定并补齐验证。",
+  "artifacts": {
+    "prd": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\tranche-org-directory-orgdirectory-h-20260408T050500\\prd.md",
+    "test_plan": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\tranche-org-directory-orgdirectory-h-20260408T050500\\test-plan.md",
+    "task_state": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\tranche-org-directory-orgdirectory-h-20260408T050500\\task-state.json",
+    "execution_log": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\tranche-org-directory-orgdirectory-h-20260408T050500\\execution-log.md",
+    "test_report": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\tranche-org-directory-orgdirectory-h-20260408T050500\\test-report.md"
+  }
+}

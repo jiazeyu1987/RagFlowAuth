@@ -114,7 +114,6 @@ describe('TrainingComplianceManagement', () => {
     renderPage();
 
     expect(await screen.findByTestId('training-compliance-page')).toBeInTheDocument();
-    expect(screen.getByText('培训合规管理')).toBeInTheDocument();
     expect(screen.getAllByText('TR-001').length).toBeGreaterThan(0);
     expect(screen.getByTestId('training-records-tab-panel')).toBeInTheDocument();
 

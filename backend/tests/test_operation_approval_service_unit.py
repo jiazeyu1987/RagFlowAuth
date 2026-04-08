@@ -799,6 +799,34 @@ class TestOperationApprovalServiceUnit(unittest.TestCase):
         self.assertEqual(detail["steps"][0]["status"], "rejected")
         self.assertEqual(self.ragflow_service.created_payloads, [])
 
+    def test_create_request_rolls_back_when_initial_event_write_fails(self):
+        self._upsert_workflow(
+            "knowledge_base_create",
+            [{"step_name": "Step 1", "approver_user_ids": [self.approver_1.user_id]}],
+        )
+        request_id = "req-create-rollback"
+        original_add_event = self.service._store.add_event
+
+        def failing_add_event(*args, **kwargs):
+            if kwargs.get("event_type") == "request_submitted":
+                raise RuntimeError("request_submitted_event_failed")
+            return original_add_event(*args, **kwargs)
+
+        with patch("backend.services.operation_approval.service.uuid4", return_value=request_id):
+            with patch.object(self.service._store, "add_event", side_effect=failing_add_event):
+                with self.assertRaises(RuntimeError) as ctx:
+                    self._create_dataset_request(name="Dataset Create Rollback")
+
+        self.assertEqual(str(ctx.exception), "request_submitted_event_failed")
+        self.assertIsNone(self.service._store.get_request(request_id))
+        mine = self.service.list_requests_for_user(
+            requester_user=self.admin_user,
+            view="mine",
+            limit=20,
+        )
+        self.assertEqual(mine["count"], 0)
+        self.assertEqual(self.ragflow_service.created_payloads, [])
+
     def test_approve_request_rolls_back_state_when_event_write_fails(self):
         self._upsert_workflow(
             "knowledge_base_create",

@@ -9,3 +9,8 @@ script = ""
 name = "运行"
 icon = "run"
 command = "start_ragflowauth.bat"
+
+[[actions]]
+name = "start_ragflowauth"
+icon = "run"
+command = "./start_ragflowauth.bat"

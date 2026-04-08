@@ -1,6 +1,7 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import useNotificationSettingsPage from './useNotificationSettingsPage';
 import { notificationApi } from '../api';
+import { DEFAULTS } from './constants';
 
 jest.mock('../api', () => ({
   notificationApi: {
@@ -232,6 +233,44 @@ describe('useNotificationSettingsPage', () => {
           },
           custom_flag: 'keep-me',
         }),
+      })
+    );
+  });
+
+  it('uses stable ASCII default channel names when creating missing channels', async () => {
+    notificationApi.listChannels.mockResolvedValue([]);
+
+    const { result } = renderHook(() => useNotificationSettingsPage());
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    act(() => {
+      result.current.setFormValue('email', 'enabled', true);
+      result.current.setFormValue('email', 'host', 'smtp.example.com');
+      result.current.setFormValue('email', 'from_email', 'noreply@example.com');
+    });
+
+    await act(async () => {
+      await result.current.saveChannels();
+    });
+
+    expect(notificationApi.upsertChannel).toHaveBeenCalledWith(
+      DEFAULTS.email.channelId,
+      expect.objectContaining({
+        channel_type: 'email',
+        name: DEFAULTS.email.name,
+        enabled: true,
+        config: expect.objectContaining({
+          host: 'smtp.example.com',
+          from_email: 'noreply@example.com',
+        }),
+      })
+    );
+    expect(notificationApi.upsertChannel).toHaveBeenCalledWith(
+      DEFAULTS.in_app.channelId,
+      expect.objectContaining({
+        channel_type: 'in_app',
+        name: DEFAULTS.in_app.name,
       })
     );
   });

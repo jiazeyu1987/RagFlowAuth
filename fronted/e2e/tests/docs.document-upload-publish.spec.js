@@ -9,6 +9,7 @@ const {
   findDatasetByRef,
   loginApiAs,
   pollSearchToken,
+  readOperationRequestEnvelope,
   waitForBrowserDocument,
   waitForOperationRequest,
 } = require('../helpers/docRealFlow');
@@ -73,7 +74,10 @@ test('Doc upload publish flow covers real upload, approval, browser visibility, 
     const uploadResponse = await uploadResponsePromise;
     await expect(uploadResponse.ok()).toBeTruthy();
     const uploadBody = await uploadResponse.json();
-    const requestId = String(uploadBody?.request_id || '').trim();
+    const requestId = String(
+      readOperationRequestEnvelope(uploadBody, 'doc upload publish submit returned invalid approval envelope').request_id
+      || ''
+    ).trim();
     expect(requestId).toBeTruthy();
 
     await uploaderUi.page.waitForURL(/\/approvals\?view=mine/, { timeout: 30_000 });

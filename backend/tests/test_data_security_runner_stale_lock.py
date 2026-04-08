@@ -25,5 +25,5 @@ class TestDataSecurityRunnerStaleLock(unittest.TestCase):
             job_id = runner.start_job_if_idle(reason="manual", store=store, full_backup=False)
 
         self.assertEqual(job_id, 123)
-        store.release_backup_lock.assert_called_once()
+        store.release_backup_lock.assert_called_once_with(force=True)
         self.assertEqual(store.try_acquire_backup_lock.call_count, 2)

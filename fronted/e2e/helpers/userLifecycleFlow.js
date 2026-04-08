@@ -11,6 +11,20 @@ async function readJson(response, fallbackMessage) {
   return response.json();
 }
 
+function readUserEnvelope(payload, fallbackMessage) {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    throw new Error(`${fallbackMessage}: invalid envelope`);
+  }
+  const user = payload.user;
+  if (!user || typeof user !== 'object' || Array.isArray(user)) {
+    throw new Error(`${fallbackMessage}: missing user`);
+  }
+  if (!String(user.user_id || '').trim()) {
+    throw new Error(`${fallbackMessage}: missing user.user_id`);
+  }
+  return user;
+}
+
 async function loginApiAs(username, password) {
   const api = await request.newContext({ baseURL: BACKEND_BASE_URL });
   const loginResponse = await api.post('/api/auth/login', {
@@ -115,6 +129,7 @@ module.exports = {
   listUsers,
   loginApiAs,
   pickFirstSelectableOption,
+  readUserEnvelope,
   tryLoginApi,
   uniquePassword,
   uniqueUsername,

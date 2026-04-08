@@ -101,8 +101,6 @@ class TestBackupRestoreAuditUnit(unittest.TestCase):
     def _run_backup_job(
         self,
         *,
-        replica_enabled: bool,
-        replica_side_effect,
         finalize_side_effect=None,
     ):
         td = make_temp_dir(prefix="ragflowauth_backup_hash")
@@ -116,8 +114,6 @@ class TestBackupRestoreAuditUnit(unittest.TestCase):
                 "replica_subdir_format": "flat",
             }
         )
-        if not replica_enabled:
-            store.update_settings({"replica_enabled": False})
         job = store.create_job_v2(kind="incremental", status="queued", message="queued")
 
         local_root = Path(td) / "local_backups"
@@ -146,14 +142,6 @@ class TestBackupRestoreAuditUnit(unittest.TestCase):
 
         def _fake_snapshot(_ctx):
             (staged_pack_dir / "backup_settings.json").write_text('{"ok": true}', encoding="utf-8")
-
-        def _replica_wrapper(pack_dir: Path, job_id: int):
-            return replica_side_effect(
-                pack_dir=pack_dir,
-                job_id=job_id,
-                store=store,
-                replica_dir=replica_dir,
-            )
 
         svc = DataSecurityBackupService(store)
         with ExitStack() as stack:
@@ -206,10 +194,10 @@ class TestBackupRestoreAuditUnit(unittest.TestCase):
                         side_effect=finalize_side_effect,
                     )
                 )
-            stack.enter_context(
+            replicate_mock = stack.enter_context(
                 patch(
                     "backend.services.data_security.replica_service.BackupReplicaService.replicate_backup",
-                    side_effect=_replica_wrapper,
+                    side_effect=AssertionError("formal_backup_should_not_use_windows_replica"),
                 )
             )
             svc.run_incremental_backup_job(job.id)
@@ -224,106 +212,41 @@ class TestBackupRestoreAuditUnit(unittest.TestCase):
             "local_root": local_root,
             "staged_pack_dir": staged_pack_dir,
             "replica_dir": replica_dir,
+            "replicate_mock": replicate_mock,
         }
 
-    def test_backup_service_completes_when_local_succeeds_and_windows_fails(self):
-        def _replica_fail(*, pack_dir: Path, job_id: int, store: DataSecurityStore, replica_dir: Path):
-            self.assertTrue(pack_dir.exists())
-            raise RuntimeError("windows_disk_full")
-
-        result = self._run_backup_job(replica_enabled=True, replica_side_effect=_replica_fail)
+    def test_backup_service_completes_when_local_backup_succeeds(self):
+        result = self._run_backup_job()
         try:
             after = result["job"]
             self.assertEqual(after.status, "completed")
-            self.assertEqual(after.message, "backup_completed_local_only")
+            self.assertEqual(after.message, "backup_completed_local")
             self.assertTrue(after.output_dir)
-            self.assertEqual(after.replication_status, "failed")
-            self.assertEqual(after.replication_error, "windows_disk_full")
+            self.assertIsNone(after.replication_status)
+            self.assertIsNone(after.replication_error)
+            self.assertFalse(after.replica_path)
             self.assertIsNotNone(after.package_hash)
             self.assertRegex(str(after.package_hash), r"^[0-9a-f]{64}$")
             self.assertEqual(after.package_hash, _compute_backup_package_hash(result["package_dir"]))
+            result["replicate_mock"].assert_not_called()
         finally:
             cleanup_dir(result["td"])
 
-    def test_backup_service_completes_when_local_and_windows_succeed(self):
-        def _replica_success(*, pack_dir: Path, job_id: int, store: DataSecurityStore, replica_dir: Path):
-            replica_dir.mkdir(parents=True, exist_ok=True)
-            shutil.copytree(pack_dir, replica_dir, dirs_exist_ok=True)
-            store.update_job(job_id, replication_status="succeeded", replica_path=str(replica_dir), replication_error="")
-            return True
-
-        result = self._run_backup_job(replica_enabled=True, replica_side_effect=_replica_success)
-        try:
-            after = result["job"]
-            self.assertEqual(after.status, "completed")
-            self.assertEqual(after.message, "backup_completed_local_and_windows")
-            self.assertTrue(after.output_dir)
-            self.assertEqual(after.replication_status, "succeeded")
-            self.assertEqual(after.replica_path, str(result["replica_dir"]))
-        finally:
-            cleanup_dir(result["td"])
-
-    def test_backup_service_completes_when_local_fails_and_windows_succeeds(self):
-        def _replica_success(*, pack_dir: Path, job_id: int, store: DataSecurityStore, replica_dir: Path):
-            replica_dir.mkdir(parents=True, exist_ok=True)
-            shutil.copytree(pack_dir, replica_dir, dirs_exist_ok=True)
-            store.update_job(job_id, replication_status="succeeded", replica_path=str(replica_dir), replication_error="")
-            return True
-
+    def test_backup_service_fails_when_local_backup_fails(self):
         def _local_fail(*, pack_dir: Path, local_root: Path):
             raise RuntimeError("local_move_failed")
 
         result = self._run_backup_job(
-            replica_enabled=True,
-            replica_side_effect=_replica_success,
-            finalize_side_effect=_local_fail,
-        )
-        try:
-            after = result["job"]
-            self.assertEqual(after.status, "completed")
-            self.assertEqual(after.message, "backup_completed_windows_only")
-            self.assertFalse(after.output_dir)
-            self.assertEqual(after.replication_status, "succeeded")
-            self.assertEqual(after.replica_path, str(result["replica_dir"]))
-            self.assertIn("local_backup_failed:local_move_failed", str(after.detail))
-        finally:
-            cleanup_dir(result["td"])
-
-    def test_backup_service_fails_only_when_local_and_windows_both_fail(self):
-        def _replica_fail(*, pack_dir: Path, job_id: int, store: DataSecurityStore, replica_dir: Path):
-            raise RuntimeError("windows_copy_failed")
-
-        def _local_fail(*, pack_dir: Path, local_root: Path):
-            raise RuntimeError("local_move_failed")
-
-        result = self._run_backup_job(
-            replica_enabled=True,
-            replica_side_effect=_replica_fail,
             finalize_side_effect=_local_fail,
         )
         try:
             after = result["job"]
             self.assertEqual(after.status, "failed")
-            self.assertEqual(after.message, "backup_failed_local_and_windows")
+            self.assertEqual(after.message, "backup_failed_local")
             self.assertFalse(after.output_dir)
-            self.assertEqual(after.replication_status, "failed")
+            self.assertIsNone(after.replication_status)
             self.assertIn("local_backup_failed:local_move_failed", str(after.detail))
-            self.assertIn("windows_backup_failed:windows_copy_failed", str(after.detail))
-        finally:
-            cleanup_dir(result["td"])
-
-    def test_backup_service_marks_windows_skipped_when_replica_not_enabled(self):
-        def _replica_skip(*, pack_dir: Path, job_id: int, store: DataSecurityStore, replica_dir: Path):
-            store.update_job(job_id, replication_status="skipped", replication_error="replica_disabled")
-            return False
-
-        result = self._run_backup_job(replica_enabled=False, replica_side_effect=_replica_skip)
-        try:
-            after = result["job"]
-            self.assertEqual(after.status, "completed")
-            self.assertEqual(after.message, "backup_completed_local_only")
-            self.assertTrue(after.output_dir)
-            self.assertEqual(after.replication_status, "skipped")
+            result["replicate_mock"].assert_not_called()
         finally:
             cleanup_dir(result["td"])
 

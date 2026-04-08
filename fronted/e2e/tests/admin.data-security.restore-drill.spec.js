@@ -1,28 +1,21 @@
 // @ts-check
 const { expect } = require('@playwright/test');
-const { realAdminTest } = require('../helpers/auth');
+const { realAdminTest, mockAuthMe } = require('../helpers/auth');
 
 realAdminTest('data security restore drill can be recorded and listed @regression @admin', async ({ page }) => {
+  await mockAuthMe(page);
+
   const settings = {
     enabled: false,
     interval_minutes: 60,
-    target_mode: 'local',
-    target_local_dir: '/mnt/replica/RagflowAuth',
-    target_ip: '',
-    target_share_name: '',
-    target_subdir: '',
     ragflow_compose_path: '/app/ragflow_compose/docker-compose.yml',
     ragflow_stop_services: false,
     full_backup_include_images: true,
     auth_db_path: 'data/auth.db',
     last_run_at_ms: null,
     backup_retention_max: 30,
-    backup_target_path: '/app/data/backups',
-    backup_pack_count: 1,
     local_backup_target_path: '/app/data/backups',
     local_backup_pack_count: 1,
-    windows_backup_target_path: '/mnt/replica/RagflowAuth',
-    windows_backup_pack_count: 1,
   };
 
   const nowMs = Date.now();
@@ -38,8 +31,6 @@ realAdminTest('data security restore drill can be recorded and listed @regressio
       package_hash: 'abcd1234hash',
       verified_by: null,
       verified_at_ms: null,
-      replication_status: 'failed',
-      replication_error: 'disk full',
       created_at_ms: nowMs,
       started_at_ms: nowMs - 1000,
       finished_at_ms: nowMs,
@@ -49,14 +40,12 @@ realAdminTest('data security restore drill can be recorded and listed @regressio
       kind: 'full',
       status: 'completed',
       progress: 100,
-      message: 'windows only',
-      detail: 'local backup failed',
+      message: 'missing local backup output',
+      detail: 'output_dir_missing',
       output_dir: '',
-      package_hash: 'windowsonlyhash',
+      package_hash: 'missinglocalhash',
       verified_by: null,
       verified_at_ms: null,
-      replication_status: 'succeeded',
-      replica_path: '/mnt/replica/RagflowAuth/migration_pack_20260403',
       created_at_ms: nowMs - 10_000,
       started_at_ms: nowMs - 11_000,
       finished_at_ms: nowMs - 10_000,
@@ -118,6 +107,7 @@ realAdminTest('data security restore drill can be recorded and listed @regressio
   await expect(page.getByTestId('ds-restore-job-select')).toBeVisible();
   await expect(page.getByRole('option', { name: /#101/ })).toHaveCount(1);
   await expect(page.getByRole('option', { name: /#102/ })).toHaveCount(0);
+  await expect(page.getByTestId('data-security-page')).not.toContainText('Windows');
   await page.getByTestId('ds-restore-target').fill('qa-restore');
   await page.getByTestId('ds-restore-notes').fill('restore verified in qa');
   await page.getByTestId('ds-restore-submit').click();
@@ -135,5 +125,5 @@ realAdminTest('data security restore drill can be recorded and listed @regressio
   await expect(row).toContainText('acceptance: passed');
   await expect(row).toContainText('hash match: true');
   await expect(row).toContainText('compare match: true');
-  await expect(page.getByTestId('ds-job-row-101')).toContainText('验证');
+  await expect(page.getByTestId('ds-job-row-101')).toContainText('验证:');
 });

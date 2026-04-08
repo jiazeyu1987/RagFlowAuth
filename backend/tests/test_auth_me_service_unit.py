@@ -28,6 +28,11 @@ class _PermissionGroupStore:
         return None
 
 
+class _BrokenManagementManager:
+    def get_management_scope(self, user):  # noqa: ARG002
+        raise RuntimeError("management_scope_failed")
+
+
 class TestAuthMeServiceUnit(unittest.TestCase):
     def test_build_payload_all_scope(self):
         deps = SimpleNamespace(
@@ -62,6 +67,7 @@ class TestAuthMeServiceUnit(unittest.TestCase):
             chat_ids=frozenset(),
             tool_scope=ResourceScope.ALL,
             tool_ids=frozenset(),
+            can_manage_users=True,
         )
 
         payload = build_auth_me_payload(deps=deps, user=user, snapshot=snapshot)
@@ -69,6 +75,9 @@ class TestAuthMeServiceUnit(unittest.TestCase):
         self.assertEqual(payload["accessible_kbs"], ["kb-a", "kb-b"])
         self.assertEqual(payload["accessible_chats"], ["agent-a1", "chat-c1"])
         self.assertEqual(payload["permission_groups"], [{"group_id": 1, "group_name": "g1"}])
+        self.assertEqual(payload["capabilities"]["users"]["manage"], {"scope": "all", "targets": []})
+        self.assertEqual(payload["capabilities"]["kb_documents"]["view"], {"scope": "all", "targets": []})
+        self.assertEqual(payload["capabilities"]["tools"]["view"], {"scope": "all", "targets": []})
 
     def test_build_payload_set_scope(self):
         deps = SimpleNamespace(
@@ -96,13 +105,13 @@ class TestAuthMeServiceUnit(unittest.TestCase):
             can_delete=False,
             can_manage_kb_directory=False,
             can_view_kb_config=False,
-            can_view_tools=False,
+            can_view_tools=True,
             kb_scope=ResourceScope.SET,
             kb_names=frozenset({"kb-k1"}),
             chat_scope=ResourceScope.SET,
             chat_ids=frozenset({"chat-c2"}),
-            tool_scope=ResourceScope.NONE,
-            tool_ids=frozenset(),
+            tool_scope=ResourceScope.SET,
+            tool_ids=frozenset({"nmpa"}),
         )
 
         payload = build_auth_me_payload(deps=deps, user=user, snapshot=snapshot)
@@ -110,6 +119,48 @@ class TestAuthMeServiceUnit(unittest.TestCase):
         self.assertEqual(payload["accessible_kbs"], ["kb-k1"])
         self.assertEqual(payload["accessible_chats"], ["chat-c2"])
         self.assertEqual(payload["permission_groups"], [])
+        self.assertEqual(payload["permissions"]["accessible_tools"], ["nmpa"])
+        self.assertEqual(payload["capabilities"]["kb_documents"]["view"], {"scope": "set", "targets": ["id-k1"]})
+        self.assertEqual(payload["capabilities"]["ragflow_documents"]["preview"], {"scope": "set", "targets": ["id-k1"]})
+        self.assertEqual(payload["capabilities"]["tools"]["view"], {"scope": "set", "targets": ["nmpa"]})
+
+    def test_build_payload_does_not_silence_management_scope_failures(self):
+        deps = SimpleNamespace(
+            ragflow_service=_RagflowService(),
+            ragflow_chat_service=_RagflowChatService(),
+            permission_group_store=_PermissionGroupStore(),
+            knowledge_management_manager=_BrokenManagementManager(),
+        )
+        user = SimpleNamespace(
+            user_id="u3",
+            username="charlie",
+            email="charlie@example.com",
+            role="sub_admin",
+            status="active",
+            group_id=None,
+            group_ids=[],
+            managed_kb_root_node_id="root-1",
+        )
+        snapshot = PermissionSnapshot(
+            is_admin=False,
+            can_upload=False,
+            can_review=False,
+            can_download=False,
+            can_copy=False,
+            can_delete=False,
+            can_manage_kb_directory=False,
+            can_view_kb_config=False,
+            can_view_tools=False,
+            kb_scope=ResourceScope.NONE,
+            kb_names=frozenset(),
+            chat_scope=ResourceScope.NONE,
+            chat_ids=frozenset(),
+            tool_scope=ResourceScope.NONE,
+            tool_ids=frozenset(),
+        )
+
+        with self.assertRaisesRegex(RuntimeError, "management_scope_failed"):
+            build_auth_me_payload(deps=deps, user=user, snapshot=snapshot)
 
 
 if __name__ == "__main__":

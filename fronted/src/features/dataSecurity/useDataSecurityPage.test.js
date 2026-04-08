@@ -19,11 +19,10 @@ const settingsResponse = {
   enabled: true,
   backup_retention_max: 7,
   local_backup_target_path: '/app/data/backups',
-  windows_backup_target_path: '/mnt/replica/RagflowAuth',
-  target_mode: 'share',
-  target_ip: '10.0.0.8',
-  target_share_name: 'BackupShare',
-  target_subdir: 'RagflowAuth',
+  ragflow_compose_path: '/app/ragflow_compose/docker-compose.yml',
+  ragflow_stop_services: false,
+  full_backup_include_images: true,
+  auth_db_path: 'data/auth.db',
 };
 
 const createJob = (overrides = {}) => ({
@@ -34,9 +33,6 @@ const createJob = (overrides = {}) => ({
   progress: 100,
   package_hash: 'hash-local-101',
   output_dir: '/app/data/backups/migration_pack_20260404_120000',
-  replica_path: '',
-  replication_status: 'failed',
-  replication_error: 'windows share unavailable',
   created_at_ms: 1_775_270_400_000,
   started_at_ms: 1_775_270_300_000,
   detail: '',
@@ -47,6 +43,7 @@ describe('useDataSecurityPage', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     dataSecurityApi.getSettings.mockResolvedValue(settingsResponse);
+    dataSecurityApi.updateSettings.mockResolvedValue(settingsResponse);
     dataSecurityApi.listJobs.mockResolvedValue([createJob()]);
     dataSecurityApi.listRestoreDrills.mockResolvedValue([]);
     dataSecurityApi.createRestoreDrill.mockResolvedValue({
@@ -65,9 +62,9 @@ describe('useDataSecurityPage', () => {
     expect(dataSecurityApi.listJobs).toHaveBeenCalledWith(30);
     expect(dataSecurityApi.listRestoreDrills).toHaveBeenCalledWith(30);
     expect(result.current.localBackupTargetPath).toBe('/app/data/backups');
-    expect(result.current.windowsBackupTargetPath).toBe('/mnt/replica/RagflowAuth');
     expect(result.current.restoreEligibleJobs).toHaveLength(1);
     expect(result.current.selectedRestoreJobId).toBe('101');
+    expect('windowsBackupTargetPath' in result.current).toBe(false);
   });
 
   it('submits restore drills through the feature api using the selected local backup', async () => {
@@ -90,6 +87,33 @@ describe('useDataSecurityPage', () => {
       backup_hash: 'hash-local-101',
       restore_target: 'qa-staging',
       verification_notes: 'local-only drill',
+    });
+  });
+
+  it('saves only generic backup settings without Windows replica fields', async () => {
+    const { result } = renderHook(() => useDataSecurityPage());
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    await act(async () => {
+      result.current.setSettingField('enabled', false);
+      result.current.setSettingField('ragflow_compose_path', '/srv/ragflow/docker-compose.yml');
+      result.current.setSettingField('ragflow_stop_services', true);
+      result.current.setSettingField('full_backup_include_images', false);
+      result.current.setSettingField('auth_db_path', 'config/auth.db');
+    });
+
+    await act(async () => {
+      await result.current.saveSettings('update local backup settings');
+    });
+
+    expect(dataSecurityApi.updateSettings).toHaveBeenCalledWith({
+      enabled: false,
+      ragflow_compose_path: '/srv/ragflow/docker-compose.yml',
+      ragflow_stop_services: true,
+      auth_db_path: 'config/auth.db',
+      full_backup_include_images: false,
+      change_reason: 'update local backup settings',
     });
   });
 });

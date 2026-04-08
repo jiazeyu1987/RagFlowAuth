@@ -4,6 +4,9 @@ from tool.maintenance.features.docker_cleanup_images import cleanup_docker_image
 from tool.maintenance.features.kill_backup_job import (
     kill_running_backup_job as feature_kill_running_backup_job,
 )
+from tool.maintenance.features.local_backup_restore import (
+    restore_downloaded_backup_to_local as feature_restore_downloaded_backup_to_local,
+)
 from tool.maintenance.features.local_backup_catalog import list_local_backups as feature_list_local_backups
 from tool.maintenance.features.onlyoffice_deploy import (
     deploy_onlyoffice_from_local as feature_deploy_onlyoffice_from_local,
@@ -27,6 +30,10 @@ from tool.maintenance.features.replica_backups import (
     delete_replica_backup_dir as feature_delete_replica_backup_dir,
     list_replica_backup_dirs as feature_list_replica_backup_dirs,
 )
+from tool.maintenance.features.server_backup_pull import (
+    download_server_backup_dir as feature_download_server_backup_dir,
+    list_server_backup_dirs as feature_list_server_backup_dirs,
+)
 from tool.maintenance.features.restart_services import (
     restart_ragflow_and_ragflowauth as feature_restart_ragflow_and_ragflowauth,
 )
@@ -41,9 +48,12 @@ __all__ = [
     "feature_mount_windows_share",
     "feature_unmount_windows_share",
     "feature_check_mount_status",
+    "feature_restore_downloaded_backup_to_local",
     "feature_list_local_backups",
     "feature_delete_replica_backup_dir",
     "feature_list_replica_backup_dirs",
+    "feature_download_server_backup_dir",
+    "feature_list_server_backup_dirs",
     "feature_get_server_version_info",
     "feature_publish_from_test_to_prod",
     "feature_publish_from_local_to_test",

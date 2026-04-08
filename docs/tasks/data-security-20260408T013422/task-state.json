@@ -1,0 +1,182 @@
+{
+  "schema_version": 2,
+  "task_id": "data-security-20260408T013422",
+  "mode": "full",
+  "status": "completed",
+  "current_phase": null,
+  "phase_statuses": [
+    {
+      "phase_id": "P1",
+      "title": "后端数据安全存储职责拆分",
+      "status": "completed",
+      "objective": "",
+      "owned_paths": [],
+      "dependencies": [],
+      "deliverables": [],
+      "evidence_expectation": "",
+      "evidence": [
+        "execution-log.md#phase-p1"
+      ],
+      "notes": "",
+      "last_reviewed_at": "2026-04-08T02:05:29",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P1-AC1",
+          "text": "",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#phase-p1",
+            "test-report.md#t1",
+            "test-report.md#t4",
+            "D:/ProjectPackage/RagflowAuth/output/playwright/data-security-page.png"
+          ]
+        },
+        {
+          "ac_id": "P1-AC2",
+          "text": "",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#phase-p1",
+            "test-report.md#t1",
+            "test-report.md#t4",
+            "D:/ProjectPackage/RagflowAuth/output/playwright/data-security-page.png"
+          ]
+        },
+        {
+          "ac_id": "P1-AC3",
+          "text": "",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#phase-p1",
+            "test-report.md#t1",
+            "test-report.md#t4",
+            "D:/ProjectPackage/RagflowAuth/output/playwright/data-security-page.png"
+          ]
+        }
+      ]
+    },
+    {
+      "phase_id": "P2",
+      "title": "前端数据安全页面与 Hook 拆分",
+      "status": "completed",
+      "objective": "",
+      "owned_paths": [],
+      "dependencies": [],
+      "deliverables": [],
+      "evidence_expectation": "",
+      "evidence": [
+        "execution-log.md#phase-p2"
+      ],
+      "notes": "",
+      "last_reviewed_at": "2026-04-08T02:05:40",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P2-AC1",
+          "text": "",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#phase-p2",
+            "test-report.md#t1",
+            "test-report.md#t4",
+            "D:/ProjectPackage/RagflowAuth/output/playwright/data-security-page.png"
+          ]
+        },
+        {
+          "ac_id": "P2-AC2",
+          "text": "",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#phase-p2",
+            "test-report.md#t1",
+            "test-report.md#t4",
+            "D:/ProjectPackage/RagflowAuth/output/playwright/data-security-page.png"
+          ]
+        },
+        {
+          "ac_id": "P2-AC3",
+          "text": "",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#phase-p2",
+            "test-report.md#t1",
+            "test-report.md#t4",
+            "D:/ProjectPackage/RagflowAuth/output/playwright/data-security-page.png"
+          ]
+        }
+      ]
+    },
+    {
+      "phase_id": "P3",
+      "title": "回归验证与任务工件收口",
+      "status": "completed",
+      "objective": "",
+      "owned_paths": [],
+      "dependencies": [],
+      "deliverables": [],
+      "evidence_expectation": "",
+      "evidence": [
+        "execution-log.md#phase-p3"
+      ],
+      "notes": "",
+      "last_reviewed_at": "2026-04-08T02:05:52",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P3-AC1",
+          "text": "",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#phase-p3",
+            "test-report.md#t1",
+            "test-report.md#t4",
+            "D:/ProjectPackage/RagflowAuth/output/playwright/data-security-page.png"
+          ]
+        },
+        {
+          "ac_id": "P3-AC2",
+          "text": "",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#phase-p3",
+            "test-report.md#t1",
+            "test-report.md#t4",
+            "D:/ProjectPackage/RagflowAuth/output/playwright/data-security-page.png"
+          ]
+        },
+        {
+          "ac_id": "P3-AC3",
+          "text": "",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#phase-p3",
+            "test-report.md#t1",
+            "test-report.md#t4",
+            "D:/ProjectPackage/RagflowAuth/output/playwright/data-security-page.png"
+          ]
+        }
+      ]
+    }
+  ],
+  "planner_review_status": "approved",
+  "test_status": "passed",
+  "blocking_prereqs": [],
+  "iteration_counts": {
+    "planner_revisions": 0,
+    "executor_loops": 3,
+    "test_loops": 1
+  },
+  "created_at": "2026-04-08T01:34:23",
+  "updated_at": "2026-04-08T02:07:23",
+  "branch": "int_latest",
+  "baseline_revision": "3619b8169b862232147c8e7a8d7bca3608a3d8f3",
+  "workspace_root": "D:\\ProjectPackage\\RagflowAuth",
+  "tasks_root": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks",
+  "task_dir": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\data-security-20260408T013422",
+  "goal": "继续推进系统重构，完成 data_security 模块前后端第一期局部重构，保持现有行为与接口稳定",
+  "artifacts": {
+    "prd": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\data-security-20260408T013422\\prd.md",
+    "test_plan": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\data-security-20260408T013422\\test-plan.md",
+    "task_state": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\data-security-20260408T013422\\task-state.json",
+    "execution_log": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\data-security-20260408T013422\\execution-log.md",
+    "test_report": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\data-security-20260408T013422\\test-report.md"
+  }
+}

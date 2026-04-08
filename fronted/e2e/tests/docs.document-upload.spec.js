@@ -6,6 +6,7 @@ const { openSessionPage } = require('../helpers/docSessionPage');
 const {
   FRONTEND_BASE_URL,
   loginApiAs,
+  readOperationRequestEnvelope,
   waitForOperationRequestStatus,
   withdrawOperationRequestViaApi,
 } = require('../helpers/docRealFlow');
@@ -74,7 +75,9 @@ test('Doc upload page uses real file selection, removal, clear, and submit flow 
     const uploadResponse = await uploadResponsePromise;
     await expect(uploadResponse.ok()).toBeTruthy();
     const uploadBody = await uploadResponse.json();
-    requestId = String(uploadBody?.request_id || '').trim();
+    requestId = String(
+      readOperationRequestEnvelope(uploadBody, 'doc upload submit returned invalid approval envelope').request_id || ''
+    ).trim();
     expect(requestId).toBeTruthy();
 
     await expect(page.getByTestId('upload-success')).toContainText(requestId);

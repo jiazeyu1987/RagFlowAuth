@@ -14,11 +14,11 @@ export default function PaperSourceSummaryPanel({
           {Object.entries(sourceStats).map(([key, stat]) => (
             <div key={key}>
               <div>
-                {sourceLabelMap[key] || key}: candidates {stat?.candidates || 0}, downloaded{' '}
-                {stat?.downloaded || 0}, reused {stat?.reused || 0}, failed {stat?.failed || 0}
+                {sourceLabelMap[key] || key}：候选 {stat?.candidates || 0}，已下载{' '}
+                {stat?.downloaded || 0}，已复用 {stat?.reused || 0}，失败 {stat?.failed || 0}
               </div>
               {stat?.query ? (
-                <div style={{ marginTop: '2px' }}>Search query: {stat.query}</div>
+                <div style={{ marginTop: '2px' }}>检索语句：{stat.query}</div>
               ) : null}
             </div>
           ))}
@@ -35,10 +35,10 @@ export default function PaperSourceSummaryPanel({
             paddingTop: '8px',
           }}
         >
-          <div style={{ fontWeight: 800, marginBottom: '4px' }}>Logs</div>
+          <div style={{ fontWeight: 800, marginBottom: '4px' }}>日志</div>
           {Object.entries(sourceErrors).map(([key, value]) => (
             <div key={key}>
-              {sourceLabelMap[key] || key}: {String(value || '-')}
+              {sourceLabelMap[key] || key}：{String(value || '-')}
             </div>
           ))}
         </div>

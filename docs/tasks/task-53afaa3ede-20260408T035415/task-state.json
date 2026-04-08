@@ -1,0 +1,163 @@
+{
+  "schema_version": 2,
+  "task_id": "task-53afaa3ede-20260408T035415",
+  "mode": "full",
+  "status": "completed",
+  "current_phase": null,
+  "phase_statuses": [
+    {
+      "phase_id": "P1",
+      "title": "Decompose document-browser page state",
+      "status": "completed",
+      "objective": "Split document-browser responsibilities into smaller browser-domain hooks/helpers without changing the public page-hook contract used by `DocumentBrowser.js`.",
+      "owned_paths": [],
+      "dependencies": [],
+      "deliverables": [],
+      "evidence_expectation": "",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P1-AC1",
+          "text": "`useDocumentBrowserPage.js` no longer directly owns all major responsibilities for storage-backed preferences, document loading, folder navigation, and batch/transfer actions in one file.",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P1",
+            "test-report.md#T1",
+            "test-report.md#T2"
+          ]
+        },
+        {
+          "ac_id": "P1-AC2",
+          "text": "`DocumentBrowser.js` and existing browser components can continue using the page hook without a breaking contract change.",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P1",
+            "test-report.md#T1",
+            "test-report.md#T2"
+          ]
+        },
+        {
+          "ac_id": "P1-AC3",
+          "text": "dataset usage tracking, recent keyword persistence, document loading, delete, batch download, and transfer behavior remain stable after decomposition.",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P1",
+            "test-report.md#T1",
+            "test-report.md#T2"
+          ]
+        }
+      ],
+      "evidence": [
+        "execution-log.md#Phase-P1"
+      ],
+      "notes": "",
+      "last_reviewed_at": "2026-04-08T04:12:44"
+    },
+    {
+      "phase_id": "P2",
+      "title": "Decompose document-preview modal lifecycle and renderer",
+      "status": "completed",
+      "objective": "Split preview loading/state lifecycle from preview content rendering so new formats or lifecycle fixes stop accumulating in one modal file.",
+      "owned_paths": [],
+      "dependencies": [],
+      "deliverables": [],
+      "evidence_expectation": "",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P2-AC1",
+          "text": "`DocumentPreviewModal.js` no longer mixes preview loading orchestration and all format render branches in one monolithic component body.",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P2",
+            "test-report.md#T1",
+            "test-report.md#T2"
+          ]
+        },
+        {
+          "ac_id": "P2-AC2",
+          "text": "OnlyOffice, PDF, HTML, image, text/markdown/CSV, and Excel/Docx preview branches continue to render through explicit preview-specific logic after extraction.",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P2",
+            "test-report.md#T1",
+            "test-report.md#T2"
+          ]
+        },
+        {
+          "ac_id": "P2-AC3",
+          "text": "object URL cleanup and modal close/reset behavior remain explicit and verifiable.",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P2",
+            "test-report.md#T1",
+            "test-report.md#T2"
+          ]
+        }
+      ],
+      "evidence": [
+        "execution-log.md#Phase-P2"
+      ],
+      "notes": "",
+      "last_reviewed_at": "2026-04-08T04:12:54"
+    },
+    {
+      "phase_id": "P3",
+      "title": "Focused regression coverage and task evidence",
+      "status": "completed",
+      "objective": "Prove the bounded refactor preserved the targeted browser and preview behaviors.",
+      "owned_paths": [],
+      "dependencies": [],
+      "deliverables": [],
+      "evidence_expectation": "",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P3-AC1",
+          "text": "focused frontend Jest suites pass against the final code state.",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P3",
+            "test-report.md#T1",
+            "test-report.md#T2"
+          ]
+        },
+        {
+          "ac_id": "P3-AC2",
+          "text": "task artifacts record the commands run, acceptance coverage, and any remaining bounded risks.",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P3",
+            "test-report.md#T1",
+            "test-report.md#T2"
+          ]
+        }
+      ],
+      "evidence": [
+        "execution-log.md#Phase-P3"
+      ],
+      "notes": "",
+      "last_reviewed_at": "2026-04-08T04:13:05"
+    }
+  ],
+  "planner_review_status": "approved",
+  "test_status": "passed",
+  "blocking_prereqs": [],
+  "iteration_counts": {
+    "planner_revisions": 0,
+    "executor_loops": 3,
+    "test_loops": 1
+  },
+  "created_at": "2026-04-08T03:54:16",
+  "updated_at": "2026-04-08T04:14:17",
+  "branch": "int_latest",
+  "baseline_revision": "3619b8169b862232147c8e7a8d7bca3608a3d8f3",
+  "workspace_root": "D:\\ProjectPackage\\RagflowAuth",
+  "tasks_root": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks",
+  "task_dir": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\task-53afaa3ede-20260408T035415",
+  "goal": "继续进行前后端重构直到重构结束：完成系统重构计划最后一阶段，拆分文档浏览器与文档预览前端模块，保持现有行为并补齐验证。",
+  "artifacts": {
+    "prd": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\task-53afaa3ede-20260408T035415\\prd.md",
+    "test_plan": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\task-53afaa3ede-20260408T035415\\test-plan.md",
+    "task_state": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\task-53afaa3ede-20260408T035415\\task-state.json",
+    "execution_log": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\task-53afaa3ede-20260408T035415\\execution-log.md",
+    "test_report": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\task-53afaa3ede-20260408T035415\\test-report.md"
+  }
+}

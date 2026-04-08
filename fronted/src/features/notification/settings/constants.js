@@ -1,9 +1,9 @@
 export const CHANNEL_TYPES = ['email', 'dingtalk', 'in_app'];
 
 export const DEFAULTS = {
-  email: { channelId: 'email-main', name: '邮件通知', enabled: false },
-  dingtalk: { channelId: 'dingtalk-main', name: '钉钉工作通知', enabled: false },
-  in_app: { channelId: 'inapp-main', name: '站内信', enabled: true },
+  email: { channelId: 'email-main', name: 'Email Notification', enabled: false },
+  dingtalk: { channelId: 'dingtalk-main', name: 'DingTalk Notification', enabled: false },
+  in_app: { channelId: 'inapp-main', name: 'In-App Notification', enabled: true },
 };
 
 export const DINGTALK_DEFAULT_RECIPIENT_MAP = {

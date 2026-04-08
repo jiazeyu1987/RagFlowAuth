@@ -114,6 +114,21 @@ class TestKnowledgeManagementManagerUnit(unittest.TestCase):
             self.manager.assert_dataset_manageable(user, "ds_other")
         self.assertEqual(cm.exception.code, "dataset_out_of_management_scope")
 
+    def test_prepare_dataset_create_payload_requires_name(self):
+        user = SimpleNamespace(role="admin", managed_kb_root_node_id=None)
+        with self.assertRaises(KnowledgeManagementError) as cm:
+            self.manager.prepare_dataset_create_payload(user=user, payload={"name": "   "})
+        self.assertEqual(cm.exception.code, "missing_name")
+
+    def test_prepare_dataset_create_payload_requires_target_node_for_sub_admin(self):
+        user = SimpleNamespace(role="sub_admin", managed_kb_root_node_id=self.root["id"])
+        with self.assertRaises(KnowledgeManagementError) as cm:
+            self.manager.prepare_dataset_create_payload(
+                user=user,
+                payload={"name": "Child KB", "node_id": ""},
+            )
+        self.assertEqual(cm.exception.code, "target_node_required_for_sub_admin")
+
 
 if __name__ == "__main__":
     unittest.main()

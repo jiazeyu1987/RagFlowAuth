@@ -1,203 +1,29 @@
 from __future__ import annotations
 
 from dataclasses import asdict
-from pathlib import Path
-import time
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
 from backend.app.core.auth import get_deps
 from backend.app.core.authz import AdminOnly
-from backend.app.core.config import settings
-from backend.app.core.paths import repo_root
 from backend.app.core.training_support import assert_user_training_for_action
 from backend.app.dependencies import AppDependencies
 from backend.app.modules.data_security.runner import start_job_if_idle
-from backend.services.audit_helpers import actor_fields_from_user
-from backend.services.data_security.backup_service import _compute_backup_package_hash
-from backend.services.data_security import RestoreDrillExecutionService
-from backend.services.data_security.docker_utils import (
-    docker_ok,
-    list_docker_volumes_by_prefix,
-    read_compose_project_name,
-    resolve_backend_helper_image,
+from backend.app.modules.data_security.support import (
+    _actor_fields,
+    _assert_backup_prerequisites,
+    _audit_data_security_event,
+    _backup_pack_stats,
+    _backup_run_error_status,
+    _hydrate_job_package_hash,
+    _parse_restore_drill_request,
+    _request_audit_fields,
+    _settings_response,
 )
+from backend.services.data_security import RestoreDrillExecutionService
 
 router = APIRouter()
-
-
-def _norm_path(s: str) -> str:
-    text = str(s or "").replace("\\", "/")
-    while "//" in text:
-        text = text.replace("//", "/")
-    if len(text) > 1:
-        text = text.rstrip("/")
-    return text
-
-
-def _backup_pack_stats(s) -> dict[str, Any]:
-    local_target = None
-    try:
-        local_target = s.local_backup_target_path()
-    except Exception:
-        local_target = None
-
-    windows_target = None
-    try:
-        windows_target = s.windows_target_path()
-    except Exception:
-        windows_target = None
-
-    local_stats = _pack_stats_for_target(str(local_target or ""))
-    windows_stats = _pack_stats_for_target(str(windows_target or ""))
-    return {
-        "local_backup_target_path": local_stats["target_path"],
-        "local_backup_pack_count": local_stats["pack_count"],
-        "local_backup_pack_count_skipped": local_stats.get("pack_count_skipped", False),
-        "windows_backup_target_path": windows_stats["target_path"],
-        "windows_backup_pack_count": windows_stats["pack_count"],
-        "windows_backup_pack_count_skipped": windows_stats.get("pack_count_skipped", False),
-    }
-
-
-def _pack_stats_for_target(target: str) -> dict[str, Any]:
-    target_text = str(target or "").strip()
-    if not target_text:
-        return {"target_path": "", "pack_count": 0}
-
-    p = Path(target_text)
-    target_norm = _norm_path(target_text)
-
-    if target_norm == "/mnt/replica" or target_norm.startswith("/mnt/replica/"):
-        if not settings.DATA_SECURITY_SCAN_MOUNT_STATS:
-            return {
-                "target_path": str(p),
-                "pack_count": 0,
-                "pack_count_skipped": True,
-            }
-
-    try:
-        count = 0
-        if p.exists() and p.is_dir():
-            count = sum(1 for child in p.iterdir() if child.is_dir() and child.name.startswith("migration_pack_"))
-        return {"target_path": str(p), "pack_count": int(count)}
-    except Exception:
-        return {"target_path": str(p), "pack_count": 0}
-
-
-def _request_audit_fields(request: Request) -> tuple[str | None, str | None]:
-    request_id = getattr(getattr(request, "state", None), "request_id", None)
-    client_ip = getattr(getattr(request, "client", None), "host", None)
-    return request_id, client_ip
-
-
-def _actor_fields(deps: AppDependencies, actor_user_id: str) -> dict[str, Any]:
-    actor_user = deps.user_store.get_by_user_id(actor_user_id)
-    if not actor_user:
-        raise HTTPException(status_code=401, detail="actor_user_not_found")
-    return actor_fields_from_user(deps, actor_user)
-
-
-def _settings_response(s) -> dict[str, Any]:
-    resp: dict[str, Any] = {
-        "enabled": s.enabled,
-        "interval_minutes": s.interval_minutes,
-        "target_mode": s.target_mode,
-        "target_ip": s.target_ip or "",
-        "target_share_name": s.target_share_name or "",
-        "target_subdir": s.target_subdir or "",
-        "target_local_dir": s.target_local_dir or "",
-        "ragflow_compose_path": s.ragflow_compose_path or "",
-        "ragflow_project_name": s.ragflow_project_name or "",
-        "ragflow_stop_services": s.ragflow_stop_services,
-        "auth_db_path": s.auth_db_path,
-        "updated_at_ms": s.updated_at_ms,
-        "last_run_at_ms": s.last_run_at_ms,
-        "full_backup_enabled": s.full_backup_enabled,
-        "full_backup_include_images": s.full_backup_include_images,
-        "incremental_schedule": s.incremental_schedule,
-        "full_backup_schedule": s.full_backup_schedule,
-        "replica_enabled": s.replica_enabled,
-        "replica_target_path": s.replica_target_path or "",
-        "replica_subdir_format": s.replica_subdir_format or "flat",
-        "backup_retention_max": int(s.backup_retention_max or 30),
-    }
-    resp.update(_backup_pack_stats(s))
-    return resp
-
-
-def _resolve_auth_db_path(auth_db_path: str) -> Path:
-    path = Path(str(auth_db_path or "").strip() or "data/auth.db")
-    if not path.is_absolute():
-        path = repo_root() / path
-    return path
-
-
-def _resolve_backup_worker_image(
-    *, compose_file: Path | None = None, project_name: str | None = None
-) -> tuple[str | None, str | None]:
-    try:
-        return resolve_backend_helper_image(compose_file=compose_file, project_name=project_name), None
-    except RuntimeError as exc:
-        return None, str(exc)
-
-
-def _assert_backup_prerequisites(deps: AppDependencies) -> None:
-    current_settings = deps.data_security_store.get_settings()
-    local_target = str(current_settings.local_backup_target_path() or "").strip()
-    if not local_target:
-        raise RuntimeError("local_backup_target_not_configured")
-
-    ok, why = docker_ok()
-    if not ok:
-        raise RuntimeError(f"docker_unavailable:{why}")
-
-    local_root = Path(local_target)
-    try:
-        probe_dir = local_root / "_staging" / "_preflight"
-        probe_dir.mkdir(parents=True, exist_ok=True)
-        probe = probe_dir / f".write_probe_{int(time.time() * 1000)}"
-        probe.write_text("ok", encoding="utf-8")
-        probe.unlink()
-    except Exception as exc:
-        raise RuntimeError(f"local_backup_target_not_writable:{local_root} err={exc}") from exc
-
-    src_db = _resolve_auth_db_path(current_settings.auth_db_path)
-    if not src_db.exists():
-        raise RuntimeError(f"project_auth_db_not_found:{src_db}")
-
-    compose_path = str(current_settings.ragflow_compose_path or "").strip()
-    if not compose_path:
-        raise RuntimeError("ragflow_compose_path_required")
-    compose_file = Path(compose_path)
-    if not compose_file.is_absolute():
-        compose_file = repo_root() / compose_file
-    if not compose_file.exists():
-        raise RuntimeError(f"ragflow_compose_file_not_found:{compose_file}")
-
-    project_name = read_compose_project_name(compose_file)
-    prefix = f"{project_name}_"
-    volumes = list_docker_volumes_by_prefix(prefix)
-    if not volumes:
-        raise RuntimeError(f"ragflow_volumes_not_found:{prefix}")
-
-    _, worker_error = _resolve_backup_worker_image(compose_file=compose_file, project_name=project_name)
-    if worker_error:
-        raise RuntimeError(worker_error)
-
-
-def _hydrate_job_package_hash(store, job):
-    if not job or job.package_hash or not str(job.output_dir or "").strip():
-        return job
-    pack_dir = Path(str(job.output_dir).strip())
-    if not pack_dir.exists() or not pack_dir.is_dir():
-        return job
-    try:
-        package_hash = _compute_backup_package_hash(pack_dir)
-        return store.update_job(job.id, package_hash=package_hash)
-    except Exception:
-        return job
 
 
 @router.get("/admin/data-security/settings")
@@ -228,21 +54,18 @@ def update_settings(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     resp = _settings_response(s)
 
-    request_id, client_ip = _request_audit_fields(request)
-    deps.audit_log_manager.log_event(
+    _audit_data_security_event(
+        deps=deps,
+        request=request,
+        actor_user_id=payload.sub,
         action="data_security_settings_update",
-        actor=payload.sub,
-        source="data_security",
         resource_type="data_security_settings",
         resource_id="1",
         event_type="update",
         before=asdict(before),
         after=asdict(s),
         reason=change_reason,
-        request_id=request_id,
-        client_ip=client_ip,
         meta={"changed_keys": changed_keys},
-        **_actor_fields(deps, payload.sub),
     )
     return resp
 
@@ -258,24 +81,20 @@ def run_backup(
         job_id = start_job_if_idle(reason="manual", store=deps.data_security_store)
     except RuntimeError as e:
         detail = str(e)
-        status_code = 409 if detail == "backup_job_already_running" or "占用" in detail else 400
-        raise HTTPException(status_code=status_code, detail=detail)
+        raise HTTPException(status_code=_backup_run_error_status(detail), detail=detail)
 
-    request_id, client_ip = _request_audit_fields(request)
-    deps.audit_log_manager.log_event(
+    _audit_data_security_event(
+        deps=deps,
+        request=request,
+        actor_user_id=payload.sub,
         action="backup_run",
-        actor=payload.sub,
-        source="data_security",
         resource_type="backup_job",
         resource_id=str(job_id),
         event_type="create",
         before=None,
         after={"job_id": job_id, "kind": "incremental"},
         reason="manual_run",
-        request_id=request_id,
-        client_ip=client_ip,
         meta={"full_backup": False},
-        **_actor_fields(deps, payload.sub),
     )
     return {"job_id": job_id}
 
@@ -309,24 +128,20 @@ def run_full_backup(
         job_id = start_job_if_idle(reason="manual_full_backup", store=deps.data_security_store, full_backup=True)
     except RuntimeError as e:
         detail = str(e)
-        status_code = 409 if detail == "backup_job_already_running" or "占用" in detail else 400
-        raise HTTPException(status_code=status_code, detail=detail)
+        raise HTTPException(status_code=_backup_run_error_status(detail), detail=detail)
 
-    request_id, client_ip = _request_audit_fields(request)
-    deps.audit_log_manager.log_event(
+    _audit_data_security_event(
+        deps=deps,
+        request=request,
+        actor_user_id=payload.sub,
         action="backup_run",
-        actor=payload.sub,
-        source="data_security",
         resource_type="backup_job",
         resource_id=str(job_id),
         event_type="create",
         before=None,
         after={"job_id": job_id, "kind": "full"},
         reason="manual_run_full",
-        request_id=request_id,
-        client_ip=client_ip,
         meta={"full_backup": True},
-        **_actor_fields(deps, payload.sub),
     )
     return {"job_id": job_id}
 
@@ -353,21 +168,18 @@ def cancel_backup_job(
     except KeyError:
         raise HTTPException(status_code=404, detail="job_not_found")
 
-    request_id, client_ip = _request_audit_fields(request)
-    deps.audit_log_manager.log_event(
+    _audit_data_security_event(
+        deps=deps,
+        request=request,
+        actor_user_id=payload.sub,
         action="backup_cancel",
-        actor=payload.sub,
-        source="data_security",
         resource_type="backup_job",
         resource_id=str(job_id),
         event_type="update",
         before=before_job.as_dict(),
         after=job.as_dict(),
         reason=(body or {}).get("reason"),
-        request_id=request_id,
-        client_ip=client_ip,
         meta={"cancel_requested": True},
-        **_actor_fields(deps, payload.sub),
     )
     return job.as_dict()
 
@@ -387,42 +199,20 @@ def create_restore_drill(
         user=actor_user,
         controlled_action="restore_drill_execute",
     )
-    data = body or {}
-
     try:
-        job_id = int(data.get("job_id"))
-    except Exception as exc:
-        raise HTTPException(status_code=400, detail="invalid_job_id") from exc
-
-    backup_path = str(data.get("backup_path") or "").strip()
-    backup_hash = str(data.get("backup_hash") or "").strip()
-    restore_target = str(data.get("restore_target") or "").strip()
-    verification_notes = data.get("verification_notes")
-    if verification_notes is not None:
-        verification_notes = str(verification_notes).strip()
-
-    if not backup_path:
-        raise HTTPException(status_code=400, detail="backup_path_required")
-    if not backup_hash:
-        raise HTTPException(status_code=400, detail="backup_hash_required")
-    if not restore_target:
-        raise HTTPException(status_code=400, detail="restore_target_required")
-
-    executed_at_raw = data.get("executed_at_ms")
-    try:
-        executed_at_ms = int(time.time() * 1000) if executed_at_raw is None else int(executed_at_raw)
-    except Exception as exc:
-        raise HTTPException(status_code=400, detail="invalid_executed_at_ms") from exc
+        request_data = _parse_restore_drill_request(body)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     try:
         drill = RestoreDrillExecutionService(deps.data_security_store).execute_drill(
-            job_id=job_id,
-            backup_path=backup_path,
-            backup_hash=backup_hash,
-            restore_target=restore_target,
+            job_id=request_data.job_id,
+            backup_path=request_data.backup_path,
+            backup_hash=request_data.backup_hash,
+            restore_target=request_data.restore_target,
             executed_by=payload.sub,
-            executed_at_ms=executed_at_ms,
-            verification_notes=verification_notes,
+            executed_at_ms=request_data.executed_at_ms,
+            verification_notes=request_data.verification_notes,
         )
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="job_not_found") from exc
@@ -431,28 +221,25 @@ def create_restore_drill(
     except RuntimeError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
-    request_id, client_ip = _request_audit_fields(request)
-    deps.audit_log_manager.log_event(
+    _audit_data_security_event(
+        deps=deps,
+        request=request,
+        actor_user_id=payload.sub,
         action="backup_restore_drill_create",
-        actor=payload.sub,
-        source="data_security",
         resource_type="restore_drill",
         resource_id=drill.drill_id,
         event_type="create",
         before=None,
         after=drill.as_dict(),
-        reason=str(data.get("reason") or "manual_restore_drill"),
-        request_id=request_id,
-        client_ip=client_ip,
+        reason=request_data.reason,
         meta={
-            "job_id": job_id,
+            "job_id": request_data.job_id,
             "result": drill.result,
             "acceptance_status": drill.acceptance_status,
             "package_validation_status": drill.package_validation_status,
             "hash_match": drill.hash_match,
             "compare_match": drill.compare_match,
         },
-        **_actor_fields(deps, payload.sub),
     )
     return drill.as_dict()
 
@@ -466,20 +253,17 @@ def list_restore_drills(
 ) -> dict[str, Any]:
     items = deps.data_security_store.list_restore_drills(limit=limit)
 
-    request_id, client_ip = _request_audit_fields(request)
-    deps.audit_log_manager.log_event(
+    _audit_data_security_event(
+        deps=deps,
+        request=request,
+        actor_user_id=payload.sub,
         action="backup_restore_drill_list",
-        actor=payload.sub,
-        source="data_security",
         resource_type="restore_drill",
         resource_id="*",
         event_type="query",
         before=None,
         after=None,
         reason="list_restore_drills",
-        request_id=request_id,
-        client_ip=client_ip,
         meta={"limit": int(limit), "count": len(items)},
-        **_actor_fields(deps, payload.sub),
     )
     return {"items": [item.as_dict() for item in items], "count": len(items)}

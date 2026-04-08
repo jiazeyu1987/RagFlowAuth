@@ -8,6 +8,7 @@ const {
   ensureUserDeletedByUsername,
   findUserByUsername,
   loginApiAs,
+  readUserEnvelope,
   tryLoginApi,
   uniquePassword,
   uniqueUsername,
@@ -69,7 +70,9 @@ test('User management covers real create, reset password, disable/enable, and lo
     });
     await expect(createResponse.ok()).toBeTruthy();
     const createBody = await createResponse.json();
-    createdUserId = String(createBody?.user_id || '').trim();
+    createdUserId = String(
+      readUserEnvelope(createBody, `create user returned invalid payload for ${username}`).user_id || ''
+    ).trim();
     expect(createdUserId).toBeTruthy();
 
     const createdUser = await waitForUserVisible(adminSession.api, adminSession.headers, username);

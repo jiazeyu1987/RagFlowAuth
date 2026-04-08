@@ -1,0 +1,386 @@
+{
+  "schema_version": 2,
+  "task_id": "address-remaining-refactor-hotspots-across-backe-20260408T093242",
+  "mode": "full",
+  "status": "completed",
+  "current_phase": null,
+  "phase_statuses": [
+    {
+      "phase_id": "P1",
+      "title": "Backend dependency assembly decomposition",
+      "status": "completed",
+      "objective": "Break `backend/app/dependencies.py` into reviewable factory seams so global dependencies, tenant dependencies, and feature dependency groups stop being assembled in one large routine.",
+      "owned_paths": [],
+      "dependencies": [],
+      "deliverables": [],
+      "evidence_expectation": "execution evidence references code changes plus passing focused dependency/auth tests.",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P1-AC1",
+          "text": "`backend/app/dependencies.py` no longer directly owns the full application object graph assembly in one large routine; feature-specific or stage-specific assembly has been extracted into bounded helpers/modules.",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P1",
+            "test-report.md#T1",
+            "test-report.md#T2",
+            "test-report.md#T3",
+            "test-report.md#T4",
+            "test-report.md#T5",
+            "test-report.md#T6"
+          ]
+        },
+        {
+          "ac_id": "P1-AC2",
+          "text": "tenant-scoped dependency resolution still fails fast on invalid prerequisites and preserves current global-versus-tenant behavior without introducing fallback logic.",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P1",
+            "test-report.md#T1",
+            "test-report.md#T2",
+            "test-report.md#T3",
+            "test-report.md#T4",
+            "test-report.md#T5",
+            "test-report.md#T6"
+          ]
+        },
+        {
+          "ac_id": "P1-AC3",
+          "text": "focused backend tests cover dependency creation and tenant-scoped resolution against the final code state.",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P1",
+            "test-report.md#T1",
+            "test-report.md#T2",
+            "test-report.md#T3",
+            "test-report.md#T4",
+            "test-report.md#T5",
+            "test-report.md#T6"
+          ]
+        }
+      ],
+      "evidence": [
+        "execution-log.md#Phase-P1"
+      ],
+      "notes": "",
+      "last_reviewed_at": "2026-04-08T09:57:35"
+    },
+    {
+      "phase_id": "P2",
+      "title": "Permission/auth pipeline hardening and convergence",
+      "status": "completed",
+      "objective": "Split permission resolution and auth-me payload generation into clearer stages, reduce broad catch-all exception swallowing on core authorization paths, and keep frontend/backend permission contracts aligned.",
+      "owned_paths": [],
+      "dependencies": [],
+      "deliverables": [],
+      "evidence_expectation": "execution evidence references permission/auth code changes and passing focused backend/frontend auth tests.",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P2-AC1",
+          "text": "backend permission resolution and `/api/auth/me` payload construction are split into clearer reviewable steps rather than one concentrated rule block with mixed expansion/output concerns.",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P2",
+            "test-report.md#T1",
+            "test-report.md#T2",
+            "test-report.md#T3",
+            "test-report.md#T4",
+            "test-report.md#T5",
+            "test-report.md#T6"
+          ]
+        },
+        {
+          "ac_id": "P2-AC2",
+          "text": "core authorization and permission paths no longer hide important failures behind broad best-effort exception swallowing where that would obscure broken authorization behavior.",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P2",
+            "test-report.md#T1",
+            "test-report.md#T2",
+            "test-report.md#T3",
+            "test-report.md#T4",
+            "test-report.md#T5",
+            "test-report.md#T6"
+          ]
+        },
+        {
+          "ac_id": "P2-AC3",
+          "text": "frontend auth evaluation and permission guards consume the shared capability contract without reintroducing divergent access-control rules.",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P2",
+            "test-report.md#T1",
+            "test-report.md#T2",
+            "test-report.md#T3",
+            "test-report.md#T4",
+            "test-report.md#T5",
+            "test-report.md#T6"
+          ]
+        }
+      ],
+      "evidence": [
+        "execution-log.md#Phase-P2"
+      ],
+      "notes": "",
+      "last_reviewed_at": "2026-04-08T10:32:50"
+    },
+    {
+      "phase_id": "P3",
+      "title": "Data-security router boundary cleanup",
+      "status": "completed",
+      "objective": "Thin the data-security router so HTTP concerns, prerequisite probing, business operations, and audit-record construction are no longer mixed in one router file.",
+      "owned_paths": [],
+      "dependencies": [],
+      "deliverables": [],
+      "evidence_expectation": "execution evidence references data-security boundary extraction and passing route-level tests.",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P3-AC1",
+          "text": "`backend/app/modules/data_security/router.py` is reduced to HTTP boundary responsibilities, with prerequisite probing, audit payload construction, or core operation logic extracted to bounded helpers/services.",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P3",
+            "test-report.md#T1",
+            "test-report.md#T2",
+            "test-report.md#T3",
+            "test-report.md#T4",
+            "test-report.md#T5",
+            "test-report.md#T6"
+          ]
+        },
+        {
+          "ac_id": "P3-AC2",
+          "text": "data-security routes preserve existing fail-fast request validation and do not introduce compatibility shims or silent downgrade paths.",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P3",
+            "test-report.md#T1",
+            "test-report.md#T2",
+            "test-report.md#T3",
+            "test-report.md#T4",
+            "test-report.md#T5",
+            "test-report.md#T6"
+          ]
+        },
+        {
+          "ac_id": "P3-AC3",
+          "text": "focused backend data-security tests pass against the final code state.",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P3",
+            "test-report.md#T1",
+            "test-report.md#T2",
+            "test-report.md#T3",
+            "test-report.md#T4",
+            "test-report.md#T5",
+            "test-report.md#T6"
+          ]
+        }
+      ],
+      "evidence": [
+        "execution-log.md#Phase-P3"
+      ],
+      "notes": "",
+      "last_reviewed_at": "2026-04-08T10:40:50"
+    },
+    {
+      "phase_id": "P4",
+      "title": "Frontend access-control and navigation convergence",
+      "status": "completed",
+      "objective": "Eliminate remaining scattered route/nav access logic so route guarding and navigation visibility derive from one coherent metadata/evaluation path.",
+      "owned_paths": [],
+      "dependencies": [],
+      "deliverables": [],
+      "evidence_expectation": "execution evidence references route/layout changes, focused frontend test output, and browser evidence refs.",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P4-AC1",
+          "text": "route access and navigation visibility no longer rely on ad hoc `Layout`-only special cases such as standalone document-history visibility logic that is disconnected from shared route metadata.",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P4",
+            "test-report.md#T1",
+            "test-report.md#T2",
+            "test-report.md#T3",
+            "test-report.md#T4",
+            "test-report.md#T5",
+            "test-report.md#T6"
+          ]
+        },
+        {
+          "ac_id": "P4-AC2",
+          "text": "shared route metadata plus shared auth evaluation now govern the affected nav and route-guard behavior consistently.",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P4",
+            "test-report.md#T1",
+            "test-report.md#T2",
+            "test-report.md#T3",
+            "test-report.md#T4",
+            "test-report.md#T5",
+            "test-report.md#T6"
+          ]
+        },
+        {
+          "ac_id": "P4-AC3",
+          "text": "focused frontend tests and one real-browser validation pass confirm the affected navigation and access-control paths still work after convergence.",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P4",
+            "test-report.md#T1",
+            "test-report.md#T2",
+            "test-report.md#T3",
+            "test-report.md#T4",
+            "test-report.md#T5",
+            "test-report.md#T6"
+          ]
+        }
+      ],
+      "evidence": [
+        "execution-log.md#Phase-P4"
+      ],
+      "notes": "",
+      "last_reviewed_at": "2026-04-08T11:13:47"
+    },
+    {
+      "phase_id": "P5",
+      "title": "Selected page-controller hotspot decomposition",
+      "status": "completed",
+      "objective": "Reduce the highest-cost frontend controller hotspots by extracting bounded logic seams from `useTrainingCompliancePage`, `useChatStream`, and `Layout`.",
+      "owned_paths": [],
+      "dependencies": [],
+      "deliverables": [],
+      "evidence_expectation": "execution evidence references controller decomposition plus passing targeted frontend tests.",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P5-AC1",
+          "text": "`fronted/src/features/trainingCompliance/useTrainingCompliancePage.js` is decomposed into smaller bounded helpers/hooks so the page-level controller no longer directly owns all user-search, prefill, data loading, and form submission behavior in one file.",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P5",
+            "test-report.md#T1",
+            "test-report.md#T2",
+            "test-report.md#T3",
+            "test-report.md#T4",
+            "test-report.md#T5",
+            "test-report.md#T6"
+          ]
+        },
+        {
+          "ac_id": "P5-AC2",
+          "text": "`fronted/src/features/chat/hooks/useChatStream.js` no longer keeps the full SSE parsing and merge heuristics embedded in one large `sendMessage()` routine without narrower helper seams.",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P5",
+            "test-report.md#T1",
+            "test-report.md#T2",
+            "test-report.md#T3",
+            "test-report.md#T4",
+            "test-report.md#T5",
+            "test-report.md#T6"
+          ]
+        },
+        {
+          "ac_id": "P5-AC3",
+          "text": "focused frontend tests cover the decomposed training-compliance and chat-stream behavior against the final code state.",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P5",
+            "test-report.md#T1",
+            "test-report.md#T2",
+            "test-report.md#T3",
+            "test-report.md#T4",
+            "test-report.md#T5",
+            "test-report.md#T6"
+          ]
+        }
+      ],
+      "evidence": [
+        "execution-log.md#Phase-P5"
+      ],
+      "notes": "",
+      "last_reviewed_at": "2026-04-08T11:13:57"
+    },
+    {
+      "phase_id": "P6",
+      "title": "Focused regression, browser validation, and artifact closure",
+      "status": "completed",
+      "objective": "Validate the final refactor through focused backend/frontend commands and a real-browser smoke pass for the affected UI access-control paths, then close task evidence cleanly.",
+      "owned_paths": [],
+      "dependencies": [],
+      "deliverables": [],
+      "evidence_expectation": "execution evidence references exact commands, browser artifacts, and final completion-script success.",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P6-AC1",
+          "text": "focused backend regression commands for dependencies, auth/permissions, and data-security pass against the final code state.",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P6",
+            "test-report.md#T1",
+            "test-report.md#T2",
+            "test-report.md#T3",
+            "test-report.md#T4",
+            "test-report.md#T5",
+            "test-report.md#T6"
+          ]
+        },
+        {
+          "ac_id": "P6-AC2",
+          "text": "focused frontend regression commands for auth, layout/routes, training-compliance, and chat-stream pass against the final code state.",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P6",
+            "test-report.md#T1",
+            "test-report.md#T2",
+            "test-report.md#T3",
+            "test-report.md#T4",
+            "test-report.md#T5",
+            "test-report.md#T6"
+          ]
+        },
+        {
+          "ac_id": "P6-AC3",
+          "text": "`test-report.md` records a real-browser validation pass with concrete non-task-artifact evidence for the affected UI access-control surface.",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P6",
+            "test-report.md#T1",
+            "test-report.md#T2",
+            "test-report.md#T3",
+            "test-report.md#T4",
+            "test-report.md#T5",
+            "test-report.md#T6"
+          ]
+        }
+      ],
+      "evidence": [
+        "execution-log.md#Phase-P6"
+      ],
+      "notes": "",
+      "last_reviewed_at": "2026-04-08T11:14:10"
+    }
+  ],
+  "planner_review_status": "approved",
+  "test_status": "passed",
+  "blocking_prereqs": [],
+  "iteration_counts": {
+    "planner_revisions": 0,
+    "executor_loops": 4,
+    "test_loops": 1
+  },
+  "created_at": "2026-04-08T09:32:42",
+  "updated_at": "2026-04-08T11:17:36",
+  "branch": "int_latest",
+  "baseline_revision": "3619b8169b862232147c8e7a8d7bca3608a3d8f3",
+  "workspace_root": "D:\\ProjectPackage\\RagflowAuth",
+  "tasks_root": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks",
+  "task_dir": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\address-remaining-refactor-hotspots-across-backe-20260408T093242",
+  "goal": "Address remaining refactor hotspots across backend dependencies, permission/auth flow, data security router boundaries, store responsibilities, frontend access-control convergence, and page-controller hotspots without introducing fallback behavior",
+  "artifacts": {
+    "prd": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\address-remaining-refactor-hotspots-across-backe-20260408T093242\\prd.md",
+    "test_plan": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\address-remaining-refactor-hotspots-across-backe-20260408T093242\\test-plan.md",
+    "task_state": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\address-remaining-refactor-hotspots-across-backe-20260408T093242\\task-state.json",
+    "execution_log": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\address-remaining-refactor-hotspots-across-backe-20260408T093242\\execution-log.md",
+    "test_report": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\address-remaining-refactor-hotspots-across-backe-20260408T093242\\test-report.md"
+  }
+}

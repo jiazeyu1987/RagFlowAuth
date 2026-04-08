@@ -1,0 +1,111 @@
+{
+  "schema_version": 2,
+  "task_id": "backend-services-users-store-py-userstore-pytest-20260408T090909",
+  "mode": "full",
+  "status": "completed",
+  "current_phase": null,
+  "phase_statuses": [
+    {
+      "phase_id": "P1",
+      "title": "Extract shared UserStore read-side helpers",
+      "status": "completed",
+      "objective": "Move repeated user-row mapping and identifier/display-name lookup logic into bounded local helpers while keeping `UserStore` behavior stable.",
+      "owned_paths": [],
+      "dependencies": [],
+      "deliverables": [],
+      "evidence_expectation": "",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P1-AC1",
+          "text": "`store.py` no longer duplicates the same user-row-to-`User` mapping logic across the main read methods.",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P1",
+            "test-report.md#T1"
+          ]
+        },
+        {
+          "ac_id": "P1-AC2",
+          "text": "username and display-name reference maps are built through shared bounded helpers instead of repeated ad hoc loops.",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P1",
+            "test-report.md#T1"
+          ]
+        },
+        {
+          "ac_id": "P1-AC3",
+          "text": "`UserStore` read and write contracts remain stable and do not introduce fallback or silent downgrade behavior.",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P1",
+            "test-report.md#T1"
+          ]
+        }
+      ],
+      "evidence": [
+        "execution-log.md#Phase-P1"
+      ],
+      "notes": "",
+      "last_reviewed_at": "2026-04-08T09:14:58"
+    },
+    {
+      "phase_id": "P2",
+      "title": "Focused backend regression validation and tranche evidence",
+      "status": "completed",
+      "objective": "Prove the bounded store refactor preserves current user-store behavior and record reviewable evidence.",
+      "owned_paths": [],
+      "dependencies": [],
+      "deliverables": [],
+      "evidence_expectation": "",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P2-AC1",
+          "text": "focused `UserStore` pytest suites pass against the final code state.",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P2",
+            "test-report.md#T1"
+          ]
+        },
+        {
+          "ac_id": "P2-AC2",
+          "text": "task artifacts record the exact commands run, changed paths, verified acceptance ids, and bounded residual risk.",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P2",
+            "test-report.md#T1"
+          ]
+        }
+      ],
+      "evidence": [
+        "execution-log.md#Phase-P2"
+      ],
+      "notes": "",
+      "last_reviewed_at": "2026-04-08T09:15:10"
+    }
+  ],
+  "planner_review_status": "approved",
+  "test_status": "passed",
+  "blocking_prereqs": [],
+  "iteration_counts": {
+    "planner_revisions": 0,
+    "executor_loops": 2,
+    "test_loops": 1
+  },
+  "created_at": "2026-04-08T09:09:09",
+  "updated_at": "2026-04-08T09:15:40",
+  "branch": "int_latest",
+  "baseline_revision": "3619b8169b862232147c8e7a8d7bca3608a3d8f3",
+  "workspace_root": "D:\\ProjectPackage\\RagflowAuth",
+  "tasks_root": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks",
+  "task_dir": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\backend-services-users-store-py-userstore-pytest-20260408T090909",
+  "goal": "聚焦 backend/services/users/store.py，抽离共享用户行映射与用户名/显示名引用构建逻辑，保持 UserStore 读写契约和现有 pytest 行为稳定",
+  "artifacts": {
+    "prd": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\backend-services-users-store-py-userstore-pytest-20260408T090909\\prd.md",
+    "test_plan": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\backend-services-users-store-py-userstore-pytest-20260408T090909\\test-plan.md",
+    "task_state": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\backend-services-users-store-py-userstore-pytest-20260408T090909\\task-state.json",
+    "execution_log": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\backend-services-users-store-py-userstore-pytest-20260408T090909\\execution-log.md",
+    "test_report": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\backend-services-users-store-py-userstore-pytest-20260408T090909\\test-report.md"
+  }
+}

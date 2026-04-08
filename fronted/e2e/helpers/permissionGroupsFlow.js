@@ -12,7 +12,7 @@ async function readJson(response, message) {
 async function createPermissionGroup(api, headers, payload) {
   const response = await api.post('/api/permission-groups', { headers, data: payload });
   const body = await readJson(response, `create permission group failed for ${payload.group_name}`);
-  const groupId = Number(body?.data?.group_id || 0);
+  const groupId = Number(body?.result?.group_id || 0);
   if (!Number.isInteger(groupId) || groupId <= 0) {
     throw new Error(`create permission group did not return group_id for ${payload.group_name}`);
   }

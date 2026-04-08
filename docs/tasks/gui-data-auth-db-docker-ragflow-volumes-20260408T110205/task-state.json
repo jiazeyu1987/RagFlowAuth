@@ -1,0 +1,160 @@
+{
+  "schema_version": 2,
+  "task_id": "gui-data-auth-db-docker-ragflow-volumes-20260408T110205",
+  "mode": "full",
+  "status": "completed",
+  "current_phase": null,
+  "phase_statuses": [
+    {
+      "phase_id": "P1",
+      "title": "实现本地恢复服务层",
+      "status": "completed",
+      "objective": "提供一个可单测的本地恢复服务层，负责本地备份目录校验、目标 `auth.db` 路径校验、本机后端运行态检查、Docker volume 映射、停止容器、恢复 volume 和重启被停止容器。",
+      "owned_paths": [
+        "tool/maintenance/features/local_backup_restore.py",
+        "tool/maintenance/tests/test_local_backup_restore_unit.py"
+      ],
+      "dependencies": [
+        "当前单独 GUI 下载目录结构；本地 `data/auth.db`；本机 Docker 环境"
+      ],
+      "deliverables": [
+        "本地恢复 feature API；volume 映射与恢复逻辑；失败前提覆盖单测"
+      ],
+      "evidence_expectation": "单测覆盖前提失败和 volume 映射；真实运行验证覆盖至少一次本地 `auth.db` 与 volume 恢复。",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P1-AC1",
+          "text": "服务层可以对已下载本地备份目录做严格校验，至少覆盖 `auth.db` 存在、本地 `data/auth.db` 目标可写、`127.0.0.1:8001` 未运行、Docker 可用，以及 volume 归档到本机 volume 的映射唯一性。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P1",
+            "test-report.md#Final-Verdict"
+          ]
+        },
+        {
+          "ac_id": "P1-AC2",
+          "text": "服务层可以把备份中的 `auth.db` 覆盖恢复到仓库 `data/auth.db`，并把 `volumes/*.tar.gz` 恢复到映射到的本机 Docker volumes；恢复过程中需要先停止占用目标 volume 的本机容器，再在完成后重启它们。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P1",
+            "test-report.md#Final-Verdict"
+          ]
+        }
+      ],
+      "evidence": [
+        "execution-log.md#Phase-P1"
+      ],
+      "notes": "",
+      "last_reviewed_at": "2026-04-08T11:12:22"
+    },
+    {
+      "phase_id": "P2",
+      "title": "接入单独 GUI",
+      "status": "completed",
+      "objective": "在服务器备份拉取 GUI 中增加“还原到本地”按钮、确认提示与状态反馈，并让它以当前已选备份和本地保存目录为输入运行本地恢复。",
+      "owned_paths": [
+        "tool/maintenance/server_backup_pull_tool.py",
+        "tool/maintenance/tests/test_server_backup_pull_tool_import_unit.py"
+      ],
+      "dependencies": [
+        "P1 服务层"
+      ],
+      "deliverables": [
+        "GUI 恢复按钮；确认提示；成功/失败反馈；导入与运行验证"
+      ],
+      "evidence_expectation": "GUI 初始化校验与脚本化 GUI 运行路径验证。",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P2-AC1",
+          "text": "GUI 在当前已选备份和本地保存目录上下文下提供“还原到本地”操作，并在本地未下载该备份时明确报错而不是静默创建空恢复。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P2",
+            "test-report.md#Final-Verdict"
+          ]
+        },
+        {
+          "ac_id": "P2-AC2",
+          "text": "GUI 在执行本地恢复前展示明确确认信息，执行过程中显示状态，完成后给出清晰成功或失败原因。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P2",
+            "test-report.md#Final-Verdict"
+          ]
+        }
+      ],
+      "evidence": [
+        "execution-log.md#Phase-P2"
+      ],
+      "notes": "",
+      "last_reviewed_at": "2026-04-08T11:12:33"
+    },
+    {
+      "phase_id": "P3",
+      "title": "文档与验证收口",
+      "status": "completed",
+      "objective": "更新备份文档并完成本地恢复的验证记录与任务闭环。",
+      "owned_paths": [
+        "docs/maintance/backup.md",
+        "docs/tasks/gui-data-auth-db-docker-ragflow-volumes-20260408T110205/execution-log.md",
+        "docs/tasks/gui-data-auth-db-docker-ragflow-volumes-20260408T110205/test-report.md"
+      ],
+      "dependencies": [
+        "P1",
+        "P2"
+      ],
+      "deliverables": [
+        "文档更新；测试报告；状态闭环"
+      ],
+      "evidence_expectation": "文档更新与 `test-report.md` 的最终通过记录。",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P3-AC1",
+          "text": "`docs/maintance/backup.md` 明确说明本地恢复会覆盖仓库 `data/auth.db`、恢复本机 Docker volumes、要求本地后端先停止，以及可能操作本机 Docker 容器。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P3",
+            "test-report.md#Final-Verdict"
+          ]
+        },
+        {
+          "ac_id": "P3-AC2",
+          "text": "本任务涉及的新增单测、GUI 初始化验证和真实本机恢复验证都已记录在任务工件中并通过。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P3",
+            "test-report.md#Final-Verdict"
+          ]
+        }
+      ],
+      "evidence": [
+        "execution-log.md#Phase-P3"
+      ],
+      "notes": "",
+      "last_reviewed_at": "2026-04-08T11:12:47"
+    }
+  ],
+  "planner_review_status": "approved",
+  "test_status": "passed",
+  "blocking_prereqs": [],
+  "iteration_counts": {
+    "planner_revisions": 0,
+    "executor_loops": 3,
+    "test_loops": 1
+  },
+  "created_at": "2026-04-08T11:02:06",
+  "updated_at": "2026-04-08T11:13:06",
+  "branch": "int_latest",
+  "baseline_revision": "3619b8169b862232147c8e7a8d7bca3608a3d8f3",
+  "workspace_root": "D:\\ProjectPackage\\RagflowAuth",
+  "tasks_root": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks",
+  "task_dir": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\gui-data-auth-db-docker-ragflow-volumes-20260408T110205",
+  "goal": "在服务器备份拉取 GUI 中增加本地还原功能，可将已下载备份恢复到本机 data/auth.db 与本机 Docker RAGFlow volumes",
+  "artifacts": {
+    "prd": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\gui-data-auth-db-docker-ragflow-volumes-20260408T110205\\prd.md",
+    "test_plan": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\gui-data-auth-db-docker-ragflow-volumes-20260408T110205\\test-plan.md",
+    "task_state": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\gui-data-auth-db-docker-ragflow-volumes-20260408T110205\\task-state.json",
+    "execution_log": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\gui-data-auth-db-docker-ragflow-volumes-20260408T110205\\execution-log.md",
+    "test_report": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\gui-data-auth-db-docker-ragflow-volumes-20260408T110205\\test-report.md"
+  }
+}

@@ -32,6 +32,11 @@ class _RagflowChatService:
         return [{"id": "c1", "name": "Chat 1"}]
 
 
+class _BrokenRagflowService:
+    def get_dataset_index(self):
+        raise RuntimeError("dataset_index_failed")
+
+
 class TestPermissionResolverSubAdminManagementUnit(unittest.TestCase):
     def setUp(self):
         self._tmp = make_temp_dir(prefix="ragflowauth_chat_management")
@@ -82,6 +87,7 @@ class TestPermissionResolverSubAdminManagementUnit(unittest.TestCase):
         self.assertTrue(snapshot.can_delete)
         self.assertTrue(snapshot.can_manage_kb_directory)
         self.assertTrue(snapshot.can_view_kb_config)
+        self.assertTrue(snapshot.can_manage_users)
         self.assertEqual(ResourceScope.SET, snapshot.kb_scope)
         self.assertIn("ds_1", snapshot.kb_names)
         self.assertIn("KB 1", snapshot.kb_names)
@@ -111,6 +117,24 @@ class TestPermissionResolverSubAdminManagementUnit(unittest.TestCase):
         self.assertFalse(snapshot.can_view_kb_config)
         self.assertEqual(ResourceScope.NONE, snapshot.kb_scope)
         self.assertEqual(ResourceScope.NONE, snapshot.chat_scope)
+
+    def test_dataset_index_failures_are_not_silenced(self):
+        deps = SimpleNamespace(
+            permission_group_store=_PermissionGroupStore(),
+            ragflow_service=_BrokenRagflowService(),
+            knowledge_directory_manager=self.tree_manager,
+            knowledge_management_manager=self.management_manager,
+            chat_management_manager=self.chat_management_manager,
+        )
+        user = SimpleNamespace(
+            role="viewer",
+            group_ids=[],
+            user_id="u_viewer",
+            managed_kb_root_node_id=None,
+        )
+
+        with self.assertRaisesRegex(RuntimeError, "dataset_index_failed"):
+            resolve_permissions(deps, user)
 
 
 if __name__ == "__main__":

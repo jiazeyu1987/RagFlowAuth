@@ -1,0 +1,111 @@
+{
+  "schema_version": 2,
+  "task_id": "tranche-backend-services-users-manager-py-create-20260408T075138",
+  "mode": "full",
+  "status": "completed",
+  "current_phase": null,
+  "phase_statuses": [
+    {
+      "phase_id": "P1",
+      "title": "Extract shared user mutation rule parsing",
+      "status": "completed",
+      "objective": "Move repeated create/update normalization and validation logic into bounded helpers while keeping `UserManagementManager` as the stable facade.",
+      "owned_paths": [],
+      "dependencies": [],
+      "deliverables": [],
+      "evidence_expectation": "",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P1-AC1",
+          "text": "`UserManagementManager` no longer directly owns duplicated create/update parsing for company/department relation checks, manager/sub-admin assignment, permission-group resolution, and managed-root handling in one file.",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P1",
+            "test-report.md#T1"
+          ]
+        },
+        {
+          "ac_id": "P1-AC2",
+          "text": "existing business errors and role-specific behavior remain stable for duplicate usernames, manager validation, admin disable guards, and disable scheduling.",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P1",
+            "test-report.md#T1"
+          ]
+        },
+        {
+          "ac_id": "P1-AC3",
+          "text": "invalid user mutations still fail fast with the existing business errors instead of introducing fallback paths.",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P1",
+            "test-report.md#T1"
+          ]
+        }
+      ],
+      "evidence": [
+        "execution-log.md#Phase-P1"
+      ],
+      "notes": "- - Extracted shared user mutation parsing into manager_support.py and kept UserManagementManager as the public facade while preserving fail-fast errors.",
+      "last_reviewed_at": "2026-04-08T08:00:42"
+    },
+    {
+      "phase_id": "P2",
+      "title": "Focused backend regression validation and task evidence",
+      "status": "completed",
+      "objective": "Prove the bounded users-manager refactor preserved the current business behavior.",
+      "owned_paths": [],
+      "dependencies": [],
+      "deliverables": [],
+      "evidence_expectation": "",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P2-AC1",
+          "text": "focused users-manager tests pass against the final code state.",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P2",
+            "test-report.md#T1"
+          ]
+        },
+        {
+          "ac_id": "P2-AC2",
+          "text": "task artifacts record the exact commands run, verified acceptance coverage, and bounded residual risk.",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P2",
+            "test-report.md#T1"
+          ]
+        }
+      ],
+      "evidence": [
+        "execution-log.md#Phase-P2"
+      ],
+      "notes": "- - Focused py_compile and pytest evidence recorded in task artifacts with acceptance coverage and bounded residual risk.",
+      "last_reviewed_at": "2026-04-08T08:00:51"
+    }
+  ],
+  "planner_review_status": "approved",
+  "test_status": "passed",
+  "blocking_prereqs": [],
+  "iteration_counts": {
+    "planner_revisions": 0,
+    "executor_loops": 2,
+    "test_loops": 1
+  },
+  "created_at": "2026-04-08T07:51:38",
+  "updated_at": "2026-04-08T08:01:06",
+  "branch": "int_latest",
+  "baseline_revision": "3619b8169b862232147c8e7a8d7bca3608a3d8f3",
+  "workspace_root": "D:\\ProjectPackage\\RagflowAuth",
+  "tasks_root": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks",
+  "task_dir": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\tranche-backend-services-users-manager-py-create-20260408T075138",
+  "goal": "继续进行前后端重构直到重构结束：本 tranche 聚焦 backend/services/users/manager.py，抽离 create/update 共用的用户组织、角色、权限组与禁用策略解析逻辑，保持用户管理对外行为和现有单测契约稳定",
+  "artifacts": {
+    "prd": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\tranche-backend-services-users-manager-py-create-20260408T075138\\prd.md",
+    "test_plan": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\tranche-backend-services-users-manager-py-create-20260408T075138\\test-plan.md",
+    "task_state": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\tranche-backend-services-users-manager-py-create-20260408T075138\\task-state.json",
+    "execution_log": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\tranche-backend-services-users-manager-py-create-20260408T075138\\execution-log.md",
+    "test_report": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\tranche-backend-services-users-manager-py-create-20260408T075138\\test-report.md"
+  }
+}
