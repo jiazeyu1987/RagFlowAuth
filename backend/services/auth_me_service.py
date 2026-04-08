@@ -1,18 +1,31 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any
 
 from backend.app.core.permdbg import permdbg
 from backend.app.core.permission_resolver import ResourceScope
+from backend.services.users.group_compat import normalize_legacy_group_ids
+
+
+@dataclass(frozen=True)
+class _AuthMeAccessSummary:
+    accessible_kb_ids: tuple[str, ...]
+    accessible_kb_names: tuple[str, ...]
+    accessible_chats: tuple[str, ...]
+    capabilities: dict[str, dict[str, dict[str, Any]]]
+
+
+def _permission_group_ids(user: Any) -> list[Any]:
+    return normalize_legacy_group_ids(
+        group_ids=getattr(user, "group_ids", None),
+        group_id=getattr(user, "group_id", None),
+    )
 
 
 def _build_permission_groups(*, deps: Any, user: Any) -> list[dict[str, Any]]:
     permission_groups_list: list[dict[str, Any]] = []
-    group_ids = list(user.group_ids or [])
-    if not group_ids and user.group_id is not None:
-        group_ids = [user.group_id]
-
-    for group_id in group_ids:
+    for group_id in _permission_group_ids(user):
         group = deps.permission_group_store.get_group(group_id)
         if not group:
             continue
@@ -37,53 +50,68 @@ def _resolve_accessible_chats(*, deps: Any, snapshot: Any) -> set[str]:
     return set(snapshot.chat_ids)
 
 
-def build_auth_me_payload(*, deps: Any, user: Any, snapshot: Any) -> dict[str, Any]:
-    permissions = snapshot.permissions_dict()
-    managed_kb_root_path = None
+def _resolve_managed_kb_root_path(*, deps: Any, user: Any) -> str | None:
     management_manager = getattr(deps, "knowledge_management_manager", None)
-    if management_manager is not None:
-        try:
-            scope = management_manager.get_management_scope(user)
-            managed_kb_root_path = getattr(scope, "root_node_path", None)
-        except Exception:
-            managed_kb_root_path = None
+    if management_manager is None:
+        return None
+    scope = management_manager.get_management_scope(user)
+    return getattr(scope, "root_node_path", None)
 
-    # Debug: trace where KB visibility comes from (permission groups + per-user grants).
-    try:
-        group_ids = list(user.group_ids or [])
-        group_kbs: list[str] = []
-        for gid in group_ids:
-            group = deps.permission_group_store.get_group(gid)
-            if not group:
-                continue
-            for ref in (group.get("accessible_kbs") or []):
-                if isinstance(ref, str) and ref:
-                    group_kbs.append(ref)
-        permdbg(
-            "auth.me.snapshot",
-            user=user.username,
-            role=user.role,
-            group_ids=group_ids,
-            kb_scope=snapshot.kb_scope,
-            kb_refs=sorted(list(snapshot.kb_names))[:50],
-            group_kbs=sorted(set([x for x in group_kbs if isinstance(x, str) and x]))[:50],
-        )
-    except Exception:
-        # Best-effort debug only.
-        pass
 
+def _group_kb_refs(*, deps: Any, user: Any) -> list[str]:
+    refs: list[str] = []
+    for group_id in _permission_group_ids(user):
+        group = deps.permission_group_store.get_group(group_id)
+        if not group:
+            continue
+        for ref in group.get("accessible_kbs") or []:
+            if isinstance(ref, str) and ref:
+                refs.append(ref)
+    return refs
+
+
+def _log_snapshot_debug(*, deps: Any, user: Any, snapshot: Any) -> None:
+    permdbg(
+        "auth.me.snapshot",
+        user=user.username,
+        role=user.role,
+        group_ids=_permission_group_ids(user),
+        kb_scope=snapshot.kb_scope,
+        kb_refs=sorted(snapshot.kb_names)[:50],
+        group_kbs=sorted(set(_group_kb_refs(deps=deps, user=user)))[:50],
+    )
+
+
+def _build_access_summary(*, deps: Any, snapshot: Any) -> _AuthMeAccessSummary:
     accessible_kb_ids_set, accessible_kb_names_set = _resolve_accessible_kbs(deps=deps, snapshot=snapshot)
     accessible_chats_set = _resolve_accessible_chats(deps=deps, snapshot=snapshot)
+    capabilities = snapshot.capabilities_dict(
+        accessible_kb_ids=accessible_kb_ids_set,
+        accessible_chat_ids=accessible_chats_set,
+    )
+    return _AuthMeAccessSummary(
+        accessible_kb_ids=tuple(sorted(accessible_kb_ids_set)),
+        accessible_kb_names=tuple(sorted(accessible_kb_names_set)),
+        accessible_chats=tuple(sorted(accessible_chats_set)),
+        capabilities=capabilities,
+    )
 
-    try:
-        permdbg(
-            "auth.me.effective",
-            accessible_kbs=sorted(accessible_kb_names_set)[:50],
-            accessible_kb_ids=sorted(accessible_kb_ids_set)[:50],
-            accessible_chats_count=len(accessible_chats_set),
-        )
-    except Exception:
-        pass
+
+def _log_effective_access(summary: _AuthMeAccessSummary) -> None:
+    permdbg(
+        "auth.me.effective",
+        accessible_kbs=list(summary.accessible_kb_names[:50]),
+        accessible_kb_ids=list(summary.accessible_kb_ids[:50]),
+        accessible_chats_count=len(summary.accessible_chats),
+    )
+
+
+def build_auth_me_payload(*, deps: Any, user: Any, snapshot: Any) -> dict[str, Any]:
+    permissions = snapshot.permissions_dict()
+    managed_kb_root_path = _resolve_managed_kb_root_path(deps=deps, user=user)
+    _log_snapshot_debug(deps=deps, user=user, snapshot=snapshot)
+    access_summary = _build_access_summary(deps=deps, snapshot=snapshot)
+    _log_effective_access(access_summary)
 
     return {
         "user_id": user.user_id,
@@ -97,6 +125,7 @@ def build_auth_me_payload(*, deps: Any, user: Any, snapshot: Any) -> dict[str, A
         "permission_groups": _build_permission_groups(deps=deps, user=user),
         "scopes": [],
         "permissions": permissions,
+        "capabilities": access_summary.capabilities,
         "max_login_sessions": int(getattr(user, "max_login_sessions", 3) or 3),
         "idle_timeout_minutes": int(getattr(user, "idle_timeout_minutes", 120) or 120),
         "can_change_password": bool(getattr(user, "can_change_password", True)),
@@ -109,8 +138,8 @@ def build_auth_me_payload(*, deps: Any, user: Any, snapshot: Any) -> dict[str, A
         "managed_kb_root_node_id": getattr(user, "managed_kb_root_node_id", None),
         "managed_kb_root_path": managed_kb_root_path,
         # Legacy field: dataset names (for display).
-        "accessible_kbs": sorted(accessible_kb_names_set),
+        "accessible_kbs": list(access_summary.accessible_kb_names),
         # New field: dataset ids (for API operations / stage-3 migration).
-        "accessible_kb_ids": sorted(accessible_kb_ids_set),
-        "accessible_chats": sorted(accessible_chats_set),
+        "accessible_kb_ids": list(access_summary.accessible_kb_ids),
+        "accessible_chats": list(access_summary.accessible_chats),
     }
