@@ -1,0 +1,35 @@
+import { APP_ROUTES, NAVIGATION_ROUTES, ROUTE_TEXT, findRouteConfig, getRouteTitle } from './routeRegistry';
+
+describe('routeRegistry', () => {
+  it('resolves alias and tool sub-route titles from shared metadata', () => {
+    expect(getRouteTitle('/messages')).toBe(ROUTE_TEXT.nav.inbox);
+    expect(getRouteTitle('/tools/package-drawing')).toBe(ROUTE_TEXT.toolTitles.packageDrawing);
+  });
+
+  it('keeps navigation-only entries separate from aliases', () => {
+    const navPaths = NAVIGATION_ROUTES.map((route) => route.path);
+
+    expect(navPaths).toContain('/tools');
+    expect(navPaths).toContain('/inbox');
+    expect(navPaths).not.toContain('/messages');
+  });
+
+  it('preserves special nav guard overrides in route metadata', () => {
+    const dataSecurity = findRouteConfig('/data-security');
+    const browser = findRouteConfig('/browser');
+    const documentHistory = findRouteConfig('/document-history');
+
+    expect(dataSecurity.guard.allowedRoles).toEqual(['admin', 'sub_admin']);
+    expect(dataSecurity.navGuard.allowedRoles).toEqual(['admin']);
+    expect(browser.navHiddenRoles).toEqual(['admin']);
+    expect(documentHistory.guard.anyPermissions).toEqual([
+      { resource: 'kb_documents', action: 'review' },
+      { resource: 'kb_documents', action: 'view' },
+    ]);
+  });
+
+  it('keeps protected routes registered in the shared route list', () => {
+    expect(APP_ROUTES.some((route) => route.path === '/notification-settings')).toBe(true);
+    expect(APP_ROUTES.some((route) => route.path === '/approval-config')).toBe(true);
+  });
+});

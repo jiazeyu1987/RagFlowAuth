@@ -1,0 +1,163 @@
+{
+  "schema_version": 2,
+  "task_id": "tranche-documents-documentaudit-h-20260408T060805",
+  "mode": "full",
+  "status": "completed",
+  "current_phase": null,
+  "phase_statuses": [
+    {
+      "phase_id": "P1",
+      "title": "Decompose backend document manager orchestration",
+      "status": "completed",
+      "objective": "Split preview/download/delete support responsibilities out of the current backend manager while keeping `DocumentManager` as the stable facade used by unified routes.",
+      "owned_paths": [],
+      "dependencies": [],
+      "deliverables": [],
+      "evidence_expectation": "",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P1-AC1",
+          "text": "`DocumentManager` no longer directly owns all preview payload building, watermark package construction, unified download response construction, and delete orchestration in one file.",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P1",
+            "test-report.md#T1",
+            "test-report.md#T2"
+          ]
+        },
+        {
+          "ac_id": "P1-AC2",
+          "text": "existing unified documents router behavior, response envelopes, and controlled download semantics remain unchanged.",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P1",
+            "test-report.md#T1",
+            "test-report.md#T2"
+          ]
+        },
+        {
+          "ac_id": "P1-AC3",
+          "text": "document delete/download flows still fail fast on missing prerequisites, invalid source input, and out-of-scope document access.",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P1",
+            "test-report.md#T1",
+            "test-report.md#T2"
+          ]
+        }
+      ],
+      "evidence": [
+        "execution-log.md#Phase-P1"
+      ],
+      "notes": "",
+      "last_reviewed_at": "2026-04-08T06:39:44"
+    },
+    {
+      "phase_id": "P2",
+      "title": "Decompose frontend document-audit page and hook",
+      "status": "completed",
+      "objective": "Split the document-audit page shell and hook into smaller units for data loading, filter state, tab rendering, and versions-modal rendering without changing current behavior.",
+      "owned_paths": [],
+      "dependencies": [],
+      "deliverables": [],
+      "evidence_expectation": "",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P2-AC1",
+          "text": "`useDocumentAuditPage.js` no longer directly owns all data loading, user-name resolution, audit filtering, and versions-dialog orchestration in one file.",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P2",
+            "test-report.md#T1",
+            "test-report.md#T2"
+          ]
+        },
+        {
+          "ac_id": "P2-AC2",
+          "text": "`DocumentAudit.js` no longer mixes page shell, tab switcher, filter controls, table renderers, signature-manifest rendering, and versions-modal markup in one file.",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P2",
+            "test-report.md#T1",
+            "test-report.md#T2"
+          ]
+        },
+        {
+          "ac_id": "P2-AC3",
+          "text": "current page interactions, test ids, version-history loading, and document/deletion/download tab behavior remain stable after extraction.",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P2",
+            "test-report.md#T1",
+            "test-report.md#T2"
+          ]
+        }
+      ],
+      "evidence": [
+        "execution-log.md#Phase-P2"
+      ],
+      "notes": "",
+      "last_reviewed_at": "2026-04-08T06:39:54"
+    },
+    {
+      "phase_id": "P3",
+      "title": "Focused regression validation and task evidence",
+      "status": "completed",
+      "objective": "Prove the bounded documents/document-audit refactor preserved both backend and frontend behavior.",
+      "owned_paths": [],
+      "dependencies": [],
+      "deliverables": [],
+      "evidence_expectation": "",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P3-AC1",
+          "text": "focused backend and frontend documents/document-audit tests pass against the final code state.",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P3",
+            "test-report.md#T1",
+            "test-report.md#T2"
+          ]
+        },
+        {
+          "ac_id": "P3-AC2",
+          "text": "task artifacts record the exact commands run, verified acceptance coverage, and bounded residual risk.",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P3",
+            "test-report.md#T1",
+            "test-report.md#T2"
+          ]
+        }
+      ],
+      "evidence": [
+        "execution-log.md#Phase-P3"
+      ],
+      "notes": "",
+      "last_reviewed_at": "2026-04-08T06:40:02"
+    }
+  ],
+  "planner_review_status": "approved",
+  "test_status": "passed",
+  "blocking_prereqs": [],
+  "iteration_counts": {
+    "planner_revisions": 0,
+    "executor_loops": 3,
+    "test_loops": 1
+  },
+  "created_at": "2026-04-08T06:08:18",
+  "updated_at": "2026-04-08T06:40:26",
+  "branch": "int_latest",
+  "baseline_revision": "3619b8169b862232147c8e7a8d7bca3608a3d8f3",
+  "workspace_root": "D:\\ProjectPackage\\RagflowAuth",
+  "tasks_root": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks",
+  "task_dir": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\tranche-documents-documentaudit-h-20260408T060805",
+  "goal": "继续进行前后端重构：以下一 tranche 聚焦 documents/document audit 模块，拆分后端 DocumentManager 与前端 DocumentAudit 页面和 hook，保持统一文档下载/删除/批量下载与审计页面行为稳定并补齐验证。",
+  "artifacts": {
+    "prd": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\tranche-documents-documentaudit-h-20260408T060805\\prd.md",
+    "test_plan": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\tranche-documents-documentaudit-h-20260408T060805\\test-plan.md",
+    "task_state": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\tranche-documents-documentaudit-h-20260408T060805\\task-state.json",
+    "execution_log": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\tranche-documents-documentaudit-h-20260408T060805\\execution-log.md",
+    "test_report": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\tranche-documents-documentaudit-h-20260408T060805\\test-report.md"
+  }
+}

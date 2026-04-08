@@ -39,13 +39,6 @@ const ChangePassword = () => {
 
   return (
     <div style={{ maxWidth: 520, width: '100%' }}>
-      <div style={{ marginBottom: 16 }}>
-        <h2 style={{ margin: 0 }}>修改密码</h2>
-        <div style={{ marginTop: 6, color: '#6b7280', fontSize: '0.9rem', wordBreak: 'break-word' }}>
-          当前用户：{user?.full_name || user?.username || '-'}
-        </div>
-      </div>
-
       <div
         style={{
           backgroundColor: 'white',

@@ -6,6 +6,7 @@ const {
   ensureUserDeletedByUsername,
   findUserByUsername,
   loginApiAs,
+  readUserEnvelope,
   uniquePassword,
   uniqueUsername,
 } = require('./userLifecycleFlow');
@@ -146,7 +147,9 @@ async function createToolsEmptyStateAccount(summary, {
       },
     });
     const createBody = await readJson(createResponse, `create tools empty-state user failed for ${username}`);
-    userId = String(createBody?.user_id || '').trim();
+    userId = String(
+      readUserEnvelope(createBody, `create tools empty-state user returned invalid payload for ${username}`).user_id || ''
+    ).trim();
     if (!userId) {
       throw new Error(`create tools empty-state user did not return user_id for ${username}`);
     }

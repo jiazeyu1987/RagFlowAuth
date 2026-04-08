@@ -24,7 +24,7 @@ def start_job_if_idle(*, reason: str, store: DataSecurityStore, full_backup: boo
         full_backup: If True, run a full backup including Docker images and configs
     """
     global _running_job_id
-    # If any queued/running job exists (from other process/instance), reuse it.
+
     active_job_id = store.get_active_job_id()
     if active_job_id is not None:
         return active_job_id
@@ -33,15 +33,15 @@ def start_job_if_idle(*, reason: str, store: DataSecurityStore, full_backup: boo
         if _running_job_id is not None:
             return _running_job_id
 
-    # Cross-process guard (multi-instance): ensure only one backup starts at a time.
     if not store.try_acquire_backup_lock():
         active_job_id = store.get_active_job_id()
         if active_job_id is not None:
             return active_job_id
-        # Lock exists but no active job is visible. This commonly happens when a backup is aborted by
-        # restarting the container or killing the process. Try once to clear the stale lock.
+
+        # Lock exists but no active job is visible. This commonly happens when a
+        # backup is aborted by restarting the container or killing the process.
         try:
-            store.release_backup_lock()
+            store.release_backup_lock(force=True)
         except Exception:
             pass
 
@@ -59,6 +59,7 @@ def start_job_if_idle(*, reason: str, store: DataSecurityStore, full_backup: boo
 
     def worker(job_id: int) -> None:
         global _running_job_id
+
         worker_store = DataSecurityStore(db_path=str(store.db_path))
         svc = DataSecurityBackupService(worker_store)
         try:
@@ -80,7 +81,7 @@ def start_job_if_idle(*, reason: str, store: DataSecurityStore, full_backup: boo
             with _lock:
                 _running_job_id = None
             try:
-                worker_store.release_backup_lock()
+                worker_store.release_backup_lock(job_id=job_id)
             except Exception:
                 pass
 

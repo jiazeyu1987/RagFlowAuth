@@ -60,6 +60,11 @@ docReviewerTest('Doc approval center covers real approve, reject, and withdraw f
 
   const withdrawn = await withdrawResponse;
   await expect(withdrawn.ok()).toBeTruthy();
-  expect(await withdrawn.json()).toMatchObject({ status: 'withdrawn' });
-  await expect(page.getByTestId('approval-center-detail-status')).toContainText(/撤|withdraw/i);
+  expect(await withdrawn.json()).toMatchObject({
+    result: {
+      request_id: fixtures.approvals.unit.withdraw_request_id,
+      status: 'withdrawn',
+    },
+  });
+  await expect(page.getByTestId('approval-center-detail-status')).toContainText(/已撤回|withdraw/i);
 });

@@ -30,6 +30,7 @@ describe('Layout permission group navigation visibility', () => {
       canViewKbConfig: () => true,
       canViewTools: () => true,
       hasRole: (roles) => roles.includes('admin'),
+      isAuthorized: ({ allowedRoles }) => !allowedRoles || allowedRoles.includes('admin'),
     });
 
     render(
@@ -56,6 +57,7 @@ describe('Layout permission group navigation visibility', () => {
       canViewKbConfig: () => true,
       canViewTools: () => true,
       hasRole: (roles) => roles.includes('sub_admin'),
+      isAuthorized: ({ allowedRoles }) => !allowedRoles || allowedRoles.includes('sub_admin'),
     });
 
     render(
@@ -76,9 +78,9 @@ describe('Layout permission group navigation visibility', () => {
       user: {
         user_id: 'sub-1',
         username: 'wangxin',
-        full_name: '王鑫',
+        full_name: 'Wang Xin',
         role: 'sub_admin',
-        permission_groups: [{ group_name: '测试组' }],
+        permission_groups: [{ group_name: 'test-group' }],
       },
       logout: jest.fn(),
       canUpload: () => true,
@@ -86,6 +88,7 @@ describe('Layout permission group navigation visibility', () => {
       canViewKbConfig: () => true,
       canViewTools: () => true,
       hasRole: (roles) => roles.includes('sub_admin'),
+      isAuthorized: ({ allowedRoles }) => !allowedRoles || allowedRoles.includes('sub_admin'),
     });
 
     render(
@@ -96,10 +99,10 @@ describe('Layout permission group navigation visibility', () => {
       </MemoryRouter>
     );
 
-    expect(screen.getByTestId('layout-user-name')).toHaveTextContent('王鑫');
-    expect(screen.getByTestId('layout-user-role')).toHaveTextContent('子管理员');
+    expect(screen.getByTestId('layout-user-name')).toHaveTextContent('Wang Xin');
+    expect(screen.getByTestId('layout-user-role')).toHaveTextContent('\u5b50\u7ba1\u7406\u5458');
     expect(screen.getByTestId('layout-user-role')).not.toHaveTextContent('sub_admin');
-    expect(screen.getByTestId('layout-user-role')).not.toHaveTextContent('测试组');
+    expect(screen.getByTestId('layout-user-role')).not.toHaveTextContent('test-group');
   });
 
   it('hides knowledge bases navigation for normal viewer', () => {
@@ -111,6 +114,7 @@ describe('Layout permission group navigation visibility', () => {
       canViewKbConfig: () => true,
       canViewTools: () => true,
       hasRole: () => false,
+      isAuthorized: ({ allowedRoles }) => !allowedRoles,
     });
 
     render(
@@ -124,6 +128,29 @@ describe('Layout permission group navigation visibility', () => {
     expect(screen.queryByTestId('nav-kbs')).not.toBeInTheDocument();
   });
 
+  it('hides document history navigation when shared auth evaluation denies both view and review access', () => {
+    useAuth.mockReturnValue({
+      user: { user_id: 'viewer-2', username: 'viewer', role: 'viewer', permission_groups: [] },
+      logout: jest.fn(),
+      hasRole: () => false,
+      isAuthorized: ({ allowedRoles, anyPermissions }) => {
+        if (allowedRoles) return false;
+        if (anyPermissions) return false;
+        return true;
+      },
+    });
+
+    render(
+      <MemoryRouter initialEntries={['/browser']}>
+        <Layout>
+          <div>content</div>
+        </Layout>
+      </MemoryRouter>
+    );
+
+    expect(screen.queryByTestId('nav-document-history')).not.toBeInTheDocument();
+  });
+
   it('hides notification settings and electronic signatures for sub admin', () => {
     useAuth.mockReturnValue({
       user: { user_id: 'sub-1', username: 'sub', role: 'sub_admin', permission_groups: [] },
@@ -133,6 +160,7 @@ describe('Layout permission group navigation visibility', () => {
       canViewKbConfig: () => true,
       canViewTools: () => true,
       hasRole: (roles) => roles.includes('sub_admin'),
+      isAuthorized: ({ allowedRoles }) => !allowedRoles || allowedRoles.includes('sub_admin'),
     });
 
     render(
@@ -157,6 +185,7 @@ describe('Layout permission group navigation visibility', () => {
       canViewKbConfig: () => false,
       canViewTools: () => true,
       hasRole: () => false,
+      isAuthorized: ({ allowedRoles }) => !allowedRoles,
     });
 
     render(

@@ -5,6 +5,7 @@ import useDocumentBrowserPage from './useDocumentBrowserPage';
 import { documentBrowserApi } from './api';
 import { knowledgeApi } from '../api';
 import { documentsApi } from '../../documents/api';
+import { DOCUMENT_SOURCE } from '../../../shared/documents/constants';
 
 jest.mock('../../../hooks/useAuth', () => ({
   useAuth: jest.fn(),
@@ -48,6 +49,7 @@ const wrapper = ({ children }) => (
 describe('useDocumentBrowserPage', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    window.localStorage.clear();
     useAuth.mockReturnValue({
       user: { user_id: 'u-1' },
       can: jest.fn((resource, action) => {
@@ -220,5 +222,61 @@ describe('useDocumentBrowserPage', () => {
         done: true,
       })
     );
+  });
+
+  it('loads and persists recent keywords and dataset usage through local storage', async () => {
+    window.localStorage.setItem(
+      'ragflowauth_recent_dataset_keywords_v1:u-1',
+      JSON.stringify(['Alpha', 'Beta'])
+    );
+    window.localStorage.setItem(
+      'ragflowauth_browser_dataset_usage_v1:u-1',
+      JSON.stringify({ 'KB-2': 3, 'KB-1': 1 })
+    );
+
+    const { result } = renderHook(() => useDocumentBrowserPage(), { wrapper });
+
+    await waitFor(() => {
+      expect(result.current.quickDatasets.map((item) => item.name)).toEqual(['KB-2', 'KB-1']);
+      expect(result.current.recentDatasetKeywords).toEqual(['Alpha', 'Beta']);
+    });
+
+    act(() => {
+      result.current.commitKeyword('alpha');
+      result.current.openQuickDataset('KB-1');
+    });
+
+    await waitFor(() => {
+      expect(JSON.parse(window.localStorage.getItem('ragflowauth_recent_dataset_keywords_v1:u-1'))).toEqual([
+        'alpha',
+        'Beta',
+      ]);
+      expect(JSON.parse(window.localStorage.getItem('ragflowauth_browser_dataset_usage_v1:u-1'))).toEqual({
+        'KB-2': 3,
+        'KB-1': 2,
+      });
+    });
+  });
+
+  it('opens quick datasets and preview state through the page action helpers without changing the hook contract', async () => {
+    const { result } = renderHook(() => useDocumentBrowserPage(), { wrapper });
+
+    await waitFor(() => {
+      expect(documentBrowserApi.listDocuments).toHaveBeenCalledWith('KB-1');
+    });
+
+    act(() => {
+      result.current.openQuickDataset('KB-1');
+      result.current.handleView('doc-1', 'KB-1');
+    });
+
+    expect(result.current.expandedDatasets.has('KB-1')).toBe(true);
+    expect(result.current.previewOpen).toBe(true);
+    expect(result.current.previewTarget).toEqual({
+      source: DOCUMENT_SOURCE.RAGFLOW,
+      docId: 'doc-1',
+      datasetName: 'KB-1',
+      filename: 'Doc 1',
+    });
   });
 });

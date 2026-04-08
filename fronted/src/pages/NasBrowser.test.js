@@ -83,4 +83,18 @@ describe('NasBrowser', () => {
       expect(nasApi.importFile).toHaveBeenCalledWith('docs/manual.pdf', 'KB-1');
     });
   });
+
+  it('shows an admin-only message for non-admin users', async () => {
+    useAuth.mockReturnValue({
+      isAdmin: () => false,
+    });
+
+    render(
+      <MemoryRouter>
+        <NasBrowser />
+      </MemoryRouter>
+    );
+
+    expect(await screen.findByText('仅管理员可访问 NAS 云盘。')).toBeInTheDocument();
+  });
 });

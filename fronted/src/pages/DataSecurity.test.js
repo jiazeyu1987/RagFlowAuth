@@ -23,16 +23,6 @@ const settingsResponse = {
   backup_retention_max: 7,
   local_backup_target_path: '/app/data/backups',
   local_backup_pack_count: 2,
-  windows_backup_target_path: '/mnt/replica/RagflowAuth',
-  windows_backup_pack_count: 1,
-  windows_backup_pack_count_skipped: false,
-  replica_enabled: false,
-  replica_target_path: '/mnt/replica/RagflowAuth',
-  replica_subdir_format: 'flat',
-  target_mode: 'share',
-  target_ip: '10.0.0.8',
-  target_share_name: 'BackupShare',
-  target_subdir: 'RagflowAuth',
   ragflow_compose_path: '/app/ragflow_compose/docker-compose.yml',
   ragflow_stop_services: false,
   full_backup_include_images: true,
@@ -47,9 +37,6 @@ const createJob = (overrides = {}) => ({
   progress: 100,
   package_hash: 'hash-local-101',
   output_dir: '/app/data/backups/migration_pack_20260404_120000',
-  replica_path: '',
-  replication_status: 'failed',
-  replication_error: 'windows share unavailable',
   created_at_ms: 1_775_270_400_000,
   started_at_ms: 1_775_270_300_000,
   detail: '',
@@ -102,27 +89,26 @@ describe('DataSecurity', () => {
     jest.clearAllMocks();
   });
 
-  it('shows separate local and Windows backup destinations with split job statuses', async () => {
+  it('shows only server local backup information on the page', async () => {
     const jobs = [
       createJob(),
       createJob({
         id: 102,
-        message: 'windows only backup',
-        package_hash: 'hash-remote-102',
+        message: 'missing local output',
+        package_hash: 'hash-local-102',
         output_dir: '',
-        replica_path: '/mnt/replica/RagflowAuth/migration_pack_20260403_235959',
-        replication_status: 'succeeded',
       }),
     ];
 
     await renderPage({ jobs });
 
     expect(await screen.findByText('/app/data/backups')).toBeInTheDocument();
-    expect(screen.getByText('/mnt/replica/RagflowAuth')).toBeInTheDocument();
     expect(screen.getByTestId('ds-active-job-status')).toHaveTextContent('#101 completed');
-    expect(screen.getByTestId('ds-active-job')).toHaveTextContent('/app/data/backups/migration_pack_20260404_120000');
-    expect(screen.getByTestId('ds-active-job')).toHaveTextContent('windows share unavailable');
-    expect(screen.getByTestId('ds-job-row-102')).toHaveTextContent('/mnt/replica/RagflowAuth/migration_pack_20260403_235959');
+    expect(screen.getByTestId('ds-active-job')).toHaveTextContent(
+      '/app/data/backups/migration_pack_20260404_120000'
+    );
+    expect(screen.getByTestId('ds-job-row-102')).toHaveTextContent('missing local output');
+    expect(screen.queryByText(/Windows/i)).not.toBeInTheDocument();
   });
 
   it('submits restore drills only from jobs that have a local backup output_dir', async () => {
@@ -132,17 +118,15 @@ describe('DataSecurity', () => {
       package_hash: 'hash-local-201',
       output_dir: '/app/data/backups/migration_pack_20260405_080000',
     });
-    const windowsOnlyJob = createJob({
+    const incompleteJob = createJob({
       id: 202,
       kind: 'full',
       output_dir: '',
-      package_hash: 'hash-remote-202',
-      replica_path: '/mnt/replica/RagflowAuth/migration_pack_20260405_080000',
-      replication_status: 'succeeded',
+      package_hash: 'hash-local-202',
     });
     const user = userEvent.setup();
 
-    await renderPage({ jobs: [recoverableJob, windowsOnlyJob] });
+    await renderPage({ jobs: [recoverableJob, incompleteJob] });
 
     const select = screen.getByTestId('ds-restore-job-select');
     expect(within(select).getByRole('option', { name: '#201 full completed' })).toBeInTheDocument();
@@ -172,9 +156,7 @@ describe('DataSecurity', () => {
         createJob({
           id: 301,
           output_dir: '',
-          package_hash: 'hash-remote-301',
-          replica_path: '/mnt/replica/RagflowAuth/migration_pack_20260406_010000',
-          replication_status: 'succeeded',
+          package_hash: 'hash-local-301',
         }),
       ],
     });
@@ -185,57 +167,39 @@ describe('DataSecurity', () => {
     expect(await screen.findByTestId('ds-error')).not.toHaveTextContent('');
   });
 
-  it('saves advanced Windows replica settings through the auth backend', async () => {
+  it('saves generic backup settings through the auth backend', async () => {
     const user = userEvent.setup();
-    const promptSpy = jest.spyOn(window, 'prompt').mockReturnValue('switch to UNC share');
+    const promptSpy = jest
+      .spyOn(window, 'prompt')
+      .mockReturnValue('switch local backup runtime settings');
     dataSecurityApi.updateSettings.mockResolvedValue({
       ...settingsResponse,
-      windows_backup_target_path: '\\\\192.168.1.100\\BackupShare\\RagflowAuth',
-      replica_enabled: true,
-      replica_target_path: '',
-      target_mode: 'share',
-      target_ip: '192.168.1.100',
-      target_share_name: 'BackupShare',
-      target_subdir: 'RagflowAuth',
+      enabled: false,
+      ragflow_compose_path: '/srv/ragflow/docker-compose.yml',
+      ragflow_stop_services: true,
+      full_backup_include_images: false,
+      auth_db_path: 'data/auth.db',
     });
 
     await renderPage({
       route: '/data-security?advanced=1',
-      settings: {
-        ...settingsResponse,
-        windows_backup_target_path: '',
-        replica_enabled: false,
-        replica_target_path: '/mnt/replica/RagflowAuth',
-        target_mode: 'share',
-        target_ip: '',
-        target_share_name: '',
-        target_subdir: '',
-      },
     });
 
-    await user.click(screen.getByTestId('ds-replica-enabled'));
-    await user.clear(screen.getByTestId('ds-replica-target-path'));
-    await user.type(screen.getByTestId('ds-target-ip'), '192.168.1.100');
-    await user.type(screen.getByTestId('ds-target-share-name'), 'BackupShare');
-    await user.type(screen.getByTestId('ds-target-subdir'), 'RagflowAuth');
+    await user.click(screen.getByTestId('ds-enabled'));
+    await user.clear(screen.getByTestId('ds-ragflow-compose-path'));
+    await user.type(screen.getByTestId('ds-ragflow-compose-path'), '/srv/ragflow/docker-compose.yml');
+    await user.click(screen.getByTestId('ds-ragflow-stop-services'));
+    await user.click(screen.getByTestId('ds-full-backup-include-images'));
     await user.click(screen.getByTestId('ds-settings-save'));
 
     await waitFor(() => {
       expect(dataSecurityApi.updateSettings).toHaveBeenCalledWith({
-        enabled: true,
-        target_mode: 'share',
-        target_ip: '192.168.1.100',
-        target_share_name: 'BackupShare',
-        target_subdir: 'RagflowAuth',
-        target_local_dir: '',
-        ragflow_compose_path: '/app/ragflow_compose/docker-compose.yml',
-        ragflow_stop_services: false,
+        enabled: false,
+        ragflow_compose_path: '/srv/ragflow/docker-compose.yml',
+        ragflow_stop_services: true,
         auth_db_path: 'data/auth.db',
-        full_backup_include_images: true,
-        replica_enabled: true,
-        replica_target_path: '',
-        replica_subdir_format: 'flat',
-        change_reason: 'switch to UNC share',
+        full_backup_include_images: false,
+        change_reason: 'switch local backup runtime settings',
       });
     });
 

@@ -161,6 +161,40 @@ class TestRagflowChatUpdateRetryUnit(unittest.TestCase):
                 svc.update_chat("c1", {"name": "n1", "dataset_ids": ["d1"]})
             self.assertIn("chat_dataset_locked", str(ctx.exception))
 
+    def test_update_chat_raises_original_error_when_retry_response_is_missing(self):
+        class _MissingRetryResponseHttp:
+            def __init__(self):
+                self._calls = 0
+
+            def set_config(self, _cfg):  # noqa: ARG002
+                return None
+
+            def put_json(self, _path, body=None, params=None):  # noqa: ARG002
+                self._calls += 1
+                if self._calls == 1:
+                    return {
+                        "code": 100,
+                        "message": "The dataset abc doesn't own parsed file",
+                        "data": None,
+                    }
+                return None
+
+            def get_list(self, _path, params=None, context=None):  # noqa: ARG002
+                return []
+
+        with tempfile.TemporaryDirectory() as td:
+            cfg_path = Path(td) / "ragflow_config.json"
+            cfg_path.write_text('{"base_url":"http://127.0.0.1:9380","api_key":"k","timeout":10}', encoding="utf-8")
+            conn = RagflowConnection(
+                config_path=cfg_path,
+                config={"base_url": "http://127.0.0.1:9380", "api_key": "k", "timeout": 10},
+                http=_MissingRetryResponseHttp(),
+            )
+            svc = RagflowChatService(connection=conn)
+            with self.assertRaises(ValueError) as ctx:
+                svc.update_chat("c1", {"name": "n1", "dataset_ids": ["d1"]})
+            self.assertEqual(str(ctx.exception), "The dataset abc doesn't own parsed file")
+
     def test_update_chat_clears_stale_parsed_bindings_for_unbound_chat(self):
         class _AutoClearHttp:
             def __init__(self):

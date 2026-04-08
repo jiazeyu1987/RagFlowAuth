@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import inspect
 import time
 from typing import Optional, Protocol
 
 from backend.core.roles import VALID_ROLES
 from backend.models.user import UserCreate, UserResponse, UserUpdate
 from backend.services.users.account_status import is_login_disabled_now
+from backend.services.users.manager_support import UserManagementMutationSupport
 
 VALID_USER_STATUSES = {"active", "inactive"}
 
@@ -92,13 +94,17 @@ class UserManagementError(Exception):
         return self.code
 
 
-class UserManagementManager:
+class UserManagementManager(UserManagementMutationSupport):
     """
     Framework-agnostic user domain manager.
     """
 
     def __init__(self, port: UsersPort):
         self._port = port
+
+    @staticmethod
+    def _error(code: str, *, status_code: int = 400) -> UserManagementError:
+        return UserManagementError(code, status_code=status_code)
 
     @staticmethod
     def _normalize_login_policy(
@@ -187,6 +193,36 @@ class UserManagementManager:
         if normalized:
             return normalized
         return None if for_create else ""
+
+    @staticmethod
+    def _filter_supported_kwargs(method, kwargs: dict[str, object]) -> dict[str, object]:
+        try:
+            signature = inspect.signature(method)
+        except (TypeError, ValueError):
+            return kwargs
+
+        if any(
+            parameter.kind == inspect.Parameter.VAR_KEYWORD
+            for parameter in signature.parameters.values()
+        ):
+            return kwargs
+
+        supported_names = {
+            name
+            for name, parameter in signature.parameters.items()
+            if parameter.kind
+            in (inspect.Parameter.POSITIONAL_OR_KEYWORD, inspect.Parameter.KEYWORD_ONLY)
+        }
+        return {
+            name: value
+            for name, value in kwargs.items()
+            if name in supported_names
+        }
+
+    def _call_port_update_user(self, **kwargs):
+        return self._port.update_user(
+            **self._filter_supported_kwargs(self._port.update_user, kwargs)
+        )
 
     def _build_permission_groups(self, group_ids: list[int] | None) -> list[dict]:
         result: list[dict] = []
@@ -367,15 +403,10 @@ class UserManagementManager:
         if role not in VALID_ROLES:
             raise UserManagementError(f"Invalid role: {role}")
         status = self._normalize_user_status(user_data.status, for_create=True)
-
-        if user_data.company_id is not None and not self._port.get_company(user_data.company_id):
-            raise UserManagementError("company_not_found")
-        department = None
-        if user_data.department_id is not None:
-            department = self._port.get_department(user_data.department_id)
-            if not department:
-                raise UserManagementError("department_not_found")
-        self._validate_company_department_relation(company_id=user_data.company_id, department=department)
+        organization = self._resolve_organization_context(
+            company_id=user_data.company_id,
+            department_id=user_data.department_id,
+        )
 
         max_login_sessions, idle_timeout_minutes = self._normalize_login_policy(
             max_login_sessions=user_data.max_login_sessions,
@@ -388,42 +419,13 @@ class UserManagementManager:
             for_create=True,
         )
         full_name = self._normalize_full_name(user_data.full_name, for_create=True)
-        manager_user_id = self._validate_manager_user_id(
-            user_id=None,
-            manager_user_id=user_data.manager_user_id,
-            company_id=user_data.company_id,
-            require_sub_admin=(role == "viewer"),
+        access = self._resolve_create_access_assignment(
+            user_data=user_data,
+            role=role,
+            company_id=organization.company_id,
+            department_id=organization.department_id,
         )
-        if role == "viewer" and not manager_user_id:
-            raise UserManagementError("manager_user_required_for_viewer")
-        managed_kb_root_node_id = self._normalize_managed_kb_root_node_id(user_data.managed_kb_root_node_id)
-        if role == "sub_admin":
-            managed_kb_root_node_id, _ = self._validate_managed_kb_root_node(
-                company_id=user_data.company_id,
-                node_id=managed_kb_root_node_id,
-                required=True,
-            )
-            manager_user_id = None
-        else:
-            managed_kb_root_node_id = None
-
-        group_ids = user_data.group_ids
-        if group_ids is None:
-            group_ids = []
-        for gid in group_ids:
-            if not self._port.get_permission_group(gid):
-                raise UserManagementError(f"permission_group_not_found:{gid}")
-        if role == "viewer":
-            group_ids = []
-        elif not group_ids:
-            group_id = user_data.group_id
-            if not group_id:
-                default_group = self._port.get_group_by_name("viewer")
-                if default_group:
-                    group_id = default_group["group_id"]
-                else:
-                    raise UserManagementError("default_permission_group_not_found")
-            group_ids = [group_id] if group_id else []
+        group_ids = self._resolve_create_group_ids(user_data=user_data, role=role)
 
         try:
             create_kwargs = dict(
@@ -431,9 +433,9 @@ class UserManagementManager:
                 password=user_data.password,
                 full_name=full_name,
                 email=user_data.email,
-                manager_user_id=manager_user_id,
-                company_id=user_data.company_id,
-                department_id=user_data.department_id,
+                manager_user_id=access.manager_user_id,
+                company_id=organization.company_id,
+                department_id=organization.department_id,
                 role=role,
                 group_id=None,
                 status=status,
@@ -444,7 +446,7 @@ class UserManagementManager:
                 disable_login_until_ms=disable_login_until_ms,
                 electronic_signature_enabled=bool(user_data.electronic_signature_enabled),
                 created_by=created_by,
-                managed_kb_root_node_id=managed_kb_root_node_id,
+                managed_kb_root_node_id=access.managed_kb_root_node_id,
             )
             user = self._port.create_user(**create_kwargs)
         except ValueError as e:
@@ -480,16 +482,16 @@ class UserManagementManager:
             raise UserManagementError(f"Invalid role: {role}")
         status = self._normalize_user_status(user_data.status, for_create=False)
 
-        next_company_id = current_user.company_id if user_data.company_id is None else user_data.company_id
-        if user_data.company_id is not None and not self._port.get_company(user_data.company_id):
-            raise UserManagementError("company_not_found")
-        department = None
-        next_department_id = current_user.department_id if user_data.department_id is None else user_data.department_id
-        if next_department_id is not None:
-            department = self._port.get_department(next_department_id)
-            if not department:
-                raise UserManagementError("department_not_found")
-        self._validate_company_department_relation(company_id=next_company_id, department=department)
+        organization = self._resolve_organization_context(
+            company_id=(
+                current_user.company_id if user_data.company_id is None else user_data.company_id
+            ),
+            department_id=(
+                current_user.department_id
+                if user_data.department_id is None
+                else user_data.department_id
+            ),
+        )
 
         max_login_sessions, idle_timeout_minutes = self._normalize_login_policy(
             max_login_sessions=user_data.max_login_sessions,
@@ -505,68 +507,37 @@ class UserManagementManager:
             bool(user_data.can_change_password) if user_data.can_change_password is not None else None
         )
         full_name = self._normalize_full_name(user_data.full_name, for_create=False)
-        manager_user_id = None
-        if "manager_user_id" in fields_set:
-            manager_user_id = self._validate_manager_user_id(
-                user_id=user_id,
-                manager_user_id=user_data.manager_user_id,
-                company_id=next_company_id,
-                require_sub_admin=((role or current_user.role) == "viewer"),
-            )
-
         effective_role = role or current_user.role
-        if effective_role == "viewer" and "manager_user_id" in fields_set and not manager_user_id:
-            raise UserManagementError("manager_user_required_for_viewer")
-        if effective_role == "viewer" and "manager_user_id" not in fields_set:
-            if not getattr(current_user, "manager_user_id", None):
-                raise UserManagementError("manager_user_required_for_viewer")
-            self._validate_manager_user_id(
-                user_id=user_id,
-                manager_user_id=getattr(current_user, "manager_user_id", None),
-                company_id=next_company_id,
-                require_sub_admin=True,
-            )
-        managed_kb_root_node_id = getattr(current_user, "managed_kb_root_node_id", None)
-        if effective_role == "sub_admin":
-            if "managed_kb_root_node_id" in fields_set:
-                managed_kb_root_node_id = user_data.managed_kb_root_node_id
-            managed_kb_root_node_id, _ = self._validate_managed_kb_root_node(
-                company_id=next_company_id,
-                node_id=managed_kb_root_node_id,
-                required=True,
-            )
-            manager_user_id = None
-        else:
-            managed_kb_root_node_id = None
+        access = self._resolve_update_access_assignment(
+            user_id=user_id,
+            current_user=current_user,
+            user_data=user_data,
+            fields_set=fields_set,
+            effective_role=effective_role,
+            company_id=organization.company_id,
+            department_id=organization.department_id,
+        )
 
-        disable_now = False
-        if status is not None and status != "active":
-            disable_now = True
-        if disable_login_enabled:
-            if disable_login_until_ms is None:
-                disable_now = True
-            else:
-                disable_now = disable_login_until_ms > int(time.time() * 1000)
+        disable_now = self._is_disable_applied_now(
+            status=status,
+            disable_login_enabled=disable_login_enabled,
+            disable_login_until_ms=disable_login_until_ms,
+        )
 
         is_builtin_admin = str(getattr(current_user, "username", "") or "").strip().lower() == "admin"
         if is_builtin_admin and disable_now:
             raise UserManagementError("admin_user_cannot_be_disabled")
 
-        group_ids = user_data.group_ids
-        if group_ids is not None:
-            for gid in group_ids:
-                if not self._port.get_permission_group(gid):
-                    raise UserManagementError(f"permission_group_not_found:{gid}")
-        elif user_data.group_id is not None:
-            group = self._port.get_permission_group(user_data.group_id)
-            if not group:
-                raise UserManagementError("permission_group_not_found")
-            group_ids = [user_data.group_id]
+        group_ids = self._resolve_update_group_ids(user_data=user_data)
         update_kwargs = dict(
             user_id=user_id,
             full_name=full_name,
             email=user_data.email,
-            manager_user_id=(manager_user_id if manager_user_id is not None else "" if "manager_user_id" in fields_set else None),
+            manager_user_id=(
+                access.manager_user_id
+                if access.manager_user_id is not None
+                else "" if "manager_user_id" in fields_set else None
+            ),
             company_id=user_data.company_id,
             department_id=user_data.department_id,
             role=role,
@@ -578,9 +549,11 @@ class UserManagementManager:
             disable_login_enabled=disable_login_enabled,
             disable_login_until_ms=disable_login_until_ms,
             electronic_signature_enabled=user_data.electronic_signature_enabled,
-            managed_kb_root_node_id=(managed_kb_root_node_id if effective_role == "sub_admin" else ""),
+            managed_kb_root_node_id=(
+                access.managed_kb_root_node_id if effective_role == "sub_admin" else ""
+            ),
         )
-        user = self._port.update_user(**update_kwargs)
+        user = self._call_port_update_user(**update_kwargs)
         if not user:
             raise UserManagementError("user_not_found", status_code=404)
 

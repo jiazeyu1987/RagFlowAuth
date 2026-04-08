@@ -1,16 +1,13 @@
 // @ts-check
 const { expect } = require('@playwright/test');
-const { adminTest } = require('../helpers/auth');
+const { realAdminTest, mockAuthMe } = require('../helpers/auth');
 
-adminTest('data security run backup keeps job successful when local backup succeeds but windows backup fails @regression @admin', async ({ page }) => {
+realAdminTest('data security run backup completes from server local backup only @regression @admin', async ({ page }) => {
+  await mockAuthMe(page);
+
   const settings = {
     enabled: false,
     interval_minutes: 60,
-    target_mode: 'local',
-    target_local_dir: 'D:\\\\backup\\\\ragflowauth',
-    target_ip: '',
-    target_share_name: '',
-    target_subdir: '',
     ragflow_compose_path: '/app/ragflow_compose/docker-compose.yml',
     ragflow_stop_services: false,
     full_backup_include_images: true,
@@ -18,8 +15,6 @@ adminTest('data security run backup keeps job successful when local backup succe
     last_run_at_ms: null,
     local_backup_target_path: '/app/data/backups',
     local_backup_pack_count: 1,
-    windows_backup_target_path: '\\\\10.0.0.8\\backup\\ragflowauth',
-    windows_backup_pack_count: 1,
   };
 
   const jobs = [];
@@ -49,9 +44,6 @@ adminTest('data security run backup keeps job successful when local backup succe
       started_at_ms: Date.now(),
       output_dir: '',
       detail: null,
-      replication_status: 'pending',
-      replica_path: '',
-      replication_error: null,
     });
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ job_id: 2 }) });
   });
@@ -69,32 +61,30 @@ adminTest('data security run backup keeps job successful when local backup succe
   await page.route('**/api/admin/data-security/backup/jobs/2', async (route) => {
     if (route.request().method() !== 'GET') return route.fallback();
     jobGetCount += 1;
-    const j = jobs[0];
+    const job = jobs[0];
     if (jobGetCount === 1) {
-      Object.assign(j, { status: 'running', progress: 10, message: 'running' });
+      Object.assign(job, { status: 'running', progress: 10, message: 'running' });
     } else {
-      Object.assign(j, {
+      Object.assign(job, {
         status: 'completed',
         progress: 100,
-        message: 'backup_completed_local_only',
-        detail: 'windows_backup_failed:disk full',
+        message: 'backup_completed_local',
+        detail: null,
         output_dir: '/app/data/backups/migration_pack_20260404_010101',
-        replication_status: 'failed',
-        replication_error: 'disk full',
       });
     }
-    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(j) });
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(job) });
   });
 
   await page.goto('/data-security');
   await page.getByTestId('ds-run-now').click();
 
   await expect(page.getByTestId('ds-active-job-status')).toContainText('#2');
-  await expect(page.getByTestId('ds-active-job-detail')).toContainText('windows_backup_failed:disk full', { timeout: 20_000 });
+  await expect(page.getByTestId('ds-active-job-message')).toContainText('backup_completed_local', { timeout: 20_000 });
+  await expect(page.getByTestId('ds-active-job')).toContainText('/app/data/backups/migration_pack_20260404_010101');
   await expect(page.getByTestId('ds-active-job-status')).toContainText('completed');
-  await expect(page.getByTestId('ds-job-row-2')).toContainText('Windows 备份: 失败');
-  await expect(page.getByTestId('ds-job-row-2')).toContainText('本地备份: 成功');
+  await expect(page.getByTestId('ds-job-row-2')).toContainText('服务器本机备份: 成功');
+  await expect(page.getByTestId('data-security-page')).not.toContainText('Windows');
 
-  // Should stop running after the partial-success completion, allowing another run attempt.
   await expect(page.getByTestId('ds-run-now')).toBeEnabled();
 });

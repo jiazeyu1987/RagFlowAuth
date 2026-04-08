@@ -1,15 +1,23 @@
 import React from 'react';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import DocumentBrowser from './DocumentBrowser';
+
+import { TEXT } from '../features/knowledge/documentBrowser/constants';
 import useDocumentBrowserPage from '../features/knowledge/documentBrowser/useDocumentBrowserPage';
+import DocumentBrowser from './DocumentBrowser';
 
 jest.mock('../features/knowledge/documentBrowser/useDocumentBrowserPage', () => jest.fn());
 jest.mock('../features/knowledge/documentBrowser/components/BatchTransferProgress', () => () => null);
-jest.mock('../features/knowledge/documentBrowser/components/DatasetPanel', () => () => <div data-testid="browser-dataset-panel" />);
-jest.mock('../features/knowledge/documentBrowser/components/FolderTree', () => () => <div data-testid="browser-folder-tree" />);
+jest.mock('../features/knowledge/documentBrowser/components/DatasetPanel', () => () => (
+  <div data-testid="browser-dataset-panel" />
+));
+jest.mock('../features/knowledge/documentBrowser/components/FolderTree', () => () => (
+  <div data-testid="browser-folder-tree" />
+));
 jest.mock('../features/knowledge/documentBrowser/components/TransferDialog', () => () => null);
-jest.mock('../shared/documents/preview/DocumentPreviewModal', () => ({ DocumentPreviewModal: () => null }));
+jest.mock('../shared/documents/preview/DocumentPreviewModal', () => ({
+  DocumentPreviewModal: () => null,
+}));
 
 const createHookState = (overrides = {}) => ({
   canDownload: () => true,
@@ -25,7 +33,7 @@ const createHookState = (overrides = {}) => ({
   indexes: { byId: new Map(), childrenByParent: new Map() },
   currentFolderId: '',
   expandedFolderIds: [],
-  folderBreadcrumb: [{ id: '', name: '根目录' }],
+  folderBreadcrumb: [{ id: '', name: TEXT.root }],
   datasetsInCurrentFolder: [{ id: 'ds1', name: '知识库A', node_id: 'node-1', node_path: '/A' }],
   transferTargetOptions: [],
   datasetFilterKeyword: '',
@@ -97,8 +105,45 @@ describe('DocumentBrowser', () => {
     expect(screen.queryByTestId('browser-refresh-all')).not.toBeInTheDocument();
 
     await user.click(screen.getByTestId('browser-quick-dataset-ds1'));
+
     expect(hookState.openQuickDataset).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'ds1', name: '知识库A' })
     );
+  });
+
+  it('wires filter controls and recent keyword chips through the extracted filter panel', async () => {
+    const user = userEvent.setup();
+    const hookState = createHookState({
+      datasetFilterKeyword: 'Alpha',
+      recentDatasetKeywords: ['Beta'],
+    });
+    useDocumentBrowserPage.mockReturnValue(hookState);
+
+    render(<DocumentBrowser />);
+
+    await user.type(screen.getByTestId('browser-dataset-filter'), '{enter}');
+    await user.click(screen.getByTestId('browser-dataset-filter-clear'));
+    await user.click(screen.getByRole('button', { name: 'Beta' }));
+
+    expect(hookState.commitKeyword).toHaveBeenCalledWith('Alpha');
+    expect(hookState.setDatasetFilterKeyword).toHaveBeenCalledWith('');
+    expect(hookState.setDatasetFilterKeyword).toHaveBeenCalledWith('Beta');
+  });
+
+  it('renders error and no-match states from the hook through the workspace section', () => {
+    useDocumentBrowserPage.mockReturnValue(
+      createHookState({
+        error: 'load_failed',
+        datasetsWithFolders: [{ id: 'ds1', name: '知识库A', node_id: 'node-1', node_path: '/A' }],
+        visibleDatasets: [],
+        datasetsInCurrentFolder: [],
+      })
+    );
+
+    render(<DocumentBrowser />);
+
+    expect(screen.getByTestId('browser-error')).toHaveTextContent('load_failed');
+    expect(screen.getByText(TEXT.noMatch)).toBeInTheDocument();
+    expect(screen.getByText(TEXT.noMatchDesc)).toBeInTheDocument();
   });
 });

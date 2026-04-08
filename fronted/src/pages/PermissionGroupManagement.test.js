@@ -119,4 +119,21 @@ describe('PermissionGroupManagement', () => {
     expect(hookState.createFolder).toHaveBeenCalledTimes(1);
     expect(hookState.handleCreateGroup).toHaveBeenCalledTimes(1);
   });
+
+  it('renders pending delete confirmation actions and wires cancel and confirm callbacks', () => {
+    const hookState = buildHookState({
+      pendingDeleteGroup: { group_id: 9, group_name: 'Ops' },
+    });
+    usePermissionGroupManagementPage.mockReturnValue(hookState);
+
+    render(<PermissionGroupManagement />);
+
+    expect(screen.getByText('确认删除权限组“Ops”？')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText('取消'));
+    fireEvent.click(screen.getByTestId('pg-delete-confirm'));
+
+    expect(hookState.handleCancelDeleteGroup).toHaveBeenCalledTimes(1);
+    expect(hookState.handleConfirmDeleteGroup).toHaveBeenCalledTimes(1);
+  });
 });

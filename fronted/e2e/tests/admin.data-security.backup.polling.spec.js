@@ -1,16 +1,13 @@
 // @ts-check
 const { expect } = require('@playwright/test');
-const { adminTest } = require('../helpers/auth');
+const { realAdminTest, mockAuthMe } = require('../helpers/auth');
 
-adminTest('data security run backup polls progress until done @regression @admin', async ({ page }) => {
+realAdminTest('data security run backup polls progress until local backup completes @regression @admin', async ({ page }) => {
+  await mockAuthMe(page);
+
   const settings = {
     enabled: false,
     interval_minutes: 60,
-    target_mode: 'local',
-    target_local_dir: 'D:\\\\backup\\\\ragflowauth',
-    target_ip: '',
-    target_share_name: '',
-    target_subdir: '',
     ragflow_compose_path: '/app/ragflow_compose/docker-compose.yml',
     ragflow_stop_services: false,
     full_backup_include_images: true,
@@ -18,8 +15,6 @@ adminTest('data security run backup polls progress until done @regression @admin
     last_run_at_ms: null,
     local_backup_target_path: '/app/data/backups',
     local_backup_pack_count: 2,
-    windows_backup_target_path: '\\\\10.0.0.8\\backup\\ragflowauth',
-    windows_backup_pack_count: 2,
   };
 
   const jobs = [];
@@ -48,7 +43,7 @@ adminTest('data security run backup polls progress until done @regression @admin
       created_at_ms: Date.now(),
       started_at_ms: Date.now(),
       output_dir: '',
-      replication_status: 'pending',
+      detail: null,
     });
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ job_id: 1 }) });
   });
@@ -66,34 +61,32 @@ adminTest('data security run backup polls progress until done @regression @admin
   await page.route('**/api/admin/data-security/backup/jobs/1', async (route) => {
     if (route.request().method() !== 'GET') return route.fallback();
     jobGetCount += 1;
-    const j = jobs[0];
+    const job = jobs[0];
     if (jobGetCount === 1) {
-      Object.assign(j, { status: 'queued', progress: 0, message: 'queued' });
+      Object.assign(job, { status: 'queued', progress: 0, message: 'queued' });
     } else if (jobGetCount === 2) {
-      Object.assign(j, { status: 'running', progress: 20, message: 'running' });
+      Object.assign(job, { status: 'running', progress: 20, message: 'running' });
     } else if (jobGetCount === 3) {
-      Object.assign(j, { status: 'running', progress: 80, message: 'running' });
+      Object.assign(job, { status: 'running', progress: 80, message: 'running' });
     } else {
-      Object.assign(j, {
+      Object.assign(job, {
         status: 'completed',
         progress: 100,
-        message: 'backup_completed_local_and_windows',
+        message: 'backup_completed_local',
         output_dir: '/app/data/backups/migration_pack_20260404_020202',
-        replication_status: 'succeeded',
-        replica_path: '\\\\10.0.0.8\\backup\\ragflowauth\\migration_pack_20260404_020202',
       });
     }
-    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(j) });
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(job) });
   });
 
   await page.goto('/data-security');
-
   await page.getByTestId('ds-run-now').click();
 
   await expect(page.getByTestId('ds-active-job-status')).toContainText('#1');
   await expect(page.getByTestId('ds-active-job-progress')).toContainText('100%', { timeout: 20_000 });
   await expect(page.getByTestId('ds-active-job-status')).toContainText('completed');
+  await expect(page.getByTestId('ds-active-job')).toContainText('/app/data/backups/migration_pack_20260404_020202');
+  await expect(page.getByTestId('data-security-page')).not.toContainText('Windows');
 
-  // After completion, list refresh should have occurred and history should include job row.
   await expect(page.getByTestId('ds-job-row-1')).toBeVisible();
 });

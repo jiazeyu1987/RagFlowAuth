@@ -1,0 +1,132 @@
+{
+  "schema_version": 2,
+  "task_id": "windows-20260408T124743",
+  "mode": "full",
+  "status": "completed",
+  "current_phase": null,
+  "phase_statuses": [
+    {
+      "phase_id": "P1",
+      "title": "收敛后端正式备份链路为本机单份",
+      "status": "completed",
+      "objective": "移除正式备份服务中的 Windows 副本执行与状态聚合，让正式结果仅取决于服务器本机备份。",
+      "owned_paths": [],
+      "dependencies": [],
+      "deliverables": [],
+      "evidence_expectation": "",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P1-AC1",
+          "text": "正式备份服务运行时不再调用 Windows 副本执行路径，最终成功/失败仅由本机备份结果决定。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P1",
+            "test-report.md#T1-Backend-backup-outcome-depends-only-on-server-local-result",
+            "test-report.md#T5-Browser-regressions-no-longer-assert-Windows-state",
+            "test-report.md#T6-Backup-maintenance-documentation-matches-the-new-formal-flow"
+          ]
+        },
+        {
+          "ac_id": "P1-AC2",
+          "text": "正式备份任务状态消息不再出现 `waiting_windows`、`local_and_windows`、`windows_only`、`windows_backup_*` 等 Windows 语义。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P1",
+            "test-report.md#T1-Backend-backup-outcome-depends-only-on-server-local-result",
+            "test-report.md#T5-Browser-regressions-no-longer-assert-Windows-state",
+            "test-report.md#T6-Backup-maintenance-documentation-matches-the-new-formal-flow"
+          ]
+        },
+        {
+          "ac_id": "P1-AC3",
+          "text": "获取数据安全设置时不再因为正式逻辑而检查 Windows 挂载状态或统计 Windows 副本目录。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P1",
+            "test-report.md#T1-Backend-backup-outcome-depends-only-on-server-local-result",
+            "test-report.md#T5-Browser-regressions-no-longer-assert-Windows-state",
+            "test-report.md#T6-Backup-maintenance-documentation-matches-the-new-formal-flow"
+          ]
+        }
+      ],
+      "evidence": [
+        "execution-log.md#Phase-P1"
+      ],
+      "notes": "- Formal backup flow now depends only on server-local backup outcome and no longer checks Windows formal status.",
+      "last_reviewed_at": "2026-04-08T13:58:07"
+    },
+    {
+      "phase_id": "P2",
+      "title": "清理前端展示与测试",
+      "status": "completed",
+      "objective": "移除数据安全页中的 Windows 备份状态、路径和设置提示，并同步更新单元/E2E 测试。",
+      "owned_paths": [],
+      "dependencies": [],
+      "deliverables": [],
+      "evidence_expectation": "",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P2-AC1",
+          "text": "数据安全页不再展示 Windows 备份路径、Windows 备份状态或 Windows 备份设置。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P2",
+            "test-report.md#T1-Backend-backup-outcome-depends-only-on-server-local-result",
+            "test-report.md#T5-Browser-regressions-no-longer-assert-Windows-state",
+            "test-report.md#T6-Backup-maintenance-documentation-matches-the-new-formal-flow"
+          ]
+        },
+        {
+          "ac_id": "P2-AC2",
+          "text": "相关前端单元测试与 E2E 用例改为断言本机单份备份行为。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P2",
+            "test-report.md#T1-Backend-backup-outcome-depends-only-on-server-local-result",
+            "test-report.md#T5-Browser-regressions-no-longer-assert-Windows-state",
+            "test-report.md#T6-Backup-maintenance-documentation-matches-the-new-formal-flow"
+          ]
+        },
+        {
+          "ac_id": "P2-AC3",
+          "text": "文档明确说明正式逻辑只要求服务器本机备份，Windows 端如需副本使用独立手动拉取工具。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P2",
+            "test-report.md#T1-Backend-backup-outcome-depends-only-on-server-local-result",
+            "test-report.md#T5-Browser-regressions-no-longer-assert-Windows-state",
+            "test-report.md#T6-Backup-maintenance-documentation-matches-the-new-formal-flow"
+          ]
+        }
+      ],
+      "evidence": [
+        "execution-log.md#Phase-P2"
+      ],
+      "notes": "- Frontend, E2E, and maintenance docs now reflect a local-only formal backup flow with no Windows prompts.",
+      "last_reviewed_at": "2026-04-08T13:58:38"
+    }
+  ],
+  "planner_review_status": "approved",
+  "test_status": "passed",
+  "blocking_prereqs": [],
+  "iteration_counts": {
+    "planner_revisions": 0,
+    "executor_loops": 2,
+    "test_loops": 1
+  },
+  "created_at": "2026-04-08T12:47:43",
+  "updated_at": "2026-04-08T14:06:11",
+  "branch": "int_latest",
+  "baseline_revision": "15832390fe4d6149784698ac3dda56f7978fb9bd",
+  "workspace_root": "D:\\ProjectPackage\\RagflowAuth",
+  "tasks_root": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks",
+  "task_dir": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\windows-20260408T124743",
+  "goal": "将正式备份链路改为只做服务器本机备份，不再检查、不再执行也不再提示 Windows 副本状态；清理对应测试与状态文案。",
+  "artifacts": {
+    "prd": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\windows-20260408T124743\\prd.md",
+    "test_plan": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\windows-20260408T124743\\test-plan.md",
+    "task_state": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\windows-20260408T124743\\task-state.json",
+    "execution_log": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\windows-20260408T124743\\execution-log.md",
+    "test_report": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\windows-20260408T124743\\test-report.md"
+  }
+}

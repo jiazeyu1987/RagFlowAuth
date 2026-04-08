@@ -1,0 +1,191 @@
+{
+  "schema_version": 2,
+  "task_id": "notification-20260408T021230",
+  "mode": "full",
+  "status": "completed",
+  "current_phase": null,
+  "phase_statuses": [
+    {
+      "phase_id": "P1",
+      "title": "后端通知职责拆分",
+      "status": "completed",
+      "objective": "把 `NotificationStore` 收敛为 facade，把 `NotificationManager` 收敛为编排入口，拆出仓储和分域服务，同时保持公开接口稳定。",
+      "owned_paths": [],
+      "dependencies": [],
+      "deliverables": [],
+      "evidence_expectation": "",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P1-AC1",
+          "text": "`backend/services/notification/store.py` 不再直接承载全部渠道、规则、任务、投递日志、站内信读写细节，而是退化为 facade / repository 聚合入口。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P1",
+            "test-report.md#T1",
+            "test-report.md#T2",
+            "test-report.md#T3",
+            "test-report.md#T4"
+          ]
+        },
+        {
+          "ac_id": "P1-AC2",
+          "text": "`backend/services/notification/service.py` 不再直接承载全部渠道、规则、收件人解析、投递、站内信、钉钉目录重建细节，公开的 `NotificationManager` / `NotificationService` 接口保持可用。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P1",
+            "test-report.md#T1",
+            "test-report.md#T2",
+            "test-report.md#T3",
+            "test-report.md#T4"
+          ]
+        },
+        {
+          "ac_id": "P1-AC3",
+          "text": "管理端通知 API 与站内信 API 的现有行为保持稳定，通知投递、重试、重发和读状态更新回归通过。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P1",
+            "test-report.md#T1",
+            "test-report.md#T2",
+            "test-report.md#T3",
+            "test-report.md#T4"
+          ]
+        }
+      ],
+      "evidence": [
+        "execution-log.md#Phase-P1"
+      ],
+      "notes": "",
+      "last_reviewed_at": "2026-04-08T03:05:08"
+    },
+    {
+      "phase_id": "P2",
+      "title": "前端通知设置页与 Hook 拆分",
+      "status": "completed",
+      "objective": "把通知设置页拆成更单一的状态域和展示区块，保留现有交互、字段和测试选择器。",
+      "owned_paths": [],
+      "dependencies": [],
+      "deliverables": [],
+      "evidence_expectation": "",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P2-AC1",
+          "text": "`useNotificationSettingsPage.js` 不再同时维护通道配置、规则矩阵、投递历史全部细节状态，至少拆出 helper 与分域 hook。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P2",
+            "test-report.md#T1",
+            "test-report.md#T2",
+            "test-report.md#T3",
+            "test-report.md#T4"
+          ]
+        },
+        {
+          "ac_id": "P2-AC2",
+          "text": "`NotificationSettings.js` 明显缩小，页面展示按 rules / channels / history 拆成独立展示区块或组件。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P2",
+            "test-report.md#T1",
+            "test-report.md#T2",
+            "test-report.md#T3",
+            "test-report.md#T4"
+          ]
+        },
+        {
+          "ac_id": "P2-AC3",
+          "text": "现有通知设置页测试选择器、规则切换、渠道保存、历史筛选和日志展开行为保持稳定。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P2",
+            "test-report.md#T1",
+            "test-report.md#T2",
+            "test-report.md#T3",
+            "test-report.md#T4"
+          ]
+        }
+      ],
+      "evidence": [
+        "execution-log.md#Phase-P2"
+      ],
+      "notes": "",
+      "last_reviewed_at": "2026-04-08T03:05:08"
+    },
+    {
+      "phase_id": "P3",
+      "title": "回归验证与工件收口",
+      "status": "completed",
+      "objective": "用后端、前端和真实浏览器三层验证证明本次重构未改变对外行为，并完成任务工件闭环。",
+      "owned_paths": [],
+      "dependencies": [],
+      "deliverables": [],
+      "evidence_expectation": "",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P3-AC1",
+          "text": "通知相关后端定向回归测试通过，能够覆盖投递、规则、管理端 API、站内信读状态和钉钉目录重建。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P3",
+            "test-report.md#T1",
+            "test-report.md#T2",
+            "test-report.md#T3",
+            "test-report.md#T4"
+          ]
+        },
+        {
+          "ac_id": "P3-AC2",
+          "text": "通知设置页相关前端测试通过，覆盖 hook 和页面壳层。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P3",
+            "test-report.md#T1",
+            "test-report.md#T2",
+            "test-report.md#T3",
+            "test-report.md#T4"
+          ]
+        },
+        {
+          "ac_id": "P3-AC3",
+          "text": "真实浏览器下通知设置页能正常渲染、切换 tab 和展示当前配置，并有截图或等价证据落盘。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P3",
+            "test-report.md#T1",
+            "test-report.md#T2",
+            "test-report.md#T3",
+            "test-report.md#T4"
+          ]
+        }
+      ],
+      "evidence": [
+        "execution-log.md#Phase-P3"
+      ],
+      "notes": "",
+      "last_reviewed_at": "2026-04-08T03:05:08"
+    }
+  ],
+  "planner_review_status": "approved",
+  "test_status": "passed",
+  "blocking_prereqs": [],
+  "iteration_counts": {
+    "planner_revisions": 0,
+    "executor_loops": 3,
+    "test_loops": 1
+  },
+  "created_at": "2026-04-08T02:12:30",
+  "updated_at": "2026-04-08T03:07:11",
+  "branch": "int_latest",
+  "baseline_revision": "3619b8169b862232147c8e7a8d7bca3608a3d8f3",
+  "workspace_root": "D:\\ProjectPackage\\RagflowAuth",
+  "tasks_root": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks",
+  "task_dir": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\notification-20260408T021230",
+  "goal": "继续推进系统前后端重构，完成 notification 模块第一期局部重构，保持现有行为与接口契约稳定",
+  "artifacts": {
+    "prd": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\notification-20260408T021230\\prd.md",
+    "test_plan": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\notification-20260408T021230\\test-plan.md",
+    "task_state": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\notification-20260408T021230\\task-state.json",
+    "execution_log": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\notification-20260408T021230\\execution-log.md",
+    "test_report": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\notification-20260408T021230\\test-report.md"
+  }
+}

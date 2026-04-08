@@ -93,3 +93,6 @@ class TestAuthMeAdmin(unittest.TestCase):
         self.assertEqual(body["accessible_kbs"], ["kb_a", "kb_b"])
         self.assertEqual(body["accessible_kb_ids"], ["id_a", "id_b"])
         self.assertEqual(body["accessible_chats"], ["agent_a1", "chat_c1", "chat_c2"])
+        self.assertEqual(body["capabilities"]["users"]["manage"], {"scope": "all", "targets": []})
+        self.assertEqual(body["capabilities"]["tools"]["view"], {"scope": "all", "targets": []})
+        self.assertEqual(body["capabilities"]["kb_documents"]["view"], {"scope": "all", "targets": []})

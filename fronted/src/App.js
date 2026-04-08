@@ -1,41 +1,10 @@
-import React, { Suspense, lazy } from 'react';
+import React, { Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './hooks/useAuth';
 import Layout from './components/Layout';
 import PermissionGuard from './components/PermissionGuard';
 import { getDefaultLandingRoute } from './features/auth/defaultLandingRoute';
-
-const LoginPage = lazy(() => import('./pages/LoginPage'));
-const Dashboard = lazy(() => import('./pages/Dashboard'));
-const UserManagement = lazy(() => import('./pages/UserManagement'));
-const KnowledgeUpload = lazy(() => import('./pages/KnowledgeUpload'));
-const DocumentBrowser = lazy(() => import('./pages/DocumentBrowser'));
-const Chat = lazy(() => import('./pages/Chat'));
-const Agents = lazy(() => import('./pages/Agents'));
-const PermissionGroupManagement = lazy(() => import('./pages/PermissionGroupManagement'));
-const DataSecurity = lazy(() => import('./pages/DataSecurity'));
-const NotificationSettings = lazy(() => import('./pages/NotificationSettings'));
-const ApprovalCenter = lazy(() => import('./pages/ApprovalCenter'));
-const ApprovalConfig = lazy(() => import('./pages/ApprovalConfig'));
-const ElectronicSignatureManagement = lazy(() => import('./pages/ElectronicSignatureManagement'));
-const TrainingComplianceManagement = lazy(() => import('./pages/TrainingComplianceManagement'));
-const InboxPage = lazy(() => import('./pages/InboxPage'));
-const OrgDirectoryManagement = lazy(() => import('./pages/OrgDirectoryManagement'));
-const Unauthorized = lazy(() => import('./pages/Unauthorized'));
-const ChangePassword = lazy(() => import('./pages/ChangePassword'));
-const AuditLogs = lazy(() => import('./pages/AuditLogs'));
-const Tools = lazy(() => import('./pages/Tools'));
-const PatentDownload = lazy(() => import('./pages/PatentDownload'));
-const PaperDownload = lazy(() => import('./pages/PaperDownload'));
-const KnowledgeBases = lazy(() => import('./pages/KnowledgeBases'));
-const NasBrowser = lazy(() => import('./pages/NasBrowser'));
-const DrugAdminNavigator = lazy(() => import('./pages/DrugAdminNavigator'));
-const NMPATool = lazy(() => import('./pages/NMPATool'));
-const PackageDrawingTool = lazy(() => import('./pages/PackageDrawingTool'));
-const SearchConfigsPanel = lazy(() => import('./pages/SearchConfigsPanel'));
-const ChatConfigsPanel = lazy(() => import('./pages/ChatConfigsPanel'));
-const DocumentAudit = lazy(() => import('./pages/DocumentAudit'));
-
+import { APP_ROUTES } from './routes/routeRegistry';
 
 function RouteLoadingFallback() {
   return <div style={{ padding: 16 }}>加载中...</div>;
@@ -47,323 +16,45 @@ function DefaultRouteRedirect() {
   return <Navigate to={getDefaultLandingRoute(user)} replace />;
 }
 
+function renderRouteElement(route) {
+  const PageComponent = route.component;
+  if (route.public) {
+    return <PageComponent />;
+  }
+
+  return (
+    <PermissionGuard
+      allowedRoles={route.guard?.allowedRoles}
+      permission={route.guard?.permission}
+      permissions={route.guard?.permissions}
+      anyPermissions={route.guard?.anyPermissions}
+    >
+      <Layout>
+        <PageComponent />
+      </Layout>
+    </PermissionGuard>
+  );
+}
+
 function App() {
   return (
     <AuthProvider>
       <BrowserRouter>
         <Suspense fallback={<RouteLoadingFallback />}>
           <Routes>
-            <Route path="/login" element={<LoginPage />} />
             <Route
               path="/"
-              element={
+              element={(
                 <PermissionGuard>
                   <Layout>
                     <DefaultRouteRedirect />
                   </Layout>
                 </PermissionGuard>
-              }
+              )}
             />
-            <Route
-              path="/dashboard"
-              element={
-                <PermissionGuard>
-                  <Layout>
-                    <Dashboard />
-                  </Layout>
-                </PermissionGuard>
-              }
-            />
-            <Route
-              path="/users"
-              element={
-                <PermissionGuard allowedRoles={['admin', 'sub_admin']}>
-                  <Layout>
-                    <UserManagement />
-                  </Layout>
-                </PermissionGuard>
-              }
-            />
-            <Route
-              path="/upload"
-              element={
-                <PermissionGuard permission={{ resource: 'kb_documents', action: 'upload' }}>
-                  <Layout>
-                    <KnowledgeUpload />
-                  </Layout>
-                </PermissionGuard>
-              }
-            />
-            <Route
-              path="/document-history"
-              element={
-                <PermissionGuard>
-                  <Layout>
-                    <DocumentAudit />
-                  </Layout>
-                </PermissionGuard>
-              }
-            />
-            <Route
-              path="/browser"
-              element={
-                <PermissionGuard>
-                  <Layout>
-                    <DocumentBrowser />
-                  </Layout>
-                </PermissionGuard>
-              }
-            />
-            <Route
-              path="/chat"
-              element={
-                <PermissionGuard>
-                  <Layout>
-                    <Chat />
-                  </Layout>
-                </PermissionGuard>
-              }
-            />
-            <Route
-              path="/agents"
-              element={
-                <PermissionGuard>
-                  <Layout>
-                    <Agents />
-                  </Layout>
-                </PermissionGuard>
-              }
-            />
-            <Route
-              path="/change-password"
-              element={
-                <PermissionGuard>
-                  <Layout>
-                    <ChangePassword />
-                  </Layout>
-                </PermissionGuard>
-              }
-            />
-            <Route
-              path="/tools"
-              element={
-                <PermissionGuard permission={{ resource: 'tools', action: 'view' }}>
-                  <Layout>
-                    <Tools />
-                  </Layout>
-                </PermissionGuard>
-              }
-            />
-            <Route
-              path="/tools/patent-download"
-              element={
-                <PermissionGuard permission={{ resource: 'tools', action: 'view', target: 'patent_download' }}>
-                  <Layout>
-                    <PatentDownload />
-                  </Layout>
-                </PermissionGuard>
-              }
-            />
-            <Route
-              path="/tools/paper-download"
-              element={
-                <PermissionGuard permission={{ resource: 'tools', action: 'view', target: 'paper_download' }}>
-                  <Layout>
-                    <PaperDownload />
-                  </Layout>
-                </PermissionGuard>
-              }
-            />
-            <Route
-              path="/tools/nas-browser"
-              element={
-                <PermissionGuard allowedRoles={['admin']} permission={{ resource: 'tools', action: 'view', target: 'nas_browser' }}>
-                  <Layout>
-                    <NasBrowser />
-                  </Layout>
-                </PermissionGuard>
-              }
-            />
-            <Route
-              path="/tools/drug-admin"
-              element={
-                <PermissionGuard permission={{ resource: 'tools', action: 'view', target: 'drug_admin' }}>
-                  <Layout>
-                    <DrugAdminNavigator />
-                  </Layout>
-                </PermissionGuard>
-              }
-            />
-            <Route
-              path="/tools/nmpa"
-              element={
-                <PermissionGuard permission={{ resource: 'tools', action: 'view', target: 'nmpa' }}>
-                  <Layout>
-                    <NMPATool />
-                  </Layout>
-                </PermissionGuard>
-              }
-            />
-            <Route
-              path="/tools/package-drawing"
-              element={
-                <PermissionGuard permission={{ resource: 'tools', action: 'view', target: 'package_drawing' }}>
-                  <Layout>
-                    <PackageDrawingTool />
-                  </Layout>
-                </PermissionGuard>
-              }
-            />
-            <Route
-              path="/kbs"
-              element={
-                <PermissionGuard allowedRoles={['sub_admin']} permission={{ resource: 'kbs_config', action: 'view' }}>
-                  <Layout>
-                    <KnowledgeBases />
-                  </Layout>
-                </PermissionGuard>
-              }
-            />
-            <Route
-              path="/chat-configs"
-              element={
-                <PermissionGuard allowedRoles={['sub_admin']} permission={{ resource: 'kbs_config', action: 'view' }}>
-                  <Layout>
-                    <ChatConfigsPanel />
-                  </Layout>
-                </PermissionGuard>
-              }
-            />
-            <Route
-              path="/search-configs"
-              element={
-                <PermissionGuard allowedRoles={['admin']}>
-                  <Layout>
-                    <SearchConfigsPanel />
-                  </Layout>
-                </PermissionGuard>
-              }
-            />
-            <Route
-              path="/permission-groups"
-              element={
-                <PermissionGuard allowedRoles={['sub_admin']}>
-                  <Layout>
-                    <PermissionGroupManagement />
-                  </Layout>
-                </PermissionGuard>
-              }
-            />
-            <Route
-              path="/approvals"
-              element={
-                <PermissionGuard>
-                  <Layout>
-                    <ApprovalCenter />
-                  </Layout>
-                </PermissionGuard>
-              }
-            />
-            <Route
-              path="/approval-config"
-              element={
-                <PermissionGuard allowedRoles={['admin']}>
-                  <Layout>
-                    <ApprovalConfig />
-                  </Layout>
-                </PermissionGuard>
-              }
-            />
-            <Route
-              path="/inbox"
-              element={
-                <PermissionGuard>
-                  <Layout>
-                    <InboxPage />
-                  </Layout>
-                </PermissionGuard>
-              }
-            />
-            <Route
-              path="/org-directory"
-              element={
-                <PermissionGuard allowedRoles={['admin']}>
-                  <Layout>
-                    <OrgDirectoryManagement />
-                  </Layout>
-                </PermissionGuard>
-              }
-            />
-            <Route
-              path="/data-security"
-              element={
-                <PermissionGuard allowedRoles={['admin', 'sub_admin']}>
-                  <Layout>
-                    <DataSecurity />
-                  </Layout>
-                </PermissionGuard>
-              }
-            />
-            <Route
-              path="/notification-settings"
-              element={
-                <PermissionGuard allowedRoles={['admin']}>
-                  <Layout>
-                    <NotificationSettings />
-                  </Layout>
-                </PermissionGuard>
-              }
-            />
-            <Route
-              path="/electronic-signatures"
-              element={
-                <PermissionGuard allowedRoles={['admin']}>
-                  <Layout>
-                    <ElectronicSignatureManagement />
-                  </Layout>
-                </PermissionGuard>
-              }
-            />
-            <Route
-              path="/training-compliance"
-              element={
-                <PermissionGuard allowedRoles={['admin']}>
-                  <Layout>
-                    <TrainingComplianceManagement />
-                  </Layout>
-                </PermissionGuard>
-              }
-            />
-            <Route
-              path="/messages"
-              element={
-                <PermissionGuard>
-                  <Layout>
-                    <InboxPage />
-                  </Layout>
-                </PermissionGuard>
-              }
-            />
-            <Route
-              path="/logs"
-              element={
-                <PermissionGuard allowedRoles={['admin']}>
-                  <Layout>
-                    <AuditLogs />
-                  </Layout>
-                </PermissionGuard>
-              }
-            />
-            <Route
-              path="/unauthorized"
-              element={
-                <PermissionGuard>
-                  <Layout>
-                    <Unauthorized />
-                  </Layout>
-                </PermissionGuard>
-              }
-            />
+            {APP_ROUTES.map((route) => (
+              <Route key={route.path} path={route.path} element={renderRouteElement(route)} />
+            ))}
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </Suspense>

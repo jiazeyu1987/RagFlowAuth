@@ -17,6 +17,36 @@ async function readJson(response, fallbackMessage) {
   return response.json();
 }
 
+function readEnvelopeObject(payload, field, fallbackMessage) {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    throw new Error(`${fallbackMessage}: invalid envelope`);
+  }
+  const value = payload[field];
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error(`${fallbackMessage}: missing ${field}`);
+  }
+  return value;
+}
+
+function readOperationRequestEnvelope(payload, fallbackMessage) {
+  const request = readEnvelopeObject(payload, 'request', fallbackMessage);
+  if (!String(request.request_id || '').trim()) {
+    throw new Error(`${fallbackMessage}: missing request.request_id`);
+  }
+  return request;
+}
+
+function readOperationActionResult(payload, fallbackMessage) {
+  const result = readEnvelopeObject(payload, 'result', fallbackMessage);
+  if (!String(result.request_id || '').trim()) {
+    throw new Error(`${fallbackMessage}: missing result.request_id`);
+  }
+  if (!String(result.status || '').trim()) {
+    throw new Error(`${fallbackMessage}: missing result.status`);
+  }
+  return result;
+}
+
 async function loginApiAs(username, password) {
   const api = await request.newContext({ baseURL: BACKEND_BASE_URL });
   const loginResponse = await api.post('/api/auth/login', {
@@ -89,7 +119,8 @@ async function approveOperationRequestViaApi(api, headers, {
       notes: notes || reason,
     },
   });
-  return readJson(response, `approve operation request failed for ${requestId}`);
+  const payload = await readJson(response, `approve operation request failed for ${requestId}`);
+  return readOperationActionResult(payload, `approve operation request returned invalid payload for ${requestId}`);
 }
 
 async function withdrawOperationRequestViaApi(api, headers, {
@@ -100,7 +131,8 @@ async function withdrawOperationRequestViaApi(api, headers, {
     headers,
     data: { reason },
   });
-  return readJson(response, `withdraw operation request failed for ${requestId}`);
+  const payload = await readJson(response, `withdraw operation request failed for ${requestId}`);
+  return readOperationActionResult(payload, `withdraw operation request returned invalid payload for ${requestId}`);
 }
 
 async function uploadKnowledgeFileViaApi(api, headers, {
@@ -123,7 +155,8 @@ async function uploadKnowledgeFileViaApi(api, headers, {
       },
     },
   });
-  return readJson(response, `upload knowledge file failed for ${filename}`);
+  const payload = await readJson(response, `upload knowledge file failed for ${filename}`);
+  return readOperationRequestEnvelope(payload, `upload knowledge file returned invalid payload for ${filename}`);
 }
 
 async function getKnowledgeDocument(api, headers, docId) {
@@ -209,6 +242,8 @@ module.exports = {
   openBrowserDataset,
   openLoggedInPage,
   pollSearchToken,
+  readOperationActionResult,
+  readOperationRequestEnvelope,
   toSafeId,
   uploadKnowledgeFileViaApi,
   waitForBrowserDocument,

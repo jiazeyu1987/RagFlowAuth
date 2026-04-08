@@ -127,7 +127,7 @@ export default function PatentDownload() {
             keywordLabel="关键词（支持逗号 / 分号 / 换行分隔）"
             keywordText={keywordText}
             onKeywordChange={setKeywordText}
-            placeholder={'3D printer\n导板'}
+            placeholder={'3D 打印机\n导板'}
             useAnd={useAnd}
             onUseAndChange={setUseAnd}
             useAndId="patent-use-and"
@@ -234,7 +234,7 @@ export default function PatentDownload() {
                 loading={historyItemsLoading}
                 loadingText="正在加载专利历史..."
                 payload={historyPayload}
-                itemLabel="patents"
+                itemLabel="专利"
               >
                 <PatentResultList
                   items={historyItems}

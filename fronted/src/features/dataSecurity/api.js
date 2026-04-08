@@ -22,9 +22,6 @@ const normalizeSettings = (payload, action) => {
     ...data,
     local_backup_target_path: String(data.local_backup_target_path || ''),
     local_backup_pack_count: Number(data.local_backup_pack_count ?? 0) || 0,
-    windows_backup_target_path: String(data.windows_backup_target_path || ''),
-    windows_backup_pack_count: Number(data.windows_backup_pack_count ?? 0) || 0,
-    windows_backup_pack_count_skipped: Boolean(data.windows_backup_pack_count_skipped),
   };
 };
 

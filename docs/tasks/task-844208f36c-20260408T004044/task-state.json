@@ -1,0 +1,191 @@
+{
+  "schema_version": 2,
+  "task_id": "task-844208f36c-20260408T004044",
+  "mode": "full",
+  "status": "completed",
+  "current_phase": null,
+  "phase_statuses": [
+    {
+      "phase_id": "P1",
+      "title": "审批后端服务收敛",
+      "status": "completed",
+      "objective": "",
+      "owned_paths": [],
+      "dependencies": [],
+      "deliverables": [],
+      "evidence_expectation": "",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P1-AC1",
+          "text": "",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P1",
+            "test-report.md#T1",
+            "test-report.md#T2",
+            "test-report.md#T3",
+            "test-report.md#T4"
+          ]
+        },
+        {
+          "ac_id": "P1-AC2",
+          "text": "",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P1",
+            "test-report.md#T1",
+            "test-report.md#T2",
+            "test-report.md#T3",
+            "test-report.md#T4"
+          ]
+        },
+        {
+          "ac_id": "P1-AC3",
+          "text": "",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P1",
+            "test-report.md#T1",
+            "test-report.md#T2",
+            "test-report.md#T3",
+            "test-report.md#T4"
+          ]
+        }
+      ],
+      "evidence": [
+        "execution-log.md#Phase-P1"
+      ],
+      "notes": "- Backend repository split and action/query facade refactor completed with approval regression coverage.",
+      "last_reviewed_at": "2026-04-08T01:24:13"
+    },
+    {
+      "phase_id": "P2",
+      "title": "审批前端页面与 Hook 收敛",
+      "status": "completed",
+      "objective": "",
+      "owned_paths": [],
+      "dependencies": [],
+      "deliverables": [],
+      "evidence_expectation": "",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P2-AC1",
+          "text": "",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P2",
+            "test-report.md#T1",
+            "test-report.md#T2",
+            "test-report.md#T3",
+            "test-report.md#T4"
+          ]
+        },
+        {
+          "ac_id": "P2-AC2",
+          "text": "",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P2",
+            "test-report.md#T1",
+            "test-report.md#T2",
+            "test-report.md#T3",
+            "test-report.md#T4"
+          ]
+        },
+        {
+          "ac_id": "P2-AC3",
+          "text": "",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P2",
+            "test-report.md#T1",
+            "test-report.md#T2",
+            "test-report.md#T3",
+            "test-report.md#T4"
+          ]
+        }
+      ],
+      "evidence": [
+        "execution-log.md#Phase-P2"
+      ],
+      "notes": "- Approval frontend hooks/pages were decomposed into helpers and focused components with regression tests passing.",
+      "last_reviewed_at": "2026-04-08T01:21:52"
+    },
+    {
+      "phase_id": "P3",
+      "title": "验证与证据收口",
+      "status": "completed",
+      "objective": "",
+      "owned_paths": [],
+      "dependencies": [],
+      "deliverables": [],
+      "evidence_expectation": "",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P3-AC1",
+          "text": "",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P3",
+            "test-report.md#T1",
+            "test-report.md#T2",
+            "test-report.md#T3",
+            "test-report.md#T4"
+          ]
+        },
+        {
+          "ac_id": "P3-AC2",
+          "text": "",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P3",
+            "test-report.md#T1",
+            "test-report.md#T2",
+            "test-report.md#T3",
+            "test-report.md#T4"
+          ]
+        },
+        {
+          "ac_id": "P3-AC3",
+          "text": "",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P3",
+            "test-report.md#T1",
+            "test-report.md#T2",
+            "test-report.md#T3",
+            "test-report.md#T4"
+          ]
+        }
+      ],
+      "evidence": [
+        "execution-log.md#Phase-P3"
+      ],
+      "notes": "- Execution evidence, test evidence, and task-state were reconciled and documented.",
+      "last_reviewed_at": "2026-04-08T01:24:34"
+    }
+  ],
+  "planner_review_status": "approved",
+  "test_status": "passed",
+  "blocking_prereqs": [],
+  "iteration_counts": {
+    "planner_revisions": 0,
+    "executor_loops": 3,
+    "test_loops": 1
+  },
+  "created_at": "2026-04-08T00:40:44",
+  "updated_at": "2026-04-08T01:25:17",
+  "branch": "int_latest",
+  "baseline_revision": "3619b8169b862232147c8e7a8d7bca3608a3d8f3",
+  "workspace_root": "D:\\ProjectPackage\\RagflowAuth",
+  "tasks_root": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks",
+  "task_dir": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\task-844208f36c-20260408T004044",
+  "goal": "持续推进前后端重构，按系统重构计划实施审批域后端与高优先前端热点的局部重构，保持现有行为和契约稳定",
+  "artifacts": {
+    "prd": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\task-844208f36c-20260408T004044\\prd.md",
+    "test_plan": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\task-844208f36c-20260408T004044\\test-plan.md",
+    "task_state": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\task-844208f36c-20260408T004044\\task-state.json",
+    "execution_log": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\task-844208f36c-20260408T004044\\execution-log.md",
+    "test_report": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\task-844208f36c-20260408T004044\\test-report.md"
+  }
+}

@@ -1,0 +1,111 @@
+{
+  "schema_version": 2,
+  "task_id": "fronted-src-pages-documentbrowser-js-usedocument-20260408T084722",
+  "mode": "full",
+  "status": "completed",
+  "current_phase": null,
+  "phase_statuses": [
+    {
+      "phase_id": "P1",
+      "title": "Split the document browser route page into focused render components",
+      "status": "completed",
+      "objective": "Move the major render sections out of `DocumentBrowser.js` while keeping the route page as a composition shell over `useDocumentBrowserPage`.",
+      "owned_paths": [],
+      "dependencies": [],
+      "deliverables": [],
+      "evidence_expectation": "",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P1-AC1",
+          "text": "`DocumentBrowser.js` no longer directly owns the quick-dataset cards, filter block, workspace layout, breadcrumb block, and modal wiring in one large file.",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P1",
+            "test-report.md#T1"
+          ]
+        },
+        {
+          "ac_id": "P1-AC2",
+          "text": "the page continues to consume the same `useDocumentBrowserPage` contract without page-level behavior changes.",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P1",
+            "test-report.md#T1"
+          ]
+        },
+        {
+          "ac_id": "P1-AC3",
+          "text": "loading, empty, quick-open, and filter actions continue surfacing the existing states without introducing fallback branches.",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P1",
+            "test-report.md#T1"
+          ]
+        }
+      ],
+      "evidence": [
+        "execution-log.md#Phase-P1"
+      ],
+      "notes": "",
+      "last_reviewed_at": "2026-04-08T08:54:44"
+    },
+    {
+      "phase_id": "P2",
+      "title": "Focused frontend regression validation and tranche evidence",
+      "status": "completed",
+      "objective": "Prove the bounded page refactor preserved current document-browser behavior.",
+      "owned_paths": [],
+      "dependencies": [],
+      "deliverables": [],
+      "evidence_expectation": "",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P2-AC1",
+          "text": "focused document-browser page and page-hook Jest suites pass against the final code state.",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P2",
+            "test-report.md#T1"
+          ]
+        },
+        {
+          "ac_id": "P2-AC2",
+          "text": "task artifacts record the exact commands run, verified acceptance coverage, and bounded residual risk.",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P2",
+            "test-report.md#T1"
+          ]
+        }
+      ],
+      "evidence": [
+        "execution-log.md#Phase-P2"
+      ],
+      "notes": "",
+      "last_reviewed_at": "2026-04-08T08:54:54"
+    }
+  ],
+  "planner_review_status": "approved",
+  "test_status": "passed",
+  "blocking_prereqs": [],
+  "iteration_counts": {
+    "planner_revisions": 0,
+    "executor_loops": 2,
+    "test_loops": 1
+  },
+  "created_at": "2026-04-08T08:47:22",
+  "updated_at": "2026-04-08T08:55:14",
+  "branch": "int_latest",
+  "baseline_revision": "3619b8169b862232147c8e7a8d7bca3608a3d8f3",
+  "workspace_root": "D:\\ProjectPackage\\RagflowAuth",
+  "tasks_root": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks",
+  "task_dir": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\fronted-src-pages-documentbrowser-js-usedocument-20260408T084722",
+  "goal": "聚焦 fronted/src/pages/DocumentBrowser.js，拆分快捷知识库、筛选栏、目录工作区与状态区块，保持 useDocumentBrowserPage 契约和现有 Jest 行为稳定",
+  "artifacts": {
+    "prd": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\fronted-src-pages-documentbrowser-js-usedocument-20260408T084722\\prd.md",
+    "test_plan": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\fronted-src-pages-documentbrowser-js-usedocument-20260408T084722\\test-plan.md",
+    "task_state": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\fronted-src-pages-documentbrowser-js-usedocument-20260408T084722\\task-state.json",
+    "execution_log": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\fronted-src-pages-documentbrowser-js-usedocument-20260408T084722\\execution-log.md",
+    "test_report": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\fronted-src-pages-documentbrowser-js-usedocument-20260408T084722\\test-report.md"
+  }
+}

@@ -1,0 +1,217 @@
+{
+  "version": 1,
+  "description": "Verified doc/e2e to Playwright mappings for the full real-chain doc suite.",
+  "verified_at": "2026-04-05",
+  "principles": {
+    "mock": "forbidden",
+    "fallback": "forbidden",
+    "seed_mode": "real_bootstrap_only"
+  },
+  "environment": {
+    "frontend_base_url": "http://127.0.0.1:33002",
+    "backend_base_url": "http://127.0.0.1:38002",
+    "db_path": "data/e2e/doc_auth.db",
+    "bootstrap_script": "scripts/bootstrap_doc_test_env.py",
+    "runner": "scripts/run_doc_e2e.py",
+    "playwright_config": "fronted/playwright.docs.config.js"
+  },
+  "coverage": {
+    "automated_doc_count": 30,
+    "pending_doc_count": 0,
+    "unique_spec_count": 25,
+    "scopes": {
+      "unit_automated": 19,
+      "role_automated": 11
+    }
+  },
+  "groups": {
+    "unit": [
+      {
+        "doc": "doc/e2e/unit/审批中心.md",
+        "specs": [
+          "fronted/e2e/tests/docs.approval-center.spec.js"
+        ]
+      },
+      {
+        "doc": "doc/e2e/unit/审批配置.md",
+        "specs": [
+          "fronted/e2e/tests/docs.approval-config.spec.js"
+        ]
+      },
+      {
+        "doc": "doc/e2e/unit/培训合规.md",
+        "specs": [
+          "fronted/e2e/tests/docs.training-compliance.spec.js"
+        ]
+      },
+      {
+        "doc": "doc/e2e/unit/文档记录.md",
+        "specs": [
+          "fronted/e2e/tests/docs.document-audit.spec.js"
+        ]
+      },
+      {
+        "doc": "doc/e2e/unit/电子签名管理.md",
+        "specs": [
+          "fronted/e2e/tests/docs.electronic-signatures.spec.js"
+        ]
+      },
+      {
+        "doc": "doc/e2e/unit/站内信.md",
+        "specs": [
+          "fronted/e2e/tests/docs.inbox.spec.js"
+        ]
+      },
+      {
+        "doc": "doc/e2e/unit/通知设置.md",
+        "specs": [
+          "fronted/e2e/tests/docs.notification-settings.spec.js"
+        ]
+      },
+      {
+        "doc": "doc/e2e/unit/文档上传.md",
+        "specs": [
+          "fronted/e2e/tests/docs.document-upload.spec.js"
+        ]
+      },
+      {
+        "doc": "doc/e2e/unit/文档浏览.md",
+        "specs": [
+          "fronted/e2e/tests/docs.document-browser.spec.js"
+        ]
+      },
+      {
+        "doc": "doc/e2e/unit/知识库配置.md",
+        "specs": [
+          "fronted/e2e/tests/docs.knowledge-base-config.spec.js"
+        ]
+      },
+      {
+        "doc": "doc/e2e/unit/用户管理.md",
+        "specs": [
+          "fronted/e2e/tests/docs.user-management.spec.js"
+        ]
+      },
+      {
+        "doc": "doc/e2e/unit/权限分组.md",
+        "specs": [
+          "fronted/e2e/tests/docs.permission-groups.spec.js"
+        ]
+      },
+      {
+        "doc": "doc/e2e/unit/组织管理.md",
+        "specs": [
+          "fronted/e2e/tests/docs.org-management.spec.js"
+        ]
+      },
+      {
+        "doc": "doc/e2e/unit/全库搜索.md",
+        "specs": [
+          "fronted/e2e/tests/docs.global-search.spec.js"
+        ]
+      },
+      {
+        "doc": "doc/e2e/unit/智能对话.md",
+        "specs": [
+          "fronted/e2e/tests/docs.chat.spec.js"
+        ]
+      },
+      {
+        "doc": "doc/e2e/unit/日志审计.md",
+        "specs": [
+          "fronted/e2e/tests/docs.audit-logs.spec.js"
+        ]
+      },
+      {
+        "doc": "doc/e2e/unit/数据安全.md",
+        "specs": [
+          "fronted/e2e/tests/docs.data-security.spec.js"
+        ]
+      },
+      {
+        "doc": "doc/e2e/unit/修改密码.md",
+        "specs": [
+          "fronted/e2e/tests/docs.password-change.spec.js"
+        ]
+      },
+      {
+        "doc": "doc/e2e/unit/实用工具.md",
+        "specs": [
+          "fronted/e2e/tests/docs.tools.spec.js"
+        ]
+      }
+    ],
+    "role": [
+      {
+        "doc": "doc/e2e/role/01_账号与权限开通.md",
+        "specs": [
+          "fronted/e2e/tests/docs.user-management.spec.js",
+          "fronted/e2e/tests/docs.login.spec.js"
+        ]
+      },
+      {
+        "doc": "doc/e2e/role/02_权限组与菜单生效.md",
+        "specs": [
+          "fronted/e2e/tests/docs.role.permission-menu.spec.js"
+        ]
+      },
+      {
+        "doc": "doc/e2e/role/03_知识库与目录范围.md",
+        "specs": [
+          "fronted/e2e/tests/docs.role.knowledge-scope.spec.js"
+        ]
+      },
+      {
+        "doc": "doc/e2e/role/04_文档上传审核发布.md",
+        "specs": [
+          "fronted/e2e/tests/docs.document-upload-publish.spec.js"
+        ]
+      },
+      {
+        "doc": "doc/e2e/role/05_文档删除下载与审计.md",
+        "specs": [
+          "fronted/e2e/tests/docs.document-audit.spec.js"
+        ]
+      },
+      {
+        "doc": "doc/e2e/role/06_审批申请处理撤回.md",
+        "specs": [
+          "fronted/e2e/tests/docs.approval-center.spec.js"
+        ]
+      },
+      {
+        "doc": "doc/e2e/role/07_通知规则与站内信.md",
+        "specs": [
+          "fronted/e2e/tests/docs.notification-settings.spec.js",
+          "fronted/e2e/tests/docs.inbox.spec.js"
+        ]
+      },
+      {
+        "doc": "doc/e2e/role/08_电子签名授权与验签.md",
+        "specs": [
+          "fronted/e2e/tests/docs.electronic-signatures.spec.js"
+        ]
+      },
+      {
+        "doc": "doc/e2e/role/09_培训合规与审批资格.md",
+        "specs": [
+          "fronted/e2e/tests/docs.training-compliance.spec.js",
+          "fronted/e2e/tests/docs.role.training-approval-flow.spec.js"
+        ]
+      },
+      {
+        "doc": "doc/e2e/role/10_密码重置与账号状态.md",
+        "specs": [
+          "fronted/e2e/tests/docs.user-management.spec.js",
+          "fronted/e2e/tests/docs.password-change.spec.js"
+        ]
+      },
+      {
+        "doc": "doc/e2e/role/11_越权访问与数据隔离.md",
+        "specs": [
+          "fronted/e2e/tests/docs.role.data-isolation.spec.js"
+        ]
+      }
+    ]
+  }
+}

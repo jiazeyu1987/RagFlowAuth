@@ -6,8 +6,8 @@ from unittest.mock import Mock, patch
 
 
 class TestDataSecurityRouterUnit(unittest.TestCase):
-    def test_settings_response_uses_explicit_data_security_fields(self) -> None:
-        from backend.app.modules.data_security import router
+    def test_settings_response_uses_local_backup_fields_without_windows_stats(self) -> None:
+        from backend.app.modules.data_security import support
 
         settings = SimpleNamespace(
             enabled=True,
@@ -36,18 +36,18 @@ class TestDataSecurityRouterUnit(unittest.TestCase):
         )
 
         with patch.object(
-            router,
+            support,
             "_backup_pack_stats",
             return_value={
                 "local_backup_target_path": "/backup/local",
                 "local_backup_pack_count": 2,
                 "local_backup_pack_count_skipped": False,
-                "windows_backup_target_path": "/mnt/replica/RagflowAuth",
-                "windows_backup_pack_count": 1,
+                "windows_backup_target_path": "",
+                "windows_backup_pack_count": 0,
                 "windows_backup_pack_count_skipped": False,
             },
         ):
-            payload = router._settings_response(settings)
+            payload = support._settings_response(settings)
 
         self.assertTrue(payload["full_backup_enabled"])
         self.assertFalse(payload["full_backup_include_images"])
@@ -55,10 +55,10 @@ class TestDataSecurityRouterUnit(unittest.TestCase):
         self.assertEqual(payload["replica_subdir_format"], "date")
         self.assertEqual(payload["backup_retention_max"], 9)
         self.assertEqual(payload["local_backup_target_path"], "/backup/local")
-        self.assertEqual(payload["windows_backup_target_path"], "/mnt/replica/RagflowAuth")
+        self.assertEqual(payload["windows_backup_target_path"], "")
 
     def test_backup_prerequisites_fail_fast_when_backup_worker_image_missing(self) -> None:
-        from backend.app.modules.data_security import router
+        from backend.app.modules.data_security import support
 
         with tempfile.TemporaryDirectory(prefix="ragflowauth_ds_router_") as temp_dir:
             root = Path(temp_dir)
@@ -76,22 +76,22 @@ class TestDataSecurityRouterUnit(unittest.TestCase):
                 data_security_store=SimpleNamespace(get_settings=lambda: settings),
             )
 
-            with patch.object(router, "docker_ok", return_value=(True, "")), patch.object(
-                router, "read_compose_project_name", return_value="docker"
+            with patch.object(support, "docker_ok", return_value=(True, "")), patch.object(
+                support, "read_compose_project_name", return_value="docker"
             ), patch.object(
-                router, "list_docker_volumes_by_prefix", return_value=["docker_esdata01"]
+                support, "list_docker_volumes_by_prefix", return_value=["docker_esdata01"]
             ), patch.object(
-                router, "resolve_backend_helper_image", side_effect=RuntimeError(
+                support, "resolve_backend_helper_image", side_effect=RuntimeError(
                     "backup_worker_image_not_found:container=ragflowauth-backend"
                 )
             ):
                 with self.assertRaises(RuntimeError) as ctx:
-                    router._assert_backup_prerequisites(deps)
+                    support._assert_backup_prerequisites(deps)
 
             self.assertEqual(str(ctx.exception), "backup_worker_image_not_found:container=ragflowauth-backend")
 
     def test_hydrate_job_package_hash_backfills_existing_pack(self) -> None:
-        from backend.app.modules.data_security import router
+        from backend.app.modules.data_security import support
         from backend.services.data_security.backup_service import _compute_backup_package_hash
 
         with tempfile.TemporaryDirectory(prefix="ragflowauth_ds_pack_") as temp_dir:
@@ -114,7 +114,7 @@ class TestDataSecurityRouterUnit(unittest.TestCase):
             store = Mock()
             store.update_job.return_value = updated_job
 
-            result = router._hydrate_job_package_hash(store, original_job)
+            result = support._hydrate_job_package_hash(store, original_job)
 
             store.update_job.assert_called_once_with(7, package_hash=expected_hash)
             self.assertIs(result, updated_job)

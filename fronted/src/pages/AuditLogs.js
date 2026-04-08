@@ -74,6 +74,24 @@ const SOURCE_LABELS = {
   users: '用户管理',
 };
 
+const EXTRA_ACTION_LABELS = {
+  notification_channel_upsert: '新增/更新通知通道',
+  notification_channel_recipient_map_rebuild: '重建通知通道收件人映射',
+  notification_event_rule_upsert: '新增/更新通知事件规则',
+  notification_job_enqueue: '通知入队',
+  notification_job_dispatch: '发送通知',
+  notification_job_retry: '重试通知发送',
+  notification_job_resend: '重新发送通知',
+  notification_inbox_read_state_update: '更新通知已读状态',
+  notification_inbox_mark_all_read: '全部标记通知为已读',
+};
+
+const EXTRA_SOURCE_LABELS = {
+  ragflow: '系统',
+  notification: '通知',
+  maintenance: '维护',
+};
+
 const tableStyle = {
   width: '100%',
   borderCollapse: 'collapse',
@@ -95,11 +113,29 @@ const tdStyle = {
   fontSize: '0.9rem',
 };
 
-const actionLabel = (value) =>
-  ACTION_LABELS[String(value || '').trim()] || String(value || '');
+const actionLabel = (value) => {
+  const normalized = String(value || '').trim();
+  if (!normalized) return '';
+  return (
+    EXTRA_ACTION_LABELS[normalized] ||
+    EXTRA_ACTION_LABELS[normalized.toLowerCase()] ||
+    ACTION_LABELS[normalized] ||
+    ACTION_LABELS[normalized.toLowerCase()] ||
+    normalized
+  );
+};
 
-const sourceLabel = (value) =>
-  SOURCE_LABELS[String(value || '').trim()] || String(value || '');
+const sourceLabel = (value) => {
+  const normalized = String(value || '').trim();
+  if (!normalized) return '';
+  return (
+    EXTRA_SOURCE_LABELS[normalized] ||
+    EXTRA_SOURCE_LABELS[normalized.toLowerCase()] ||
+    SOURCE_LABELS[normalized] ||
+    SOURCE_LABELS[normalized.toLowerCase()] ||
+    normalized
+  );
+};
 
 const ACTION_FILTER_VALUES = [
   'auth_login',
@@ -200,8 +236,6 @@ const AuditLogs = () => {
 
   return (
     <div data-testid="audit-logs-page" style={{ padding: isMobile ? '0 0 12px' : 0 }}>
-      <h2 style={{ margin: '0 0 12px 0' }}>操作日志</h2>
-
       <div
         style={{
           backgroundColor: 'white',

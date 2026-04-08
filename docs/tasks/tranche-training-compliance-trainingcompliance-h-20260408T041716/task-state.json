@@ -1,0 +1,163 @@
+{
+  "schema_version": 2,
+  "task_id": "tranche-training-compliance-trainingcompliance-h-20260408T041716",
+  "mode": "full",
+  "status": "completed",
+  "current_phase": null,
+  "phase_statuses": [
+    {
+      "phase_id": "P1",
+      "title": "Decompose backend training-compliance service",
+      "status": "completed",
+      "objective": "Split validation, serialization, query, and mutation responsibilities out of the monolithic backend service while keeping `TrainingComplianceService` as the stable facade.",
+      "owned_paths": [],
+      "dependencies": [],
+      "deliverables": [],
+      "evidence_expectation": "",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P1-AC1",
+          "text": "`TrainingComplianceService` no longer directly owns all validation helpers, row serialization, query composition, and mutation orchestration in one file.",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P1",
+            "test-report.md#T1",
+            "test-report.md#T2"
+          ]
+        },
+        {
+          "ac_id": "P1-AC2",
+          "text": "existing router behavior and cross-module training authorization flows remain unchanged.",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P1",
+            "test-report.md#T1",
+            "test-report.md#T2"
+          ]
+        },
+        {
+          "ac_id": "P1-AC3",
+          "text": "training requirement, record, certification, and authorization logic still fails fast on invalid or missing prerequisites.",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P1",
+            "test-report.md#T1",
+            "test-report.md#T2"
+          ]
+        }
+      ],
+      "evidence": [
+        "execution-log.md#Phase-P1"
+      ],
+      "notes": "- Backend training-compliance service was decomposed into support and repository helpers with focused API regression coverage preserved.",
+      "last_reviewed_at": "2026-04-08T04:45:12"
+    },
+    {
+      "phase_id": "P2",
+      "title": "Decompose frontend training-compliance page and hook",
+      "status": "completed",
+      "objective": "Split the page shell and hook into smaller, focused units for user lookup, form wiring, and tab-panel rendering without changing current page behavior.",
+      "owned_paths": [],
+      "dependencies": [],
+      "deliverables": [],
+      "evidence_expectation": "",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P2-AC1",
+          "text": "`TrainingComplianceManagement.js` no longer mixes page shell, local copy/config, reusable lookup widget, and both record/certification panel render trees in one file.",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P2",
+            "test-report.md#T1",
+            "test-report.md#T2"
+          ]
+        },
+        {
+          "ac_id": "P2-AC2",
+          "text": "`useTrainingCompliancePage.js` no longer directly owns all duplicated user-search effect logic and page-form orchestration in one file.",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P2",
+            "test-report.md#T1",
+            "test-report.md#T2"
+          ]
+        },
+        {
+          "ac_id": "P2-AC3",
+          "text": "current page interactions, test ids, and query-param prefills remain stable after extraction.",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P2",
+            "test-report.md#T1",
+            "test-report.md#T2"
+          ]
+        }
+      ],
+      "evidence": [
+        "execution-log.md#Phase-P2"
+      ],
+      "notes": "- Frontend training-compliance page and hook were decomposed into helpers, a reusable user-search hook, style tokens, and section components without changing page contracts.",
+      "last_reviewed_at": "2026-04-08T04:45:22"
+    },
+    {
+      "phase_id": "P3",
+      "title": "Focused regression validation and task evidence",
+      "status": "completed",
+      "objective": "Prove the bounded refactor preserved both backend and frontend training-compliance behavior.",
+      "owned_paths": [],
+      "dependencies": [],
+      "deliverables": [],
+      "evidence_expectation": "",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P3-AC1",
+          "text": "focused backend and frontend training-compliance tests pass against the final code state.",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P3",
+            "test-report.md#T1",
+            "test-report.md#T2"
+          ]
+        },
+        {
+          "ac_id": "P3-AC2",
+          "text": "task artifacts record the exact commands run, verified acceptance coverage, and any bounded residual risk.",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P3",
+            "test-report.md#T1",
+            "test-report.md#T2"
+          ]
+        }
+      ],
+      "evidence": [
+        "execution-log.md#Phase-P3"
+      ],
+      "notes": "- Focused backend and frontend regression commands passed and the tranche evidence was recorded in execution-log.md and test-report.md.",
+      "last_reviewed_at": "2026-04-08T04:45:31"
+    }
+  ],
+  "planner_review_status": "approved",
+  "test_status": "passed",
+  "blocking_prereqs": [],
+  "iteration_counts": {
+    "planner_revisions": 0,
+    "executor_loops": 1,
+    "test_loops": 1
+  },
+  "created_at": "2026-04-08T04:17:16",
+  "updated_at": "2026-04-08T04:46:19",
+  "branch": "int_latest",
+  "baseline_revision": "3619b8169b862232147c8e7a8d7bca3608a3d8f3",
+  "workspace_root": "D:\\ProjectPackage\\RagflowAuth",
+  "tasks_root": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks",
+  "task_dir": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\tranche-training-compliance-trainingcompliance-h-20260408T041716",
+  "goal": "继续进行前后端重构：以培训合规模块为下一轮 tranche，拆分后端 training_compliance 服务与前端 TrainingCompliance 页面/Hook，保持行为稳定并补齐验证。",
+  "artifacts": {
+    "prd": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\tranche-training-compliance-trainingcompliance-h-20260408T041716\\prd.md",
+    "test_plan": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\tranche-training-compliance-trainingcompliance-h-20260408T041716\\test-plan.md",
+    "task_state": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\tranche-training-compliance-trainingcompliance-h-20260408T041716\\task-state.json",
+    "execution_log": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\tranche-training-compliance-trainingcompliance-h-20260408T041716\\execution-log.md",
+    "test_report": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\tranche-training-compliance-trainingcompliance-h-20260408T041716\\test-report.md"
+  }
+}

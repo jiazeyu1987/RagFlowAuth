@@ -8,6 +8,7 @@ const {
   approveOperationRequestViaApi,
   listDatasets,
   loginApiAs,
+  readOperationRequestEnvelope,
   toSafeId,
   uploadKnowledgeFileViaApi,
   waitForOperationRequest,
@@ -197,7 +198,12 @@ docSubAdminTest('Knowledge-base config covers real directory create/rename, KB c
     const deleteEmptyKbResponse = await deleteEmptyKbResponsePromise;
     await expect(deleteEmptyKbResponse.ok()).toBeTruthy();
     const deleteEmptyKbBody = await deleteEmptyKbResponse.json();
-    deleteRequestId = String(deleteEmptyKbBody?.request_id || '').trim();
+    deleteRequestId = String(
+      readOperationRequestEnvelope(
+        deleteEmptyKbBody,
+        `delete empty KB returned invalid approval envelope for ${emptyKbId}`
+      ).request_id || ''
+    ).trim();
     expect(deleteRequestId).toBeTruthy();
 
     await waitForOperationRequestStatus(

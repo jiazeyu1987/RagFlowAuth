@@ -102,6 +102,9 @@ class TestNoneDefaults(unittest.TestCase):
                 "accessible_tools": [],
             },
         )
+        self.assertEqual(body["capabilities"]["users"]["manage"], {"scope": "none", "targets": []})
+        self.assertEqual(body["capabilities"]["kb_documents"]["view"], {"scope": "none", "targets": []})
+        self.assertEqual(body["capabilities"]["tools"]["view"], {"scope": "none", "targets": []})
         self.assertEqual(body["accessible_kbs"], [])
         self.assertEqual(body["accessible_chats"], [])
 

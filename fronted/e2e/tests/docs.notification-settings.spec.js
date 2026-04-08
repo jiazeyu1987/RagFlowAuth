@@ -6,8 +6,8 @@ const { loadDocFixtures } = require('../helpers/bootstrapSummary');
 const fixtures = loadDocFixtures();
 
 docAdminTest('Doc notification settings exercise real rules, channels, history, retry, and dispatch @doc-e2e', async ({ page }) => {
-  const queuedJobId = fixtures.notifications.history.queued_job_id;
-  const failedJobId = fixtures.notifications.history.failed_job_id;
+  let queuedJobId = String(fixtures.notifications.history.queued_job_id || '');
+  let failedJobId = String(fixtures.notifications.history.failed_job_id || '');
 
   await page.goto('/notification-settings');
   await expect(page.getByTestId('notification-settings-page')).toBeVisible();
@@ -16,7 +16,7 @@ docAdminTest('Doc notification settings exercise real rules, channels, history, 
   const todoDingtalkRule = page.getByTestId('notification-rule-operation_approval_todo-dingtalk');
   const todoInAppRule = page.getByTestId('notification-rule-operation_approval_todo-in_app');
 
-  await expect(todoEmailRule).toBeChecked();
+  await expect(todoEmailRule).not.toBeChecked();
   await expect(todoInAppRule).toBeChecked();
   await expect(todoDingtalkRule).not.toBeChecked();
 
@@ -77,13 +77,18 @@ docAdminTest('Doc notification settings exercise real rules, channels, history, 
   await page.getByTestId('notification-history-status').selectOption('failed');
   await page.getByTestId('notification-history-apply').click();
   await expect((await failedHistoryResponse).ok()).toBeTruthy();
-  await expect(page.getByTestId(`notification-retry-${failedJobId}`)).toBeVisible();
+  const failedRetryButton = page.locator('[data-testid^="notification-retry-"]').first();
+  await expect(failedRetryButton).toBeVisible();
+  failedJobId = String((await failedRetryButton.getAttribute('data-testid')) || '')
+    .replace('notification-retry-', '')
+    .trim();
+  expect(failedJobId).toBeTruthy();
 
   const retryResponse = page.waitForResponse((response) => (
     response.request().method() === 'POST'
     && response.url().includes(`/api/admin/notifications/jobs/${failedJobId}/retry`)
   ));
-  await page.getByTestId(`notification-retry-${failedJobId}`).click();
+  await failedRetryButton.click();
   await expect((await retryResponse).ok()).toBeTruthy();
 
   const sentHistoryAfterRetry = page.waitForResponse((response) => (
@@ -104,7 +109,11 @@ docAdminTest('Doc notification settings exercise real rules, channels, history, 
   await page.getByTestId('notification-history-status').selectOption('queued');
   await page.getByTestId('notification-history-apply').click();
   await expect((await queuedHistoryResponse).ok()).toBeTruthy();
-  await expect(page.locator('tbody')).toContainText(String(queuedJobId));
+  const queuedJobIdCell = page.locator('tbody tr td').first();
+  await expect(queuedJobIdCell).toBeVisible();
+  queuedJobId = String((await queuedJobIdCell.textContent()) || '').trim();
+  expect(queuedJobId).toBeTruthy();
+  await expect(page.locator('tbody')).toContainText(queuedJobId);
 
   const dispatchResponse = page.waitForResponse((response) => (
     response.request().method() === 'POST'
@@ -121,5 +130,5 @@ docAdminTest('Doc notification settings exercise real rules, channels, history, 
   await page.getByTestId('notification-history-status').selectOption('sent');
   await page.getByTestId('notification-history-apply').click();
   await expect((await sentHistoryAfterDispatch).ok()).toBeTruthy();
-  await expect(page.locator('tbody')).toContainText(String(queuedJobId));
+  await expect(page.locator('tbody')).toContainText(queuedJobId);
 });

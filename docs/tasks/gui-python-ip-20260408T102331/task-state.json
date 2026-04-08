@@ -1,0 +1,164 @@
+{
+  "schema_version": 2,
+  "task_id": "gui-python-ip-20260408T102331",
+  "mode": "full",
+  "status": "completed",
+  "current_phase": null,
+  "phase_statuses": [
+    {
+      "phase_id": "P1",
+      "title": "实现备份拉取服务层",
+      "status": "completed",
+      "objective": "提供一个可复用的 Python 服务层，负责远端备份目录枚举、备份名称解析、安全校验和单个备份目录下载。",
+      "owned_paths": [
+        "tool/maintenance/features/server_backup_pull.py",
+        "tool/maintenance/features/__init__.py",
+        "tool/maintenance/exports/features.py",
+        "tool/maintenance/tests/test_server_backup_pull_unit.py"
+      ],
+      "dependencies": [
+        "tool/maintenance/core/ssh_executor.py",
+        "tool/maintenance/core/constants.py"
+      ],
+      "deliverables": [
+        "可列出远端备份的 feature API；可把单个备份拉取到本机目录的 feature API；服务层单测"
+      ],
+      "evidence_expectation": "单测覆盖远端列表解析、名称格式化、安全校验与下载命令构造，执行记录写入 `execution-log.md`。",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P1-AC1",
+          "text": "服务层可以通过 SSH 枚举 `/opt/ragflowauth/backups` 下符合命名规则的备份目录，并返回稳定排序的原始目录名与日期化显示名。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P1",
+            "test-report.md#Final-Verdict"
+          ]
+        },
+        {
+          "ac_id": "P1-AC2",
+          "text": "服务层可以对用户选中的单个备份执行安全校验后通过 SCP 拉取到本机指定目录；若目标目录已存在、目录名非法或 `ssh/scp` 缺失，必须明确失败而不是静默覆盖。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P1",
+            "test-report.md#Final-Verdict"
+          ]
+        }
+      ],
+      "evidence": [
+        "execution-log.md#Phase-P1"
+      ],
+      "notes": "",
+      "last_reviewed_at": "2026-04-08T10:42:02"
+    },
+    {
+      "phase_id": "P2",
+      "title": "实现独立 GUI 程序",
+      "status": "completed",
+      "objective": "提供单窗口 Tkinter 工具，支持选择服务器、加载备份列表、选择本地保存路径、拉取所选备份，并给出明确状态提示。",
+      "owned_paths": [
+        "tool/maintenance/server_backup_pull_tool.py",
+        "tool/maintenance/tests/test_server_backup_pull_tool_import_unit.py"
+      ],
+      "dependencies": [
+        "P1 服务层；tool/maintenance/core/constants.py；tool/maintenance/core/logging_setup.py"
+      ],
+      "deliverables": [
+        "可直接运行的 GUI 入口；默认服务器下拉框；备份列表交互；本地目录选择；拉取动作与状态展示"
+      ],
+      "evidence_expectation": "运行截图或手动运行结果证明 GUI 可启动，且能从服务层加载展示数据。",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P2-AC1",
+          "text": "GUI 默认提供正式服务器 `172.30.30.57` 和测试服务器 `172.30.30.58` 的下拉选项，支持点击按钮加载该服务器的备份列表。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P2",
+            "test-report.md#Final-Verdict"
+          ]
+        },
+        {
+          "ac_id": "P2-AC2",
+          "text": "GUI 中的备份列表以日期化名称供用户选择，并提供“选择保存路径”和“拉取所选备份”操作；状态区或弹窗需要展示明确成功/失败原因。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P2",
+            "test-report.md#Final-Verdict"
+          ]
+        }
+      ],
+      "evidence": [
+        "execution-log.md#Phase-P2"
+      ],
+      "notes": "",
+      "last_reviewed_at": "2026-04-08T10:42:10"
+    },
+    {
+      "phase_id": "P3",
+      "title": "启动入口、文档与验证收口",
+      "status": "completed",
+      "objective": "提供便于本机启动的入口，补充备份文档，并完成本任务所需验证闭环。",
+      "owned_paths": [
+        "docs/maintance/backup.md",
+        "服务器备份拉取工具.bat",
+        "docs/tasks/gui-python-ip-20260408T102331/execution-log.md",
+        "docs/tasks/gui-python-ip-20260408T102331/test-report.md"
+      ],
+      "dependencies": [
+        "P1",
+        "P2"
+      ],
+      "deliverables": [
+        "启动批处理入口；备份文档更新；测试结果与任务证据"
+      ],
+      "evidence_expectation": "文档更新、启动入口文件、测试命令输出与任务工件中的测试记录。",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P3-AC1",
+          "text": "仓库提供一个面向 Windows 的本地启动入口，用户无需手工拼接命令即可启动该 GUI 程序。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P3",
+            "test-report.md#Final-Verdict"
+          ]
+        },
+        {
+          "ac_id": "P3-AC2",
+          "text": "`docs/maintance/backup.md` 补充该拉取工具的定位、使用方式与前提条件，并且本任务涉及的新增测试命令全部通过。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P3",
+            "test-report.md#Final-Verdict"
+          ]
+        }
+      ],
+      "evidence": [
+        "execution-log.md#Phase-P3"
+      ],
+      "notes": "",
+      "last_reviewed_at": "2026-04-08T10:41:28"
+    }
+  ],
+  "planner_review_status": "approved",
+  "test_status": "passed",
+  "blocking_prereqs": [],
+  "iteration_counts": {
+    "planner_revisions": 0,
+    "executor_loops": 3,
+    "test_loops": 1
+  },
+  "created_at": "2026-04-08T10:23:31",
+  "updated_at": "2026-04-08T10:42:25",
+  "branch": "int_latest",
+  "baseline_revision": "3619b8169b862232147c8e7a8d7bca3608a3d8f3",
+  "workspace_root": "D:\\ProjectPackage\\RagflowAuth",
+  "tasks_root": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks",
+  "task_dir": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\gui-python-ip-20260408T102331",
+  "goal": "做成一个单 GUI 的 Python 备份拉取程序，可下拉选择正式/测试服务器 IP，列出服务器备份，选择一个备份并拉取到本地自选目录",
+  "artifacts": {
+    "prd": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\gui-python-ip-20260408T102331\\prd.md",
+    "test_plan": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\gui-python-ip-20260408T102331\\test-plan.md",
+    "task_state": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\gui-python-ip-20260408T102331\\task-state.json",
+    "execution_log": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\gui-python-ip-20260408T102331\\execution-log.md",
+    "test_report": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\gui-python-ip-20260408T102331\\test-report.md"
+  }
+}

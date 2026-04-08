@@ -46,7 +46,7 @@ test('Permission groups page covers real folder create/rename/delete and group c
     const createFolderResponse = await createFolderResponsePromise;
     await expect(createFolderResponse.ok()).toBeTruthy();
     const createFolderBody = await createFolderResponse.json();
-    folderId = String(createFolderBody?.data?.id || '').trim();
+    folderId = String(createFolderBody?.folder?.id || '').trim();
     expect(folderId).toBeTruthy();
     await expect(
       page.getByRole('button', { name: new RegExp(escapeRegex(folderName)) }).first()
@@ -82,7 +82,7 @@ test('Permission groups page covers real folder create/rename/delete and group c
     const createGroupResponse = await createGroupResponsePromise;
     await expect(createGroupResponse.ok()).toBeTruthy();
     const createGroupBody = await createGroupResponse.json();
-    groupId = Number(createGroupBody?.data?.group_id || 0);
+    groupId = Number(createGroupBody?.result?.group_id || 0);
     expect(groupId).toBeGreaterThan(0);
     await expect(page.getByTestId(`pg-tree-edit-${toSafeId(groupId)}`)).toBeVisible();
 

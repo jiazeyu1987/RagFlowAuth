@@ -1,57 +1,22 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import TrainingCertificationsSection from '../features/trainingCompliance/components/TrainingCertificationsSection';
+import TrainingRecordsSection from '../features/trainingCompliance/components/TrainingRecordsSection';
+import TrainingRequirementsSection from '../features/trainingCompliance/components/TrainingRequirementsSection';
+import {
+  bannerErrorStyle,
+  bannerSuccessStyle,
+  buttonStyle,
+  pageContainerStyle,
+  pageHeaderStyle,
+  primaryButtonStyle,
+  tabListStyle,
+} from '../features/trainingCompliance/pageStyles';
 import useTrainingCompliancePage from '../features/trainingCompliance/useTrainingCompliancePage';
 import { useAuth } from '../hooks/useAuth';
 
-const cardStyle = {
-  background: 'white',
-  border: '1px solid #e5e7eb',
-  borderRadius: '12px',
-  padding: '16px',
-  marginTop: '16px',
-};
-
-const tableStyle = {
-  width: '100%',
-  borderCollapse: 'collapse',
-};
-
-const cellStyle = {
-  borderBottom: '1px solid #e5e7eb',
-  textAlign: 'left',
-  padding: '8px',
-  verticalAlign: 'top',
-  fontSize: '0.9rem',
-};
-
-const inputStyle = {
-  padding: '8px 10px',
-  borderRadius: '8px',
-  border: '1px solid #d1d5db',
-  width: '100%',
-  background: '#ffffff',
-};
-
-const buttonStyle = {
-  border: '1px solid #d1d5db',
-  borderRadius: '8px',
-  background: '#ffffff',
-  color: '#111827',
-  cursor: 'pointer',
-  padding: '8px 12px',
-};
-
-const primaryButtonStyle = {
-  ...buttonStyle,
-  border: 'none',
-  background: '#2563eb',
-  color: '#ffffff',
-};
-
 const TEXT = {
   loading: '正在加载培训合规数据...',
-  title: '培训合规管理',
-  subtitle: '仅管理员可录入和维护培训记录与上岗认证。请先录入培训记录，再录入上岗认证。',
   refresh: '刷新',
   loadError: '加载培训合规数据失败',
   defaultError: '操作失败',
@@ -213,123 +178,6 @@ const buildDefaultTrainingSummary = (requirement) => {
   return '已完成培训并通过考核。';
 };
 
-function UserLookupField({
-  label,
-  placeholder,
-  selectedUser,
-  searchState,
-  onInputChange,
-  onFocus,
-  onBlur,
-  onSelectUser,
-  testIdPrefix,
-}) {
-  const blurTimerRef = useRef(null);
-
-  useEffect(() => () => {
-    if (blurTimerRef.current) {
-      window.clearTimeout(blurTimerRef.current);
-    }
-  }, []);
-
-  const handleBlur = () => {
-    if (blurTimerRef.current) {
-      window.clearTimeout(blurTimerRef.current);
-    }
-    blurTimerRef.current = window.setTimeout(() => {
-      onBlur();
-    }, 120);
-  };
-
-  const handleFocus = () => {
-    if (blurTimerRef.current) {
-      window.clearTimeout(blurTimerRef.current);
-    }
-    onFocus();
-  };
-
-  const showDropdown = searchState.open && (
-    searchState.loading
-    || !!searchState.error
-    || searchState.results.length > 0
-    || String(searchState.keyword || '').trim()
-  );
-
-  return (
-    <label style={{ display: 'grid', gap: '6px' }}>
-      <span>{label}</span>
-      <div style={{ position: 'relative' }}>
-        <input
-          data-testid={`${testIdPrefix}-input`}
-          value={searchState.keyword}
-          onChange={(event) => onInputChange(event.target.value)}
-          onFocus={handleFocus}
-          onBlur={handleBlur}
-          placeholder={placeholder}
-          autoComplete="off"
-          style={inputStyle}
-        />
-        {showDropdown ? (
-          <div
-            data-testid={`${testIdPrefix}-results`}
-            style={{
-              position: 'absolute',
-              zIndex: 10,
-              top: 'calc(100% + 6px)',
-              left: 0,
-              right: 0,
-              background: '#ffffff',
-              border: '1px solid #d1d5db',
-              borderRadius: '10px',
-              boxShadow: '0 12px 30px rgba(15, 23, 42, 0.12)',
-              overflow: 'hidden',
-            }}
-          >
-            {searchState.loading ? (
-              <div style={{ padding: '10px 12px', color: '#6b7280', fontSize: '0.9rem' }}>{TEXT.userSearchLoading}</div>
-            ) : null}
-            {!searchState.loading && searchState.error ? (
-              <div style={{ padding: '10px 12px', color: '#991b1b', fontSize: '0.9rem' }}>{searchState.error}</div>
-            ) : null}
-            {!searchState.loading && !searchState.error && searchState.results.length === 0 ? (
-              <div style={{ padding: '10px 12px', color: '#6b7280', fontSize: '0.9rem' }}>{TEXT.userSearchEmpty}</div>
-            ) : null}
-            {!searchState.loading && !searchState.error
-              ? searchState.results.map((item) => (
-                <button
-                  key={item.user_id}
-                  type="button"
-                  data-testid={`${testIdPrefix}-result-${item.user_id}`}
-                  onMouseDown={(event) => {
-                    event.preventDefault();
-                    onSelectUser(item);
-                  }}
-                  style={{
-                    width: '100%',
-                    textAlign: 'left',
-                    border: 'none',
-                    background: '#ffffff',
-                    padding: '10px 12px',
-                    cursor: 'pointer',
-                    borderTop: '1px solid #f3f4f6',
-                  }}
-                >
-                  <div style={{ fontWeight: 600 }}>{buildUserLabel(item)}</div>
-                  <div style={{ color: '#6b7280', fontSize: '0.8rem', marginTop: '2px' }}>{item.department_name || item.company_name || ''}</div>
-                </button>
-              ))
-              : null}
-          </div>
-        ) : null}
-      </div>
-      <div data-testid={`${testIdPrefix}-selected`} style={{ color: '#6b7280', fontSize: '0.85rem' }}>
-        {selectedUser ? `${TEXT.selectedUser}: ${buildUserLabel(selectedUser)}` : `${TEXT.selectedUser}: ${TEXT.noSelectedUser}`}
-      </div>
-      <div style={{ color: '#9ca3af', fontSize: '0.8rem' }}>{TEXT.userSearchHint}</div>
-    </label>
-  );
-}
-
 export default function TrainingComplianceManagement() {
   const { user } = useAuth();
   const [searchParams] = useSearchParams();
@@ -350,12 +198,14 @@ export default function TrainingComplianceManagement() {
     recordForm,
     certificationForm,
     setActiveTab,
-    setRecordUserSearch,
-    setCertificationUserSearch,
     setRecordForm,
     setCertificationForm,
     loadData,
     applyRecordRequirementCode,
+    openRecordUserSearch,
+    closeRecordUserSearch,
+    openCertificationUserSearch,
+    closeCertificationUserSearch,
     handleRecordUserKeywordChange,
     handleCertificationUserKeywordChange,
     handleSelectRecordUser,
@@ -378,77 +228,45 @@ export default function TrainingComplianceManagement() {
     },
   });
 
+  const handleRecordFormFieldChange = useCallback((field, value) => {
+    setRecordForm((previous) => ({ ...previous, [field]: value }));
+  }, [setRecordForm]);
+
+  const handleCertificationFormFieldChange = useCallback((field, value) => {
+    setCertificationForm((previous) => ({ ...previous, [field]: value }));
+  }, [setCertificationForm]);
+
   if (loading) {
     return <div style={{ padding: '12px' }}>{TEXT.loading}</div>;
   }
 
   return (
-    <div style={{ maxWidth: '1400px' }} data-testid="training-compliance-page">
-      <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
-        <div>
-          <h2 style={{ margin: 0 }}>{TEXT.title}</h2>
-          <div style={{ color: '#6b7280', marginTop: '6px' }}>{TEXT.subtitle}</div>
-        </div>
+    <div style={pageContainerStyle} data-testid="training-compliance-page">
+      <div style={{ ...pageHeaderStyle, justifyContent: 'flex-end' }}>
         <button type="button" onClick={loadData} style={buttonStyle}>
           {TEXT.refresh}
         </button>
       </div>
 
       {error ? (
-        <div
-          data-testid="training-compliance-error"
-          style={{ marginTop: '12px', padding: '10px 12px', background: '#fef2f2', color: '#991b1b', borderRadius: '10px' }}
-        >
+        <div data-testid="training-compliance-error" style={bannerErrorStyle}>
           {error}
         </div>
       ) : null}
 
       {success ? (
-        <div
-          data-testid="training-compliance-success"
-          style={{ marginTop: '12px', padding: '10px 12px', background: '#ecfdf5', color: '#166534', borderRadius: '10px' }}
-        >
+        <div data-testid="training-compliance-success" style={bannerSuccessStyle}>
           {success}
         </div>
       ) : null}
 
-      <div style={cardStyle}>
-        <h3 style={{ marginTop: 0 }}>{TEXT.requirementSection}</h3>
-        <div style={{ overflowX: 'auto' }}>
-          <table style={tableStyle}>
-            <thead>
-              <tr>
-                <th style={cellStyle}>{TEXT.requirementCode}</th>
-                <th style={cellStyle}>{TEXT.controlledAction}</th>
-                <th style={cellStyle}>{TEXT.roleCode}</th>
-                <th style={cellStyle}>{TEXT.curriculumVersion}</th>
-                <th style={cellStyle}>{TEXT.recertificationInterval}</th>
-                <th style={cellStyle}>{TEXT.active}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {requirements.length === 0 ? (
-                <tr>
-                  <td style={cellStyle} colSpan={6}>
-                    {TEXT.noRequirements}
-                  </td>
-                </tr>
-              ) : requirements.map((item) => (
-                <tr key={item.requirement_code}>
-                  <td style={cellStyle}>{item.requirement_code}</td>
-                  <td style={cellStyle}>{getControlledActionLabel(item.controlled_action)}</td>
-                  <td style={cellStyle}>{item.role_code}</td>
-                  <td style={cellStyle}>{item.curriculum_version}</td>
-                  <td style={cellStyle}>{item.recertification_interval_days}</td>
-                  <td style={cellStyle}>{item.active ? TEXT.yes : TEXT.no}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      <TrainingRequirementsSection
+        text={TEXT}
+        requirements={requirements}
+        getControlledActionLabel={getControlledActionLabel}
+      />
 
-      <div style={{ display: 'flex', gap: '8px', marginTop: '16px', flexWrap: 'wrap' }}>
+      <div style={tabListStyle}>
         <button
           type="button"
           data-testid="training-tab-records"
@@ -468,264 +286,52 @@ export default function TrainingComplianceManagement() {
       </div>
 
       {activeTab === 'records' ? (
-        <>
-          <section style={cardStyle} data-testid="training-records-tab-panel">
-            <h3 style={{ marginTop: 0 }}>{TEXT.recordSection}</h3>
-            <div style={{ display: 'grid', gap: '12px' }}>
-              <UserLookupField
-                label={TEXT.targetUser}
-                placeholder={TEXT.userSearchPlaceholder}
-                selectedUser={recordSelectedUser}
-                searchState={recordUserSearch}
-                onInputChange={handleRecordUserKeywordChange}
-                onFocus={() => setRecordUserSearch((prev) => ({ ...prev, open: true }))}
-                onBlur={() => setRecordUserSearch((prev) => ({ ...prev, open: false }))}
-                onSelectUser={handleSelectRecordUser}
-                testIdPrefix="training-record-user-search"
-              />
-              <label style={{ display: 'grid', gap: '6px' }}>
-                <span>{TEXT.trainingRequirement}</span>
-                <select
-                  data-testid="training-record-requirement"
-                  value={recordForm.requirement_code}
-                  onChange={(event) => applyRecordRequirementCode(event.target.value)}
-                  style={inputStyle}
-                >
-                  {requirements.length === 0 ? (
-                    <option value="">{TEXT.noRequirements}</option>
-                  ) : requirements.map((item) => (
-                    <option key={item.requirement_code} value={item.requirement_code}>
-                      {buildRequirementOptionLabel(item)}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label style={{ display: 'grid', gap: '6px' }}>
-                <span>{TEXT.completedAt}</span>
-                <input
-                  data-testid="training-record-completed-at"
-                  type="datetime-local"
-                  value={recordForm.completed_at}
-                  onChange={(event) => setRecordForm((prev) => ({ ...prev, completed_at: event.target.value }))}
-                  style={inputStyle}
-                />
-              </label>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '12px' }}>
-                <label style={{ display: 'grid', gap: '6px' }}>
-                  <span>{TEXT.trainingOutcome}</span>
-                  <select
-                    data-testid="training-record-outcome"
-                    value={recordForm.training_outcome}
-                    onChange={(event) => setRecordForm((prev) => ({ ...prev, training_outcome: event.target.value }))}
-                    style={inputStyle}
-                  >
-                    {TRAINING_OUTCOME_OPTIONS.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label style={{ display: 'grid', gap: '6px' }}>
-                  <span>{TEXT.effectivenessStatus}</span>
-                  <select
-                    data-testid="training-record-effectiveness"
-                    value={recordForm.effectiveness_status}
-                    onChange={(event) => setRecordForm((prev) => ({ ...prev, effectiveness_status: event.target.value }))}
-                    style={inputStyle}
-                  >
-                    {EFFECTIVENESS_OPTIONS.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              </div>
-              <label style={{ display: 'grid', gap: '6px' }}>
-                <span>{TEXT.effectivenessSummary}</span>
-                <textarea
-                  data-testid="training-record-summary"
-                  rows={3}
-                  value={recordForm.effectiveness_summary}
-                  onChange={(event) => setRecordForm((prev) => ({ ...prev, effectiveness_summary: event.target.value }))}
-                  style={{ ...inputStyle, resize: 'vertical' }}
-                />
-              </label>
-              <label style={{ display: 'grid', gap: '6px' }}>
-                <span>{TEXT.notes}</span>
-                <textarea
-                  data-testid="training-record-notes"
-                  rows={3}
-                  value={recordForm.training_notes}
-                  onChange={(event) => setRecordForm((prev) => ({ ...prev, training_notes: event.target.value }))}
-                  style={{ ...inputStyle, resize: 'vertical' }}
-                />
-              </label>
-              <button
-                type="button"
-                data-testid="training-record-submit"
-                onClick={handleCreateRecord}
-                disabled={savingRecord}
-                style={primaryButtonStyle}
-              >
-                {savingRecord ? TEXT.saveRecordPending : TEXT.saveRecord}
-              </button>
-            </div>
-          </section>
-
-          <div style={cardStyle}>
-            <h3 style={{ marginTop: 0 }}>{TEXT.latestRecords}</h3>
-            <div style={{ overflowX: 'auto' }}>
-              <table style={tableStyle}>
-                <thead>
-                  <tr>
-                    <th style={cellStyle}>{TEXT.targetUser}</th>
-                    <th style={cellStyle}>{TEXT.requirementCode}</th>
-                    <th style={cellStyle}>{TEXT.curriculumVersion}</th>
-                    <th style={cellStyle}>{TEXT.trainingOutcome}</th>
-                    <th style={cellStyle}>{TEXT.effectivenessStatus}</th>
-                    <th style={cellStyle}>{TEXT.completedAt}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {records.length === 0 ? (
-                    <tr>
-                      <td style={cellStyle} colSpan={6}>
-                        {TEXT.noRecords}
-                      </td>
-                    </tr>
-                  ) : records.map((item) => (
-                    <tr key={item.record_id}>
-                      <td style={cellStyle}>{buildDisplayUserLabel(item.user_id)}</td>
-                      <td style={cellStyle}>{item.requirement_code}</td>
-                      <td style={cellStyle}>{item.curriculum_version}</td>
-                      <td style={cellStyle}>{getTrainingOutcomeLabel(item.training_outcome)}</td>
-                      <td style={cellStyle}>{getEffectivenessLabel(item.effectiveness_status)}</td>
-                      <td style={cellStyle}>{formatTime(item.completed_at_ms)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </>
+        <TrainingRecordsSection
+          text={TEXT}
+          requirements={requirements}
+          records={records}
+          recordForm={recordForm}
+          recordSelectedUser={recordSelectedUser}
+          recordUserSearch={recordUserSearch}
+          savingRecord={savingRecord}
+          trainingOutcomeOptions={TRAINING_OUTCOME_OPTIONS}
+          effectivenessOptions={EFFECTIVENESS_OPTIONS}
+          buildRequirementOptionLabel={buildRequirementOptionLabel}
+          getTrainingOutcomeLabel={getTrainingOutcomeLabel}
+          getEffectivenessLabel={getEffectivenessLabel}
+          buildDisplayUserLabel={buildDisplayUserLabel}
+          buildUserLabel={buildUserLabel}
+          formatTime={formatTime}
+          onRequirementChange={applyRecordRequirementCode}
+          onRecordFormFieldChange={handleRecordFormFieldChange}
+          onUserKeywordChange={handleRecordUserKeywordChange}
+          onOpenUserSearch={openRecordUserSearch}
+          onCloseUserSearch={closeRecordUserSearch}
+          onSelectUser={handleSelectRecordUser}
+          onSubmit={handleCreateRecord}
+        />
       ) : (
-        <>
-          <section style={cardStyle} data-testid="training-certifications-tab-panel">
-            <h3 style={{ marginTop: 0 }}>{TEXT.certificationSection}</h3>
-            <div style={{ display: 'grid', gap: '12px' }}>
-              <UserLookupField
-                label={TEXT.targetUser}
-                placeholder={TEXT.userSearchPlaceholder}
-                selectedUser={certificationSelectedUser}
-                searchState={certificationUserSearch}
-                onInputChange={handleCertificationUserKeywordChange}
-                onFocus={() => setCertificationUserSearch((prev) => ({ ...prev, open: true }))}
-                onBlur={() => setCertificationUserSearch((prev) => ({ ...prev, open: false }))}
-                onSelectUser={handleSelectCertificationUser}
-                testIdPrefix="training-certification-user-search"
-              />
-              <label style={{ display: 'grid', gap: '6px' }}>
-                <span>{TEXT.trainingRequirement}</span>
-                <select
-                  data-testid="training-certification-requirement"
-                  value={certificationForm.requirement_code}
-                  onChange={(event) => setCertificationForm((prev) => ({ ...prev, requirement_code: event.target.value }))}
-                  style={inputStyle}
-                >
-                  {requirements.length === 0 ? (
-                    <option value="">{TEXT.noRequirements}</option>
-                  ) : requirements.map((item) => (
-                    <option key={item.requirement_code} value={item.requirement_code}>
-                      {buildRequirementOptionLabel(item)}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label style={{ display: 'grid', gap: '6px' }}>
-                <span>{TEXT.certificationStatus}</span>
-                <select
-                  data-testid="training-certification-status"
-                  value={certificationForm.certification_status}
-                  onChange={(event) => setCertificationForm((prev) => ({ ...prev, certification_status: event.target.value }))}
-                  style={inputStyle}
-                >
-                  {CERTIFICATION_STATUS_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label style={{ display: 'grid', gap: '6px' }}>
-                <span>{TEXT.validUntil}</span>
-                <input
-                  data-testid="training-certification-valid-until"
-                  type="datetime-local"
-                  value={certificationForm.valid_until}
-                  onChange={(event) => setCertificationForm((prev) => ({ ...prev, valid_until: event.target.value }))}
-                  style={inputStyle}
-                />
-              </label>
-              <label style={{ display: 'grid', gap: '6px' }}>
-                <span>{TEXT.notes}</span>
-                <textarea
-                  data-testid="training-certification-notes"
-                  rows={3}
-                  value={certificationForm.certification_notes}
-                  onChange={(event) => setCertificationForm((prev) => ({ ...prev, certification_notes: event.target.value }))}
-                  style={{ ...inputStyle, resize: 'vertical' }}
-                />
-              </label>
-              <button
-                type="button"
-                data-testid="training-certification-submit"
-                onClick={handleCreateCertification}
-                disabled={savingCertification}
-                style={primaryButtonStyle}
-              >
-                {savingCertification ? TEXT.saveCertificationPending : TEXT.saveCertification}
-              </button>
-            </div>
-          </section>
-
-          <div style={cardStyle}>
-            <h3 style={{ marginTop: 0 }}>{TEXT.latestCertifications}</h3>
-            <div style={{ overflowX: 'auto' }}>
-              <table style={tableStyle}>
-                <thead>
-                  <tr>
-                    <th style={cellStyle}>{TEXT.targetUser}</th>
-                    <th style={cellStyle}>{TEXT.requirementCode}</th>
-                    <th style={cellStyle}>{TEXT.curriculumVersion}</th>
-                    <th style={cellStyle}>{TEXT.certificationStatus}</th>
-                    <th style={cellStyle}>{TEXT.validUntil}</th>
-                    <th style={cellStyle}>{TEXT.grantedAt}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {certifications.length === 0 ? (
-                    <tr>
-                      <td style={cellStyle} colSpan={6}>
-                        {TEXT.noCertifications}
-                      </td>
-                    </tr>
-                  ) : certifications.map((item) => (
-                    <tr key={item.certification_id}>
-                      <td style={cellStyle}>{buildDisplayUserLabel(item.user_id)}</td>
-                      <td style={cellStyle}>{item.requirement_code}</td>
-                      <td style={cellStyle}>{item.curriculum_version}</td>
-                      <td style={cellStyle}>{getCertificationStatusLabel(item.certification_status)}</td>
-                      <td style={cellStyle}>{formatTime(item.valid_until_ms)}</td>
-                      <td style={cellStyle}>{formatTime(item.granted_at_ms)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </>
+        <TrainingCertificationsSection
+          text={TEXT}
+          requirements={requirements}
+          certifications={certifications}
+          certificationForm={certificationForm}
+          certificationSelectedUser={certificationSelectedUser}
+          certificationUserSearch={certificationUserSearch}
+          savingCertification={savingCertification}
+          certificationStatusOptions={CERTIFICATION_STATUS_OPTIONS}
+          buildRequirementOptionLabel={buildRequirementOptionLabel}
+          getCertificationStatusLabel={getCertificationStatusLabel}
+          buildDisplayUserLabel={buildDisplayUserLabel}
+          buildUserLabel={buildUserLabel}
+          formatTime={formatTime}
+          onCertificationFormFieldChange={handleCertificationFormFieldChange}
+          onUserKeywordChange={handleCertificationUserKeywordChange}
+          onOpenUserSearch={openCertificationUserSearch}
+          onCloseUserSearch={closeCertificationUserSearch}
+          onSelectUser={handleSelectCertificationUser}
+          onSubmit={handleCreateCertification}
+        />
       )}
     </div>
   );

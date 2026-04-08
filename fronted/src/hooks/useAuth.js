@@ -1,40 +1,38 @@
 import { useState, useEffect, useCallback, createContext, useContext, useRef } from 'react';
 import { STORAGE_KEYS } from '../constants/storageKeys';
 import authApi from '../features/auth/api';
-import { meApi } from '../features/me/api';
 import tokenStore from '../shared/auth/tokenStore';
+import {
+  DEFAULT_AUTH_CAPABILITIES,
+  DEFAULT_AUTH_PERMISSIONS,
+  canWithCapabilities,
+  hasAnyRole,
+  isAuthorized as evaluateAuthorization,
+  normalizeAuthenticatedUser,
+} from '../shared/auth/capabilities';
 
 const AuthContext = createContext(null);
 
 const APP_VERSION = '7';
 
-const createDefaultPermissions = () => ({
-  can_upload: false,
-  can_review: false,
-  can_download: false,
-  can_copy: false,
-  can_delete: false,
-  can_manage_kb_directory: false,
-  can_view_kb_config: false,
-  can_view_tools: false,
-  accessible_tools: []
-});
-
 const mapLoginErrorMessage = (message) => {
   const code = String(message || '').trim();
   if (code === 'invalid_username_or_password') {
-    return '用户名或密码错误';
+    return '\u7528\u6237\u540d\u6216\u5bc6\u7801\u9519\u8bef';
   }
   if (code === 'credentials_locked') {
-    return '账号已被临时锁定，请稍后再试或联系管理员';
+    return '\u8d26\u53f7\u5df2\u88ab\u4e34\u65f6\u9501\u5b9a\uff0c\u8bf7\u7a0d\u540e\u518d\u8bd5\u6216\u8054\u7cfb\u7ba1\u7406\u5458';
   }
   if (code === 'account_inactive' || code === 'account_disabled') {
-    return '该账号已被禁用，请联系管理员';
+    return '\u8be5\u8d26\u53f7\u5df2\u88ab\u7981\u7528\uff0c\u8bf7\u8054\u7cfb\u7ba1\u7406\u5458';
   }
   if (code === 'missing_refresh_token' || code.startsWith('invalid_refresh_token')) {
-    return '登录状态已失效，请重新登录';
+    return '\u767b\u5f55\u72b6\u6001\u5df2\u5931\u6548\uff0c\u8bf7\u91cd\u65b0\u767b\u5f55';
   }
-  return code || '登录失败';
+  if (code.startsWith('auth_user_invalid_')) {
+    return '\u767b\u5f55\u8fd4\u56de\u7684\u6743\u9650\u6570\u636e\u5f02\u5e38\uff0c\u8bf7\u8054\u7cfb\u7ba1\u7406\u5458';
+  }
+  return code || '\u767b\u5f55\u5931\u8d25';
 };
 
 export const useAuth = () => {
@@ -49,24 +47,32 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [accessibleKbs, setAccessibleKbs] = useState([]);
-  const [permissions, setPermissions] = useState(createDefaultPermissions);
+  const [permissions, setPermissions] = useState(DEFAULT_AUTH_PERMISSIONS);
+  const [capabilities, setCapabilities] = useState(DEFAULT_AUTH_CAPABILITIES);
   const idleRedirectingRef = useRef(false);
   const currentUserId = user?.user_id;
   const currentIdleTimeoutMinutes = user?.idle_timeout_minutes;
+  const accessibleKbs = Array.isArray(user?.accessible_kb_ids) ? user.accessible_kb_ids : [];
+
+  const syncAuthenticatedUserState = useCallback((normalizedUser) => {
+    setUser(normalizedUser);
+    setPermissions(normalizedUser.permissions);
+    setCapabilities(normalizedUser.capabilities);
+  }, []);
 
   const invalidateAuth = useCallback(() => {
     tokenStore.clearAuth();
     setUser(null);
-    setAccessibleKbs([]);
-    setPermissions(createDefaultPermissions());
+    setPermissions(DEFAULT_AUTH_PERMISSIONS);
+    setCapabilities(DEFAULT_AUTH_CAPABILITIES);
   }, []);
 
   const applyAuthenticatedUser = useCallback((nextUser) => {
-    tokenStore.setUser(nextUser);
-    setUser(nextUser);
-    setPermissions(nextUser?.permissions ? nextUser.permissions : createDefaultPermissions());
-  }, []);
+    const normalizedUser = normalizeAuthenticatedUser(nextUser);
+    tokenStore.setUser(normalizedUser);
+    syncAuthenticatedUserState(normalizedUser);
+    return normalizedUser;
+  }, [syncAuthenticatedUserState]);
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -114,7 +120,7 @@ export const AuthProvider = ({ children }) => {
         } else if (refreshToken || storedUser) {
           invalidateAuth();
         }
-      } catch (error) {
+      } catch (authError) {
         invalidateAuth();
       } finally {
         setLoading(false);
@@ -129,7 +135,7 @@ export const AuthProvider = ({ children }) => {
       idleRedirectingRef.current = false;
       return;
     }
-    if (typeof window === 'undefined') return;
+    if (typeof window === 'undefined') return undefined;
 
     const rawMinutes = Number(currentIdleTimeoutMinutes);
     const idleMinutes = Number.isFinite(rawMinutes) && rawMinutes > 0 ? rawMinutes : 120;
@@ -163,32 +169,15 @@ export const AuthProvider = ({ children }) => {
     };
   }, [currentUserId, currentIdleTimeoutMinutes, invalidateAuth]);
 
-  useEffect(() => {
-    const fetchAccessibleKbs = async () => {
-      if (user) {
-        try {
-          const data = await meApi.listMyKnowledgeBases();
-          setAccessibleKbs(Array.isArray(data?.kbIds) ? data.kbIds : []);
-        } catch (fetchError) {
-          console.error('Failed to fetch accessible KBs:', fetchError);
-          setAccessibleKbs([]);
-        }
-      } else {
-        setAccessibleKbs([]);
-      }
-    };
-
-    fetchAccessibleKbs();
-  }, [user]);
-
   const login = async (username, password) => {
     try {
       setError(null);
       const data = await authApi.login(username, password);
-      tokenStore.setAuth(data.access_token, data.refresh_token, data.user);
-      console.log('[Login] Logged in user:', data.user);
-      applyAuthenticatedUser(data.user);
-      return { success: true, user: data.user };
+      const normalizedUser = normalizeAuthenticatedUser(data.user);
+      tokenStore.setAuth(data.access_token, data.refresh_token, normalizedUser);
+      console.log('[Login] Logged in user:', normalizedUser);
+      syncAuthenticatedUserState(normalizedUser);
+      return { success: true, user: normalizedUser };
     } catch (loginError) {
       const message = mapLoginErrorMessage(loginError?.message);
       setError(message);
@@ -207,78 +196,28 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const hasRole = (roles) => {
-    if (!user) return false;
-    if (Array.isArray(roles)) {
-      return roles.includes(user.role);
-    }
-    return user.role === roles;
-  };
-
-  const isAdmin = () => user?.role === 'admin';
-  const isSubAdmin = () => user?.role === 'sub_admin';
-  const isReviewer = () => user?.role === 'admin' || !!permissions.can_review;
-  const isOperator = () => user?.role === 'admin' || !!permissions.can_upload || !!permissions.can_review;
-  const canManageKnowledgeTree = () => user?.role === 'admin' || !!permissions.can_manage_kb_directory;
-
+  const hasRole = useCallback((roles) => hasAnyRole(user, roles), [user]);
+  const isAdmin = useCallback(() => user?.role === 'admin', [user]);
+  const isSubAdmin = useCallback(() => user?.role === 'sub_admin', [user]);
   const can = useCallback((resource, action, target = null) => {
     if (!user) return false;
-
-    const ops = permissions || {};
-
-    if (resource === 'users') {
-      return user.role === 'admin' || user.role === 'sub_admin';
-    }
-
-    if (resource === 'kb_documents') {
-      if (action === 'view') return accessibleKbs.length > 0;
-      if (action === 'upload') return user.role === 'admin' || !!ops.can_upload;
-      if (action === 'review' || action === 'approve' || action === 'reject') return user.role === 'admin' || !!ops.can_review;
-      if (action === 'delete') return user.role === 'admin' || !!ops.can_delete;
-      if (action === 'download') return user.role === 'admin' || !!ops.can_download;
-      if (action === 'copy') return user.role === 'admin' || !!ops.can_copy;
-      return false;
-    }
-
-    if (resource === 'ragflow_documents') {
-      if (action === 'view' || action === 'preview') return accessibleKbs.length > 0;
-      if (action === 'download') return user.role === 'admin' || !!ops.can_download;
-      if (action === 'copy') return user.role === 'admin' || !!ops.can_copy;
-      if (action === 'delete') return user.role === 'admin' || !!ops.can_delete;
-      return false;
-    }
-
-    if (resource === 'kb_directory') {
-      if (action === 'manage') return user.role === 'admin' || !!ops.can_manage_kb_directory;
-      return false;
-    }
-
-    if (resource === 'kbs_config') {
-      if (action === 'view') return user.role === 'admin' || ops.can_view_kb_config !== false;
-      return false;
-    }
-
-    if (resource === 'tools') {
-      if (action !== 'view') return false;
-      if (user.role === 'admin') return true;
-      if (ops.can_view_tools === false) return false;
-      const allowedTools = Array.isArray(ops.accessible_tools)
-        ? ops.accessible_tools
-            .map((item) => String(item || '').trim())
-            .filter((item) => !!item)
-        : [];
-      if (!target) return true;
-      if (allowedTools.length === 0) return true;
-      return allowedTools.includes(String(target));
-    }
-
-    return false;
-  }, [user, permissions, accessibleKbs]);
-
-  const canAccessKb = useCallback((kbId) => {
-    if (!user) return false;
-    return accessibleKbs.includes(kbId);
-  }, [user, accessibleKbs]);
+    return canWithCapabilities(capabilities, resource, action, target);
+  }, [user, capabilities]);
+  const isReviewer = useCallback(() => can('kb_documents', 'review'), [can]);
+  const isOperator = useCallback(
+    () => can('kb_documents', 'upload') || can('kb_documents', 'review'),
+    [can]
+  );
+  const canManageKnowledgeTree = useCallback(() => can('kb_directory', 'manage'), [can]);
+  const canAccessKb = useCallback((kbId) => can('kb_documents', 'view', kbId), [can]);
+  const isAuthorized = useCallback((options = {}) => evaluateAuthorization({
+    user,
+    capabilities,
+    allowedRoles: options.allowedRoles,
+    permission: options.permission,
+    permissions: options.permissions,
+    anyPermissions: options.anyPermissions,
+  }), [user, capabilities]);
 
   const value = {
     user,
@@ -296,16 +235,18 @@ export const AuthProvider = ({ children }) => {
     accessibleKbs,
     canAccessKb,
     permissions,
+    capabilities,
+    isAuthorized,
     managedKbRootNodeId: user?.managed_kb_root_node_id || null,
     managedKbRootPath: user?.managed_kb_root_path || null,
-    canUpload: () => user?.role === 'admin' || !!permissions.can_upload,
-    canReview: () => user?.role === 'admin' || !!permissions.can_review,
-    canDownload: () => user?.role === 'admin' || !!permissions.can_download,
-    canCopy: () => user?.role === 'admin' || !!permissions.can_copy,
-    canDelete: () => user?.role === 'admin' || !!permissions.can_delete,
-    canManageKbDirectory: () => user?.role === 'admin' || !!permissions.can_manage_kb_directory,
-    canViewKbConfig: () => user?.role === 'admin' || permissions.can_view_kb_config !== false,
-    canViewTools: () => user?.role === 'admin' || permissions.can_view_tools !== false,
+    canUpload: () => can('kb_documents', 'upload'),
+    canReview: () => can('kb_documents', 'review'),
+    canDownload: () => can('kb_documents', 'download'),
+    canCopy: () => can('kb_documents', 'copy'),
+    canDelete: () => can('kb_documents', 'delete'),
+    canManageKbDirectory: () => can('kb_directory', 'manage'),
+    canViewKbConfig: () => can('kbs_config', 'view'),
+    canViewTools: () => can('tools', 'view'),
     canAccessTool: (toolId) => can('tools', 'view', toolId),
     isAuthenticated: !!user,
   };

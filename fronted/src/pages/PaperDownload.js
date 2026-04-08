@@ -127,7 +127,7 @@ export default function PaperDownload() {
             keywordLabel="关键词（支持逗号 / 分号 / 换行分隔）"
             keywordText={keywordText}
             onKeywordChange={setKeywordText}
-            placeholder={'3D printer\n导板'}
+            placeholder={'3D 打印机\n导板'}
             useAnd={useAnd}
             onUseAndChange={setUseAnd}
             useAndId="paper-use-and"
@@ -234,7 +234,7 @@ export default function PaperDownload() {
                 loading={historyItemsLoading}
                 loadingText="正在加载论文历史..."
                 payload={historyPayload}
-                itemLabel="papers"
+                itemLabel="论文"
               >
                 <PaperResultList
                   items={historyItems}

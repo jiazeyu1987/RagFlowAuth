@@ -61,7 +61,7 @@ const LayoutSidebar = ({
           onClick={onToggleSidebar}
           data-testid="layout-sidebar-toggle"
           style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer', fontSize: '1.2rem' }}
-          aria-label="toggle sidebar"
+          aria-label="切换侧边栏"
         >
           {sidebarOpen ? '<' : '>'}
         </button>

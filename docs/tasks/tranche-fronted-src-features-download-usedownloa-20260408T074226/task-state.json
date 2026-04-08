@@ -1,0 +1,111 @@
+{
+  "schema_version": 2,
+  "task_id": "tranche-fronted-src-features-download-usedownloa-20260408T074226",
+  "mode": "full",
+  "status": "completed",
+  "current_phase": null,
+  "phase_statuses": [
+    {
+      "phase_id": "P1",
+      "title": "Split the shared download controller into focused frontend units",
+      "status": "completed",
+      "objective": "Move configuration persistence, current-session actions, and history-panel actions into focused helpers while keeping the controller return contract stable.",
+      "owned_paths": [],
+      "dependencies": [],
+      "deliverables": [],
+      "evidence_expectation": "",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P1-AC1",
+          "text": "`useDownloadPageController.js` no longer directly owns configuration persistence, current-session action orchestration, and history-panel mutations in one hook body.",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P1",
+            "test-report.md#T1"
+          ]
+        },
+        {
+          "ac_id": "P1-AC2",
+          "text": "paper/patent page wrappers continue to consume the same controller-facing contract without page-level behavior changes.",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P1",
+            "test-report.md#T1"
+          ]
+        },
+        {
+          "ac_id": "P1-AC3",
+          "text": "download controller failures still surface through the existing error/info channels instead of introducing silent downgrade paths.",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P1",
+            "test-report.md#T1"
+          ]
+        }
+      ],
+      "evidence": [
+        "execution-log.md#Phase-P1"
+      ],
+      "notes": "- Split the shared download controller into focused config, session, history-action, and message helpers while preserving the page-wrapper contract.",
+      "last_reviewed_at": "2026-04-08T07:48:26"
+    },
+    {
+      "phase_id": "P2",
+      "title": "Focused frontend regression validation and task evidence",
+      "status": "completed",
+      "objective": "Prove the bounded controller refactor preserved current page and hook behavior.",
+      "owned_paths": [],
+      "dependencies": [],
+      "deliverables": [],
+      "evidence_expectation": "",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P2-AC1",
+          "text": "focused frontend download controller and page tests pass against the final code state.",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P2",
+            "test-report.md#T1"
+          ]
+        },
+        {
+          "ac_id": "P2-AC2",
+          "text": "task artifacts record the exact commands run, verified acceptance coverage, and bounded residual risk.",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P2",
+            "test-report.md#T1"
+          ]
+        }
+      ],
+      "evidence": [
+        "execution-log.md#Phase-P2"
+      ],
+      "notes": "- Focused Jest evidence recorded and acceptance coverage captured in the task artifacts.",
+      "last_reviewed_at": "2026-04-08T07:48:34"
+    }
+  ],
+  "planner_review_status": "approved",
+  "test_status": "passed",
+  "blocking_prereqs": [],
+  "iteration_counts": {
+    "planner_revisions": 0,
+    "executor_loops": 2,
+    "test_loops": 1
+  },
+  "created_at": "2026-04-08T07:42:27",
+  "updated_at": "2026-04-08T07:48:50",
+  "branch": "int_latest",
+  "baseline_revision": "3619b8169b862232147c8e7a8d7bca3608a3d8f3",
+  "workspace_root": "D:\\ProjectPackage\\RagflowAuth",
+  "tasks_root": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks",
+  "task_dir": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\tranche-fronted-src-features-download-usedownloa-20260408T074226",
+  "goal": "继续进行前后端重构直到重构结束：本 tranche 聚焦 fronted/src/features/download/useDownloadPageController.js，拆分配置持久化、当前下载会话动作、历史面板动作，保持 paper/patent 下载页行为与测试契约稳定",
+  "artifacts": {
+    "prd": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\tranche-fronted-src-features-download-usedownloa-20260408T074226\\prd.md",
+    "test_plan": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\tranche-fronted-src-features-download-usedownloa-20260408T074226\\test-plan.md",
+    "task_state": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\tranche-fronted-src-features-download-usedownloa-20260408T074226\\task-state.json",
+    "execution_log": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\tranche-fronted-src-features-download-usedownloa-20260408T074226\\execution-log.md",
+    "test_report": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\tranche-fronted-src-features-download-usedownloa-20260408T074226\\test-report.md"
+  }
+}

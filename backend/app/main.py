@@ -110,17 +110,10 @@ def _register_application_routers(app: FastAPI) -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    from backend.app.dependencies import create_dependencies, get_tenant_dependencies
-    from backend.database.paths import resolve_auth_db_path
+    from backend.app.dependencies import initialize_application_dependencies
     from backend.services.data_security_scheduler_v2 import init_scheduler_v2, stop_scheduler_v2
 
-    app.state.base_auth_db_path = str(resolve_auth_db_path())
-    app.state.tenant_deps_cache = {}
-    app.state.deps = create_dependencies(
-        operation_approval_execution_deps_resolver=lambda company_id: get_tenant_dependencies(
-            app, company_id=company_id
-        )
-    )
+    initialize_application_dependencies(app)
     logger.info("Dependencies initialized")
 
     # Help diagnose stale code / wrong interpreter issues on Windows.

@@ -24,7 +24,7 @@ describe('AuditLogs', () => {
         offset: 0,
       },
       result: {
-        total: 2,
+        total: 5,
         items: [
           {
             id: 'event-1',
@@ -46,6 +46,42 @@ describe('AuditLogs', () => {
             company_name: 'Company A',
             department_name: 'Dept A',
             source: 'operation_approval',
+            kb_name: '',
+            filename: '',
+            doc_id: '',
+          },
+          {
+            id: 'event-3',
+            created_at_ms: 1712210400000,
+            action: 'notification_event_rule_upsert',
+            username: 'carol',
+            company_name: 'Company A',
+            department_name: 'Dept A',
+            source: 'RAGFlow',
+            kb_name: '',
+            filename: '',
+            doc_id: '',
+          },
+          {
+            id: 'event-4',
+            created_at_ms: 1712214000000,
+            action: 'notification_channel_recipient_map_rebuild',
+            username: 'dave',
+            company_name: 'Company A',
+            department_name: 'Dept A',
+            source: 'notification',
+            kb_name: '',
+            filename: '',
+            doc_id: '',
+          },
+          {
+            id: 'event-5',
+            created_at_ms: 1712217600000,
+            action: 'notification_channel_upsert',
+            username: 'erin',
+            company_name: 'Company A',
+            department_name: 'Dept A',
+            source: 'maintenance',
             kb_name: '',
             filename: '',
             doc_id: '',
@@ -77,6 +113,42 @@ describe('AuditLogs', () => {
           filename: '',
           doc_id: '',
         },
+        {
+          id: 'event-3',
+          created_at_ms: 1712210400000,
+          action: 'notification_event_rule_upsert',
+          username: 'carol',
+          company_name: 'Company A',
+          department_name: 'Dept A',
+          source: 'RAGFlow',
+          kb_name: '',
+          filename: '',
+          doc_id: '',
+        },
+        {
+          id: 'event-4',
+          created_at_ms: 1712214000000,
+          action: 'notification_channel_recipient_map_rebuild',
+          username: 'dave',
+          company_name: 'Company A',
+          department_name: 'Dept A',
+          source: 'notification',
+          kb_name: '',
+          filename: '',
+          doc_id: '',
+        },
+        {
+          id: 'event-5',
+          created_at_ms: 1712217600000,
+          action: 'notification_channel_upsert',
+          username: 'erin',
+          company_name: 'Company A',
+          department_name: 'Dept A',
+          source: 'maintenance',
+          kb_name: '',
+          filename: '',
+          doc_id: '',
+        },
       ],
       visibleDepartments: [
         { id: 10, company_id: 1, name: 'Dept A', path_name: 'Company A / Dept A' },
@@ -90,21 +162,26 @@ describe('AuditLogs', () => {
     });
   });
 
-  it('renders audit rows and dispatches hook actions from the page controls', async () => {
+  it('renders mapped audit source and action labels and dispatches hook actions', async () => {
     const user = userEvent.setup();
 
     render(<AuditLogs />);
 
-    expect(screen.getByTestId('audit-total')).toHaveTextContent('2');
+    expect(screen.getByTestId('audit-total')).toHaveTextContent('5');
     expect(screen.getByTestId('audit-row-event-1')).toBeInTheDocument();
     expect(screen.getByTestId('audit-row-event-2')).toBeInTheDocument();
-    expect(within(screen.getByTestId('audit-row-event-1')).getByText('下载文档')).toBeInTheDocument();
-    expect(within(screen.getByTestId('audit-row-event-1')).getByText('本地知识库')).toBeInTheDocument();
+    expect(screen.getByTestId('audit-row-event-3')).toBeInTheDocument();
+    expect(screen.getByTestId('audit-row-event-4')).toBeInTheDocument();
+    expect(screen.getByTestId('audit-row-event-5')).toBeInTheDocument();
+
+    expect(within(screen.getByTestId('audit-row-event-3')).getByText('新增/更新通知事件规则')).toBeInTheDocument();
+    expect(within(screen.getByTestId('audit-row-event-3')).getByText('系统')).toBeInTheDocument();
     expect(
-      within(screen.getByTestId('audit-row-event-2')).getByText('操作审批执行失败')
+      within(screen.getByTestId('audit-row-event-4')).getByText('重建通知通道收件人映射')
     ).toBeInTheDocument();
-    expect(within(screen.getByTestId('audit-row-event-2')).getByText('操作审批')).toBeInTheDocument();
-    expect(screen.getByRole('option', { name: '导出审计证据包' })).toBeInTheDocument();
+    expect(within(screen.getByTestId('audit-row-event-4')).getByText('通知')).toBeInTheDocument();
+    expect(within(screen.getByTestId('audit-row-event-5')).getByText('新增/更新通知通道')).toBeInTheDocument();
+    expect(within(screen.getByTestId('audit-row-event-5')).getByText('维护')).toBeInTheDocument();
 
     await user.click(screen.getByTestId('audit-apply'));
     expect(useAuditLogsPage.mock.results[0].value.applyFilters).toHaveBeenCalledTimes(1);

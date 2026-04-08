@@ -1,71 +1,15 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import trainingComplianceApi from './api';
+import {
+  addYearsToTimestamp,
+  buildUserLabel,
+  parseDateTimeLocal,
+  toDateTimeLocalValue,
+  USER_SEARCH_LIMIT,
+} from './helpers';
+import useTrainingCompliancePrefill from './useTrainingCompliancePrefill';
+import useTrainingComplianceUserSearch from './useTrainingComplianceUserSearch';
 import { usersApi } from '../users/api';
-
-const USER_SEARCH_LIMIT = 20;
-const USER_SEARCH_DELAY_MS = 250;
-const VALID_TABS = new Set(['records', 'certifications']);
-
-const createUserSearchState = () => ({
-  keyword: '',
-  results: [],
-  loading: false,
-  open: false,
-  error: '',
-});
-
-const toDateTimeLocalValue = (value) => {
-  const date = value ? new Date(Number(value)) : new Date();
-  if (Number.isNaN(date.getTime())) return '';
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  const hours = String(date.getHours()).padStart(2, '0');
-  const minutes = String(date.getMinutes()).padStart(2, '0');
-  return `${year}-${month}-${day}T${hours}:${minutes}`;
-};
-
-const parseDateTimeLocal = (value) => {
-  const text = String(value || '').trim();
-  if (!text) return null;
-  const timestamp = new Date(text).getTime();
-  return Number.isFinite(timestamp) ? timestamp : null;
-};
-
-const addYearsToTimestamp = (value, years) => {
-  const base = new Date(Number(value));
-  if (Number.isNaN(base.getTime())) return Number(value);
-  base.setFullYear(base.getFullYear() + years);
-  return base.getTime();
-};
-
-const buildUserLabel = (user) => {
-  if (!user) return '-';
-  const fullName = String(user.full_name || '').trim();
-  const username = String(user.username || '').trim();
-  return fullName || username || String(user.user_id || '-');
-};
-
-const resolvePrefillRequirementCode = (requirements, searchParams) => {
-  const requestedRequirementCode = String(searchParams.get('requirement_code') || '').trim();
-  if (requestedRequirementCode) {
-    const matchedRequirement = (requirements || []).find(
-      (item) => String(item?.requirement_code || '') === requestedRequirementCode
-    );
-    if (matchedRequirement) {
-      return requestedRequirementCode;
-    }
-  }
-
-  const requestedControlledAction = String(searchParams.get('controlled_action') || '').trim();
-  if (!requestedControlledAction) {
-    return '';
-  }
-  const matchedRequirement = (requirements || []).find(
-    (item) => String(item?.controlled_action || '') === requestedControlledAction
-  );
-  return String(matchedRequirement?.requirement_code || '');
-};
 
 export default function useTrainingCompliancePage({
   user,
@@ -87,10 +31,6 @@ export default function useTrainingCompliancePage({
   const [userDirectory, setUserDirectory] = useState(() =>
     user?.user_id ? { [String(user.user_id)]: user } : {}
   );
-  const prefillKeyRef = useRef('');
-  const [recordUserSearch, setRecordUserSearch] = useState(createUserSearchState);
-  const [certificationUserSearch, setCertificationUserSearch] =
-    useState(createUserSearchState);
   const [recordForm, setRecordForm] = useState({
     user_id: '',
     requirement_code: '',
@@ -159,31 +99,67 @@ export default function useTrainingCompliancePage({
     [buildDefaultTrainingSummary, requirementMap]
   );
 
+  const clearRecordSelectedUser = useCallback(() => {
+    setRecordForm((previous) => ({ ...previous, user_id: '' }));
+  }, []);
+
+  const clearCertificationSelectedUser = useCallback(() => {
+    setCertificationForm((previous) => ({ ...previous, user_id: '' }));
+  }, []);
+
+  const runUserSearch = useCallback(
+    async (keyword) => {
+      const items = await usersApi.search(keyword, USER_SEARCH_LIMIT);
+      mergeUsersIntoDirectory(items);
+      return items;
+    },
+    [mergeUsersIntoDirectory]
+  );
+
+  const {
+    searchState: recordUserSearch,
+    setSearchState: setRecordUserSearch,
+    handleKeywordChange: handleRecordUserKeywordChange,
+    openSearch: openRecordUserSearch,
+    closeSearch: closeRecordUserSearch,
+    applySelectedUser: applyRecordUserSearchSelection,
+  } = useTrainingComplianceUserSearch({
+    buildUserLabel,
+    errorMessage: text.userSearchError,
+    mapErrorMessage,
+    onClearSelection: clearRecordSelectedUser,
+    runUserSearch,
+  });
+
+  const {
+    searchState: certificationUserSearch,
+    setSearchState: setCertificationUserSearch,
+    handleKeywordChange: handleCertificationUserKeywordChange,
+    openSearch: openCertificationUserSearch,
+    closeSearch: closeCertificationUserSearch,
+    applySelectedUser: applyCertificationUserSearchSelection,
+  } = useTrainingComplianceUserSearch({
+    buildUserLabel,
+    errorMessage: text.userSearchError,
+    mapErrorMessage,
+    onClearSelection: clearCertificationSelectedUser,
+    runUserSearch,
+  });
+
   const applySelectedUserToForms = useCallback(
     (selectedUser) => {
       const nextUserId = String(selectedUser?.user_id || '');
-      const nextLabel = buildUserLabel(selectedUser);
       mergeUsersIntoDirectory([selectedUser]);
       setRecordForm((previous) => ({ ...previous, user_id: nextUserId }));
       setCertificationForm((previous) => ({ ...previous, user_id: nextUserId }));
-      setRecordUserSearch((previous) => ({
-        ...previous,
-        keyword: nextLabel,
-        open: false,
-        loading: false,
-        results: [],
-        error: '',
-      }));
-      setCertificationUserSearch((previous) => ({
-        ...previous,
-        keyword: nextLabel,
-        open: false,
-        loading: false,
-        results: [],
-        error: '',
-      }));
+      applyRecordUserSearchSelection(selectedUser);
+      applyCertificationUserSearchSelection(selectedUser);
     },
-    [mergeUsersIntoDirectory]
+    [
+      applyCertificationUserSearchSelection,
+      applyRecordUserSearchSelection,
+      mergeUsersIntoDirectory,
+    ]
   );
 
   useEffect(() => {
@@ -249,217 +225,20 @@ export default function useTrainingCompliancePage({
     }));
   }, [buildDefaultTrainingSummary, requirements]);
 
-  const runUserSearch = useCallback(
-    async (keyword) => {
-      const items = await usersApi.search(keyword, USER_SEARCH_LIMIT);
-      mergeUsersIntoDirectory(items);
-      return items;
-    },
-    [mergeUsersIntoDirectory]
-  );
-
-  useEffect(() => {
-    if (loading) return undefined;
-
-    const prefillKey = searchParams.toString();
-    if (!prefillKey || prefillKeyRef.current === prefillKey) {
-      return undefined;
-    }
-
-    let cancelled = false;
-    const requestedTab = String(searchParams.get('tab') || '').trim();
-    const requestedUserId = String(searchParams.get('user_id') || '').trim();
-    const nextRequirementCode = resolvePrefillRequirementCode(requirements, searchParams);
-
-    const applyPrefill = async () => {
-      if (requestedTab && VALID_TABS.has(requestedTab)) {
-        setActiveTab(requestedTab);
-      }
-      if (nextRequirementCode) {
-        applyRecordRequirementCode(nextRequirementCode);
-        setCertificationForm((previous) => ({
-          ...previous,
-          requirement_code: nextRequirementCode,
-        }));
-      }
-      if (!requestedUserId) {
-        if (!cancelled) {
-          prefillKeyRef.current = prefillKey;
-        }
-        return;
-      }
-
-      try {
-        const cachedUser = userDirectory[requestedUserId];
-        const items = cachedUser ? [cachedUser] : await runUserSearch(requestedUserId);
-        if (cancelled) return;
-        const matchedUser =
-          items.find((item) => String(item?.user_id || '') === requestedUserId) ||
-          items.find((item) => String(item?.username || '') === requestedUserId) ||
-          null;
-        if (!matchedUser) {
-          setError(mapErrorMessage('user_id_not_found'));
-        } else {
-          applySelectedUserToForms(matchedUser);
-        }
-      } catch (requestError) {
-        if (!cancelled) {
-          setError(mapErrorMessage(requestError?.message, text.userSearchError));
-        }
-      } finally {
-        if (!cancelled) {
-          prefillKeyRef.current = prefillKey;
-        }
-      }
-    };
-
-    applyPrefill();
-    return () => {
-      cancelled = true;
-    };
-  }, [
-    applyRecordRequirementCode,
-    applySelectedUserToForms,
+  useTrainingCompliancePrefill({
     loading,
-    mapErrorMessage,
-    requirements,
-    runUserSearch,
     searchParams,
-    text.userSearchError,
+    requirements,
     userDirectory,
-  ]);
-
-  useEffect(() => {
-    const keyword = String(recordUserSearch.keyword || '').trim();
-    if (!recordUserSearch.open) return undefined;
-    if (!keyword) {
-      setRecordUserSearch((previous) => ({
-        ...previous,
-        loading: false,
-        results: [],
-        error: '',
-      }));
-      return undefined;
-    }
-
-    let cancelled = false;
-    const timerId = window.setTimeout(async () => {
-      setRecordUserSearch((previous) =>
-        String(previous.keyword || '').trim() === keyword
-          ? { ...previous, loading: true, error: '' }
-          : previous
-      );
-      try {
-        const items = await runUserSearch(keyword);
-        if (cancelled) return;
-        setRecordUserSearch((previous) =>
-          String(previous.keyword || '').trim() === keyword && previous.open
-            ? { ...previous, loading: false, results: items, error: '' }
-            : previous
-        );
-      } catch (requestError) {
-        if (cancelled) return;
-        setRecordUserSearch((previous) =>
-          String(previous.keyword || '').trim() === keyword && previous.open
-            ? {
-                ...previous,
-                loading: false,
-                results: [],
-                error: mapErrorMessage(requestError?.message, text.userSearchError),
-              }
-            : previous
-        );
-      }
-    }, USER_SEARCH_DELAY_MS);
-
-    return () => {
-      cancelled = true;
-      window.clearTimeout(timerId);
-    };
-  }, [
-    mapErrorMessage,
-    recordUserSearch.keyword,
-    recordUserSearch.open,
     runUserSearch,
-    text.userSearchError,
-  ]);
-
-  useEffect(() => {
-    const keyword = String(certificationUserSearch.keyword || '').trim();
-    if (!certificationUserSearch.open) return undefined;
-    if (!keyword) {
-      setCertificationUserSearch((previous) => ({
-        ...previous,
-        loading: false,
-        results: [],
-        error: '',
-      }));
-      return undefined;
-    }
-
-    let cancelled = false;
-    const timerId = window.setTimeout(async () => {
-      setCertificationUserSearch((previous) =>
-        String(previous.keyword || '').trim() === keyword
-          ? { ...previous, loading: true, error: '' }
-          : previous
-      );
-      try {
-        const items = await runUserSearch(keyword);
-        if (cancelled) return;
-        setCertificationUserSearch((previous) =>
-          String(previous.keyword || '').trim() === keyword && previous.open
-            ? { ...previous, loading: false, results: items, error: '' }
-            : previous
-        );
-      } catch (requestError) {
-        if (cancelled) return;
-        setCertificationUserSearch((previous) =>
-          String(previous.keyword || '').trim() === keyword && previous.open
-            ? {
-                ...previous,
-                loading: false,
-                results: [],
-                error: mapErrorMessage(requestError?.message, text.userSearchError),
-              }
-            : previous
-        );
-      }
-    }, USER_SEARCH_DELAY_MS);
-
-    return () => {
-      cancelled = true;
-      window.clearTimeout(timerId);
-    };
-  }, [
-    certificationUserSearch.keyword,
-    certificationUserSearch.open,
     mapErrorMessage,
-    runUserSearch,
-    text.userSearchError,
-  ]);
-
-  const handleRecordUserKeywordChange = useCallback((value) => {
-    setRecordForm((previous) => ({ ...previous, user_id: '' }));
-    setRecordUserSearch((previous) => ({
-      ...previous,
-      keyword: value,
-      open: true,
-      error: '',
-      ...(String(value || '').trim() ? {} : { results: [] }),
-    }));
-  }, []);
-
-  const handleCertificationUserKeywordChange = useCallback((value) => {
-    setCertificationForm((previous) => ({ ...previous, user_id: '' }));
-    setCertificationUserSearch((previous) => ({
-      ...previous,
-      keyword: value,
-      open: true,
-      error: '',
-      ...(String(value || '').trim() ? {} : { results: [] }),
-    }));
-  }, []);
+    userSearchError: text.userSearchError,
+    setError,
+    setActiveTab,
+    applyRecordRequirementCode,
+    setCertificationForm,
+    applySelectedUserToForms,
+  });
 
   const buildDisplayUserLabel = useCallback(
     (userId) => {
@@ -618,6 +397,10 @@ export default function useTrainingCompliancePage({
     setCertificationForm,
     loadData,
     applyRecordRequirementCode,
+    openRecordUserSearch,
+    closeRecordUserSearch,
+    openCertificationUserSearch,
+    closeCertificationUserSearch,
     handleRecordUserKeywordChange,
     handleCertificationUserKeywordChange,
     handleSelectRecordUser,

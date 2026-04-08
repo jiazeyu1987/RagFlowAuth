@@ -1,5 +1,13 @@
 import { useCallback, useRef } from 'react';
 import { chatApi } from '../api';
+import {
+  createStreamTraceId,
+  previewStreamText,
+  processCompletionStream,
+  readCompletionStreamFrame,
+  rollbackAssistantDraft,
+  shouldRefreshSessionMessages,
+} from './useChatStreamSupport';
 
 export const useChatStream = ({
   selectedChatId,
@@ -30,12 +38,6 @@ export const useChatStream = ({
     }
   }, []);
 
-  const previewText = useCallback((value, max = 200) => {
-    const text = String(value || '');
-    if (text.length <= max) return text;
-    return `${text.slice(0, max)}...`;
-  }, []);
-
   const logStream = useCallback(
     (level, message, payload = null) => {
       if (!isStreamDebugEnabled()) return;
@@ -47,20 +49,6 @@ export const useChatStream = ({
       }
     },
     [isStreamDebugEnabled]
-  );
-
-  const readStreamFrame = useCallback(
-    (payload) => {
-      const frame = payload && typeof payload === 'object' && !Array.isArray(payload) ? payload : null;
-      const data = frame?.data && typeof frame.data === 'object' && !Array.isArray(frame.data) ? frame.data : null;
-      return {
-        code: typeof frame?.code === 'number' ? frame.code : null,
-        answer: typeof data?.answer === 'string' ? data.answer : '',
-        sources: Array.isArray(data?.sources) ? data.sources : null,
-        message: String(frame?.message || frame?.detail || '').trim(),
-      };
-    },
-    []
   );
 
   const upsertAssistantMessage = useCallback(
@@ -118,7 +106,7 @@ export const useChatStream = ({
   const sendMessage = useCallback(async () => {
     if (!inputMessage.trim() || !selectedChatId || !selectedSessionId) return;
     const question = inputMessage.trim();
-    const traceId = `chat_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+    const traceId = createStreamTraceId();
     const sendStartedAt = typeof performance !== 'undefined' ? performance.now() : Date.now();
     const userMessage = { role: 'user', content: question };
     const isFirstUserMessage = !(messages || []).some((m) => m?.role === 'user');
@@ -162,218 +150,37 @@ export const useChatStream = ({
         throw new Error('send_failed');
       }
 
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = '';
-      let rawText = '';
-      let consumedSseEvent = false;
-      let receivedAnswerEvent = false;
-      let readerChunkIndex = 0;
-      let sseLineIndex = 0;
       assistantMessageRef.current = '';
       assistantSourcesRef.current = [];
+      const {
+        rawText,
+        consumedSseEvent,
+        receivedAnswerEvent,
+        readerChunkIndex,
+        sseLineIndex,
+      } = await processCompletionStream({
+        response,
+        traceId,
+        logStream,
+        previewText: previewStreamText,
+        readStreamFrame: readCompletionStreamFrame,
+        normalizeForCompare,
+        containsReasoningMarkers,
+        upsertAssistantMessage,
+        upsertAssistantSources,
+        setError,
+        assistantMessageRef,
+      });
 
-      const processSseLine = (rawLine) => {
-        sseLineIndex += 1;
-        const line = String(rawLine ?? '')
-          .replace(/^\uFEFF/, '')
-          .trim();
-
-        logStream('debug', 'sse line received', {
-          traceId,
-          sseLineIndex,
-          rawLen: String(rawLine ?? '').length,
-          linePreview: previewText(line, 180),
-        });
-
-        if (!line.startsWith('data:')) return;
-
-        const dataStr = line.slice(5).trim();
-        if (!dataStr || dataStr === '[DONE]') return;
-
-        try {
-          consumedSseEvent = true;
-          const data = JSON.parse(dataStr);
-
-          logStream('debug', 'sse json parsed', {
-            traceId,
-            sseLineIndex,
-            code: data?.code,
-            dataType: typeof data?.data,
-            topKeys: data && typeof data === 'object' ? Object.keys(data).slice(0, 8) : [],
-          });
-
-          const frame = readStreamFrame(data);
-          if (frame.code === null) {
-            logStream('warn', 'invalid sse payload ignored', {
-              traceId,
-              sseLineIndex,
-              dataPreview: previewText(dataStr, 180),
-            });
-            return;
-          }
-
-          if (Array.isArray(frame.sources)) {
-            upsertAssistantSources(frame.sources);
-            logStream('debug', 'sources event', {
-              traceId,
-              sseLineIndex,
-              sourcesCount: frame.sources.length,
-            });
-          }
-
-          const incoming = frame.answer;
-          if (incoming) {
-            receivedAnswerEvent = true;
-            if (incoming.toLowerCase().includes('<think')) {
-              console.debug('[Chat:stream] think detected');
-            }
-            logStream('debug', 'answer event', {
-              traceId,
-              sseLineIndex,
-              incomingLen: incoming.length,
-              incomingPreview: previewText(incoming, 140),
-            });
-
-            const current = assistantMessageRef.current || '';
-            const currentNorm = normalizeForCompare(current);
-            const incomingNorm = normalizeForCompare(incoming);
-            let next = '';
-
-            if (current && incoming.startsWith(current)) {
-              next = incoming;
-            } else if (current && current.startsWith(incoming)) {
-              next = current;
-            } else if (current && incoming.includes(current) && incoming.length >= current.length) {
-              next = incoming;
-            }
-
-            if (!next && (containsReasoningMarkers(incoming) || containsReasoningMarkers(current))) {
-              if (incomingNorm.length >= currentNorm.length) {
-                next = incoming;
-              }
-            }
-
-            if (!next && currentNorm && incomingNorm && incomingNorm.length > currentNorm.length) {
-              let prefixLen = 0;
-              const max = Math.min(currentNorm.length, incomingNorm.length);
-              for (let k = 0; k < max; k++) {
-                if (currentNorm[k] !== incomingNorm[k]) break;
-                prefixLen++;
-              }
-              const ratio = prefixLen / Math.max(1, currentNorm.length);
-              if (ratio >= 0.8 || prefixLen >= 400) {
-                next = incoming;
-              }
-            }
-
-            if (next) {
-              assistantMessageRef.current = next;
-              upsertAssistantMessage(next);
-              logStream('debug', 'assistant message updated', {
-                traceId,
-                sseLineIndex,
-                nextLen: next.length,
-                nextPreview: previewText(next, 140),
-              });
-              return;
-            }
-
-            if (incomingNorm === currentNorm) {
-              next = current;
-            } else if (incomingNorm.startsWith(currentNorm)) {
-              next = incoming;
-            } else if (incomingNorm.includes(currentNorm)) {
-              next = incoming;
-            } else if (currentNorm.startsWith(incomingNorm)) {
-              next = current;
-            } else if (currentNorm.includes(incomingNorm)) {
-              next = current;
-            } else {
-              let overlap = 0;
-              const max = Math.min(currentNorm.length, incomingNorm.length);
-              for (let k = max; k > 0; k--) {
-                if (currentNorm.endsWith(incomingNorm.slice(0, k))) {
-                  overlap = k;
-                  break;
-                }
-              }
-
-              if (overlap > 0) {
-                let rawOverlap = 0;
-                const rawMax = Math.min(current.length, incoming.length);
-                for (let k = rawMax; k > 0; k--) {
-                  if (current.endsWith(incoming.slice(0, k))) {
-                    rawOverlap = k;
-                    break;
-                  }
-                }
-                next = rawOverlap > 0 ? current + incoming.slice(rawOverlap) : incoming;
-              } else {
-                next = current + incoming;
-              }
-            }
-
-            assistantMessageRef.current = next;
-            upsertAssistantMessage(next);
-            logStream('debug', 'assistant message merged', {
-              traceId,
-              sseLineIndex,
-              nextLen: next.length,
-              nextPreview: previewText(next, 140),
-            });
-          }
-
-          if (frame.code !== 0) {
-            const msg = frame.message || 'backend_error';
-            setError(msg);
-            upsertAssistantMessage(msg);
-            logStream('warn', 'backend non-zero code', {
-              traceId,
-              sseLineIndex,
-              code: frame.code,
-              message: previewText(msg, 180),
-            });
-          }
-        } catch {
-          logStream('warn', 'malformed sse chunk ignored', {
-            traceId,
-            sseLineIndex,
-            dataPreview: previewText(dataStr, 180),
-          });
-        }
-      };
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        readerChunkIndex += 1;
-        const decoded = decoder.decode(value, { stream: true });
-        rawText += decoded;
-        buffer += decoded;
-        logStream('debug', 'reader chunk', {
-          traceId,
-          readerChunkIndex,
-          byteLength: value?.byteLength || 0,
-          decodedLen: decoded.length,
-          decodedPreview: previewText(decoded, 180),
-        });
-
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
-
-        for (const line of lines) {
-          processSseLine(line);
-        }
-      }
-
-      if (buffer) {
-        processSseLine(buffer);
-      }
-
-      const visibleAssistantText = String(stripThinkTags(assistantMessageRef.current || '') || '').trim();
-      if (!visibleAssistantText && !receivedAnswerEvent && !consumedSseEvent && typeof refreshSessionMessages === 'function') {
+      if (
+        shouldRefreshSessionMessages({
+          assistantMessage: assistantMessageRef.current,
+          stripThinkTags,
+          receivedAnswerEvent,
+          consumedSseEvent,
+        }) &&
+        typeof refreshSessionMessages === 'function'
+      ) {
         try {
           logStream('warn', 'no answer parsed, refreshing session messages', {
             traceId,
@@ -411,20 +218,7 @@ export const useChatStream = ({
         message: String(err?.message || err || 'unknown_error'),
       });
       setError(err?.message || 'send_failed');
-      setMessages((prev) => {
-        const next = Array.isArray(prev) ? [...prev] : [];
-        const last = next[next.length - 1];
-        if (last?.role === 'assistant') next.pop();
-
-        const hasCurrentUserQuestion = next.some(
-          (msg) => msg?.role === 'user' && String(msg?.content || '') === question
-        );
-        if (!hasCurrentUserQuestion) {
-          next.push({ role: 'user', content: question });
-        }
-
-        return next;
-      });
+      setMessages((prev) => rollbackAssistantDraft(prev, question));
     }
   }, [
     autoRenameSessionByFirstQuestion,
@@ -433,8 +227,6 @@ export const useChatStream = ({
     logStream,
     messages,
     normalizeForCompare,
-    previewText,
-    readStreamFrame,
     saveSourcesForAssistantMessage,
     refreshSessionMessages,
     selectedChatId,

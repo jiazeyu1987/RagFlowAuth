@@ -1,0 +1,138 @@
+{
+  "schema_version": 2,
+  "task_id": "gui-20260408T112206",
+  "mode": "full",
+  "status": "completed",
+  "current_phase": null,
+  "phase_statuses": [
+    {
+      "phase_id": "P1",
+      "title": "修正 GUI 双列表与恢复来源",
+      "status": "completed",
+      "objective": "把 GUI 改为“服务器列表拉取 + 本地列表恢复”的双列表模式，并清理当前乱码文案。",
+      "owned_paths": [],
+      "dependencies": [],
+      "deliverables": [],
+      "evidence_expectation": "",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P1-AC1",
+          "text": "窗口同时展示“服务器备份列表”和“本地备份列表”两个独立区域，并分别维护各自的选中状态。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P1",
+            "test-report.md#Final-Verdict"
+          ]
+        },
+        {
+          "ac_id": "P1-AC2",
+          "text": "本地列表通过 `list_local_backups` 基于当前保存目录展示仅包含 `auth.db` 的本地备份，且支持手动刷新。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P1",
+            "test-report.md#Final-Verdict"
+          ]
+        },
+        {
+          "ac_id": "P1-AC3",
+          "text": "成功拉取远端备份后，GUI 会自动刷新本地列表，并让状态提示明确显示本地落盘位置。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P1",
+            "test-report.md#Final-Verdict"
+          ]
+        },
+        {
+          "ac_id": "P1-AC4",
+          "text": "“拉取”动作只接受服务器列表选中项；“恢复”动作只接受本地列表选中项；两者之间不存在隐式回退或混用。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P1",
+            "test-report.md#Final-Verdict"
+          ]
+        },
+        {
+          "ac_id": "P1-AC5",
+          "text": "工具内标题、按钮、提示框和状态栏文案以可读中文显示，不再保留当前乱码字符串。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P1",
+            "test-report.md#Final-Verdict"
+          ]
+        }
+      ],
+      "evidence": [
+        "execution-log.md#Phase-P1"
+      ],
+      "notes": "- GUI 已改为双列表，本地恢复仅绑定本地列表。",
+      "last_reviewed_at": "2026-04-08T11:41:31"
+    },
+    {
+      "phase_id": "P2",
+      "title": "补充验证与文档",
+      "status": "completed",
+      "objective": "为新流程补齐自动化验证，并把操作说明更新到维护文档。",
+      "owned_paths": [],
+      "dependencies": [],
+      "deliverables": [],
+      "evidence_expectation": "",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P2-AC1",
+          "text": "自动化测试覆盖 GUI 的导入以及“拉取使用服务器列表 / 恢复使用本地列表”的关键流程。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P2",
+            "test-report.md#Final-Verdict"
+          ]
+        },
+        {
+          "ac_id": "P2-AC2",
+          "text": "文档明确描述单独 GUI 的正确操作顺序为“从服务器拉取到本地，再从本地列表选择一个进行恢复”。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P2",
+            "test-report.md#Final-Verdict"
+          ]
+        },
+        {
+          "ac_id": "P2-AC3",
+          "text": "工具可以在本机真实运行环境中成功启动，且无启动即崩溃问题。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P2",
+            "test-report.md#Final-Verdict"
+          ]
+        }
+      ],
+      "evidence": [
+        "execution-log.md#Phase-P2"
+      ],
+      "notes": "- 测试、文档和真实启动验证已完成。",
+      "last_reviewed_at": "2026-04-08T11:41:40"
+    }
+  ],
+  "planner_review_status": "approved",
+  "test_status": "passed",
+  "blocking_prereqs": [],
+  "iteration_counts": {
+    "planner_revisions": 0,
+    "executor_loops": 1,
+    "test_loops": 1
+  },
+  "created_at": "2026-04-08T11:22:06",
+  "updated_at": "2026-04-08T11:42:05",
+  "branch": "int_latest",
+  "baseline_revision": "3619b8169b862232147c8e7a8d7bca3608a3d8f3",
+  "workspace_root": "D:\\ProjectPackage\\RagflowAuth",
+  "tasks_root": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks",
+  "task_dir": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\gui-20260408T112206",
+  "goal": "修正服务器备份拉取 GUI：服务器列表仅用于拉取，本地列表仅用于恢复；支持先拉取到本地，再从本地备份列表中选择一个恢复到本地数据。",
+  "artifacts": {
+    "prd": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\gui-20260408T112206\\prd.md",
+    "test_plan": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\gui-20260408T112206\\test-plan.md",
+    "task_state": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\gui-20260408T112206\\task-state.json",
+    "execution_log": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\gui-20260408T112206\\execution-log.md",
+    "test_report": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\gui-20260408T112206\\test-report.md"
+  }
+}

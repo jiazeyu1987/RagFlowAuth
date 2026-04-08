@@ -25,8 +25,6 @@ const primaryButtonStyle = {
 };
 
 const TEXT = {
-  title: '站内信',
-  subtitle: '审批流通知会统一进入这里，并可跳转到申请详情。',
   unread: '未读',
   read: '已读',
   unreadPrefix: '未读',
@@ -61,15 +59,11 @@ export default function InboxPage() {
         style={{
           ...cardStyle,
           display: 'flex',
-          justifyContent: 'space-between',
+          justifyContent: 'flex-end',
           gap: '12px',
           flexWrap: 'wrap',
         }}
       >
-        <div>
-          <div style={{ fontSize: '1.2rem', fontWeight: 700, color: '#111827' }}>{TEXT.title}</div>
-          <div style={{ color: '#4b5563', marginTop: '4px' }}>{TEXT.subtitle}</div>
-        </div>
         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
           <span data-testid="inbox-unread-count">{`${TEXT.unreadPrefix} ${unreadCount}`}</span>
           <button
