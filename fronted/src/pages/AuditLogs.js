@@ -21,13 +21,24 @@ const ACTION_LABELS = {
   datasets_create: '新建知识库',
   datasets_update: '修改知识库',
   datasets_delete: '删除知识库',
+  notification_channel_upsert: '新增/更新通知通道',
+  notification_channel_recipient_map_rebuild: '重建通知通道收件人映射',
+  notification_event_rule_upsert: '新增/更新通知事件规则',
+  notification_job_enqueue: '通知入队',
+  notification_job_dispatch: '发送通知',
+  notification_job_retry: '重试通知发送',
+  notification_job_resend: '重新发送通知',
+  notification_inbox_read_state_update: '更新通知已读状态',
+  notification_inbox_mark_all_read: '全部标记通知为已读',
   overwrite: '覆盖入库',
 };
 
 const SOURCE_LABELS = {
   auth: '认证',
   knowledge: '本地知识库',
-  ragflow: 'RAGFlow',
+  ragflow: '系统',
+  notification: '通知',
+  maintenance: '维护',
   patent_download: '专利下载',
   paper_download: '论文下载',
   patent: '专利',
@@ -53,6 +64,9 @@ const ACTION_OPTIONS = [
   { value: 'datasets_create', label: '新建知识库' },
   { value: 'datasets_update', label: '修改知识库' },
   { value: 'datasets_delete', label: '删除知识库' },
+  { value: 'notification_channel_upsert', label: '新增/更新通知通道' },
+  { value: 'notification_channel_recipient_map_rebuild', label: '重建通知通道收件人映射' },
+  { value: 'notification_event_rule_upsert', label: '新增/更新通知事件规则' },
   { value: 'overwrite', label: '覆盖入库' },
 ];
 
@@ -77,11 +91,17 @@ const tdStyle = {
   fontSize: '0.9rem',
 };
 
-const actionLabel = (value) =>
-  ACTION_LABELS[String(value || '').trim()] || String(value || '');
+const actionLabel = (value) => {
+  const normalized = String(value || '').trim();
+  if (!normalized) return '';
+  return ACTION_LABELS[normalized] || ACTION_LABELS[normalized.toLowerCase()] || normalized;
+};
 
-const sourceLabel = (value) =>
-  SOURCE_LABELS[String(value || '').trim()] || String(value || '');
+const sourceLabel = (value) => {
+  const normalized = String(value || '').trim();
+  if (!normalized) return '';
+  return SOURCE_LABELS[normalized] || SOURCE_LABELS[normalized.toLowerCase()] || normalized;
+};
 
 const formatMs = (value) => {
   if (!value) return '';
