@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { mapUserFacingErrorMessage } from '../../shared/errors/userFacingErrorMessages';
 import { DOCUMENT_SOURCE } from '../../shared/documents/constants';
 import { documentsApi } from '../documents/api';
 import { useAuth } from '../../hooks/useAuth';
@@ -104,7 +105,7 @@ export default function useAgentsPage() {
         setSelectedDatasetIds(rows.map((item) => item.id));
       }
     } catch (requestError) {
-      setError(requestError?.message || '加载知识库失败');
+      setError(mapUserFacingErrorMessage(requestError?.message, '加载知识库失败'));
     } finally {
       setLoading(false);
     }
@@ -166,7 +167,7 @@ export default function useAgentsPage() {
       pushSearchHistory(query);
       setSearchResults(normalized);
     } catch (requestError) {
-      setError(requestError?.message || '搜索失败');
+      setError(mapUserFacingErrorMessage(requestError?.message, '搜索失败'));
     } finally {
       setLoading(false);
     }
@@ -229,7 +230,7 @@ export default function useAgentsPage() {
         filename: docName,
       });
     } catch (requestError) {
-      setError(`下载文档失败: ${requestError?.message || '未知错误'}`);
+      setError(`下载文档失败：${mapUserFacingErrorMessage(requestError?.message, '请稍后重试')}`);
     }
   }, [resolveDatasetName]);
 
@@ -244,7 +245,7 @@ export default function useAgentsPage() {
       });
       setPreviewOpen(true);
     } catch (requestError) {
-      setError(`预览文档失败: ${requestError?.message || '未知错误'}`);
+      setError(`预览文档失败：${mapUserFacingErrorMessage(requestError?.message, '请稍后重试')}`);
     }
   }, [resolveDatasetName]);
 

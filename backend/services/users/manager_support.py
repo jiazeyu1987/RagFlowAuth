@@ -4,6 +4,8 @@ from dataclasses import dataclass
 import time
 from typing import Any
 
+from backend.app.core.tool_catalog import normalize_assignable_tool_ids
+
 
 @dataclass(frozen=True)
 class UserOrganizationContext:
@@ -182,6 +184,30 @@ class UserManagementMutationSupport:
             return [user_data.group_id]
 
         return None
+
+    def _normalize_tool_ids(self, raw_tool_ids: list[str] | None) -> list[str]:
+        try:
+            return normalize_assignable_tool_ids(raw_tool_ids)
+        except ValueError as exc:
+            raise self._error(str(exc)) from exc
+
+    def _resolve_create_tool_ids(self, *, user_data, role: str) -> list[str]:
+        tool_ids = self._normalize_tool_ids(user_data.tool_ids)
+        if role == "sub_admin":
+            return tool_ids
+        if tool_ids:
+            raise self._error("tool_assignment_role_not_supported")
+        return []
+
+    def _resolve_update_tool_ids(self, *, user_data, role: str) -> list[str] | None:
+        if user_data.tool_ids is None:
+            return None
+        tool_ids = self._normalize_tool_ids(user_data.tool_ids)
+        if role in {"sub_admin", "viewer"}:
+            return tool_ids
+        if tool_ids:
+            raise self._error("tool_assignment_role_not_supported")
+        return []
 
     @staticmethod
     def _is_disable_applied_now(

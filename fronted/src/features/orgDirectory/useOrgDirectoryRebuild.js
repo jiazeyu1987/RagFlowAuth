@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from 'react';
 
 import { notificationApi } from '../notification/api';
+import { mapUserFacingErrorMessage } from '../../shared/errors/userFacingErrorMessages';
 import { orgDirectoryApi } from './api';
 import {
   DINGTALK_DIRECTORY_REBUILD_FAILED_ERROR,
@@ -114,7 +115,7 @@ export default function useOrgDirectoryRebuild({
       setNotice(nextNotice);
       setRecipientMapRebuildSummary(nextRecipientMapRebuildSummary);
     } catch (err) {
-      setError(err?.message || String(err));
+      setError(mapUserFacingErrorMessage(err?.message, DINGTALK_DIRECTORY_REBUILD_FAILED_ERROR));
     } finally {
       setRebuilding(false);
     }

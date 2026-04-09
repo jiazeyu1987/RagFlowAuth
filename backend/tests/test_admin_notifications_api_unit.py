@@ -108,7 +108,9 @@ class TestAdminNotificationsApiUnit(unittest.TestCase):
 
                 list_channels_resp = client.get("/api/admin/notifications/channels")
                 self.assertEqual(list_channels_resp.status_code, 200, list_channels_resp.text)
-                self.assertEqual(list_channels_resp.json().get("count"), 1)
+                self.assertEqual(list_channels_resp.json().get("count"), 2)
+                channel_ids = {item.get("channel_id") for item in list_channels_resp.json().get("items") or []}
+                self.assertEqual(channel_ids, {"email-main", "dingtalk-main"})
 
                 list_rules_resp = client.get("/api/admin/notifications/rules")
                 self.assertEqual(list_rules_resp.status_code, 200, list_rules_resp.text)

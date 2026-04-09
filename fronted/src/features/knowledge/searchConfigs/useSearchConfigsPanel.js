@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../../../hooks/useAuth';
+import { mapUserFacingErrorMessage } from '../../../shared/errors/userFacingErrorMessages';
 import { searchConfigsApi } from './api';
 import { parseJson, prettyJson } from './utils';
 
@@ -45,7 +46,7 @@ export default function useSearchConfigsPanel() {
       setList(configs);
     } catch (requestError) {
       setList([]);
-      setError(requestError?.message || 'Failed to load configs');
+      setError(mapUserFacingErrorMessage(requestError?.message, '加载搜索配置失败'));
     } finally {
       setLoading(false);
     }
@@ -64,7 +65,7 @@ export default function useSearchConfigsPanel() {
       setJsonText(prettyJson(config?.config || {}));
     } catch (requestError) {
       setSelected(null);
-      setDetailError(requestError?.message || 'Failed to load config');
+      setDetailError(mapUserFacingErrorMessage(requestError?.message, '加载搜索配置失败'));
     } finally {
       setDetailLoading(false);
     }
@@ -105,10 +106,10 @@ export default function useSearchConfigsPanel() {
       setSelected(updated);
       setNameText(String(updated?.name || name));
       setJsonText(prettyJson(updated?.config || parsed.value));
-      setSaveStatus('Saved');
+      setSaveStatus('已保存');
       await fetchList();
     } catch (requestError) {
-      setDetailError(requestError?.message || 'Failed to save config');
+      setDetailError(mapUserFacingErrorMessage(requestError?.message, '保存搜索配置失败'));
     } finally {
       setBusy(false);
     }
@@ -124,7 +125,7 @@ export default function useSearchConfigsPanel() {
         if (selected?.id === item.id) setSelected(null);
         await fetchList();
       } catch (requestError) {
-        setError(requestError?.message || 'Failed to delete config');
+        setError(mapUserFacingErrorMessage(requestError?.message, '删除搜索配置失败'));
       } finally {
         setBusy(false);
       }
@@ -154,7 +155,7 @@ export default function useSearchConfigsPanel() {
       setCreateJsonText(prettyJson(source?.config || {}));
     } catch (requestError) {
       setCreateJsonText('{}');
-      setCreateError(requestError?.message || '加载源配置失败');
+      setCreateError(mapUserFacingErrorMessage(requestError?.message, '加载源配置失败'));
     }
   }, []);
 
@@ -185,7 +186,7 @@ export default function useSearchConfigsPanel() {
       await fetchList();
       await loadDetail(created.id);
     } catch (requestError) {
-      setCreateError(requestError?.message || '创建配置失败');
+      setCreateError(mapUserFacingErrorMessage(requestError?.message, '创建配置失败'));
     } finally {
       setBusy(false);
     }

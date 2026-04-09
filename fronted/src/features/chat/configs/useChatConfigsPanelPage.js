@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { chatConfigsApi } from './api';
 import { knowledgeApi } from '../../knowledge/api';
 import { useAuth } from '../../../hooks/useAuth';
+import { mapUserFacingErrorMessage } from '../../../shared/errors/userFacingErrorMessages';
 import {
   getDatasetIdsKeyForUpdate,
   getSelectedDatasetIdsFromChatJson,
@@ -87,7 +88,7 @@ export default function useChatConfigsPanelPage() {
       setChatList(getVisibleChats(chats));
     } catch (error) {
       setChatList([]);
-      setChatError(error?.message || '加载对话列表失败');
+      setChatError(mapUserFacingErrorMessage(error?.message, '加载对话列表失败'));
     } finally {
       setChatLoading(false);
     }
@@ -101,7 +102,7 @@ export default function useChatConfigsPanelPage() {
       setKbList(datasets);
     } catch (error) {
       setKbList([]);
-      setKbError(error?.message || '加载知识库列表失败');
+      setKbError(mapUserFacingErrorMessage(error?.message, '加载知识库列表失败'));
     } finally {
       setKbLoading(false);
     }
@@ -121,7 +122,7 @@ export default function useChatConfigsPanelPage() {
       setChatJsonText(prettyJson(sanitizeChatPayload(chat)));
     } catch (error) {
       setChatSelected(null);
-      setChatDetailError(error?.message || '加载对话详情失败');
+      setChatDetailError(mapUserFacingErrorMessage(error?.message, '加载对话详情失败'));
     } finally {
       setChatDetailLoading(false);
     }
@@ -244,7 +245,7 @@ export default function useChatConfigsPanelPage() {
       setChatLocked(null);
       await fetchChatList();
     } catch (error) {
-      setChatDetailError(error?.message || '保存失败');
+      setChatDetailError(mapUserFacingErrorMessage(error?.message, '保存失败'));
     } finally {
       setBusy(false);
     }
@@ -271,7 +272,7 @@ export default function useChatConfigsPanelPage() {
       await fetchChatList();
       await loadChatDetail(created.id);
     } catch (error) {
-      setChatDetailError(error?.message || '复制创建失败');
+      setChatDetailError(mapUserFacingErrorMessage(error?.message, '复制创建失败'));
     } finally {
       setBusy(false);
     }
@@ -294,7 +295,7 @@ export default function useChatConfigsPanelPage() {
       await loadChatDetail(chatSelected.id);
       setChatSaveStatus('已尝试清除解析绑定');
     } catch (error) {
-      setChatDetailError(error?.message || '清除失败');
+      setChatDetailError(mapUserFacingErrorMessage(error?.message, '清除失败'));
     } finally {
       setBusy(false);
     }
@@ -314,7 +315,7 @@ export default function useChatConfigsPanelPage() {
         }
         await fetchChatList();
       } catch (error) {
-        setChatError(error?.message || '删除失败');
+        setChatError(mapUserFacingErrorMessage(error?.message, '删除失败'));
       } finally {
         setBusy(false);
       }

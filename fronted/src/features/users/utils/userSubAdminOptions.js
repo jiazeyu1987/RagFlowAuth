@@ -35,17 +35,20 @@ export const buildSubAdminOptions = ({ users, companyId, excludeUserId = '' }) =
 export const buildUserManagementSubAdminOptions = ({
   users,
   createCompanyId,
+  createEmployeeUserId,
   policyCompanyId,
   policyUserId,
 }) => {
+  const normalizedCreateEmployeeUserId = String(createEmployeeUserId || '').trim();
   const normalizedCreateCompanyId = createCompanyId ? Number(createCompanyId) : null;
   const normalizedPolicyCompanyId = policyCompanyId ? Number(policyCompanyId) : null;
   const normalizedPolicyUserId = String(policyUserId || '');
+  const createCompanyFilter = normalizedCreateEmployeeUserId ? normalizedCreateCompanyId : null;
 
   return {
     subAdminOptions: buildSubAdminOptions({
       users,
-      companyId: normalizedCreateCompanyId,
+      companyId: createCompanyFilter,
     }),
     policySubAdminOptions: buildSubAdminOptions({
       users,

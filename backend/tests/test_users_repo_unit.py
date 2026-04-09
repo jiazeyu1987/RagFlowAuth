@@ -50,6 +50,10 @@ class _UserStore:
         self.calls.append(("get_by_user_id", user_id))
         return {"user_id": user_id}
 
+    def get_by_employee_user_id(self, employee_user_id):
+        self.calls.append(("get_by_employee_user_id", employee_user_id))
+        return {"employee_user_id": employee_user_id}
+
     def create_user(self, **kwargs):
         self.calls.append(("create_user", kwargs))
         return {"user_id": "u-created"}
@@ -80,6 +84,18 @@ class _OrgStructureManager:
     def get_department(self, department_id):
         self.calls.append(("get_department", department_id))
         return {"department_id": department_id}
+
+    def get_employee_by_user_id(self, employee_user_id):
+        self.calls.append(("get_employee_by_user_id", employee_user_id))
+        return {"employee_user_id": employee_user_id}
+
+    def list_departments_flat(self):
+        self.calls.append(("list_departments_flat", None))
+        return [
+            SimpleNamespace(department_id=11, company_id=1),
+            SimpleNamespace(department_id=12, company_id=1),
+            {"id": 21, "company_id": 2},
+        ]
 
 
 def _build_repo(
@@ -182,6 +198,7 @@ class UsersRepoUnitTest(unittest.TestCase):
         create_payload = {
             "username": "alice",
             "password": "Secret123",
+            "employee_user_id": "alice",
             "full_name": "Alice",
             "email": "alice@example.com",
             "manager_user_id": "u-sub",
@@ -234,6 +251,7 @@ class UsersRepoUnitTest(unittest.TestCase):
             ["user-a"],
         )
         self.assertEqual(repo.get_user("u-1"), {"user_id": "u-1"})
+        self.assertEqual(repo.get_user_by_employee_user_id("alice_emp"), {"employee_user_id": "alice_emp"})
         self.assertEqual(repo.create_user(**create_payload), {"user_id": "u-created"})
         self.assertEqual(repo.update_user(**update_payload), {"user_id": "u-2"})
         self.assertTrue(repo.delete_user("u-3"))
@@ -259,6 +277,7 @@ class UsersRepoUnitTest(unittest.TestCase):
                     },
                 ),
                 ("get_by_user_id", "u-1"),
+                ("get_by_employee_user_id", "alice_emp"),
                 ("create_user", create_payload),
                 ("update_user", update_payload),
                 ("delete_user", "u-3"),
@@ -273,9 +292,20 @@ class UsersRepoUnitTest(unittest.TestCase):
 
         self.assertEqual(repo.get_company(1), {"company_id": 1})
         self.assertEqual(repo.get_department(11), {"department_id": 11})
+        self.assertEqual(repo.get_employee_by_user_id("alice"), {"employee_user_id": "alice"})
+        self.assertEqual(repo.get_default_department_id_for_company(1), 11)
+        self.assertEqual(repo.get_default_department_id_for_company(2), 21)
+        self.assertIsNone(repo.get_default_department_id_for_company(3))
         self.assertEqual(
             org_structure_manager.calls,
-            [("get_company", 1), ("get_department", 11)],
+            [
+                ("get_company", 1),
+                ("get_department", 11),
+                ("get_employee_by_user_id", "alice"),
+                ("list_departments_flat", None),
+                ("list_departments_flat", None),
+                ("list_departments_flat", None),
+            ],
         )
 
 

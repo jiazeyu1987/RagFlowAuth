@@ -8,9 +8,9 @@ script = ""
 [[actions]]
 name = "运行"
 icon = "run"
-command = "start_ragflowauth.bat"
+command = "./start_ragflowauth.bat"
 
 [[actions]]
-name = "start_ragflowauth"
+name = "运维工具"
 icon = "run"
-command = "./start_ragflowauth.bat"
+command = "./运维工具.bat"

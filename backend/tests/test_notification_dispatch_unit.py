@@ -198,7 +198,7 @@ class TestNotificationDispatchUnit(unittest.TestCase):
                 config={"host": "smtp.example.com", "from_email": "noreply@example.com"},
             )
             service.upsert_channel(
-                channel_id="ding-main",
+                channel_id="dingtalk-main",
                 channel_type="dingtalk",
                 name="Main DingTalk",
                 enabled=True,
@@ -208,6 +208,9 @@ class TestNotificationDispatchUnit(unittest.TestCase):
                     "agent_id": "4432005762",
                     "recipient_map": {},
                 },
+            )
+            service.upsert_event_rules(
+                items=[{"event_type": "review_todo_approval", "enabled_channel_types": ["email", "dingtalk"]}]
             )
 
             with self.assertRaises(NotificationServiceError) as ctx:
@@ -236,7 +239,7 @@ class TestNotificationDispatchUnit(unittest.TestCase):
                 dingtalk_adapter=_NoopAdapter(),
             )
             service.upsert_channel(
-                channel_id="ding-main",
+                channel_id="dingtalk-main",
                 channel_type="dingtalk",
                 name="Main DingTalk",
                 enabled=True,
@@ -250,6 +253,9 @@ class TestNotificationDispatchUnit(unittest.TestCase):
                         "ding-target": {"full_name": "Target User", "company_id": 1, "department_id": 1},
                     },
                 },
+            )
+            service.upsert_event_rules(
+                items=[{"event_type": "review_todo_approval", "enabled_channel_types": ["in_app", "dingtalk"]}]
             )
 
             jobs = service.notify_event(
@@ -302,9 +308,7 @@ class TestNotificationDispatchUnit(unittest.TestCase):
             "channel_type": "dingtalk",
             "config": {
                 "recipient_map": {},
-                "recipient_directory": {
-                    "ding-user": {"full_name": "Ding User", "company_id": 1, "department_id": 1},
-                },
+                "recipient_directory": {},
             },
         }
 
@@ -320,6 +324,30 @@ class TestNotificationDispatchUnit(unittest.TestCase):
             ),
             "ding-user",
         )
+
+    def test_service_seeds_code_owned_dingtalk_channel_and_todo_rule(self):
+        td = make_temp_dir(prefix="ragflowauth_notification_code_owned_dingtalk")
+        try:
+            db_path = os.path.join(str(td), "auth.db")
+            ensure_schema(db_path)
+
+            store = NotificationStore(db_path=db_path)
+            service = NotificationService(
+                store=store,
+                email_adapter=_NoopAdapter(),
+                dingtalk_adapter=_NoopAdapter(),
+            )
+
+            channels = {item["channel_id"]: item for item in service.list_channels(enabled_only=False)}
+            self.assertIn("dingtalk-main", channels)
+            self.assertEqual(channels["dingtalk-main"]["channel_type"], "dingtalk")
+            self.assertTrue(channels["dingtalk-main"]["enabled"])
+
+            rule = store.get_event_rule("operation_approval_todo")
+            self.assertIsNotNone(rule)
+            self.assertEqual(rule["enabled_channel_types"], ["in_app", "dingtalk"])
+        finally:
+            cleanup_dir(td)
 
     def test_in_app_inbox_read_flow_and_audit_logs(self):
         td = make_temp_dir(prefix="ragflowauth_notification_in_app_inbox")
@@ -523,6 +551,6 @@ class TestNotificationDispatchUnit(unittest.TestCase):
                     recipients=[self._recipient()],
                     dedupe_key="review_todo_approval:doc-missing-channel",
                 )
-            self.assertEqual(str(ctx.exception), "notification_channel_not_configured:dingtalk")
+            self.assertEqual(str(ctx.exception), "notification_recipient_unresolved:dingtalk-main:user-a")
         finally:
             cleanup_dir(td)

@@ -9,6 +9,10 @@ export default function UserProfileFields({
   values,
   onChangeValues,
   afterFullName = null,
+  fullNameExtra = null,
+  fullNamePlaceholder = '',
+  onFullNameFocus,
+  onFullNameBlur,
   companies,
   departments,
   subAdminOptions,
@@ -17,6 +21,10 @@ export default function UserProfileFields({
   companyRequired = false,
   departmentRequired = false,
   managerRequired = false,
+  companyDisabled = false,
+  departmentDisabled = false,
+  fullNameReadOnly = false,
+  fullNameInputStyle = null,
   readonlyUserType = false,
   userTypeReadonlyLabel = '',
   showManager = true,
@@ -54,6 +62,7 @@ export default function UserProfileFields({
       companyPlaceholder={labels.companyPlaceholder}
       companyValue={values.company_id}
       companyRequired={companyRequired}
+      companyDisabled={companyDisabled}
       companyTestId={testIds.company}
       companies={companies}
       onChangeCompany={(event) =>
@@ -67,6 +76,7 @@ export default function UserProfileFields({
       departmentPlaceholder={labels.departmentPlaceholder}
       departmentValue={values.department_id}
       departmentRequired={departmentRequired}
+      departmentDisabled={departmentDisabled}
       departmentTestId={testIds.department}
       departments={visibleDepartments}
       onChangeDepartment={(event) => onChangeValues({ department_id: event.target.value })}
@@ -75,15 +85,24 @@ export default function UserProfileFields({
 
   return (
     <>
-      <div style={{ marginBottom: 16 }}>
+      <div style={{ marginBottom: 16, position: 'relative' }}>
         <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>{labels.fullName}</label>
         <input
           type="text"
           value={values.full_name || ''}
-          onChange={(event) => onChangeValues({ full_name: event.target.value })}
+          placeholder={fullNamePlaceholder}
+          readOnly={fullNameReadOnly}
+          onChange={
+            fullNameReadOnly
+              ? undefined
+              : (event) => onChangeValues({ full_name: event.target.value })
+          }
+          onFocus={onFullNameFocus}
+          onBlur={onFullNameBlur}
           data-testid={testIds.fullName}
-          style={inputStyle}
+          style={fullNameInputStyle || inputStyle}
         />
+        {fullNameExtra}
       </div>
 
       {afterFullName}

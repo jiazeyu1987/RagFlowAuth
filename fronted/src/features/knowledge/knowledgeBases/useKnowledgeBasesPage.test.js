@@ -115,4 +115,44 @@ describe('useKnowledgeBasesPage', () => {
 
     confirmSpy.mockRestore();
   });
+
+  it('uses managed root node as mount target for sub admins when creating knowledge bases', async () => {
+    useAuth.mockReturnValue({
+      canManageKbDirectory: () => true,
+      canManageKnowledgeTree: () => true,
+      isSubAdmin: () => true,
+      managedKbRootNodeId: 'node-subadmin-root',
+      managedKbRootPath: '/managed',
+    });
+    knowledgeApi.listKnowledgeDirectories.mockResolvedValue({
+      nodes: [{ id: 'node-subadmin-root', name: 'Managed', path: '/managed' }],
+      datasets: [{ id: 'ds-existing', name: 'Existing KB', node_id: 'node-subadmin-root' }],
+    });
+
+    const { result } = renderHook(() => useKnowledgeBasesPage());
+
+    await waitFor(() => {
+      expect(result.current.dirOptions).toEqual(
+        expect.arrayContaining([expect.objectContaining({ id: 'node-subadmin-root' })])
+      );
+    });
+    expect(result.current.dirOptions.find((option) => option.id === '')).toBeUndefined();
+
+    act(() => {
+      result.current.openCreateKb();
+      result.current.setCreateName('SubAdmin KB');
+    });
+    expect(result.current.createDirId).toBe('node-subadmin-root');
+
+    await act(async () => {
+      await result.current.createKb();
+    });
+
+    expect(knowledgeApi.createRagflowDataset).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: 'SubAdmin KB',
+        node_id: 'node-subadmin-root',
+      })
+    );
+  });
 });

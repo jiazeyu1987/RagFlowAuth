@@ -39,14 +39,20 @@ export default function useDownloadPageController({
     itemsErrorMessage: msg.itemsError,
   });
 
-  useEffect(() => {
-    history.loadHistoryKeywords();
-  }, [history.loadHistoryKeywords]);
+  const {
+    loadHistoryKeywords,
+    loadHistoryItems,
+    selectedHistoryKey,
+  } = history;
 
   useEffect(() => {
-    if (!history.selectedHistoryKey) return;
-    history.loadHistoryItems(history.selectedHistoryKey);
-  }, [history.loadHistoryItems, history.selectedHistoryKey]);
+    loadHistoryKeywords();
+  }, [loadHistoryKeywords]);
+
+  useEffect(() => {
+    if (!selectedHistoryKey) return;
+    loadHistoryItems(selectedHistoryKey);
+  }, [loadHistoryItems, selectedHistoryKey]);
 
   const currentSession = useDownloadCurrentSession({
     manager,
@@ -57,8 +63,8 @@ export default function useDownloadPageController({
     autoAnalyze: config.autoAnalyze,
     sources: config.sources,
     strictCompletionValidation,
-    loadHistoryKeywords: history.loadHistoryKeywords,
-    loadHistoryItems: history.loadHistoryItems,
+    loadHistoryKeywords,
+    loadHistoryItems,
   });
 
   const historyActions = useDownloadHistoryActions({
@@ -66,10 +72,10 @@ export default function useDownloadPageController({
     localKbRef,
     msg,
     sessionId: currentSession.sessionId,
-    selectedHistoryKey: history.selectedHistoryKey,
+    selectedHistoryKey,
     setSelectedHistoryKey: history.setSelectedHistoryKey,
-    loadHistoryKeywords: history.loadHistoryKeywords,
-    loadHistoryItems: history.loadHistoryItems,
+    loadHistoryKeywords,
+    loadHistoryItems,
     clearHistoryPayload: history.clearHistoryPayload,
     refreshSession: currentSession.refreshSession,
     setError: currentSession.setError,
@@ -103,7 +109,7 @@ export default function useDownloadPageController({
     historyKeywords: history.historyKeywords,
     historyLoading: history.historyLoading,
     historyError: history.historyError,
-    selectedHistoryKey: history.selectedHistoryKey,
+    selectedHistoryKey,
     historyPayload: history.historyPayload,
     historyItems: history.historyItems,
     historyItemsLoading: history.historyItemsLoading,

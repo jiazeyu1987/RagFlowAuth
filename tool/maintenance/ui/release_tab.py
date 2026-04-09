@@ -84,7 +84,7 @@ def _create_release_local_to_test_tab(app) -> None:
     button_frame.pack(fill=tk.X, padx=20, pady=(10, 10))
     ttk.Button(button_frame, text="刷新测试版本", command=app.refresh_release_test_versions).pack(side=tk.LEFT, padx=5)
     ttk.Button(button_frame, text="发布本机到测试", command=app.publish_local_to_test).pack(side=tk.LEFT, padx=5)
-    app.release_local_sync_data_var = tk.BooleanVar(value=False)
+    app.release_local_sync_data_var = tk.BooleanVar(value=True)
     ttk.Checkbutton(
         button_frame,
         text="发布后同步数据到测试（auth.db + RAGFlow volumes；覆盖测试数据）",

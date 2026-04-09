@@ -27,6 +27,7 @@ def build_user_from_row(
     row: Sequence[object],
     *,
     group_ids: Iterable[int] | None = None,
+    tool_ids: Iterable[str] | None = None,
 ) -> User:
     normalized_group_ids = normalize_legacy_group_ids(group_ids=group_ids)
     user = User(
@@ -59,6 +60,13 @@ def build_user_from_row(
     )
     user.group_ids = normalized_group_ids
     user.group_id = primary_group_id(normalized_group_ids)
+    user.tool_ids = sorted(
+        {
+            str(tool_id or "").strip()
+            for tool_id in (tool_ids or [])
+            if str(tool_id or "").strip()
+        }
+    )
     return user
 
 

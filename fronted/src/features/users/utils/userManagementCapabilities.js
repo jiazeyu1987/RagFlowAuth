@@ -17,5 +17,6 @@ export const buildUserManagementCapabilities = (user) => {
     canToggleUserStatus: isAdminUser,
     canDeleteUsers: isAdminUser,
     canAssignGroups: isSubAdminUser,
+    canAssignTools: isSubAdminUser,
   };
 };

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { auditApi } from './api';
 import { usersApi } from '../users/api';
 import { useAuth } from '../../hooks/useAuth';
+import { mapUserFacingErrorMessage } from '../../shared/errors/userFacingErrorMessages';
 import {
   LIST_LIMIT,
   collectKnowledgeBases,
@@ -39,7 +40,7 @@ export default function useDocumentAuditData() {
       setDeletions(deletionItems);
       setDownloads(downloadItems);
     } catch (requestError) {
-      setError(requestError?.message || '\u52a0\u8f7d\u6587\u6863\u5ba1\u8ba1\u8bb0\u5f55\u5931\u8d25');
+      setError(mapUserFacingErrorMessage(requestError?.message, '加载文档审计记录失败'));
     } finally {
       setLoading(false);
     }

@@ -1,4 +1,5 @@
 import { useCallback, useRef, useState } from 'react';
+import { mapUserFacingErrorMessage } from '../../shared/errors/userFacingErrorMessages';
 import { electronicSignatureApi } from '../electronicSignature/api';
 
 const SIGNATURE_CANCELLED = '__signature_cancelled__';
@@ -48,7 +49,7 @@ export function useSignaturePrompt() {
       });
     } catch (error) {
       setSignatureSubmitting(false);
-      setSignatureError(error?.message || '电子签名失败');
+      setSignatureError(mapUserFacingErrorMessage(error?.message, '电子签名失败'));
     }
   }, [resetPrompt]);
 

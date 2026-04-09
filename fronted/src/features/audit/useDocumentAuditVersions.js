@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react';
 import { auditApi } from './api';
 import { createVersionsDialogState } from './documentAuditHelpers';
+import { mapUserFacingErrorMessage } from '../../shared/errors/userFacingErrorMessages';
 
 export default function useDocumentAuditVersions() {
   const [versionsDialog, setVersionsDialog] = useState(createVersionsDialogState);
@@ -32,7 +33,7 @@ export default function useDocumentAuditVersions() {
       setVersionsDialog((previous) => ({
         ...previous,
         loading: false,
-        error: requestError?.message || '\u52a0\u8f7d\u7248\u672c\u5386\u53f2\u5931\u8d25',
+        error: mapUserFacingErrorMessage(requestError?.message, '加载版本历史失败'),
       }));
     }
   }, []);

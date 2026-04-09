@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useMemo } from 'react';
 import { useAuth } from '../../../hooks/useAuth';
 import {
   LOAD_KNOWLEDGE_DIRECTORIES_ERROR,
@@ -11,6 +11,7 @@ import { useUserKnowledgeDirectories } from './useUserKnowledgeDirectories';
 import { useUserManagementData } from './useUserManagementData';
 import { useUserPasswordReset } from './useUserPasswordReset';
 import { useUserGroupAssignment } from './useUserGroupAssignment';
+import { useUserToolAssignment } from './useUserToolAssignment';
 import { useUserPolicyManagement } from './useUserPolicyManagement';
 import { useUserStatusManagement } from './useUserStatusManagement';
 import { useUserCreateManagement } from './useUserCreateManagement';
@@ -20,10 +21,29 @@ import { useUserManagementActions } from './useUserManagementActions';
 import { buildUserManagementCapabilities } from '../utils/userManagementCapabilities';
 import { buildUserKnowledgeDirectoryModes } from '../utils/userKnowledgeDirectoryModes';
 import { buildUserManagementState } from '../utils/userManagementState';
+import {
+  TOOL_PERMISSION_IDS,
+  mapToolIdsToChecklistItems,
+  normalizeToolIds,
+} from '../utils/toolCatalog';
 
 export const useUserManagement = () => {
   const { can, user } = useAuth();
   const capabilities = buildUserManagementCapabilities(user);
+  const availableTools = useMemo(
+    () => mapToolIdsToChecklistItems(TOOL_PERMISSION_IDS),
+    []
+  );
+  const subAdminAssignableToolIds = useMemo(() => {
+    if (!capabilities.isSubAdminUser) {
+      return [];
+    }
+    return normalizeToolIds(user?.permissions?.accessible_tools);
+  }, [capabilities.isSubAdminUser, user?.permissions?.accessible_tools]);
+  const assignableTools = useMemo(
+    () => mapToolIdsToChecklistItems(subAdminAssignableToolIds),
+    [subAdminAssignableToolIds]
+  );
 
   const {
     allUsers,
@@ -50,6 +70,7 @@ export const useUserManagement = () => {
   });
 
   const createManagement = useUserCreateManagement({
+    companies,
     departments,
     fetchUsers,
     mapErrorMessage: mapUserManagementErrorMessage,
@@ -71,6 +92,7 @@ export const useUserManagement = () => {
   } = useUserManagementViewModel({
     allUsers,
     createCompanyId: createManagement.newUser.company_id,
+    createEmployeeUserId: createManagement.newUser.employee_user_id,
     policyCompanyId: policyManagement.policyForm.company_id,
     policyUserId: policyManagement.policyUser?.user_id,
   });
@@ -123,31 +145,14 @@ export const useUserManagement = () => {
     onSaved: fetchUsers,
   });
 
-  useEffect(() => {
-    if (
-      createManagement.showCreateModal
-      && String(createManagement.newUser.user_type || 'normal') === 'sub_admin'
-    ) {
-      fetchPermissionGroups();
-    }
-  }, [
-    createManagement.newUser.user_type,
-    createManagement.showCreateModal,
-    fetchPermissionGroups,
-  ]);
-
-  useEffect(() => {
-    if (
-      policyManagement.showPolicyModal
-      && String(policyManagement.policyForm.user_type || 'normal') === 'sub_admin'
-    ) {
-      fetchPermissionGroups();
-    }
-  }, [
-    fetchPermissionGroups,
-    policyManagement.policyForm.user_type,
-    policyManagement.showPolicyModal,
-  ]);
+  const toolAssignment = useUserToolAssignment({
+    actorRole: capabilities.actorRole,
+    actorUserId: capabilities.actorUserId,
+    availableToolIds: subAdminAssignableToolIds,
+    mapErrorMessage: mapUserManagementErrorMessage,
+    onError: setError,
+    onSaved: fetchUsers,
+  });
 
   const statusManagement = useUserStatusManagement({
     fetchUsers,
@@ -169,6 +174,8 @@ export const useUserManagement = () => {
       error,
       canManageUsers,
       availableGroups,
+      availableTools,
+      assignableTools,
       permissionGroupsLoading,
       permissionGroupsError,
       companies,
@@ -200,6 +207,7 @@ export const useUserManagement = () => {
     actions,
     passwordReset,
     groupAssignment,
+    toolAssignment,
     statusManagement,
     deletion,
   });

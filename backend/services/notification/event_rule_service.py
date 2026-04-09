@@ -99,7 +99,7 @@ class NotificationEventRuleService:
     def default_rule_channel_types(self) -> list[str]:
         enabled_channel_config = self.enabled_channel_config_by_type()
         items = ["in_app"]
-        for channel_type_name in ("email", "dingtalk"):
+        for channel_type_name in ("email",):
             if enabled_channel_config.get(channel_type_name):
                 items.append(channel_type_name)
         return normalize_channel_types(items)

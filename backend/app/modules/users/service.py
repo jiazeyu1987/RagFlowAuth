@@ -59,8 +59,13 @@ class UsersService:
     def get_user(self, *, user_id: str) -> UserResponse:
         return self._call_manager("get_user", user_id=user_id)
 
-    def update_user(self, *, user_id: str, user_data: UserUpdate) -> UserResponse:
-        return self._call_manager("update_user", user_id=user_id, user_data=user_data)
+    def update_user(self, *, user_id: str, user_data: UserUpdate, updated_by: str | None = None) -> UserResponse:
+        return self._call_manager(
+            "update_user",
+            user_id=user_id,
+            user_data=user_data,
+            updated_by=updated_by,
+        )
 
     def delete_user(self, *, user_id: str) -> None:
         self._call_manager("delete_user", user_id=user_id)

@@ -1,6 +1,10 @@
 import { nodeExistsInTree } from './userAccessPolicy';
-import { getValidAssignableGroupIds, isUserLoginDisabled } from './userManagementRules';
-import { getUserPermissionGroupIds } from './userPolicyForm';
+import {
+  getValidAssignableGroupIds,
+  getValidAssignableToolIds,
+  isUserLoginDisabled,
+} from './userManagementRules';
+import { getUserPermissionGroupIds, getUserToolIds } from './userPolicyForm';
 
 export const isManagedKbRootSelectionInvalid = ({
   policyUserType,
@@ -19,6 +23,14 @@ export const buildGroupAssignmentModalState = ({ targetUser, availableGroups }) 
   return {
     editingGroupUser: targetUser,
     selectedGroupIds: getValidAssignableGroupIds({ availableGroups, groupIds }),
+  };
+};
+
+export const buildToolAssignmentModalState = ({ targetUser, availableToolIds }) => {
+  const toolIds = getUserToolIds(targetUser);
+  return {
+    editingToolUser: targetUser,
+    selectedToolIds: getValidAssignableToolIds({ availableToolIds, toolIds }),
   };
 };
 

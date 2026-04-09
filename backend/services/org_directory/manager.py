@@ -54,6 +54,9 @@ class OrgStructureManager:
     def get_employee(self, employee_id: int) -> Employee | None:
         return self._store.get_employee(employee_id)
 
+    def get_employee_by_user_id(self, employee_user_id: str) -> Employee | None:
+        return self._store.get_employee_by_user_id(employee_user_id)
+
     def list_audit_logs(
         self,
         *,

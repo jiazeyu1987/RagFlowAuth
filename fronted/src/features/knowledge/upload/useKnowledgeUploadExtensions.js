@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 
 import { knowledgeUploadApi } from './api';
+import { mapUserFacingErrorMessage } from '../../../shared/errors/userFacingErrorMessages';
 import { normalizeExtension } from './utils';
 
 export default function useKnowledgeUploadExtensions({ canManageExtensions }) {
@@ -37,8 +38,10 @@ export default function useKnowledgeUploadExtensions({ canManageExtensions }) {
         setAllowedExtensions([]);
         setExtensionsMessage({
           type: 'error',
-          text:
-            requestError?.message || '无法加载可上传文件后缀，已回退到默认配置',
+          text: mapUserFacingErrorMessage(
+            requestError?.message,
+            '无法加载可上传文件后缀，已回退到默认配置'
+          ),
         });
       } finally {
         if (active) {
@@ -127,7 +130,7 @@ export default function useKnowledgeUploadExtensions({ canManageExtensions }) {
     } catch (requestError) {
       setExtensionsMessage({
         type: 'error',
-        text: requestError?.message || '保存文件后缀配置失败',
+        text: mapUserFacingErrorMessage(requestError?.message, '保存文件后缀配置失败'),
       });
     } finally {
       setSavingExtensions(false);

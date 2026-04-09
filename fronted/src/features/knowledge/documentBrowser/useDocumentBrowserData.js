@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { knowledgeApi } from '../api';
+import { mapUserFacingErrorMessage } from '../../../shared/errors/userFacingErrorMessages';
 import { documentBrowserApi } from './api';
 import { TEXT } from './constants';
 
@@ -45,7 +46,7 @@ export default function useDocumentBrowserData({ can, accessibleKbs, user }) {
         setError(nextDatasets.length ? null : TEXT.noPermission);
       } catch (requestError) {
         if (cancelled) return;
-        setError(requestError?.message || TEXT.loadKbFail);
+        setError(mapUserFacingErrorMessage(requestError?.message, TEXT.loadKbFail));
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -69,7 +70,7 @@ export default function useDocumentBrowserData({ can, accessibleKbs, user }) {
     } catch (requestError) {
       setDocumentErrors((previous) => ({
         ...previous,
-        [datasetName]: requestError?.message || TEXT.loadDocFail,
+        [datasetName]: mapUserFacingErrorMessage(requestError?.message, TEXT.loadDocFail),
       }));
       setDocuments((previous) => ({ ...previous, [datasetName]: [] }));
     }

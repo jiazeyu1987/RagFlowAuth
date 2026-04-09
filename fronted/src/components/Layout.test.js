@@ -99,6 +99,8 @@ describe('Layout permission group navigation visibility', () => {
       </MemoryRouter>
     );
 
+    expect(screen.getByTestId('layout-sidebar-title')).toHaveTextContent('\u77e5\u8bc6\u5e93\u7cfb\u7edf');
+    expect(screen.getByTestId('layout-sidebar-subtitle')).toHaveTextContent('sub-1');
     expect(screen.getByTestId('layout-user-name')).toHaveTextContent('Wang Xin');
     expect(screen.getByTestId('layout-user-role')).toHaveTextContent('\u5b50\u7ba1\u7406\u5458');
     expect(screen.getByTestId('layout-user-role')).not.toHaveTextContent('sub_admin');

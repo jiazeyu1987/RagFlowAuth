@@ -18,6 +18,7 @@ describe('buildUserManagementCapabilities', () => {
       canToggleUserStatus: true,
       canDeleteUsers: true,
       canAssignGroups: false,
+      canAssignTools: false,
     });
   });
 
@@ -38,6 +39,7 @@ describe('buildUserManagementCapabilities', () => {
       canToggleUserStatus: false,
       canDeleteUsers: false,
       canAssignGroups: true,
+      canAssignTools: true,
     });
   });
 
@@ -53,6 +55,7 @@ describe('buildUserManagementCapabilities', () => {
       canToggleUserStatus: false,
       canDeleteUsers: false,
       canAssignGroups: false,
+      canAssignTools: false,
     });
   });
 });

@@ -67,7 +67,7 @@ def resolve_recipient_address(*, channel: dict[str, Any], recipient: dict[str, s
         if value is not None:
             target = str(value or "").strip()
             return target or None
-        if employee_user_id and employee_user_id in recipient_directory:
+        if employee_user_id:
             return employee_user_id
         if user_id and user_id in recipient_directory:
             return user_id

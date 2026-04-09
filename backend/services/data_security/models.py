@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from pathlib import Path, PurePosixPath
 from typing import Any
 
 from backend.app.core.managed_paths import managed_data_root
+from backend.app.core.paths import repo_root
 
 
 LOCAL_BACKUP_TARGET_PATH = "/app/data/backups"
@@ -48,6 +49,28 @@ def resolve_runtime_managed_path(path_text: str | None) -> str | None:
         rel = pure.relative_to(PurePosixPath("/app/uploads"))
         return str((managed_data_root() / "uploads" / Path(*rel.parts)).resolve())
     return str(Path(str(path_text)))
+
+
+def resolve_runtime_compose_file_path(path_text: str | None) -> Path | None:
+    raw = str(path_text or "").strip()
+    text = _normalize_path_text(raw)
+    if not text:
+        return None
+    if _running_inside_container():
+        return Path(text if text.startswith("/") else raw)
+
+    native = Path(raw)
+    if native.is_absolute():
+        return native
+
+    if text.startswith("/"):
+        pure = PurePosixPath(text)
+        if text == "/app" or text.startswith("/app/"):
+            rel = pure.relative_to(PurePosixPath("/app"))
+            return (repo_root() / Path(*rel.parts)).resolve()
+        return Path(raw)
+
+    return (repo_root() / native).resolve()
 
 
 @dataclass(frozen=True)
@@ -112,6 +135,13 @@ class DataSecuritySettings:
         ):
             return replica_target
         return self.target_path()
+
+    def to_dict(self) -> dict[str, Any]:
+        data = asdict(self)
+        data["resolved_local_backup_target_path"] = self.local_backup_target_path()
+        data["resolved_target_path"] = self.target_path()
+        data["resolved_windows_target_path"] = self.windows_target_path()
+        return data
 
 
 @dataclass(frozen=True)

@@ -4,8 +4,6 @@ $root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $backendPort = 8001
 $frontendPort = 3001
 $openUrl = 'http://127.0.0.1:3001/chat'
-$backendHealthUrl = 'http://127.0.0.1:8001/health'
-$frontendHealthUrl = 'http://127.0.0.1:3001'
 
 function Get-PortPids {
     param([int]$Port)
@@ -34,40 +32,6 @@ function Stop-PortProcesses {
     }
 }
 
-function Wait-HttpReady {
-    param(
-        [string]$Url,
-        [int]$TimeoutSeconds
-    )
-    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
-    while ((Get-Date) -lt $deadline) {
-        try {
-            $resp = Invoke-WebRequest -Uri $Url -UseBasicParsing -TimeoutSec 3
-            if ($resp.StatusCode -ge 200 -and $resp.StatusCode -lt 500) {
-                return $true
-            }
-        } catch {
-        }
-        Start-Sleep -Seconds 1
-    }
-    return $false
-}
-
-function Wait-PortReady {
-    param(
-        [int]$Port,
-        [int]$TimeoutSeconds
-    )
-    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
-    while ((Get-Date) -lt $deadline) {
-        if ((Get-PortPids -Port $Port).Count -gt 0) {
-            return $true
-        }
-        Start-Sleep -Seconds 1
-    }
-    return $false
-}
-
 function Open-Url {
     param([string]$Url)
     try {
@@ -94,17 +58,6 @@ Start-Process -FilePath 'cmd.exe' -ArgumentList '/k', $backendCmd -WindowStyle N
 $frontendRunning = (Get-PortPids -Port $frontendPort).Count -gt 0
 if (-not $frontendRunning) {
     Start-Process -FilePath 'cmd.exe' -ArgumentList '/k', $frontendCmd -WindowStyle Normal | Out-Null
-}
-
-$backendReady = Wait-HttpReady -Url $backendHealthUrl -TimeoutSeconds 90
-$frontendReady = Wait-HttpReady -Url $frontendHealthUrl -TimeoutSeconds 120
-
-if (-not $backendReady) {
-    throw "Backend failed to become ready on $backendHealthUrl"
-}
-
-if (-not $frontendReady) {
-    throw "Frontend failed to become ready on $frontendHealthUrl"
 }
 
 Open-Url -Url $openUrl

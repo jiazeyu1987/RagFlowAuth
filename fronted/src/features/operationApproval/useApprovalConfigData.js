@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { mapUserFacingErrorMessage } from '../../shared/errors/userFacingErrorMessages';
 import operationApprovalApi from './api';
 import {
   USER_SEARCH_LIMIT,
@@ -71,7 +72,7 @@ export default function useApprovalConfigData() {
         return nextDrafts[0]?.operation_type || '';
       });
     } catch (requestError) {
-      setError(requestError?.message || '加载审批配置失败');
+      setError(mapUserFacingErrorMessage(requestError?.message, '加载审批配置失败'));
       setDrafts([]);
       setCurrentOperationType('');
     } finally {

@@ -17,11 +17,12 @@ from backend.app.modules.data_security.support import (
     _backup_pack_stats,
     _backup_run_error_status,
     _hydrate_job_package_hash,
+    _parse_real_restore_request,
     _parse_restore_drill_request,
     _request_audit_fields,
     _settings_response,
 )
-from backend.services.data_security import RestoreDrillExecutionService
+from backend.services.data_security import RealRestoreExecutionService, RestoreDrillExecutionService
 
 router = APIRouter()
 
@@ -242,6 +243,64 @@ def create_restore_drill(
         },
     )
     return drill.as_dict()
+
+
+@router.post("/admin/data-security/restore/run")
+def run_real_restore(
+    payload: AdminOnly,
+    request: Request,
+    body: dict[str, Any] | None = None,
+    deps: AppDependencies = Depends(get_deps),
+) -> dict[str, Any]:
+    actor_user = deps.user_store.get_by_user_id(payload.sub)
+    if not actor_user:
+        raise HTTPException(status_code=401, detail="actor_user_not_found")
+    assert_user_training_for_action(
+        deps=deps,
+        user=actor_user,
+        controlled_action="restore_drill_execute",
+    )
+    try:
+        request_data = _parse_real_restore_request(body)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    try:
+        result = RealRestoreExecutionService(deps.data_security_store).execute_restore(
+            job_id=request_data.job_id,
+            backup_path=request_data.backup_path,
+            backup_hash=request_data.backup_hash,
+            change_reason=request_data.change_reason,
+            confirmation_text=request_data.confirmation_text,
+            executed_by=payload.sub,
+            executed_at_ms=request_data.executed_at_ms,
+        )
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="job_not_found") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+    _audit_data_security_event(
+        deps=deps,
+        request=request,
+        actor_user_id=payload.sub,
+        action="backup_restore_execute",
+        resource_type="backup_job",
+        resource_id=str(result.job_id),
+        event_type="update",
+        before=None,
+        after=result.as_dict(),
+        reason=request_data.change_reason,
+        meta={
+            "job_id": result.job_id,
+            "hash_match": result.hash_match,
+            "compare_match": result.compare_match,
+            "live_auth_db_path": result.live_auth_db_path,
+        },
+    )
+    return result.as_dict()
 
 
 @router.get("/admin/data-security/restore-drills")

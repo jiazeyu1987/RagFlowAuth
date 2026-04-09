@@ -21,6 +21,7 @@ describe('useUserManagementViewModel', () => {
       useUserManagementViewModel({
         allUsers: users,
         createCompanyId: '1',
+        createEmployeeUserId: 'emp-001',
         policyCompanyId: '1',
         policyUserId: 'sub-1',
       })
@@ -43,6 +44,7 @@ describe('useUserManagementViewModel', () => {
       useUserManagementViewModel({
         allUsers: users,
         createCompanyId: '',
+        createEmployeeUserId: '',
         policyCompanyId: '',
         policyUserId: '',
       })
@@ -68,5 +70,20 @@ describe('useUserManagementViewModel', () => {
       created_from: '',
       created_to: '',
     });
+  });
+
+  it('shows all active sub-admins before employee binding is selected', () => {
+    const { result } = renderHook(() =>
+      useUserManagementViewModel({
+        allUsers: users,
+        createCompanyId: '1',
+        createEmployeeUserId: '',
+        policyCompanyId: '',
+        policyUserId: '',
+      })
+    );
+
+    expect(result.current.subAdminOptions).toHaveLength(2);
+    expect(result.current.subAdminOptions.map((item) => item.value)).toEqual(['sub-1', 'sub-2']);
   });
 });

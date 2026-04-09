@@ -20,6 +20,7 @@ from backend.services.electronic_signature.service import AuthorizedSignatureCon
 
 from scripts.bootstrap_real_test_env import (
     EnvUserSpec,
+    _ensure_bootstrap_employee_profile,
     _upsert_user,
     bootstrap_real_test_env,
     parse_args as parse_base_args,
@@ -28,6 +29,16 @@ from scripts.bootstrap_real_test_env import (
 
 DOC_COMPANY_ADMIN_USERNAME = "doc_company_admin"
 DOC_UNTRAINED_REVIEWER_USERNAME = "doc_untrained_reviewer"
+DOC_NOTIFICATION_TARGET_USERNAME = "jiazeyu"
+DOC_NOTIFICATION_TARGET_FULL_NAME = "贾泽宇"
+DOC_LOGIN_USERNAME = "doc_login_user"
+DOC_LOGIN_FULL_NAME = "Doc Login User"
+DOC_TOOLS_EMPTY_USERNAME = "doc_tools_empty_user"
+DOC_TOOLS_EMPTY_FULL_NAME = "Doc Tools Empty User"
+DOC_USER_MANAGEMENT_USERNAME = "doc_user_management_user"
+DOC_USER_MANAGEMENT_FULL_NAME = "Doc User Management User"
+DOC_PASSWORD_CHANGE_USERNAME = "doc_password_change_user"
+DOC_PASSWORD_CHANGE_FULL_NAME = "Doc Password Change User"
 
 GLOBAL_CLEAR_TABLES = (
     "operation_approval_events",
@@ -36,6 +47,8 @@ GLOBAL_CLEAR_TABLES = (
     "operation_approval_request_steps",
     "operation_approval_requests",
     "operation_approval_legacy_migrations",
+    "notification_delivery_logs",
+    "notification_jobs",
 )
 
 TENANT_CLEAR_TABLES = (
@@ -184,11 +197,21 @@ def _seed_document_audit(tenant_deps: Any, *, repo_root: Path, company_admin: An
         status="pending",
         effective_status="pending",
     )
-    old_doc, current_doc = kb_store.apply_version_replacement(
+    replacement_result = kb_store.apply_version_replacement(
         old_doc_id=str(old_doc.doc_id),
         new_doc_id=str(current_doc.doc_id),
         effective_status="pending",
     )
+    if isinstance(replacement_result, dict):
+        old_doc = replacement_result.get("old_doc") or replacement_result.get("old")
+        current_doc = replacement_result.get("new_doc") or replacement_result.get("new")
+    elif isinstance(replacement_result, (list, tuple)):
+        if len(replacement_result) < 2:
+            raise RuntimeError("doc_seed_version_replace_invalid_return")
+        old_doc = replacement_result[0]
+        current_doc = replacement_result[1]
+    else:
+        raise RuntimeError("doc_seed_version_replace_invalid_return")
     if old_doc is None or current_doc is None:
         raise RuntimeError("doc_seed_version_replace_failed")
 
@@ -492,63 +515,76 @@ def _seed_notifications(
     operator_user: Any,
     reviewer_user: Any,
     approval_requests: dict[str, Any],
+    seed_configuration: bool = True,
 ) -> dict[str, Any]:
     manager = tenant_deps.notification_manager
     store = manager._store
+    dedupe_suffix = uuid4().hex
 
-    manager.upsert_channel(
-        channel_id="email-main",
-        channel_type="email",
-        name="邮件通知",
-        enabled=True,
-        config={
-            "host": "smtp.example.test",
-            "port": 465,
-            "username": "doc_notify",
-            "password": "doc-password",
-            "use_tls": True,
-            "from_email": "doc@example.test",
-        },
-    )
-    manager.upsert_channel(
-        channel_id="dingtalk-main",
-        channel_type="dingtalk",
-        name="钉钉工作通知",
-        enabled=True,
-        config={
-            "app_key": "doc-app-key",
-            "app_secret": "doc-app-secret",
-            "agent_id": "10001",
-            "recipient_map": {
-                str(operator_user.user_id): "operator-ding-user",
-                str(operator_user.username): "operator-ding-user",
-                str(reviewer_user.user_id): "reviewer-ding-user",
-                str(reviewer_user.username): "reviewer-ding-user",
+    if seed_configuration:
+        manager.upsert_channel(
+            channel_id="email-main",
+            channel_type="email",
+            name="邮件通知",
+            enabled=True,
+            config={
+                "host": "smtp.example.test",
+                "port": 465,
+                "username": "doc_notify",
+                "password": "doc-password",
+                "use_tls": True,
+                "from_email": "doc@example.test",
             },
-            "api_base": "https://api.dingtalk.com",
-            "oapi_base": "https://oapi.dingtalk.com",
-            "timeout_seconds": 30,
-        },
-    )
-    manager.upsert_channel(
-        channel_id="inapp-main",
-        channel_type="in_app",
-        name="站内信",
-        enabled=True,
-        config={},
-    )
-    manager.upsert_event_rules(
-        items=[
-            {
-                "event_type": "operation_approval_todo",
-                "enabled_channel_types": ["email", "in_app"],
+        )
+        manager.upsert_channel(
+            channel_id="dingtalk-main",
+            channel_type="dingtalk",
+            name="钉钉工作通知",
+            enabled=True,
+            config={
+                "app_key": "doc-app-key",
+                "app_secret": "doc-app-secret",
+                "agent_id": "10001",
+                "recipient_map": {
+                    str(operator_user.user_id): "operator-ding-user",
+                    str(operator_user.username): "operator-ding-user",
+                    str(reviewer_user.user_id): "reviewer-ding-user",
+                    str(reviewer_user.username): "reviewer-ding-user",
+                },
+                "api_base": "https://api.dingtalk.com",
+                "oapi_base": "https://oapi.dingtalk.com",
+                "timeout_seconds": 30,
             },
-            {
-                "event_type": "review_todo_approval",
-                "enabled_channel_types": ["in_app"],
-            },
-        ]
-    )
+        )
+        manager.upsert_channel(
+            channel_id="inapp-main",
+            channel_type="in_app",
+            name="站内信",
+            enabled=True,
+            config={},
+        )
+        manager.upsert_event_rules(
+            items=[
+                {
+                    "event_type": "operation_approval_todo",
+                    "enabled_channel_types": ["email", "in_app"],
+                },
+                {
+                    "event_type": "review_todo_approval",
+                    "enabled_channel_types": ["in_app"],
+                },
+            ]
+        )
+    else:
+        existing_channel = store.get_channel("inapp-main")
+        if existing_channel is None or not bool(existing_channel.get("enabled")):
+            manager.upsert_channel(
+                channel_id="inapp-main",
+                channel_type="in_app",
+                name="站内信",
+                enabled=True,
+                config={},
+            )
 
     history_payload_base = {
         "link_path": f"/approvals?request_id={approval_requests['unit']['approve_request_id']}",
@@ -562,7 +598,7 @@ def _seed_notifications(
         recipient_user_id=str(reviewer_user.user_id),
         recipient_username=str(reviewer_user.username),
         recipient_address=str(reviewer_user.user_id),
-        dedupe_key="doc-history-queued",
+        dedupe_key=f"doc-history-queued-{dedupe_suffix}",
         max_attempts=3,
     )
     store.add_delivery_log(job_id=int(queued_job["job_id"]), channel_id="inapp-main", status="queued")
@@ -574,7 +610,7 @@ def _seed_notifications(
         recipient_user_id=str(reviewer_user.user_id),
         recipient_username=str(reviewer_user.username),
         recipient_address=str(reviewer_user.user_id),
-        dedupe_key="doc-history-sent",
+        dedupe_key=f"doc-history-sent-{dedupe_suffix}",
         max_attempts=3,
     )
     store.add_delivery_log(job_id=int(sent_job["job_id"]), channel_id="inapp-main", status="queued")
@@ -592,7 +628,7 @@ def _seed_notifications(
         recipient_user_id=str(operator_user.user_id),
         recipient_username=str(operator_user.username),
         recipient_address=str(operator_user.user_id),
-        dedupe_key="doc-history-failed",
+        dedupe_key=f"doc-history-failed-{dedupe_suffix}",
         max_attempts=1,
     )
     store.add_delivery_log(job_id=int(failed_job["job_id"]), channel_id="inapp-main", status="queued")
@@ -620,7 +656,7 @@ def _seed_notifications(
         recipient_user_id=str(operator_user.user_id),
         recipient_username=str(operator_user.username),
         recipient_address=str(operator_user.user_id),
-        dedupe_key="doc-inbox-unread-1",
+        dedupe_key=f"doc-inbox-unread-1-{dedupe_suffix}",
         max_attempts=3,
     )
     store.add_delivery_log(job_id=int(inbox_unread["job_id"]), channel_id="inapp-main", status="queued")
@@ -639,7 +675,7 @@ def _seed_notifications(
         recipient_user_id=str(operator_user.user_id),
         recipient_username=str(operator_user.username),
         recipient_address=str(operator_user.user_id),
-        dedupe_key="doc-inbox-read-1",
+        dedupe_key=f"doc-inbox-read-1-{dedupe_suffix}",
         max_attempts=3,
     )
     store.add_delivery_log(job_id=int(inbox_read["job_id"]), channel_id="inapp-main", status="queued")
@@ -663,7 +699,7 @@ def _seed_notifications(
         recipient_user_id=str(operator_user.user_id),
         recipient_username=str(operator_user.username),
         recipient_address=str(operator_user.user_id),
-        dedupe_key="doc-inbox-unread-2",
+        dedupe_key=f"doc-inbox-unread-2-{dedupe_suffix}",
         max_attempts=3,
     )
     store.add_delivery_log(job_id=int(inbox_unread_2["job_id"]), channel_id="inapp-main", status="queued")
@@ -702,12 +738,72 @@ def bootstrap_doc_test_env(config) -> dict[str, Any]:
     base_users = base_summary["users"]
     company_id = int(base_summary["org"]["company"]["id"])
     department_id = base_summary["org"]["department"]["id"]
+    if department_id is None:
+        raise RuntimeError("doc_bootstrap_department_required")
+    department_id = int(department_id)
     reviewer_group_id = int(base_summary["groups"]["reviewer"]["id"])
     operator_user = _require_user(global_deps, base_users["operator"]["username"])
     reviewer_user = _require_user(global_deps, base_users["reviewer"]["username"])
     viewer_user = _require_user(global_deps, base_users["viewer"]["username"])
     sub_admin_user = _require_user(global_deps, base_users["sub_admin"]["username"])
     admin_user = _require_user(global_deps, base_users["admin"]["username"])
+
+    _ensure_bootstrap_employee_profile(
+        db_path=global_db_path,
+        employee_user_id=DOC_COMPANY_ADMIN_USERNAME,
+        full_name="Doc Company Admin",
+        email=f"{DOC_COMPANY_ADMIN_USERNAME}@example.test",
+        company_id=company_id,
+        department_id=department_id,
+    )
+    _ensure_bootstrap_employee_profile(
+        db_path=global_db_path,
+        employee_user_id=DOC_UNTRAINED_REVIEWER_USERNAME,
+        full_name="Doc Untrained Reviewer",
+        email=f"{DOC_UNTRAINED_REVIEWER_USERNAME}@example.test",
+        company_id=company_id,
+        department_id=department_id,
+    )
+    _ensure_bootstrap_employee_profile(
+        db_path=global_db_path,
+        employee_user_id=DOC_NOTIFICATION_TARGET_USERNAME,
+        full_name=DOC_NOTIFICATION_TARGET_FULL_NAME,
+        email=f"{DOC_NOTIFICATION_TARGET_USERNAME}@example.test",
+        company_id=company_id,
+        department_id=department_id,
+    )
+    _ensure_bootstrap_employee_profile(
+        db_path=global_db_path,
+        employee_user_id=DOC_LOGIN_USERNAME,
+        full_name=DOC_LOGIN_FULL_NAME,
+        email=f"{DOC_LOGIN_USERNAME}@example.test",
+        company_id=company_id,
+        department_id=department_id,
+    )
+    _ensure_bootstrap_employee_profile(
+        db_path=global_db_path,
+        employee_user_id=DOC_TOOLS_EMPTY_USERNAME,
+        full_name=DOC_TOOLS_EMPTY_FULL_NAME,
+        email=f"{DOC_TOOLS_EMPTY_USERNAME}@example.test",
+        company_id=company_id,
+        department_id=department_id,
+    )
+    _ensure_bootstrap_employee_profile(
+        db_path=global_db_path,
+        employee_user_id=DOC_USER_MANAGEMENT_USERNAME,
+        full_name=DOC_USER_MANAGEMENT_FULL_NAME,
+        email=f"{DOC_USER_MANAGEMENT_USERNAME}@example.test",
+        company_id=company_id,
+        department_id=department_id,
+    )
+    _ensure_bootstrap_employee_profile(
+        db_path=global_db_path,
+        employee_user_id=DOC_PASSWORD_CHANGE_USERNAME,
+        full_name=DOC_PASSWORD_CHANGE_FULL_NAME,
+        email=f"{DOC_PASSWORD_CHANGE_USERNAME}@example.test",
+        company_id=company_id,
+        department_id=department_id,
+    )
 
     company_admin = _upsert_user(
         users_service=users_service,
@@ -779,11 +875,18 @@ def bootstrap_doc_test_env(config) -> dict[str, Any]:
         company_admin=company_admin,
         untrained_reviewer=untrained_reviewer,
     )
-    notification_fixtures = _seed_notifications(
+    tenant_notification_fixtures = _seed_notifications(
         tenant_deps,
         operator_user=operator_user,
         reviewer_user=reviewer_user,
         approval_requests=approval_fixtures,
+    )
+    global_notification_fixtures = _seed_notifications(
+        global_deps,
+        operator_user=operator_user,
+        reviewer_user=reviewer_user,
+        approval_requests=approval_fixtures,
+        seed_configuration=False,
     )
 
     summary = dict(base_summary)
@@ -799,6 +902,14 @@ def bootstrap_doc_test_env(config) -> dict[str, Any]:
             "user_id": str(untrained_reviewer.user_id),
             "role": str(untrained_reviewer.role),
         },
+        "user_management_target": {
+            "username": DOC_USER_MANAGEMENT_USERNAME,
+            "full_name": DOC_USER_MANAGEMENT_FULL_NAME,
+        },
+        "password_change_target": {
+            "username": DOC_PASSWORD_CHANGE_USERNAME,
+            "full_name": DOC_PASSWORD_CHANGE_FULL_NAME,
+        },
     }
     summary["doc_fixtures"] = {
         "training": {
@@ -812,7 +923,10 @@ def bootstrap_doc_test_env(config) -> dict[str, Any]:
         },
         "documents": document_fixtures,
         "approvals": approval_fixtures,
-        "notifications": notification_fixtures,
+        "notifications": {
+            "history": dict(global_notification_fixtures.get("history") or {}),
+            "inbox": dict(tenant_notification_fixtures.get("inbox") or {}),
+        },
     }
     return summary
 

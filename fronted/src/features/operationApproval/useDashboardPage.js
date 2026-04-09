@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import operationApprovalApi from './api';
 import { useAuth } from '../../hooks/useAuth';
+import { mapUserFacingErrorMessage } from '../../shared/errors/userFacingErrorMessages';
 
 const MOBILE_BREAKPOINT = 768;
 
@@ -57,7 +58,7 @@ export default function useDashboardPage() {
         });
       } catch (requestError) {
         if (cancelled) return;
-        setStatsError(requestError?.message || '加载审批统计失败');
+        setStatsError(mapUserFacingErrorMessage(requestError?.message, '加载审批统计失败'));
       } finally {
         if (!cancelled) {
           setLoading(false);

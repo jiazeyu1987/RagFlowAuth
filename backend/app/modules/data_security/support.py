@@ -18,6 +18,7 @@ from backend.services.data_security.docker_utils import (
     read_compose_project_name,
     resolve_backend_helper_image,
 )
+from backend.services.data_security.models import resolve_runtime_compose_file_path
 
 
 @dataclass(frozen=True)
@@ -29,6 +30,16 @@ class RestoreDrillRequestData:
     executed_at_ms: int
     verification_notes: str | None
     reason: str
+
+
+@dataclass(frozen=True)
+class RealRestoreRequestData:
+    job_id: int
+    backup_path: str
+    backup_hash: str
+    change_reason: str
+    confirmation_text: str
+    executed_at_ms: int
 
 
 def _norm_path(value: str) -> str:
@@ -154,9 +165,9 @@ def _assert_backup_prerequisites(deps: AppDependencies) -> None:
     compose_path = str(current_settings.ragflow_compose_path or "").strip()
     if not compose_path:
         raise RuntimeError("ragflow_compose_path_required")
-    compose_file = Path(compose_path)
-    if not compose_file.is_absolute():
-        compose_file = repo_root() / compose_file
+    compose_file = resolve_runtime_compose_file_path(compose_path)
+    if compose_file is None:
+        raise RuntimeError("ragflow_compose_path_required")
     if not compose_file.exists():
         raise RuntimeError(f"ragflow_compose_file_not_found:{compose_file}")
 
@@ -269,4 +280,42 @@ def _parse_restore_drill_request(body: dict[str, Any] | None) -> RestoreDrillReq
         executed_at_ms=executed_at_ms,
         verification_notes=verification_notes,
         reason=str(data.get("reason") or "manual_restore_drill"),
+    )
+
+
+def _parse_real_restore_request(body: dict[str, Any] | None) -> RealRestoreRequestData:
+    data = body or {}
+
+    try:
+        job_id = int(data.get("job_id"))
+    except Exception as exc:
+        raise ValueError("invalid_job_id") from exc
+
+    backup_path = str(data.get("backup_path") or "").strip()
+    backup_hash = str(data.get("backup_hash") or "").strip()
+    change_reason = str(data.get("change_reason") or "").strip()
+    confirmation_text = str(data.get("confirmation_text") or "").strip()
+
+    if not backup_path:
+        raise ValueError("backup_path_required")
+    if not backup_hash:
+        raise ValueError("backup_hash_required")
+    if not change_reason:
+        raise ValueError("change_reason_required")
+    if not confirmation_text:
+        raise ValueError("restore_confirmation_text_required")
+
+    executed_at_raw = data.get("executed_at_ms")
+    try:
+        executed_at_ms = int(time.time() * 1000) if executed_at_raw is None else int(executed_at_raw)
+    except Exception as exc:
+        raise ValueError("invalid_executed_at_ms") from exc
+
+    return RealRestoreRequestData(
+        job_id=job_id,
+        backup_path=backup_path,
+        backup_hash=backup_hash,
+        change_reason=change_reason,
+        confirmation_text=confirmation_text,
+        executed_at_ms=executed_at_ms,
     )

@@ -65,6 +65,19 @@ function HookHarness() {
       <button type="button" data-testid="set-department" onClick={() => hook.setNewUserField('department_id', '11')}>
         set-department
       </button>
+      <button
+        type="button"
+        data-testid="set-employee-binding"
+        onClick={() => {
+          hook.setNewUserField('username', 'emp-001');
+          hook.setNewUserField('employee_user_id', 'emp-001');
+          hook.setNewUserField('full_name', 'Alice');
+          hook.setNewUserField('company_id', '1');
+          hook.setNewUserField('department_id', '11');
+        }}
+      >
+        set-employee-binding
+      </button>
       <button type="button" data-testid="set-create-root-node" onClick={() => hook.setNewUserField('managed_kb_root_node_id', 'node-1')}>
         set-create-root-node
       </button>
@@ -73,6 +86,13 @@ function HookHarness() {
       </button>
       <button type="button" data-testid="select-create-group-7" onClick={() => hook.toggleNewUserGroup(7, true)}>
         select-create-group-7
+      </button>
+      <button
+        type="button"
+        data-testid="select-create-tool-paper"
+        onClick={() => hook.toggleNewUserTool('paper_download', true)}
+      >
+        select-create-tool-paper
       </button>
       <button type="button" data-testid="submit-create" onClick={() => hook.handleCreateUser({ preventDefault() {} })}>
         submit-create
@@ -115,6 +135,7 @@ function HookHarness() {
             company_id: 1,
             department_id: 11,
             group_ids: [7],
+            tool_ids: ['paper_download'],
             managed_kb_root_node_id: 'node-1',
             managed_kb_root_path: null,
             max_login_sessions: 3,
@@ -161,6 +182,13 @@ function HookHarness() {
       </button>
       <button
         type="button"
+        data-testid="select-policy-tool-paper"
+        onClick={() => hook.handleTogglePolicyTool('paper_download', true)}
+      >
+        select-policy-tool-paper
+      </button>
+      <button
+        type="button"
         data-testid="assign-owned-user"
         onClick={() =>
           hook.handleAssignGroup({ user_id: 'u-owned', role: 'viewer', manager_user_id: 'sub-actor', group_ids: [7] })
@@ -186,8 +214,39 @@ function HookHarness() {
       >
         assign-owned-user-stale-groups
       </button>
+      <button
+        type="button"
+        data-testid="assign-owned-user-tools"
+        onClick={() =>
+          hook.handleAssignTool({
+            user_id: 'u-owned-tools',
+            role: 'viewer',
+            manager_user_id: 'sub-actor',
+            tool_ids: ['paper_download', 'drug_admin', 'nmpa'],
+          })
+        }
+      >
+        assign-owned-user-tools
+      </button>
+      <button
+        type="button"
+        data-testid="assign-other-user-tools"
+        onClick={() =>
+          hook.handleAssignTool({
+            user_id: 'u-other-tools',
+            role: 'viewer',
+            manager_user_id: 'someone-else',
+            tool_ids: ['paper_download'],
+          })
+        }
+      >
+        assign-other-user-tools
+      </button>
       <button type="button" data-testid="save-group" onClick={hook.handleSaveGroup}>
         save-group
+      </button>
+      <button type="button" data-testid="save-tool" onClick={hook.handleSaveTool}>
+        save-tool
       </button>
       <button
         type="button"
@@ -274,9 +333,12 @@ function HookHarness() {
       <div data-testid="org-error">{hook.orgDirectoryError || ''}</div>
       <div data-testid="kb-root-invalid">{hook.managedKbRootInvalid ? 'yes' : 'no'}</div>
       <div data-testid="assign-groups-flag">{hook.canAssignGroups ? 'yes' : 'no'}</div>
+      <div data-testid="assign-tools-flag">{hook.canAssignTools ? 'yes' : 'no'}</div>
       <div data-testid="selected-group-ids">{hook.selectedGroupIds.join(',')}</div>
+      <div data-testid="selected-tool-ids">{hook.selectedToolIds.join(',')}</div>
       <div data-testid="reset-passwords-flag">{hook.canResetPasswords ? 'yes' : 'no'}</div>
       <div data-testid="show-group-modal">{hook.showGroupModal ? 'yes' : 'no'}</div>
+      <div data-testid="show-tool-modal">{hook.showToolModal ? 'yes' : 'no'}</div>
       <div data-testid="show-reset-password-modal">{hook.showResetPasswordModal ? 'yes' : 'no'}</div>
       <div data-testid="show-disable-user-modal">{hook.showDisableUserModal ? 'yes' : 'no'}</div>
       <div data-testid="disable-user-error">{hook.disableUserError || ''}</div>
@@ -288,7 +350,21 @@ describe('useUserManagement user type payloads', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     useAuth.mockReturnValue({
-      user: { role: 'admin', user_id: 'admin-1' },
+      user: {
+        role: 'admin',
+        user_id: 'admin-1',
+        permissions: {
+          accessible_tools: [
+            'paper_download',
+            'patent_download',
+            'package_drawing',
+            'nhsa_code_search',
+            'shanghai_tax',
+            'drug_admin',
+            'nmpa',
+          ],
+        },
+      },
       can: jest.fn(() => true),
     });
     usersApi.list.mockResolvedValue([
@@ -316,8 +392,7 @@ describe('useUserManagement user type payloads', () => {
 
     await waitFor(() => expect(usersApi.list).toHaveBeenCalled());
     await user.click(screen.getByTestId('open-create'));
-    await user.click(screen.getByTestId('set-company'));
-    await user.click(screen.getByTestId('set-department'));
+    await user.click(screen.getByTestId('set-employee-binding'));
     await user.click(screen.getByTestId('submit-create'));
 
     await waitFor(() => {
@@ -332,8 +407,7 @@ describe('useUserManagement user type payloads', () => {
 
     await waitFor(() => expect(usersApi.list).toHaveBeenCalled());
     await user.click(screen.getByTestId('open-create'));
-    await user.click(screen.getByTestId('set-company'));
-    await user.click(screen.getByTestId('set-department'));
+    await user.click(screen.getByTestId('set-employee-binding'));
     await user.click(screen.getByTestId('set-manager'));
     await user.click(screen.getByTestId('submit-create'));
 
@@ -354,8 +428,7 @@ describe('useUserManagement user type payloads', () => {
 
     await waitFor(() => expect(usersApi.list).toHaveBeenCalled());
     await user.click(screen.getByTestId('open-create'));
-    await user.click(screen.getByTestId('set-company'));
-    await user.click(screen.getByTestId('set-department'));
+    await user.click(screen.getByTestId('set-employee-binding'));
     await user.click(screen.getByTestId('set-manager'));
     await user.click(screen.getByTestId('set-type-sub-admin'));
     await user.click(screen.getByTestId('submit-create'));
@@ -366,16 +439,15 @@ describe('useUserManagement user type payloads', () => {
     expect(usersApi.create).not.toHaveBeenCalled();
   });
 
-  it('sub admin create payload keeps selected permission groups', async () => {
+  it('sub admin create payload keeps selected tool permissions', async () => {
     const user = userEvent.setup();
     render(<HookHarness />);
 
     await waitFor(() => expect(usersApi.list).toHaveBeenCalled());
     await user.click(screen.getByTestId('open-create'));
-    await user.click(screen.getByTestId('set-company'));
-    await user.click(screen.getByTestId('set-department'));
+    await user.click(screen.getByTestId('set-employee-binding'));
     await user.click(screen.getByTestId('set-type-sub-admin'));
-    await user.click(screen.getByTestId('select-create-group-7'));
+    await user.click(screen.getByTestId('select-create-tool-paper'));
     await user.click(screen.getByTestId('set-create-root-node'));
     await user.click(screen.getByTestId('submit-create'));
 
@@ -383,7 +455,7 @@ describe('useUserManagement user type payloads', () => {
     expect(usersApi.create).toHaveBeenCalledWith(
       expect.objectContaining({
         role: 'sub_admin',
-        group_ids: [7],
+        tool_ids: ['paper_download'],
       })
     );
   });
@@ -424,7 +496,7 @@ describe('useUserManagement user type payloads', () => {
     );
   });
 
-  it('editing sub admin keeps selected permission groups', async () => {
+  it('editing sub admin keeps selected tool permissions', async () => {
     const user = userEvent.setup();
     render(<HookHarness />);
 
@@ -437,7 +509,7 @@ describe('useUserManagement user type payloads', () => {
       'u-2',
       expect.objectContaining({
         role: 'sub_admin',
-        group_ids: [7],
+        tool_ids: ['paper_download'],
       })
     );
   });
@@ -461,7 +533,13 @@ describe('useUserManagement user type payloads', () => {
 
   it('only sub admin can assign groups and only for owned users', async () => {
     useAuth.mockReturnValue({
-      user: { role: 'sub_admin', user_id: 'sub-actor' },
+      user: {
+        role: 'sub_admin',
+        user_id: 'sub-actor',
+        permissions: {
+          accessible_tools: ['paper_download', 'drug_admin'],
+        },
+      },
       can: jest.fn(() => true),
     });
     const user = userEvent.setup();
@@ -483,7 +561,13 @@ describe('useUserManagement user type payloads', () => {
 
   it('filters stale permission group ids before saving owned user assignments', async () => {
     useAuth.mockReturnValue({
-      user: { role: 'sub_admin', user_id: 'sub-actor' },
+      user: {
+        role: 'sub_admin',
+        user_id: 'sub-actor',
+        permissions: {
+          accessible_tools: ['paper_download', 'drug_admin'],
+        },
+      },
       can: jest.fn(() => true),
     });
     const user = userEvent.setup();
@@ -505,7 +589,40 @@ describe('useUserManagement user type payloads', () => {
     );
   });
 
-  it('admin loads assignable permission groups only after a sub admin flow requests them', async () => {
+  it('sub admin can assign tools only for owned users and stale tools are filtered before save', async () => {
+    useAuth.mockReturnValue({
+      user: {
+        role: 'sub_admin',
+        user_id: 'sub-actor',
+        permissions: {
+          accessible_tools: ['paper_download', 'drug_admin'],
+        },
+      },
+      can: jest.fn(() => true),
+    });
+    const user = userEvent.setup();
+    render(<HookHarness />);
+
+    await waitFor(() => expect(usersApi.list).toHaveBeenCalled());
+    expect(screen.getByTestId('assign-tools-flag')).toHaveTextContent('yes');
+
+    await user.click(screen.getByTestId('assign-other-user-tools'));
+    expect(screen.getByTestId('show-tool-modal')).toHaveTextContent('no');
+
+    await user.click(screen.getByTestId('assign-owned-user-tools'));
+    await waitFor(() => expect(screen.getByTestId('show-tool-modal')).toHaveTextContent('yes'));
+    expect(screen.getByTestId('selected-tool-ids')).toHaveTextContent('paper_download,drug_admin');
+
+    await user.click(screen.getByTestId('save-tool'));
+
+    await waitFor(() =>
+      expect(usersApi.update).toHaveBeenCalledWith('u-owned-tools', {
+        tool_ids: ['paper_download', 'drug_admin'],
+      })
+    );
+  });
+
+  it('admin does not preload assignable permission groups when opening sub-admin create flow', async () => {
     const user = userEvent.setup();
     render(<HookHarness />);
 
@@ -515,12 +632,18 @@ describe('useUserManagement user type payloads', () => {
     await user.click(screen.getByTestId('open-create'));
     await user.click(screen.getByTestId('set-type-sub-admin'));
 
-    await waitFor(() => expect(permissionGroupsApi.listAssignable).toHaveBeenCalledTimes(1));
+    expect(permissionGroupsApi.listAssignable).not.toHaveBeenCalled();
   });
 
   it('sub admin still loads permission groups for assignment on demand', async () => {
     useAuth.mockReturnValue({
-      user: { role: 'sub_admin', user_id: 'sub-actor' },
+      user: {
+        role: 'sub_admin',
+        user_id: 'sub-actor',
+        permissions: {
+          accessible_tools: ['paper_download', 'drug_admin'],
+        },
+      },
       can: jest.fn(() => true),
     });
     const user = userEvent.setup();
@@ -537,7 +660,13 @@ describe('useUserManagement user type payloads', () => {
 
   it('sub admin can reset own and owned user passwords only', async () => {
     useAuth.mockReturnValue({
-      user: { role: 'sub_admin', user_id: 'sub-actor' },
+      user: {
+        role: 'sub_admin',
+        user_id: 'sub-actor',
+        permissions: {
+          accessible_tools: ['paper_download', 'drug_admin'],
+        },
+      },
       can: jest.fn(() => true),
     });
     const user = userEvent.setup();

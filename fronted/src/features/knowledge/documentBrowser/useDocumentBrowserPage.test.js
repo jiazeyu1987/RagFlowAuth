@@ -279,4 +279,16 @@ describe('useDocumentBrowserPage', () => {
       filename: 'Doc 1',
     });
   });
+
+  it('maps backend ascii permission codes to Chinese page errors', async () => {
+    knowledgeApi.listRagflowDatasets.mockRejectedValueOnce(
+      new Error('no_knowledge_management_permission')
+    );
+
+    const { result } = renderHook(() => useDocumentBrowserPage(), { wrapper });
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    expect(result.current.error).toBe('当前账号没有知识库管理权限');
+  });
 });

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { mapUserFacingErrorMessage } from '../../shared/errors/userFacingErrorMessages';
 import operationApprovalApi from './api';
 import { publishInboxUnreadCount } from '../notification/inboxUnreadSync';
 
@@ -51,7 +52,7 @@ export default function useInboxPage() {
       setItems(response.items);
       syncUnreadCount(response.unreadCount);
     } catch (requestError) {
-      setError(requestError?.message || DEFAULT_LOAD_ERROR);
+      setError(mapUserFacingErrorMessage(requestError?.message, DEFAULT_LOAD_ERROR));
       setItems([]);
       syncUnreadCount(0);
     } finally {
@@ -85,7 +86,7 @@ export default function useInboxPage() {
         syncUnreadCount((previous) => Math.max(0, Number(previous || 0) - 1));
       }
     } catch (requestError) {
-      setError(requestError?.message || DEFAULT_UPDATE_ERROR);
+      setError(mapUserFacingErrorMessage(requestError?.message, DEFAULT_UPDATE_ERROR));
     } finally {
       setBusyId('');
     }
@@ -110,7 +111,7 @@ export default function useInboxPage() {
       ));
       syncUnreadCount(0);
     } catch (requestError) {
-      setError(requestError?.message || DEFAULT_MARK_ALL_ERROR);
+      setError(mapUserFacingErrorMessage(requestError?.message, DEFAULT_MARK_ALL_ERROR));
     } finally {
       setMarkAllBusy(false);
     }

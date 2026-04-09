@@ -11,10 +11,7 @@ import {
 import { runPreparedUserManagementMutation } from '../utils/userManagementPreparedMutations';
 import { prepareGroupAssignmentSubmission } from '../utils/userManagementSubmissions';
 import { SAVE_GROUP_ERROR } from '../utils/userManagementMessages';
-import {
-  bindStateAction,
-  runStateAction,
-} from '../utils/userManagementActionRunners';
+import { runStateAction } from '../utils/userManagementActionRunners';
 
 export const useUserGroupAssignment = ({
   actorRole,
@@ -65,13 +62,12 @@ export const useUserGroupAssignment = ({
     [actorRole, actorUserId, applyGroupModalState, availableGroups, ensureAvailableGroupsLoaded]
   );
 
-  const handleCloseGroupModal = useCallback(
-    bindStateAction(
+  const handleCloseGroupModal = useCallback(() => {
+    runStateAction(
       applyGroupModalState,
       buildClosedGroupAssignmentState
-    ),
-    [applyGroupModalState]
-  );
+    );
+  }, [applyGroupModalState]);
 
   const toggleSelectedGroup = useCallback((groupId, checked) => {
     setSelectedGroupIds((prev) => toggleSelectedGroupIds(prev, groupId, checked));

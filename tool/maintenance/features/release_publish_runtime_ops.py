@@ -159,8 +159,8 @@ def recreate_server_containers_from_inspect_impl(
     Recreate ragflowauth-frontend/backend on a server by:
     - inspecting current containers for ports/mounts/env/network/restart policy
     - removing existing containers
-    - running new containers with the provided images
-    - waiting for healthcheck
+    - running backend first with the provided image and waiting for healthcheck
+    - running frontend after backend is healthy
     """
     prod_backend = docker_inspect_fn(server_ip, "ragflowauth-backend")
     prod_frontend = docker_inspect_fn(server_ip, "ragflowauth-frontend")
@@ -180,15 +180,7 @@ def recreate_server_containers_from_inspect_impl(
     if not ok:
         return False, f"stop/rm failed: {out}"
 
-    run_front = build_recreate_fn("ragflowauth-frontend", prod_frontend, new_image=frontend_image)
     run_back = build_recreate_fn("ragflowauth-backend", prod_backend, new_image=backend_image)
-    log(f"run frontend: {run_front}")
-    ok, out = ssh_cmd(server_ip, run_front)
-    if not ok:
-        return False, f"run frontend failed: {out}"
-    if out:
-        log(f"frontend started: {(out or '').strip()}")
-
     log(f"run backend: {run_back}")
     ok, out = ssh_cmd(server_ip, run_back)
     if not ok:
@@ -199,6 +191,14 @@ def recreate_server_containers_from_inspect_impl(
     ok, out = wait_ready_fn(prod_ip=server_ip, healthcheck_url=healthcheck_url)
     if not ok:
         return False, f"healthcheck failed:\n{out}"
+
+    run_front = build_recreate_fn("ragflowauth-frontend", prod_frontend, new_image=frontend_image)
+    log(f"run frontend: {run_front}")
+    ok, out = ssh_cmd(server_ip, run_front)
+    if not ok:
+        return False, f"run frontend failed: {out}"
+    if out:
+        log(f"frontend started: {(out or '').strip()}")
     return True, "OK"
 
 
@@ -272,21 +272,6 @@ def bootstrap_server_containers_impl(
     if not ok:
         return False, f"stop/rm failed: {out}"
 
-    run_front = (
-        "docker run -d "
-        "--name ragflowauth-frontend "
-        f"--network {network_name} "
-        f"-p {frontend_port}:80 "
-        "--restart unless-stopped "
-        f"{frontend_image}"
-    )
-    log(f"[BOOTSTRAP] run frontend: {run_front}")
-    ok, out = ssh_cmd(server_ip, run_front)
-    if not ok:
-        return False, f"run frontend failed: {out}"
-    if out:
-        log(f"[BOOTSTRAP] frontend started: {(out or '').strip()}")
-
     run_back = (
         "docker run -d "
         "--name ragflowauth-backend "
@@ -323,4 +308,19 @@ def bootstrap_server_containers_impl(
     ok, out = wait_ready_fn(prod_ip=server_ip, healthcheck_url=healthcheck_url)
     if not ok:
         return False, f"healthcheck failed:\n{out}"
+
+    run_front = (
+        "docker run -d "
+        "--name ragflowauth-frontend "
+        f"--network {network_name} "
+        f"-p {frontend_port}:80 "
+        "--restart unless-stopped "
+        f"{frontend_image}"
+    )
+    log(f"[BOOTSTRAP] run frontend: {run_front}")
+    ok, out = ssh_cmd(server_ip, run_front)
+    if not ok:
+        return False, f"run frontend failed: {out}"
+    if out:
+        log(f"[BOOTSTRAP] frontend started: {(out or '').strip()}")
     return True, "OK"

@@ -3,7 +3,8 @@ from __future__ import annotations
 from backend.app.modules.users.group_assignment_access import (
     assert_sub_admin_group_assignment_only,
     normalize_requested_group_ids,
-    validate_permission_group_tool_scope,
+    normalize_requested_tool_ids,
+    validate_sub_admin_assignable_tool_ids,
     validate_sub_admin_assignable_group_ids,
 )
 from backend.app.modules.users.management_access import (

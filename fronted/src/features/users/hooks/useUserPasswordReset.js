@@ -11,10 +11,7 @@ import {
   RESET_PASSWORD_ERROR,
   getResetPasswordValidationMessage,
 } from '../utils/userManagementMessages';
-import {
-  bindStateAction,
-  runStateAction,
-} from '../utils/userManagementActionRunners';
+import { runStateAction } from '../utils/userManagementActionRunners';
 
 export const useUserPasswordReset = ({
   actorRole,
@@ -58,13 +55,12 @@ export const useUserPasswordReset = ({
     [applyResetPasswordState, canResetPasswordForUser]
   );
 
-  const handleCloseResetPassword = useCallback(
-    bindStateAction(
+  const handleCloseResetPassword = useCallback(() => {
+    runStateAction(
       applyResetPasswordState,
       buildClosedResetPasswordState
-    ),
-    [applyResetPasswordState]
-  );
+    );
+  }, [applyResetPasswordState]);
 
   const handleSubmitResetPassword = useCallback(async () => {
     setResetPasswordError(null);

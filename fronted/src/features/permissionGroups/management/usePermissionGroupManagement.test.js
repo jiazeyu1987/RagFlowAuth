@@ -141,6 +141,74 @@ describe('usePermissionGroupManagement', () => {
     });
   });
 
+  it('keeps create-and-refresh working even when supplemental resources are unavailable', async () => {
+    const createdGroup = {
+      group_id: 3,
+      group_name: 'Docs',
+      folder_id: 'folder-1',
+      accessible_kbs: [],
+      accessible_kb_nodes: [],
+      accessible_chats: [],
+      accessible_tools: [],
+    };
+
+    permissionGroupsApi.create.mockResolvedValue({
+      message: 'created',
+      group_id: 3,
+    });
+
+    const { result } = renderHook(() => usePermissionGroupManagement());
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+      expect(permissionGroupsApi.listKnowledgeTree).toHaveBeenCalledTimes(1);
+      expect(permissionGroupsApi.listChats).toHaveBeenCalledTimes(1);
+    });
+
+    permissionGroupsApi.list.mockResolvedValue([
+      {
+        group_id: 1,
+        group_name: 'Quality',
+        folder_id: null,
+        accessible_kbs: [],
+        accessible_kb_nodes: [],
+        accessible_chats: [],
+        accessible_tools: [],
+      },
+      createdGroup,
+    ]);
+    permissionGroupsApi.listGroupFolders.mockResolvedValue({
+      folders: [{ id: 'folder-1', name: 'Team Folder', parent_id: null }],
+      group_bindings: { '1': 'folder-1', '3': 'folder-1' },
+      root_group_count: 0,
+    });
+
+    permissionGroupsApi.listKnowledgeTree.mockRejectedValue(new Error('knowledge_tree_unavailable'));
+    permissionGroupsApi.listChats.mockRejectedValue(new Error('chat_list_unavailable'));
+
+    act(() => {
+      result.current.startCreateGroup();
+      result.current.setFormData((previous) => ({
+        ...previous,
+        group_name: 'Docs',
+      }));
+    });
+
+    await act(async () => {
+      await result.current.saveForm({
+        preventDefault: jest.fn(),
+      });
+    });
+
+    await waitFor(() => {
+      expect(result.current.hint).toBeTruthy();
+      expect(result.current.mode).toBe('view');
+      expect(result.current.editingGroup).toEqual(expect.objectContaining({ group_id: 3 }));
+    });
+    expect(permissionGroupsApi.listKnowledgeTree).toHaveBeenCalledTimes(1);
+    expect(permissionGroupsApi.listChats).toHaveBeenCalledTimes(1);
+  });
+
   it('moves the dragged permission group to a new folder and clears drag state after drop', async () => {
     permissionGroupsApi.update.mockResolvedValue({
       message: 'updated',

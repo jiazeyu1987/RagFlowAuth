@@ -35,6 +35,13 @@ const requestUsersList = async (params = {}, action = 'users_list') => {
   );
 };
 
+const normalizeSearchOptions = (options) => {
+  if (!options || typeof options !== 'object' || Array.isArray(options)) {
+    return {};
+  }
+  return options;
+};
+
 export const usersApi = {
   list(params = {}) {
     return requestUsersList(params, 'users_list');
@@ -44,8 +51,11 @@ export const usersApi = {
     return requestUsersList(params, 'users_items');
   },
 
-  search(keyword, limit = 20) {
-    return requestUsersList({ q: keyword, limit }, 'users_search');
+  search(keyword, limit = 20, options = {}) {
+    return requestUsersList(
+      { q: keyword, limit, ...normalizeSearchOptions(options) },
+      'users_search'
+    );
   },
 
   async get(userId) {

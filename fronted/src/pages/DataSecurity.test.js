@@ -15,6 +15,7 @@ jest.mock('../features/dataSecurity/api', () => ({
     getJob: jest.fn(),
     listRestoreDrills: jest.fn(),
     createRestoreDrill: jest.fn(),
+    runRealRestore: jest.fn(),
   },
 }));
 
@@ -71,6 +72,11 @@ const renderPage = async ({
   dataSecurityApi.listJobs.mockResolvedValue(jobs);
   dataSecurityApi.listRestoreDrills.mockResolvedValue(drills);
   dataSecurityApi.createRestoreDrill.mockResolvedValue(createRestoreDrill());
+  dataSecurityApi.runRealRestore.mockResolvedValue({
+    job_id: 101,
+    result: 'success',
+    live_auth_db_path: '/app/data/auth.db',
+  });
   dataSecurityApi.runBackup.mockResolvedValue({ job_id: 101 });
   dataSecurityApi.runFullBackup.mockResolvedValue({ job_id: 101 });
   dataSecurityApi.getJob.mockResolvedValue(jobs[0] || createJob());
@@ -128,6 +134,12 @@ describe('DataSecurity', () => {
 
     await renderPage({ jobs: [recoverableJob, incompleteJob] });
 
+    expect(screen.getByText('恢复演练（仅校验）')).toBeInTheDocument();
+    expect(screen.getByTestId('ds-real-restore-submit')).toHaveTextContent('真实恢复当前数据');
+    expect(
+      screen.getByText(/不会覆盖当前系统数据，也不会恢复已删除的用户/)
+    ).toBeInTheDocument();
+
     const select = screen.getByTestId('ds-restore-job-select');
     expect(within(select).getByRole('option', { name: '#201 full completed' })).toBeInTheDocument();
     expect(within(select).queryByRole('option', { name: '#202 full completed' })).not.toBeInTheDocument();
@@ -148,7 +160,59 @@ describe('DataSecurity', () => {
     });
   });
 
-  it('blocks restore drills when no job has a local backup', async () => {
+  it('submits real restore only after reason and confirmation prompts', async () => {
+    const user = userEvent.setup();
+    const promptSpy = jest
+      .spyOn(window, 'prompt')
+      .mockReturnValueOnce('recover deleted user')
+      .mockReturnValueOnce('RESTORE');
+    const alertSpy = jest.spyOn(window, 'alert').mockImplementation(() => {});
+
+    await renderPage({
+      jobs: [
+        createJob({
+          id: 201,
+          kind: 'full',
+          package_hash: 'hash-local-201',
+          output_dir: '/app/data/backups/migration_pack_20260405_080000',
+        }),
+      ],
+    });
+
+    await user.click(screen.getByTestId('ds-real-restore-submit'));
+
+    await waitFor(() => {
+      expect(dataSecurityApi.runRealRestore).toHaveBeenCalledWith({
+        job_id: 201,
+        backup_path: '/app/data/backups/migration_pack_20260405_080000',
+        backup_hash: 'hash-local-201',
+        change_reason: 'recover deleted user',
+        confirmation_text: 'RESTORE',
+      });
+    });
+    expect(alertSpy).toHaveBeenCalledWith('真实恢复已完成：/app/data/auth.db');
+
+    promptSpy.mockRestore();
+    alertSpy.mockRestore();
+  });
+
+  it('does not submit real restore when the confirmation prompt is canceled', async () => {
+    const user = userEvent.setup();
+    const promptSpy = jest
+      .spyOn(window, 'prompt')
+      .mockReturnValueOnce('recover deleted user')
+      .mockReturnValueOnce(null);
+
+    await renderPage();
+
+    await user.click(screen.getByTestId('ds-real-restore-submit'));
+
+    expect(dataSecurityApi.runRealRestore).not.toHaveBeenCalled();
+
+    promptSpy.mockRestore();
+  });
+
+  it('disables restore drills when no job has a local backup', async () => {
     const user = userEvent.setup();
 
     await renderPage({
@@ -161,10 +225,17 @@ describe('DataSecurity', () => {
       ],
     });
 
+    expect(screen.getByTestId('ds-restore-submit')).toBeDisabled();
+    expect(screen.getByTestId('ds-real-restore-submit')).toBeDisabled();
+    expect(screen.getByTestId('ds-restore-blocked-reason')).toHaveTextContent(
+      '当前没有可用于恢复的服务器本机备份任务'
+    );
+
     await user.click(screen.getByTestId('ds-restore-submit'));
 
     expect(dataSecurityApi.createRestoreDrill).not.toHaveBeenCalled();
-    expect(await screen.findByTestId('ds-error')).not.toHaveTextContent('');
+    expect(dataSecurityApi.runRealRestore).not.toHaveBeenCalled();
+    expect(screen.queryByTestId('ds-error')).not.toBeInTheDocument();
   });
 
   it('saves generic backup settings through the auth backend', async () => {

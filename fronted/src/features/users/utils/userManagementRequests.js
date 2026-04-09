@@ -2,6 +2,7 @@ import {
   applyPolicyDisableState,
   buildCreateUserPayload,
   buildPolicyUpdatePayload,
+  validateCreateUserEmployeeBindingPayload,
   validateManagedUserPayload,
 } from './userAccessPolicy';
 import { parseRootDirectoryCreationInput } from './userKnowledgeDirectories';
@@ -9,7 +10,7 @@ import { buildDisableUserPayload, buildEnableUserPayload } from './userManagemen
 
 export const buildCreateUserRequest = ({ draft, kbDirectoryNodes }) =>
   validateManagedUserPayload({
-    payload: buildCreateUserPayload(draft),
+    payload: validateCreateUserEmployeeBindingPayload(buildCreateUserPayload(draft)),
     kbDirectoryNodes,
   });
 
@@ -79,6 +80,19 @@ export const buildGroupAssignmentUpdateRequest = ({ editingGroupUser, selectedGr
     userId: editingGroupUser.user_id,
     payload: {
       group_ids: selectedGroupIds,
+    },
+  };
+};
+
+export const buildToolAssignmentUpdateRequest = ({ editingToolUser, selectedToolIds }) => {
+  if (!editingToolUser?.user_id) {
+    return { skipped: true };
+  }
+
+  return {
+    userId: editingToolUser.user_id,
+    payload: {
+      tool_ids: selectedToolIds,
     },
   };
 };

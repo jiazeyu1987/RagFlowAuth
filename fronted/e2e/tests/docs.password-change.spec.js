@@ -5,12 +5,12 @@ const { openSessionPage } = require('../helpers/docSessionPage');
 const { FRONTEND_BASE_URL } = require('../helpers/docRealFlow');
 const {
   deleteUserById,
+  ensureUserDeletedByUsername,
   findUserByUsername,
   loginApiAs,
   readUserEnvelope,
   tryLoginApi,
   uniquePassword,
-  uniqueUsername,
 } = require('../helpers/userLifecycleFlow');
 
 const summary = loadBootstrapSummary();
@@ -23,7 +23,8 @@ const adminPassword = process.env.E2E_ADMIN_PASS || 'admin123';
 test('Change password page uses real old/new password flow and login verification @doc-e2e', async ({ browser }) => {
   test.setTimeout(300_000);
 
-  const username = uniqueUsername('doc_pwd');
+  const username = summary?.users?.password_change_target?.username || 'doc_password_change_user';
+  const fullName = summary?.users?.password_change_target?.full_name || 'Doc Password Change User';
   const initialPassword = uniquePassword('DocPwdInit');
   const changedPassword = uniquePassword('DocPwdChanged');
 
@@ -37,6 +38,7 @@ test('Change password page uses real old/new password flow and login verificatio
 
   try {
     adminSession = await loginApiAs(adminUsername, adminPassword);
+    await ensureUserDeletedByUsername(adminSession.api, adminSession.headers, username);
     const viewerUser = await findUserByUsername(
       adminSession.api,
       adminSession.headers,
@@ -54,8 +56,9 @@ test('Change password page uses real old/new password flow and login verificatio
       headers: adminSession.headers,
       data: {
         username,
+        employee_user_id: username,
         password: initialPassword,
-        full_name: `Doc Password User ${Date.now()}`,
+        full_name: fullName,
         role: 'viewer',
         manager_user_id: subAdminUser.user_id,
         company_id: viewerUser.company_id,
@@ -65,7 +68,10 @@ test('Change password page uses real old/new password flow and login verificatio
         idle_timeout_minutes: 120,
       },
     });
-    await expect(createResponse.ok()).toBeTruthy();
+    if (!createResponse.ok()) {
+      const body = await createResponse.text().catch(() => '');
+      throw new Error(`create password-change user failed for ${username}: ${createResponse.status()} ${body}`.trim());
+    }
     const createBody = await createResponse.json();
     createdUserId = String(
       readUserEnvelope(createBody, `create password-change user returned invalid payload for ${username}`).user_id || ''
@@ -102,8 +108,12 @@ test('Change password page uses real old/new password flow and login verificatio
   } finally {
     if (userUi) await userUi.context.close();
     if (userSession) await userSession.api.dispose();
-    if (adminSession && createdUserId) {
-      await deleteUserById(adminSession.api, adminSession.headers, createdUserId);
+    if (adminSession) {
+      if (createdUserId) {
+        await deleteUserById(adminSession.api, adminSession.headers, createdUserId);
+      } else {
+        await ensureUserDeletedByUsername(adminSession.api, adminSession.headers, username);
+      }
     }
     if (adminSession) await adminSession.api.dispose();
   }

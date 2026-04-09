@@ -2,7 +2,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from backend.services.data_security.models import DataSecuritySettings
+from backend.services.data_security.models import DataSecuritySettings, resolve_runtime_compose_file_path
 
 
 def _settings(**overrides) -> DataSecuritySettings:
@@ -100,6 +100,35 @@ class TestDataSecurityModelsUnit(unittest.TestCase):
         )
 
         self.assertEqual(settings.windows_target_path(), r"\\10.0.0.9\Backups\RagflowAuth")
+
+    def test_to_dict_includes_resolved_runtime_paths(self) -> None:
+        expected_local = str((Path(r"D:\ProjectPackage\RagflowAuth\data") / "backups").resolve())
+        with patch("backend.services.data_security.models._running_inside_container", return_value=False), patch(
+            "backend.services.data_security.models.managed_data_root",
+            return_value=Path(r"D:\ProjectPackage\RagflowAuth\data"),
+        ):
+            settings = _settings(
+                target_ip="10.0.0.8",
+                target_share_name="BackupShare",
+                target_subdir="RagflowAuth",
+                replica_target_path=r"\\10.0.0.9\Backups\RagflowAuth",
+            )
+            actual = settings.to_dict()
+
+        self.assertEqual(actual["auth_db_path"], "data/auth.db")
+        self.assertEqual(actual["resolved_local_backup_target_path"], expected_local)
+        self.assertEqual(actual["resolved_target_path"], r"\\10.0.0.8\BackupShare\RagflowAuth")
+        self.assertEqual(actual["resolved_windows_target_path"], r"\\10.0.0.9\Backups\RagflowAuth")
+
+    def test_resolve_runtime_compose_file_path_maps_app_root_to_repo_root_on_host(self) -> None:
+        expected = Path(r"D:\ProjectPackage\RagflowAuth\ragflow_compose\docker-compose.yml").resolve()
+        with patch("backend.services.data_security.models._running_inside_container", return_value=False), patch(
+            "backend.services.data_security.models.repo_root",
+            return_value=Path(r"D:\ProjectPackage\RagflowAuth"),
+        ):
+            actual = resolve_runtime_compose_file_path("/app/ragflow_compose/docker-compose.yml")
+
+        self.assertEqual(actual, expected)
 
 
 if __name__ == "__main__":

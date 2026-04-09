@@ -1,4 +1,5 @@
 import React, { useEffect, useRef } from 'react';
+import { mapUserFacingErrorMessage } from '../../../shared/errors/userFacingErrorMessages';
 import { buildUserLabel } from '../approvalConfigHelpers';
 import { inputStyle } from '../pageStyles';
 
@@ -61,7 +62,7 @@ export default function ApprovalMemberUserLookup({
                 ...prev,
                 loading: false,
                 results: [],
-                error: requestError?.message || '用户搜索失败',
+                error: mapUserFacingErrorMessage(requestError?.message, '用户搜索失败'),
               }
             : prev
         );

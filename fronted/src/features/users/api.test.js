@@ -43,6 +43,19 @@ describe('usersApi', () => {
     );
   });
 
+  it('supports optional scoped filters when searching users', async () => {
+    httpClient.requestJson.mockResolvedValueOnce([{ user_id: 'u-9' }]);
+
+    await expect(
+      usersApi.search('wang', 8, { company_id: '2', status: 'active' })
+    ).resolves.toEqual([{ user_id: 'u-9' }]);
+
+    expect(httpClient.requestJson).toHaveBeenCalledWith(
+      'http://auth.local/api/users?q=wang&limit=8&company_id=2&status=active',
+      { method: 'GET' }
+    );
+  });
+
   it('loads a single user through the auth backend and returns a stable object', async () => {
     httpClient.requestJson.mockResolvedValueOnce({ user_id: 'u-1', username: 'alice' });
 

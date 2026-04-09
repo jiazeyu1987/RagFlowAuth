@@ -1,4 +1,5 @@
 import { formatDateForInput, isUserLoginDisabled, mapRoleToUserType } from './userManagementRules';
+import { normalizeToolIds } from './toolCatalog';
 
 export const getUserPermissionGroupIds = (user) => {
   if (Array.isArray(user?.group_ids)) {
@@ -9,6 +10,8 @@ export const getUserPermissionGroupIds = (user) => {
   }
   return [];
 };
+
+export const getUserToolIds = (user) => normalizeToolIds(user?.tool_ids);
 
 export const buildPolicyFormFromUser = (user, nowMs = Date.now()) => {
   const disableUntilMs = Number(user?.disable_login_until_ms || 0);
@@ -22,6 +25,7 @@ export const buildPolicyFormFromUser = (user, nowMs = Date.now()) => {
     user_type: mapRoleToUserType(user?.role),
     managed_kb_root_node_id: String(user?.managed_kb_root_node_id || ''),
     group_ids: getUserPermissionGroupIds(user),
+    tool_ids: getUserToolIds(user),
     max_login_sessions: Number(user?.max_login_sessions || 3),
     idle_timeout_minutes: Number(user?.idle_timeout_minutes || 120),
     can_change_password: user?.can_change_password !== false,

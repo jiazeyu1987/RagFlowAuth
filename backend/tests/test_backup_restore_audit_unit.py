@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import re
 import shutil
+import sqlite3
 import unittest
 from contextlib import ExitStack
 from pathlib import Path
@@ -70,6 +71,24 @@ def _override_admin_only() -> TokenPayload:
 
 
 class TestBackupRestoreAuditUnit(unittest.TestCase):
+    def _write_restore_probe(self, db_path: Path, value: str) -> None:
+        conn = sqlite3.connect(str(db_path))
+        try:
+            conn.execute("CREATE TABLE IF NOT EXISTS restore_probe (value TEXT NOT NULL)")
+            conn.execute("DELETE FROM restore_probe")
+            conn.execute("INSERT INTO restore_probe(value) VALUES (?)", (value,))
+            conn.commit()
+        finally:
+            conn.close()
+
+    def _read_restore_probe(self, db_path: Path) -> str | None:
+        conn = sqlite3.connect(str(db_path))
+        try:
+            row = conn.execute("SELECT value FROM restore_probe LIMIT 1").fetchone()
+            return str(row[0]) if row else None
+        finally:
+            conn.close()
+
     def test_backup_job_verification_fields_persist(self):
         td = make_temp_dir(prefix="ragflowauth_backup_audit")
         try:
@@ -442,6 +461,189 @@ class TestBackupRestoreAuditUnit(unittest.TestCase):
                 )
                 self.assertEqual(create_resp.status_code, 400, create_resp.text)
                 self.assertEqual(create_resp.json().get("detail"), "restore_drill_requires_local_backup")
+        finally:
+            cleanup_dir(td)
+
+    def test_real_restore_router_overwrites_live_auth_db(self):
+        td = make_temp_dir(prefix="ragflowauth_real_restore")
+        try:
+            db_path = Path(td) / "auth.db"
+            ensure_schema(str(db_path))
+            store = DataSecurityStore(db_path=str(db_path))
+            store.update_settings({"auth_db_path": str(db_path)})
+            base_job = store.create_job_v2(kind="full", status="completed", message="done")
+            self._write_restore_probe(db_path, "live-before")
+
+            pack_dir = Path(td) / "migration_pack_real"
+            pack_dir.mkdir(parents=True, exist_ok=True)
+            backup_auth_db = pack_dir / "auth.db"
+            shutil.copy2(db_path, backup_auth_db)
+            self._write_restore_probe(backup_auth_db, "from-backup")
+            (pack_dir / "backup_settings.json").write_text('{"enabled": true}', encoding="utf-8")
+            pack_hash = _compute_backup_package_hash(pack_dir)
+            store.update_job(base_job.id, output_dir=str(pack_dir), package_hash=pack_hash)
+            qualify_user_for_action(str(db_path), user_id="u1", action_code="restore_drill_execute")
+
+            audit_mgr = _AuditLogManagerStub()
+            deps = _Deps(store=store, audit_mgr=audit_mgr, db_path=str(db_path))
+
+            app = FastAPI()
+            app.state.deps = deps
+            app.include_router(data_security_router.router, prefix="/api")
+            app.dependency_overrides[authz_module.admin_only] = _override_admin_only
+
+            with TestClient(app) as client:
+                resp = client.post(
+                    "/api/admin/data-security/restore/run",
+                    json={
+                        "job_id": base_job.id,
+                        "backup_path": str(pack_dir),
+                        "backup_hash": pack_hash,
+                        "change_reason": "recover deleted user",
+                        "confirmation_text": "RESTORE",
+                    },
+                )
+                self.assertEqual(resp.status_code, 200, resp.text)
+                payload = resp.json()
+                self.assertEqual(payload["result"], "success")
+                self.assertTrue(payload["hash_match"])
+                self.assertTrue(payload["compare_match"])
+                self.assertEqual(payload["live_auth_db_path"], str(db_path))
+                self.assertEqual(payload["source_auth_db_path"], str(backup_auth_db))
+
+            self.assertEqual(self._read_restore_probe(db_path), "from-backup")
+            self.assertEqual(self._read_restore_probe(backup_auth_db), "from-backup")
+
+            actions = [str(item.get("action") or "") for item in audit_mgr.events]
+            self.assertIn("backup_restore_execute", actions)
+            restore_events = [item for item in audit_mgr.events if item.get("action") == "backup_restore_execute"]
+            self.assertEqual(len(restore_events), 1)
+            self.assertEqual(restore_events[0]["meta"]["job_id"], base_job.id)
+            self.assertTrue(restore_events[0]["meta"]["compare_match"])
+        finally:
+            cleanup_dir(td)
+
+    def test_real_restore_rejects_invalid_confirmation(self):
+        td = make_temp_dir(prefix="ragflowauth_real_restore_confirm")
+        try:
+            db_path = Path(td) / "auth.db"
+            ensure_schema(str(db_path))
+            store = DataSecurityStore(db_path=str(db_path))
+            store.update_settings({"auth_db_path": str(db_path)})
+            base_job = store.create_job_v2(kind="full", status="completed", message="done")
+            pack_dir = Path(td) / "migration_pack_invalid_confirmation"
+            pack_dir.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(db_path, pack_dir / "auth.db")
+            (pack_dir / "backup_settings.json").write_text('{"enabled": true}', encoding="utf-8")
+            pack_hash = _compute_backup_package_hash(pack_dir)
+            store.update_job(base_job.id, output_dir=str(pack_dir), package_hash=pack_hash)
+            qualify_user_for_action(str(db_path), user_id="u1", action_code="restore_drill_execute")
+
+            audit_mgr = _AuditLogManagerStub()
+            deps = _Deps(store=store, audit_mgr=audit_mgr, db_path=str(db_path))
+
+            app = FastAPI()
+            app.state.deps = deps
+            app.include_router(data_security_router.router, prefix="/api")
+            app.dependency_overrides[authz_module.admin_only] = _override_admin_only
+
+            with TestClient(app) as client:
+                resp = client.post(
+                    "/api/admin/data-security/restore/run",
+                    json={
+                        "job_id": base_job.id,
+                        "backup_path": str(pack_dir),
+                        "backup_hash": pack_hash,
+                        "change_reason": "recover deleted user",
+                        "confirmation_text": "WRONG",
+                    },
+                )
+                self.assertEqual(resp.status_code, 400, resp.text)
+                self.assertEqual(resp.json().get("detail"), "restore_confirmation_text_invalid")
+        finally:
+            cleanup_dir(td)
+
+    def test_real_restore_rejects_missing_change_reason(self):
+        td = make_temp_dir(prefix="ragflowauth_real_restore_reason")
+        try:
+            db_path = Path(td) / "auth.db"
+            ensure_schema(str(db_path))
+            store = DataSecurityStore(db_path=str(db_path))
+            store.update_settings({"auth_db_path": str(db_path)})
+            base_job = store.create_job_v2(kind="full", status="completed", message="done")
+            pack_dir = Path(td) / "migration_pack_missing_reason"
+            pack_dir.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(db_path, pack_dir / "auth.db")
+            (pack_dir / "backup_settings.json").write_text('{"enabled": true}', encoding="utf-8")
+            pack_hash = _compute_backup_package_hash(pack_dir)
+            store.update_job(base_job.id, output_dir=str(pack_dir), package_hash=pack_hash)
+            qualify_user_for_action(str(db_path), user_id="u1", action_code="restore_drill_execute")
+
+            audit_mgr = _AuditLogManagerStub()
+            deps = _Deps(store=store, audit_mgr=audit_mgr, db_path=str(db_path))
+
+            app = FastAPI()
+            app.state.deps = deps
+            app.include_router(data_security_router.router, prefix="/api")
+            app.dependency_overrides[authz_module.admin_only] = _override_admin_only
+
+            with TestClient(app) as client:
+                resp = client.post(
+                    "/api/admin/data-security/restore/run",
+                    json={
+                        "job_id": base_job.id,
+                        "backup_path": str(pack_dir),
+                        "backup_hash": pack_hash,
+                        "change_reason": "   ",
+                        "confirmation_text": "RESTORE",
+                    },
+                )
+                self.assertEqual(resp.status_code, 400, resp.text)
+                self.assertEqual(resp.json().get("detail"), "change_reason_required")
+        finally:
+            cleanup_dir(td)
+
+    def test_real_restore_rejects_when_backup_job_is_running(self):
+        td = make_temp_dir(prefix="ragflowauth_real_restore_running_job")
+        try:
+            db_path = Path(td) / "auth.db"
+            ensure_schema(str(db_path))
+            store = DataSecurityStore(db_path=str(db_path))
+            store.update_settings({"auth_db_path": str(db_path)})
+            running_job = store.create_job_v2(kind="incremental", status="running", message="busy")
+            base_job = store.create_job_v2(kind="full", status="completed", message="done")
+            pack_dir = Path(td) / "migration_pack_running_conflict"
+            pack_dir.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(db_path, pack_dir / "auth.db")
+            (pack_dir / "backup_settings.json").write_text('{"enabled": true}', encoding="utf-8")
+            pack_hash = _compute_backup_package_hash(pack_dir)
+            store.update_job(base_job.id, output_dir=str(pack_dir), package_hash=pack_hash)
+            qualify_user_for_action(str(db_path), user_id="u1", action_code="restore_drill_execute")
+
+            audit_mgr = _AuditLogManagerStub()
+            deps = _Deps(store=store, audit_mgr=audit_mgr, db_path=str(db_path))
+
+            app = FastAPI()
+            app.state.deps = deps
+            app.include_router(data_security_router.router, prefix="/api")
+            app.dependency_overrides[authz_module.admin_only] = _override_admin_only
+
+            with TestClient(app) as client:
+                resp = client.post(
+                    "/api/admin/data-security/restore/run",
+                    json={
+                        "job_id": base_job.id,
+                        "backup_path": str(pack_dir),
+                        "backup_hash": pack_hash,
+                        "change_reason": "recover deleted user",
+                        "confirmation_text": "RESTORE",
+                    },
+                )
+                self.assertEqual(resp.status_code, 409, resp.text)
+                self.assertEqual(
+                    resp.json().get("detail"),
+                    f"restore_requires_no_active_backup_job:{running_job.id}",
+                )
         finally:
             cleanup_dir(td)
 

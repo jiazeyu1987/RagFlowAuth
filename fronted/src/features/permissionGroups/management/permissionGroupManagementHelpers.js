@@ -17,7 +17,6 @@ export function fillFormFromGroup(group) {
     accessible_kbs: group?.accessible_kbs || [],
     accessible_kb_nodes: group?.accessible_kb_nodes || [],
     accessible_chats: group?.accessible_chats || [],
-    accessible_tools: group?.accessible_tools || [],
     can_upload: !!group?.can_upload,
     can_review: !!group?.can_review,
     can_download: group?.can_download !== false,
@@ -25,7 +24,6 @@ export function fillFormFromGroup(group) {
     can_delete: !!group?.can_delete,
     can_manage_kb_directory: !!group?.can_manage_kb_directory,
     can_view_kb_config: group?.can_view_kb_config !== false,
-    can_view_tools: group?.can_view_tools !== false,
   };
 }
 

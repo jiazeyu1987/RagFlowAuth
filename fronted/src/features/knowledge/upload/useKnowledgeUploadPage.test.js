@@ -232,4 +232,38 @@ describe('useKnowledgeUploadPage', () => {
     expect(result.current.error).toBe('missing_kb_id');
     expect(knowledgeUploadApi.uploadDocument).not.toHaveBeenCalled();
   });
+
+  it('shows a Chinese message when the upload approval workflow is not configured', async () => {
+    knowledgeUploadApi.uploadDocument.mockRejectedValue(
+      new Error('operation_workflow_not_configured')
+    );
+
+    const { result } = renderHook(() => useKnowledgeUploadPage());
+
+    await waitFor(() => {
+      expect(result.current.loadingDatasets).toBe(false);
+    });
+
+    const file = new File(['hello'], 'onlyoffice_docker_integration.txt', {
+      type: 'text/plain',
+    });
+    act(() => {
+      result.current.handleFileSelect({
+        target: {
+          files: [file],
+          value: 'onlyoffice_docker_integration.txt',
+        },
+      });
+    });
+
+    await act(async () => {
+      await result.current.handleUpload({
+        preventDefault() {},
+      });
+    });
+
+    expect(result.current.error).toBe(
+      '申请提交完成：成功 0 个，失败 1 个。管理员没有配置文件上传审批流'
+    );
+  });
 });

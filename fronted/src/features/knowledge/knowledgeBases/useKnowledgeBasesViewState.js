@@ -35,7 +35,12 @@ export default function useKnowledgeBasesViewState({
   setDragDatasetId,
   dropTargetNodeId,
   setDropTargetNodeId,
+  isSubAdmin = false,
+  managedKbRootNodeId = null,
+  managedKbRootPath = null,
 }) {
+  const normalizedManagedRootNodeId = String(managedKbRootNodeId || '').trim();
+  const normalizedManagedRootPath = String(managedKbRootPath || '').trim();
   const indexes = useMemo(() => buildIndexes(directoryTree), [directoryTree]);
   const datasetsByNode = useMemo(() => buildDatasetsByNode(directoryTree), [directoryTree]);
 
@@ -76,10 +81,22 @@ export default function useKnowledgeBasesViewState({
   );
 
   const dirOptions = useMemo(() => {
-    const options = [{ id: ROOT, label: TEXT.mountRoot }];
+    const options = [];
     const nodes = [...(directoryTree?.nodes || [])].sort((left, right) =>
       String(left.path || '').localeCompare(String(right.path || ''), 'zh-Hans-CN')
     );
+
+    if (!isSubAdmin) {
+      options.push({ id: ROOT, label: TEXT.mountRoot });
+    } else if (normalizedManagedRootNodeId) {
+      const hasManagedRoot = nodes.some((node) => String(node?.id || '') === normalizedManagedRootNodeId);
+      if (!hasManagedRoot) {
+        options.push({
+          id: normalizedManagedRootNodeId,
+          label: normalizedManagedRootPath || normalizedManagedRootNodeId,
+        });
+      }
+    }
 
     nodes.forEach((node) => {
       options.push({
@@ -89,7 +106,7 @@ export default function useKnowledgeBasesViewState({
     });
 
     return options;
-  }, [directoryTree]);
+  }, [directoryTree, isSubAdmin, normalizedManagedRootNodeId, normalizedManagedRootPath]);
 
   const rows = useMemo(() => {
     const next = [];

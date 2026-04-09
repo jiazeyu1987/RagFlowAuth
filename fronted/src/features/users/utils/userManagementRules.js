@@ -4,6 +4,7 @@ import {
   normalizeGroupId,
   parseDisableUntilDate,
 } from './userAccessPolicy';
+import { normalizeToolIds } from './toolCatalog';
 
 export const mapRoleToUserType = (role) =>
   (String(role || '') === 'sub_admin' ? 'sub_admin' : 'normal');
@@ -87,6 +88,13 @@ export const canAssignManagedUserGroups = ({ actorRole, actorUserId, targetUser 
   return String(targetUser?.manager_user_id || '') === String(actorUserId || '');
 };
 
+export const canAssignManagedUserTools = ({ actorRole, actorUserId, targetUser }) => {
+  if (String(targetUser?.role || '') !== 'viewer') return false;
+  if (String(actorRole || '') !== 'sub_admin') return false;
+
+  return String(targetUser?.manager_user_id || '') === String(actorUserId || '');
+};
+
 export const getValidAssignableGroupIds = ({ availableGroups, groupIds }) => {
   const allowedGroupIds = new Set(
     (Array.isArray(availableGroups) ? availableGroups : [])
@@ -101,4 +109,9 @@ export const getValidAssignableGroupIds = ({ availableGroups, groupIds }) => {
         .filter((groupId) => groupId != null && allowedGroupIds.has(groupId))
     )
   );
+};
+
+export const getValidAssignableToolIds = ({ availableToolIds, toolIds }) => {
+  const allowedToolIds = new Set(normalizeToolIds(availableToolIds));
+  return normalizeToolIds(toolIds).filter((toolId) => allowedToolIds.has(toolId));
 };

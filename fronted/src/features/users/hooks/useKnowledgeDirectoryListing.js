@@ -7,10 +7,7 @@ import {
   buildKnowledgeDirectoryListingSuccessState,
 } from '../utils/userKnowledgeDirectories';
 import { isManagedKbRootSelectionInvalid } from '../utils/userManagementDerivedState';
-import {
-  bindStateAction,
-  runStateAction,
-} from '../utils/userManagementActionRunners';
+import { runStateAction } from '../utils/userManagementActionRunners';
 import { runUserManagementMutation } from '../utils/userManagementMutations';
 import { useKnowledgeDirectoryModeLoader } from './useKnowledgeDirectoryModeLoader';
 import { useKnowledgeDirectoryModeReset } from './useKnowledgeDirectoryModeReset';
@@ -32,13 +29,12 @@ export const useKnowledgeDirectoryListing = ({
     setKbDirectoryError(nextState.error);
   }, []);
 
-  const clearKnowledgeDirectoryListing = useCallback(
-    bindStateAction(
+  const clearKnowledgeDirectoryListing = useCallback(() => {
+    runStateAction(
       applyKnowledgeDirectoryListingState,
       buildEmptyKnowledgeDirectoryListingState
-    ),
-    [applyKnowledgeDirectoryListingState]
-  );
+    );
+  }, [applyKnowledgeDirectoryListingState]);
 
   const fetchKnowledgeDirectories = useCallback(
     async (companyId) => {

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 
 import { electronicSignatureApi } from './api';
+import { mapUserFacingErrorMessage } from '../../shared/errors/userFacingErrorMessages';
 
 const MOBILE_BREAKPOINT = 768;
 
@@ -100,7 +101,7 @@ export default function useElectronicSignatureManagementPage() {
       const detail = await electronicSignatureApi.getSignature(nextSignatureId);
       setSelectedSignature(detail);
     } catch (requestError) {
-      setError(requestError?.message || MESSAGES.loadError);
+      setError(mapUserFacingErrorMessage(requestError?.message, MESSAGES.loadError));
     } finally {
       setLoading(false);
     }
@@ -113,7 +114,7 @@ export default function useElectronicSignatureManagementPage() {
       const response = await electronicSignatureApi.listAuthorizations({ limit: 200 });
       setAuthorizations(getItems(response));
     } catch (requestError) {
-      setError(requestError?.message || MESSAGES.authorizationLoadError);
+      setError(mapUserFacingErrorMessage(requestError?.message, MESSAGES.authorizationLoadError));
     } finally {
       setAuthorizationLoading(false);
     }
@@ -153,7 +154,7 @@ export default function useElectronicSignatureManagementPage() {
       const detail = await electronicSignatureApi.getSignature(signatureId);
       setSelectedSignature(detail);
     } catch (requestError) {
-      setError(requestError?.message || MESSAGES.detailError);
+      setError(mapUserFacingErrorMessage(requestError?.message, MESSAGES.detailError));
     } finally {
       setDetailLoading(false);
     }
@@ -181,7 +182,7 @@ export default function useElectronicSignatureManagementPage() {
       );
       setVerifyMessage(verified ? MESSAGES.verifyPassed : MESSAGES.verifyFailed);
     } catch (requestError) {
-      setError(requestError?.message || MESSAGES.verifyError);
+      setError(mapUserFacingErrorMessage(requestError?.message, MESSAGES.verifyError));
     } finally {
       setVerifyLoading(false);
     }
@@ -197,7 +198,7 @@ export default function useElectronicSignatureManagementPage() {
         });
         await loadAuthorizations();
       } catch (requestError) {
-        setError(requestError?.message || MESSAGES.authorizationUpdateError);
+        setError(mapUserFacingErrorMessage(requestError?.message, MESSAGES.authorizationUpdateError));
       }
     },
     [loadAuthorizations]

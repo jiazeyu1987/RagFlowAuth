@@ -8,8 +8,10 @@ const {
   loginApiAs,
   readUserEnvelope,
   uniquePassword,
-  uniqueUsername,
 } = require('./userLifecycleFlow');
+
+const DOC_TOOLS_EMPTY_USERNAME = 'doc_tools_empty_user';
+const DOC_TOOLS_EMPTY_FULL_NAME = 'Doc Tools Empty User';
 
 async function readJson(response, fallbackMessage) {
   if (!response.ok()) {
@@ -94,7 +96,7 @@ async function createToolsEmptyStateAccount(summary, {
   let subAdminSession = null;
   let groupId = 0;
   let userId = '';
-  const username = uniqueUsername('doc_tools_empty');
+  const username = DOC_TOOLS_EMPTY_USERNAME;
   const password = uniquePassword('DocToolsEmpty');
 
   try {
@@ -135,8 +137,9 @@ async function createToolsEmptyStateAccount(summary, {
       headers: adminSession.headers,
       data: {
         username,
+        employee_user_id: username,
         password,
-        full_name: `Doc Tools Empty ${Date.now()}`,
+        full_name: DOC_TOOLS_EMPTY_FULL_NAME,
         role: 'viewer',
         manager_user_id: subAdminUser.user_id,
         company_id: viewerUser.company_id,

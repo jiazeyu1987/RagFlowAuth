@@ -75,12 +75,14 @@ export default function UsersTable({
   filteredUsers,
   canEditUserPolicy,
   canAssignGroups,
+  canAssignTools,
   canResetPasswords,
   canResetPasswordForUser,
   canToggleUserStatus,
   canDeleteUsers,
   onOpenPolicyModal,
   onAssignGroup,
+  onAssignTool,
   onOpenResetPassword,
   onDeleteUser,
   onToggleUserStatus,
@@ -123,6 +125,10 @@ export default function UsersTable({
                   : true);
               const canEditGroupsForUser =
                 canAssignGroups &&
+                String(user?.role || '') === 'viewer' &&
+                !isBuiltInAdmin;
+              const canEditToolsForUser =
+                canAssignTools &&
                 String(user?.role || '') === 'viewer' &&
                 !isBuiltInAdmin;
 
@@ -221,6 +227,22 @@ export default function UsersTable({
                           }}
                         >
                           权限组
+                        </button>
+                      ) : null}
+                      {canEditToolsForUser ? (
+                        <button
+                          type="button"
+                          onClick={() => onAssignTool?.(user)}
+                          data-testid={`users-edit-tools-${safeUserId}`}
+                          style={{
+                            padding: '6px 10px',
+                            border: '1px solid #bfdbfe',
+                            background: '#eff6ff',
+                            borderRadius: 6,
+                            cursor: 'pointer',
+                          }}
+                        >
+                          工具权限
                         </button>
                       ) : null}
                       {canResetPasswordForRow ? (

@@ -1,5 +1,6 @@
 import { useCallback } from 'react';
 
+import { mapUserFacingErrorMessage } from '../../../shared/errors/userFacingErrorMessages';
 import { permissionGroupsApi } from '../api';
 import { ROOT } from './constants';
 import { buildCreateForm, fillFormFromGroup } from './permissionGroupManagementHelpers';
@@ -108,7 +109,7 @@ export default function usePermissionGroupManagementActions({
         if (mode === 'create') {
           const response = await permissionGroupsApi.create(formData);
           const createdId = response?.group_id;
-          const nextGroups = await fetchAll();
+          const nextGroups = await fetchAll({ includeSupplemental: false });
           const createdGroup = nextGroups.find((group) => group.group_id === createdId) || null;
 
           if (createdGroup) {
@@ -117,7 +118,7 @@ export default function usePermissionGroupManagementActions({
           }
         } else if (mode === 'edit' && editingGroupId != null) {
           await permissionGroupsApi.update(editingGroupId, formData);
-          const nextGroups = await fetchAll();
+          const nextGroups = await fetchAll({ includeSupplemental: false });
           const updatedGroup = nextGroups.find((group) => group.group_id === editingGroupId) || null;
 
           if (updatedGroup) {
@@ -126,7 +127,7 @@ export default function usePermissionGroupManagementActions({
           }
         }
       } catch (saveError) {
-        setError(saveError?.message || '保存权限组失败');
+        setError(mapUserFacingErrorMessage(saveError?.message, '保存权限组失败'));
       } finally {
         setSaving(false);
       }
@@ -183,7 +184,7 @@ export default function usePermissionGroupManagementActions({
 
       try {
         await permissionGroupsApi.remove(group.group_id);
-        const nextGroups = await fetchAll();
+        const nextGroups = await fetchAll({ includeSupplemental: false });
 
         if (editingGroupId === group.group_id) {
           if (nextGroups.length) {
@@ -195,7 +196,7 @@ export default function usePermissionGroupManagementActions({
 
         setHint('权限组已删除');
       } catch (removeError) {
-        setError(removeError?.message || '删除权限组失败');
+        setError(mapUserFacingErrorMessage(removeError?.message, '删除权限组失败'));
       }
     },
     [clearFeedback, editingGroupId, fetchAll, setError, setHint, startCreateGroup, viewGroup]
@@ -214,7 +215,7 @@ export default function usePermissionGroupManagementActions({
       });
       const newFolderId = response?.id || '';
 
-      await fetchAll();
+      await fetchAll({ includeSupplemental: false });
 
       if (newFolderId) {
         openFolder(newFolderId);
@@ -223,7 +224,7 @@ export default function usePermissionGroupManagementActions({
 
       setHint('文件夹已创建');
     } catch (createError) {
-      setError(createError?.message || '创建文件夹失败');
+      setError(mapUserFacingErrorMessage(createError?.message, '创建文件夹失败'));
     }
   }, [clearFeedback, currentFolderId, fetchAll, openFolder, setError, setHint, setSelectedItem]);
 
@@ -239,11 +240,11 @@ export default function usePermissionGroupManagementActions({
 
     try {
       await permissionGroupsApi.updateFolder(targetFolderId, { name: nextName.trim() });
-      await fetchAll();
+      await fetchAll({ includeSupplemental: false });
       ensureFolderExpanded(targetFolderId);
       setHint('文件夹已重命名');
     } catch (renameError) {
-      setError(renameError?.message || '重命名文件夹失败');
+      setError(mapUserFacingErrorMessage(renameError?.message, '重命名文件夹失败'));
     }
   }, [
     clearFeedback,
@@ -272,10 +273,10 @@ export default function usePermissionGroupManagementActions({
       const parentFolderId = folder?.parent_id || ROOT;
       openFolder(parentFolderId);
       setSelectedItem(null);
-      await fetchAll();
+      await fetchAll({ includeSupplemental: false });
       setHint('文件夹已删除');
     } catch (deleteError) {
-      setError(deleteError?.message || '删除文件夹失败');
+      setError(mapUserFacingErrorMessage(deleteError?.message, '删除文件夹失败'));
     }
   }, [
     clearFeedback,
@@ -309,13 +310,6 @@ export default function usePermissionGroupManagementActions({
     }));
   }, [setFormData]);
 
-  const toggleToolAuth = useCallback((toolId) => {
-    setFormData((previous) => ({
-      ...previous,
-      accessible_tools: toggleInArray(previous.accessible_tools, toolId),
-    }));
-  }, [setFormData]);
-
   const moveGroupToFolder = useCallback(
     async (groupId, folderId) => {
       if (!groupId) return;
@@ -324,7 +318,7 @@ export default function usePermissionGroupManagementActions({
 
       try {
         await permissionGroupsApi.update(groupId, { folder_id: folderId || null });
-        const nextGroups = await fetchAll();
+        const nextGroups = await fetchAll({ includeSupplemental: false });
         const movedGroup = nextGroups.find((group) => group.group_id === groupId);
 
         if (editingGroupId === groupId && movedGroup) {
@@ -336,7 +330,7 @@ export default function usePermissionGroupManagementActions({
 
         setHint('权限组已移动');
       } catch (moveError) {
-        setError(moveError?.message || '移动权限组失败');
+        setError(mapUserFacingErrorMessage(moveError?.message, '移动权限组失败'));
       }
     },
     [clearFeedback, editingGroupId, fetchAll, setError, setFormData, setHint]
@@ -358,7 +352,6 @@ export default function usePermissionGroupManagementActions({
     toggleNodeAuth,
     toggleKbAuth,
     toggleChatAuth,
-    toggleToolAuth,
     moveGroupToFolder,
   };
 }

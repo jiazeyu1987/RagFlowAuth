@@ -90,6 +90,46 @@ class TestDataSecurityRouterUnit(unittest.TestCase):
 
             self.assertEqual(str(ctx.exception), "backup_worker_image_not_found:container=ragflowauth-backend")
 
+    def test_backup_prerequisites_resolves_app_root_compose_path_on_host(self) -> None:
+        from backend.app.modules.data_security import support
+
+        with tempfile.TemporaryDirectory(prefix="ragflowauth_ds_router_hostmap_") as temp_dir:
+            root = Path(temp_dir)
+            compose = root / "ragflow_compose" / "docker-compose.yml"
+            compose.parent.mkdir(parents=True, exist_ok=True)
+            compose.write_text("services: {}", encoding="utf-8")
+            auth_db = root / "auth.db"
+            auth_db.write_text("ok", encoding="utf-8")
+
+            settings = SimpleNamespace(
+                local_backup_target_path=lambda: str(root / "backups"),
+                auth_db_path=str(auth_db),
+                ragflow_compose_path="/app/ragflow_compose/docker-compose.yml",
+            )
+            deps = SimpleNamespace(
+                data_security_store=SimpleNamespace(get_settings=lambda: settings),
+            )
+
+            with patch.object(support, "docker_ok", return_value=(True, "")), patch.object(
+                support, "read_compose_project_name", return_value="docker"
+            ), patch.object(
+                support, "list_docker_volumes_by_prefix", return_value=["docker_esdata01"]
+            ), patch.object(
+                support, "resolve_backend_helper_image", side_effect=RuntimeError(
+                    "backup_worker_image_not_found:container=ragflowauth-backend"
+                )
+            ), patch(
+                "backend.services.data_security.models._running_inside_container",
+                return_value=False,
+            ), patch(
+                "backend.services.data_security.models.repo_root",
+                return_value=root,
+            ):
+                with self.assertRaises(RuntimeError) as ctx:
+                    support._assert_backup_prerequisites(deps)
+
+            self.assertEqual(str(ctx.exception), "backup_worker_image_not_found:container=ragflowauth-backend")
+
     def test_hydrate_job_package_hash_backfills_existing_pack(self) -> None:
         from backend.app.modules.data_security import support
         from backend.services.data_security.backup_service import _compute_backup_package_hash

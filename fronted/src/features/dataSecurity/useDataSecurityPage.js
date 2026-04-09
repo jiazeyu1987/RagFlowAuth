@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { mapUserFacingErrorMessage } from '../../shared/errors/userFacingErrorMessages';
 import { dataSecurityApi } from './api';
 import { getLocalBackupTargetPath } from './dataSecurityHelpers';
 import useDataSecurityJobs from './useDataSecurityJobs';
@@ -38,7 +39,7 @@ export default function useDataSecurityPage() {
       ]);
       setSettings(settingsResponse);
     } catch (e) {
-      setError(e.message || '加载失败');
+      setError(mapUserFacingErrorMessage(e?.message, '加载失败'));
     } finally {
       setLoading(false);
     }
@@ -73,7 +74,7 @@ export default function useDataSecurityPage() {
         setSettings((previous) => ({ ...(previous || {}), ...(response || {}), backup_retention_max: clamped }));
         return true;
       } catch (e) {
-        setError(e.message || '保存失败');
+        setError(mapUserFacingErrorMessage(e?.message, '保存失败'));
         return false;
       } finally {
         setSavingRetention(false);
@@ -105,7 +106,7 @@ export default function useDataSecurityPage() {
         setSettings((previous) => ({ ...(previous || {}), ...(response || {}) }));
         return true;
       } catch (e) {
-        setError(e.message || '保存失败');
+        setError(mapUserFacingErrorMessage(e?.message, '保存失败'));
         return false;
       } finally {
         setSavingSettings(false);
@@ -122,7 +123,7 @@ export default function useDataSecurityPage() {
         await startPollingJob(response.job_id);
       }
     } catch (e) {
-      setError(e.message || '启动失败');
+      setError(mapUserFacingErrorMessage(e?.message, '启动失败'));
     }
   }, [startPollingJob]);
 
@@ -134,7 +135,7 @@ export default function useDataSecurityPage() {
         await startPollingJob(response.job_id);
       }
     } catch (e) {
-      setError(e.message || '全量备份启动失败');
+      setError(mapUserFacingErrorMessage(e?.message, '全量备份启动失败'));
     }
   }, [startPollingJob]);
 

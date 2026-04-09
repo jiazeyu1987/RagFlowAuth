@@ -5,6 +5,7 @@ from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
 from backend.app.core.authz import AuthContextDep
+from backend.app.core.permission_resolver import assert_tool_allowed
 from backend.models.download import DownloadSessionStopResultEnvelope
 from backend.services.patent_download.manager import LOCAL_PATENTS_KB_REF, PatentDownloadManager
 
@@ -36,6 +37,7 @@ async def create_patent_download_session(
     body: PatentSessionCreateRequest,
     ctx: AuthContextDep,
 ):
+    assert_tool_allowed(ctx.snapshot, "patent_download")
     mgr = PatentDownloadManager(ctx.deps)
     sources = {k: v.model_dump() for k, v in (body.sources or {}).items()}
     return mgr.create_session_and_download(
@@ -52,6 +54,7 @@ async def get_patent_download_session(
     session_id: str,
     ctx: AuthContextDep,
 ):
+    assert_tool_allowed(ctx.snapshot, "patent_download")
     mgr = PatentDownloadManager(ctx.deps)
     return mgr.get_session_payload(session_id=session_id, ctx=ctx)
 
@@ -61,6 +64,7 @@ async def stop_patent_download_session(
     session_id: str,
     ctx: AuthContextDep,
 ):
+    assert_tool_allowed(ctx.snapshot, "patent_download")
     mgr = PatentDownloadManager(ctx.deps)
     return mgr.stop_session_download(session_id=session_id, ctx=ctx)
 
@@ -69,6 +73,7 @@ async def stop_patent_download_session(
 async def list_patent_download_history_keywords(
     ctx: AuthContextDep,
 ):
+    assert_tool_allowed(ctx.snapshot, "patent_download")
     mgr = PatentDownloadManager(ctx.deps)
     return mgr.list_history_keywords(ctx=ctx)
 
@@ -78,6 +83,7 @@ async def get_patent_download_history_items(
     history_key: str,
     ctx: AuthContextDep,
 ):
+    assert_tool_allowed(ctx.snapshot, "patent_download")
     mgr = PatentDownloadManager(ctx.deps)
     return mgr.get_history_group_payload(history_key=history_key, ctx=ctx)
 
@@ -88,6 +94,7 @@ async def add_all_patent_history_items_to_local_kb(
     body: PatentAddRequest,
     ctx: AuthContextDep,
 ):
+    assert_tool_allowed(ctx.snapshot, "patent_download")
     mgr = PatentDownloadManager(ctx.deps)
     return mgr.add_history_group_to_local_kb(
         history_key=history_key,
@@ -101,6 +108,7 @@ async def delete_patent_download_history_keyword(
     history_key: str,
     ctx: AuthContextDep,
 ):
+    assert_tool_allowed(ctx.snapshot, "patent_download")
     mgr = PatentDownloadManager(ctx.deps)
     return mgr.delete_history_group(history_key=history_key, ctx=ctx)
 
@@ -110,6 +118,7 @@ async def delete_patent_download_history_keyword_post(
     body: PatentHistoryDeleteRequest,
     ctx: AuthContextDep,
 ):
+    assert_tool_allowed(ctx.snapshot, "patent_download")
     mgr = PatentDownloadManager(ctx.deps)
     return mgr.delete_history_group(history_key=(body.history_key or ""), ctx=ctx)
 
@@ -121,6 +130,7 @@ async def preview_patent_download_item(
     ctx: AuthContextDep,
     render: str = "default",
 ):
+    assert_tool_allowed(ctx.snapshot, "patent_download")
     mgr = PatentDownloadManager(ctx.deps)
     return mgr.get_item_preview_payload(session_id=session_id, item_id=item_id, ctx=ctx, render=render)
 
@@ -131,6 +141,7 @@ async def download_patent_download_item(
     item_id: int,
     ctx: AuthContextDep,
 ):
+    assert_tool_allowed(ctx.snapshot, "patent_download")
     mgr = PatentDownloadManager(ctx.deps)
     content, filename, mime_type = mgr.get_item_download_payload(session_id=session_id, item_id=item_id, ctx=ctx)
     return Response(
@@ -147,6 +158,7 @@ async def add_patent_item_to_local_kb(
     body: PatentAddRequest,
     ctx: AuthContextDep,
 ):
+    assert_tool_allowed(ctx.snapshot, "patent_download")
     mgr = PatentDownloadManager(ctx.deps)
     return mgr.add_item_to_local_kb(
         session_id=session_id,
@@ -163,6 +175,7 @@ async def add_all_patent_items_to_local_kb(
     body: PatentAddRequest,
     ctx: AuthContextDep,
 ):
+    assert_tool_allowed(ctx.snapshot, "patent_download")
     mgr = PatentDownloadManager(ctx.deps)
     return mgr.add_all_to_local_kb(
         session_id=session_id,
@@ -178,6 +191,7 @@ async def delete_patent_download_item(
     ctx: AuthContextDep,
     delete_local_kb: bool = True,
 ):
+    assert_tool_allowed(ctx.snapshot, "patent_download")
     mgr = PatentDownloadManager(ctx.deps)
     return mgr.delete_item(
         session_id=session_id,
@@ -193,5 +207,6 @@ async def delete_patent_download_session(
     ctx: AuthContextDep,
     delete_local_kb: bool = True,
 ):
+    assert_tool_allowed(ctx.snapshot, "patent_download")
     mgr = PatentDownloadManager(ctx.deps)
     return mgr.delete_session(session_id=session_id, ctx=ctx, delete_local_kb=delete_local_kb)

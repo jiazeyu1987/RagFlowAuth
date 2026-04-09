@@ -165,6 +165,37 @@ class OrgDirectoryStore:
         finally:
             conn.close()
 
+    def get_employee_by_user_id(self, employee_user_id: str) -> Employee | None:
+        normalized = str(employee_user_id or "").strip()
+        if not normalized:
+            return None
+        conn = self._get_connection()
+        try:
+            row = conn.execute(
+                """
+                SELECT
+                    employee_id,
+                    employee_user_id,
+                    name,
+                    email,
+                    employee_no,
+                    department_manager_name,
+                    is_department_manager,
+                    company_id,
+                    department_id,
+                    source_key,
+                    sort_order,
+                    created_at_ms,
+                    updated_at_ms
+                FROM org_employees
+                WHERE employee_user_id = ?
+                """,
+                (normalized,),
+            ).fetchone()
+            return self._row_to_employee(row) if row else None
+        finally:
+            conn.close()
+
     def list_audit_logs(
         self,
         *,

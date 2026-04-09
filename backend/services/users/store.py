@@ -24,9 +24,11 @@ from .store_support import (
     build_username_reference_map,
     normalize_lookup_ids,
 )
+from .tool_permission_store import UserToolPermissionStore
 USER_LOOKUP_QUERIES = {
     "username": f"SELECT {USER_READ_COLUMNS} FROM users WHERE username = ?",
     "user_id": f"SELECT {USER_READ_COLUMNS} FROM users WHERE user_id = ?",
+    "employee_user_id": f"SELECT {USER_READ_COLUMNS} FROM users WHERE employee_user_id = ?",
 }
 
 
@@ -36,6 +38,7 @@ class UserStore:
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._credential_store = UserCredentialStore(connection_factory=self._get_connection)
         self._group_membership_store = UserPermissionGroupStore(connection_factory=self._get_connection)
+        self._tool_permission_store = UserToolPermissionStore(connection_factory=self._get_connection)
 
     def _get_connection(self):
         return connect_sqlite(self.db_path)
@@ -51,7 +54,8 @@ class UserStore:
                 return None
 
             group_ids = self._get_user_group_ids(str(row[0]), conn)
-            return build_user_from_row(row, group_ids=group_ids)
+            tool_ids = self._get_user_tool_ids(str(row[0]), conn)
+            return build_user_from_row(row, group_ids=group_ids, tool_ids=tool_ids)
         finally:
             conn.close()
 
@@ -60,6 +64,12 @@ class UserStore:
 
     def get_by_user_id(self, user_id: str) -> Optional[User]:
         return self._fetch_user_by("user_id", user_id)
+
+    def get_by_employee_user_id(self, employee_user_id: str) -> Optional[User]:
+        normalized = str(employee_user_id or "").strip()
+        if not normalized:
+            return None
+        return self._fetch_user_by("employee_user_id", normalized)
 
     def get_usernames_by_ids(self, user_ids: Set[str]) -> dict[str, str]:
         ids = normalize_lookup_ids(user_ids)
@@ -104,10 +114,14 @@ class UserStore:
     def _get_user_group_ids(self, user_id: str, conn) -> List[int]:
         return self._group_membership_store.list_group_ids(user_id, conn=conn)
 
+    def _get_user_tool_ids(self, user_id: str, conn) -> List[str]:
+        return self._tool_permission_store.list_tool_ids(user_id, conn=conn)
+
     def create_user(
         self,
         username: str,
         password: str,
+        employee_user_id: Optional[str] = None,
         full_name: Optional[str] = None,
         email: Optional[str] = None,
         manager_user_id: Optional[str] = None,
@@ -138,14 +152,14 @@ class UserStore:
             cursor.execute(
                 """
                 INSERT INTO users (
-                    user_id, username, password_hash, email, manager_user_id, role, group_id, company_id, department_id,
+                    user_id, username, password_hash, email, manager_user_id, employee_user_id, role, group_id, company_id, department_id,
                     max_login_sessions, idle_timeout_minutes, status,
                     can_change_password, disable_login_enabled, disable_login_until_ms,
                     electronic_signature_enabled,
                     password_changed_at_ms,
                     credential_fail_count, credential_fail_window_started_at_ms, credential_locked_until_ms,
                     created_at_ms, created_by, full_name, managed_kb_root_node_id
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     user_id,
@@ -153,6 +167,7 @@ class UserStore:
                     password_hash_value,
                     email,
                     manager_user_id,
+                    str(employee_user_id).strip() if employee_user_id is not None else None,
                     role,
                     group_id,
                     company_id,
@@ -182,7 +197,7 @@ class UserStore:
                 email=email,
                 full_name=full_name,
                 manager_user_id=manager_user_id,
-                employee_user_id=None,
+                employee_user_id=(str(employee_user_id).strip() if employee_user_id is not None else None),
                 role=role,
                 group_id=group_id,
                 company_id=company_id,
@@ -201,6 +216,7 @@ class UserStore:
                 created_at_ms=now_ms,
                 created_by=created_by,
                 managed_kb_root_node_id=managed_kb_root_node_id,
+                tool_ids=[],
             )
         except sqlite3.IntegrityError:
             raise ValueError(f"Username '{username}' already exists")
@@ -408,7 +424,8 @@ class UserStore:
             users: list[User] = []
             for row in rows:
                 group_ids = self._get_user_group_ids(str(row[0]), conn)
-                users.append(build_user_from_row(row, group_ids=group_ids))
+                tool_ids = self._get_user_tool_ids(str(row[0]), conn)
+                users.append(build_user_from_row(row, group_ids=group_ids, tool_ids=tool_ids))
             return users
         finally:
             conn.close()
@@ -469,3 +486,63 @@ class UserStore:
 
     def set_user_permission_groups(self, user_id: str, group_ids: List[int]) -> bool:
         return self._group_membership_store.replace_group_ids(user_id, group_ids)
+
+    def list_user_tool_ids(self, user_id: str) -> List[str]:
+        conn = self._get_connection()
+        try:
+            return self._get_user_tool_ids(user_id, conn)
+        finally:
+            conn.close()
+
+    def set_user_tool_permissions(
+        self,
+        user_id: str,
+        tool_ids: List[str],
+        *,
+        granted_by_user_id: str | None = None,
+    ) -> bool:
+        return self._tool_permission_store.replace_tool_ids(
+            user_id,
+            tool_ids,
+            granted_by_user_id=granted_by_user_id,
+        )
+
+    def set_user_tool_permissions_with_managed_viewer_sync(
+        self,
+        *,
+        sub_admin_user_id: str,
+        tool_ids: List[str],
+        granted_by_user_id: str | None = None,
+    ) -> bool:
+        conn = self._get_connection()
+        try:
+            allowed = {
+                str(tool_id or "").strip()
+                for tool_id in tool_ids
+                if str(tool_id or "").strip()
+            }
+            self._tool_permission_store.replace_tool_ids(
+                sub_admin_user_id,
+                sorted(allowed),
+                granted_by_user_id=granted_by_user_id,
+                conn=conn,
+            )
+
+            managed_viewer_ids = self._tool_permission_store.list_managed_viewer_user_ids(
+                sub_admin_user_id,
+                conn=conn,
+            )
+            for viewer_user_id in managed_viewer_ids:
+                current = set(self._tool_permission_store.list_tool_ids(viewer_user_id, conn=conn))
+                scoped = sorted(current.intersection(allowed))
+                self._tool_permission_store.replace_tool_ids(
+                    viewer_user_id,
+                    scoped,
+                    granted_by_user_id=sub_admin_user_id,
+                    conn=conn,
+                )
+
+            conn.commit()
+            return True
+        finally:
+            conn.close()
