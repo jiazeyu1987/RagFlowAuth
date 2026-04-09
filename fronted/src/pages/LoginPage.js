@@ -79,7 +79,7 @@ const LoginPage = () => {
                 textShadow: '0 10px 30px rgba(0,0,0,0.45)',
               }}
             >
-              瑞泰知识库
+              瑛泰知识库
             </div>
             <div
               style={{

@@ -13,9 +13,16 @@ const getInitialIsMobile = () => {
 };
 
 export default function useKnowledgeBasesPage() {
-  const { canManageKbDirectory, canManageKnowledgeTree } = useAuth();
+  const {
+    canManageKbDirectory,
+    canManageKnowledgeTree,
+    isSubAdmin,
+    managedKbRootNodeId,
+    managedKbRootPath,
+  } = useAuth();
   const canManageDirectory = canManageKbDirectory();
   const canManageDatasets = canManageKnowledgeTree();
+  const isSubAdminUser = Boolean(isSubAdmin?.());
 
   const [subtab, setSubtab] = useState('kbs');
   const [isMobile, setIsMobile] = useState(getInitialIsMobile);
@@ -70,11 +77,16 @@ export default function useKnowledgeBasesPage() {
     setDragDatasetId,
     dropTargetNodeId,
     setDropTargetNodeId,
+    isSubAdmin: isSubAdminUser,
+    managedKbRootNodeId,
+    managedKbRootPath,
   });
 
   const mutations = useKnowledgeBasesMutations({
     canManageDirectory,
     canManageDatasets,
+    isSubAdmin: isSubAdminUser,
+    managedKbRootNodeId,
     datasetState: {
       kbList,
       setKbList,

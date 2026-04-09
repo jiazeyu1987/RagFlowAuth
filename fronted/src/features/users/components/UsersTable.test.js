@@ -113,4 +113,35 @@ describe('UsersTable', () => {
     expect(screen.getByTestId('users-reset-password-u-allowed')).toBeInTheDocument();
     expect(screen.queryByTestId('users-reset-password-u-denied')).not.toBeInTheDocument();
   });
+
+  it('renders the tool assignment button with a readable Chinese label', () => {
+    render(
+      <UsersTable
+        filteredUsers={[
+          {
+            user_id: 'u-viewer-tools',
+            username: 'viewer_tools',
+            full_name: 'Viewer Tools',
+            role: 'viewer',
+            status: 'active',
+          },
+        ]}
+        canEditUserPolicy={false}
+        canAssignGroups={false}
+        canAssignTools
+        canResetPasswords={false}
+        canToggleUserStatus={false}
+        canDeleteUsers={false}
+        onOpenPolicyModal={() => {}}
+        onAssignGroup={() => {}}
+        onAssignTool={() => {}}
+        onOpenResetPassword={() => {}}
+        onDeleteUser={() => {}}
+        onToggleUserStatus={() => {}}
+        statusUpdatingUserId=""
+      />
+    );
+
+    expect(screen.getByTestId('users-edit-tools-u-viewer-tools')).toHaveTextContent('工具权限');
+  });
 });

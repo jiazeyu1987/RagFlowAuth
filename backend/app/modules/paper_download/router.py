@@ -5,6 +5,7 @@ from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
 from backend.app.core.authz import AuthContextDep
+from backend.app.core.permission_resolver import assert_tool_allowed
 from backend.models.download import DownloadSessionStopResultEnvelope
 from backend.services.paper_download.manager import LOCAL_PAPERS_KB_REF, PaperDownloadManager
 
@@ -33,6 +34,7 @@ class PaperHistoryDeleteRequest(BaseModel):
 
 @router.post("/paper-download/sessions")
 async def create_paper_download_session(body: PaperSessionCreateRequest, ctx: AuthContextDep):
+    assert_tool_allowed(ctx.snapshot, "paper_download")
     mgr = PaperDownloadManager(ctx.deps)
     sources = {k: v.model_dump() for k, v in (body.sources or {}).items()}
     return mgr.create_session_and_download(
@@ -46,30 +48,35 @@ async def create_paper_download_session(body: PaperSessionCreateRequest, ctx: Au
 
 @router.get("/paper-download/sessions/{session_id}")
 async def get_paper_download_session(session_id: str, ctx: AuthContextDep):
+    assert_tool_allowed(ctx.snapshot, "paper_download")
     mgr = PaperDownloadManager(ctx.deps)
     return mgr.get_session_payload(session_id=session_id, ctx=ctx)
 
 
 @router.post("/paper-download/sessions/{session_id}/stop", response_model=DownloadSessionStopResultEnvelope)
 async def stop_paper_download_session(session_id: str, ctx: AuthContextDep):
+    assert_tool_allowed(ctx.snapshot, "paper_download")
     mgr = PaperDownloadManager(ctx.deps)
     return mgr.stop_session_download(session_id=session_id, ctx=ctx)
 
 
 @router.get("/paper-download/history/keywords")
 async def list_paper_download_history_keywords(ctx: AuthContextDep):
+    assert_tool_allowed(ctx.snapshot, "paper_download")
     mgr = PaperDownloadManager(ctx.deps)
     return mgr.list_history_keywords(ctx=ctx)
 
 
 @router.get("/paper-download/history/keywords/{history_key}")
 async def get_paper_download_history_items(history_key: str, ctx: AuthContextDep):
+    assert_tool_allowed(ctx.snapshot, "paper_download")
     mgr = PaperDownloadManager(ctx.deps)
     return mgr.get_history_group_payload(history_key=history_key, ctx=ctx)
 
 
 @router.post("/paper-download/history/keywords/{history_key}/add-all-to-local-kb")
 async def add_all_paper_history_items_to_local_kb(history_key: str, body: PaperAddRequest, ctx: AuthContextDep):
+    assert_tool_allowed(ctx.snapshot, "paper_download")
     mgr = PaperDownloadManager(ctx.deps)
     return mgr.add_history_group_to_local_kb(
         history_key=history_key,
@@ -80,12 +87,14 @@ async def add_all_paper_history_items_to_local_kb(history_key: str, body: PaperA
 
 @router.delete("/paper-download/history/keywords/{history_key}")
 async def delete_paper_download_history_keyword(history_key: str, ctx: AuthContextDep):
+    assert_tool_allowed(ctx.snapshot, "paper_download")
     mgr = PaperDownloadManager(ctx.deps)
     return mgr.delete_history_group(history_key=history_key, ctx=ctx)
 
 
 @router.post("/paper-download/history/keywords/delete")
 async def delete_paper_download_history_keyword_post(body: PaperHistoryDeleteRequest, ctx: AuthContextDep):
+    assert_tool_allowed(ctx.snapshot, "paper_download")
     mgr = PaperDownloadManager(ctx.deps)
     return mgr.delete_history_group(history_key=(body.history_key or ""), ctx=ctx)
 
@@ -97,12 +106,14 @@ async def preview_paper_download_item(
     ctx: AuthContextDep,
     render: str = "default",
 ):
+    assert_tool_allowed(ctx.snapshot, "paper_download")
     mgr = PaperDownloadManager(ctx.deps)
     return mgr.get_item_preview_payload(session_id=session_id, item_id=item_id, ctx=ctx, render=render)
 
 
 @router.get("/paper-download/sessions/{session_id}/items/{item_id}/download")
 async def download_paper_download_item(session_id: str, item_id: int, ctx: AuthContextDep):
+    assert_tool_allowed(ctx.snapshot, "paper_download")
     mgr = PaperDownloadManager(ctx.deps)
     content, filename, mime_type = mgr.get_item_download_payload(session_id=session_id, item_id=item_id, ctx=ctx)
     return Response(
@@ -114,6 +125,7 @@ async def download_paper_download_item(session_id: str, item_id: int, ctx: AuthC
 
 @router.post("/paper-download/sessions/{session_id}/items/{item_id}/add-to-local-kb")
 async def add_paper_item_to_local_kb(session_id: str, item_id: int, body: PaperAddRequest, ctx: AuthContextDep):
+    assert_tool_allowed(ctx.snapshot, "paper_download")
     mgr = PaperDownloadManager(ctx.deps)
     return mgr.add_item_to_local_kb(
         session_id=session_id,
@@ -126,6 +138,7 @@ async def add_paper_item_to_local_kb(session_id: str, item_id: int, body: PaperA
 
 @router.post("/paper-download/sessions/{session_id}/add-all-to-local-kb")
 async def add_all_paper_items_to_local_kb(session_id: str, body: PaperAddRequest, ctx: AuthContextDep):
+    assert_tool_allowed(ctx.snapshot, "paper_download")
     mgr = PaperDownloadManager(ctx.deps)
     return mgr.add_all_to_local_kb(
         session_id=session_id,
@@ -136,6 +149,7 @@ async def add_all_paper_items_to_local_kb(session_id: str, body: PaperAddRequest
 
 @router.delete("/paper-download/sessions/{session_id}/items/{item_id}")
 async def delete_paper_download_item(session_id: str, item_id: int, ctx: AuthContextDep, delete_local_kb: bool = True):
+    assert_tool_allowed(ctx.snapshot, "paper_download")
     mgr = PaperDownloadManager(ctx.deps)
     return mgr.delete_item(
         session_id=session_id,
@@ -147,5 +161,6 @@ async def delete_paper_download_item(session_id: str, item_id: int, ctx: AuthCon
 
 @router.delete("/paper-download/sessions/{session_id}")
 async def delete_paper_download_session(session_id: str, ctx: AuthContextDep, delete_local_kb: bool = True):
+    assert_tool_allowed(ctx.snapshot, "paper_download")
     mgr = PaperDownloadManager(ctx.deps)
     return mgr.delete_session(session_id=session_id, ctx=ctx, delete_local_kb=delete_local_kb)

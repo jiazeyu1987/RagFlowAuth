@@ -31,6 +31,26 @@ describe('useUserCreateManagement', () => {
     await waitFor(() => expect(result.current.newUser.department_id).toBe(''));
   });
 
+  it('defaults create modal company to target company when present', async () => {
+    const { result } = renderHook(() =>
+      useUserCreateManagement({
+        companies: [
+          { id: 8, name: 'Other Co' },
+          { id: 19, name: '\u745b\u6cf0\u533b\u7597' },
+        ],
+        departments: [],
+        fetchUsers: jest.fn(),
+        mapErrorMessage: (value) => value,
+      })
+    );
+
+    act(() => {
+      result.current.handleOpenCreateModal();
+    });
+
+    await waitFor(() => expect(result.current.newUser.company_id).toBe('19'));
+  });
+
   it('submits a valid create request and resets modal state', async () => {
     const fetchUsers = jest.fn().mockResolvedValue(undefined);
     const { result } = renderHook(() =>
@@ -43,6 +63,9 @@ describe('useUserCreateManagement', () => {
 
     act(() => {
       result.current.handleOpenCreateModal();
+      result.current.setNewUserField('username', 'emp-001');
+      result.current.setNewUserField('employee_user_id', 'emp-001');
+      result.current.setNewUserField('full_name', 'Alice');
       result.current.setNewUserField('company_id', '1');
       result.current.setNewUserField('department_id', '11');
       result.current.setNewUserField('manager_user_id', 'sub-1');
@@ -59,6 +82,8 @@ describe('useUserCreateManagement', () => {
       expect(usersApi.create).toHaveBeenCalledWith(
         expect.objectContaining({
           role: 'viewer',
+          username: 'emp-001',
+          employee_user_id: 'emp-001',
           company_id: 1,
           department_id: 11,
           manager_user_id: 'sub-1',

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { notificationApi } from '../api';
+import { mapUserFacingErrorMessage } from '../../../shared/errors/userFacingErrorMessages';
 import useNotificationChannelSettings from './useNotificationChannelSettings';
 import useNotificationHistory from './useNotificationHistory';
 import useNotificationRuleSettings from './useNotificationRuleSettings';
@@ -57,7 +58,7 @@ export default function useNotificationSettingsPage() {
       hydrateRules(nextRulesGroups);
       await loadHistory(historyFiltersRef.current);
     } catch (requestError) {
-      setError(requestError?.message || '加载通知设置失败');
+      setError(mapUserFacingErrorMessage(requestError?.message, '加载通知设置失败'));
     } finally {
       setLoading(false);
     }
@@ -76,7 +77,7 @@ export default function useNotificationSettingsPage() {
       setNotice('通知通道已保存');
       await loadPage({ keepNotice: true });
     } catch (requestError) {
-      setError(requestError?.message || '保存通知通道失败');
+      setError(mapUserFacingErrorMessage(requestError?.message, '保存通知通道失败'));
     } finally {
       setChannelsSaving(false);
     }
@@ -90,7 +91,7 @@ export default function useNotificationSettingsPage() {
       await persistRules();
       setNotice('通知规则已保存');
     } catch (requestError) {
-      setError(requestError?.message || '保存通知规则失败');
+      setError(mapUserFacingErrorMessage(requestError?.message, '保存通知规则失败'));
     } finally {
       setRulesSaving(false);
     }
@@ -101,7 +102,7 @@ export default function useNotificationSettingsPage() {
     try {
       await loadHistory(filters);
     } catch (requestError) {
-      setError(requestError?.message || '加载通知历史失败');
+      setError(mapUserFacingErrorMessage(requestError?.message, '加载通知历史失败'));
     }
   }, [historyFiltersRef, loadHistory]);
 
@@ -110,7 +111,7 @@ export default function useNotificationSettingsPage() {
     try {
       await resetHistoryFilters();
     } catch (requestError) {
-      setError(requestError?.message || '加载通知历史失败');
+      setError(mapUserFacingErrorMessage(requestError?.message, '加载通知历史失败'));
     }
   }, [resetHistoryFilters]);
 
@@ -118,7 +119,7 @@ export default function useNotificationSettingsPage() {
     try {
       await toggleLogs(jobId);
     } catch (requestError) {
-      setError(requestError?.message || '加载通知任务日志失败');
+      setError(mapUserFacingErrorMessage(requestError?.message, '加载通知任务日志失败'));
     }
   }, [toggleLogs]);
 
@@ -130,7 +131,7 @@ export default function useNotificationSettingsPage() {
       setNotice(successText);
       await loadHistory(historyFiltersRef.current);
     } catch (requestError) {
-      setError(requestError?.message || '通知任务操作失败');
+      setError(mapUserFacingErrorMessage(requestError?.message, '通知任务操作失败'));
     }
   }, [historyFiltersRef, loadHistory]);
 

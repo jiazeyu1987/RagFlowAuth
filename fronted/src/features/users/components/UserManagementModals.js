@@ -3,19 +3,26 @@ import CreateUserModal from './modals/CreateUserModal';
 import ResetPasswordModal from './modals/ResetPasswordModal';
 import PolicyModal from './modals/PolicyModal';
 import GroupModal from './modals/GroupModal';
+import ToolModal from './modals/ToolModal';
 import DisableUserModal from './modals/DisableUserModal';
 
 const UserManagementModals = ({
   canCreateUsers,
+  allUsers,
   showCreateModal,
   newUser,
   createUserError,
   availableGroups,
+  availableTools,
+  assignableTools,
   permissionGroupsLoading,
   permissionGroupsError,
   editingGroupUser,
   showGroupModal,
   selectedGroupIds,
+  editingToolUser,
+  showToolModal,
+  selectedToolIds,
   showResetPasswordModal,
   resetPasswordUser,
   resetPasswordValue,
@@ -50,11 +57,13 @@ const UserManagementModals = ({
   handleCloseCreateModal,
   setNewUserField,
   toggleNewUserGroup,
+  toggleNewUserTool,
   handleCreateUser,
   handleCloseResetPassword,
   handleSubmitResetPassword,
   handleClosePolicyModal,
   handleTogglePolicyGroup,
+  handleTogglePolicyTool,
   handleSavePolicy,
   handleCloseDisableUserModal,
   handleChangeDisableMode,
@@ -63,6 +72,9 @@ const UserManagementModals = ({
   handleCloseGroupModal,
   toggleSelectedGroup,
   handleSaveGroup,
+  handleCloseToolModal,
+  toggleSelectedTool,
+  handleSaveTool,
   handleCreateModalRootDirectory,
   handlePolicyRootDirectory,
 }) => (
@@ -88,8 +100,7 @@ const UserManagementModals = ({
       departments={departments}
       policySubAdminOptions={policySubAdminOptions}
       availableGroups={availableGroups}
-      permissionGroupsLoading={permissionGroupsLoading}
-      permissionGroupsError={permissionGroupsError}
+      availableTools={availableTools}
       kbDirectoryNodes={kbDirectoryNodes}
       kbDirectoryLoading={kbDirectoryLoading}
       kbDirectoryError={kbDirectoryError}
@@ -101,6 +112,7 @@ const UserManagementModals = ({
       policySubmitting={policySubmitting}
       onChangePolicyForm={handleChangePolicyForm}
       onToggleGroup={handleTogglePolicyGroup}
+      onToggleTool={handleTogglePolicyTool}
       onCancel={handleClosePolicyModal}
       onSave={handleSavePolicy}
       onCreateRootDirectory={handlePolicyRootDirectory}
@@ -124,12 +136,11 @@ const UserManagementModals = ({
         open={showCreateModal}
         newUser={newUser}
         error={createUserError}
+        allUsers={allUsers}
         companies={companies}
         departments={departments}
         subAdminOptions={subAdminOptions}
-        availableGroups={availableGroups}
-        permissionGroupsLoading={permissionGroupsLoading}
-        permissionGroupsError={permissionGroupsError}
+        availableTools={availableTools}
         kbDirectoryNodes={kbDirectoryNodes}
         kbDirectoryLoading={kbDirectoryLoading}
         kbDirectoryError={kbDirectoryError}
@@ -139,7 +150,7 @@ const UserManagementModals = ({
         onSubmit={handleCreateUser}
         onCancel={handleCloseCreateModal}
         onFieldChange={setNewUserField}
-        onToggleGroup={toggleNewUserGroup}
+        onToggleTool={toggleNewUserTool}
         onCreateRootDirectory={handleCreateModalRootDirectory}
       />
     ) : null}
@@ -154,6 +165,16 @@ const UserManagementModals = ({
       onToggleGroup={toggleSelectedGroup}
       onCancel={handleCloseGroupModal}
       onSave={handleSaveGroup}
+    />
+
+    <ToolModal
+      open={showToolModal}
+      editingToolUser={editingToolUser}
+      availableTools={assignableTools}
+      selectedToolIds={selectedToolIds}
+      onToggleTool={toggleSelectedTool}
+      onCancel={handleCloseToolModal}
+      onSave={handleSaveTool}
     />
   </>
 );

@@ -6,6 +6,7 @@ import { buildUserManagementSubAdminOptions } from '../utils/userSubAdminOptions
 export const useUserManagementViewModel = ({
   allUsers,
   createCompanyId,
+  createEmployeeUserId,
   policyCompanyId,
   policyUserId,
 }) => {
@@ -19,10 +20,11 @@ export const useUserManagementViewModel = ({
       buildUserManagementSubAdminOptions({
         users: allUsers,
         createCompanyId,
+        createEmployeeUserId,
         policyCompanyId,
         policyUserId,
       }),
-    [allUsers, createCompanyId, policyCompanyId, policyUserId]
+    [allUsers, createCompanyId, createEmployeeUserId, policyCompanyId, policyUserId]
   );
 
   const handleResetFilters = useCallback(() => {

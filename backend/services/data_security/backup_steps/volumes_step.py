@@ -2,8 +2,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from backend.app.core.paths import repo_root
-
 from ..common import ensure_dir
 from ..docker_utils import (
     docker_compose_start,
@@ -13,6 +11,7 @@ from ..docker_utils import (
     resolve_backend_helper_image,
     docker_tar_volume,
 )
+from ..models import resolve_runtime_compose_file_path
 from .context import BackupContext, BackupCancelledError
 
 
@@ -26,9 +25,9 @@ def backup_ragflow_volumes(ctx: BackupContext) -> None:
     compose_path = (settings.ragflow_compose_path or "").strip()
     if not compose_path:
         raise RuntimeError("未设置 RAGFlow docker-compose.yml 路径（请在“数据安全”里选择）")
-    compose_file = Path(compose_path)
-    if not compose_file.is_absolute():
-        compose_file = repo_root() / compose_file
+    compose_file = resolve_runtime_compose_file_path(compose_path)
+    if compose_file is None:
+        raise RuntimeError("ragflow_compose_path_required")
     if not compose_file.exists():
         raise RuntimeError(f"找不到 RAGFlow docker-compose.yml：{compose_file}")
 

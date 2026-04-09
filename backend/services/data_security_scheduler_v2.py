@@ -169,7 +169,15 @@ class BackupSchedulerV2:
             return False, "增量 cron 无效或当前未到触发点", None
 
         last_success_ms = settings.last_incremental_backup_time_ms or 0
-        last_marker_ms = max(last_success_ms, self._last_incremental_attempt_ms or 0)
+        persisted_last_run_ms = settings.last_run_at_ms or 0
+        # `last_run_at_ms` is updated when a scheduled backup starts. Keep using it
+        # as a persisted anti-replay marker so a container restart does not rerun
+        # the same cron window after a failed/interrupted attempt.
+        last_marker_ms = max(
+            last_success_ms,
+            persisted_last_run_ms,
+            self._last_incremental_attempt_ms or 0,
+        )
         if scheduled_ms <= last_marker_ms:
             return False, "增量备份已在本次调度窗口尝试/完成", scheduled_ms
 
@@ -202,7 +210,12 @@ class BackupSchedulerV2:
             return False, "全量 cron 无效或当前未到触发点", None
 
         last_success_ms = settings.last_full_backup_time_ms or 0
-        last_marker_ms = max(last_success_ms, self._last_full_attempt_ms or 0)
+        persisted_last_run_ms = settings.last_run_at_ms or 0
+        last_marker_ms = max(
+            last_success_ms,
+            persisted_last_run_ms,
+            self._last_full_attempt_ms or 0,
+        )
         if scheduled_ms <= last_marker_ms:
             return False, "全量备份已在本次调度窗口尝试/完成", scheduled_ms
 

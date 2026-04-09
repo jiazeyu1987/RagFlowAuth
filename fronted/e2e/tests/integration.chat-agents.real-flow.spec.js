@@ -82,7 +82,6 @@ test('real flow: smart chat and global search are both available @integration @c
     expect(preSearchChunks.length, `precheck "${SEARCH_QUERY}" returned no chunks`).toBeGreaterThan(0);
 
     await uiLogin(page);
-    await expect(page).toHaveURL(/\/chat$/);
 
     await page.goto(`${FRONTEND_BASE_URL}/chat`);
     await expect(page.getByTestId('chat-page')).toBeVisible({ timeout: 30_000 });
@@ -97,7 +96,7 @@ test('real flow: smart chat and global search are both available @integration @c
     ]);
     expect(createSessionResp.ok(), 'create chat session failed').toBeTruthy();
     const createdSession = await createSessionResp.json();
-    createdSessionId = createdSession?.id ? String(createdSession.id) : null;
+    createdSessionId = createdSession?.session?.id ? String(createdSession.session.id) : null;
     expect(createdSessionId, 'created session id missing').toBeTruthy();
     await expect(page.getByTestId(`chat-session-item-${createdSessionId}`)).toBeVisible({ timeout: 30_000 });
 

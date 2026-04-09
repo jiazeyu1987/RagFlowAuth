@@ -137,4 +137,14 @@ describe('useDocumentAuditPage', () => {
       }),
     ]);
   });
+
+  it('maps backend ascii permission codes to Chinese error messages', async () => {
+    usersApi.items.mockRejectedValueOnce(new Error('no_knowledge_management_permission'));
+
+    const { result } = renderHook(() => useDocumentAuditPage());
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    expect(result.current.error).toBe('当前账号没有知识库管理权限');
+  });
 });

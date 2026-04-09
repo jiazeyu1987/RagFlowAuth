@@ -26,6 +26,7 @@ class User:
     disable_login_until_ms: Optional[int] = None
     # Source of truth permission groups.
     group_ids: List[int] | None = None
+    tool_ids: List[str] | None = None
     status: str = "active"
     created_at_ms: int = 0
     last_login_at_ms: Optional[int] = None
@@ -40,3 +41,5 @@ class User:
     def __post_init__(self):
         if self.group_ids is None:
             self.group_ids = []
+        if self.tool_ids is None:
+            self.tool_ids = []

@@ -1,9 +1,23 @@
 import { useEffect, useRef, useState } from 'react';
 
 import { knowledgeUploadApi } from './api';
+import { mapUserFacingErrorMessage } from '../../../shared/errors/userFacingErrorMessages';
 import { getDisplayPath, getFileExtensionLower, getFileUniqueKey } from './utils';
 
 const normalizeKbRef = (value) => String(value || '').trim();
+const OPERATION_WORKFLOW_NOT_CONFIGURED_MESSAGE =
+  '管理员没有配置文件上传审批流';
+
+const mapUploadErrorMessage = (errorMessage) => {
+  const normalizedMessage = String(errorMessage || '').trim();
+  if (!normalizedMessage) {
+    return '上传失败';
+  }
+  if (normalizedMessage === 'operation_workflow_not_configured') {
+    return OPERATION_WORKFLOW_NOT_CONFIGURED_MESSAGE;
+  }
+  return mapUserFacingErrorMessage(normalizedMessage, '上传失败');
+};
 
 export default function useKnowledgeUploadFiles({
   kbId,
@@ -120,13 +134,16 @@ export default function useKnowledgeUploadFiles({
           results.push({
             ok: false,
             filename: getDisplayPath(file),
-            error: requestError?.message || '上传失败',
+            error: mapUploadErrorMessage(requestError?.message),
           });
         }
       }
 
       const successCount = results.filter((item) => item.ok).length;
       const failedCount = results.length - successCount;
+      const hasWorkflowNotConfiguredError = results.some(
+        (item) => !item.ok && item.error === OPERATION_WORKFLOW_NOT_CONFIGURED_MESSAGE
+      );
 
       if (failedCount === 0) {
         const requestIds = results.map((item) => item.requestId).filter(Boolean);
@@ -143,15 +160,18 @@ export default function useKnowledgeUploadFiles({
       }
 
       const firstFailedResult = results.find((item) => !item.ok);
-      const failureExample = firstFailedResult
-        ? `。例如 ${firstFailedResult.filename}: ${firstFailedResult.error}`
-        : '';
+      const failureExample =
+        hasWorkflowNotConfiguredError || !firstFailedResult
+          ? ''
+          : `。例如 ${firstFailedResult.filename}: ${firstFailedResult.error}`;
 
       setError(
-        `申请提交完成：成功 ${successCount} 个，失败 ${failedCount} 个${failureExample}`
+        hasWorkflowNotConfiguredError
+          ? `申请提交完成：成功 ${successCount} 个，失败 ${failedCount} 个。${OPERATION_WORKFLOW_NOT_CONFIGURED_MESSAGE}`
+          : `申请提交完成：成功 ${successCount} 个，失败 ${failedCount} 个${failureExample}`
       );
     } catch (requestError) {
-      setError(requestError?.message || '上传失败');
+      setError(mapUploadErrorMessage(requestError?.message));
     } finally {
       setUploading(false);
       setUploadProgress(null);

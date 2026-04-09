@@ -35,6 +35,7 @@ class UsersPort(Protocol):
         *,
         username: str,
         password: str,
+        employee_user_id: str | None,
         full_name: Optional[str],
         email: Optional[str],
         manager_user_id: Optional[str],
@@ -75,11 +76,29 @@ class UsersPort(Protocol):
     def delete_user(self, user_id: str) -> bool: ...
     def update_password(self, user_id: str, new_password: str) -> None: ...
     def set_user_permission_groups(self, user_id: str, group_ids: list[int]) -> None: ...
+    def list_user_tool_ids(self, user_id: str) -> list[str]: ...
+    def set_user_tool_permissions(
+        self,
+        user_id: str,
+        tool_ids: list[str],
+        *,
+        granted_by_user_id: str | None = None,
+    ) -> None: ...
+    def set_user_tool_permissions_with_managed_viewer_sync(
+        self,
+        *,
+        sub_admin_user_id: str,
+        tool_ids: list[str],
+        granted_by_user_id: str | None = None,
+    ) -> None: ...
     def enforce_login_session_limit(self, user_id: str, max_sessions: int) -> list[str]: ...
     def get_permission_group(self, group_id: int): ...
     def get_group_by_name(self, name: str): ...
     def get_company(self, company_id: int): ...
     def get_department(self, department_id: int): ...
+    def get_user_by_employee_user_id(self, employee_user_id: str): ...
+    def get_employee_by_user_id(self, employee_user_id: str): ...
+    def get_default_department_id_for_company(self, company_id: int): ...
     def get_login_session_summary(self, user_id: str, idle_timeout_minutes: int | None): ...
     def get_login_session_summaries(self, idle_timeout_by_user: dict[str, int | None]): ...
     def get_managed_kb_root_path(self, *, company_id: int | None, node_id: str | None): ...
@@ -195,6 +214,69 @@ class UserManagementManager(UserManagementMutationSupport):
         return None if for_create else ""
 
     @staticmethod
+    def _normalize_employee_user_id(employee_user_id: str | None) -> str | None:
+        normalized = str(employee_user_id or "").strip()
+        return normalized or None
+
+    def _resolve_default_department_id_for_company(self, *, company_id: int | None) -> int | None:
+        if company_id is None:
+            return None
+        department_id = self._port.get_default_department_id_for_company(int(company_id))
+        if department_id is None:
+            return None
+        try:
+            return int(department_id)
+        except Exception:
+            return None
+
+    def _validate_create_employee_binding(
+        self,
+        *,
+        user_data: UserCreate,
+    ) -> tuple[str, str, int, int]:
+        employee_user_id = self._normalize_employee_user_id(user_data.employee_user_id)
+        if not employee_user_id:
+            raise UserManagementError("employee_user_id_required")
+
+        employee_profile = self._port.get_employee_by_user_id(employee_user_id)
+        if not employee_profile:
+            raise UserManagementError("employee_user_id_not_found")
+
+        org_full_name = str(getattr(employee_profile, "name", "") or "").strip()
+        org_company_id = getattr(employee_profile, "company_id", None)
+        org_department_id = getattr(employee_profile, "department_id", None)
+        if not org_full_name or org_company_id is None:
+            raise UserManagementError("employee_org_profile_mismatch")
+        try:
+            org_company_id = int(org_company_id)
+        except Exception:
+            raise UserManagementError("employee_org_profile_mismatch") from None
+
+        if org_department_id is None:
+            org_department_id = self._resolve_default_department_id_for_company(company_id=org_company_id)
+            if org_department_id is None:
+                raise UserManagementError("default_department_not_found_for_company")
+        else:
+            try:
+                org_department_id = int(org_department_id)
+            except Exception:
+                raise UserManagementError("employee_org_profile_mismatch") from None
+
+        submitted_full_name = self._normalize_full_name(user_data.full_name, for_create=True)
+        if (
+            submitted_full_name != org_full_name
+            or user_data.company_id != org_company_id
+            or user_data.department_id != org_department_id
+        ):
+            raise UserManagementError("employee_org_profile_mismatch")
+
+        bound_user = self._port.get_user_by_employee_user_id(employee_user_id)
+        if bound_user is not None:
+            raise UserManagementError("employee_user_id_already_bound", status_code=409)
+
+        return employee_user_id, org_full_name, org_company_id, org_department_id
+
+    @staticmethod
     def _filter_supported_kwargs(method, kwargs: dict[str, object]) -> dict[str, object]:
         try:
             signature = inspect.signature(method)
@@ -300,6 +382,29 @@ class UserManagementManager(UserManagementMutationSupport):
             raise UserManagementError("managed_kb_root_node_not_found")
         return clean_node_id, path
 
+    def _resolve_actor_role(self, *, actor_user_id: str | None) -> str:
+        clean_actor_user_id = str(actor_user_id or "").strip()
+        if not clean_actor_user_id:
+            return ""
+        actor_user = self._port.get_user(clean_actor_user_id)
+        if actor_user is None:
+            return ""
+        return str(getattr(actor_user, "role", "") or "").strip()
+
+    @staticmethod
+    def _assert_tool_assignment_actor_scope(
+        *,
+        actor_role: str,
+        effective_role: str,
+        tool_ids_requested: bool,
+    ) -> None:
+        if not tool_ids_requested:
+            return
+        if actor_role == "admin" and effective_role != "sub_admin":
+            raise UserManagementError("admin_can_only_assign_sub_admin_tools", status_code=403)
+        if actor_role == "sub_admin" and effective_role != "viewer":
+            raise UserManagementError("sub_admin_can_only_assign_viewer_tools", status_code=403)
+
     def _to_response(self, user, session_summary: dict[str, int | None] | None = None) -> UserResponse:
         group = self._port.get_permission_group(user.group_id) if user.group_id else None
         company = self._port.get_company(user.company_id) if getattr(user, "company_id", None) else None
@@ -330,6 +435,7 @@ class UserManagementManager(UserManagementMutationSupport):
         return UserResponse(
             user_id=user.user_id,
             username=user.username,
+            employee_user_id=getattr(user, "employee_user_id", None),
             full_name=getattr(user, "full_name", None),
             email=user.email,
             manager_user_id=getattr(user, "manager_user_id", None),
@@ -343,6 +449,7 @@ class UserManagementManager(UserManagementMutationSupport):
             group_name=group["group_name"] if group else None,
             group_ids=user.group_ids,
             permission_groups=self._build_permission_groups(user.group_ids),
+            tool_ids=list(getattr(user, "tool_ids", []) or []),
             role=user.role,
             status=user.status,
             can_change_password=bool(getattr(user, "can_change_password", True)),
@@ -399,13 +506,17 @@ class UserManagementManager(UserManagementMutationSupport):
         return [self._to_response(u, summaries.get(u.user_id)) for u in users]
 
     def create_user(self, *, user_data: UserCreate, created_by: str) -> UserResponse:
+        employee_user_id, full_name, profile_company_id, profile_department_id = (
+            self._validate_create_employee_binding(user_data=user_data)
+        )
+        username = str(user_data.username or "").strip()
         role = user_data.role or "viewer"
         if role not in VALID_ROLES:
             raise UserManagementError(f"Invalid role: {role}")
         status = self._normalize_user_status(user_data.status, for_create=True)
         organization = self._resolve_organization_context(
-            company_id=user_data.company_id,
-            department_id=user_data.department_id,
+            company_id=profile_company_id,
+            department_id=profile_department_id,
         )
 
         max_login_sessions, idle_timeout_minutes = self._normalize_login_policy(
@@ -418,7 +529,6 @@ class UserManagementManager(UserManagementMutationSupport):
             disable_login_until_ms=user_data.disable_login_until_ms,
             for_create=True,
         )
-        full_name = self._normalize_full_name(user_data.full_name, for_create=True)
         access = self._resolve_create_access_assignment(
             user_data=user_data,
             role=role,
@@ -426,11 +536,13 @@ class UserManagementManager(UserManagementMutationSupport):
             department_id=organization.department_id,
         )
         group_ids = self._resolve_create_group_ids(user_data=user_data, role=role)
+        tool_ids = self._resolve_create_tool_ids(user_data=user_data, role=role)
 
         try:
             create_kwargs = dict(
-                username=user_data.username,
+                username=username,
                 password=user_data.password,
+                employee_user_id=employee_user_id,
                 full_name=full_name,
                 email=user_data.email,
                 manager_user_id=access.manager_user_id,
@@ -457,6 +569,12 @@ class UserManagementManager(UserManagementMutationSupport):
 
         if group_ids:
             self._port.set_user_permission_groups(user.user_id, group_ids)
+        if role == "sub_admin":
+            self._port.set_user_tool_permissions(
+                user.user_id,
+                tool_ids,
+                granted_by_user_id=created_by,
+            )
 
         user = self._port.get_user(user.user_id)
         return self._to_response(user)
@@ -471,11 +589,12 @@ class UserManagementManager(UserManagementMutationSupport):
         )
         return self._to_response(user, summary)
 
-    def update_user(self, *, user_id: str, user_data: UserUpdate) -> UserResponse:
+    def update_user(self, *, user_id: str, user_data: UserUpdate, updated_by: str | None = None) -> UserResponse:
         current_user = self._port.get_user(user_id)
         if not current_user:
             raise UserManagementError("user_not_found", status_code=404)
         fields_set = set(getattr(user_data, "model_fields_set", set()) or set())
+        tool_ids_requested = user_data.tool_ids is not None
 
         role = user_data.role
         if role is not None and role not in VALID_ROLES:
@@ -529,6 +648,14 @@ class UserManagementManager(UserManagementMutationSupport):
             raise UserManagementError("admin_user_cannot_be_disabled")
 
         group_ids = self._resolve_update_group_ids(user_data=user_data)
+        tool_ids = self._resolve_update_tool_ids(user_data=user_data, role=effective_role)
+        if tool_ids is None and "role" in fields_set:
+            tool_ids = []
+        self._assert_tool_assignment_actor_scope(
+            actor_role=self._resolve_actor_role(actor_user_id=updated_by),
+            effective_role=effective_role,
+            tool_ids_requested=tool_ids_requested,
+        )
         update_kwargs = dict(
             user_id=user_id,
             full_name=full_name,
@@ -559,6 +686,25 @@ class UserManagementManager(UserManagementMutationSupport):
 
         if group_ids is not None:
             self._port.set_user_permission_groups(user.user_id, group_ids)
+        if tool_ids is not None:
+            if effective_role == "sub_admin":
+                self._port.set_user_tool_permissions_with_managed_viewer_sync(
+                    sub_admin_user_id=user.user_id,
+                    tool_ids=tool_ids,
+                    granted_by_user_id=updated_by,
+                )
+            elif effective_role == "viewer":
+                self._port.set_user_tool_permissions(
+                    user.user_id,
+                    tool_ids,
+                    granted_by_user_id=updated_by,
+                )
+            else:
+                self._port.set_user_tool_permissions(
+                    user.user_id,
+                    [],
+                    granted_by_user_id=updated_by,
+                )
 
         if max_login_sessions is not None:
             self._port.enforce_login_session_limit(user.user_id, max_login_sessions)

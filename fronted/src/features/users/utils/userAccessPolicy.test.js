@@ -3,6 +3,8 @@ import {
   buildCreateUserPayload,
   buildPolicyUpdatePayload,
   COMPANY_REQUIRED_MESSAGE,
+  EMPLOYEE_PROFILE_REQUIRED_MESSAGE,
+  EMPLOYEE_USER_ID_REQUIRED_MESSAGE,
   DISABLE_UNTIL_FUTURE_MESSAGE,
   DISABLE_UNTIL_REQUIRED_MESSAGE,
   IDLE_TIMEOUT_MESSAGE,
@@ -13,6 +15,8 @@ import {
   normalizeGroupIds,
   parseDisableUntilDate,
   SUB_ADMIN_REQUIRED_MESSAGE,
+  USERNAME_REQUIRED_MESSAGE,
+  validateCreateUserEmployeeBindingPayload,
   validateManagedUserPayload,
 } from './userAccessPolicy';
 
@@ -56,6 +60,7 @@ describe('userAccessPolicy', () => {
     expect(
       buildCreateUserPayload({
         username: 'viewer_a',
+        employee_user_id: 'viewer_a',
         password: 'secret',
         full_name: 'Viewer A',
         user_type: 'normal',
@@ -85,6 +90,7 @@ describe('userAccessPolicy', () => {
     expect(
       buildCreateUserPayload({
         username: 'sub_a',
+        employee_user_id: 'sub_a',
         user_type: 'sub_admin',
         manager_user_id: 'sub-1',
         managed_kb_root_node_id: 'node-1',
@@ -97,11 +103,44 @@ describe('userAccessPolicy', () => {
     ).toEqual(
       expect.objectContaining({
         role: 'sub_admin',
+        employee_user_id: 'sub_a',
         manager_user_id: null,
         managed_kb_root_node_id: 'node-1',
         group_ids: [7],
       })
     );
+  });
+
+  it('validates create-time employee binding payload', () => {
+    expect(() =>
+      validateCreateUserEmployeeBindingPayload({
+        username: 'viewer_a',
+        employee_user_id: null,
+        full_name: 'Viewer A',
+        company_id: 1,
+        department_id: 11,
+      })
+    ).toThrow(EMPLOYEE_USER_ID_REQUIRED_MESSAGE);
+
+    expect(() =>
+      validateCreateUserEmployeeBindingPayload({
+        username: '  ',
+        employee_user_id: 'viewer_a',
+        full_name: 'Viewer A',
+        company_id: 1,
+        department_id: 11,
+      })
+    ).toThrow(USERNAME_REQUIRED_MESSAGE);
+
+    expect(() =>
+      validateCreateUserEmployeeBindingPayload({
+        username: 'viewer_a',
+        employee_user_id: 'viewer_a',
+        full_name: '',
+        company_id: 1,
+        department_id: 11,
+      })
+    ).toThrow(EMPLOYEE_PROFILE_REQUIRED_MESSAGE);
   });
 
   it('builds policy payloads and strips admin-only mutable fields', () => {

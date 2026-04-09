@@ -55,7 +55,7 @@ test('ragflow real chat: multi-turn responses on target chat @integration @chat 
     });
     expect(createSessionResp.ok(), 'precreate chat session failed').toBeTruthy();
     const createdSession = await createSessionResp.json();
-    createdSessionId = createdSession?.id ? String(createdSession.id) : null;
+    createdSessionId = createdSession?.session?.id ? String(createdSession.session.id) : null;
     expect(createdSessionId, 'created session id missing').toBeTruthy();
 
     await uiLogin(page);

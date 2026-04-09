@@ -1,6 +1,7 @@
 import { useCallback } from 'react';
 
 import { documentsApi } from '../../documents/api';
+import { mapUserFacingErrorMessage } from '../../../shared/errors/userFacingErrorMessages';
 import { documentBrowserApi } from './api';
 import {
   buildBatchDownloadItems,
@@ -111,7 +112,7 @@ export default function useDocumentBrowserPageActions({
         setActionLoading((previous) => ({ ...previous, [`${docId}-download`]: true }));
         await documentsApi.downloadToBrowser(buildPreviewTarget(docId, datasetName, documents));
       } catch (requestError) {
-        setError(requestError?.message || TEXT.downloadFail);
+        setError(mapUserFacingErrorMessage(requestError?.message, TEXT.downloadFail));
       } finally {
         setActionLoading((previous) => ({ ...previous, [`${docId}-download`]: false }));
       }
@@ -131,7 +132,7 @@ export default function useDocumentBrowserPageActions({
           [datasetName]: (previous[datasetName] || []).filter((item) => item.id !== docId),
         }));
       } catch (requestError) {
-        setError(requestError?.message || TEXT.deleteFail);
+        setError(mapUserFacingErrorMessage(requestError?.message, TEXT.deleteFail));
       } finally {
         setActionLoading((previous) => ({ ...previous, [`${docId}-delete`]: false }));
       }
@@ -180,7 +181,7 @@ export default function useDocumentBrowserPageActions({
       await documentsApi.batchDownloadRagflowToBrowser(items);
       clearAllSelections();
     } catch (requestError) {
-      setError(requestError?.message || TEXT.batchFail);
+      setError(mapUserFacingErrorMessage(requestError?.message, TEXT.batchFail));
     } finally {
       setActionLoading((previous) => ({ ...previous, 'batch-download': false }));
     }

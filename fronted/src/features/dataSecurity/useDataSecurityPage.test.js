@@ -12,6 +12,7 @@ jest.mock('./api', () => ({
     getJob: jest.fn(),
     listRestoreDrills: jest.fn(),
     createRestoreDrill: jest.fn(),
+    runRealRestore: jest.fn(),
   },
 }));
 
@@ -51,6 +52,11 @@ describe('useDataSecurityPage', () => {
       job_id: 101,
       result: 'passed',
     });
+    dataSecurityApi.runRealRestore.mockResolvedValue({
+      job_id: 101,
+      result: 'success',
+      live_auth_db_path: '/app/data/auth.db',
+    });
   });
 
   it('loads settings, jobs, and restore options into stable hook state', async () => {
@@ -64,6 +70,9 @@ describe('useDataSecurityPage', () => {
     expect(result.current.localBackupTargetPath).toBe('/app/data/backups');
     expect(result.current.restoreEligibleJobs).toHaveLength(1);
     expect(result.current.selectedRestoreJobId).toBe('101');
+    expect(result.current.canSubmitRestoreDrill).toBe(true);
+    expect(result.current.canSubmitRealRestore).toBe(true);
+    expect(result.current.restoreDrillBlockedReason).toBe('');
     expect('windowsBackupTargetPath' in result.current).toBe(false);
   });
 
@@ -88,6 +97,53 @@ describe('useDataSecurityPage', () => {
       restore_target: 'qa-staging',
       verification_notes: 'local-only drill',
     });
+  });
+
+  it('submits real restore through the feature api using the selected local backup', async () => {
+    const { result } = renderHook(() => useDataSecurityPage());
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    let response = null;
+    await act(async () => {
+      response = await result.current.submitRealRestore({
+        changeReason: 'recover deleted user',
+        confirmationText: 'RESTORE',
+      });
+    });
+
+    expect(dataSecurityApi.runRealRestore).toHaveBeenCalledWith({
+      job_id: 101,
+      backup_path: '/app/data/backups/migration_pack_20260404_120000',
+      backup_hash: 'hash-local-101',
+      change_reason: 'recover deleted user',
+      confirmation_text: 'RESTORE',
+    });
+    expect(response).toEqual({
+      job_id: 101,
+      result: 'success',
+      live_auth_db_path: '/app/data/auth.db',
+    });
+  });
+
+  it('exposes a blocked reason when no local backup job can be used for restore drills', async () => {
+    dataSecurityApi.listJobs.mockResolvedValue([
+      createJob({
+        id: 301,
+        output_dir: '',
+        package_hash: 'hash-local-301',
+      }),
+    ]);
+
+    const { result } = renderHook(() => useDataSecurityPage());
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    expect(result.current.canSubmitRestoreDrill).toBe(false);
+    expect(result.current.canSubmitRealRestore).toBe(false);
+    expect(result.current.restoreDrillBlockedReason).toContain(
+      '当前没有可用于恢复的服务器本机备份任务'
+    );
   });
 
   it('saves only generic backup settings without Windows replica fields', async () => {

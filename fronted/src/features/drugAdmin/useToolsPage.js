@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
+import { mapUserFacingErrorMessage } from '../../shared/errors/userFacingErrorMessages';
 import drugAdminApi from './api';
 
 const DEFAULT_PAGE_SIZE = 12;
@@ -55,7 +56,7 @@ export default function useToolsPage({
       } catch (error) {
         if (!active) return;
         setProvinceTools([]);
-        setProvinceError(error?.message || provinceLoadErrorMessage);
+        setProvinceError(mapUserFacingErrorMessage(error?.message, provinceLoadErrorMessage));
       }
     };
 

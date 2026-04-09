@@ -45,6 +45,14 @@ class _RagflowService:
         return {"by_id": {}, "by_name": {}}
 
 
+class _UserToolPermissionStore:
+    def __init__(self, tool_ids_by_user: dict[str, list[str]]):
+        self._tool_ids_by_user = tool_ids_by_user
+
+    def list_tool_ids(self, user_id: str):
+        return list(self._tool_ids_by_user.get(str(user_id), []))
+
+
 class _Deps:
     def __init__(self, *, user: _User, package_drawing_store: PackageDrawingStore, groups: dict[int, dict] | None = None):
         self.user_store = _UserStore(user)
@@ -52,6 +60,11 @@ class _Deps:
         self.permission_group_store = _PermissionGroupStore(groups or {})
         self.ragflow_service = _RagflowService()
         self.knowledge_directory_manager = None
+        self.user_tool_permission_store = _UserToolPermissionStore(
+            {
+                user.user_id: ["package_drawing"],
+            }
+        )
 
 
 def _override_get_current_payload(_: Request) -> TokenPayload:

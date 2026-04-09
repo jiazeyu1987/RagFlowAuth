@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { mapUserFacingErrorMessage } from '../../shared/errors/userFacingErrorMessages';
 import drugAdminApi from './api';
 
 const MOBILE_BREAKPOINT = 768;
@@ -61,7 +62,7 @@ export default function useDrugAdminNavigatorPage() {
         if (!active) return;
         setProvinces([]);
         setSelectedProvince('');
-        setError(requestError?.message || '加载省份列表失败');
+        setError(mapUserFacingErrorMessage(requestError?.message, '加载省份列表失败'));
       } finally {
         if (active) {
           setLoading(false);
@@ -92,7 +93,7 @@ export default function useDrugAdminNavigatorPage() {
         setInfo(`${selectedProvince} 当前不可访问`);
       }
     } catch (requestError) {
-      setError(requestError?.message || '省份链接解析失败');
+      setError(mapUserFacingErrorMessage(requestError?.message, '省份链接解析失败'));
     } finally {
       setActionLoading(false);
     }
@@ -110,7 +111,7 @@ export default function useDrugAdminNavigatorPage() {
         `校验完成：共 ${result?.total || 0} 个，成功 ${result?.success || 0} 个，失败 ${result?.failed || 0} 个`
       );
     } catch (requestError) {
-      setError(requestError?.message || '批量校验失败');
+      setError(mapUserFacingErrorMessage(requestError?.message, '批量校验失败'));
     } finally {
       setVerifying(false);
     }

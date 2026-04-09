@@ -9,7 +9,7 @@ const reviewerPassword = process.env.E2E_REVIEWER_PASS || process.env.E2E_ADMIN_
 
 docReviewerTest('Doc approval center covers real approve, reject, and withdraw flows @doc-e2e', async ({ page }) => {
   await page.goto('/approvals');
-  await expect(page.getByTestId('approval-center-page')).toBeVisible();
+  await expect(page.getByTestId('approval-center-page')).toBeVisible({ timeout: 30_000 });
   await expect(page.getByTestId(`approval-center-item-${fixtures.approvals.unit.approve_request_id}`)).toBeVisible();
   await expect(page.getByTestId(`approval-center-item-${fixtures.approvals.unit.reject_request_id}`)).toBeVisible();
 

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { mapUserFacingErrorMessage } from '../../errors/userFacingErrorMessages';
 import { loadDocumentPreview } from '../../preview/ragflowPreviewManager';
 import { DOCUMENT_SOURCE } from '../constants';
 import {
@@ -270,11 +271,11 @@ export default function useDocumentPreviewSession({
         }
       } catch (requestError) {
         if (cancelled) return;
-        setError(requestError?.message || PREVIEW_FAILED_MESSAGE);
+        setError(mapUserFacingErrorMessage(requestError?.message, PREVIEW_FAILED_MESSAGE));
         previewTrace('open:failed', {
           ...traceContext,
           elapsedMs: Math.round(nowMs() - t0),
-          error: requestError?.message || String(requestError),
+          error: mapUserFacingErrorMessage(requestError?.message, PREVIEW_FAILED_MESSAGE),
         });
       } finally {
         if (!cancelled) {
@@ -329,7 +330,7 @@ export default function useDocumentPreviewSession({
         })
       );
     } catch (requestError) {
-      setError(requestError?.message || PREVIEW_FAILED_MESSAGE);
+      setError(mapUserFacingErrorMessage(requestError?.message, PREVIEW_FAILED_MESSAGE));
     } finally {
       setLoading(false);
     }

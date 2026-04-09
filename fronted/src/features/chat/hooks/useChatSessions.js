@@ -53,11 +53,15 @@ export const useChatSessions = ({ restoreSourcesIntoMessages }) => {
         return !HIDDEN_CHAT_NAMES.has(rawName) && !HIDDEN_CHAT_NAMES.has(normalized);
       });
       setChats(list);
-      if (list.length > 0) {
-        setSelectedChatId(list[0].id);
-      } else {
-        setSelectedChatId(null);
-      }
+      setSelectedChatId((previous) => {
+        if (list.length === 0) {
+          return null;
+        }
+        if (previous && list.some((chat) => String(chat?.id || '') === String(previous))) {
+          return previous;
+        }
+        return list[0].id;
+      });
     } catch (err) {
       setError(err?.message || '\u52a0\u8f7d\u804a\u5929\u52a9\u624b\u5931\u8d25');
     } finally {
@@ -116,6 +120,8 @@ export const useChatSessions = ({ restoreSourcesIntoMessages }) => {
   const createSession = useCallback(async () => {
     if (!selectedChatId) return;
     try {
+      // Invalidate in-flight list responses that started before this create.
+      fetchSessionsRequestRef.current += 1;
       const sessionName = '\u65b0\u5bf9\u8bdd';
       const session = await chatApi.createChatSession(selectedChatId, sessionName);
       setSessions((prev) => [session, ...prev]);

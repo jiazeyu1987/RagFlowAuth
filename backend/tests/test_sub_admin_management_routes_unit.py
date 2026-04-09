@@ -59,6 +59,20 @@ class _UserStore:
         return self._targets.get(str(user_id))
 
 
+class _UserToolPermissionStore:
+    def __init__(self, tool_ids_by_user: dict[str, list[str]] | None = None):
+        self._tool_ids_by_user = dict(tool_ids_by_user or {})
+
+    def list_tool_ids(self, user_id: str):
+        return list(self._tool_ids_by_user.get(str(user_id), []))
+
+
+class _RagflowService:
+    @staticmethod
+    def get_dataset_index():
+        return {"by_id": {}, "by_name": {}}
+
+
 class _KnowledgeManagementManager:
     def __init__(
         self,
@@ -77,6 +91,23 @@ class _KnowledgeManagementManager:
         if not self.can_manage:
             raise ValueError("no_knowledge_management_permission")
         return True
+
+    def get_management_scope(self, user):  # noqa: ARG002
+        if not self.can_manage:
+            return SimpleNamespace(
+                can_manage=False,
+                root_node_id=None,
+                root_node_path=None,
+                node_ids=frozenset(),
+                dataset_ids=frozenset(),
+            )
+        return SimpleNamespace(
+            can_manage=True,
+            root_node_id="node-root",
+            root_node_path="/Root",
+            node_ids=frozenset({"node-root"}),
+            dataset_ids=frozenset({"ds-in"}),
+        )
 
     def validate_group_kb_scope(self, *, user, accessible_kbs, accessible_kb_nodes):  # noqa: ARG002
         self.validated_group_scope.append(
@@ -382,6 +413,7 @@ class _UsersService:
             "group_id": user_data.group_id,
             "group_ids": list(user_data.group_ids or []),
             "permission_groups": [],
+            "tool_ids": list(user_data.tool_ids or []),
             "role": user_data.role or "viewer",
             "status": user_data.status,
             "can_change_password": user_data.can_change_password,
@@ -403,13 +435,14 @@ class _UsersService:
             "group_id": None,
             "group_ids": [],
             "permission_groups": [],
+            "tool_ids": [],
             "max_login_sessions": 3,
             "idle_timeout_minutes": 120,
             "created_at_ms": 1,
         }
 
-    def update_user(self, *, user_id, user_data):
-        self.updated.append((user_id, user_data))
+    def update_user(self, *, user_id, user_data, updated_by=None):
+        self.updated.append((user_id, user_data, updated_by))
         return {
             "user_id": user_id,
             "username": "target",
@@ -423,6 +456,7 @@ class _UsersService:
             "group_id": None,
             "group_ids": list(user_data.group_ids or []),
             "permission_groups": [],
+            "tool_ids": list(user_data.tool_ids or []),
             "can_change_password": True,
             "disable_login_enabled": False,
             "disable_login_until_ms": None,
@@ -456,6 +490,7 @@ def _make_permission_group_client(
     role: str = "sub_admin",
     *,
     group_ids: list[int] | None = None,
+    actor_tool_ids: list[str] | None = None,
     knowledge_bases_error: Exception | None = None,
     knowledge_tree_error: Exception | None = None,
     chat_list_error: Exception | None = None,
@@ -473,6 +508,12 @@ def _make_permission_group_client(
         permission_group_store=_PermissionGroupStore(),
         knowledge_management_manager=km,
         chat_management_manager=cm,
+        ragflow_service=_RagflowService(),
+        user_tool_permission_store=_UserToolPermissionStore(
+            {
+                user.user_id: list(actor_tool_ids or []),
+            }
+        ),
     )
     router = create_permission_groups_router()
     app.include_router(router, prefix="/api")
@@ -481,7 +522,13 @@ def _make_permission_group_client(
     return TestClient(app), km, cm, service
 
 
-def _make_users_client(*, role: str = "sub_admin", can_manage: bool = True, actor_group_ids: list[int] | None = None):
+def _make_users_client(
+    *,
+    role: str = "sub_admin",
+    can_manage: bool = True,
+    actor_group_ids: list[int] | None = None,
+    actor_tool_ids: list[str] | None = None,
+):
     user = _User(role=role, group_ids=actor_group_ids)
     km = _KnowledgeManagementManager(can_manage=can_manage)
     cm = _ChatManagementManager()
@@ -494,6 +541,12 @@ def _make_users_client(*, role: str = "sub_admin", can_manage: bool = True, acto
         knowledge_management_manager=km,
         chat_management_manager=cm,
         audit_log_manager=audit,
+        ragflow_service=_RagflowService(),
+        user_tool_permission_store=_UserToolPermissionStore(
+            {
+                user.user_id: list(actor_tool_ids or []),
+            }
+        ),
     )
     app.include_router(users_router, prefix="/api/users")
     app.dependency_overrides[auth_module.get_current_payload] = _override_get_current_payload
@@ -544,7 +597,7 @@ class TestSubAdminPermissionGroupRoutesUnit(unittest.TestCase):
         with client:
             resp = client.get("/api/permission-groups/assignable")
         self.assertEqual(resp.status_code, 200)
-        self.assertEqual([item["group_id"] for item in resp.json()["groups"]], [1, 41])
+        self.assertEqual([item["group_id"] for item in resp.json()["groups"]], [1, 41, 42, 43])
 
     def test_sub_admin_can_create_group_with_in_scope_kb_resources(self):
         client, km, cm, service = _make_permission_group_client()
@@ -853,15 +906,15 @@ class TestSubAdminUserGroupAssignmentRoutesUnit(unittest.TestCase):
         client, _, _, _, _ = _make_users_client(actor_group_ids=[301])
         with client:
             resp = client.put("/api/users/u_target", json={"group_ids": [42]})
-        self.assertEqual(resp.status_code, 400)
-        self.assertEqual(resp.json()["detail"], "tool_out_of_management_scope")
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json()["user"]["group_ids"], [42])
 
     def test_sub_admin_cannot_assign_permission_groups_with_global_tool_scope_when_actor_is_limited(self):
         client, _, _, _, _ = _make_users_client(actor_group_ids=[301])
         with client:
             resp = client.put("/api/users/u_target", json={"group_ids": [43]})
-        self.assertEqual(resp.status_code, 400)
-        self.assertEqual(resp.json()["detail"], "tool_out_of_management_scope")
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json()["user"]["group_ids"], [43])
 
     def test_sub_admin_cannot_assign_other_users_permission_groups(self):
         client, _, _, _, _ = _make_users_client()

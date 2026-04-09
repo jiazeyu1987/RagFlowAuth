@@ -6,6 +6,7 @@ from typing import Any, Callable
 from backend.app.core.config import settings
 from backend.database.paths import resolve_auth_db_path
 from backend.database.schema.ensure import ensure_schema
+from backend.database.sqlite import connect_sqlite
 from backend.services.audit import AuditLogManager
 from backend.services.audit_log_store import AuditLogStore
 from backend.services.auth_session import AuthSessionManager
@@ -42,6 +43,7 @@ from backend.services.supplier_qualification import SupplierQualificationService
 from backend.services.training_compliance import TrainingComplianceService
 from backend.services.upload_settings_store import UploadSettingsStore
 from backend.services.users.store import UserStore
+from backend.services.users.tool_permission_store import UserToolPermissionStore
 from backend.services.watermark_policy_store import WatermarkPolicyStore
 
 
@@ -60,6 +62,7 @@ class AppDependencies:
     auth_session_manager: AuthSessionManager
     chat_message_sources_store: ChatMessageSourcesStore
     permission_group_store: PermissionGroupStore
+    user_tool_permission_store: UserToolPermissionStore
     org_directory_store: OrgDirectoryStore
     org_structure_manager: OrgStructureManager
     data_security_store: DataSecurityStore
@@ -149,6 +152,7 @@ class _SharedRuntime:
     org_directory_store: OrgDirectoryStore
     org_structure_manager: OrgStructureManager
     permission_group_store: PermissionGroupStore
+    user_tool_permission_store: UserToolPermissionStore
     upload_settings_store: UploadSettingsStore
     patent_download_store: PatentDownloadStore
     paper_download_store: PaperDownloadStore
@@ -312,6 +316,9 @@ class DependencyFactory:
             org_directory_store=org_directory_store,
             org_structure_manager=OrgStructureManager(store=org_directory_store),
             permission_group_store=PermissionGroupStore(database_path=auth_db_path),
+            user_tool_permission_store=UserToolPermissionStore(
+                connection_factory=lambda: connect_sqlite(auth_db_path)
+            ),
             upload_settings_store=UploadSettingsStore(db_path=auth_db_path),
             patent_download_store=PatentDownloadStore(db_path=auth_db_path),
             paper_download_store=PaperDownloadStore(db_path=auth_db_path),
@@ -337,6 +344,7 @@ class DependencyFactory:
             auth_session_manager=runtime.auth_session_manager,
             chat_message_sources_store=runtime.chat_message_sources_store,
             permission_group_store=runtime.permission_group_store,
+            user_tool_permission_store=runtime.user_tool_permission_store,
             org_directory_store=runtime.org_directory_store,
             org_structure_manager=runtime.org_structure_manager,
             data_security_store=runtime.data_security_store,

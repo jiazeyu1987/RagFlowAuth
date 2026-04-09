@@ -11,6 +11,13 @@ from tool.maintenance.features import release_publish_local_to_test
 from tool.maintenance.features.release_publish import ServerVersionInfo
 
 
+class DummyCompletedProcess:
+    def __init__(self, returncode: int = 0, stdout: str = "", stderr: str = ""):
+        self.returncode = returncode
+        self.stdout = stdout
+        self.stderr = stderr
+
+
 class TestReleasePublishLocalToTestUnit(unittest.TestCase):
     def test_ssh_timeout_returns_error_tuple(self) -> None:
         with patch.object(
@@ -30,11 +37,6 @@ class TestReleasePublishLocalToTestUnit(unittest.TestCase):
 
         def fake_run_local(command: str, *, cwd=None, timeout_s: int = 3600):
             calls.append(command)
-            if command.strip().startswith("ssh ") and "df -Pk" in command:
-                # Filesystem 1024-blocks Used Available Capacity Mounted on
-                return True, "/dev/vdb 102400 0 102400 0% /tmp"
-            if command.strip().startswith("ssh ") and "echo OK" in command:
-                return True, "OK"
             # Simulate docker save creating the tar file.
             if "docker save" in command and "-o" in command:
                 # Extract quoted tar path (simple heuristic).
@@ -43,6 +45,13 @@ class TestReleasePublishLocalToTestUnit(unittest.TestCase):
                     tar_path = command.split(marker, 1)[1].split('"', 1)[0]
                     Path(tar_path).write_bytes(b"tar")
             return True, "ok"
+
+        def fake_ssh(ip: str, command: str, *, timeout_s: int = 60):
+            if "df -Pk" in command:
+                return True, "/dev/vdb 102400 0 102400 0% /var/lib/docker/tmp"
+            if ".ragflowauth_write_test_" in command:
+                return True, "OK"
+            return True, "OK"
 
         before = ServerVersionInfo(
             server_ip=TEST_SERVER_IP,
@@ -64,7 +73,11 @@ class TestReleasePublishLocalToTestUnit(unittest.TestCase):
         )
 
         with patch.object(release_publish_local_to_test, "_run_local", side_effect=fake_run_local), patch.object(
+            release_publish_local_to_test, "_ssh", side_effect=fake_ssh
+        ), patch.object(
             release_publish_local_to_test, "make_temp_dir", return_value=tmp_root
+        ), patch.object(
+            release_publish_local_to_test.subprocess, "run", return_value=DummyCompletedProcess()
         ), patch.object(
             release_publish_local_to_test, "docker_load_tar_on_server", return_value=(True, "OK")
         ), patch.object(
@@ -109,12 +122,6 @@ class TestReleasePublishLocalToTestUnit(unittest.TestCase):
             if ".ragflowauth_write_test_" in command:
                 return True, "OK"
             return True, "OK"
-
-        class DummyCompletedProcess:
-            def __init__(self, returncode: int = 0, stdout: str = "", stderr: str = ""):
-                self.returncode = returncode
-                self.stdout = stdout
-                self.stderr = stderr
 
         before = ServerVersionInfo(
             server_ip=TEST_SERVER_IP,
@@ -163,10 +170,6 @@ class TestReleasePublishLocalToTestUnit(unittest.TestCase):
 
         def fake_run_local(command: str, *, cwd=None, timeout_s: int = 3600):
             calls.append(command)
-            if command.strip().startswith("ssh ") and "df -Pk" in command:
-                return True, "/dev/vdb 102400 0 102400 0% /tmp"
-            if command.strip().startswith("ssh ") and "echo OK" in command:
-                return True, "OK"
             # Simulate docker save creating the tar file.
             if "docker save" in command and "-o" in command:
                 marker = '-o "'
@@ -174,6 +177,13 @@ class TestReleasePublishLocalToTestUnit(unittest.TestCase):
                     tar_path = command.split(marker, 1)[1].split('"', 1)[0]
                     Path(tar_path).write_bytes(b"tar")
             return True, "ok"
+
+        def fake_ssh(ip: str, command: str, *, timeout_s: int = 60):
+            if "df -Pk" in command:
+                return True, "/dev/vdb 102400 0 102400 0% /var/lib/docker/tmp"
+            if ".ragflowauth_write_test_" in command:
+                return True, "OK"
+            return True, "OK"
 
         before = ServerVersionInfo(
             server_ip=TEST_SERVER_IP,
@@ -195,7 +205,11 @@ class TestReleasePublishLocalToTestUnit(unittest.TestCase):
         )
 
         with patch.object(release_publish_local_to_test, "_run_local", side_effect=fake_run_local), patch.object(
+            release_publish_local_to_test, "_ssh", side_effect=fake_ssh
+        ), patch.object(
             release_publish_local_to_test, "make_temp_dir", return_value=tmp_root
+        ), patch.object(
+            release_publish_local_to_test.subprocess, "run", return_value=DummyCompletedProcess()
         ), patch.object(
             release_publish_local_to_test, "docker_load_tar_on_server", return_value=(True, "OK")
         ), patch.object(
@@ -221,16 +235,19 @@ class TestReleasePublishLocalToTestUnit(unittest.TestCase):
 
         def fake_run_local(command: str, *, cwd=None, timeout_s: int = 3600):
             # Simulate docker save creating the tar file.
-            if command.strip().startswith("ssh ") and "df -Pk" in command:
-                return True, "/dev/vdb 102400 0 102400 0% /tmp"
-            if command.strip().startswith("ssh ") and "echo OK" in command:
-                return True, "OK"
             if "docker save" in command and "-o" in command:
                 marker = '-o "'
                 if marker in command:
                     tar_path = command.split(marker, 1)[1].split('"', 1)[0]
                     Path(tar_path).write_bytes(b"tar")
             return True, "ok"
+
+        def fake_ssh(ip: str, command: str, *, timeout_s: int = 60):
+            if "df -Pk" in command:
+                return True, "/dev/vdb 102400 0 102400 0% /var/lib/docker/tmp"
+            if ".ragflowauth_write_test_" in command:
+                return True, "OK"
+            return True, "OK"
 
         before = ServerVersionInfo(
             server_ip=TEST_SERVER_IP,
@@ -254,7 +271,11 @@ class TestReleasePublishLocalToTestUnit(unittest.TestCase):
         ui_lines: list[str] = []
 
         with patch.object(release_publish_local_to_test, "_run_local", side_effect=fake_run_local), patch.object(
+            release_publish_local_to_test, "_ssh", side_effect=fake_ssh
+        ), patch.object(
             release_publish_local_to_test, "make_temp_dir", return_value=tmp_root
+        ), patch.object(
+            release_publish_local_to_test.subprocess, "run", return_value=DummyCompletedProcess()
         ), patch.object(
             release_publish_local_to_test, "docker_load_tar_on_server", return_value=(True, "OK")
         ), patch.object(
@@ -269,3 +290,39 @@ class TestReleasePublishLocalToTestUnit(unittest.TestCase):
 
         self.assertTrue(any("LOCAL -> TEST" in ln for ln in ui_lines), ui_lines[:5])
         cleanup_dir(tmp_root)
+
+    def test_local_to_test_fails_fast_when_local_docker_daemon_is_unavailable(self) -> None:
+        before = ServerVersionInfo(
+            server_ip=TEST_SERVER_IP,
+            backend_image="ragflowauth-backend:old",
+            frontend_image="ragflowauth-frontend:old",
+            compose_path="",
+            env_path="",
+            compose_sha256="",
+            env_sha256="",
+        )
+
+        commands: list[str] = []
+
+        def fake_run_local(command: str, *, cwd=None, timeout_s: int = 3600):
+            commands.append(command)
+            if command == "docker info":
+                return (
+                    False,
+                    "failed to connect to the docker API at npipe:////./pipe/dockerDesktopLinuxEngine; "
+                    "check if the path is correct and if the daemon is running: "
+                    "open //./pipe/dockerDesktopLinuxEngine: The system cannot find the file specified.",
+                )
+            return True, "ok"
+
+        with patch.object(release_publish_local_to_test, "_run_local", side_effect=fake_run_local), patch.object(
+            release_publish_local_to_test, "preflight_check_ragflow_base_url", return_value=True
+        ), patch.object(
+            release_publish_local_to_test, "get_server_version_info", return_value=before
+        ):
+            res = release_publish_local_to_test.publish_from_local_to_test(version="v123")
+
+        self.assertFalse(res.ok)
+        self.assertIn("Docker Desktop 的 Linux 引擎没有启动", res.log)
+        self.assertIn("切换到 Linux containers", res.log)
+        self.assertEqual(commands, ["docker info"])

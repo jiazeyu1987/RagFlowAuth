@@ -11,7 +11,6 @@ export function normalizeGroups(rawGroups, groupBindings = {}) {
       accessible_kbs: Array.isArray(group?.accessible_kbs) ? group.accessible_kbs : [],
       accessible_kb_nodes: Array.isArray(group?.accessible_kb_nodes) ? group.accessible_kb_nodes : [],
       accessible_chats: Array.isArray(group?.accessible_chats) ? group.accessible_chats : [],
-      accessible_tools: Array.isArray(group?.accessible_tools) ? group.accessible_tools : [],
     };
   });
 }

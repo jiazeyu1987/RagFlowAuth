@@ -22,7 +22,7 @@ def create_group_folder_result(ctx, service, data) -> dict:
         if data.parent_id:
             visible_folder_ids = permission_operations.get_visible_folder_ids(ctx, service)
             permission_access.validate_folder_parent(data.parent_id, visible_folder_ids)
-        folder = service.create_group_folder(name=data.name, parent_id=data.parent_id, created_by=ctx.payload.sub)
+        folder = service.create_group_folder(name=data.name, parent_id=data.parent_id, created_by=ctx.user.user_id)
         folder = permission_contracts.require_object_payload(folder, detail="permission_group_folder_invalid_payload")
         return permission_contracts.wrap_folder(folder)
 

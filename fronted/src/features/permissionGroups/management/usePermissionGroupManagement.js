@@ -106,7 +106,6 @@ export default function usePermissionGroupManagement() {
     toggleNodeAuth,
     toggleKbAuth,
     toggleChatAuth,
-    toggleToolAuth,
     moveGroupToFolder,
   } = usePermissionGroupManagementActions({
     currentFolderId,
@@ -216,7 +215,6 @@ export default function usePermissionGroupManagement() {
     toggleNodeAuth,
     toggleKbAuth,
     toggleChatAuth,
-    toggleToolAuth,
     openFolder,
     onDragOverFolder,
     onDropFolder,

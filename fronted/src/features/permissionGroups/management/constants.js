@@ -1,16 +1,10 @@
 export const ROOT = '';
 
-export const HIDDEN_CHAT_NAMES = new Set(['\u5927\u6a21\u578b', '\u5c0f\u6a21\u578b', '\u95ee\u9898\u6bd4\u5bf9']);
-
-export const TOOL_PERMISSION_ITEMS = [
-  { id: 'paper_download', name: '论文下载分析' },
-  { id: 'patent_download', name: '专利下载分析' },
-  { id: 'package_drawing', name: '包装图纸' },
-  { id: 'nhsa_code_search', name: '医保编码查询工具' },
-  { id: 'shanghai_tax', name: '上海电子税务局' },
-  { id: 'drug_admin', name: '药监导航' },
-  { id: 'nmpa', name: 'NMPA' },
-];
+export const HIDDEN_CHAT_NAMES = new Set([
+  '\u5927\u6a21\u578b',
+  '\u5c0f\u6a21\u578b',
+  '\u95ee\u9898\u6bd4\u5bf9',
+]);
 
 export const emptyForm = {
   group_name: '',
@@ -19,7 +13,6 @@ export const emptyForm = {
   accessible_kbs: [],
   accessible_kb_nodes: [],
   accessible_chats: [],
-  accessible_tools: [],
   can_upload: false,
   can_review: false,
   can_download: true,
@@ -27,5 +20,4 @@ export const emptyForm = {
   can_delete: false,
   can_manage_kb_directory: false,
   can_view_kb_config: true,
-  can_view_tools: true,
 };

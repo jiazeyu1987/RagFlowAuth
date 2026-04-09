@@ -1,0 +1,668 @@
+- generic [ref=e4]:
+  - complementary [ref=e5]:
+    - generic [ref=e6]:
+      - heading "知识库系统" [level=2] [ref=e7]
+      - button "切换侧边栏" [ref=e8] [cursor=pointer]: <
+    - navigation [ref=e9]:
+      - link "用户管理" [ref=e10] [cursor=pointer]:
+        - /url: /users
+        - generic [ref=e11]: 👥
+        - generic [ref=e12]: 用户管理
+      - link "文档记录" [ref=e13] [cursor=pointer]:
+        - /url: /document-history
+        - generic [ref=e14]: 🗂️
+        - generic [ref=e15]: 文档记录
+      - link "修改密码" [ref=e16] [cursor=pointer]:
+        - /url: /change-password
+        - generic [ref=e17]: 🔑
+        - generic [ref=e18]: 修改密码
+      - link "审批中心" [ref=e19] [cursor=pointer]:
+        - /url: /approvals
+        - generic [ref=e20]: 📋
+        - generic [ref=e21]: 审批中心
+      - link "审批配置" [ref=e22] [cursor=pointer]:
+        - /url: /approval-config
+        - generic [ref=e23]: 🔧
+        - generic [ref=e24]: 审批配置
+      - link "站内信" [ref=e25] [cursor=pointer]:
+        - /url: /inbox
+        - generic [ref=e26]: 📬
+        - generic [ref=e27]: 站内信
+      - link "组织管理" [ref=e28] [cursor=pointer]:
+        - /url: /org-directory
+        - generic [ref=e29]: 🏢
+        - generic [ref=e30]: 组织管理
+      - link "数据安全" [ref=e31] [cursor=pointer]:
+        - /url: /data-security
+        - generic [ref=e32]: 🔒
+        - generic [ref=e33]: 数据安全
+      - link "通知设置" [ref=e34] [cursor=pointer]:
+        - /url: /notification-settings
+        - generic [ref=e35]: 🔔
+        - generic [ref=e36]: 通知设置
+      - link "电子签名" [ref=e37] [cursor=pointer]:
+        - /url: /electronic-signatures
+        - generic [ref=e38]: ✍️
+        - generic [ref=e39]: 电子签名
+      - link "培训合规" [ref=e40] [cursor=pointer]:
+        - /url: /training-compliance
+        - generic [ref=e41]: 🎓
+        - generic [ref=e42]: 培训合规
+      - link "日志审计" [ref=e43] [cursor=pointer]:
+        - /url: /logs
+        - generic [ref=e44]: 📋
+        - generic [ref=e45]: 日志审计
+    - generic [ref=e46]:
+      - generic [ref=e48]: 管理员
+      - button "退出" [ref=e49] [cursor=pointer]
+  - main [ref=e50]:
+    - heading "用户管理" [level=1] [ref=e52]
+    - generic [ref=e54]:
+      - button "创建用户" [ref=e56] [cursor=pointer]
+      - generic [ref=e57]:
+        - table [ref=e61]:
+          - rowgroup [ref=e62]:
+            - row "用户 角色 公司/部门 权限组 状态 操作" [ref=e63]:
+              - columnheader "用户" [ref=e64]
+              - columnheader "角色" [ref=e65]
+              - columnheader "公司/部门" [ref=e66]
+              - columnheader "权限组" [ref=e67]
+              - columnheader "状态" [ref=e68]
+              - columnheader "操作" [ref=e69]
+          - rowgroup [ref=e70]:
+            - row "汤斌 子管理员 瑛泰医疗 瑛泰医疗 / 行政服务中心 / 网络信息 viewer 正常 用户配置 重置密码 停用 删除" [ref=e71]:
+              - cell "汤斌" [ref=e72]:
+                - generic [ref=e73]: 汤斌
+              - cell "子管理员" [ref=e74]:
+                - generic [ref=e75]: 子管理员
+              - cell "瑛泰医疗 瑛泰医疗 / 行政服务中心 / 网络信息" [ref=e76]:
+                - generic [ref=e77]: 瑛泰医疗
+                - generic [ref=e78]: 瑛泰医疗 / 行政服务中心 / 网络信息
+              - cell "viewer" [ref=e79]:
+                - generic [ref=e81]: viewer
+              - cell "正常" [ref=e82]
+              - cell "用户配置 重置密码 停用 删除" [ref=e83]:
+                - generic [ref=e84]:
+                  - button "用户配置" [ref=e85] [cursor=pointer]
+                  - button "重置密码" [ref=e86] [cursor=pointer]
+                  - button "停用" [ref=e87] [cursor=pointer]
+                  - button "删除" [ref=e88] [cursor=pointer]
+            - row "ZhanTingUploader 普通用户 瑛泰医疗 - 展厅上传 正常 用户配置 重置密码 停用 删除" [ref=e89]:
+              - cell "ZhanTingUploader" [ref=e90]:
+                - generic [ref=e91]: ZhanTingUploader
+              - cell "普通用户" [ref=e92]:
+                - generic [ref=e93]: 普通用户
+              - cell "瑛泰医疗 -" [ref=e94]:
+                - generic [ref=e95]: 瑛泰医疗
+                - generic [ref=e96]: "-"
+              - cell "展厅上传" [ref=e97]:
+                - generic [ref=e99]: 展厅上传
+              - cell "正常" [ref=e100]
+              - cell "用户配置 重置密码 停用 删除" [ref=e101]:
+                - generic [ref=e102]:
+                  - button "用户配置" [ref=e103] [cursor=pointer]
+                  - button "重置密码" [ref=e104] [cursor=pointer]
+                  - button "停用" [ref=e105] [cursor=pointer]
+                  - button "删除" [ref=e106] [cursor=pointer]
+            - row "ZhanTingDownloader 普通用户 瑛泰医疗 - 展厅下载 正常 用户配置 重置密码 停用 删除" [ref=e107]:
+              - cell "ZhanTingDownloader" [ref=e108]:
+                - generic [ref=e109]: ZhanTingDownloader
+              - cell "普通用户" [ref=e110]:
+                - generic [ref=e111]: 普通用户
+              - cell "瑛泰医疗 -" [ref=e112]:
+                - generic [ref=e113]: 瑛泰医疗
+                - generic [ref=e114]: "-"
+              - cell "展厅下载" [ref=e115]:
+                - generic [ref=e117]: 展厅下载
+              - cell "正常" [ref=e118]
+              - cell "用户配置 重置密码 停用 删除" [ref=e119]:
+                - generic [ref=e120]:
+                  - button "用户配置" [ref=e121] [cursor=pointer]
+                  - button "重置密码" [ref=e122] [cursor=pointer]
+                  - button "停用" [ref=e123] [cursor=pointer]
+                  - button "删除" [ref=e124] [cursor=pointer]
+            - row "ZhanTingViewer 普通用户 瑛泰医疗 - 展厅查看 正常 用户配置 重置密码 停用 删除" [ref=e125]:
+              - cell "ZhanTingViewer" [ref=e126]:
+                - generic [ref=e127]: ZhanTingViewer
+              - cell "普通用户" [ref=e128]:
+                - generic [ref=e129]: 普通用户
+              - cell "瑛泰医疗 -" [ref=e130]:
+                - generic [ref=e131]: 瑛泰医疗
+                - generic [ref=e132]: "-"
+              - cell "展厅查看" [ref=e133]:
+                - generic [ref=e135]: 展厅查看
+              - cell "正常" [ref=e136]
+              - cell "用户配置 重置密码 停用 删除" [ref=e137]:
+                - generic [ref=e138]:
+                  - button "用户配置" [ref=e139] [cursor=pointer]
+                  - button "重置密码" [ref=e140] [cursor=pointer]
+                  - button "停用" [ref=e141] [cursor=pointer]
+                  - button "删除" [ref=e142] [cursor=pointer]
+            - row "ZhanTingReviewer 普通用户 瑛泰医疗 - 展厅审核 正常 用户配置 重置密码 停用 删除" [ref=e143]:
+              - cell "ZhanTingReviewer" [ref=e144]:
+                - generic [ref=e145]: ZhanTingReviewer
+              - cell "普通用户" [ref=e146]:
+                - generic [ref=e147]: 普通用户
+              - cell "瑛泰医疗 -" [ref=e148]:
+                - generic [ref=e149]: 瑛泰医疗
+                - generic [ref=e150]: "-"
+              - cell "展厅审核" [ref=e151]:
+                - generic [ref=e153]: 展厅审核
+              - cell "正常" [ref=e154]
+              - cell "用户配置 重置密码 停用 删除" [ref=e155]:
+                - generic [ref=e156]:
+                  - button "用户配置" [ref=e157] [cursor=pointer]
+                  - button "重置密码" [ref=e158] [cursor=pointer]
+                  - button "停用" [ref=e159] [cursor=pointer]
+                  - button "删除" [ref=e160] [cursor=pointer]
+            - row "ZhanTingAdmin 普通用户 瑛泰医疗 - 展厅管理员 正常 用户配置 重置密码 停用 删除" [ref=e161]:
+              - cell "ZhanTingAdmin" [ref=e162]:
+                - generic [ref=e163]: ZhanTingAdmin
+              - cell "普通用户" [ref=e164]:
+                - generic [ref=e165]: 普通用户
+              - cell "瑛泰医疗 -" [ref=e166]:
+                - generic [ref=e167]: 瑛泰医疗
+                - generic [ref=e168]: "-"
+              - cell "展厅管理员" [ref=e169]:
+                - generic [ref=e171]: 展厅管理员
+              - cell "正常" [ref=e172]
+              - cell "用户配置 重置密码 停用 删除" [ref=e173]:
+                - generic [ref=e174]:
+                  - button "用户配置" [ref=e175] [cursor=pointer]
+                  - button "重置密码" [ref=e176] [cursor=pointer]
+                  - button "停用" [ref=e177] [cursor=pointer]
+                  - button "删除" [ref=e178] [cursor=pointer]
+            - row "TangBin 普通用户 瑛泰医疗 - 行政管理员 正常 用户配置 重置密码 停用 删除" [ref=e179]:
+              - cell "TangBin" [ref=e180]:
+                - generic [ref=e181]: TangBin
+              - cell "普通用户" [ref=e182]:
+                - generic [ref=e183]: 普通用户
+              - cell "瑛泰医疗 -" [ref=e184]:
+                - generic [ref=e185]: 瑛泰医疗
+                - generic [ref=e186]: "-"
+              - cell "行政管理员" [ref=e187]:
+                - generic [ref=e189]: 行政管理员
+              - cell "正常" [ref=e190]
+              - cell "用户配置 重置密码 停用 删除" [ref=e191]:
+                - generic [ref=e192]:
+                  - button "用户配置" [ref=e193] [cursor=pointer]
+                  - button "重置密码" [ref=e194] [cursor=pointer]
+                  - button "停用" [ref=e195] [cursor=pointer]
+                  - button "删除" [ref=e196] [cursor=pointer]
+            - row "16 普通用户 - - 展厅管理员 正常 用户配置 重置密码 停用 删除" [ref=e197]:
+              - cell "16" [ref=e198]:
+                - generic [ref=e199]: "16"
+              - cell "普通用户" [ref=e200]:
+                - generic [ref=e201]: 普通用户
+              - cell "- -" [ref=e202]:
+                - generic [ref=e203]: "-"
+                - generic [ref=e204]: "-"
+              - cell "展厅管理员" [ref=e205]:
+                - generic [ref=e207]: 展厅管理员
+              - cell "正常" [ref=e208]
+              - cell "用户配置 重置密码 停用 删除" [ref=e209]:
+                - generic [ref=e210]:
+                  - button "用户配置" [ref=e211] [cursor=pointer]
+                  - button "重置密码" [ref=e212] [cursor=pointer]
+                  - button "停用" [ref=e213] [cursor=pointer]
+                  - button "删除" [ref=e214] [cursor=pointer]
+            - row "15 普通用户 - - 展厅上传 正常 用户配置 重置密码 停用 删除" [ref=e215]:
+              - cell "15" [ref=e216]:
+                - generic [ref=e217]: "15"
+              - cell "普通用户" [ref=e218]:
+                - generic [ref=e219]: 普通用户
+              - cell "- -" [ref=e220]:
+                - generic [ref=e221]: "-"
+                - generic [ref=e222]: "-"
+              - cell "展厅上传" [ref=e223]:
+                - generic [ref=e225]: 展厅上传
+              - cell "正常" [ref=e226]
+              - cell "用户配置 重置密码 停用 删除" [ref=e227]:
+                - generic [ref=e228]:
+                  - button "用户配置" [ref=e229] [cursor=pointer]
+                  - button "重置密码" [ref=e230] [cursor=pointer]
+                  - button "停用" [ref=e231] [cursor=pointer]
+                  - button "删除" [ref=e232] [cursor=pointer]
+            - row "14 普通用户 - - 展厅审核 正常 用户配置 重置密码 停用 删除" [ref=e233]:
+              - cell "14" [ref=e234]:
+                - generic [ref=e235]: "14"
+              - cell "普通用户" [ref=e236]:
+                - generic [ref=e237]: 普通用户
+              - cell "- -" [ref=e238]:
+                - generic [ref=e239]: "-"
+                - generic [ref=e240]: "-"
+              - cell "展厅审核" [ref=e241]:
+                - generic [ref=e243]: 展厅审核
+              - cell "正常" [ref=e244]
+              - cell "用户配置 重置密码 停用 删除" [ref=e245]:
+                - generic [ref=e246]:
+                  - button "用户配置" [ref=e247] [cursor=pointer]
+                  - button "重置密码" [ref=e248] [cursor=pointer]
+                  - button "停用" [ref=e249] [cursor=pointer]
+                  - button "删除" [ref=e250] [cursor=pointer]
+            - row "13 普通用户 - - 展厅下载 正常 用户配置 重置密码 停用 删除" [ref=e251]:
+              - cell "13" [ref=e252]:
+                - generic [ref=e253]: "13"
+              - cell "普通用户" [ref=e254]:
+                - generic [ref=e255]: 普通用户
+              - cell "- -" [ref=e256]:
+                - generic [ref=e257]: "-"
+                - generic [ref=e258]: "-"
+              - cell "展厅下载" [ref=e259]:
+                - generic [ref=e261]: 展厅下载
+              - cell "正常" [ref=e262]
+              - cell "用户配置 重置密码 停用 删除" [ref=e263]:
+                - generic [ref=e264]:
+                  - button "用户配置" [ref=e265] [cursor=pointer]
+                  - button "重置密码" [ref=e266] [cursor=pointer]
+                  - button "停用" [ref=e267] [cursor=pointer]
+                  - button "删除" [ref=e268] [cursor=pointer]
+            - row "12 普通用户 - - 展厅查看 正常 用户配置 重置密码 停用 删除" [ref=e269]:
+              - cell "12" [ref=e270]:
+                - generic [ref=e271]: "12"
+              - cell "普通用户" [ref=e272]:
+                - generic [ref=e273]: 普通用户
+              - cell "- -" [ref=e274]:
+                - generic [ref=e275]: "-"
+                - generic [ref=e276]: "-"
+              - cell "展厅查看" [ref=e277]:
+                - generic [ref=e279]: 展厅查看
+              - cell "正常" [ref=e280]
+              - cell "用户配置 重置密码 停用 删除" [ref=e281]:
+                - generic [ref=e282]:
+                  - button "用户配置" [ref=e283] [cursor=pointer]
+                  - button "重置密码" [ref=e284] [cursor=pointer]
+                  - button "停用" [ref=e285] [cursor=pointer]
+                  - button "删除" [ref=e286] [cursor=pointer]
+            - row "admin 管理员 - - admin 正常 用户配置 重置密码 停用" [ref=e287]:
+              - cell "admin" [ref=e288]:
+                - generic [ref=e289]: admin
+              - cell "管理员" [ref=e290]:
+                - generic [ref=e291]: 管理员
+              - cell "- -" [ref=e292]:
+                - generic [ref=e293]: "-"
+                - generic [ref=e294]: "-"
+              - cell "admin" [ref=e295]:
+                - generic [ref=e297]: admin
+              - cell "正常" [ref=e298]
+              - cell "用户配置 重置密码 停用" [ref=e299]:
+                - generic [ref=e300]:
+                  - button "用户配置" [ref=e301] [cursor=pointer]
+                  - button "重置密码" [ref=e302] [cursor=pointer]
+                  - button "停用" [disabled] [ref=e303]
+        - generic [ref=e304]:
+          - generic [ref=e306]:
+            - generic [ref=e307]:
+              - generic [ref=e308]: 搜索用户
+              - textbox "支持模糊搜索" [ref=e309]
+            - generic [ref=e310]:
+              - generic [ref=e311]: 公司
+              - combobox [ref=e312]:
+                - option "全部" [selected]
+                - option "七木医疗"
+                - option "上海瑛泰医疗器械股份有限公司"
+                - option "吉尔邦医学"
+                - option "唯强医疗"
+                - option "山东瑛泰"
+                - option "山东瑛盛"
+                - option "德柯医疗"
+                - option "德诺电生理"
+                - option "珠海德瑞"
+                - option "珠海璞瑞"
+                - option "瑛泰医疗"
+                - option "瑛泰昇活"
+                - option "瑛泰生物"
+                - option "瑛泰自动化"
+                - option "璞康医疗"
+                - option "璞慧医疗"
+                - option "璞润医疗"
+                - option "璞跃医疗"
+                - option "璞霖医疗"
+                - option "移视科技"
+                - option "翰凌医疗"
+            - generic [ref=e313]:
+              - generic [ref=e314]: 部门
+              - combobox [ref=e315]:
+                - option "全部" [selected]
+                - option "瑛泰医疗 / 生产制造中心"
+                - option "瑛泰医疗 / 研发创新中心"
+                - option "瑛泰医疗 / 质量体系中心"
+                - option "瑛泰医疗 / 人力资源中心"
+                - option "瑛泰医疗 / 市场营销中心"
+                - option "瑛泰医疗 / 注册服务中心"
+                - option "瑛泰医疗 / 总经办"
+                - option "瑛泰医疗 / 行政服务中心"
+                - option "瑛泰医疗 / 资财管控中心"
+                - option "瑛泰医疗 / 检测中心"
+                - option "瑛泰医疗 / 董办"
+                - option "瑛泰医疗 / 供应链中心"
+                - option "瑛泰医疗 / 人力资源中心 / 外部人员"
+                - option "瑛泰医疗 / 供应链中心 / 仓储物流"
+                - option "瑛泰医疗 / 市场营销中心 / 泛血管BU"
+                - option "瑛泰医疗 / 总经办 / 总经办"
+                - option "瑛泰医疗 / 检测中心 / 检测实验室"
+                - option "瑛泰医疗 / 注册服务中心 / 注册部"
+                - option "瑛泰医疗 / 生产制造中心 / 外围车间"
+                - option "瑛泰医疗 / 研发创新中心 / 新品开发部"
+                - option "瑛泰医疗 / 行政服务中心 / 行政后勤"
+                - option "瑛泰医疗 / 质量体系中心 / QA"
+                - option "瑛泰医疗 / 资财管控中心 / 财务"
+                - option "瑛泰医疗 / 人力资源中心 / 明我信息"
+                - option "瑛泰医疗 / 供应链中心 / 生产计划"
+                - option "瑛泰医疗 / 市场营销中心 / 外贸部"
+                - option "瑛泰医疗 / 检测中心 / CNAS实验室"
+                - option "瑛泰医疗 / 生产制造中心 / 组装车间"
+                - option "瑛泰医疗 / 研发创新中心 / 设备开发部"
+                - option "瑛泰医疗 / 行政服务中心 / 网络信息"
+                - option "瑛泰医疗 / 质量体系中心 / QC"
+                - option "瑛泰医疗 / 供应链中心 / 包装设计组"
+                - option "瑛泰医疗 / 市场营销中心 / 外派德诺电生理"
+                - option "瑛泰医疗 / 生产制造中心 / 注塑车间"
+                - option "瑛泰医疗 / 研发创新中心 / 生产技术部"
+                - option "瑛泰医疗 / 行政服务中心 / 工程维修"
+                - option "瑛泰医疗 / 质量体系中心 / QMS"
+                - option "瑛泰医疗 / 供应链中心 / 生产采购"
+                - option "瑛泰医疗 / 市场营销中心 / 市场服务部"
+                - option "瑛泰医疗 / 生产制造中心 / 生产管理"
+                - option "瑛泰医疗 / 市场营销中心 / 外派珠海"
+                - option "瑛泰医疗 / 市场营销中心 / 泛血管BU / 冠脉&外周BU"
+                - option "瑛泰医疗 / 注册服务中心 / 注册部 / 国内注册"
+                - option "瑛泰医疗 / 生产制造中心 / 外围车间 / 外围计件"
+                - option "瑛泰医疗 / 生产制造中心 / 注塑车间 / 注塑计件"
+                - option "瑛泰医疗 / 生产制造中心 / 组装车间 / 组装车间1"
+                - option "瑛泰医疗 / 研发创新中心 / 新品开发部 / 中试车间"
+                - option "瑛泰医疗 / 行政服务中心 / 工程维修 / 物业维修"
+                - option "瑛泰医疗 / 行政服务中心 / 网络信息 / 钉钉工程师"
+                - option "瑛泰医疗 / 行政服务中心 / 行政后勤 / 食堂"
+                - option "瑛泰医疗 / 质量体系中心 / QC / 过程检验PQC"
+                - option "瑛泰医疗 / 资财管控中心 / 财务 / 项目部"
+                - option "瑛泰医疗 / 市场营销中心 / 泛血管BU / 数据运营"
+                - option "瑛泰医疗 / 注册服务中心 / 注册部 / 国际注册"
+                - option "瑛泰医疗 / 生产制造中心 / 外围车间 / 外围计时"
+                - option "瑛泰医疗 / 生产制造中心 / 注塑车间 / 注塑计时"
+                - option "瑛泰医疗 / 生产制造中心 / 组装车间 / 组装车间2"
+                - option "瑛泰医疗 / 研发创新中心 / 新品开发部 / 新品开发"
+                - option "瑛泰医疗 / 行政服务中心 / 行政后勤 / 保洁"
+                - option "瑛泰医疗 / 质量体系中心 / QC / 来料检IQC"
+                - option "瑛泰医疗 / 市场营销中心 / 泛血管BU / 市场部"
+                - option "瑛泰医疗 / 注册服务中心 / 注册部 / 唯强"
+                - option "瑛泰医疗 / 生产制造中心 / 注塑车间 / 注塑临时工"
+                - option "瑛泰医疗 / 生产制造中心 / 组装车间 / 组装车间3"
+                - option "瑛泰医疗 / 行政服务中心 / 行政后勤 / 司机"
+                - option "瑛泰医疗 / 质量体系中心 / QC / 质量品质QE"
+                - option "瑛泰医疗 / 市场营销中心 / 泛血管BU / 骨科部"
+                - option "瑛泰医疗 / 行政服务中心 / 行政后勤 / 保安"
+                - option "瑛泰医疗 / 市场营销中心 / 泛血管BU / 综合部"
+                - option "瑛泰医疗 / 市场营销中心 / 泛血管BU / 商务部"
+                - option "瑛泰医疗 / 市场营销中心 / 泛血管BU / 培训部"
+                - option "瑛泰医疗 / 市场营销中心 / 泛血管BU / 冠脉&外周BU / 南中国BU"
+                - option "瑛泰医疗 / 市场营销中心 / 泛血管BU / 市场部 / 冠脉外周市场"
+                - option "瑛泰医疗 / 市场营销中心 / 泛血管BU / 综合部 / 财务部"
+                - option "瑛泰医疗 / 市场营销中心 / 泛血管BU / 骨科部 / 山东、河南区域"
+                - option "瑛泰医疗 / 生产制造中心 / 组装车间 / 组装车间1 / 组装1临时"
+                - option "瑛泰医疗 / 生产制造中心 / 组装车间 / 组装车间2 / 组装2临时"
+                - option "瑛泰医疗 / 生产制造中心 / 组装车间 / 组装车间3 / 组装3临时"
+                - option "瑛泰医疗 / 研发创新中心 / 新品开发部 / 中试车间 / 中试车间3"
+                - option "瑛泰医疗 / 研发创新中心 / 新品开发部 / 新品开发 / 导管组"
+                - option "瑛泰医疗 / 市场营销中心 / 泛血管BU / 冠脉&外周BU / 北中国BU"
+                - option "瑛泰医疗 / 市场营销中心 / 泛血管BU / 综合部 / 行政部"
+                - option "瑛泰医疗 / 生产制造中心 / 组装车间 / 组装车间1 / 组装1计件"
+                - option "瑛泰医疗 / 生产制造中心 / 组装车间 / 组装车间2 / 组装2计件"
+                - option "瑛泰医疗 / 生产制造中心 / 组装车间 / 组装车间3 / 组装3计件"
+                - option "瑛泰医疗 / 研发创新中心 / 新品开发部 / 中试车间 / 中试4临时"
+                - option "瑛泰医疗 / 研发创新中心 / 新品开发部 / 新品开发 / 导管鞘组"
+                - option "瑛泰医疗 / 市场营销中心 / 泛血管BU / 综合部 / 人事部"
+                - option "瑛泰医疗 / 生产制造中心 / 组装车间 / 组装车间1 / 组装1计时"
+                - option "瑛泰医疗 / 生产制造中心 / 组装车间 / 组装车间2 / 组装2计时"
+                - option "瑛泰医疗 / 生产制造中心 / 组装车间 / 组装车间3 / 组装3计时"
+                - option "瑛泰医疗 / 研发创新中心 / 新品开发部 / 中试车间 / 中试车间4"
+                - option "瑛泰医疗 / 研发创新中心 / 新品开发部 / 新品开发 / 导丝组"
+                - option "瑛泰医疗 / 生产制造中心 / 组装车间 / 组装车间1 / 设备维护"
+                - option "瑛泰医疗 / 生产制造中心 / 组装车间 / 组装车间2 / 内衬管工段"
+                - option "瑛泰医疗 / 生产制造中心 / 组装车间 / 组装车间3 / 精密导管车间"
+                - option "瑛泰医疗 / 研发创新中心 / 新品开发部 / 新品开发 / 临床技术组"
+                - option "瑛泰医疗 / 生产制造中心 / 组装车间 / 组装车间2 / 设备维护"
+                - option "瑛泰医疗 / 研发创新中心 / 新品开发部 / 新品开发 / 球囊组"
+                - option "瑛泰医疗 / 研发创新中心 / 新品开发部 / 新品开发 / 支架组"
+                - option "瑛泰医疗 / 研发创新中心 / 新品开发部 / 新品开发 / 新材料组"
+                - option "瑛泰医疗 / 研发创新中心 / 新品开发部 / 新品开发 / 有源组"
+                - option "瑛泰医疗 / 研发创新中心 / 新品开发部 / 新品开发 / 骨科组"
+                - option "瑛泰医疗 / 研发创新中心 / 新品开发部 / 新品开发 / 综合组"
+                - option "瑛泰医疗 / 研发创新中心 / 新品开发部 / 新品开发 / 材料组"
+                - option "瑛泰医疗 / 研发创新中心 / 新品开发部 / 新品开发 / 输注组"
+                - option "瑛泰医疗 / 研发创新中心 / 新品开发部 / 新品开发 / 药球组"
+                - option "瑛泰医疗 / 研发创新中心 / 新品开发部 / 新品开发 / 中试3/4"
+                - option "瑛泰医疗 / 市场营销中心 / 泛血管BU / 冠脉&外周BU / 北中国BU / 北四区"
+                - option "瑛泰医疗 / 市场营销中心 / 泛血管BU / 冠脉&外周BU / 南中国BU / 华南大区"
+                - option "瑛泰医疗 / 市场营销中心 / 泛血管BU / 市场部 / 冠脉外周市场 / 市场1"
+                - option "瑛泰医疗 / 市场营销中心 / 泛血管BU / 冠脉&外周BU / 北中国BU / 华北大区"
+                - option "瑛泰医疗 / 市场营销中心 / 泛血管BU / 冠脉&外周BU / 南中国BU / 华东大区"
+                - option "瑛泰医疗 / 市场营销中心 / 泛血管BU / 市场部 / 冠脉外周市场 / 市场2"
+                - option "瑛泰医疗 / 市场营销中心 / 泛血管BU / 冠脉&外周BU / 北中国BU / 华中大区"
+                - option "瑛泰医疗 / 市场营销中心 / 泛血管BU / 冠脉&外周BU / 南中国BU / 西南特区"
+                - option "瑛泰医疗 / 市场营销中心 / 泛血管BU / 冠脉&外周BU / 北中国BU / 北二区"
+                - option "瑛泰医疗 / 市场营销中心 / 泛血管BU / 冠脉&外周BU / 北中国BU / 华中大区 / 华中区"
+                - option "瑛泰医疗 / 市场营销中心 / 泛血管BU / 冠脉&外周BU / 北中国BU / 华北大区 / 北三区"
+                - option "瑛泰医疗 / 市场营销中心 / 泛血管BU / 冠脉&外周BU / 南中国BU / 华东大区 / 南三区1"
+                - option "瑛泰医疗 / 市场营销中心 / 泛血管BU / 冠脉&外周BU / 南中国BU / 华南大区 / 南四区"
+                - option "瑛泰医疗 / 市场营销中心 / 泛血管BU / 冠脉&外周BU / 南中国BU / 西南特区 / 西南区"
+                - option "瑛泰医疗 / 市场营销中心 / 泛血管BU / 冠脉&外周BU / 北中国BU / 华中大区 / 北五区"
+                - option "瑛泰医疗 / 市场营销中心 / 泛血管BU / 冠脉&外周BU / 北中国BU / 华北大区 / 北一区"
+                - option "瑛泰医疗 / 市场营销中心 / 泛血管BU / 冠脉&外周BU / 南中国BU / 华东大区 / 南二区"
+                - option "瑛泰医疗 / 市场营销中心 / 泛血管BU / 冠脉&外周BU / 南中国BU / 华东大区 / 南三区"
+                - option "瑛泰医疗 / 市场营销中心 / 泛血管BU / 冠脉&外周BU / 南中国BU / 华东大区 / 南一区"
+                - option "璞润医疗 / 研发部"
+                - option "璞润医疗 / 产品部"
+                - option "璞润医疗 / 生产部"
+                - option "璞润医疗 / 注册质量部"
+                - option "璞润医疗 / 行政人事部"
+                - option "璞润医疗 / 生产部 / 制造"
+                - option "璞润医疗 / 研发部 / ICE"
+                - option "璞润医疗 / 生产部 / 供应链"
+                - option "璞润医疗 / 研发部 / 产品开发部"
+                - option "璞润医疗 / 研发部 / 声学部"
+                - option "七木医疗 / 市场部"
+                - option "七木医疗 / 质量部"
+                - option "七木医疗 / 生产部"
+                - option "七木医疗 / 技术部"
+                - option "七木医疗 / 财务部"
+                - option "七木医疗 / 总经理"
+                - option "七木医疗 / 行政部"
+                - option "璞慧医疗 / 销售部"
+                - option "璞慧医疗 / 技术部"
+                - option "璞慧医疗 / 行政部"
+                - option "璞慧医疗 / 生产部"
+                - option "璞慧医疗 / 质量部"
+                - option "璞慧医疗 / 市场部"
+                - option "璞慧医疗 / 销售部 / 泛血管BU"
+                - option "璞慧医疗 / 销售部 / 泛血管BU / 神经BU"
+                - option "璞慧医疗 / 销售部 / 泛血管BU / 市场部"
+                - option "璞慧医疗 / 销售部 / 泛血管BU / 商务部"
+                - option "璞慧医疗 / 销售部 / 泛血管BU / 市场部 / 神经产品"
+                - option "璞慧医疗 / 销售部 / 泛血管BU / 神经BU / 北大区"
+                - option "璞慧医疗 / 销售部 / 泛血管BU / 神经BU / 中大区"
+                - option "璞慧医疗 / 销售部 / 泛血管BU / 神经BU / 南大区"
+                - option "璞慧医疗 / 销售部 / 泛血管BU / 神经BU / OCT产品"
+                - option "璞慧医疗 / 销售部 / 泛血管BU / 神经BU / OCT技术"
+                - option "璞慧医疗 / 销售部 / 泛血管BU / 神经BU / 中大区 / 山河战区"
+                - option "璞慧医疗 / 销售部 / 泛血管BU / 神经BU / 北大区 / 东北战区"
+                - option "璞慧医疗 / 销售部 / 泛血管BU / 神经BU / 南大区 / 西南战区"
+                - option "璞慧医疗 / 销售部 / 泛血管BU / 神经BU / 中大区 / 中部战区"
+                - option "璞慧医疗 / 销售部 / 泛血管BU / 神经BU / 北大区 / 华北战区"
+                - option "璞慧医疗 / 销售部 / 泛血管BU / 神经BU / 南大区 / 华南战区1"
+                - option "璞慧医疗 / 销售部 / 泛血管BU / 神经BU / 中大区 / 华东战区"
+                - option "璞慧医疗 / 销售部 / 泛血管BU / 神经BU / 北大区 / 西北战区"
+                - option "璞霖医疗 / 商务部"
+                - option "璞霖医疗 / 测试"
+                - option "山东瑛泰 / 行政人事部"
+                - option "山东瑛泰 / 生产部"
+                - option "山东瑛泰 / 质量部"
+                - option "山东瑛泰 / 财务部"
+                - option "山东瑛泰 / 市场营销部"
+                - option "山东瑛泰 / 技术部"
+                - option "山东瑛泰 / 生产部 / 组装车间"
+                - option "山东瑛泰 / 行政人事部 / 外协劳务"
+                - option "山东瑛泰 / 财务部 / 统计"
+                - option "山东瑛泰 / 质量部 / PQC"
+                - option "山东瑛泰 / 生产部 / 吸塑盒车间"
+                - option "山东瑛泰 / 质量部 / QA"
+                - option "山东瑛泰 / 生产部 / 注塑车间"
+                - option "山东瑛泰 / 质量部 / 实验室"
+                - option "山东瑛泰 / 生产部 / 外围车间"
+                - option "山东瑛泰 / 生产部 / 供应链"
+                - option "山东瑛泰 / 生产部 / 设备维护"
+                - option "山东瑛泰 / 生产部 / 食品车间"
+                - option "山东瑛泰 / 生产部 / 供应链 / 生产计划"
+                - option "山东瑛泰 / 生产部 / 外围车间 / 仓库"
+                - option "山东瑛泰 / 生产部 / 注塑车间 / 设备维护"
+                - option "山东瑛泰 / 生产部 / 组装车间 / 设备维护"
+                - option "山东瑛泰 / 生产部 / 设备维护 / 设备验证"
+                - option "山东瑛泰 / 生产部 / 供应链 / 生产采购"
+                - option "山东瑛泰 / 生产部 / 注塑车间 / 硅胶车间"
+                - option "山东瑛泰 / 生产部 / 设备维护 / 设备维修"
+                - option "山东瑛泰 / 生产部 / 注塑车间 / 注塑车间"
+                - option "山东瑛泰 / 生产部 / 注塑车间 / 止血带车间"
+                - option "瑛泰生物 / 研发部"
+                - option "瑛泰生物 / 生产部"
+                - option "瑛泰生物 / 行政部"
+                - option "瑛泰生物 / 质量部"
+                - option "璞跃医疗 / 市场部"
+                - option "璞跃医疗 / 生产技术部"
+                - option "璞跃医疗 / 器械研发部"
+                - option "璞跃医疗 / 质量部"
+                - option "璞跃医疗 / 采购部"
+                - option "璞跃医疗 / 行政部"
+                - option "璞跃医疗 / 总经办"
+                - option "璞跃医疗 / 电子研发部"
+                - option "瑛泰自动化 / 生产部"
+                - option "瑛泰自动化 / 自动化技术部"
+                - option "瑛泰自动化 / 质量部"
+                - option "瑛泰自动化 / 自动化办公室"
+                - option "瑛泰自动化 / 人力资源部"
+                - option "瑛泰自动化 / 临时工"
+                - option "瑛泰自动化 / 生产部 / 标准件车间"
+                - option "瑛泰自动化 / 自动化技术部 / 设备技术科"
+                - option "瑛泰自动化 / 生产部 / 设备车间"
+                - option "瑛泰自动化 / 自动化技术部 / 模具技术科"
+                - option "瑛泰自动化 / 生产部 / 模具车间"
+                - option "瑛泰自动化 / 自动化技术部 / 生产技术科"
+                - option "瑛泰自动化 / 生产部 / 机加工车间"
+                - option "瑛泰自动化 / 生产部 / 激光切割车间"
+                - option "瑛泰自动化 / 生产部 / 标准件车间 / 压力表车间"
+                - option "瑛泰自动化 / 生产部 / 标准件车间 / 海波管"
+                - option "瑛泰自动化 / 生产部 / 标准件车间 / 芯丝车间"
+                - option "瑛泰自动化 / 生产部 / 标准件车间 / 压力表车间 / 压力表临时工"
+                - option "瑛泰自动化 / 生产部 / 标准件车间 / 海波管 / 海波管临时工"
+                - option "瑛泰自动化 / 生产部 / 标准件车间 / 芯丝车间 / 导丝临时工"
+                - option "唯强医疗 / 西大区"
+                - option "唯强医疗 / 北大区"
+                - option "唯强医疗 / 南大区"
+                - option "唯强医疗 / 西南大区"
+                - option "唯强医疗 / 东大区"
+                - option "唯强医疗 / 鄂湘赣大区"
+                - option "唯强医疗 / 东大区 / 东区（李鹏飞）"
+                - option "唯强医疗 / 北大区 / 北区（段晓宁）"
+                - option "唯强医疗 / 南大区 / 南区（陈宁）"
+                - option "唯强医疗 / 西南大区 / 西南区（冯亮）"
+                - option "唯强医疗 / 西大区 / 西区（张延涛）"
+                - option "唯强医疗 / 鄂湘赣大区 / 鄂湘赣（尹晓晶）"
+                - option "唯强医疗 / 东大区 / 东区（罗春辉）"
+                - option "唯强医疗 / 北大区 / 北区（张龙好）"
+                - option "唯强医疗 / 南大区 / 南区（冼颖毅）"
+                - option "唯强医疗 / 西南大区 / 西南区（李铖）"
+                - option "唯强医疗 / 西大区 / 西区（冀刚）"
+                - option "唯强医疗 / 鄂湘赣大区 / 鄂湘赣（柴小元）"
+                - option "唯强医疗 / 北大区 / 北区（辛代弟）"
+                - option "唯强医疗 / 西南大区 / 西南区（庞璐）"
+                - option "唯强医疗 / 西大区 / 西区（任红波）"
+                - option "唯强医疗 / 鄂湘赣大区 / 鄂湘赣（王磊）"
+                - option "唯强医疗 / 北大区 / 北区（侯阳）"
+                - option "唯强医疗 / 鄂湘赣大区 / 鄂湘赣（梁立纬）"
+                - option "唯强医疗 / 北大区 / 北区（赵蕾）"
+                - option "唯强医疗 / 北大区 / 北区（张星唯）"
+                - option "唯强医疗 / 北大区 / 北区（张凯）"
+                - option "唯强医疗 / 北大区 / 北区（刘松源）"
+                - option "吉尔邦医学 / 质量体系部"
+                - option "珠海德瑞 / 营销中心"
+                - option "珠海德瑞 / 质量部"
+                - option "珠海德瑞 / 技术部"
+                - option "珠海德瑞 / 生产部"
+                - option "珠海德瑞 / 研发工时组"
+                - option "珠海德瑞 / 设备动力部"
+                - option "珠海德瑞 / 注册部"
+                - option "珠海德瑞 / 财务部"
+                - option "珠海德瑞 / 人力资源部"
+                - option "珠海德瑞 / 行政部"
+                - option "珠海德瑞 / 总经办"
+                - option "翰凌医疗 / 研发中心"
+                - option "翰凌医疗 / 临床部"
+                - option "翰凌医疗 / 制造部"
+                - option "翰凌医疗 / 质量部"
+                - option "翰凌医疗 / 项目管理部"
+                - option "翰凌医疗 / 运营部"
+                - option "翰凌医疗 / 人事行政部"
+                - option "翰凌医疗 / 临床部 / 临床组"
+                - option "翰凌医疗 / 制造部 / 生产部"
+                - option "翰凌医疗 / 研发中心 / 研发二部"
+                - option "翰凌医疗 / 质量部 / QC"
+                - option "翰凌医疗 / 项目管理部 / 项目部"
+                - option "翰凌医疗 / 研发中心 / 工艺部"
+                - option "翰凌医疗 / 质量部 / QA"
+                - option "翰凌医疗 / 研发中心 / 研发一部"
+                - option "翰凌医疗 / 质量部 / QMS"
+                - option "翰凌医疗 / 制造部 / 生产部 / 缝瓣组"
+                - option "翰凌医疗 / 研发中心 / 研发二部 / 一组"
+                - option "翰凌医疗 / 质量部 / QC / 实验室"
+                - option "翰凌医疗 / 制造部 / 生产部 / 二车间组"
+                - option "翰凌医疗 / 研发中心 / 研发二部 / 二组"
+                - option "翰凌医疗 / 质量部 / QC / PQC"
+                - option "翰凌医疗 / 制造部 / 生产部 / 心包组"
+                - option "翰凌医疗 / 质量部 / QC / IQC/FQC"
+                - option "翰凌医疗 / 制造部 / 生产部 / 热处理组"
+                - option "璞康医疗 / 财务部"
+                - option "璞康医疗 / 生产部"
+                - option "璞康医疗 / 研发部"
+                - option "璞康医疗 / 质量部"
+                - option "璞康医疗 / 销售部"
+                - option "璞康医疗 / 行政部"
+                - option "璞康医疗 / 采购部"
+            - generic [ref=e316]:
+              - generic [ref=e317]: 状态
+              - combobox [ref=e318]:
+                - option "全部" [selected]
+                - option "激活"
+                - option "停用"
+            - generic [ref=e319]:
+              - generic [ref=e320]: 权限组
+              - combobox [ref=e321]:
+                - option "全部" [selected]
+            - generic [ref=e322]:
+              - generic [ref=e323]: 权限分配
+              - combobox [ref=e324]:
+                - option "全部" [selected]
+                - option "待分配"
+                - option "已分配"
+            - generic [ref=e325]:
+              - generic [ref=e326]: 创建时间(从)
+              - textbox [ref=e327]
+            - generic [ref=e328]:
+              - generic [ref=e329]: 创建时间(至)
+              - textbox [ref=e330]
+            - button "重置" [ref=e331] [cursor=pointer]
+          - generic [ref=e332]:
+            - generic [ref=e334]:
+              - generic [ref=e335]: 按部门划分
+              - generic [ref=e336]: 当前筛选结果共 13 个用户，分布在 2 个部门中
+            - generic [ref=e337]:
+              - generic [ref=e338]:
+                - generic [ref=e339]:
+                  - generic [ref=e340]: 瑛泰医疗 / 行政服务中心 / 网络信息
+                  - generic [ref=e341]: 1 人
+                - generic [ref=e342]: tangbin
+                - button "只看本部门" [ref=e343] [cursor=pointer]
+              - generic [ref=e344]:
+                - generic [ref=e345]:
+                  - generic [ref=e346]: 未分配部门
+                  - generic [ref=e347]: 12 人
+                - generic [ref=e348]: ZhanTingUploader、ZhanTingDownloader、ZhanTingViewer、ZhanTingReviewer、ZhanTingAdmin、TangBin 等 12 人
+                - generic [ref=e349]: 这些用户尚未分配部门

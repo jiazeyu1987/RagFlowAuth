@@ -1,0 +1,73 @@
+- generic [ref=e27]:
+  - complementary [ref=e28]:
+    - generic [ref=e29]:
+      - heading "知识库系统" [level=2] [ref=e30]
+      - button "切换侧边栏" [ref=e31] [cursor=pointer]: <
+    - navigation [ref=e32]:
+      - link "用户管理" [ref=e33] [cursor=pointer]:
+        - /url: /users
+        - generic [ref=e34]: 👥
+        - generic [ref=e35]: 用户管理
+      - link "文档上传" [ref=e36] [cursor=pointer]:
+        - /url: /upload
+        - generic [ref=e37]: 📤
+        - generic [ref=e38]: 文档上传
+      - link "文档记录" [ref=e39] [cursor=pointer]:
+        - /url: /document-history
+        - generic [ref=e40]: 🗂️
+        - generic [ref=e41]: 文档记录
+      - link "文档浏览" [ref=e42] [cursor=pointer]:
+        - /url: /browser
+        - generic [ref=e43]: 📄
+        - generic [ref=e44]: 文档浏览
+      - link "智能对话" [ref=e45] [cursor=pointer]:
+        - /url: /chat
+        - generic [ref=e46]: 💬
+        - generic [ref=e47]: 智能对话
+      - link "全库搜索" [ref=e48] [cursor=pointer]:
+        - /url: /agents
+        - generic [ref=e49]: 🔍
+        - generic [ref=e50]: 全库搜索
+      - link "修改密码" [ref=e51] [cursor=pointer]:
+        - /url: /change-password
+        - generic [ref=e52]: 🔑
+        - generic [ref=e53]: 修改密码
+      - link "知识库配置" [ref=e54] [cursor=pointer]:
+        - /url: /kbs
+        - generic [ref=e55]: 📖
+        - generic [ref=e56]: 知识库配置
+      - link "权限分组" [ref=e57] [cursor=pointer]:
+        - /url: /permission-groups
+        - generic [ref=e58]: 🛡️
+        - generic [ref=e59]: 权限分组
+      - link "审批中心" [ref=e60] [cursor=pointer]:
+        - /url: /approvals
+        - generic [ref=e61]: 📋
+        - generic [ref=e62]: 审批中心
+      - link "站内信" [ref=e63] [cursor=pointer]:
+        - /url: /inbox
+        - generic [ref=e64]: 📬
+        - generic [ref=e65]: 站内信
+    - generic [ref=e66]:
+      - generic [ref=e67]:
+        - generic [ref=e68]: 汤斌
+        - generic [ref=e69]: 子管理员
+      - button "退出" [ref=e70] [cursor=pointer]
+  - main [ref=e71]:
+    - heading "智能对话" [level=1] [ref=e73]
+    - generic [ref=e75]:
+      - generic [ref=e76]:
+        - generic [ref=e77]:
+          - heading "聊天助手" [level=3] [ref=e78]
+          - generic [ref=e80] [cursor=pointer]: IT 对话
+        - generic [ref=e81]:
+          - generic [ref=e82]:
+            - heading "会话" [level=3] [ref=e83]
+            - button "新建" [ref=e84] [cursor=pointer]
+          - generic [ref=e85]: 暂无会话，请点击“新建”
+      - generic [ref=e86]:
+        - generic [ref=e87]: 对话
+        - generic [ref=e89]:
+          - text: 当前没有会话，请先新建一个会话。
+          - button "新建会话" [ref=e91] [cursor=pointer]
+        - button "新建会话" [ref=e93] [cursor=pointer]

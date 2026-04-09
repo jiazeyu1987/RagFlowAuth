@@ -13,6 +13,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from backend.app.core.authz import AuthContextDep
+from backend.app.core.permission_resolver import assert_tool_allowed
 
 router = APIRouter()
 
@@ -155,6 +156,7 @@ def _verify_all(provinces: list[dict[str, object]]) -> list[dict[str, object]]:
 
 @router.get("/drug-admin/provinces", response_model=ProvinceListResponse)
 async def list_drug_admin_provinces(ctx: AuthContextDep):  # noqa: ARG001
+    assert_tool_allowed(ctx.snapshot, "drug_admin")
     payload, _ = _province_map()
     provinces = _normalize_provinces(payload)
     return {
@@ -167,6 +169,7 @@ async def list_drug_admin_provinces(ctx: AuthContextDep):  # noqa: ARG001
 
 @router.post("/drug-admin/resolve", response_model=ResolveProvinceResponse)
 async def resolve_drug_admin_province(body: ResolveProvinceRequest, ctx: AuthContextDep):  # noqa: ARG001
+    assert_tool_allowed(ctx.snapshot, "drug_admin")
     _, mapping = _province_map()
     province = str(body.province or "").strip()
     urls = mapping.get(province)
@@ -185,6 +188,7 @@ async def resolve_drug_admin_province(body: ResolveProvinceRequest, ctx: AuthCon
 
 @router.post("/drug-admin/verify", response_model=VerifyAllResponse)
 async def verify_drug_admin_provinces(ctx: AuthContextDep):  # noqa: ARG001
+    assert_tool_allowed(ctx.snapshot, "drug_admin")
     payload, _ = _province_map()
     provinces = _normalize_provinces(payload)
     rows = await asyncio.to_thread(_verify_all, provinces)

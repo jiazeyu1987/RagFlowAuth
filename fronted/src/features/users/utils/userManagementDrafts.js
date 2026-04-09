@@ -1,4 +1,5 @@
 import { normalizeDraftByUserType, normalizeGroupIds } from './userAccessPolicy';
+import { normalizeToolIds } from './toolCatalog';
 
 export const applyManagedUserFieldChange = (draft, field, value) => {
   const next = { ...(draft || {}), [field]: value };
@@ -21,6 +22,19 @@ export const toggleManagedUserDraftGroup = (draft, groupId, checked) => {
     return { ...(draft || {}), group_ids: [...groupIds, groupId] };
   }
   return { ...(draft || {}), group_ids: groupIds.filter((id) => id !== groupId) };
+};
+
+export const toggleManagedUserDraftTool = (draft, toolId, checked) => {
+  if (String(draft?.user_type || 'normal') !== 'sub_admin') {
+    return { ...(draft || {}), tool_ids: [] };
+  }
+
+  const toolIds = normalizeToolIds(draft?.tool_ids);
+  if (checked) {
+    if (toolIds.includes(toolId)) return draft;
+    return { ...(draft || {}), tool_ids: normalizeToolIds([...toolIds, toolId]) };
+  }
+  return { ...(draft || {}), tool_ids: toolIds.filter((id) => id !== toolId) };
 };
 
 export const applyPolicyFormChange = (previousDraft, nextValue) => {
@@ -47,6 +61,19 @@ export const togglePolicyGroupSelection = ({ draft, groupId, checked, isPolicyAd
   return { ...(draft || {}), group_ids: current.filter((id) => id !== groupId) };
 };
 
+export const togglePolicyToolSelection = ({ draft, toolId, checked, isPolicyAdminUser }) => {
+  if (isPolicyAdminUser || String(draft?.user_type || 'normal') !== 'sub_admin') {
+    return { ...(draft || {}), tool_ids: [] };
+  }
+
+  const current = normalizeToolIds(draft?.tool_ids);
+  if (checked) {
+    if (current.includes(toolId)) return draft;
+    return { ...(draft || {}), tool_ids: normalizeToolIds([...current, toolId]) };
+  }
+  return { ...(draft || {}), tool_ids: current.filter((id) => id !== toolId) };
+};
+
 export const toggleSelectedGroupIds = (groupIds, groupId, checked) => {
   const current = Array.isArray(groupIds) ? groupIds : [];
   if (checked) {
@@ -54,4 +81,13 @@ export const toggleSelectedGroupIds = (groupIds, groupId, checked) => {
     return [...current, groupId];
   }
   return current.filter((id) => id !== groupId);
+};
+
+export const toggleSelectedToolIds = (toolIds, toolId, checked) => {
+  const current = normalizeToolIds(toolIds);
+  if (checked) {
+    if (current.includes(toolId)) return current;
+    return normalizeToolIds([...current, toolId]);
+  }
+  return current.filter((id) => id !== toolId);
 };

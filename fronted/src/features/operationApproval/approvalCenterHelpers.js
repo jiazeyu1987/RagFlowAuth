@@ -1,3 +1,5 @@
+import { mapUserFacingErrorMessage } from '../../shared/errors/userFacingErrorMessages';
+
 const APPROVAL_ERROR_MESSAGES = {
   training_record_missing: '当前审批账号缺少审批培训记录，请先补录培训记录后再审批或驳回。',
   training_curriculum_outdated: '当前审批账号的审批培训版本已过期，请完成最新版培训后再审批或驳回。',
@@ -72,7 +74,7 @@ export const buildSignaturePrompt = (action, detail, getOperationLabel) => {
 export const mapApprovalCenterErrorMessage = (message) => {
   const code = String(message || '').trim();
   if (!code) return '';
-  return APPROVAL_ERROR_MESSAGES[code] || code;
+  return APPROVAL_ERROR_MESSAGES[code] || mapUserFacingErrorMessage(code, '审批处理失败，请稍后重试');
 };
 
 export const buildTrainingCompliancePath = ({

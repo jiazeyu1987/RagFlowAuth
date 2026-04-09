@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 
 import { knowledgeApi } from '../api';
+import { mapUserFacingErrorMessage } from '../../../shared/errors/userFacingErrorMessages';
 import {
   DATASET_CREATE_ALLOWED_KEYS,
   DATASET_UPDATE_ALLOWED_KEYS,
@@ -30,11 +31,15 @@ const TEXT = {
   createNameRequired: '\u8bf7\u8f93\u5165\u77e5\u8bc6\u5e93\u540d\u79f0',
   createSuccess: '\u65b0\u5efa\u77e5\u8bc6\u5e93\u6210\u529f',
   selectCopySource: '\u8bf7\u9009\u62e9\u8981\u590d\u5236\u7684\u77e5\u8bc6\u5e93',
+  subAdminRootMissing:
+    '\u5f53\u524d\u5b50\u7ba1\u7406\u5458\u672a\u914d\u7f6e\u77e5\u8bc6\u5e93\u6839\u76ee\u5f55\uff0c\u8bf7\u8054\u7cfb\u7cfb\u7edf\u7ba1\u7406\u5458',
 };
 
 export default function useKnowledgeBasesMutations({
   canManageDirectory,
   canManageDatasets,
+  isSubAdmin = false,
+  managedKbRootNodeId = null,
   datasetState,
   createState,
   navigationState,
@@ -77,6 +82,32 @@ export default function useKnowledgeBasesMutations({
     datasetNodeMap,
     openDir,
   } = navigationState;
+  const normalizedManagedRootNodeId = String(managedKbRootNodeId || '').trim();
+
+  function resolveSelectableNodeId(nodeId) {
+    const normalizedNodeId = typeof nodeId === 'string' ? nodeId.trim() : '';
+    if (normalizedNodeId) {
+      return normalizedNodeId;
+    }
+    if (isSubAdmin && normalizedManagedRootNodeId) {
+      return normalizedManagedRootNodeId;
+    }
+    return ROOT;
+  }
+
+  function resolveNodeIdForWrite(nodeId) {
+    const normalizedNodeId = typeof nodeId === 'string' ? nodeId.trim() : '';
+    if (normalizedNodeId) {
+      return normalizedNodeId;
+    }
+    if (isSubAdmin) {
+      if (!normalizedManagedRootNodeId) {
+        throw new Error(TEXT.subAdminRootMissing);
+      }
+      return normalizedManagedRootNodeId;
+    }
+    return null;
+  }
 
   async function fetchKbList() {
     setKbError('');
@@ -91,17 +122,19 @@ export default function useKnowledgeBasesMutations({
       const tree = await knowledgeApi.listKnowledgeDirectories();
       setDirectoryTree(tree);
       const validIds = new Set((tree.nodes || []).map((node) => node.id));
+      const fallbackDirId =
+        isSubAdmin && normalizedManagedRootNodeId ? normalizedManagedRootNodeId : ROOT;
 
       if (currentDirId && currentDirId !== ROOT && !validIds.has(currentDirId)) {
-        setCurrentDirId(ROOT);
+        setCurrentDirId(fallbackDirId);
       }
       if (selectedNodeId && selectedNodeId !== ROOT && !validIds.has(selectedNodeId)) {
-        setSelectedNodeId(ROOT);
+        setSelectedNodeId(fallbackDirId);
       }
 
       setExpanded((previous) => previous.filter((id) => validIds.has(id)));
     } catch (requestError) {
-      setTreeError(requestError?.message || TEXT.loadTreeFailed);
+      setTreeError(mapUserFacingErrorMessage(requestError?.message, TEXT.loadTreeFailed));
     }
   }
 
@@ -133,10 +166,10 @@ export default function useKnowledgeBasesMutations({
 
       const nodeId =
         (directoryTree?.datasets || []).find((item) => item.id === dataset.id)?.node_id || ROOT;
-      setDatasetDirId(nodeId);
+      setDatasetDirId(resolveSelectableNodeId(nodeId));
     } catch (requestError) {
       setKbSelected(null);
-      setKbError(requestError?.message || TEXT.loadDatasetDetailFailed);
+      setKbError(mapUserFacingErrorMessage(requestError?.message, TEXT.loadDatasetDetailFailed));
     }
   }
 
@@ -144,7 +177,7 @@ export default function useKnowledgeBasesMutations({
     try {
       await Promise.all([fetchKbList(), fetchTree()]);
     } catch (requestError) {
-      setKbError(requestError?.message || TEXT.refreshFailed);
+      setKbError(mapUserFacingErrorMessage(requestError?.message, TEXT.refreshFailed));
     }
   }
 
@@ -176,7 +209,7 @@ export default function useKnowledgeBasesMutations({
         throw new Error('dataset_update_failed');
       }
 
-      await knowledgeApi.assignDatasetDirectory(updated.id, datasetDirId || null);
+      await knowledgeApi.assignDatasetDirectory(updated.id, resolveNodeIdForWrite(datasetDirId));
       setKbSelected({
         ...updated,
         local_document_count: Number(selectedKb?.local_document_count || 0),
@@ -185,7 +218,7 @@ export default function useKnowledgeBasesMutations({
       setKbSaveStatus(TEXT.saveSuccess);
       await refreshAll();
     } catch (requestError) {
-      setKbError(requestError?.message || TEXT.saveFailed);
+      setKbError(mapUserFacingErrorMessage(requestError?.message, TEXT.saveFailed));
     } finally {
       setKbBusy(false);
     }
@@ -216,7 +249,7 @@ export default function useKnowledgeBasesMutations({
       setKbSaveStatus(`${TEXT.deleteRequestSubmitted}${requestIdText}`);
       await refreshAll();
     } catch (requestError) {
-      setKbError(requestError?.message || TEXT.deleteDatasetFailed);
+      setKbError(mapUserFacingErrorMessage(requestError?.message, TEXT.deleteDatasetFailed));
     } finally {
       setKbBusy(false);
     }
@@ -225,18 +258,19 @@ export default function useKnowledgeBasesMutations({
   async function moveDatasetToNode(datasetId, targetNodeId) {
     if (!canManageDirectory || !datasetId) return;
 
-    const fromNodeId = datasetNodeMap.get(datasetId) || ROOT;
-    const nextNodeId = targetNodeId || ROOT;
+    const fromNodeId = resolveSelectableNodeId(datasetNodeMap.get(datasetId));
+    const nextNodeId = resolveSelectableNodeId(targetNodeId);
 
     if (fromNodeId === nextNodeId) return;
 
     setKbError('');
 
     try {
-      await knowledgeApi.assignDatasetDirectory(datasetId, nextNodeId || null);
+      const nextNodeIdForWrite = resolveNodeIdForWrite(nextNodeId);
+      await knowledgeApi.assignDatasetDirectory(datasetId, nextNodeIdForWrite);
       setKbSaveStatus(
         `\u5df2\u5c06\u77e5\u8bc6\u5e93 ${datasetId} \u79fb\u52a8\u5230${
-          nextNodeId ? TEXT.moveToTarget : TEXT.moveToRoot
+          nextNodeIdForWrite ? TEXT.moveToTarget : TEXT.moveToRoot
         }`
       );
       await fetchTree();
@@ -245,7 +279,7 @@ export default function useKnowledgeBasesMutations({
         setDatasetDirId(nextNodeId);
       }
     } catch (requestError) {
-      setKbError(requestError?.message || TEXT.moveDatasetFailed);
+      setKbError(mapUserFacingErrorMessage(requestError?.message, TEXT.moveDatasetFailed));
     }
   }
 
@@ -258,7 +292,7 @@ export default function useKnowledgeBasesMutations({
     try {
       const node = await knowledgeApi.createKnowledgeDirectory({
         name: name.trim(),
-        parent_id: currentDirId || null,
+        parent_id: resolveNodeIdForWrite(currentDirId),
       });
       const newNodeId = node?.id;
       await fetchTree();
@@ -268,7 +302,7 @@ export default function useKnowledgeBasesMutations({
         setSelectedItem({ kind: 'dir', id: newNodeId });
       }
     } catch (requestError) {
-      setTreeError(requestError?.message || TEXT.createDirectoryFailed);
+      setTreeError(mapUserFacingErrorMessage(requestError?.message, TEXT.createDirectoryFailed));
     }
   }
 
@@ -283,7 +317,7 @@ export default function useKnowledgeBasesMutations({
       await knowledgeApi.updateKnowledgeDirectory(selectedNodeId, { name: nextName.trim() });
       await fetchTree();
     } catch (requestError) {
-      setTreeError(requestError?.message || TEXT.renameDirectoryFailed);
+      setTreeError(mapUserFacingErrorMessage(requestError?.message, TEXT.renameDirectoryFailed));
     }
   }
 
@@ -309,7 +343,7 @@ export default function useKnowledgeBasesMutations({
       setSelectedItem(null);
       await fetchTree();
     } catch (requestError) {
-      setTreeError(requestError?.message || TEXT.deleteDirectoryFailed);
+      setTreeError(mapUserFacingErrorMessage(requestError?.message, TEXT.deleteDirectoryFailed));
     }
   }
 
@@ -319,7 +353,7 @@ export default function useKnowledgeBasesMutations({
     createState.setCreateName('');
     setCreateFromId(String(kbList[0]?.id || ''));
     setCreatePayload({});
-    createState.setCreateDirId(preferredDirId || ROOT);
+    createState.setCreateDirId(resolveSelectableNodeId(preferredDirId));
     setCreateError('');
   }
 
@@ -340,7 +374,7 @@ export default function useKnowledgeBasesMutations({
       setCreateError('');
     } catch (requestError) {
       setCreatePayload({});
-      setCreateError(requestError?.message || TEXT.createFailed);
+      setCreateError(mapUserFacingErrorMessage(requestError?.message, TEXT.createFailed));
     }
   }
 
@@ -362,14 +396,14 @@ export default function useKnowledgeBasesMutations({
 
       await knowledgeApi.createRagflowDataset({
         name,
-        node_id: createDirId || null,
+        node_id: resolveNodeIdForWrite(createDirId),
         ...pickAllowed(createPayload, DATASET_CREATE_ALLOWED_KEYS),
       });
       setCreateOpen(false);
       setKbSaveStatus(TEXT.createSuccess);
       await refreshAll();
     } catch (requestError) {
-      setCreateError(requestError?.message || TEXT.createFailed);
+      setCreateError(mapUserFacingErrorMessage(requestError?.message, TEXT.createFailed));
     } finally {
       setKbBusy(false);
     }

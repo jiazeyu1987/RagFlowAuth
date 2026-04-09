@@ -14,10 +14,7 @@ import {
   DISABLE_USER_ERROR,
   TOGGLE_USER_STATUS_ERROR,
 } from '../utils/userManagementMessages';
-import {
-  bindStateAction,
-  runStateAction,
-} from '../utils/userManagementActionRunners';
+import { runStateAction } from '../utils/userManagementActionRunners';
 
 export const useUserStatusManagement = ({
   fetchUsers,
@@ -39,13 +36,12 @@ export const useUserStatusManagement = ({
     setDisableUserError(nextState.disableUserError);
   }, []);
 
-  const handleCloseDisableUserModal = useCallback(
-    bindStateAction(
+  const handleCloseDisableUserModal = useCallback(() => {
+    runStateAction(
       applyDisableUserState,
       buildClosedDisableUserState
-    ),
-    [applyDisableUserState]
-  );
+    );
+  }, [applyDisableUserState]);
 
   const handleChangeDisableMode = useCallback((mode) => {
     const nextMode = mode === 'until' ? 'until' : 'immediate';

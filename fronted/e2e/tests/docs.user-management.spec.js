@@ -11,7 +11,6 @@ const {
   readUserEnvelope,
   tryLoginApi,
   uniquePassword,
-  uniqueUsername,
   waitForUserVisible,
 } = require('../helpers/userLifecycleFlow');
 
@@ -25,8 +24,8 @@ const adminPassword = process.env.E2E_ADMIN_PASS || 'admin123';
 test('User management covers real create, reset password, disable/enable, and login effects @doc-e2e', async ({ browser }) => {
   test.setTimeout(300_000);
 
-  const username = uniqueUsername('doc_users');
-  const displayName = `Doc User ${Date.now()}`;
+  const username = summary?.users?.user_management_target?.username || 'doc_user_management_user';
+  const displayName = summary?.users?.user_management_target?.full_name || 'Doc User Management User';
   const initialPassword = uniquePassword('DocUserInit');
   const resetPassword = uniquePassword('DocUserReset');
 
@@ -57,6 +56,7 @@ test('User management covers real create, reset password, disable/enable, and lo
       headers: adminSession.headers,
       data: {
         username,
+        employee_user_id: username,
         password: initialPassword,
         full_name: displayName,
         role: 'viewer',
@@ -68,7 +68,10 @@ test('User management covers real create, reset password, disable/enable, and lo
         idle_timeout_minutes: 120,
       },
     });
-    await expect(createResponse.ok()).toBeTruthy();
+    if (!createResponse.ok()) {
+      const body = await createResponse.text().catch(() => '');
+      throw new Error(`create user failed for ${username}: ${createResponse.status()} ${body}`.trim());
+    }
     const createBody = await createResponse.json();
     createdUserId = String(
       readUserEnvelope(createBody, `create user returned invalid payload for ${username}`).user_id || ''

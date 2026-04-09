@@ -1,0 +1,114 @@
+- generic [ref=e4]:
+  - complementary [ref=e5]:
+    - generic [ref=e6]:
+      - heading "知识库系统" [level=2] [ref=e7]
+      - button "切换侧边栏" [ref=e8] [cursor=pointer]: <
+    - navigation [ref=e9]:
+      - link "用户管理" [ref=e10] [cursor=pointer]:
+        - /url: /users
+        - generic [ref=e11]: 👥
+        - generic [ref=e12]: 用户管理
+      - link "文档上传" [ref=e13] [cursor=pointer]:
+        - /url: /upload
+        - generic [ref=e14]: 📤
+        - generic [ref=e15]: 文档上传
+      - link "文档记录" [ref=e16] [cursor=pointer]:
+        - /url: /document-history
+        - generic [ref=e17]: 🗂️
+        - generic [ref=e18]: 文档记录
+      - link "文档浏览" [ref=e19] [cursor=pointer]:
+        - /url: /browser
+        - generic [ref=e20]: 📄
+        - generic [ref=e21]: 文档浏览
+      - link "智能对话" [ref=e22] [cursor=pointer]:
+        - /url: /chat
+        - generic [ref=e23]: 💬
+        - generic [ref=e24]: 智能对话
+      - link "全库搜索" [ref=e25] [cursor=pointer]:
+        - /url: /agents
+        - generic [ref=e26]: 🔍
+        - generic [ref=e27]: 全库搜索
+      - link "修改密码" [ref=e28] [cursor=pointer]:
+        - /url: /change-password
+        - generic [ref=e29]: 🔑
+        - generic [ref=e30]: 修改密码
+      - link "知识库配置" [ref=e31] [cursor=pointer]:
+        - /url: /kbs
+        - generic [ref=e32]: 📖
+        - generic [ref=e33]: 知识库配置
+      - link "权限分组" [ref=e34] [cursor=pointer]:
+        - /url: /permission-groups
+        - generic [ref=e35]: 🛡️
+        - generic [ref=e36]: 权限分组
+      - link "审批中心" [ref=e37] [cursor=pointer]:
+        - /url: /approvals
+        - generic [ref=e38]: 📋
+        - generic [ref=e39]: 审批中心
+      - link "站内信" [ref=e40] [cursor=pointer]:
+        - /url: /inbox
+        - generic [ref=e41]: 📬
+        - generic [ref=e42]: 站内信
+    - generic [ref=e43]:
+      - generic [ref=e44]:
+        - generic [ref=e45]: 汤斌
+        - generic [ref=e46]: 子管理员
+      - button "退出" [ref=e47] [cursor=pointer]
+  - main [ref=e48]:
+    - heading "知识库配置" [level=1] [ref=e50]
+    - generic [ref=e52]:
+      - generic [ref=e53]:
+        - button "知识配置" [ref=e54] [cursor=pointer]
+        - button "对话配置" [ref=e55] [cursor=pointer]
+      - generic [ref=e56]:
+        - generic [ref=e57]:
+          - generic [ref=e58]: 目录树
+          - generic [ref=e60]:
+            - button "🗂️ 根目录" [ref=e62] [cursor=pointer]
+            - generic [ref=e64]:
+              - button
+              - button "📁 行政" [ref=e65] [cursor=pointer]
+        - generic [ref=e66]:
+          - generic [ref=e67]:
+            - generic [ref=e68]:
+              - button "刷新" [ref=e69] [cursor=pointer]
+              - button "返回上级" [disabled] [ref=e70]
+              - button "新建目录" [ref=e71] [cursor=pointer]
+              - button "重命名目录" [disabled] [ref=e72]
+              - button "删除目录" [disabled] [ref=e73]
+              - button "新建知识库" [active] [ref=e74] [cursor=pointer]
+            - generic [ref=e75]:
+              - generic [ref=e76]: "路径:"
+              - button "根目录" [ref=e77] [cursor=pointer]
+            - textbox "筛选当前目录内容" [ref=e78]
+            - generic [ref=e79]: 支持拖拽：将右侧“知识库”行拖到左侧任意目录，可快速移动挂载位置。
+          - table [ref=e81]:
+            - rowgroup [ref=e82]:
+              - row "名称 修改日期 类型" [ref=e83]:
+                - columnheader "名称" [ref=e84]
+                - columnheader "修改日期" [ref=e85]
+                - columnheader "类型" [ref=e86]
+            - rowgroup [ref=e87]:
+              - row "行政 2026/4/9 13:58:36 文件夹" [ref=e88] [cursor=pointer]:
+                - cell "行政" [ref=e89]
+                - cell "2026/4/9 13:58:36" [ref=e90]
+                - cell "文件夹" [ref=e91]
+      - dialog [ref=e92]:
+        - generic [ref=e93]:
+          - generic [ref=e94]:
+            - generic [ref=e95]: 新建知识库
+            - button "关闭" [ref=e96] [cursor=pointer]
+          - generic [ref=e97]:
+            - generic [ref=e98]:
+              - generic [ref=e99]: 名称
+              - textbox "输入知识库名称" [ref=e100]
+            - generic [ref=e101]:
+              - generic [ref=e102]: 复制配置
+              - combobox [ref=e103]:
+                - option "IT" [selected]
+            - generic [ref=e104]:
+              - generic [ref=e105]: 挂载目录
+              - combobox [ref=e106]:
+                - option "/行政" [selected]
+          - generic [ref=e107]:
+            - button "取消" [ref=e108] [cursor=pointer]
+            - button "创建" [ref=e109] [cursor=pointer]

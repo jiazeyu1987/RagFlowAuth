@@ -93,4 +93,13 @@ export const dataSecurityApi = {
       }),
       'data_security_restore_drill_create'
     ),
+
+  runRealRestore: async (payload) =>
+    assertObjectPayload(
+      await httpClient.requestJson(authBackendUrl('/api/admin/data-security/restore/run'), {
+        method: 'POST',
+        body: JSON.stringify(payload || {}),
+      }),
+      'data_security_real_restore_run'
+    ),
 };

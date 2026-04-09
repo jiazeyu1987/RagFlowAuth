@@ -64,27 +64,9 @@ def apply_group_permissions(
     accumulator.can_delete = accumulator.can_delete or flags.can_delete
     accumulator.can_manage_kb_directory = accumulator.can_manage_kb_directory or flags.can_manage_kb_directory
     accumulator.can_view_kb_config = accumulator.can_view_kb_config or flags.can_view_kb_config
-    accumulator.can_view_tools = accumulator.can_view_tools or flags.can_view_tools
 
-    _apply_group_tool_scope(accumulator, group=group, can_view_tools=flags.can_view_tools)
     _apply_group_kb_scope(accumulator, group=group, dataset_index=dataset_index)
     _apply_group_chat_scope(accumulator, group=group)
-
-
-def _apply_group_tool_scope(
-    accumulator: PermissionAccumulator,
-    *,
-    group: dict[str, Any],
-    can_view_tools: bool,
-) -> None:
-    if not can_view_tools:
-        return
-    group_tools = resolve_group_tool_scope(group)[1]
-    if group_tools:
-        accumulator.tool_has_scoped_access = True
-        accumulator.tool_ids.update(group_tools)
-        return
-    accumulator.tool_has_global_access = True
 
 
 def _apply_group_kb_scope(
@@ -189,6 +171,23 @@ def _apply_sub_admin_chat_scope(
     for chat_ref in chat_management_manager.list_auto_granted_chat_refs(user):
         if isinstance(chat_ref, str) and chat_ref:
             accumulator.chat_ids.add(chat_ref)
+
+
+def apply_user_tool_scope(
+    accumulator: PermissionAccumulator,
+    *,
+    tool_ids: list[str] | tuple[str, ...] | set[str] | frozenset[str],
+) -> None:
+    clean: set[str] = {
+        str(tool_id or "").strip()
+        for tool_id in tool_ids
+        if str(tool_id or "").strip()
+    }
+    if not clean:
+        return
+    accumulator.can_view_tools = True
+    accumulator.tool_has_scoped_access = True
+    accumulator.tool_ids.update(clean)
 
 
 def resolve_tool_scope(accumulator: PermissionAccumulator) -> ResourceScope:

@@ -33,9 +33,13 @@ export default function DataSecurity() {
     localBackupTargetPath,
     restoreEligibleJobs,
     selectedRestoreJobId,
+    restoreDrillBlockedReason,
+    canSubmitRestoreDrill,
+    canSubmitRealRestore,
     restoreTarget,
     restoreNotes,
     creatingRestoreDrill,
+    creatingRealRestore,
     setSettingField,
     setSelectedRestoreJobId,
     setRestoreTarget,
@@ -46,6 +50,7 @@ export default function DataSecurity() {
     runFullBackupNow,
     handleSelectJob,
     submitRestoreDrill,
+    submitRealRestore,
   } = useDataSecurityPage();
 
   useEffect(() => {
@@ -67,6 +72,20 @@ export default function DataSecurity() {
     if (changeReason === null) return;
     await saveSettings(changeReason);
   }, [saveSettings]);
+
+  const handleSubmitRealRestore = useCallback(async () => {
+    const changeReason = window.prompt('请输入本次真实恢复原因');
+    if (changeReason === null) return;
+    const confirmationText = window.prompt('此操作会覆盖当前系统数据。请输入 RESTORE 确认恢复');
+    if (confirmationText === null) return;
+    const result = await submitRealRestore({
+      changeReason,
+      confirmationText,
+    });
+    if (result) {
+      window.alert(`真实恢复已完成：${result.live_auth_db_path}`);
+    }
+  }, [submitRealRestore]);
 
   if (loading) return <div style={{ padding: '12px' }}>加载中...</div>;
 
@@ -165,14 +184,19 @@ export default function DataSecurity() {
         isMobile={isMobile}
         restoreEligibleJobs={restoreEligibleJobs}
         selectedRestoreJobId={selectedRestoreJobId}
+        restoreDrillBlockedReason={restoreDrillBlockedReason}
+        canSubmitRestoreDrill={canSubmitRestoreDrill}
+        canSubmitRealRestore={canSubmitRealRestore}
         restoreTarget={restoreTarget}
         restoreNotes={restoreNotes}
         restoreDrills={restoreDrills}
         creatingRestoreDrill={creatingRestoreDrill}
+        creatingRealRestore={creatingRealRestore}
         onSelectedRestoreJobIdChange={setSelectedRestoreJobId}
         onRestoreTargetChange={setRestoreTarget}
         onRestoreNotesChange={setRestoreNotes}
         onSubmit={submitRestoreDrill}
+        onRealRestoreSubmit={handleSubmitRealRestore}
       />
     </div>
   );

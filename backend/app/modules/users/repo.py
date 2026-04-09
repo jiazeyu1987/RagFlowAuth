@@ -44,6 +44,12 @@ class UsersRepo:
             "active_session_last_activity_at_ms": None,
         }
 
+    @staticmethod
+    def _read_record_value(record, key: str):
+        if isinstance(record, dict):
+            return record.get(key)
+        return getattr(record, key, None)
+
     def _call_permission_group_store(self, method_name: str, /, *args, default_factory=None, **kwargs):
         return self._call_optional_dependency(
             self._permission_group_store,
@@ -105,11 +111,15 @@ class UsersRepo:
     def get_user(self, user_id: str):
         return self._call_user_store("get_by_user_id", user_id)
 
+    def get_user_by_employee_user_id(self, employee_user_id: str):
+        return self._call_user_store("get_by_employee_user_id", employee_user_id)
+
     def create_user(
         self,
         *,
         username: str,
         password: str,
+        employee_user_id: str | None,
         full_name: str | None,
         email: str | None,
         manager_user_id: str | None,
@@ -131,6 +141,7 @@ class UsersRepo:
             "create_user",
             username=username,
             password=password,
+            employee_user_id=employee_user_id,
             full_name=full_name,
             email=email,
             manager_user_id=manager_user_id,
@@ -198,6 +209,37 @@ class UsersRepo:
     def set_user_permission_groups(self, user_id: str, group_ids: list[int]) -> None:
         self._call_user_store("set_user_permission_groups", user_id, group_ids)
 
+    def list_user_tool_ids(self, user_id: str) -> list[str]:
+        return self._call_user_store("list_user_tool_ids", user_id)
+
+    def set_user_tool_permissions(
+        self,
+        user_id: str,
+        tool_ids: list[str],
+        *,
+        granted_by_user_id: str | None = None,
+    ) -> None:
+        self._call_user_store(
+            "set_user_tool_permissions",
+            user_id,
+            tool_ids,
+            granted_by_user_id=granted_by_user_id,
+        )
+
+    def set_user_tool_permissions_with_managed_viewer_sync(
+        self,
+        *,
+        sub_admin_user_id: str,
+        tool_ids: list[str],
+        granted_by_user_id: str | None = None,
+    ) -> None:
+        self._call_user_store(
+            "set_user_tool_permissions_with_managed_viewer_sync",
+            sub_admin_user_id=sub_admin_user_id,
+            tool_ids=tool_ids,
+            granted_by_user_id=granted_by_user_id,
+        )
+
     def enforce_login_session_limit(self, user_id: str, max_sessions: int) -> list[str]:
         return self._call_auth_session_store(
             "enforce_user_session_limit",
@@ -241,6 +283,33 @@ class UsersRepo:
 
     def get_department(self, department_id: int):
         return self._call_org_structure_manager("get_department", department_id)
+
+    def get_employee_by_user_id(self, employee_user_id: str):
+        return self._call_org_structure_manager("get_employee_by_user_id", employee_user_id)
+
+    def get_default_department_id_for_company(self, company_id: int) -> int | None:
+        try:
+            target_company_id = int(company_id)
+        except Exception:
+            return None
+        departments = self._call_org_structure_manager("list_departments_flat")
+        for department in departments or []:
+            department_company_id = self._read_record_value(department, "company_id")
+            try:
+                if int(department_company_id) != target_company_id:
+                    continue
+            except Exception:
+                continue
+            department_id = self._read_record_value(department, "department_id")
+            if department_id is None:
+                department_id = self._read_record_value(department, "id")
+            if department_id is None:
+                continue
+            try:
+                return int(department_id)
+            except Exception:
+                continue
+        return None
 
     def get_managed_kb_root_path(self, *, company_id: int | None, node_id: str | None) -> str | None:
         clean_node_id = str(node_id or "").strip()

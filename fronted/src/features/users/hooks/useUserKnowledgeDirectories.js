@@ -31,7 +31,6 @@ export const useUserKnowledgeDirectories = ({
     kbDirectoryCreatingRoot,
     kbDirectoryCreateError,
     clearKbDirectoryCreateError,
-    resetKnowledgeDirectoryRootCreation,
     handleCreateModalRootDirectory,
     handlePolicyRootDirectory,
   } = useKnowledgeDirectoryRootCreation({

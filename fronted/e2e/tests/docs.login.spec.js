@@ -3,10 +3,10 @@ const { test, expect } = require('@playwright/test');
 const { loadBootstrapSummary } = require('../helpers/bootstrapSummary');
 const {
   deleteUserById,
+  ensureUserDeletedByUsername,
   findUserByUsername,
   loginApiAs,
   uniquePassword,
-  uniqueUsername,
   waitForUserVisible,
 } = require('../helpers/userLifecycleFlow');
 
@@ -20,7 +20,8 @@ const adminPassword = process.env.E2E_ADMIN_PASS || 'admin123';
 test('Doc login supports failure messaging and success flow @doc-e2e', async ({ page }) => {
   test.setTimeout(180_000);
 
-  const username = uniqueUsername('doc_login');
+  const username = 'doc_login_user';
+  const fullName = 'Doc Login User';
   const password = uniquePassword('DocLogin');
 
   /** @type {Awaited<ReturnType<typeof loginApiAs>> | null} */
@@ -29,6 +30,7 @@ test('Doc login supports failure messaging and success flow @doc-e2e', async ({ 
 
   try {
     adminSession = await loginApiAs(adminUsername, adminPassword);
+    await ensureUserDeletedByUsername(adminSession.api, adminSession.headers, username);
     const viewerUser = summary?.users?.viewer;
     const subAdminUser = summary?.users?.sub_admin;
     if (!viewerUser?.username || !subAdminUser?.username) {
@@ -57,8 +59,9 @@ test('Doc login supports failure messaging and success flow @doc-e2e', async ({ 
       headers: adminSession.headers,
       data: {
         username,
+        employee_user_id: username,
         password,
-        full_name: `Doc Login User ${Date.now()}`,
+        full_name: fullName,
         role: 'viewer',
         manager_user_id: manager.user_id,
         company_id: viewer.company_id,

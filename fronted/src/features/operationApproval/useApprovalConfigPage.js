@@ -1,4 +1,5 @@
 import { useCallback, useState } from 'react';
+import { mapUserFacingErrorMessage } from '../../shared/errors/userFacingErrorMessages';
 import operationApprovalApi from './api';
 import {
   WORKFLOW_MEMBER_TYPE_SPECIAL_ROLE,
@@ -86,7 +87,7 @@ export default function useApprovalConfigPage() {
       setSaveMessage(`${currentDraft.operation_label} 审批流程已保存`);
       await loadData();
     } catch (requestError) {
-      setError(requestError?.message || '保存审批流程失败');
+      setError(mapUserFacingErrorMessage(requestError?.message, '保存审批流程失败'));
     } finally {
       setSavingKey('');
     }

@@ -17,26 +17,16 @@ class _RagflowService:
         return {"by_id": {}, "by_name": {}}
 
 
-class TestPermissionResolverToolsScopeUnit(unittest.TestCase):
-    def test_tools_default_to_all_when_group_has_no_tool_list(self):
-        deps = SimpleNamespace(
-            permission_group_store=_PermissionGroupStore(
-                {
-                    1: {
-                        "can_view_tools": True,
-                        "accessible_tools": [],
-                    }
-                }
-            ),
-            ragflow_service=_RagflowService(),
-            knowledge_directory_manager=None,
-        )
-        user = SimpleNamespace(role="viewer", group_ids=[1])
-        snapshot = resolve_permissions(deps, user)
-        self.assertEqual(snapshot.tool_scope, ResourceScope.ALL)
-        self.assertEqual(snapshot.permissions_dict()["accessible_tools"], [])
+class _UserToolPermissionStore:
+    def __init__(self, tool_ids_by_user: dict[str, list[str]]):
+        self._tool_ids_by_user = tool_ids_by_user
 
-    def test_tools_scope_set_when_group_specifies_tool_list(self):
+    def list_tool_ids(self, user_id: str):
+        return list(self._tool_ids_by_user.get(str(user_id), []))
+
+
+class TestPermissionResolverToolsScopeUnit(unittest.TestCase):
+    def test_tools_scope_is_none_when_user_has_no_tool_grants(self):
         deps = SimpleNamespace(
             permission_group_store=_PermissionGroupStore(
                 {
@@ -48,8 +38,29 @@ class TestPermissionResolverToolsScopeUnit(unittest.TestCase):
             ),
             ragflow_service=_RagflowService(),
             knowledge_directory_manager=None,
+            user_tool_permission_store=_UserToolPermissionStore({"u-1": []}),
         )
-        user = SimpleNamespace(role="viewer", group_ids=[1])
+        user = SimpleNamespace(user_id="u-1", role="viewer", group_ids=[1])
+        snapshot = resolve_permissions(deps, user)
+        self.assertEqual(snapshot.tool_scope, ResourceScope.NONE)
+        self.assertFalse(snapshot.can_view_tools)
+        self.assertEqual(snapshot.permissions_dict()["accessible_tools"], [])
+
+    def test_tools_scope_set_when_user_has_tool_grants(self):
+        deps = SimpleNamespace(
+            permission_group_store=_PermissionGroupStore(
+                {
+                    1: {
+                        "can_view_tools": True,
+                        "accessible_tools": ["package_drawing"],
+                    }
+                }
+            ),
+            ragflow_service=_RagflowService(),
+            knowledge_directory_manager=None,
+            user_tool_permission_store=_UserToolPermissionStore({"u-2": ["paper_download", "nmpa"]}),
+        )
+        user = SimpleNamespace(user_id="u-2", role="viewer", group_ids=[1])
         snapshot = resolve_permissions(deps, user)
         self.assertEqual(snapshot.tool_scope, ResourceScope.SET)
         self.assertEqual(snapshot.permissions_dict()["accessible_tools"], ["nmpa", "paper_download"])
@@ -57,4 +68,3 @@ class TestPermissionResolverToolsScopeUnit(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

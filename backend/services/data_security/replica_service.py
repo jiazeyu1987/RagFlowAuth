@@ -9,10 +9,9 @@ import time
 from datetime import datetime
 from pathlib import Path
 
-from backend.app.core.paths import repo_root
-
 from .common import ensure_dir
 from .docker_utils import container_path_to_host_str, resolve_backend_helper_image
+from .models import resolve_runtime_compose_file_path
 from .store import DataSecurityStore
 
 logger = logging.getLogger(__name__)
@@ -194,10 +193,8 @@ class BackupReplicaService:
         compose_file: Path | None = None
         compose_path = str(settings.ragflow_compose_path or "").strip()
         if compose_path:
-            compose_file = Path(compose_path)
-            if not compose_file.is_absolute():
-                compose_file = repo_root() / compose_file
-            if not compose_file.exists():
+            compose_file = resolve_runtime_compose_file_path(compose_path)
+            if compose_file is not None and not compose_file.exists():
                 compose_file = None
 
         helper_image = resolve_backend_helper_image(

@@ -50,7 +50,10 @@ async function uiLogin(page, username = ADMIN_USER, password = ADMIN_PASS) {
   if (!loginResp.ok()) {
     throw new Error(`UI login failed: ${loginResp.status()}`);
   }
-  await page.waitForURL(/(\/|\/chat)$/, { timeout: 30_000 });
+  await page.waitForURL(
+    (url) => ['/', '/chat', '/logs', '/dashboard'].includes(String(url.pathname || '').trim()),
+    { timeout: 30_000 }
+  );
 }
 
 module.exports = {

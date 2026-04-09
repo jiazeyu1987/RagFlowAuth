@@ -7,6 +7,7 @@ from fastapi import HTTPException
 from backend.app.core.permission_models import PermissionAccumulator, PermissionSnapshot, ResourceScope
 from backend.app.core.permission_scopes import (
     apply_group_permissions as _apply_group_permissions_impl,
+    apply_user_tool_scope as _apply_user_tool_scope_impl,
     apply_sub_admin_scope as _apply_sub_admin_scope_impl,
     expand_node_dataset_refs as _expand_node_dataset_refs_impl,
     resolve_group_tool_scope as _resolve_group_tool_scope_impl,
@@ -89,6 +90,16 @@ def _resolve_dataset_index(deps: "AppDependencies") -> dict[str, dict[str, str]]
     return get_index()
 
 
+def _resolve_user_tool_ids(deps: "AppDependencies", user: Any) -> list[str]:
+    store = getattr(deps, "user_tool_permission_store", None)
+    if store is None:
+        raise RuntimeError("user_tool_permission_store_unavailable")
+    user_id = str(getattr(user, "user_id", "") or "").strip()
+    if not user_id:
+        return []
+    return list(store.list_tool_ids(user_id))
+
+
 def _iter_permission_groups(deps: "AppDependencies", user: Any) -> Iterable[dict[str, Any]]:
     for group_id in _effective_group_ids(user):
         group = deps.permission_group_store.get_group(group_id)
@@ -138,6 +149,14 @@ def _apply_sub_admin_scope(
     )
 
 
+def _apply_user_tool_scope(
+    accumulator: PermissionAccumulator,
+    *,
+    tool_ids: list[str],
+) -> None:
+    _apply_user_tool_scope_impl(accumulator, tool_ids=tool_ids)
+
+
 def _resolve_tool_scope(accumulator: PermissionAccumulator) -> ResourceScope:
     return _resolve_tool_scope_impl(accumulator)
 
@@ -178,6 +197,11 @@ def resolve_permissions(deps: "AppDependencies", user: Any) -> PermissionSnapsho
 
     if role == "sub_admin":
         _apply_sub_admin_scope(deps, user, accumulator, dataset_index=dataset_index)
+
+    _apply_user_tool_scope(
+        accumulator,
+        tool_ids=_resolve_user_tool_ids(deps, user),
+    )
 
     return _build_permission_snapshot(role, accumulator)
 

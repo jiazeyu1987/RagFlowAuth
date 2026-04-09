@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field
 class UserCreate(BaseModel):
     username: str
     password: str
+    employee_user_id: Optional[str] = None
     full_name: Optional[str] = None
     email: Optional[str] = None
     manager_user_id: Optional[str] = None
@@ -15,6 +16,7 @@ class UserCreate(BaseModel):
     # Deprecated: single group id, kept for compatibility.
     group_id: Optional[int] = None
     group_ids: Optional[List[int]] = None
+    tool_ids: Optional[List[str]] = None
     status: str = "active"
     # Per-account login policy.
     max_login_sessions: int = 3
@@ -35,6 +37,7 @@ class UserUpdate(BaseModel):
     role: Optional[str] = None
     group_id: Optional[int] = None
     group_ids: Optional[List[int]] = None
+    tool_ids: Optional[List[str]] = None
     status: Optional[str] = None
     max_login_sessions: Optional[int] = None
     idle_timeout_minutes: Optional[int] = None
@@ -48,6 +51,7 @@ class UserUpdate(BaseModel):
 class UserResponse(BaseModel):
     user_id: str
     username: str
+    employee_user_id: Optional[str] = None
     full_name: Optional[str] = None
     email: Optional[str] = None
     manager_user_id: Optional[str] = None
@@ -61,6 +65,7 @@ class UserResponse(BaseModel):
     group_ids: List[int] = Field(default_factory=list)
     group_name: Optional[str] = None
     permission_groups: List[dict] = Field(default_factory=list)
+    tool_ids: List[str] = Field(default_factory=list)
     role: str
     status: str
     can_change_password: bool = True

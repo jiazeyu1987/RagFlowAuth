@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 
 import { knowledgeApi } from '../api';
+import { mapUserFacingErrorMessage } from '../../../shared/errors/userFacingErrorMessages';
 
 const normalizeKbRef = (value) => String(value || '').trim();
 
@@ -130,7 +131,7 @@ export default function useKnowledgeUploadDatasets({ accessibleKbs, authLoading,
         if (!active) return;
         setDatasets([]);
         setKbId('');
-        setError(requestError?.message || '无法加载知识库列表，请检查网络连接');
+        setError(mapUserFacingErrorMessage(requestError?.message, '无法加载知识库列表，请检查网络连接'));
       } finally {
         if (active) {
           setLoadingDatasets(false);

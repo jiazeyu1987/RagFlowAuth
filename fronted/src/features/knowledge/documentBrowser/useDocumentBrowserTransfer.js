@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { mapUserFacingErrorMessage } from '../../../shared/errors/userFacingErrorMessages';
 import { documentBrowserApi } from './api';
 import { TEXT } from './constants';
 
@@ -108,7 +109,10 @@ export default function useDocumentBrowserTransfer({
         }
       } catch (requestError) {
         setError(
-          requestError?.message || (operation === 'move' ? TEXT.moveFail : TEXT.copyFail)
+          mapUserFacingErrorMessage(
+            requestError?.message,
+            operation === 'move' ? TEXT.moveFail : TEXT.copyFail
+          )
         );
       } finally {
         setActionLoading((previous) => ({ ...previous, [`${docId}-${operation}`]: false }));
@@ -164,12 +168,15 @@ export default function useDocumentBrowserTransfer({
         if (result.failedCount > 0) {
           const firstFailed = result.failed[0];
           window.alert(
-            `Done ${result.successCount}/${result.total}, failed ${result.failedCount}\nSample: ${firstFailed.sourceDatasetName}/${firstFailed.docId}: ${firstFailed.detail}`
+            `已完成 ${result.successCount}/${result.total}，失败 ${result.failedCount}\n示例：${firstFailed.sourceDatasetName}/${firstFailed.docId}: ${mapUserFacingErrorMessage(firstFailed.detail, '处理失败')}`
           );
         }
       } catch (requestError) {
         setError(
-          requestError?.message || (operation === 'move' ? TEXT.moveFail : TEXT.copyFail)
+          mapUserFacingErrorMessage(
+            requestError?.message,
+            operation === 'move' ? TEXT.moveFail : TEXT.copyFail
+          )
         );
         setBatchTransferProgress({
           ...progress,

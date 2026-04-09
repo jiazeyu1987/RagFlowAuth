@@ -1,4 +1,7 @@
-import { buildGroupAssignmentModalState } from './userManagementDerivedState';
+import {
+  buildGroupAssignmentModalState,
+  buildToolAssignmentModalState,
+} from './userManagementDerivedState';
 
 export const buildClosedResetPasswordState = () => ({
   showResetPasswordModal: false,
@@ -41,4 +44,15 @@ export const buildClosedGroupAssignmentState = () => ({
 export const buildOpenedGroupAssignmentState = ({ targetUser, availableGroups }) => ({
   showGroupModal: true,
   ...buildGroupAssignmentModalState({ targetUser, availableGroups }),
+});
+
+export const buildClosedToolAssignmentState = () => ({
+  showToolModal: false,
+  editingToolUser: null,
+  selectedToolIds: [],
+});
+
+export const buildOpenedToolAssignmentState = ({ targetUser, availableToolIds }) => ({
+  showToolModal: true,
+  ...buildToolAssignmentModalState({ targetUser, availableToolIds }),
 });

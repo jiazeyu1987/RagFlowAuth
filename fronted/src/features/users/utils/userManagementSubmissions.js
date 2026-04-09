@@ -4,6 +4,7 @@ import {
   buildEnableUserUpdateRequest,
   buildGroupAssignmentUpdateRequest,
   buildPolicyUpdateRequest,
+  buildToolAssignmentUpdateRequest,
   parseRootDirectoryCreateRequest,
   buildResetPasswordUpdateRequest,
 } from './userManagementRequests';
@@ -95,6 +96,12 @@ export const prepareGroupAssignmentSubmission = ({ editingGroupUser, selectedGro
   buildGroupAssignmentUpdateRequest({
     editingGroupUser,
     selectedGroupIds,
+  });
+
+export const prepareToolAssignmentSubmission = ({ editingToolUser, selectedToolIds }) =>
+  buildToolAssignmentUpdateRequest({
+    editingToolUser,
+    selectedToolIds,
   });
 
 export const prepareRootDirectoryCreateSubmission = ({ companyId, name, isAdminUser }) =>

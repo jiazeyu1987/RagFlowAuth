@@ -22,6 +22,7 @@ from backend.app.dependencies import create_dependencies
 from backend.app.modules.users.repo import UsersRepo
 from backend.app.modules.users.service import UsersService
 from backend.database.paths import resolve_auth_db_path
+from backend.database.sqlite import connect_sqlite
 from backend.database.tenant_paths import resolve_tenant_auth_db_path
 from backend.models.user import UserCreate, UserUpdate
 from backend.runtime.runner import ensure_database
@@ -270,6 +271,150 @@ def _ensure_admin_user(user_store: Any, *, username: str, password: str) -> Any:
     return refreshed
 
 
+def _ensure_bootstrap_employee_profile(
+    *,
+    db_path: Path,
+    employee_user_id: str,
+    full_name: str,
+    email: str | None,
+    company_id: int,
+    department_id: int,
+) -> None:
+    clean_employee_user_id = str(employee_user_id or "").strip()
+    clean_full_name = str(full_name or "").strip()
+    if not clean_employee_user_id:
+        raise RuntimeError("bootstrap_employee_user_id_required")
+    if not clean_full_name:
+        raise RuntimeError(f"bootstrap_employee_full_name_required:{clean_employee_user_id}")
+    if department_id is None:
+        raise RuntimeError(f"bootstrap_department_required_for_employee:{clean_employee_user_id}")
+
+    clean_email = str(email or "").strip() or None
+    source_key = f"bootstrap:{clean_employee_user_id}"
+    now_ms = int(time.time() * 1000)
+
+    conn = connect_sqlite(db_path)
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        employee_row = conn.execute(
+            """
+            SELECT employee_id, source_key, name, company_id, department_id
+            FROM org_employees
+            WHERE employee_user_id = ?
+            ORDER BY employee_id ASC
+            LIMIT 1
+            """,
+            (clean_employee_user_id,),
+        ).fetchone()
+
+        if employee_row is not None:
+            existing_source_key = str(employee_row[1] or "").strip()
+            existing_full_name = str(employee_row[2] or "").strip()
+            existing_company_id = int(employee_row[3] or 0)
+            existing_department_id = int(employee_row[4] or 0)
+            if (
+                existing_source_key != source_key
+                and (
+                    existing_full_name != clean_full_name
+                    or existing_company_id != int(company_id)
+                    or existing_department_id != int(department_id)
+                )
+            ):
+                raise RuntimeError(f"bootstrap_employee_user_id_conflict:{clean_employee_user_id}")
+
+        profile_row = conn.execute(
+            """
+            SELECT employee_id
+            FROM org_employees
+            WHERE source_key = ?
+            LIMIT 1
+            """,
+            (source_key,),
+        ).fetchone()
+
+        if profile_row is None:
+            conn.execute(
+                """
+                INSERT INTO org_employees (
+                    employee_user_id,
+                    name,
+                    email,
+                    employee_no,
+                    department_manager_name,
+                    is_department_manager,
+                    company_id,
+                    department_id,
+                    source_key,
+                    sort_order,
+                    created_at_ms,
+                    updated_at_ms
+                ) VALUES (?, ?, ?, NULL, NULL, 0, ?, ?, ?, 0, ?, ?)
+                """,
+                (
+                    clean_employee_user_id,
+                    clean_full_name,
+                    clean_email,
+                    int(company_id),
+                    int(department_id),
+                    source_key,
+                    now_ms,
+                    now_ms,
+                ),
+            )
+        else:
+            conn.execute(
+                """
+                UPDATE org_employees
+                SET employee_user_id = ?,
+                    name = ?,
+                    email = ?,
+                    employee_no = NULL,
+                    department_manager_name = NULL,
+                    is_department_manager = 0,
+                    company_id = ?,
+                    department_id = ?,
+                    sort_order = 0,
+                    updated_at_ms = ?
+                WHERE employee_id = ?
+                """,
+                (
+                    clean_employee_user_id,
+                    clean_full_name,
+                    clean_email,
+                    int(company_id),
+                    int(department_id),
+                    now_ms,
+                    int(profile_row[0]),
+                ),
+            )
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+def _ensure_bootstrap_employee_profiles(
+    *,
+    db_path: Path,
+    specs: list[EnvUserSpec],
+    company_id: int,
+    department_id: int | None,
+) -> None:
+    if department_id is None:
+        raise RuntimeError("bootstrap_department_required_for_user_seed")
+    for spec in specs:
+        _ensure_bootstrap_employee_profile(
+            db_path=db_path,
+            employee_user_id=spec.username,
+            full_name=spec.full_name,
+            email=spec.email,
+            company_id=int(company_id),
+            department_id=int(department_id),
+        )
+
+
 def _rebuild_org(global_deps: Any, *, actor_user_id: str, excel_path: Path) -> dict[str, Any]:
     summary = global_deps.org_structure_manager.rebuild_from_excel(
         actor_user_id=actor_user_id,
@@ -331,6 +476,88 @@ def _select_department(global_deps: Any, *, company_id: int, department_name: st
             int(getattr(item, "department_id", 0) or 0),
         ),
     )[0]
+
+
+def _ensure_bootstrap_department(*, db_path: Path, company_id: int, company_name: str) -> int:
+    clean_company_name = str(company_name or "").strip()
+    if not clean_company_name:
+        raise RuntimeError("bootstrap_company_name_required")
+    source_key = f"bootstrap:department:{int(company_id)}"
+    department_name = "E2E Seed Department"
+    path_name = f"{clean_company_name} / {department_name}"
+    now_ms = int(time.time() * 1000)
+
+    conn = connect_sqlite(db_path)
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        row = conn.execute(
+            """
+            SELECT department_id
+            FROM departments
+            WHERE source_key = ?
+            LIMIT 1
+            """,
+            (source_key,),
+        ).fetchone()
+        if row is None:
+            conn.execute(
+                """
+                INSERT INTO departments (
+                    name,
+                    company_id,
+                    parent_department_id,
+                    source_key,
+                    source_department_id,
+                    level_no,
+                    path_name,
+                    sort_order,
+                    created_at_ms,
+                    updated_at_ms
+                ) VALUES (?, ?, NULL, ?, NULL, 2, ?, 0, ?, ?)
+                """,
+                (
+                    department_name,
+                    int(company_id),
+                    source_key,
+                    path_name,
+                    now_ms,
+                    now_ms,
+                ),
+            )
+            row = conn.execute("SELECT last_insert_rowid()").fetchone()
+            if row is None:
+                raise RuntimeError("bootstrap_department_insert_failed")
+            department_id = int(row[0])
+        else:
+            department_id = int(row[0])
+            conn.execute(
+                """
+                UPDATE departments
+                SET name = ?,
+                    company_id = ?,
+                    parent_department_id = NULL,
+                    source_department_id = NULL,
+                    level_no = 2,
+                    path_name = ?,
+                    sort_order = 0,
+                    updated_at_ms = ?
+                WHERE department_id = ?
+                """,
+                (
+                    department_name,
+                    int(company_id),
+                    path_name,
+                    now_ms,
+                    department_id,
+                ),
+            )
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+    return int(department_id)
 
 
 def _ensure_managed_root_node(tenant_deps: Any, *, root_name: str, created_by: str) -> str:
@@ -669,24 +896,39 @@ def _ensure_dataset_binding(tenant_deps: Any, *, node_id: str, dataset_name: str
 
 
 def _ensure_chat_target(tenant_deps: Any, *, chat_name: str, dataset_info: dict[str, str]) -> dict[str, Any]:
+    dataset_id = str(dataset_info.get("id") or "").strip()
+    dataset_name = str(dataset_info.get("name") or "").strip()
+    if not dataset_id or not dataset_name:
+        raise RuntimeError("ragflow_dataset_info_invalid")
+
     matches = _list_ragflow_chats(tenant_deps, name=chat_name)
     chat = next((item for item in matches if str(item.get("name") or "").strip() == chat_name), None)
     if chat is None:
-        try:
-            created = tenant_deps.ragflow_chat_service.create_chat(
-                {"name": chat_name, "dataset_ids": [str(dataset_info.get("id") or "").strip()]}
-            )
-        except Exception as exc:
-            raise RuntimeError(f"ragflow_chat_create_failed:{chat_name}; {exc}") from exc
-        chat = created if isinstance(created, dict) else None
-        if chat is None or not str(chat.get("id") or "").strip():
-            matches = _list_ragflow_chats(tenant_deps, name=chat_name)
-            chat = next((item for item in matches if str(item.get("name") or "").strip() == chat_name), None)
+        create_payload = {"name": chat_name, "dataset_ids": [dataset_id]}
+        for create_attempt in range(1, 4):
+            try:
+                created = tenant_deps.ragflow_chat_service.create_chat(create_payload)
+            except Exception as exc:
+                if "chat_dataset_not_ready" in str(exc):
+                    _wait_for_dataset_ready(
+                        tenant_deps,
+                        dataset_id=dataset_id,
+                        dataset_name=dataset_name,
+                    )
+                    if create_attempt < 3:
+                        time.sleep(RAGFLOW_READY_POLL_INTERVAL_S)
+                        continue
+                raise RuntimeError(f"ragflow_chat_create_failed:{chat_name}; {exc}") from exc
+
+            chat = created if isinstance(created, dict) else None
+            if chat is None or not str(chat.get("id") or "").strip():
+                matches = _list_ragflow_chats(tenant_deps, name=chat_name)
+                chat = next((item for item in matches if str(item.get("name") or "").strip() == chat_name), None)
+            if chat is not None:
+                break
         if chat is None:
             raise RuntimeError(f"ragflow_chat_create_missing:{chat_name}")
 
-    dataset_id = str(dataset_info.get("id") or "").strip()
-    dataset_name = str(dataset_info.get("name") or "").strip()
     linked, linked_names = _extract_chat_dataset_refs(chat)
     if dataset_id not in linked and dataset_name not in linked_names:
         chat_id = str(chat.get("id") or "").strip()
@@ -817,6 +1059,7 @@ def _create_payload(
     return UserCreate(
         username=spec.username,
         password=spec.password,
+        employee_user_id=spec.username,
         full_name=spec.full_name,
         email=spec.email,
         manager_user_id=manager_user_id,
@@ -1014,7 +1257,16 @@ def bootstrap_real_test_env(config: BootstrapConfig) -> dict[str, Any]:
         company_id=int(company.company_id),
         department_name=config.department_name,
     )
-    department_id = int(department.department_id) if department is not None else None
+    if department is None:
+        bootstrap_department_id = _ensure_bootstrap_department(
+            db_path=Path(global_db_path),
+            company_id=int(company.company_id),
+            company_name=str(company.name),
+        )
+        department = global_deps.org_structure_manager.get_department(bootstrap_department_id)
+        if department is None:
+            raise RuntimeError(f"bootstrap_department_not_found:{bootstrap_department_id}")
+    department_id = int(department.department_id)
 
     tenant_db_path = resolve_tenant_auth_db_path(company_id=int(company.company_id), base_db_path=global_db_path)
     tenant_deps = create_dependencies(
@@ -1059,6 +1311,12 @@ def bootstrap_real_test_env(config: BootstrapConfig) -> dict[str, Any]:
 
     users_service = UsersService(UsersRepo(global_deps, permission_group_store=tenant_deps.permission_group_store))
     env_users = _build_users(config)
+    _ensure_bootstrap_employee_profiles(
+        db_path=Path(global_db_path),
+        specs=list(env_users.values()),
+        company_id=int(company.company_id),
+        department_id=department_id,
+    )
 
     sub_admin_user = _upsert_user(
         users_service=users_service,

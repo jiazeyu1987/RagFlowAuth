@@ -26,6 +26,22 @@ _BUILD_BASE_IMAGES: tuple[str, ...] = (
 )
 
 
+def _normalize_local_docker_error(raw: str) -> str:
+    text = str(raw or "").strip()
+    if not text:
+        return "Docker 引擎不可用。"
+    if "dockerDesktopLinuxEngine" in text or "open //./pipe/dockerDesktopLinuxEngine" in text:
+        return (
+            "Docker Desktop 的 Linux 引擎没有启动。\n"
+            "请先打开 Docker Desktop，并等待显示 “Docker is running”；"
+            "如果当前处于 Windows 容器模式，请切换到 Linux containers。\n"
+            f"原始错误：{text}"
+        )
+    if "docker daemon" in text.lower() or "docker engine" in text.lower():
+        return f"Docker 引擎不可用：{text}"
+    return text
+
+
 def _run_local(command: str, *, cwd: Path | None = None, timeout_s: int = 3600) -> tuple[bool, str]:
     try:
         proc = subprocess.run(
@@ -92,6 +108,13 @@ def _pull_base_images_with_retries(*, images: tuple[str, ...], log, retries: int
     return True, "OK"
 
 
+def _ensure_local_docker_ready() -> tuple[bool, str]:
+    ok, out = _run_local("docker info", timeout_s=120)
+    if not ok:
+        return False, _normalize_local_docker_error(out)
+    return True, ""
+
+
 def publish_from_local_to_test(
     *,
     version: str | None = None,
@@ -141,6 +164,12 @@ def publish_from_local_to_test(
         role_name="TEST",
     ):
         log("[ERROR] Preflight check failed; refusing to publish (to avoid TEST reading PROD datasets).")
+        return finish(False, before, None)
+
+    log("[PRECHECK] Check local Docker daemon")
+    ok, out = _ensure_local_docker_ready()
+    if not ok:
+        log(f"[ERROR] {out}")
         return finish(False, before, None)
 
     log("[1/6] Build images locally")

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { mapUserFacingErrorMessage } from '../../shared/errors/userFacingErrorMessages';
 import { auditApi } from './api';
 import { orgDirectoryApi } from '../orgDirectory/api';
 
@@ -54,7 +55,7 @@ export default function useAuditLogsPage() {
       const data = await auditApi.listEvents(buildEventParams(nextFilters));
       setResult(data);
     } catch (requestError) {
-      setError(requestError?.message || String(requestError));
+      setError(mapUserFacingErrorMessage(requestError?.message, '加载审计日志失败'));
       setResult({ total: 0, items: [] });
     } finally {
       setLoading(false);
@@ -78,7 +79,7 @@ export default function useAuditLogsPage() {
       setCompanies([]);
       setDepartments([]);
       setResult({ total: 0, items: [] });
-      setError(requestError?.message || String(requestError));
+      setError(mapUserFacingErrorMessage(requestError?.message, '加载审计日志失败'));
     } finally {
       setLoading(false);
     }

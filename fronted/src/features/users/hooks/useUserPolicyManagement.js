@@ -3,14 +3,14 @@ import { DEFAULT_POLICY_FORM } from '../utils/constants';
 import {
   applyPolicyFormChange,
   togglePolicyGroupSelection,
+  togglePolicyToolSelection,
 } from '../utils/userManagementDrafts';
 import {
   buildClosedPolicyState,
   buildOpenedPolicyState,
 } from '../utils/userManagementFormState';
 import {
-  bindFormErrorsClearedDraftAction,
-  bindKbDirectoryErrorClearedStateAction,
+  runStateAction,
 } from '../utils/userManagementActionRunners';
 import { useManagedDepartmentReset } from './useManagedDepartmentReset';
 
@@ -43,32 +43,33 @@ export const useUserPolicyManagement = ({
   });
 
   const handleOpenPolicyModal = useCallback(
-    bindKbDirectoryErrorClearedStateAction(
-      clearKbDirectoryCreateError,
-      applyPolicyModalState,
-      buildOpenedPolicyState
-    ),
+    (...args) => {
+      clearKbDirectoryCreateError?.();
+      runStateAction(
+        applyPolicyModalState,
+        buildOpenedPolicyState,
+        ...args
+      );
+    },
     [applyPolicyModalState, clearKbDirectoryCreateError]
   );
 
   const handleClosePolicyModal = useCallback(
-    bindKbDirectoryErrorClearedStateAction(
-      clearKbDirectoryCreateError,
-      applyPolicyModalState,
-      () => buildClosedPolicyState(initialPolicyForm)
-    ),
+    () => {
+      clearKbDirectoryCreateError?.();
+      runStateAction(
+        applyPolicyModalState,
+        () => buildClosedPolicyState(initialPolicyForm)
+      );
+    },
     [applyPolicyModalState, clearKbDirectoryCreateError, initialPolicyForm]
   );
 
-  const handleChangePolicyForm = useCallback(
-    bindFormErrorsClearedDraftAction(
-      setPolicyError,
-      clearKbDirectoryCreateError,
-      setPolicyFormState,
-      applyPolicyFormChange
-    ),
-    [clearKbDirectoryCreateError]
-  );
+  const handleChangePolicyForm = useCallback((...args) => {
+    setPolicyError(null);
+    clearKbDirectoryCreateError?.();
+    setPolicyFormState((previousState) => applyPolicyFormChange(previousState, ...args));
+  }, [clearKbDirectoryCreateError]);
 
   const handleTogglePolicyGroup = useCallback(
     (groupId, checked) => {
@@ -76,6 +77,20 @@ export const useUserPolicyManagement = ({
         togglePolicyGroupSelection({
           draft: prev,
           groupId,
+          checked,
+          isPolicyAdminUser: String(policyUser?.role || '') === 'admin',
+        })
+      );
+    },
+    [policyUser]
+  );
+
+  const handleTogglePolicyTool = useCallback(
+    (toolId, checked) => {
+      setPolicyFormState((prev) =>
+        togglePolicyToolSelection({
+          draft: prev,
+          toolId,
           checked,
           isPolicyAdminUser: String(policyUser?.role || '') === 'admin',
         })
@@ -94,5 +109,6 @@ export const useUserPolicyManagement = ({
     handleClosePolicyModal,
     handleChangePolicyForm,
     handleTogglePolicyGroup,
+    handleTogglePolicyTool,
   };
 };

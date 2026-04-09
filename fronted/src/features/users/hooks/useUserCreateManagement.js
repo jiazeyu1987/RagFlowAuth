@@ -1,9 +1,10 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { usersApi } from '../api';
 import { DEFAULT_NEW_USER } from '../utils/constants';
 import {
   applyManagedUserFieldChange,
   toggleManagedUserDraftGroup,
+  toggleManagedUserDraftTool,
 } from '../utils/userManagementDrafts';
 import {
   buildClosedCreateUserState,
@@ -13,12 +14,14 @@ import { runPreparedUserManagementMutation } from '../utils/userManagementPrepar
 import { prepareCreateUserSubmission } from '../utils/userManagementSubmissions';
 import { CREATE_USER_ERROR } from '../utils/userManagementMessages';
 import {
-  bindFormErrorsClearedDraftAction,
-  bindKbDirectoryErrorClearedStateAction,
+  runStateAction,
 } from '../utils/userManagementActionRunners';
 import { useManagedDepartmentReset } from './useManagedDepartmentReset';
 
+const DEFAULT_CREATE_COMPANY_NAME = '\u745b\u6cf0\u533b\u7597';
+
 export const useUserCreateManagement = ({
+  companies = [],
   departments,
   fetchUsers,
   mapErrorMessage,
@@ -45,37 +48,77 @@ export const useUserCreateManagement = ({
     resetDepartment: clearMismatchedDepartment,
   });
 
+  const resolveDefaultCompanyId = useCallback(() => {
+    const targetCompany = (companies || []).find(
+      (item) => String(item?.name || '').trim() === DEFAULT_CREATE_COMPANY_NAME
+    );
+    if (!targetCompany || targetCompany.id == null) {
+      return '';
+    }
+    return String(targetCompany.id);
+  }, [companies]);
+
+  useEffect(() => {
+    if (!showCreateModal) {
+      return;
+    }
+    const currentCompanyId = String(newUser.company_id || '').trim();
+    if (currentCompanyId) {
+      return;
+    }
+    const defaultCompanyId = resolveDefaultCompanyId();
+    if (!defaultCompanyId) {
+      return;
+    }
+    setNewUser((previous) => {
+      const existingCompanyId = String(previous.company_id || '').trim();
+      if (existingCompanyId) {
+        return previous;
+      }
+      return {
+        ...previous,
+        company_id: defaultCompanyId,
+        department_id: '',
+      };
+    });
+  }, [newUser.company_id, resolveDefaultCompanyId, showCreateModal]);
+
   const handleOpenCreateModal = useCallback(
-    bindKbDirectoryErrorClearedStateAction(
-      clearKbDirectoryCreateError,
-      applyCreateModalState,
-      () => buildOpenedCreateUserState(newUser)
-    ),
+    () => {
+      clearKbDirectoryCreateError?.();
+      runStateAction(
+        applyCreateModalState,
+        () => buildOpenedCreateUserState(newUser)
+      );
+    },
     [applyCreateModalState, clearKbDirectoryCreateError, newUser]
   );
 
   const handleCloseCreateModal = useCallback(
-    bindKbDirectoryErrorClearedStateAction(
-      clearKbDirectoryCreateError,
-      applyCreateModalState,
-      buildClosedCreateUserState
-    ),
+    () => {
+      clearKbDirectoryCreateError?.();
+      runStateAction(
+        applyCreateModalState,
+        buildClosedCreateUserState
+      );
+    },
     [applyCreateModalState, clearKbDirectoryCreateError]
   );
 
-  const setNewUserField = useCallback(
-    bindFormErrorsClearedDraftAction(
-      setCreateUserError,
-      clearKbDirectoryCreateError,
-      setNewUser,
-      applyManagedUserFieldChange
-    ),
-    [clearKbDirectoryCreateError]
-  );
+  const setNewUserField = useCallback((...args) => {
+    setCreateUserError(null);
+    clearKbDirectoryCreateError?.();
+    setNewUser((previousState) => applyManagedUserFieldChange(previousState, ...args));
+  }, [clearKbDirectoryCreateError]);
 
   const toggleNewUserGroup = useCallback((groupId, checked) => {
     setCreateUserError(null);
     setNewUser((prev) => toggleManagedUserDraftGroup(prev, groupId, checked));
+  }, []);
+
+  const toggleNewUserTool = useCallback((toolId, checked) => {
+    setCreateUserError(null);
+    setNewUser((prev) => toggleManagedUserDraftTool(prev, toolId, checked));
   }, []);
 
   const handleCreateUser = useCallback(
@@ -115,6 +158,7 @@ export const useUserCreateManagement = ({
     handleCloseCreateModal,
     setNewUserField,
     toggleNewUserGroup,
+    toggleNewUserTool,
     handleCreateUser,
   };
 };

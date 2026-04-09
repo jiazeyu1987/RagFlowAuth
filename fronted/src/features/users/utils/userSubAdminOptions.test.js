@@ -70,11 +70,12 @@ describe('userSubAdminOptions', () => {
     ]);
   });
 
-  it('builds both create and policy sub-admin option sets for user management pages', () => {
+  it('does not scope create sub-admin options by company before employee binding', () => {
     expect(
       buildUserManagementSubAdminOptions({
         users,
         createCompanyId: '1',
+        createEmployeeUserId: '',
         policyCompanyId: '2',
         policyUserId: 'sub-3',
       })
@@ -92,8 +93,61 @@ describe('userSubAdminOptions', () => {
           username: 'uuid-user',
           company_id: 1,
         },
+        {
+          value: 'sub-3',
+          label: buildUserDisplayLabel(users[2]),
+          username: 'other-company',
+          company_id: 2,
+        },
       ],
       policySubAdminOptions: [],
+    });
+  });
+
+  it('scopes create sub-admin options to bound employee company after selection', () => {
+    expect(
+      buildUserManagementSubAdminOptions({
+        users,
+        createCompanyId: '1',
+        createEmployeeUserId: 'emp-001',
+        policyCompanyId: '',
+        policyUserId: '',
+      })
+    ).toEqual({
+      subAdminOptions: [
+        {
+          value: 'sub-1',
+          label: buildUserDisplayLabel(users[0]),
+          username: 'wangxin',
+          company_id: 1,
+        },
+        {
+          value: 'sub-2',
+          label: 'uuid-user',
+          username: 'uuid-user',
+          company_id: 1,
+        },
+      ],
+      policySubAdminOptions: [
+        {
+          value: 'sub-1',
+          label: buildUserDisplayLabel(users[0]),
+          username: 'wangxin',
+          company_id: 1,
+        },
+        {
+          value: 'sub-2',
+          label: 'uuid-user',
+          username: 'uuid-user',
+          company_id: 1,
+        },
+        {
+          value: 'sub-3',
+          label: buildUserDisplayLabel(users[2]),
+          username: 'other-company',
+          company_id: 2,
+        },
+      ],
     });
   });
 });

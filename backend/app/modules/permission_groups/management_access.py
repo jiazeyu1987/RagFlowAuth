@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from fastapi import HTTPException
 
-from backend.app.core.permission_resolver import group_tool_scope_within_snapshot
 from backend.app.modules.permission_groups.contracts import (
     require_knowledge_tree,
     require_object_list,
@@ -76,8 +75,7 @@ def list_assignable_groups(ctx, service: PermissionGroupsService) -> list[dict]:
     if ctx.snapshot.is_admin:
         return require_object_list(service.list_groups(), detail="permission_group_list_invalid_payload")
     assert_group_management(ctx)
-    groups = list_manageable_groups(ctx, service)
-    return [group for group in groups if group_tool_scope_within_snapshot(ctx.snapshot, group)]
+    return list_manageable_groups(ctx, service)
 
 
 def get_manageable_group(ctx, service: PermissionGroupsService, group_id: int) -> dict:

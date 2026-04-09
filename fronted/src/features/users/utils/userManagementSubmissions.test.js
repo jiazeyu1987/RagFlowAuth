@@ -25,6 +25,9 @@ describe('userManagementSubmissions', () => {
       prepareCreateUserSubmission({
         draft: {
           user_type: 'normal',
+          username: 'emp-001',
+          employee_user_id: 'emp-001',
+          full_name: 'Alice',
           company_id: '1',
           department_id: '11',
           manager_user_id: 'sub-1',

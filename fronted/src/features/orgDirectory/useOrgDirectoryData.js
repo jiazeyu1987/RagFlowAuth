@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { orgDirectoryApi } from './api';
+import { mapUserFacingErrorMessage } from '../../shared/errors/userFacingErrorMessages';
 import {
   ORG_AUDIT_LOAD_ERROR,
   ORG_TREE_LOAD_ERROR,
@@ -102,7 +103,7 @@ export default function useOrgDirectoryData({ setError }) {
       setAuditLogs(Array.isArray(data) ? data : []);
     } catch (err) {
       setAuditLogs([]);
-      setAuditError(err?.message || String(err));
+      setAuditError(mapUserFacingErrorMessage(err?.message, ORG_AUDIT_LOAD_ERROR));
     }
   }, []);
 

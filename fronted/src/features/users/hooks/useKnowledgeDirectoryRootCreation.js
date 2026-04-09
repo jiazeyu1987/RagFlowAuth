@@ -2,14 +2,10 @@ import { useCallback, useState } from 'react';
 import { knowledgeApi } from '../../knowledge/api';
 import { runPreparedUserManagementMutation } from '../utils/userManagementPreparedMutations';
 import { prepareRootDirectoryCreateSubmission } from '../utils/userManagementSubmissions';
-import {
-  bindStateAction,
-  runStateAction,
-} from '../utils/userManagementActionRunners';
+import { runStateAction } from '../utils/userManagementActionRunners';
 import {
   buildClearedKnowledgeDirectoryRootCreationState,
   buildResetKnowledgeDirectoryRootCreationState,
-  bindRootDirectoryCreateAction,
 } from '../utils/userKnowledgeDirectories';
 import { useKnowledgeDirectoryModeReset } from './useKnowledgeDirectoryModeReset';
 
@@ -41,13 +37,12 @@ export const useKnowledgeDirectoryRootCreation = ({
     [applyKnowledgeDirectoryRootCreationState, kbDirectoryCreatingRoot]
   );
 
-  const resetKnowledgeDirectoryRootCreation = useCallback(
-    bindStateAction(
+  const resetKnowledgeDirectoryRootCreation = useCallback(() => {
+    runStateAction(
       applyKnowledgeDirectoryRootCreationState,
       buildResetKnowledgeDirectoryRootCreationState
-    ),
-    [applyKnowledgeDirectoryRootCreationState]
-  );
+    );
+  }, [applyKnowledgeDirectoryRootCreationState]);
 
   useKnowledgeDirectoryModeReset({
     createMode,
@@ -112,12 +107,22 @@ export const useKnowledgeDirectoryRootCreation = ({
   );
 
   const handleCreateModalRootDirectory = useCallback(
-    bindRootDirectoryCreateAction(createRootDirectory, createMode),
+    async (name) =>
+      createRootDirectory({
+        companyId: createMode.companyId,
+        name,
+        onCreated: createMode.onRootCreated,
+      }),
     [createMode.companyId, createMode.onRootCreated, createRootDirectory]
   );
 
   const handlePolicyRootDirectory = useCallback(
-    bindRootDirectoryCreateAction(createRootDirectory, policyMode),
+    async (name) =>
+      createRootDirectory({
+        companyId: policyMode.companyId,
+        name,
+        onCreated: policyMode.onRootCreated,
+      }),
     [createRootDirectory, policyMode.companyId, policyMode.onRootCreated]
   );
 

@@ -42,6 +42,23 @@ def _build_settings(**overrides) -> DataSecuritySettings:
 
 
 class TestDataSecuritySchedulerV2Unit(unittest.TestCase):
+    def test_should_run_incremental_backup_skips_same_window_after_restart(self):
+        scheduler = BackupSchedulerV2(store=mock.Mock())
+        scheduler._has_running_backup = mock.Mock(return_value=False)
+        scheduler._latest_scheduled_time_ms = mock.Mock(return_value=1_700_000_000_000)
+
+        should_run, reason, scheduled_ms = scheduler._should_run_incremental_backup(
+            _build_settings(
+                incremental_schedule="5 0 * * *",
+                last_run_at_ms=1_700_000_000_000,
+                last_incremental_backup_time_ms=1_600_000_000_000,
+            )
+        )
+
+        self.assertFalse(should_run)
+        self.assertEqual(scheduled_ms, 1_700_000_000_000)
+        self.assertTrue(str(reason).strip())
+
     def test_should_run_full_backup_skips_when_disabled(self):
         scheduler = BackupSchedulerV2(store=mock.Mock())
         scheduler._has_running_backup = mock.Mock(return_value=False)
@@ -66,6 +83,24 @@ class TestDataSecuritySchedulerV2Unit(unittest.TestCase):
         )
 
         self.assertTrue(should_run)
+        self.assertEqual(scheduled_ms, 1_700_000_000_000)
+        self.assertTrue(str(reason).strip())
+
+    def test_should_run_full_backup_skips_same_window_after_restart(self):
+        scheduler = BackupSchedulerV2(store=mock.Mock())
+        scheduler._has_running_backup = mock.Mock(return_value=False)
+        scheduler._latest_scheduled_time_ms = mock.Mock(return_value=1_700_000_000_000)
+
+        should_run, reason, scheduled_ms = scheduler._should_run_full_backup(
+            _build_settings(
+                full_backup_enabled=True,
+                full_backup_schedule="0 1 * * *",
+                last_run_at_ms=1_700_000_000_000,
+                last_full_backup_time_ms=1_600_000_000_000,
+            )
+        )
+
+        self.assertFalse(should_run)
         self.assertEqual(scheduled_ms, 1_700_000_000_000)
         self.assertTrue(str(reason).strip())
 

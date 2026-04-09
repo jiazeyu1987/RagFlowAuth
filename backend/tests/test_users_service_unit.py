@@ -114,7 +114,7 @@ class UsersServiceUnitTest(unittest.TestCase):
             [
                 ("create_user", {"user_data": "payload", "created_by": "u-admin"}),
                 ("get_user", {"user_id": "u-2"}),
-                ("update_user", {"user_id": "u-3", "user_data": "patch"}),
+                ("update_user", {"user_id": "u-3", "user_data": "patch", "updated_by": None}),
                 ("delete_user", {"user_id": "u-4"}),
             ],
         )

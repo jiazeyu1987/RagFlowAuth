@@ -45,8 +45,10 @@ from .org_directory import (
 )
 from .permission_groups import (
     backfill_user_permission_groups_from_users_group_id,
+    ensure_user_tool_permissions_table,
     ensure_permission_groups_table,
     ensure_user_permission_groups_table,
+    migrate_user_tools_from_permission_groups,
     seed_default_permission_groups,
 )
 from .auth_sessions import ensure_auth_login_sessions_table
@@ -117,9 +119,11 @@ def ensure_schema(db_path: str | Path) -> None:
         ensure_permission_group_folders_table(conn)
         ensure_permission_groups_folder_column(conn)
         ensure_user_permission_groups_table(conn)
+        ensure_user_tool_permissions_table(conn)
         ensure_users_group_id_column(conn)
         seed_default_permission_groups(conn)
         backfill_user_permission_groups_from_users_group_id(conn)
+        migrate_user_tools_from_permission_groups(conn)
 
         # Data security / backup
         ensure_data_security_settings_table(conn)

@@ -5,6 +5,10 @@ from typing import Any
 
 from .audit import emit_notification_audit
 from .channel_service import NotificationChannelService
+from .code_defaults import (
+    CODE_OWNED_EVENT_RULES,
+    build_code_owned_dingtalk_channel,
+)
 from .dingtalk_adapter import DingTalkNotificationAdapter
 from .dispatch_service import NotificationDispatchService
 from .email_adapter import EmailNotificationAdapter
@@ -72,6 +76,44 @@ class NotificationManager:
             dingtalk_adapter=self._dingtalk_adapter,
             audit_log_manager=self._audit_log_manager,
         )
+        self._apply_code_owned_defaults()
+
+    def _apply_code_owned_defaults(self) -> None:
+        existing_dingtalk = self._store.get_channel("dingtalk-main")
+        desired_dingtalk = build_code_owned_dingtalk_channel(existing_dingtalk)
+        if self._channel_needs_sync(existing_dingtalk, desired_dingtalk):
+            self._store.upsert_channel(
+                channel_id=str(desired_dingtalk["channel_id"]),
+                channel_type=str(desired_dingtalk["channel_type"]),
+                name=str(desired_dingtalk["name"]),
+                enabled=bool(desired_dingtalk["enabled"]),
+                config=desired_dingtalk.get("config") or {},
+            )
+
+        for event_type, enabled_channel_types in CODE_OWNED_EVENT_RULES.items():
+            existing_rule = self._store.get_event_rule(event_type)
+            normalized_enabled_channel_types = normalize_channel_types(enabled_channel_types)
+            existing_types = normalize_channel_types((existing_rule or {}).get("enabled_channel_types") or [])
+            if existing_types == normalized_enabled_channel_types:
+                continue
+            self._store.upsert_event_rule(
+                event_type=event_type,
+                enabled_channel_types=normalized_enabled_channel_types,
+            )
+
+    @staticmethod
+    def _channel_needs_sync(current: dict[str, Any] | None, desired: dict[str, Any]) -> bool:
+        if not current:
+            return True
+        if str(current.get("channel_type") or "").strip().lower() != str(desired["channel_type"]).strip().lower():
+            return True
+        if str(current.get("name") or "").strip() != str(desired["name"]).strip():
+            return True
+        if bool(current.get("enabled")) != bool(desired["enabled"]):
+            return True
+        current_config = current.get("config") or {}
+        desired_config = desired.get("config") or {}
+        return current_config != desired_config
 
     def upsert_channel(
         self,

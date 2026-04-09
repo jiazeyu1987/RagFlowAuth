@@ -11,6 +11,7 @@ const UserManagementContent = ({
   canManageUsers,
   canEditUserPolicy,
   canAssignGroups,
+  canAssignTools,
   canResetPasswords,
   canResetPasswordForUser,
   canToggleUserStatus,
@@ -28,6 +29,7 @@ const UserManagementContent = ({
   handleOpenCreateModal,
   handleOpenPolicyModal,
   handleAssignGroup,
+  handleAssignTool,
   handleOpenResetPassword,
   handleDeleteUser,
   handleToggleUserStatus,
@@ -84,12 +86,14 @@ const UserManagementContent = ({
           canManageUsers={canManageUsers}
           canEditUserPolicy={canEditUserPolicy}
           canAssignGroups={canAssignGroups}
+          canAssignTools={canAssignTools}
           canResetPasswords={canResetPasswords}
           canResetPasswordForUser={canResetPasswordForUser}
           canToggleUserStatus={canToggleUserStatus}
           canDeleteUsers={canDeleteUsers}
           onOpenPolicyModal={handleOpenPolicyModal}
           onAssignGroup={handleAssignGroup}
+          onAssignTool={handleAssignTool}
           onOpenResetPassword={handleOpenResetPassword}
           onDeleteUser={handleDeleteUser}
           onToggleUserStatus={handleToggleUserStatus}

@@ -26,7 +26,7 @@ def require_group_delete_result(success: object) -> None:
 
 def create_permission_group_result(ctx, service, data) -> dict:
     def create_group():
-        payload = permission_payloads.build_create_group_payload(data, created_by=ctx.payload.sub)
+        payload = permission_payloads.build_create_group_payload(data, created_by=ctx.user.user_id)
         permission_access.validate_group_scope(
             ctx,
             accessible_kbs=payload.get("accessible_kbs"),

@@ -23,6 +23,7 @@ const LayoutSidebar = ({
 }) => {
   const displayName = String(user?.full_name || '').trim();
   const displayRole = formatRoleLabel(user?.role);
+  const sidebarUserId = String(user?.user_id || '').trim();
 
   return (
     <aside
@@ -50,12 +51,33 @@ const LayoutSidebar = ({
           borderBottom: '1px solid #374151',
           display: 'flex',
           justifyContent: 'space-between',
-          alignItems: 'center',
+          alignItems: 'flex-start',
         }}
       >
-        <h2 style={{ margin: 0, fontSize: sidebarOpen ? (isMobile ? '1.2rem' : '1.5rem') : '0.9rem' }}>
-          {sidebarOpen ? LAYOUT_TEXT.appName : 'KB'}
-        </h2>
+        <div style={{ minWidth: 0, flex: 1, paddingRight: '8px' }}>
+          <h2
+            data-testid="layout-sidebar-title"
+            style={{ margin: 0, fontSize: sidebarOpen ? (isMobile ? '1.2rem' : '1.5rem') : '0.9rem' }}
+          >
+            {sidebarOpen ? LAYOUT_TEXT.appName : 'KB'}
+          </h2>
+          {sidebarOpen && sidebarUserId ? (
+            <div
+              data-testid="layout-sidebar-subtitle"
+              style={{
+                marginTop: '4px',
+                fontSize: '0.7rem',
+                lineHeight: 1.2,
+                color: '#9ca3af',
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+              }}
+            >
+              {sidebarUserId}
+            </div>
+          ) : null}
+        </div>
         <button
           type="button"
           onClick={onToggleSidebar}

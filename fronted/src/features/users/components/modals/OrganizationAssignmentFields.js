@@ -6,6 +6,7 @@ export default function OrganizationAssignmentFields({
   companyPlaceholder,
   companyValue,
   companyRequired = false,
+  companyDisabled = false,
   companyTestId,
   companies,
   onChangeCompany,
@@ -13,6 +14,7 @@ export default function OrganizationAssignmentFields({
   departmentPlaceholder,
   departmentValue,
   departmentRequired = false,
+  departmentDisabled = false,
   departmentTestId,
   departments,
   onChangeDepartment,
@@ -23,10 +25,11 @@ export default function OrganizationAssignmentFields({
         <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>{companyLabel}</label>
         <select
           required={companyRequired}
+          disabled={companyDisabled}
           value={companyValue || ''}
           onChange={onChangeCompany}
           data-testid={companyTestId}
-          style={{ ...inputStyle, backgroundColor: 'white' }}
+          style={{ ...inputStyle, backgroundColor: companyDisabled ? '#f9fafb' : 'white' }}
         >
           <option value="" disabled>
             {companyPlaceholder}
@@ -43,10 +46,11 @@ export default function OrganizationAssignmentFields({
         <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>{departmentLabel}</label>
         <select
           required={departmentRequired}
+          disabled={departmentDisabled}
           value={departmentValue || ''}
           onChange={onChangeDepartment}
           data-testid={departmentTestId}
-          style={{ ...inputStyle, backgroundColor: 'white' }}
+          style={{ ...inputStyle, backgroundColor: departmentDisabled ? '#f9fafb' : 'white' }}
         >
           <option value="" disabled>
             {departmentPlaceholder}
