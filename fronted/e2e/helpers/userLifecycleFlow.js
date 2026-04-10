@@ -70,11 +70,37 @@ async function listUsers(api, headers, params = {}) {
   return readJson(response, 'list users failed');
 }
 
+async function getUser(api, headers, userId) {
+  const response = await api.get(`/api/users/${encodeURIComponent(userId)}`, { headers });
+  return readJson(response, `get user failed for ${userId}`);
+}
+
 async function findUserByUsername(api, headers, username) {
   const users = await listUsers(api, headers, { q: username, limit: '100' });
   return (Array.isArray(users) ? users : []).find(
     (item) => String(item?.username || '') === String(username || '')
   ) || null;
+}
+
+function normalizeToolIds(rawValue) {
+  const values = Array.isArray(rawValue) ? rawValue : [];
+  const seen = new Set();
+  const normalized = [];
+  for (const item of values) {
+    const toolId = String(item || '').trim();
+    if (!toolId || seen.has(toolId)) continue;
+    seen.add(toolId);
+    normalized.push(toolId);
+  }
+  return normalized;
+}
+
+async function updateUserTools(api, headers, userId, toolIds) {
+  const response = await api.put(`/api/users/${encodeURIComponent(userId)}`, {
+    headers,
+    data: { tool_ids: normalizeToolIds(toolIds) },
+  });
+  return response;
 }
 
 async function deleteUserById(api, headers, userId) {
@@ -123,14 +149,17 @@ async function pickFirstSelectableOption(selectLocator, fieldName) {
 }
 
 module.exports = {
+  getUser,
   deleteUserById,
   ensureUserDeletedByUsername,
   findUserByUsername,
   listUsers,
   loginApiAs,
+  normalizeToolIds,
   pickFirstSelectableOption,
   readUserEnvelope,
   tryLoginApi,
+  updateUserTools,
   uniquePassword,
   uniqueUsername,
   waitForUserVisible,

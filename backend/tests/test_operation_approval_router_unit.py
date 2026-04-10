@@ -52,6 +52,10 @@ class _FakeOperationApprovalService:
     def get_request_detail_for_user(self, **kwargs):  # noqa: ARG002
         return {"request_id": "req-1"}
 
+    def preview_request_artifact_for_user(self, **kwargs):
+        self.calls.append(("preview_artifact", dict(kwargs)))
+        return {"type": "text", "filename": "demo.txt", "content": "hello"}
+
     def get_stats_for_user(self, **kwargs):  # noqa: ARG002
         return {"in_approval_count": 0}
 
@@ -214,6 +218,35 @@ class TestOperationApprovalRouterUnit(unittest.TestCase):
                         "reason": "changed",
                     },
                 ),
+            ],
+        )
+
+    def test_preview_artifact_route_delegates_to_service(self):
+        client, deps = self._make_client()
+
+        with client:
+            resp = client.get(
+                "/api/operation-approvals/requests/req-1/artifacts/artifact-1/preview?render=html"
+            )
+
+        self.assertEqual(resp.status_code, 200, resp.text)
+        self.assertEqual(
+            resp.json(),
+            {"type": "text", "filename": "demo.txt", "content": "hello"},
+        )
+        self.assertEqual(
+            deps.operation_approval_service.calls,
+            [
+                (
+                    "preview_artifact",
+                    {
+                        "request_id": "req-1",
+                        "artifact_id": "artifact-1",
+                        "requester_user": unittest.mock.ANY,
+                        "render": "html",
+                        "ctx": unittest.mock.ANY,
+                    },
+                )
             ],
         )
 

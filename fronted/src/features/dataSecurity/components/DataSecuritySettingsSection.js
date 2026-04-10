@@ -38,7 +38,10 @@ function DataSecurityScheduleEditor({
   onScheduleChange,
 }) {
   const { schedule, invalid } = getResolvedSchedule(cronValue);
-  const timeValue = `${padTimePart(schedule.hour, DEFAULT_SCHEDULE.hour)}:${padTimePart(schedule.minute, DEFAULT_SCHEDULE.minute)}`;
+  const timeValue = `${padTimePart(schedule.hour, DEFAULT_SCHEDULE.hour)}:${padTimePart(
+    schedule.minute,
+    DEFAULT_SCHEDULE.minute
+  )}`;
 
   const updateSchedule = (patch) => {
     const next = {
@@ -58,22 +61,20 @@ function DataSecurityScheduleEditor({
       style={{
         padding: '12px',
         border: '1px solid #e5e7eb',
-        borderRadius: '10px',
+        borderRadius: '12px',
         display: 'grid',
-        gap: '10px',
+        gap: '12px',
         opacity: disabled ? 0.6 : 1,
       }}
     >
       <div style={{ display: 'grid', gap: '4px' }}>
-        <strong style={{ color: '#111827' }}>{title}</strong>
-        <span style={{ color: '#6b7280', fontSize: '0.85rem' }}>
-          当前计划：
-          {' '}
-          {enabled ? formatSchedule(schedule) : '未启用'}
+        <strong style={{ color: '#111827', fontSize: '1.05rem' }}>{title}</strong>
+        <span style={{ color: '#6b7280', fontSize: '0.9rem' }}>
+          当前计划： {enabled ? formatSchedule(schedule) : '未启用'}
         </span>
         {invalid ? (
           <span style={{ color: '#b91c1c', fontSize: '0.85rem' }}>
-            当前计划格式不受此页面支持，保存后会改为此处选中的每日/每周计划。
+            当前计划格式不受此页面支持，保存后会改为此处选中的每日或每周计划。
           </span>
         ) : null}
       </div>
@@ -139,7 +140,6 @@ function DataSecurityScheduleEditor({
 export default function DataSecuritySettingsSection({
   isMobile,
   settings,
-  localBackupTargetPath,
   onSettingFieldChange,
   onSaveSettings,
   savingSettings,
@@ -147,21 +147,6 @@ export default function DataSecuritySettingsSection({
   return (
     <DataSecurityCard title="备份高级设置">
       <div style={{ display: 'grid', gap: '12px' }}>
-        <div
-          style={{
-            padding: '12px',
-            background: '#f8fafc',
-            borderRadius: '10px',
-            color: '#475569',
-            fontSize: '0.9rem',
-          }}
-        >
-          正式备份固定写入服务器本机目录
-          {' '}
-          <strong>{localBackupTargetPath || '-'}</strong>
-          ，当前页面不再检查、配置或提示远端副本。
-        </div>
-
         <label style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
           <input
             type="checkbox"
@@ -199,58 +184,6 @@ export default function DataSecuritySettingsSection({
           testIdPrefix="ds-full-schedule"
           onScheduleChange={(nextValue) => onSettingFieldChange('full_backup_schedule', nextValue)}
         />
-
-        <label>
-          RAGFlow docker-compose.yml 路径
-          <input
-            value={settings?.ragflow_compose_path || ''}
-            onChange={(e) => onSettingFieldChange('ragflow_compose_path', e.target.value)}
-            data-testid="ds-ragflow-compose-path"
-            style={{
-              width: '100%',
-              padding: '8px',
-              border: '1px solid #d1d5db',
-              borderRadius: '8px',
-              marginTop: '6px',
-            }}
-          />
-        </label>
-
-        <label style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
-          <input
-            type="checkbox"
-            checked={Boolean(settings?.ragflow_stop_services)}
-            onChange={(e) => onSettingFieldChange('ragflow_stop_services', e.target.checked)}
-            data-testid="ds-ragflow-stop-services"
-          />
-          备份前停止 RAGFlow 服务
-        </label>
-
-        <label style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
-          <input
-            type="checkbox"
-            checked={Boolean(settings?.full_backup_include_images)}
-            onChange={(e) => onSettingFieldChange('full_backup_include_images', e.target.checked)}
-            data-testid="ds-full-backup-include-images"
-          />
-          全量备份包含 Docker 镜像
-        </label>
-
-        <label>
-          项目数据库路径
-          <input
-            value={settings?.auth_db_path || 'data/auth.db'}
-            onChange={(e) => onSettingFieldChange('auth_db_path', e.target.value)}
-            data-testid="ds-auth-db-path"
-            style={{
-              width: '100%',
-              padding: '8px',
-              border: '1px solid #d1d5db',
-              borderRadius: '8px',
-              marginTop: '6px',
-            }}
-          />
-        </label>
 
         <button
           type="button"

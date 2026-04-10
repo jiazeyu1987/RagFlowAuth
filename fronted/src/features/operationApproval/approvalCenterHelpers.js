@@ -1,4 +1,5 @@
 import { mapUserFacingErrorMessage } from '../../shared/errors/userFacingErrorMessages';
+import { DOCUMENT_SOURCE } from '../../shared/documents/constants';
 
 const APPROVAL_ERROR_MESSAGES = {
   training_record_missing: '当前审批账号缺少审批培训记录，请先补录培训记录后再审批或驳回。',
@@ -107,3 +108,33 @@ export const getVisibleEvents = (events) =>
     const eventType = String(event?.event_type || '').trim();
     return !HIDDEN_EVENT_TYPES.has(eventType);
   });
+
+export const getApprovalSummaryPreviewTarget = (detail, key) => {
+  if (String(key || '').trim().toLowerCase() !== 'filename') {
+    return null;
+  }
+  if (String(detail?.operation_type || '').trim() !== 'knowledge_file_upload') {
+    return null;
+  }
+
+  const artifact = (detail?.artifacts || []).find(
+    (item) =>
+      String(item?.artifact_type || '').trim() === 'knowledge_file_upload' &&
+      String(item?.artifact_id || '').trim()
+  );
+  if (!artifact) {
+    return null;
+  }
+
+  return {
+    source: DOCUMENT_SOURCE.OPERATION_APPROVAL_ARTIFACT,
+    docId: String(artifact.artifact_id),
+    requestId: String(detail?.request_id || ''),
+    filename: String(
+      artifact.file_name || detail?.summary?.filename || detail?.target_label || 'approval_artifact'
+    ),
+    title: String(
+      artifact.file_name || detail?.summary?.filename || detail?.target_label || 'approval_artifact'
+    ),
+  };
+};

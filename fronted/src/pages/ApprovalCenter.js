@@ -3,10 +3,12 @@ import SignatureConfirmModal from '../features/operationApproval/components/Sign
 import ApprovalCenterAlert from '../features/operationApproval/components/ApprovalCenterAlert';
 import ApprovalRequestDetailPanel from '../features/operationApproval/components/ApprovalRequestDetailPanel';
 import ApprovalRequestListPanel from '../features/operationApproval/components/ApprovalRequestListPanel';
+import documentsApi from '../features/documents/api';
 import {
   getOperationLabel,
 } from '../features/operationApproval/approvalCenterConfig';
 import useApprovalCenterPage from '../features/operationApproval/useApprovalCenterPage';
+import { DocumentPreviewModal } from '../shared/documents/preview/DocumentPreviewModal';
 
 export default function ApprovalCenter() {
   const {
@@ -23,12 +25,15 @@ export default function ApprovalCenter() {
     currentPendingApprover,
     withdrawable,
     visibleSummaryEntries,
+    previewableSummaryKeys,
     visibleEvents,
+    summaryPreviewTarget,
     showTrainingHelp,
     currentUserLabel,
     trainingRecordPath,
     trainingCertificationPath,
     closeSignaturePrompt,
+    closeSummaryPreview,
     signatureError,
     signaturePrompt,
     signatureSubmitting,
@@ -36,6 +41,7 @@ export default function ApprovalCenter() {
     refreshList,
     handleChangeView,
     handleChangeStatus,
+    handlePreviewSummaryEntry,
     handleSelectRequest,
     handleSignedAction,
     handleWithdraw,
@@ -51,6 +57,13 @@ export default function ApprovalCenter() {
         error={signatureError}
         onClose={closeSignaturePrompt}
         onSubmit={submitSignaturePrompt}
+      />
+      <DocumentPreviewModal
+        open={Boolean(summaryPreviewTarget)}
+        target={summaryPreviewTarget}
+        onClose={closeSummaryPreview}
+        canDownloadFiles={false}
+        documentApi={documentsApi}
       />
 
       <ApprovalCenterAlert
@@ -89,7 +102,9 @@ export default function ApprovalCenter() {
           currentPendingApprover={currentPendingApprover}
           withdrawable={withdrawable}
           visibleSummaryEntries={visibleSummaryEntries}
+          previewableSummaryKeys={previewableSummaryKeys}
           visibleEvents={visibleEvents}
+          handlePreviewSummaryEntry={handlePreviewSummaryEntry}
           handleSignedAction={handleSignedAction}
           handleWithdraw={handleWithdraw}
         />

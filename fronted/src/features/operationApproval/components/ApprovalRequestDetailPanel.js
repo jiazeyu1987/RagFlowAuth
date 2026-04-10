@@ -18,7 +18,9 @@ export default function ApprovalRequestDetailPanel({
   currentPendingApprover,
   withdrawable,
   visibleSummaryEntries,
+  previewableSummaryKeys,
   visibleEvents,
+  handlePreviewSummaryEntry,
   handleSignedAction,
   handleWithdraw,
 }) {
@@ -123,7 +125,27 @@ export default function ApprovalRequestDetailPanel({
                 <div style={{ display: 'grid', gap: '6px' }}>
                   {visibleSummaryEntries.map(([key, value]) => (
                     <div key={key}>
-                      <strong>{key}:</strong> {String(value)}
+                      <strong>{key}:</strong>{' '}
+                      {previewableSummaryKeys?.has(String(key)) ? (
+                        <button
+                          type="button"
+                          data-testid={`approval-summary-preview-${String(key)}`}
+                          onClick={() => handlePreviewSummaryEntry(String(key))}
+                          style={{
+                            border: 'none',
+                            background: 'transparent',
+                            padding: 0,
+                            color: '#2563eb',
+                            cursor: 'pointer',
+                            textDecoration: 'underline',
+                            font: 'inherit',
+                          }}
+                        >
+                          {String(value)}
+                        </button>
+                      ) : (
+                        String(value)
+                      )}
                     </div>
                   ))}
                 </div>

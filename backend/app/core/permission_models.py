@@ -4,6 +4,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Iterable
 
+from backend.app.core.tool_catalog import ASSIGNABLE_TOOL_IDS
+
 
 class ResourceScope(str, Enum):
     ALL = "ALL"
@@ -56,6 +58,11 @@ class PermissionSnapshot:
     can_manage_users: bool = False
 
     def permissions_dict(self) -> dict[str, Any]:
+        accessible_tools = []
+        if self.tool_scope == ResourceScope.ALL:
+            accessible_tools = list(ASSIGNABLE_TOOL_IDS)
+        elif self.tool_scope == ResourceScope.SET:
+            accessible_tools = sorted(self.tool_ids)
         return {
             "can_upload": self.can_upload,
             "can_review": self.can_review,
@@ -65,7 +72,7 @@ class PermissionSnapshot:
             "can_manage_kb_directory": self.can_manage_kb_directory,
             "can_view_kb_config": self.can_view_kb_config,
             "can_view_tools": self.can_view_tools,
-            "accessible_tools": sorted(self.tool_ids) if self.tool_scope == ResourceScope.SET else [],
+            "accessible_tools": accessible_tools,
         }
 
     def capabilities_dict(

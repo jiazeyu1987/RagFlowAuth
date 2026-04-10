@@ -3,6 +3,9 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
+from backend.database.paths import resolve_auth_db_path
+from backend.services.org_directory_store import OrgDirectoryStore
+
 
 _PURPOSE_LABELS = {
     "preview": "预览",
@@ -12,11 +15,18 @@ _PURPOSE_LABELS = {
 
 
 class DocumentWatermarkService:
-    def __init__(self, *, store: Any, org_structure_manager: Any = None):
+    def __init__(
+        self,
+        *,
+        store: Any,
+        org_structure_manager: Any = None,
+        global_org_directory_store: Any = None,
+    ):
         if store is None:
             raise RuntimeError("watermark_policy_store_unavailable")
         self._store = store
         self._org_structure_manager = org_structure_manager
+        self._global_org_directory_store = global_org_directory_store
 
     def build_watermark(
         self,
@@ -144,13 +154,38 @@ class DocumentWatermarkService:
         return value
 
     def _resolve_company_name(self, *, user: Any) -> str:
+        direct_name = self._normalize_company_name(getattr(user, "company_name", None))
+        if direct_name:
+            return direct_name
         company_id = getattr(user, "company_id", None)
         if company_id is None:
             return "未配置公司"
-        if self._org_structure_manager is None:
-            raise RuntimeError("org_structure_manager_unavailable")
-        company = self._org_structure_manager.get_company(int(company_id))
+        try:
+            normalized_company_id = int(company_id)
+        except Exception:
+            return "未配置公司"
+        company = self._resolve_company(normalized_company_id)
         if company is None:
-            return f"公司ID:{int(company_id)}"
-        value = str(getattr(company, "name", "") or "").strip()
-        return value or f"公司ID:{int(company_id)}"
+            return "未配置公司"
+        value = self._normalize_company_name(getattr(company, "name", None))
+        return value or "未配置公司"
+
+    def _resolve_company(self, company_id: int) -> Any:
+        for resolver in (self._org_structure_manager, self._get_global_org_directory_store()):
+            if resolver is None:
+                continue
+            company = resolver.get_company(company_id)
+            if company is None:
+                continue
+            if self._normalize_company_name(getattr(company, "name", None)):
+                return company
+        return None
+
+    def _get_global_org_directory_store(self) -> Any:
+        if self._global_org_directory_store is None:
+            self._global_org_directory_store = OrgDirectoryStore(db_path=str(resolve_auth_db_path()))
+        return self._global_org_directory_store
+
+    @staticmethod
+    def _normalize_company_name(value: Any) -> str:
+        return str(value or "").strip()

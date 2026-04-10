@@ -8,7 +8,30 @@ import {
 
 export default function DocumentAuditSignatureManifest({ item }) {
   if (!item?.signature_id) {
-    return <span style={{ color: '#9ca3af', fontSize: '0.85rem' }}>-</span>;
+    const fallbackSigner =
+      item?.reviewed_by_name ||
+      item?.signed_by_full_name ||
+      item?.signed_by_username ||
+      item?.reviewed_by ||
+      item?.signed_by ||
+      '';
+    const fallbackSignedAt = item?.signed_at_ms || item?.reviewed_at_ms || null;
+    if (!fallbackSigner && !fallbackSignedAt) {
+      return <span style={{ color: '#9ca3af', fontSize: '0.85rem' }}>-</span>;
+    }
+    return (
+      <div style={{ display: 'grid', gap: '6px' }}>
+        <div>
+          <div style={MANIFEST_LABEL_STYLE}>审核人</div>
+          <div style={MANIFEST_VALUE_STYLE}>{fallbackSigner || '-'}</div>
+        </div>
+        <div>
+          <div style={MANIFEST_LABEL_STYLE}>审核时间</div>
+          <div style={MANIFEST_VALUE_STYLE}>{formatTime(fallbackSignedAt)}</div>
+        </div>
+        <div style={{ ...MANIFEST_VALUE_STYLE, color: '#9ca3af' }}>未生成电子签名</div>
+      </div>
+    );
   }
 
   return (
@@ -71,4 +94,3 @@ export default function DocumentAuditSignatureManifest({ item }) {
     </div>
   );
 }
-

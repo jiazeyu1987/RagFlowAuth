@@ -44,10 +44,71 @@ class KnowledgeIngestionManager:
     Reusable knowledge-upload ingestion manager.
     """
 
+    _DATASET_README_REVIEW_NOTES = "dataset_readme_auto_created"
+
     def __init__(self, deps: object):
         self._deps = deps
 
-    def finalize_document(self, *, doc, reviewed_by: str, review_notes: str | None = None):
+    def create_dataset_readme(
+        self,
+        *,
+        dataset_id: str,
+        dataset_name: str,
+        uploaded_by: str,
+    ):
+        clean_dataset_id = str(dataset_id or "").strip()
+        clean_dataset_name = str(dataset_name or "").strip()
+        clean_uploaded_by = str(uploaded_by or "").strip()
+        if not clean_dataset_id:
+            raise KnowledgeIngestionError("missing_dataset_id", status_code=400)
+        if not clean_dataset_name:
+            raise KnowledgeIngestionError("missing_dataset_name", status_code=400)
+        if not clean_uploaded_by:
+            raise KnowledgeIngestionError("missing_uploaded_by", status_code=400)
+
+        uploads_dir = resolve_repo_path(settings.UPLOAD_DIR)
+        uploads_dir.mkdir(parents=True, exist_ok=True)
+
+        staged_root = uploads_dir / str(uuid.uuid4())
+        file_path = staged_root / "ReadMe.txt"
+        content_bytes = f"\u8fd9\u662f{clean_dataset_name}\u77e5\u8bc6\u5e93".encode("utf-8")
+        try:
+            file_path.parent.mkdir(parents=True, exist_ok=True)
+            file_path.write_bytes(content_bytes)
+        except Exception as exc:
+            raise KnowledgeIngestionError(f"write_file_failed:{exc}", status_code=500) from exc
+
+        try:
+            doc = self._deps.kb_store.create_document(
+                filename="ReadMe.txt",
+                file_path=str(file_path),
+                file_size=len(content_bytes),
+                mime_type="text/plain; charset=utf-8",
+                uploaded_by=clean_uploaded_by,
+                kb_id=clean_dataset_id,
+                kb_dataset_id=clean_dataset_id,
+                kb_name=clean_dataset_name,
+                status="pending",
+                effective_status="pending",
+            )
+        except Exception as exc:
+            raise KnowledgeIngestionError(f"create_document_failed:{exc}", status_code=500) from exc
+
+        return self.finalize_document(
+            doc=doc,
+            reviewed_by=clean_uploaded_by,
+            review_notes=self._DATASET_README_REVIEW_NOTES,
+            require_parse_success=True,
+        )
+
+    def finalize_document(
+        self,
+        *,
+        doc,
+        reviewed_by: str,
+        review_notes: str | None = None,
+        require_parse_success: bool = False,
+    ):
         file_path = Path(str(getattr(doc, "file_path", "") or ""))
         if not file_path.exists():
             raise KnowledgeIngestionError("local_file_missing", status_code=409)
@@ -81,13 +142,19 @@ class KnowledgeIngestionManager:
                     document_id=str(ragflow_doc_id),
                 )
                 if not ok:
+                    if require_parse_success:
+                        raise KnowledgeIngestionError("ragflow_parse_failed", status_code=500)
                     logger.warning(
                         "Parse trigger failed after auto-approving uploaded document: doc_id=%s ragflow_doc_id=%s dataset_ref=%s",
                         getattr(doc, "doc_id", None),
                         ragflow_doc_id,
                         dataset_ref,
                     )
-            except Exception:
+            except KnowledgeIngestionError:
+                raise
+            except Exception as exc:
+                if require_parse_success:
+                    raise KnowledgeIngestionError(f"ragflow_parse_failed:{exc}", status_code=500) from exc
                 logger.warning(
                     "Parse trigger raised after auto-approving uploaded document: doc_id=%s ragflow_doc_id=%s dataset_ref=%s",
                     getattr(doc, "doc_id", None),

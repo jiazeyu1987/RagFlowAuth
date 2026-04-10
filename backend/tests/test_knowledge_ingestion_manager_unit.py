@@ -35,11 +35,20 @@ class _KbStore:
             kb_id=kwargs["kb_id"],
             kb_dataset_id=kwargs["kb_dataset_id"],
             kb_name=kwargs["kb_name"],
+            effective_status=kwargs.get("effective_status"),
         )
         self.created_documents.append(doc)
         return doc
 
-    def update_document_status(self, *, doc_id: str, status: str, reviewed_by: str | None = None, review_notes: str | None = None, ragflow_doc_id: str | None = None):  # noqa: ARG002
+    def update_document_status(
+        self,
+        *,
+        doc_id: str,
+        status: str,
+        reviewed_by: str | None = None,
+        review_notes: str | None = None,
+        ragflow_doc_id: str | None = None,
+    ):  # noqa: ARG002
         if not self.created_documents:
             return None
         doc = self.created_documents[-1]
@@ -47,6 +56,7 @@ class _KbStore:
         doc.reviewed_by = reviewed_by
         doc.review_notes = review_notes
         doc.ragflow_doc_id = ragflow_doc_id
+        doc.effective_status = status
         return doc
 
 
@@ -54,6 +64,9 @@ class _RagflowService:
     def __init__(self):
         self.uploaded = []
         self.parsed = []
+        self.upload_error = None
+        self.parse_error = None
+        self.parse_result = True
 
     def normalize_dataset_id(self, kb_ref: str):  # noqa: ARG002
         return None
@@ -61,7 +74,9 @@ class _RagflowService:
     def resolve_dataset_name(self, kb_ref: str):  # noqa: ARG002
         return None
 
-    def upload_document_blob(self, file_filename: str, file_content: bytes, kb_id: str = "展厅") -> str:
+    def upload_document_blob(self, file_filename: str, file_content: bytes, kb_id: str = "default") -> str:
+        if self.upload_error is not None:
+            raise self.upload_error
         self.uploaded.append(
             {
                 "file_filename": str(file_filename),
@@ -72,8 +87,10 @@ class _RagflowService:
         return "rag-doc-1"
 
     def parse_document(self, *, dataset_ref: str, document_id: str) -> bool:
+        if self.parse_error is not None:
+            raise self.parse_error
         self.parsed.append({"dataset_ref": str(dataset_ref), "document_id": str(document_id)})
-        return True
+        return self.parse_result
 
 
 @dataclass
@@ -159,9 +176,7 @@ class TestKnowledgeIngestionManagerUnit(unittest.IsolatedAsyncioTestCase):
         old_allowed = set(settings.ALLOWED_EXTENSIONS)
         try:
             settings.ALLOWED_EXTENSIONS = {x for x in old_allowed if x != ".xyz"}
-            self.deps.upload_settings_store = _UploadSettingsStore(
-                [x for x in old_allowed if x != ".xyz"]
-            )
+            self.deps.upload_settings_store = _UploadSettingsStore([x for x in old_allowed if x != ".xyz"])
             upload = _UploadFile(filename="sample.xyz", content=b"abc", content_type=None)
             with self.assertRaises(KnowledgeIngestionError) as cm:
                 await self.manager.stage_upload_knowledge(kb_ref="kb1", upload_file=upload, ctx=self.ctx)
@@ -189,6 +204,70 @@ class TestKnowledgeIngestionManagerUnit(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(doc.ragflow_doc_id, "rag-doc-1")
         self.assertEqual(self.deps.ragflow_service.uploaded[0]["kb_id"], "kb1")
         self.assertEqual(self.deps.ragflow_service.parsed[0]["dataset_ref"], "kb1")
+
+    async def test_create_dataset_readme_creates_local_document_and_file(self):
+        doc = self.manager.create_dataset_readme(
+            dataset_id="kb-1",
+            dataset_name="\u6d4b\u8bd5\u5e93",
+            uploaded_by="u1",
+        )
+        self.assertEqual(doc.filename, "ReadMe.txt")
+        self.assertEqual(doc.status, "approved")
+        self.assertEqual(doc.kb_id, "kb-1")
+        self.assertEqual(doc.kb_dataset_id, "kb-1")
+        self.assertEqual(doc.kb_name, "\u6d4b\u8bd5\u5e93")
+        self.assertEqual(doc.effective_status, "approved")
+        self.assertEqual(doc.review_notes, "dataset_readme_auto_created")
+        self.assertEqual(doc.ragflow_doc_id, "rag-doc-1")
+        self.assertTrue(Path(doc.file_path).exists())
+        self.assertEqual(
+            Path(doc.file_path).read_text(encoding="utf-8"),
+            "\u8fd9\u662f\u6d4b\u8bd5\u5e93\u77e5\u8bc6\u5e93",
+        )
+        self.assertEqual(
+            self.deps.ragflow_service.uploaded,
+            [
+                {
+                    "file_filename": "ReadMe.txt",
+                    "file_content": "\u8fd9\u662f\u6d4b\u8bd5\u5e93\u77e5\u8bc6\u5e93".encode("utf-8"),
+                    "kb_id": "kb-1",
+                }
+            ],
+        )
+        self.assertEqual(
+            self.deps.ragflow_service.parsed,
+            [{"dataset_ref": "kb-1", "document_id": "rag-doc-1"}],
+        )
+
+    async def test_create_dataset_readme_fails_fast_when_upload_fails(self):
+        self.deps.ragflow_service.upload_error = RuntimeError("upload_unavailable")
+        with self.assertRaises(KnowledgeIngestionError) as cm:
+            self.manager.create_dataset_readme(
+                dataset_id="kb-1",
+                dataset_name="\u6d4b\u8bd5\u5e93",
+                uploaded_by="u1",
+            )
+        self.assertEqual(cm.exception.code, "ragflow_upload_failed:upload_unavailable")
+
+    async def test_create_dataset_readme_fails_fast_when_parse_returns_false(self):
+        self.deps.ragflow_service.parse_result = False
+        with self.assertRaises(KnowledgeIngestionError) as cm:
+            self.manager.create_dataset_readme(
+                dataset_id="kb-1",
+                dataset_name="\u6d4b\u8bd5\u5e93",
+                uploaded_by="u1",
+            )
+        self.assertEqual(cm.exception.code, "ragflow_parse_failed")
+
+    async def test_create_dataset_readme_fails_fast_when_parse_raises(self):
+        self.deps.ragflow_service.parse_error = RuntimeError("parse_unavailable")
+        with self.assertRaises(KnowledgeIngestionError) as cm:
+            self.manager.create_dataset_readme(
+                dataset_id="kb-1",
+                dataset_name="\u6d4b\u8bd5\u5e93",
+                uploaded_by="u1",
+            )
+        self.assertEqual(cm.exception.code, "ragflow_parse_failed:parse_unavailable")
 
 
 if __name__ == "__main__":

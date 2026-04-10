@@ -172,6 +172,23 @@ class OperationApprovalService:
             requester_user=requester_user,
         )
 
+    def preview_request_artifact_for_user(
+        self,
+        *,
+        request_id: str,
+        artifact_id: str,
+        requester_user: Any,
+        render: str = "default",
+        ctx: Any | None = None,
+    ) -> dict:
+        return self._query_service.preview_request_artifact_for_user(
+            request_id=request_id,
+            artifact_id=artifact_id,
+            requester_user=requester_user,
+            render=render,
+            ctx=ctx,
+        )
+
     def get_stats_for_user(self, *, requester_user: Any) -> dict:
         return self._query_service.get_stats_for_user(requester_user=requester_user)
 

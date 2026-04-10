@@ -91,6 +91,12 @@ def _resolve_dataset_index(deps: "AppDependencies") -> dict[str, dict[str, str]]
 
 
 def _resolve_user_tool_ids(deps: "AppDependencies", user: Any) -> list[str]:
+    if hasattr(user, "tool_ids") and getattr(user, "tool_ids", None) is not None:
+        return [
+            str(tool_id).strip()
+            for tool_id in list(getattr(user, "tool_ids", []) or [])
+            if str(tool_id).strip()
+        ]
     store = getattr(deps, "user_tool_permission_store", None)
     if store is None:
         raise RuntimeError("user_tool_permission_store_unavailable")

@@ -2,6 +2,7 @@ import unittest
 from types import SimpleNamespace
 
 from backend.app.core.permission_resolver import PermissionSnapshot, ResourceScope
+from backend.app.core.tool_catalog import ASSIGNABLE_TOOL_IDS
 from backend.services.auth_me_service import build_auth_me_payload
 
 
@@ -34,6 +35,30 @@ class _BrokenManagementManager:
 
 
 class TestAuthMeServiceUnit(unittest.TestCase):
+    def test_permissions_dict_returns_assignable_tools_for_all_scope(self):
+        snapshot = PermissionSnapshot(
+            is_admin=False,
+            can_upload=False,
+            can_review=False,
+            can_download=False,
+            can_copy=False,
+            can_delete=False,
+            can_manage_kb_directory=False,
+            can_view_kb_config=False,
+            can_view_tools=True,
+            kb_scope=ResourceScope.NONE,
+            kb_names=frozenset(),
+            chat_scope=ResourceScope.NONE,
+            chat_ids=frozenset(),
+            tool_scope=ResourceScope.ALL,
+            tool_ids=frozenset(),
+        )
+
+        self.assertEqual(
+            snapshot.permissions_dict()["accessible_tools"],
+            list(ASSIGNABLE_TOOL_IDS),
+        )
+
     def test_build_payload_all_scope(self):
         deps = SimpleNamespace(
             ragflow_service=_RagflowService(),
@@ -75,6 +100,7 @@ class TestAuthMeServiceUnit(unittest.TestCase):
         self.assertEqual(payload["accessible_kbs"], ["kb-a", "kb-b"])
         self.assertEqual(payload["accessible_chats"], ["agent-a1", "chat-c1"])
         self.assertEqual(payload["permission_groups"], [{"group_id": 1, "group_name": "g1"}])
+        self.assertEqual(payload["permissions"]["accessible_tools"], list(ASSIGNABLE_TOOL_IDS))
         self.assertEqual(payload["capabilities"]["users"]["manage"], {"scope": "all", "targets": []})
         self.assertEqual(payload["capabilities"]["kb_documents"]["view"], {"scope": "all", "targets": []})
         self.assertEqual(payload["capabilities"]["tools"]["view"], {"scope": "all", "targets": []})

@@ -1,8 +1,9 @@
-import { useMemo } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import {
   TRAINING_COMPLIANCE_ERROR_CODES,
   buildTrainingCompliancePath,
   canWithdraw,
+  getApprovalSummaryPreviewTarget,
   getVisibleEvents,
   getVisibleSummaryEntries,
   isCurrentPendingApprover,
@@ -16,6 +17,7 @@ import { getDisplayName } from '../../shared/users/displayName';
 
 export default function useApprovalCenterPage({ getOperationLabel }) {
   const { user } = useAuth();
+  const [summaryPreviewTarget, setSummaryPreviewTarget] = useState(null);
   const queryState = useApprovalCenterQueryState();
   const {
     view,
@@ -70,6 +72,15 @@ export default function useApprovalCenterPage({ getOperationLabel }) {
     () => getVisibleSummaryEntries(detail?.summary),
     [detail?.summary]
   );
+  const previewableSummaryKeys = useMemo(() => {
+    const keys = new Set();
+    visibleSummaryEntries.forEach(([key]) => {
+      if (getApprovalSummaryPreviewTarget(detail, key)) {
+        keys.add(String(key));
+      }
+    });
+    return keys;
+  }, [detail, visibleSummaryEntries]);
   const visibleEvents = useMemo(() => getVisibleEvents(detail?.events), [detail?.events]);
   const showTrainingHelp = TRAINING_COMPLIANCE_ERROR_CODES.has(String(errorCode || '').trim());
   const currentUserLabel = getDisplayName(user);
@@ -81,6 +92,17 @@ export default function useApprovalCenterPage({ getOperationLabel }) {
     tab: 'certifications',
     userId: user?.user_id,
   });
+  const handlePreviewSummaryEntry = useCallback(
+    (key) => {
+      const nextTarget = getApprovalSummaryPreviewTarget(detail, key);
+      if (!nextTarget) return;
+      setSummaryPreviewTarget(nextTarget);
+    },
+    [detail]
+  );
+  const closeSummaryPreview = useCallback(() => {
+    setSummaryPreviewTarget(null);
+  }, []);
 
   return {
     user,
@@ -97,12 +119,15 @@ export default function useApprovalCenterPage({ getOperationLabel }) {
     currentPendingApprover,
     withdrawable,
     visibleSummaryEntries,
+    previewableSummaryKeys,
     visibleEvents,
+    summaryPreviewTarget,
     showTrainingHelp,
     currentUserLabel,
     trainingRecordPath,
     trainingCertificationPath,
     closeSignaturePrompt,
+    closeSummaryPreview,
     signatureError,
     signaturePrompt,
     signatureSubmitting,
@@ -110,6 +135,7 @@ export default function useApprovalCenterPage({ getOperationLabel }) {
     refreshList,
     handleChangeView,
     handleChangeStatus,
+    handlePreviewSummaryEntry,
     handleSelectRequest,
     handleSignedAction,
     handleWithdraw,

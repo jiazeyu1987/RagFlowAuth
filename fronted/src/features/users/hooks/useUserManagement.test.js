@@ -735,6 +735,66 @@ describe('useUserManagement user type payloads', () => {
     );
   });
 
+  it('sub admin falls back to full tool catalog when capabilities expose all-scope tools', async () => {
+    useAuth.mockReturnValue({
+      user: {
+        role: 'sub_admin',
+        user_id: 'sub-actor',
+        permissions: {
+          accessible_tools: [],
+        },
+        capabilities: {
+          tools: {
+            view: {
+              scope: 'all',
+              targets: [],
+            },
+          },
+        },
+      },
+      can: jest.fn(() => true),
+    });
+    const user = userEvent.setup();
+    render(<HookHarness />);
+
+    await waitFor(() => expect(usersApi.list).toHaveBeenCalled());
+
+    await user.click(screen.getByTestId('assign-owned-user-tools'));
+
+    await waitFor(() => expect(screen.getByTestId('show-tool-modal')).toHaveTextContent('yes'));
+    expect(screen.getByTestId('selected-tool-ids')).toHaveTextContent('paper_download,drug_admin,nmpa');
+  });
+
+  it('sub admin keeps explicit accessible tool subset even when capabilities are all-scope', async () => {
+    useAuth.mockReturnValue({
+      user: {
+        role: 'sub_admin',
+        user_id: 'sub-actor',
+        permissions: {
+          accessible_tools: ['paper_download'],
+        },
+        capabilities: {
+          tools: {
+            view: {
+              scope: 'all',
+              targets: [],
+            },
+          },
+        },
+      },
+      can: jest.fn(() => true),
+    });
+    const user = userEvent.setup();
+    render(<HookHarness />);
+
+    await waitFor(() => expect(usersApi.list).toHaveBeenCalled());
+
+    await user.click(screen.getByTestId('assign-owned-user-tools'));
+
+    await waitFor(() => expect(screen.getByTestId('show-tool-modal')).toHaveTextContent('yes'));
+    expect(screen.getByTestId('selected-tool-ids')).toHaveTextContent('paper_download');
+  });
+
   it('reenables a disabled user with a normalized active payload', async () => {
     const user = userEvent.setup();
     render(<HookHarness />);

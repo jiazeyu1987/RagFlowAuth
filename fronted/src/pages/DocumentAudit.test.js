@@ -64,7 +64,10 @@ describe('DocumentAudit', () => {
           is_current: true,
           effective_status: 'approved',
           uploaded_by: 'u-1',
+          reviewed_by: 'u-2',
+          reviewed_by_name: 'Bob',
           uploaded_at_ms: 1712203200000,
+          reviewed_at_ms: 1712206800000,
           archived_at_ms: null,
           file_sha256: 'abc123',
         },
@@ -91,5 +94,8 @@ describe('DocumentAudit', () => {
       expect(auditApi.listDocumentVersions).toHaveBeenCalledWith('doc-1');
     });
     expect(await screen.findByTestId('audit-version-row-doc-1-v2')).toBeInTheDocument();
+    expect(screen.getByText('当前版本未归档')).toBeInTheDocument();
+    expect(screen.getAllByText('未生成电子签名').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Bob').length).toBeGreaterThan(0);
   });
 });

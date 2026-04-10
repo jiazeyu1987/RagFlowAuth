@@ -65,6 +65,32 @@ class TestPermissionResolverToolsScopeUnit(unittest.TestCase):
         self.assertEqual(snapshot.tool_scope, ResourceScope.SET)
         self.assertEqual(snapshot.permissions_dict()["accessible_tools"], ["nmpa", "paper_download"])
 
+    def test_tools_scope_prefers_user_embedded_tool_ids_over_store(self):
+        deps = SimpleNamespace(
+            permission_group_store=_PermissionGroupStore(
+                {
+                    1: {
+                        "can_view_tools": True,
+                        "accessible_tools": ["paper_download", "nmpa"],
+                    }
+                }
+            ),
+            ragflow_service=_RagflowService(),
+            knowledge_directory_manager=None,
+            user_tool_permission_store=_UserToolPermissionStore({"u-3": []}),
+        )
+        user = SimpleNamespace(
+            user_id="u-3",
+            role="viewer",
+            group_ids=[1],
+            tool_ids=["paper_download", "nmpa"],
+        )
+
+        snapshot = resolve_permissions(deps, user)
+
+        self.assertEqual(snapshot.tool_scope, ResourceScope.SET)
+        self.assertEqual(snapshot.permissions_dict()["accessible_tools"], ["nmpa", "paper_download"])
+
 
 if __name__ == "__main__":
     unittest.main()

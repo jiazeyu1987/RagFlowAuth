@@ -163,6 +163,24 @@ const previewDocument = async (ref) => {
     return data;
   }
 
+  if (source === DOCUMENT_SOURCE.OPERATION_APPROVAL_ARTIFACT) {
+    const requestId = String(ref?.requestId || '').trim();
+    if (!requestId) throw new Error('missing_request_id');
+    const { data, response } = await requestJsonWithResponse(
+      `/api/operation-approvals/requests/${encodeURIComponent(requestId)}/artifacts/${encodeURIComponent(docId)}/preview${buildQuery({ render })}`,
+      { method: 'GET' }
+    );
+    logPreviewTrace('preview:operation_approval_artifact', {
+      requestId,
+      artifactId: docId,
+      render,
+      elapsedMs: Math.round(nowMs() - startedAt),
+      type: data?.type,
+      requestIdHeader: response?.headers?.get?.('X-Request-ID') || '',
+    });
+    return data;
+  }
+
   throw new Error('invalid_source');
 };
 

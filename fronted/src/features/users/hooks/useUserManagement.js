@@ -38,8 +38,15 @@ export const useUserManagement = () => {
     if (!capabilities.isSubAdminUser) {
       return [];
     }
-    return normalizeToolIds(user?.permissions?.accessible_tools);
-  }, [capabilities.isSubAdminUser, user?.permissions?.accessible_tools]);
+    const accessibleToolIds = normalizeToolIds(user?.permissions?.accessible_tools);
+    if (accessibleToolIds.length > 0) {
+      return accessibleToolIds;
+    }
+    if (String(user?.capabilities?.tools?.view?.scope || '').toLowerCase() === 'all') {
+      return TOOL_PERMISSION_IDS;
+    }
+    return [];
+  }, [capabilities.isSubAdminUser, user?.capabilities?.tools?.view?.scope, user?.permissions?.accessible_tools]);
   const assignableTools = useMemo(
     () => mapToolIdsToChecklistItems(subAdminAssignableToolIds),
     [subAdminAssignableToolIds]

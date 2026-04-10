@@ -4,6 +4,7 @@ from authx import TokenPayload
 from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
 
+from backend.app.core.tool_catalog import ASSIGNABLE_TOOL_IDS
 from backend.app.modules.auth.router import router as auth_router
 from backend.app.core import auth as auth_module
 
@@ -87,7 +88,7 @@ class TestAuthMeAdmin(unittest.TestCase):
                 "can_manage_kb_directory": True,
                 "can_view_kb_config": True,
                 "can_view_tools": True,
-                "accessible_tools": [],
+                "accessible_tools": list(ASSIGNABLE_TOOL_IDS),
             },
         )
         self.assertEqual(body["accessible_kbs"], ["kb_a", "kb_b"])

@@ -120,6 +120,43 @@ describe('DataSecurity', () => {
     expect(screen.queryByText(/Windows/i)).not.toBeInTheDocument();
   });
 
+  it('opens and hides advanced settings from the page entry button', async () => {
+    const user = userEvent.setup();
+
+    await renderPage();
+
+    expect(screen.queryByTestId('ds-settings-save')).not.toBeInTheDocument();
+
+    await user.click(screen.getByTestId('ds-toggle-advanced'));
+
+    expect(await screen.findByTestId('ds-settings-save')).toBeInTheDocument();
+
+    await user.click(screen.getByTestId('ds-toggle-advanced'));
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('ds-settings-save')).not.toBeInTheDocument();
+    });
+  });
+
+  it('shows only schedule controls in advanced settings', async () => {
+    const user = userEvent.setup();
+
+    await renderPage();
+    await user.click(screen.getByTestId('ds-toggle-advanced'));
+
+    expect(await screen.findByTestId('ds-enabled')).toBeInTheDocument();
+    expect(screen.getByTestId('ds-incremental-schedule-type')).toBeInTheDocument();
+    expect(screen.getByTestId('ds-incremental-schedule-time')).toBeInTheDocument();
+    expect(screen.getByTestId('ds-full-backup-enabled')).toBeInTheDocument();
+    expect(screen.getByTestId('ds-full-schedule-type')).toBeInTheDocument();
+    expect(screen.getByTestId('ds-settings-save')).toBeInTheDocument();
+
+    expect(screen.queryByTestId('ds-ragflow-compose-path')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('ds-ragflow-stop-services')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('ds-full-backup-include-images')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('ds-auth-db-path')).not.toBeInTheDocument();
+  });
+
   it('submits restore drills only from jobs that have a local backup output_dir', async () => {
     const recoverableJob = createJob({
       id: 201,
@@ -282,10 +319,6 @@ describe('DataSecurity', () => {
     fireEvent.change(screen.getByTestId('ds-full-schedule-time'), {
       target: { value: '02:00' },
     });
-    await user.clear(screen.getByTestId('ds-ragflow-compose-path'));
-    await user.type(screen.getByTestId('ds-ragflow-compose-path'), '/srv/ragflow/docker-compose.yml');
-    await user.click(screen.getByTestId('ds-ragflow-stop-services'));
-    await user.click(screen.getByTestId('ds-full-backup-include-images'));
     await user.click(screen.getByTestId('ds-settings-save'));
 
     await waitFor(() => {
@@ -294,10 +327,10 @@ describe('DataSecurity', () => {
         incremental_schedule: '15 23 * * 3',
         full_backup_enabled: false,
         full_backup_schedule: '0 2 * * 5',
-        ragflow_compose_path: '/srv/ragflow/docker-compose.yml',
-        ragflow_stop_services: true,
+        ragflow_compose_path: '/app/ragflow_compose/docker-compose.yml',
+        ragflow_stop_services: false,
         auth_db_path: 'data/auth.db',
-        full_backup_include_images: false,
+        full_backup_include_images: true,
         change_reason: 'switch local backup runtime settings',
       });
     });

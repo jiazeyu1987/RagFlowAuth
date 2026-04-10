@@ -73,6 +73,24 @@ class _NoopAdapter:
         return None
 
 
+class _WatermarkPolicy:
+    policy_id = "wm-default"
+    name = "Default watermark"
+    text_template = "用户:{username} | 公司:{company} | 用途:{purpose} | 文档ID:{doc_id}"
+    label_text = "受控预览"
+    text_color = "#6b7280"
+    opacity = 0.18
+    rotation_deg = -24
+    gap_x = 260
+    gap_y = 180
+    font_size = 18
+
+
+class _WatermarkPolicyStore:
+    def get_active_policy(self):
+        return _WatermarkPolicy()
+
+
 class _FakeRagflowService:
     def __init__(self):
         self.datasets: dict[str, dict] = {}
@@ -331,6 +349,7 @@ class TestOperationApprovalServiceUnit(unittest.TestCase):
             audit_log_store=self.audit_store,
             org_directory_store=self.org_directory_store,
             org_structure_manager=self.org_structure_manager,
+            watermark_policy_store=_WatermarkPolicyStore(),
             notification_service=self.notification_service,
             deletion_log_store=self.deletion_log_store,
             ragflow_service=self.ragflow_service,
@@ -1140,6 +1159,57 @@ class TestOperationApprovalServiceUnit(unittest.TestCase):
         )
         self.assertEqual(upload_request_detail["artifacts"][0]["cleanup_status"], "cleaned")
         self.assertFalse(Path(upload_request_detail["artifacts"][0]["file_path"]).exists())
+
+    def test_upload_request_artifact_preview_reads_staged_file_for_visible_user(self):
+        self.ragflow_service.add_dataset(dataset_id="ds-kb-a", name="kb-a", document_count=0, chunk_count=0)
+        self._upsert_workflow(
+            "knowledge_file_upload",
+            [{"step_name": "Upload Approval", "approver_user_ids": [self.approver_1.user_id]}],
+        )
+
+        request = self._create_upload_request(filename="previewable.txt", content=b"preview body")
+        detail = self.service.get_request_detail_for_user(
+            request_id=request["request_id"],
+            requester_user=self.editor_user,
+        )
+        artifact_id = str(detail["artifacts"][0]["artifact_id"])
+        payload = self.service.preview_request_artifact_for_user(
+            request_id=request["request_id"],
+            artifact_id=artifact_id,
+            requester_user=self.editor_user,
+            ctx=self._ctx(self.editor_user, _snapshot(can_upload=True, kb_names=("kb-a", "ds-kb-a"))),
+        )
+
+        self.assertEqual(payload["type"], "text")
+        self.assertEqual(payload["filename"], "previewable.txt")
+        self.assertEqual(payload["content"], "preview body")
+        self.assertEqual(payload["watermark"]["policy_id"], "wm-default")
+        self.assertIn("文档ID:", payload["watermark"]["text"])
+
+    def test_upload_request_artifact_preview_fails_when_staged_file_missing(self):
+        self.ragflow_service.add_dataset(dataset_id="ds-kb-a", name="kb-a", document_count=0, chunk_count=0)
+        self._upsert_workflow(
+            "knowledge_file_upload",
+            [{"step_name": "Upload Approval", "approver_user_ids": [self.approver_1.user_id]}],
+        )
+
+        request = self._create_upload_request(filename="missing-preview.txt", content=b"preview body")
+        detail = self.service.get_request_detail_for_user(
+            request_id=request["request_id"],
+            requester_user=self.editor_user,
+        )
+        artifact = detail["artifacts"][0]
+        os.remove(artifact["file_path"])
+
+        with self.assertRaises(OperationApprovalServiceError) as ctx:
+            self.service.preview_request_artifact_for_user(
+                request_id=request["request_id"],
+                artifact_id=str(artifact["artifact_id"]),
+                requester_user=self.editor_user,
+                ctx=self._ctx(self.editor_user, _snapshot(can_upload=True, kb_names=("kb-a", "ds-kb-a"))),
+            )
+
+        self.assertEqual(ctx.exception.code, "operation_request_artifact_file_missing")
 
     def test_upload_request_executes_direct_ingestion_without_legacy_review_workflow(self):
         self.ragflow_service.add_dataset(dataset_id="ds-kb-a", name="kb-a", document_count=0, chunk_count=0)

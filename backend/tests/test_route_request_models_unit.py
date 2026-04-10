@@ -1,5 +1,6 @@
 import unittest
 from types import SimpleNamespace
+from unittest.mock import patch
 
 from authx import TokenPayload
 from fastapi import FastAPI, Request
@@ -13,11 +14,12 @@ from backend.app.modules.search_configs.router import router as search_configs_r
 
 
 class _FakeUser:
-    def __init__(self, *, role: str = "admin", group_id=None, group_ids=None, username: str = "u1"):
+    def __init__(self, *, role: str = "admin", group_id=None, group_ids=None, username: str = "u1", user_id: str = "u1"):
         self.role = role
         self.group_id = group_id
         self.group_ids = list(group_ids or [])
         self.username = username
+        self.user_id = user_id
 
 
 class _FakeUserStore:
@@ -35,6 +37,52 @@ class _FakePermissionGroupStore:
 
     def get_group(self, group_id: int):
         return self._groups.get(group_id)
+
+
+class _FakeUserToolPermissionStore:
+    def list_tool_ids(self, user_id: str):  # noqa: ARG002
+        return []
+
+
+class _FakeKbStore:
+    def __init__(self):
+        self.created_documents = []
+
+    def create_document(self, **kwargs):
+        doc = SimpleNamespace(
+            doc_id="doc-1",
+            filename=kwargs["filename"],
+            file_path=kwargs["file_path"],
+            file_size=kwargs["file_size"],
+            mime_type=kwargs["mime_type"],
+            uploaded_by=kwargs["uploaded_by"],
+            status=kwargs["status"],
+            kb_id=kwargs["kb_id"],
+            kb_dataset_id=kwargs["kb_dataset_id"],
+            kb_name=kwargs["kb_name"],
+            effective_status=kwargs.get("effective_status"),
+        )
+        self.created_documents.append(doc)
+        return doc
+
+    def update_document_status(
+        self,
+        *,
+        doc_id: str,
+        status: str,
+        reviewed_by: str | None = None,
+        review_notes: str | None = None,
+        ragflow_doc_id: str | None = None,
+    ):  # noqa: ARG002
+        if not self.created_documents:
+            return None
+        doc = self.created_documents[-1]
+        doc.status = status
+        doc.reviewed_by = reviewed_by
+        doc.review_notes = review_notes
+        doc.ragflow_doc_id = ragflow_doc_id
+        doc.effective_status = status
+        return doc
 
 
 class _FakeChatService:
@@ -86,6 +134,8 @@ class _FakeRagflowService:
     def __init__(self):
         self.created = []
         self.updated = []
+        self.uploaded = []
+        self.parsed = []
         self.datasets = [
             {"id": "d1", "name": "kb1"},
             {"id": "d2", "name": "kb2"},
@@ -107,6 +157,20 @@ class _FakeRagflowService:
 
     def get_dataset_detail(self, dataset_ref):
         return {"id": dataset_ref, "name": f"kb-{dataset_ref}"}
+
+    def upload_document_blob(self, file_filename: str, file_content: bytes, kb_id: str = "default") -> str:
+        self.uploaded.append(
+            {
+                "file_filename": str(file_filename),
+                "file_content": bytes(file_content),
+                "kb_id": str(kb_id),
+            }
+        )
+        return "rag-doc-1"
+
+    def parse_document(self, *, dataset_ref: str, document_id: str) -> bool:
+        self.parsed.append({"dataset_ref": str(dataset_ref), "document_id": str(document_id)})
+        return True
 
 
 class _FakeKnowledgeManagementManager:
@@ -171,6 +235,8 @@ class _FakeOperationApprovalService:
 
 
 def _make_client(*, router, deps, prefix="/api") -> TestClient:
+    if getattr(deps, "user_tool_permission_store", None) is None:
+        deps.user_tool_permission_store = _FakeUserToolPermissionStore()
     app = FastAPI()
     app.state.deps = deps
     app.include_router(router, prefix=prefix)
@@ -291,6 +357,7 @@ class TestDatasetRequestModelsUnit(unittest.TestCase):
             user_store=_FakeUserStore(role="admin"),
             permission_group_store=_FakePermissionGroupStore(),
             ragflow_service=ragflow,
+            kb_store=_FakeKbStore(),
             knowledge_management_manager=_FakeKnowledgeManagementManager(ragflow),
             operation_approval_service=_FakeOperationApprovalService(),
         )
@@ -319,6 +386,45 @@ class TestDatasetRequestModelsUnit(unittest.TestCase):
             self.assertEqual(ragflow.updated[0][0], "d1")
             self.assertEqual(ragflow.updated[0][1].get("id"), None)
             self.assertEqual(ragflow.updated[0][1].get("dataset_id"), None)
+
+    def test_dataset_create_triggers_dataset_readme_creation(self):
+        ragflow = _FakeRagflowService()
+        deps = SimpleNamespace(
+            user_store=_FakeUserStore(role="admin"),
+            permission_group_store=_FakePermissionGroupStore(),
+            ragflow_service=ragflow,
+            knowledge_management_manager=_FakeKnowledgeManagementManager(ragflow),
+            operation_approval_service=_FakeOperationApprovalService(),
+        )
+        with patch(
+            "backend.app.modules.agents.router.KnowledgeIngestionManager.create_dataset_readme"
+        ) as create_dataset_readme:
+            with _make_client(router=agents_router, deps=deps) as client:
+                resp = client.post("/api/datasets", json={"name": "kb1"})
+        self.assertEqual(resp.status_code, 200)
+        create_dataset_readme.assert_called_once_with(
+            dataset_id="d1",
+            dataset_name="kb1",
+            uploaded_by="u1",
+        )
+
+    def test_dataset_create_returns_error_when_dataset_readme_creation_fails(self):
+        ragflow = _FakeRagflowService()
+        deps = SimpleNamespace(
+            user_store=_FakeUserStore(role="admin"),
+            permission_group_store=_FakePermissionGroupStore(),
+            ragflow_service=ragflow,
+            knowledge_management_manager=_FakeKnowledgeManagementManager(ragflow),
+            operation_approval_service=_FakeOperationApprovalService(),
+        )
+        with patch(
+            "backend.app.modules.agents.router.KnowledgeIngestionManager.create_dataset_readme",
+            side_effect=RuntimeError("dataset_readme_create_failed"),
+        ):
+            with _make_client(router=agents_router, deps=deps) as client:
+                resp = client.post("/api/datasets", json={"name": "kb1"})
+        self.assertEqual(resp.status_code, 500)
+        self.assertEqual(resp.json().get("detail"), "dataset_readme_create_failed")
 
     def test_dataset_delete_returns_request_envelope(self):
         ragflow = _FakeRagflowService()

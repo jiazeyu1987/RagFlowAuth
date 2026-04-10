@@ -43,6 +43,11 @@ class _UserChatPermissionStore:
         return []
 
 
+class _UserToolPermissionStore:
+    def list_tool_ids(self, user_id: str):  # noqa: ARG002
+        return []
+
+
 class _RagflowService:
     def list_datasets(self):
         return [{"name": "kb_a"}, {"name": "kb_b"}]
@@ -68,6 +73,7 @@ class _Deps:
         self.permission_group_store = _PermissionGroupStore()
         self.user_kb_permission_store = _UserKbPermissionStore()
         self.user_chat_permission_store = _UserChatPermissionStore()
+        self.user_tool_permission_store = _UserToolPermissionStore()
         self.ragflow_service = _RagflowService()
         self.ragflow_chat_service = _RagflowChatService()
 

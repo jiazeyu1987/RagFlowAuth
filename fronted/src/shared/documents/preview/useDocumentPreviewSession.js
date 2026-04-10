@@ -29,6 +29,10 @@ const createPreviewRequest = (target, overrides = {}) => ({
   datasetName:
     target.source === DOCUMENT_SOURCE.RAGFLOW ? resolveDatasetName(target) : undefined,
   sessionId: isSessionScopedSource(target.source) ? target.sessionId : undefined,
+  requestId:
+    target.source === DOCUMENT_SOURCE.OPERATION_APPROVAL_ARTIFACT
+      ? target.requestId
+      : undefined,
   ...overrides,
 });
 

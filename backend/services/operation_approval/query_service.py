@@ -1,6 +1,10 @@
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any, Protocol
+
+from backend.services.documents.watermark_support import DocumentWatermarkSupport
+from backend.services.unified_preview import build_preview_payload
 
 from .store import OperationApprovalStore
 from .types import (
@@ -167,6 +171,59 @@ class OperationApprovalQueryService:
         data["steps"] = self._support._enrich_request_steps(request_record.steps)
         data["events"] = self._support._enrich_request_events(request_record.events)
         return data
+
+    def preview_request_artifact_for_user(
+        self,
+        *,
+        request_id: str,
+        artifact_id: str,
+        requester_user: Any,
+        render: str = "default",
+        ctx: Any | None = None,
+    ) -> dict:
+        request_record = self._support._require_request_record(request_id)
+        if not self._support._request_visible_to_user(
+            request_data=request_record,
+            requester_user=requester_user,
+        ):
+            raise self._error_type("operation_request_not_visible", status_code=403)
+
+        clean_artifact_id = str(artifact_id or "").strip()
+        artifact = next(
+            (
+                item
+                for item in request_record.artifacts
+                if str(item.artifact_id or "").strip() == clean_artifact_id
+            ),
+            None,
+        )
+        if artifact is None:
+            raise self._error_type("operation_request_artifact_not_found", status_code=404)
+
+        file_path = Path(str(artifact.file_path or "").strip())
+        if not file_path.is_file():
+            raise self._error_type("operation_request_artifact_file_missing", status_code=404)
+
+        payload = build_preview_payload(
+            file_path.read_bytes(),
+            artifact.file_name or file_path.name,
+            doc_id=clean_artifact_id,
+            render=render,
+        )
+        if ctx is not None:
+            payload["watermark"] = DocumentWatermarkSupport(ctx.deps).build_watermark(
+                ctx=ctx,
+                purpose="preview",
+                doc_id=clean_artifact_id,
+                filename=str(
+                    payload.get("source_filename")
+                    or payload.get("filename")
+                    or artifact.file_name
+                    or file_path.name
+                ),
+                source="operation_approval",
+            )
+        return payload
 
     def get_stats_for_user(self, *, requester_user: Any) -> dict:
         statuses = (

@@ -183,7 +183,7 @@ tool/maintenance/
 - 正式服务器 IP：`172.30.30.57`
 - 默认 SSH 用户：`root`
 - 远端应用目录：`/opt/ragflowauth`
-- 本地备份目录：`D:\datas\RagflowAuth`
+- 本地备份目录：`\\172.30.30.4\Backup\auth`
 
 ## 其他仓库事实
 

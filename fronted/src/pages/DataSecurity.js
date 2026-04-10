@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import useDataSecurityPage from '../features/dataSecurity/useDataSecurityPage';
 import { MOBILE_BREAKPOINT } from '../features/dataSecurity/dataSecurityHelpers';
 import DataSecurityRetentionSection from '../features/dataSecurity/components/DataSecurityRetentionSection';
@@ -10,6 +10,7 @@ import DataSecurityRestoreDrillsSection from '../features/dataSecurity/component
 
 export default function DataSecurity() {
   const location = useLocation();
+  const navigate = useNavigate();
   const [isMobile, setIsMobile] = useState(() => {
     if (typeof window === 'undefined') return false;
     return window.innerWidth <= MOBILE_BREAKPOINT;
@@ -76,7 +77,9 @@ export default function DataSecurity() {
   const handleSubmitRealRestore = useCallback(async () => {
     const changeReason = window.prompt('请输入本次真实恢复原因');
     if (changeReason === null) return;
-    const confirmationText = window.prompt('此操作会覆盖当前系统数据。请输入 RESTORE 确认恢复');
+    const confirmationText = window.prompt(
+      '此操作会覆盖当前系统数据。请输入 RESTORE 确认恢复'
+    );
     if (confirmationText === null) return;
     const result = await submitRealRestore({
       changeReason,
@@ -86,6 +89,23 @@ export default function DataSecurity() {
       window.alert(`真实恢复已完成：${result.live_auth_db_path}`);
     }
   }, [submitRealRestore]);
+
+  const handleToggleAdvanced = useCallback(() => {
+    const params = new URLSearchParams(location.search);
+    if (showAdvanced) {
+      params.delete('advanced');
+    } else {
+      params.set('advanced', '1');
+    }
+    const nextSearch = params.toString();
+    navigate(
+      {
+        pathname: location.pathname,
+        search: nextSearch ? `?${nextSearch}` : '',
+      },
+      { replace: false }
+    );
+  }, [location.pathname, location.search, navigate, showAdvanced]);
 
   if (loading) return <div style={{ padding: '12px' }}>加载中...</div>;
 
@@ -139,6 +159,22 @@ export default function DataSecurity() {
             }}
           >
             {running ? '备份中...' : '全量备份'}
+          </button>
+          <button
+            type="button"
+            onClick={handleToggleAdvanced}
+            data-testid="ds-toggle-advanced"
+            style={{
+              padding: '10px 14px',
+              borderRadius: '8px',
+              border: '1px solid #d1d5db',
+              cursor: 'pointer',
+              background: showAdvanced ? '#f3f4f6' : 'white',
+              color: '#111827',
+              width: isMobile ? '100%' : 'auto',
+            }}
+          >
+            {showAdvanced ? '收起高级设置' : '高级设置'}
           </button>
         </div>
       </div>

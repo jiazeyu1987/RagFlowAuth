@@ -92,6 +92,25 @@ def get_operation_approval_request(request_id: str, ctx: AuthContextDep):
         raise HTTPException(status_code=exc.status_code, detail=exc.code) from exc
 
 
+@router.get("/operation-approvals/requests/{request_id}/artifacts/{artifact_id}/preview")
+def preview_operation_approval_request_artifact(
+    request_id: str,
+    artifact_id: str,
+    ctx: AuthContextDep,
+    render: str = Query(default="default"),
+):
+    try:
+        return _service(ctx).preview_request_artifact_for_user(
+            request_id=request_id,
+            artifact_id=artifact_id,
+            requester_user=ctx.user,
+            render=render,
+            ctx=ctx,
+        )
+    except OperationApprovalServiceError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.code) from exc
+
+
 @router.get("/operation-approvals/stats")
 def get_operation_approval_stats(ctx: AuthContextDep):
     try:

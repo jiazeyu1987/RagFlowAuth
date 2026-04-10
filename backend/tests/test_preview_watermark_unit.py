@@ -11,6 +11,7 @@ from backend.app.core import auth as auth_module
 from backend.app.modules.onlyoffice.router import router as onlyoffice_router
 from backend.app.modules.preview.router import router as preview_router
 from backend.services.onlyoffice_security import parse_file_access_token
+from backend.services.watermarking import DocumentWatermarkService
 from backend.tests._util_tempdir import cleanup_dir, make_temp_dir
 
 
@@ -84,6 +85,18 @@ class _OrgDirectoryStore:
         return None
 
 
+class _EmptyOrgDirectoryStore:
+    def get_company(self, company_id: int):  # noqa: ARG002
+        return None
+
+
+class _GlobalOrgDirectoryStore:
+    def get_company(self, company_id: int):
+        if company_id == 1:
+            return _Company(name="瑛泰医疗")
+        return None
+
+
 class _WatermarkPolicy:
     policy_id = "wm-default"
     name = "默认水印策略"
@@ -118,6 +131,25 @@ def _override_get_current_payload(_: Request) -> TokenPayload:
 
 
 class TestPreviewWatermarkUnit(unittest.TestCase):
+    def test_watermark_uses_global_company_name_when_tenant_directory_is_empty(self):
+        service = DocumentWatermarkService(
+            store=_WatermarkPolicyStore(),
+            org_structure_manager=_EmptyOrgDirectoryStore(),
+            global_org_directory_store=_GlobalOrgDirectoryStore(),
+        )
+
+        watermark = service.build_watermark(
+            user=_User(),
+            payload_sub="u1",
+            purpose="preview",
+            doc_id="k1",
+            filename="a.txt",
+            source="knowledge",
+        )
+
+        self.assertIn("公司:瑛泰医疗", watermark.get("text", ""))
+        self.assertNotIn("公司ID:", watermark.get("text", ""))
+
     def test_preview_gateway_returns_backend_generated_watermark(self):
         td = make_temp_dir(prefix="ragflowauth_preview_watermark")
         try:

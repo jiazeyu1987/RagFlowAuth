@@ -3,4 +3,5 @@ export const DOCUMENT_SOURCE = {
   KNOWLEDGE: 'knowledge',
   PATENT: 'patent',
   PAPER: 'paper',
+  OPERATION_APPROVAL_ARTIFACT: 'operation_approval_artifact',
 };

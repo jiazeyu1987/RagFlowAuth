@@ -8,6 +8,16 @@ import {
 } from '../documentAuditView';
 import DocumentAuditSignatureManifest from './DocumentAuditSignatureManifest';
 
+const getArchivedTimeText = (item, currentDocId) => {
+  if (item?.archived_at_ms) {
+    return formatTime(item.archived_at_ms);
+  }
+  if (item?.doc_id === currentDocId || item?.is_current) {
+    return '当前版本未归档';
+  }
+  return '未记录归档时间';
+};
+
 export default function DocumentAuditVersionsModal({
   versionsDialog,
   onClose,
@@ -140,7 +150,7 @@ export default function DocumentAuditVersionsModal({
                       {formatTime(item.uploaded_at_ms)}
                     </td>
                     <td style={{ padding: '12px 16px', color: '#6b7280' }}>
-                      {formatTime(item.archived_at_ms)}
+                      {getArchivedTimeText(item, versionsDialog.currentDocId)}
                     </td>
                     <td style={{ padding: '12px 16px', minWidth: '260px' }}>
                       <DocumentAuditSignatureManifest item={item} />
@@ -166,4 +176,3 @@ export default function DocumentAuditVersionsModal({
     </div>
   );
 }
-

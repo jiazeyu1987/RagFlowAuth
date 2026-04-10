@@ -1,0 +1,266 @@
+- generic [ref=e4]:
+  - complementary [ref=e5]:
+    - generic [ref=e6]:
+      - generic [ref=e7]:
+        - heading "知识库系统" [level=2] [ref=e8]
+        - generic [ref=e9]: 6567f115-49f7-49a3-86cf-2282ae823975
+      - button "切换侧边栏" [ref=e10] [cursor=pointer]: <
+    - navigation [ref=e11]:
+      - link "用户管理" [ref=e12] [cursor=pointer]:
+        - /url: /users
+        - generic [ref=e13]: 👥
+        - generic [ref=e14]: 用户管理
+      - link "文档记录" [ref=e15] [cursor=pointer]:
+        - /url: /document-history
+        - generic [ref=e16]: 🗂️
+        - generic [ref=e17]: 文档记录
+      - link "修改密码" [ref=e18] [cursor=pointer]:
+        - /url: /change-password
+        - generic [ref=e19]: 🔑
+        - generic [ref=e20]: 修改密码
+      - link "审批中心" [ref=e21] [cursor=pointer]:
+        - /url: /approvals
+        - generic [ref=e22]: 📋
+        - generic [ref=e23]: 审批中心
+      - link "审批配置" [ref=e24] [cursor=pointer]:
+        - /url: /approval-config
+        - generic [ref=e25]: 🔧
+        - generic [ref=e26]: 审批配置
+      - link "站内信" [ref=e27] [cursor=pointer]:
+        - /url: /inbox
+        - generic [ref=e28]: 📬
+        - generic [ref=e29]: 站内信
+      - link "组织管理" [ref=e30] [cursor=pointer]:
+        - /url: /org-directory
+        - generic [ref=e31]: 🏢
+        - generic [ref=e32]: 组织管理
+      - link "数据安全" [ref=e33] [cursor=pointer]:
+        - /url: /data-security
+        - generic [ref=e34]: 🔒
+        - generic [ref=e35]: 数据安全
+      - link "通知设置" [ref=e36] [cursor=pointer]:
+        - /url: /notification-settings
+        - generic [ref=e37]: 🔔
+        - generic [ref=e38]: 通知设置
+      - link "电子签名" [ref=e39] [cursor=pointer]:
+        - /url: /electronic-signatures
+        - generic [ref=e40]: ✍️
+        - generic [ref=e41]: 电子签名
+      - link "培训合规" [ref=e42] [cursor=pointer]:
+        - /url: /training-compliance
+        - generic [ref=e43]: 🎓
+        - generic [ref=e44]: 培训合规
+      - link "日志审计" [ref=e45] [cursor=pointer]:
+        - /url: /logs
+        - generic [ref=e46]: 📋
+        - generic [ref=e47]: 日志审计
+    - generic [ref=e48]:
+      - generic [ref=e50]: 管理员
+      - button "退出" [ref=e51] [cursor=pointer]
+  - main [ref=e52]:
+    - heading "数据安全" [level=1] [ref=e54]
+    - generic [ref=e56]:
+      - generic [ref=e58]:
+        - button "立即备份" [ref=e59] [cursor=pointer]
+        - button "全量备份" [ref=e60] [cursor=pointer]
+        - button "收起高级设置" [active] [ref=e208] [cursor=pointer]
+      - generic [ref=e62]:
+        - heading "备份保留策略" [level=3] [ref=e63]
+        - generic [ref=e64]:
+          - generic [ref=e65]:
+            - generic [ref=e66]: 服务器本机备份路径
+            - generic [ref=e67]: /mnt/nas/auth
+            - generic [ref=e68]: "备份数量: 0"
+          - generic [ref=e69]: 正式备份只保存在服务器本机目录，不再检查和提示远端副本。
+          - generic [ref=e70]:
+            - generic [ref=e71]:
+              - text: 保留最多备份至
+              - spinbutton "保留最多备份至 个（1~100）" [ref=e72]: "30"
+              - text: 个（1~100）
+            - button "保存" [ref=e73] [cursor=pointer]
+      - generic [ref=e209]:
+        - heading "备份高级设置" [level=3] [ref=e210]
+        - generic [ref=e211]:
+          - generic [ref=e212]:
+            - checkbox "启用定时备份" [checked] [ref=e213]
+            - text: 启用定时备份
+          - generic [ref=e214]:
+            - generic [ref=e215]:
+              - strong [ref=e216]: 增量备份计划
+              - generic [ref=e217]: 当前计划： 每天 00:05
+            - generic [ref=e218]:
+              - generic [ref=e219]:
+                - text: 频率
+                - combobox "频率" [ref=e220]:
+                  - option "每日" [selected]
+                  - option "每周"
+              - generic [ref=e221]:
+                - text: 时间
+                - textbox "时间" [ref=e222]: 00:05
+          - generic [ref=e223]:
+            - checkbox "启用定时全量备份" [checked] [ref=e224]
+            - text: 启用定时全量备份
+          - generic [ref=e225]:
+            - generic [ref=e226]:
+              - strong [ref=e227]: 全量备份计划
+              - generic [ref=e228]: 当前计划： 每周周二 01:00
+            - generic [ref=e229]:
+              - generic [ref=e230]:
+                - text: 频率
+                - combobox "频率" [ref=e231]:
+                  - option "每日"
+                  - option "每周" [selected]
+              - generic [ref=e232]:
+                - text: 星期
+                - combobox "星期" [ref=e233]:
+                  - option "周日"
+                  - option "周一"
+                  - option "周二" [selected]
+                  - option "周三"
+                  - option "周四"
+                  - option "周五"
+                  - option "周六"
+              - generic [ref=e234]:
+                - text: 时间
+                - textbox "时间" [ref=e235]: 01:00
+          - button "保存高级设置" [ref=e236] [cursor=pointer]
+      - generic [ref=e74]:
+        - heading "备份进度" [level=3] [ref=e75]
+        - generic [ref=e76]:
+          - generic [ref=e77]:
+            - generic [ref=e78]: "#8 completed"
+            - generic [ref=e79]: backup_completed_local
+            - generic [ref=e80]: "服务器本机备份: 成功 | /mnt/nas/auth/migration_pack_20260410_172122_109"
+          - generic [ref=e81]: 2026/4/10 17:21:21
+        - generic [ref=e85]: 100%
+      - generic [ref=e86]:
+        - heading "备份记录" [level=3] [ref=e87]
+        - generic [ref=e88]:
+          - generic [ref=e89] [cursor=pointer]:
+            - generic [ref=e90]:
+              - generic [ref=e91]:
+                - generic [ref=e92]: "#8"
+                - generic [ref=e93]: completed
+                - generic [ref=e94]: backup_completed_local
+              - generic [ref=e95]: "Hash: 683ed62e4b78b523fc3dc3ef7f2f68d054c1f4aa0a5fb85eee11abd15882f6d8"
+              - generic [ref=e96]: "服务器本机备份: 成功 | /mnt/nas/auth/migration_pack_20260410_172122_109"
+              - generic [ref=e97]: "验证: 未验证"
+            - generic [ref=e98]: 2026/4/10 17:21:21
+          - generic [ref=e99] [cursor=pointer]:
+            - generic [ref=e100]:
+              - generic [ref=e101]:
+                - generic [ref=e102]: "#7"
+                - generic [ref=e103]: completed
+                - generic [ref=e104]: backup_completed_local
+              - generic [ref=e105]: "Hash: ffb1998ff418c3ab58b56c5ae0647f7f38ef88b62c7c71e7bce013a0578bf286"
+              - generic [ref=e106]: "服务器本机备份: 成功 | /mnt/nas/auth/migration_pack_20260410_161733_214"
+              - generic [ref=e107]: "验证: 未验证"
+            - generic [ref=e108]: 2026/4/10 16:17:32
+          - generic [ref=e109] [cursor=pointer]:
+            - generic [ref=e110]:
+              - generic [ref=e111]:
+                - generic [ref=e112]: "#6"
+                - generic [ref=e113]: canceled
+                - generic [ref=e114]: backup_force_canceled
+              - generic [ref=e115]: "Hash: 未生成"
+              - generic [ref=e116]: "服务器本机备份: 未生成"
+              - generic [ref=e117]: "验证: 未验证"
+            - generic [ref=e118]: 2026/4/10 15:25:25
+          - generic [ref=e119] [cursor=pointer]:
+            - generic [ref=e120]:
+              - generic [ref=e121]:
+                - generic [ref=e122]: "#5"
+                - generic [ref=e123]: completed
+                - generic [ref=e124]: backup_completed_local
+              - generic [ref=e125]: "Hash: 2a8255dda496545d7866dade58a211ea0403f32d94b9d97e4c79040b1d99dd34"
+              - generic [ref=e126]: "服务器本机备份: 成功 | /app/data/backups/migration_pack_20260410_000521_802"
+              - generic [ref=e127]: "验证: 未验证"
+            - generic [ref=e128]: 2026/4/10 00:05:21
+          - generic [ref=e129] [cursor=pointer]:
+            - generic [ref=e130]:
+              - generic [ref=e131]:
+                - generic [ref=e132]: "#4"
+                - generic [ref=e133]: canceled
+                - generic [ref=e134]: backup_force_canceled
+              - generic [ref=e135]: "Hash: 未生成"
+              - generic [ref=e136]: "服务器本机备份: 未生成"
+              - generic [ref=e137]: "验证: 未验证"
+            - generic [ref=e138]: 2026/4/9 14:08:23
+          - generic [ref=e139] [cursor=pointer]:
+            - generic [ref=e140]:
+              - generic [ref=e141]:
+                - generic [ref=e142]: "#3"
+                - generic [ref=e143]: canceled
+                - generic [ref=e144]: backup_force_canceled
+              - generic [ref=e145]: "Hash: 未生成"
+              - generic [ref=e146]: "服务器本机备份: 未生成"
+              - generic [ref=e147]: "验证: 未验证"
+            - generic [ref=e148]: 2026/4/9 13:20:52
+          - generic [ref=e149] [cursor=pointer]:
+            - generic [ref=e150]:
+              - generic [ref=e151]:
+                - generic [ref=e152]: "#2"
+                - generic [ref=e153]: completed
+                - generic [ref=e154]: backup_completed_local
+              - generic [ref=e155]: "Hash: cf3c77afd4cad10b98e53eec040d988be1679d571beef10f0f11534517750222"
+              - generic [ref=e156]: "服务器本机备份: 成功 | /app/data/backups/migration_pack_20260409_002949_055"
+              - generic [ref=e157]: "验证: 6567f115-49f7-49a3-86cf-2282ae823975 @ 2026/4/9 00:32:43"
+            - generic [ref=e158]: 2026/4/9 00:29:48
+          - generic [ref=e159] [cursor=pointer]:
+            - generic [ref=e160]:
+              - generic [ref=e161]:
+                - generic [ref=e162]: "#1"
+                - generic [ref=e163]: completed
+                - generic [ref=e164]: backup_completed_local
+              - generic [ref=e165]: "Hash: f17afe072668ffc47d58511fefae4c620381409b1f7c81c8ffe11b2dbc7508cd"
+              - generic [ref=e166]: "服务器本机备份: 成功 | /app/data/backups/migration_pack_20260409_002249_020"
+              - generic [ref=e167]: "验证: 6567f115-49f7-49a3-86cf-2282ae823975 @ 2026/4/9 00:34:05"
+            - generic [ref=e168]: 2026/4/9 00:22:48
+      - generic [ref=e169]:
+        - heading "恢复" [level=3] [ref=e170]
+        - generic [ref=e171]:
+          - generic [ref=e172]: "先选择一份服务器本机备份。下方分为两种操作：“恢复演练（仅校验）”只验证备份包是否可读、可复制、可比对； “真实恢复当前数据”会直接覆盖当前系统的 live `auth.db`。"
+          - generic [ref=e173]:
+            - generic [ref=e174]:
+              - text: 服务器本机备份任务
+              - combobox "服务器本机备份任务" [ref=e175]:
+                - option "请选择"
+                - option "#8 full completed" [selected]
+                - option "#7 incremental completed"
+                - option "#5 incremental completed"
+                - option "#2 incremental completed"
+                - option "#1 full completed"
+            - generic [ref=e176]:
+              - text: 演练目标标识
+              - textbox "演练目标标识" [ref=e177]: staging
+            - generic [ref=e178]:
+              - text: 验证备注
+              - textbox "验证备注" [ref=e179]
+          - generic [ref=e180]:
+            - generic [ref=e181]:
+              - generic [ref=e182]: 恢复演练（仅校验）
+              - generic [ref=e183]: 不会覆盖当前系统数据，也不会恢复已删除的用户，只会记录一条恢复演练结果。
+              - button "记录恢复演练（不恢复当前数据）" [ref=e184] [cursor=pointer]
+            - generic [ref=e185]:
+              - generic [ref=e186]: 真实恢复当前数据
+              - generic [ref=e187]: 会直接覆盖当前系统数据，可以恢复被删除的用户，也会同时回滚当前用户、权限和配置到所选备份状态。
+              - button "真实恢复当前数据" [ref=e188] [cursor=pointer]
+          - generic [ref=e189]:
+            - generic [ref=e190]:
+              - generic [ref=e191]: "restore_drill_14c41e72ece64279999dc390d3024c26 / job #1 / success"
+              - generic [ref=e192]: "target: staging | by: 6567f115-49f7-49a3-86cf-2282ae823975 | at: 2026/4/9 00:34:05"
+              - generic [ref=e193]: "path: /app/data/backups/migration_pack_20260409_002249_020 | hash: f17afe072668ffc47d58511fefae4c620381409b1f7c81c8ffe11b2dbc7508cd"
+              - generic [ref=e194]: "package validation: passed | acceptance: passed"
+              - generic [ref=e195]: "hash match: true | compare match: true"
+              - generic [ref=e196]: "actual hash: f17afe072668ffc47d58511fefae4c620381409b1f7c81c8ffe11b2dbc7508cd"
+              - generic [ref=e197]: "restored auth.db: /app/data/restore_drills/staging/job_1_1775666045361/auth.db"
+              - generic [ref=e198]: "notes: restore drill verification passed"
+            - generic [ref=e199]:
+              - generic [ref=e200]: "restore_drill_8f075cae65de474eb209d90be0719e57 / job #2 / success"
+              - generic [ref=e201]: "target: staging | by: 6567f115-49f7-49a3-86cf-2282ae823975 | at: 2026/4/9 00:32:43"
+              - generic [ref=e202]: "path: /app/data/backups/migration_pack_20260409_002949_055 | hash: cf3c77afd4cad10b98e53eec040d988be1679d571beef10f0f11534517750222"
+              - generic [ref=e203]: "package validation: passed | acceptance: passed"
+              - generic [ref=e204]: "hash match: true | compare match: true"
+              - generic [ref=e205]: "actual hash: cf3c77afd4cad10b98e53eec040d988be1679d571beef10f0f11534517750222"
+              - generic [ref=e206]: "restored auth.db: /app/data/restore_drills/staging/job_2_1775665963568/auth.db"
+              - generic [ref=e207]: "notes: restore drill verification passed"

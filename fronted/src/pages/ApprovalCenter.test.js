@@ -3,9 +3,30 @@ import { MemoryRouter } from 'react-router-dom';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import ApprovalCenter from './ApprovalCenter';
+import documentsApi from '../features/documents/api';
 import { electronicSignatureApi } from '../features/electronicSignature/api';
 import operationApprovalApi from '../features/operationApproval/api';
 import { useAuth } from '../hooks/useAuth';
+
+jest.mock('react-markdown', () => ({
+  __esModule: true,
+  default: ({ children }) => <div>{children}</div>,
+}));
+
+jest.mock('remark-gfm', () => ({
+  __esModule: true,
+  default: () => null,
+}));
+
+jest.mock('rehype-raw', () => ({
+  __esModule: true,
+  default: () => null,
+}));
+
+jest.mock('rehype-sanitize', () => ({
+  __esModule: true,
+  default: () => null,
+}));
 
 jest.mock('../features/electronicSignature/api', () => ({
   __esModule: true,
@@ -22,6 +43,15 @@ jest.mock('../features/operationApproval/api', () => ({
     approveRequest: jest.fn(),
     rejectRequest: jest.fn(),
     withdrawRequest: jest.fn(),
+  },
+}));
+
+jest.mock('../features/documents/api', () => ({
+  __esModule: true,
+  default: {
+    preview: jest.fn(),
+    onlyofficeEditorConfig: jest.fn(),
+    downloadBlob: jest.fn(),
   },
 }));
 
@@ -53,6 +83,16 @@ const requestBrief = {
 
 const requestDetail = {
   ...requestBrief,
+  artifacts: [
+    {
+      artifact_id: 'artifact-1',
+      artifact_type: 'knowledge_file_upload',
+      file_name: 'demo.txt',
+      file_path: '/tmp/demo.txt',
+      mime_type: 'text/markdown; charset=utf-8',
+      size_bytes: 12,
+    },
+  ],
   steps: [
     {
       request_step_id: 'step-1',
@@ -110,6 +150,11 @@ describe('ApprovalCenter', () => {
     });
     operationApprovalApi.listRequests.mockResolvedValue([requestBrief]);
     operationApprovalApi.getRequest.mockResolvedValue(requestDetail);
+    documentsApi.preview.mockResolvedValue({
+      type: 'text',
+      filename: 'demo.txt',
+      content: 'preview content',
+    });
   });
 
   it('submits approve action with electronic signature', async () => {
@@ -456,5 +501,30 @@ describe('ApprovalCenter', () => {
       status: 'all',
       limit: 100,
     });
+  });
+
+  it('opens document preview from filename summary entry when upload artifact exists', async () => {
+    const user = userEvent.setup();
+
+    render(
+      <MemoryRouter initialEntries={['/approvals?request_id=req-1']}>
+        <ApprovalCenter />
+      </MemoryRouter>
+    );
+
+    await screen.findByTestId('approval-summary-preview-filename');
+    await user.click(screen.getByTestId('approval-summary-preview-filename'));
+
+    await waitFor(() => {
+      expect(documentsApi.preview).toHaveBeenCalledWith(
+        expect.objectContaining({
+          source: 'operation_approval_artifact',
+          docId: 'artifact-1',
+          requestId: 'req-1',
+        })
+      );
+    });
+    expect(await screen.findByTestId('document-preview-modal')).toBeInTheDocument();
+    expect(screen.getByText('preview content')).toBeInTheDocument();
   });
 });

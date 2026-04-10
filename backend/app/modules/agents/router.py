@@ -14,6 +14,7 @@ from backend.app.core.pydantic_compat import model_dump, model_validate
 from backend.models.knowledge import DatasetEnvelope, DatasetListEnvelope
 from backend.services.audit_helpers import actor_fields_from_ctx
 from backend.models.operation_approval import OperationApprovalRequestBrief, OperationApprovalRequestEnvelope
+from backend.services.knowledge_ingestion import KnowledgeIngestionError, KnowledgeIngestionManager
 
 
 router = APIRouter()
@@ -263,6 +264,20 @@ async def create_dataset(
         raise HTTPException(
             status_code=int(getattr(exc, "status_code", 400) or 400),
             detail=getattr(exc, "code", None) or str(exc) or "dataset_create_failed",
+        ) from exc
+
+    try:
+        KnowledgeIngestionManager(deps).create_dataset_readme(
+            dataset_id=str(created.get("id") or "").strip(),
+            dataset_name=str(created.get("name") or name).strip(),
+            uploaded_by=ctx.payload.sub,
+        )
+    except KnowledgeIngestionError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=str(exc).strip() or "dataset_readme_create_failed",
         ) from exc
 
     audit = getattr(deps, "audit_log_store", None)
