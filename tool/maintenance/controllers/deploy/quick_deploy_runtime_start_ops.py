@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import time
 
+from tool.maintenance.core.constants import NAS_MOUNT_POINT
+
 
 def step_6_start_containers(pipeline) -> None:
     pipeline._status("Step 6/7: starting containers...")
@@ -71,6 +73,8 @@ def step_6_start_containers(pipeline) -> None:
             f"{pipeline.ctx.data_dir}/ragflow_config.json:/app/ragflow_config.json:ro",
             "-v",
             f"{pipeline.ctx.data_dir}/ragflow_compose:/app/ragflow_compose:ro",
+            "-v",
+            f"{NAS_MOUNT_POINT}:{NAS_MOUNT_POINT}",
             "-v",
             "/mnt/replica:/mnt/replica",
             "-v",

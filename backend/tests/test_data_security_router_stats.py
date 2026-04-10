@@ -20,16 +20,17 @@ class _SettingsStub:
 
 class TestDataSecurityRouterStats(unittest.TestCase):
     def test_backup_pack_stats_skips_mnt_replica_scan_by_default(self):
-        s = _SettingsStub("/app/data/backups", "/mnt/replica/RagflowAuth")
+        s = _SettingsStub("/mnt/nas/auth", "/mnt/replica/RagflowAuth")
         with patch.object(support.settings, "DATA_SECURITY_SCAN_MOUNT_STATS", False), patch.object(
             support.Path, "exists", side_effect=AssertionError("should not stat mount path")
         ):
             data = support._backup_pack_stats(s)
-        self.assertEqual(str(data.get("local_backup_target_path", "")).replace("\\", "/"), "/app/data/backups")
-        self.assertEqual(str(data.get("windows_backup_target_path", "")).replace("\\", "/"), "/mnt/replica/RagflowAuth")
+        self.assertEqual(str(data.get("local_backup_target_path", "")).replace("\\", "/"), "/mnt/nas/auth")
+        self.assertEqual(str(data.get("windows_backup_target_path", "")).replace("\\", "/"), "")
         self.assertEqual(data.get("local_backup_pack_count"), 0)
+        self.assertTrue(bool(data.get("local_backup_pack_count_skipped")))
         self.assertEqual(data.get("windows_backup_pack_count"), 0)
-        self.assertTrue(bool(data.get("windows_backup_pack_count_skipped")))
+        self.assertFalse(bool(data.get("windows_backup_pack_count_skipped")))
 
     def test_backup_pack_stats_counts_local_packs(self):
         td = make_temp_dir(prefix="ragflowauth_stats")

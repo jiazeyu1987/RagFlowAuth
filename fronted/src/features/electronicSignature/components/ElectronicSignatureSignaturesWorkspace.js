@@ -126,6 +126,9 @@ export default function ElectronicSignatureSignaturesWorkspace({
               <strong>{TEXT.action}:</strong> {getActionLabel(selectedSignature.action)}
             </div>
             <div>
+              <strong>{TEXT.fullName}:</strong> {getSignerFullName(selectedSignature)}
+            </div>
+            <div>
               <strong>{TEXT.signer}:</strong> {getSignerLabel(selectedSignature)}
             </div>
             <div>

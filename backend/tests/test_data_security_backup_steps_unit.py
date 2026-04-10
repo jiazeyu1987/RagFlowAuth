@@ -93,22 +93,24 @@ class TestDataSecurityBackupStepsUnit(unittest.TestCase):
         finally:
             cleanup_dir(td_path)
 
-    def test_precheck_fails_when_mnt_replica_not_cifs(self) -> None:
+    def test_precheck_fails_when_nas_mount_not_cifs(self) -> None:
         from backend.services.data_security.backup_steps.context import BackupContext
         from backend.services.data_security.backup_steps import precheck
 
         store = Mock()
         store.is_cancel_requested.return_value = False
         settings = _Settings(
-            local_backup_target_path="/app/data/backups",
+            local_backup_target_path="/mnt/nas/auth",
             replica_target_path="/mnt/replica/RagflowAuth",
             auth_db_path=str(Path(__file__).resolve()),
         )
         ctx = BackupContext(store=store, job_id=1, settings=settings, include_images=False)
 
-        with patch.object(precheck, "docker_ok", return_value=(True, "")):
-            precheck.backup_precheck_and_prepare(ctx)
-        self.assertIsNotNone(ctx.pack_dir)
+        with patch.object(precheck, "is_cifs_mounted", return_value=False), patch.object(
+            precheck, "docker_ok", return_value=(True, "")
+        ):
+            with self.assertRaisesRegex(RuntimeError, "local_backup_target_mount_not_cifs:/mnt/nas"):
+                precheck.backup_precheck_and_prepare(ctx)
 
     def test_precheck_sets_pack_dir_and_updates_job(self) -> None:
         from backend.services.data_security.backup_steps.context import BackupContext
@@ -139,6 +141,40 @@ class TestDataSecurityBackupStepsUnit(unittest.TestCase):
                 any("output_dir" in kwargs for _, kwargs in store.update_job.call_args_list),
                 f"unexpected output_dir update during precheck: calls={store.update_job.call_args_list!r}",
             )
+        finally:
+            cleanup_dir(td_path)
+
+    def test_precheck_uses_local_managed_staging_for_nas_target(self) -> None:
+        from backend.services.data_security.backup_steps.context import BackupContext
+        from backend.services.data_security.backup_steps import precheck
+
+        td_path = make_temp_dir(prefix="ragflowauth_precheck_nas_stage")
+        try:
+            auth_db = td_path / "auth.db"
+            auth_db.write_text("ok", encoding="utf-8")
+            managed_root = td_path / "managed_data"
+
+            store = Mock()
+            store.is_cancel_requested.return_value = False
+            settings = _Settings(
+                local_backup_target_path="/mnt/nas/auth",
+                replica_target_path="/mnt/replica/RagflowAuth",
+                auth_db_path=str(auth_db),
+            )
+            ctx = BackupContext(store=store, job_id=456, settings=settings, include_images=False)
+
+            with patch.object(precheck, "is_cifs_mounted", return_value=True), patch.object(
+                precheck, "docker_ok", return_value=(True, "")
+            ), patch.object(
+                precheck, "managed_data_root", return_value=managed_root
+            ):
+                precheck.backup_precheck_and_prepare(ctx)
+
+            expected_staging_root = managed_root / "backups" / "_staging_local" / "job_456"
+            self.assertEqual(ctx.local_backup_root, Path("/mnt/nas/auth"))
+            self.assertEqual(ctx.staging_root, expected_staging_root)
+            self.assertEqual(ctx.pack_dir.parent, expected_staging_root)
+            self.assertTrue(ctx.pack_dir.exists())
         finally:
             cleanup_dir(td_path)
 

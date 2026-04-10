@@ -8,7 +8,8 @@ from backend.app.core.managed_paths import managed_data_root
 from backend.app.core.paths import repo_root
 
 
-LOCAL_BACKUP_TARGET_PATH = "/app/data/backups"
+STANDARD_NAS_MOUNT_ROOT = "/mnt/nas"
+LOCAL_BACKUP_TARGET_PATH = f"{STANDARD_NAS_MOUNT_ROOT}/auth"
 STANDARD_REPLICA_MOUNT_ROOT = "/mnt/replica"
 
 
@@ -26,6 +27,13 @@ def _is_standard_replica_path(path_text: str | None) -> bool:
     if not text.startswith("/"):
         return False
     return text == STANDARD_REPLICA_MOUNT_ROOT or text.startswith(STANDARD_REPLICA_MOUNT_ROOT + "/")
+
+
+def is_standard_nas_path(path_text: str | None) -> bool:
+    text = _normalize_path_text(path_text)
+    if not text.startswith("/"):
+        return False
+    return text == STANDARD_NAS_MOUNT_ROOT or text.startswith(STANDARD_NAS_MOUNT_ROOT + "/")
 
 
 def _running_inside_container() -> bool:

@@ -9,9 +9,9 @@ from tkinter import filedialog, messagebox, ttk
 
 
 DEFAULT_NAS_IP = "172.30.30.4"
-DEFAULT_NAS_SHARE = "it共享"
-DEFAULT_NAS_USERNAME = "ceshi"
-DEFAULT_NAS_PASSWORD = "Kdlyx123"
+DEFAULT_NAS_SHARE = "Backup"
+DEFAULT_NAS_USERNAME = "beifen"
+DEFAULT_NAS_PASSWORD = "TYkHwI"
 DEFAULT_NAS_MOUNT_POINT = "/mnt/nas"
 
 

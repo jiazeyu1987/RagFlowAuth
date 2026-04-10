@@ -7,12 +7,13 @@ from datetime import datetime
 from pathlib import Path
 from typing import Callable
 
+from tool.maintenance.core.constants import DEFAULT_LOCAL_BACKUP_DIR
 from tool.maintenance.core.logging_setup import log_to_file
 from tool.maintenance.core.ssh_executor import SSHExecutor, build_scp_argv
 from tool.maintenance.core.tempdir import cleanup_dir, make_temp_dir
 
 REMOTE_BACKUP_ROOT = "/opt/ragflowauth/backups"
-DEFAULT_LOCAL_SAVE_DIR = Path(r"D:\datas\RagflowAuth")
+DEFAULT_LOCAL_SAVE_DIR = Path(DEFAULT_LOCAL_BACKUP_DIR)
 
 _BACKUP_PREFIX_LABELS = {
     "migration_pack": "增量备份",

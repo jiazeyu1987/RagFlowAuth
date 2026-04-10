@@ -90,6 +90,22 @@ class TestDataSecurityRouterUnit(unittest.TestCase):
 
             self.assertEqual(str(ctx.exception), "backup_worker_image_not_found:container=ragflowauth-backend")
 
+    def test_backup_prerequisites_fail_fast_when_nas_mount_not_cifs(self) -> None:
+        from backend.app.modules.data_security import support
+
+        settings = SimpleNamespace(
+            local_backup_target_path=lambda: "/mnt/nas/auth",
+            auth_db_path="data/auth.db",
+            ragflow_compose_path="docker-compose.yml",
+        )
+        deps = SimpleNamespace(
+            data_security_store=SimpleNamespace(get_settings=lambda: settings),
+        )
+
+        with patch.object(support, "is_cifs_mounted", return_value=False):
+            with self.assertRaisesRegex(RuntimeError, "local_backup_target_mount_not_cifs:/mnt/nas"):
+                support._assert_backup_prerequisites(deps)
+
     def test_backup_prerequisites_resolves_app_root_compose_path_on_host(self) -> None:
         from backend.app.modules.data_security import support
 

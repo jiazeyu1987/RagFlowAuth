@@ -20,6 +20,9 @@ const settingsResponse = {
   enabled: true,
   backup_retention_max: 7,
   local_backup_target_path: '/app/data/backups',
+  incremental_schedule: '30 18 * * *',
+  full_backup_enabled: true,
+  full_backup_schedule: '0 2 * * 1',
   ragflow_compose_path: '/app/ragflow_compose/docker-compose.yml',
   ragflow_stop_services: false,
   full_backup_include_images: true,
@@ -153,6 +156,9 @@ describe('useDataSecurityPage', () => {
 
     await act(async () => {
       result.current.setSettingField('enabled', false);
+      result.current.setSettingField('incremental_schedule', '15 23 * * 3');
+      result.current.setSettingField('full_backup_enabled', false);
+      result.current.setSettingField('full_backup_schedule', '0 3 * * 6');
       result.current.setSettingField('ragflow_compose_path', '/srv/ragflow/docker-compose.yml');
       result.current.setSettingField('ragflow_stop_services', true);
       result.current.setSettingField('full_backup_include_images', false);
@@ -165,6 +171,9 @@ describe('useDataSecurityPage', () => {
 
     expect(dataSecurityApi.updateSettings).toHaveBeenCalledWith({
       enabled: false,
+      incremental_schedule: '15 23 * * 3',
+      full_backup_enabled: false,
+      full_backup_schedule: '0 3 * * 6',
       ragflow_compose_path: '/srv/ragflow/docker-compose.yml',
       ragflow_stop_services: true,
       auth_db_path: 'config/auth.db',

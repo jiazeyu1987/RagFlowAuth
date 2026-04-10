@@ -136,3 +136,67 @@ class TestServerBackupPullUnit(unittest.TestCase):
             self.assertEqual(result.message, "downloaded")
             self.assertTrue((local_root / "migration_pack_20260408_101343_362").is_dir())
             self.assertTrue((local_root / "migration_pack_20260408_101343_362" / "auth.db").is_file())
+
+    def test_list_nas_backups_filters_formats_and_sorts(self) -> None:
+        from tool.maintenance.features.nas_backup_pull import list_nas_backup_dirs
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            backup_root = Path(tmpdir)
+            (backup_root / "full_backup_pack_20260407_220101_001").mkdir()
+            (backup_root / "migration_pack_20260408_101343_362").mkdir()
+            (backup_root / "notes").mkdir()
+
+            result = list_nas_backup_dirs(
+                backup_root=backup_root,
+                ensure_access=lambda: (True, "", "ok"),
+            )
+
+        self.assertTrue(result.ok)
+        self.assertEqual(
+            [item.name for item in result.backups],
+            [
+                "migration_pack_20260408_101343_362",
+                "full_backup_pack_20260407_220101_001",
+            ],
+        )
+
+    def test_download_nas_backup_copies_directory_to_destination(self) -> None:
+        from tool.maintenance.features.nas_backup_pull import download_nas_backup_dir
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp_root = Path(tmpdir)
+            backup_root = tmp_root / "nas"
+            destination_root = tmp_root / "local"
+            source_dir = backup_root / "migration_pack_20260408_101343_362"
+            source_dir.mkdir(parents=True)
+            destination_root.mkdir()
+            (source_dir / "auth.db").write_text("sqlite", encoding="utf-8")
+
+            result = download_nas_backup_dir(
+                name=source_dir.name,
+                destination_root=destination_root,
+                backup_root=backup_root,
+                ensure_access=lambda: (True, "", "ok"),
+            )
+
+            self.assertTrue(result.ok)
+            self.assertEqual(result.message, "downloaded")
+            self.assertTrue((destination_root / source_dir.name / "auth.db").is_file())
+
+    def test_download_nas_backup_rejects_same_source_and_destination(self) -> None:
+        from tool.maintenance.features.nas_backup_pull import download_nas_backup_dir
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            backup_root = Path(tmpdir)
+            source_dir = backup_root / "migration_pack_20260408_101343_362"
+            source_dir.mkdir()
+
+            result = download_nas_backup_dir(
+                name=source_dir.name,
+                destination_root=backup_root,
+                backup_root=backup_root,
+                ensure_access=lambda: (True, "", "ok"),
+            )
+
+        self.assertFalse(result.ok)
+        self.assertEqual(result.message, "destination_same_as_source")

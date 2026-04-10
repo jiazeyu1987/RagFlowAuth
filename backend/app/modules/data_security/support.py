@@ -18,7 +18,12 @@ from backend.services.data_security.docker_utils import (
     read_compose_project_name,
     resolve_backend_helper_image,
 )
-from backend.services.data_security.models import resolve_runtime_compose_file_path
+from backend.services.data_security.models import (
+    STANDARD_NAS_MOUNT_ROOT,
+    is_standard_nas_path,
+    resolve_runtime_compose_file_path,
+)
+from backend.services.mount_utils import is_cifs_mounted
 
 
 @dataclass(frozen=True)
@@ -59,7 +64,7 @@ def _pack_stats_for_target(target: str) -> dict[str, Any]:
     path = Path(target_text)
     target_norm = _norm_path(target_text)
 
-    if target_norm == "/mnt/replica" or target_norm.startswith("/mnt/replica/"):
+    if is_standard_nas_path(target_norm) or target_norm == "/mnt/replica" or target_norm.startswith("/mnt/replica/"):
         if not settings.DATA_SECURITY_SCAN_MOUNT_STATS:
             return {
                 "target_path": str(path),
@@ -143,6 +148,8 @@ def _assert_backup_prerequisites(deps: AppDependencies) -> None:
     local_target = str(current_settings.local_backup_target_path() or "").strip()
     if not local_target:
         raise RuntimeError("local_backup_target_not_configured")
+    if is_standard_nas_path(local_target) and not is_cifs_mounted(STANDARD_NAS_MOUNT_ROOT):
+        raise RuntimeError(f"local_backup_target_mount_not_cifs:{STANDARD_NAS_MOUNT_ROOT}")
 
     ok, why = docker_ok()
     if not ok:

@@ -90,8 +90,8 @@ def _finalize_local_backup(*, pack_dir: Path, local_root: Path) -> Path:
     final_dir = local_root / pack_dir.name
     if final_dir.exists():
         raise RuntimeError(f"local_backup_destination_exists:{final_dir}")
-    pack_dir.rename(final_dir)
-    _cleanup_empty_parents(pack_dir.parent, stop_at=local_root / "_staging")
+    shutil.move(str(pack_dir), str(final_dir))
+    _cleanup_empty_parents(pack_dir.parent, stop_at=pack_dir.parent.parent)
     return final_dir
 
 

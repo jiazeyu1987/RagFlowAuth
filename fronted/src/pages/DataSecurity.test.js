@@ -1,6 +1,6 @@
 import React from 'react';
 import { MemoryRouter } from 'react-router-dom';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import DataSecurity from './DataSecurity';
 import { dataSecurityApi } from '../features/dataSecurity/api';
@@ -24,6 +24,9 @@ const settingsResponse = {
   backup_retention_max: 7,
   local_backup_target_path: '/app/data/backups',
   local_backup_pack_count: 2,
+  incremental_schedule: '30 18 * * *',
+  full_backup_enabled: true,
+  full_backup_schedule: '0 2 * * 1',
   ragflow_compose_path: '/app/ragflow_compose/docker-compose.yml',
   ragflow_stop_services: false,
   full_backup_include_images: true,
@@ -246,6 +249,9 @@ describe('DataSecurity', () => {
     dataSecurityApi.updateSettings.mockResolvedValue({
       ...settingsResponse,
       enabled: false,
+      incremental_schedule: '15 23 * * 3',
+      full_backup_enabled: false,
+      full_backup_schedule: '0 2 * * 5',
       ragflow_compose_path: '/srv/ragflow/docker-compose.yml',
       ragflow_stop_services: true,
       full_backup_include_images: false,
@@ -257,6 +263,25 @@ describe('DataSecurity', () => {
     });
 
     await user.click(screen.getByTestId('ds-enabled'));
+    fireEvent.change(screen.getByTestId('ds-incremental-schedule-type'), {
+      target: { value: 'weekly' },
+    });
+    fireEvent.change(screen.getByTestId('ds-incremental-schedule-weekday'), {
+      target: { value: '3' },
+    });
+    fireEvent.change(screen.getByTestId('ds-incremental-schedule-time'), {
+      target: { value: '23:15' },
+    });
+    await user.click(screen.getByTestId('ds-full-backup-enabled'));
+    fireEvent.change(screen.getByTestId('ds-full-schedule-type'), {
+      target: { value: 'weekly' },
+    });
+    fireEvent.change(screen.getByTestId('ds-full-schedule-weekday'), {
+      target: { value: '5' },
+    });
+    fireEvent.change(screen.getByTestId('ds-full-schedule-time'), {
+      target: { value: '02:00' },
+    });
     await user.clear(screen.getByTestId('ds-ragflow-compose-path'));
     await user.type(screen.getByTestId('ds-ragflow-compose-path'), '/srv/ragflow/docker-compose.yml');
     await user.click(screen.getByTestId('ds-ragflow-stop-services'));
@@ -266,6 +291,9 @@ describe('DataSecurity', () => {
     await waitFor(() => {
       expect(dataSecurityApi.updateSettings).toHaveBeenCalledWith({
         enabled: false,
+        incremental_schedule: '15 23 * * 3',
+        full_backup_enabled: false,
+        full_backup_schedule: '0 2 * * 5',
         ragflow_compose_path: '/srv/ragflow/docker-compose.yml',
         ragflow_stop_services: true,
         auth_db_path: 'data/auth.db',

@@ -1,5 +1,7 @@
 from pathlib import Path
 
+from tool.maintenance.core.constants import DEFAULT_LOCAL_BACKUP_DIR
+
 from ._shared import _tool_mod
 
 TEXT_LOCAL_BACKUP_AVAILABLE = "Available local backup packages: {count}"
@@ -17,7 +19,7 @@ def refresh_release_local_backup_list_impl(app, *args, **kwargs):
     _ = args, kwargs
 
     try:
-        root_dir = Path(r"D:\datas\RagflowAuth")
+        root_dir = Path(DEFAULT_LOCAL_BACKUP_DIR)
         entries = tool_mod.feature_list_local_backups(root_dir)
 
         app.release_local_backup_map = {}

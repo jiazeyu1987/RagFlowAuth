@@ -19,6 +19,7 @@ from tool.maintenance.features.local_backup_restore import (
     default_local_auth_db_path,
     restore_downloaded_backup_to_local,
 )
+from tool.maintenance.features.nas_backup_pull import download_nas_backup_dir, list_nas_backup_dirs
 from tool.maintenance.features.server_backup_pull import (
     DEFAULT_LOCAL_SAVE_DIR,
     ServerBackupDownloadResult,
@@ -32,20 +33,31 @@ SERVER_CHOICES = (
     ("正式服务器", PROD_SERVER_IP),
     ("测试服务器", TEST_SERVER_IP),
 )
+REMOTE_SOURCE_SERVER = "服务器"
+REMOTE_SOURCE_NAS = "NAS"
+REMOTE_SOURCE_CHOICES = (REMOTE_SOURCE_SERVER, REMOTE_SOURCE_NAS)
 
 RESULT_MESSAGES = {
     "ssh_not_found": "本机未找到 ssh 命令。",
     "scp_not_found": "本机未找到 scp 命令。",
-    "list_failed": "读取服务器备份列表失败。",
-    "no_backups_found": "服务器上没有可识别的备份目录。",
+    "net_use_not_found": "本机未找到 net 命令，无法连接 NAS 共享。",
+    "nas_auth_failed": "连接 NAS 共享失败，请检查当前会话是否已有冲突连接或凭据是否正确。",
+    "nas_share_unreachable": "无法访问 NAS 共享根目录。",
+    "nas_share_not_directory": "NAS 共享根路径不是目录。",
+    "nas_backup_root_missing": "NAS 备份目录不存在。",
+    "nas_backup_root_not_directory": "NAS 备份路径不是目录。",
+    "list_failed": "读取远端备份列表失败。",
+    "no_backups_found": "远端上没有可识别的备份目录。",
     "invalid_name": "所选备份目录名无效。",
     "destination_root_not_directory": "保存路径不是目录。",
     "destination_root_create_failed": "无法创建保存目录。",
     "destination_exists": "目标目录已存在同名备份，请先清理旧目录或更换保存路径。",
-    "remote_backup_missing": "服务器上不存在所选备份目录。",
+    "destination_same_as_source": "目标目录与 NAS 来源目录相同，请改为本地磁盘目录后再拉取。",
+    "remote_backup_missing": "远端上不存在所选备份目录。",
     "scp_failed": "SCP 拉取失败。",
     "downloaded_dir_missing": "拉取完成后未找到下载目录。",
-    "local_move_failed": "移动备份到本地目录失败。",
+    "local_move_failed": "写入备份到本地目录失败。",
+    "local_copy_failed": "复制备份到本地目录失败。",
     "downloaded": "备份拉取完成。",
     "backup_dir_missing": "所选本地备份目录不存在，请先拉取到本地。",
     "backup_auth_db_missing": "备份目录缺少 auth.db，无法执行本地恢复。",
@@ -77,17 +89,20 @@ class ServerBackupPullTool:
             self._format_server_choice(label, ip): {"label": label, "ip": ip}
             for label, ip in SERVER_CHOICES
         }
+        self.source_var = tk.StringVar(value=REMOTE_SOURCE_SERVER)
         self.server_var = tk.StringVar(value=self.server_items[0])
         self.save_path_var = tk.StringVar(value=str(DEFAULT_LOCAL_SAVE_DIR))
-        self.status_var = tk.StringVar(value="请选择服务器并加载备份列表；恢复前请先把备份拉取到本地。")
-        self.selected_remote_var = tk.StringVar(value="服务器列表：未选择")
+        self.status_var = tk.StringVar(value="请选择备份来源并加载备份列表；恢复前请先把备份拉取到本地。")
+        self.selected_remote_var = tk.StringVar(value="远端列表：未选择")
         self.selected_local_var = tk.StringVar(value="本地列表：未选择")
 
         self.remote_backup_rows: dict[str, ServerBackupEntry] = {}
         self.local_backup_rows: dict[str, BackupCatalogEntry] = {}
+        self.loaded_remote_source = REMOTE_SOURCE_SERVER
         self._busy = False
 
         self._build_ui()
+        self._update_source_controls()
         self.refresh_local_backups(notify_empty=False)
 
     @staticmethod
@@ -112,10 +127,21 @@ class ServerBackupPullTool:
             foreground="gray",
         ).pack(anchor=tk.W, pady=(6, 0))
 
-        controls = ttk.LabelFrame(container, text="服务器与本地目录")
+        controls = ttk.LabelFrame(container, text="备份来源与本地目录")
         controls.pack(fill=tk.X, pady=(0, 16))
 
-        ttk.Label(controls, text="服务器").grid(row=0, column=0, padx=(12, 8), pady=12, sticky="w")
+        ttk.Label(controls, text="来源").grid(row=0, column=0, padx=(12, 8), pady=12, sticky="w")
+        self.source_combo = ttk.Combobox(
+            controls,
+            textvariable=self.source_var,
+            values=REMOTE_SOURCE_CHOICES,
+            state="readonly",
+            width=10,
+        )
+        self.source_combo.grid(row=0, column=1, padx=(0, 12), pady=12, sticky="w")
+        self.source_combo.bind("<<ComboboxSelected>>", self._on_source_changed)
+
+        ttk.Label(controls, text="服务器").grid(row=0, column=2, padx=(0, 8), pady=12, sticky="w")
         self.server_combo = ttk.Combobox(
             controls,
             textvariable=self.server_var,
@@ -123,22 +149,22 @@ class ServerBackupPullTool:
             state="readonly",
             width=34,
         )
-        self.server_combo.grid(row=0, column=1, padx=(0, 12), pady=12, sticky="we")
+        self.server_combo.grid(row=0, column=3, padx=(0, 12), pady=12, sticky="we")
 
         self.load_button = ttk.Button(controls, text="加载服务器备份列表", command=self.load_backups)
-        self.load_button.grid(row=0, column=2, padx=(0, 12), pady=12, sticky="e")
+        self.load_button.grid(row=0, column=4, padx=(0, 12), pady=12, sticky="e")
 
         ttk.Label(controls, text="保存到").grid(row=1, column=0, padx=(12, 8), pady=(0, 12), sticky="w")
         self.path_entry = ttk.Entry(controls, textvariable=self.save_path_var)
-        self.path_entry.grid(row=1, column=1, padx=(0, 12), pady=(0, 12), sticky="we")
+        self.path_entry.grid(row=1, column=1, columnspan=3, padx=(0, 12), pady=(0, 12), sticky="we")
 
         self.browse_button = ttk.Button(controls, text="选择目录", command=self.choose_save_path)
-        self.browse_button.grid(row=1, column=2, padx=(0, 12), pady=(0, 12), sticky="e")
+        self.browse_button.grid(row=1, column=4, padx=(0, 12), pady=(0, 12), sticky="e")
 
         self.refresh_local_button = ttk.Button(controls, text="刷新本地列表", command=self.refresh_local_backups)
-        self.refresh_local_button.grid(row=1, column=3, padx=(0, 12), pady=(0, 12), sticky="e")
+        self.refresh_local_button.grid(row=1, column=5, padx=(0, 12), pady=(0, 12), sticky="e")
 
-        controls.columnconfigure(1, weight=1)
+        controls.columnconfigure(3, weight=1)
 
         lists = ttk.Frame(container)
         lists.pack(fill=tk.BOTH, expand=True)
@@ -146,14 +172,14 @@ class ServerBackupPullTool:
         lists.columnconfigure(1, weight=1)
         lists.rowconfigure(0, weight=1)
 
-        remote_frame = ttk.LabelFrame(lists, text="服务器备份列表")
-        remote_frame.grid(row=0, column=0, sticky="nsew", padx=(0, 8))
-        remote_frame.columnconfigure(0, weight=1)
-        remote_frame.rowconfigure(0, weight=1)
+        self.remote_frame = ttk.LabelFrame(lists, text="服务器备份列表")
+        self.remote_frame.grid(row=0, column=0, sticky="nsew", padx=(0, 8))
+        self.remote_frame.columnconfigure(0, weight=1)
+        self.remote_frame.rowconfigure(0, weight=1)
 
         remote_columns = ("backup_type", "raw_name")
         self.remote_tree = ttk.Treeview(
-            remote_frame,
+            self.remote_frame,
             columns=remote_columns,
             show="tree headings",
             selectmode="browse",
@@ -167,7 +193,7 @@ class ServerBackupPullTool:
         self.remote_tree.grid(row=0, column=0, sticky="nsew", padx=(12, 0), pady=12)
         self.remote_tree.bind("<<TreeviewSelect>>", self._on_remote_backup_selected)
 
-        remote_scroll = ttk.Scrollbar(remote_frame, orient=tk.VERTICAL, command=self.remote_tree.yview)
+        remote_scroll = ttk.Scrollbar(self.remote_frame, orient=tk.VERTICAL, command=self.remote_tree.yview)
         remote_scroll.grid(row=0, column=1, sticky="ns", padx=(0, 12), pady=12)
         self.remote_tree.configure(yscrollcommand=remote_scroll.set)
 
@@ -226,7 +252,8 @@ class ServerBackupPullTool:
         state = tk.DISABLED if busy else tk.NORMAL
         combo_state = tk.DISABLED if busy else "readonly"
 
-        self.server_combo.configure(state=combo_state)
+        self.source_combo.configure(state=combo_state)
+        self.server_combo.configure(state=combo_state if self._current_remote_source() == REMOTE_SOURCE_SERVER else tk.DISABLED)
         self.path_entry.configure(state=state)
         self.load_button.configure(state=state)
         self.browse_button.configure(state=state)
@@ -236,6 +263,35 @@ class ServerBackupPullTool:
 
         if status_text is not None:
             self.status_var.set(status_text)
+        if not busy:
+            self._update_source_controls()
+
+    def _current_remote_source(self) -> str:
+        source = self.source_var.get().strip()
+        if source in REMOTE_SOURCE_CHOICES:
+            return source
+        return REMOTE_SOURCE_SERVER
+
+    def _remote_list_title(self, source: str | None = None) -> str:
+        current_source = source or self.loaded_remote_source
+        return f"{current_source}备份列表"
+
+    def _remote_selection_prefix(self, source: str | None = None) -> str:
+        current_source = source or self.loaded_remote_source
+        return f"{current_source}列表"
+
+    def _update_source_controls(self) -> None:
+        current_source = self._current_remote_source()
+        if not self._busy:
+            self.server_combo.configure(state="readonly" if current_source == REMOTE_SOURCE_SERVER else tk.DISABLED)
+            self.source_combo.configure(state="readonly")
+        self.load_button.configure(
+            text="加载服务器备份列表" if current_source == REMOTE_SOURCE_SERVER else "加载 NAS 备份列表"
+        )
+        self.pull_button.configure(
+            text="拉取所选服务器备份" if current_source == REMOTE_SOURCE_SERVER else "拉取所选 NAS 备份"
+        )
+        self.remote_frame.configure(text=self._remote_list_title(current_source))
 
     def _selected_server(self) -> tuple[str, str]:
         current = self.server_var.get()
@@ -303,9 +359,11 @@ class ServerBackupPullTool:
     def _refresh_remote_selection_hint(self) -> None:
         entry = self._selected_remote_backup()
         if entry is None:
-            self.selected_remote_var.set("服务器列表：未选择")
+            self.selected_remote_var.set(f"{self._remote_selection_prefix()}：未选择")
             return
-        self.selected_remote_var.set(f"服务器列表：{entry.created_at} | {entry.backup_type} | {entry.name}")
+        self.selected_remote_var.set(
+            f"{self._remote_selection_prefix()}：{entry.created_at} | {entry.backup_type} | {entry.name}"
+        )
 
     def _refresh_local_selection_hint(self) -> None:
         entry = self._selected_local_backup()
@@ -329,23 +387,41 @@ class ServerBackupPullTool:
         self.save_path_var.set(chosen)
         self.refresh_local_backups(notify_empty=True)
 
+    def _on_source_changed(self, _event=None) -> None:
+        self.loaded_remote_source = self._current_remote_source()
+        self._clear_remote_backups()
+        self._update_source_controls()
+        self._refresh_remote_selection_hint()
+        self.status_var.set("请选择备份来源并加载备份列表；恢复前请先把备份拉取到本地。")
+
     def load_backups(self) -> None:
-        _, server_ip = self._selected_server()
+        current_source = self._current_remote_source()
+        self.loaded_remote_source = current_source
+        if current_source == REMOTE_SOURCE_SERVER:
+            _, server_ip = self._selected_server()
+            self._start_background(
+                busy_text=f"正在读取 {server_ip} 的服务器备份列表...",
+                work=lambda: list_server_backup_dirs(server_ip=server_ip, server_user=DEFAULT_SERVER_USER),
+                on_done=lambda payload: self._finish_load_backups(payload, REMOTE_SOURCE_SERVER),
+            )
+            return
+
         self._start_background(
-            busy_text=f"正在读取 {server_ip} 的服务器备份列表...",
-            work=lambda: list_server_backup_dirs(server_ip=server_ip, server_user=DEFAULT_SERVER_USER),
-            on_done=self._finish_load_backups,
+            busy_text="正在读取 NAS 备份列表...",
+            work=list_nas_backup_dirs,
+            on_done=lambda payload: self._finish_load_backups(payload, REMOTE_SOURCE_NAS),
         )
 
-    def _finish_load_backups(self, result: ServerBackupListResult) -> None:
+    def _finish_load_backups(self, result: ServerBackupListResult, source: str) -> None:
         self._set_busy(False)
+        self.loaded_remote_source = source
         self._clear_remote_backups()
 
         if not result.ok:
             message = self._result_message(result.message, result.raw)
             self.status_var.set(message.splitlines()[0])
-            self.selected_remote_var.set("服务器列表：未选择")
-            messagebox.showerror("加载服务器备份列表失败", message)
+            self._refresh_remote_selection_hint()
+            messagebox.showerror(f"加载{source}备份列表失败", message)
             return
 
         for index, entry in enumerate(result.backups, start=1):
@@ -359,9 +435,12 @@ class ServerBackupPullTool:
                 values=(entry.backup_type, entry.name),
             )
 
-        server_label, server_ip = self._selected_server()
-        self.status_var.set(f"{server_label} {server_ip} 共加载 {len(result.backups)} 个服务器备份。")
-        self.selected_remote_var.set("服务器列表：未选择")
+        if source == REMOTE_SOURCE_SERVER:
+            server_label, server_ip = self._selected_server()
+            self.status_var.set(f"{server_label} {server_ip} 共加载 {len(result.backups)} 个服务器备份。")
+        else:
+            self.status_var.set(f"NAS 共加载 {len(result.backups)} 个备份。")
+        self._refresh_remote_selection_hint()
 
     def refresh_local_backups(
         self,
@@ -424,7 +503,7 @@ class ServerBackupPullTool:
         elif notify_empty:
             self.status_var.set(f"本地目录中暂无可恢复备份：{root_dir}")
         else:
-            self.status_var.set(f"等待从服务器拉取备份到本地目录：{root_dir}")
+            self.status_var.set(f"等待从远端拉取备份到本地目录：{root_dir}")
 
     def _on_remote_backup_selected(self, _event=None) -> None:
         self._refresh_remote_selection_hint()
@@ -435,7 +514,7 @@ class ServerBackupPullTool:
     def pull_selected_backup(self) -> None:
         entry = self._selected_remote_backup()
         if entry is None:
-            messagebox.showwarning("未选择服务器备份", "请先从服务器备份列表中选择一个备份。")
+            messagebox.showwarning("未选择远端备份", "请先从远端备份列表中选择一个备份。")
             return
 
         save_path = self.save_path_var.get().strip()
@@ -443,25 +522,37 @@ class ServerBackupPullTool:
             messagebox.showwarning("缺少保存路径", "请先选择本地保存目录。")
             return
 
-        _, server_ip = self._selected_server()
+        current_source = self._current_remote_source()
+        if current_source == REMOTE_SOURCE_SERVER:
+            _, server_ip = self._selected_server()
+            self._start_background(
+                busy_text=f"正在拉取服务器备份 {entry.name}...",
+                work=lambda: download_server_backup_dir(
+                    server_ip=server_ip,
+                    server_user=DEFAULT_SERVER_USER,
+                    name=entry.name,
+                    destination_root=save_path,
+                ),
+                on_done=lambda payload: self._finish_pull_backup(payload, REMOTE_SOURCE_SERVER),
+            )
+            return
+
         self._start_background(
-            busy_text=f"正在拉取服务器备份 {entry.name}...",
-            work=lambda: download_server_backup_dir(
-                server_ip=server_ip,
-                server_user=DEFAULT_SERVER_USER,
+            busy_text=f"正在拉取 NAS 备份 {entry.name}...",
+            work=lambda: download_nas_backup_dir(
                 name=entry.name,
                 destination_root=save_path,
             ),
-            on_done=self._finish_pull_backup,
+            on_done=lambda payload: self._finish_pull_backup(payload, REMOTE_SOURCE_NAS),
         )
 
-    def _finish_pull_backup(self, result: ServerBackupDownloadResult) -> None:
+    def _finish_pull_backup(self, result: ServerBackupDownloadResult, source: str) -> None:
         self._set_busy(False)
 
         if not result.ok:
             message = self._result_message(result.message, result.raw)
             self.status_var.set(message.splitlines()[0])
-            messagebox.showerror("拉取备份失败", message)
+            messagebox.showerror(f"拉取{source}备份失败", message)
             return
 
         self.refresh_local_backups(
@@ -469,7 +560,7 @@ class ServerBackupPullTool:
             preferred_name=result.name,
             status_override=f"拉取完成，已保存到：{result.destination}；本地列表已刷新。",
         )
-        messagebox.showinfo("拉取完成", f"备份已拉取到：\n{result.destination}")
+        messagebox.showinfo("拉取完成", f"{source} 备份已拉取到：\n{result.destination}")
 
     def restore_selected_backup(self) -> None:
         entry = self._selected_local_backup()

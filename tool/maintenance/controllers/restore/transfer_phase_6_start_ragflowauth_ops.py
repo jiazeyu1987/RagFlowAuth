@@ -1,4 +1,6 @@
 def start_ragflowauth_containers(self):
+    from tool.maintenance.core.constants import NAS_MOUNT_POINT
+
     ragflowauth_reason = ""
 
     # 尽量启动已存在的容器；还原阶段不强制删除容器，避免“没镜像/没网络”导致无法启动。
@@ -62,6 +64,7 @@ def start_ragflowauth_containers(self):
         "-v /opt/ragflowauth/ragflow_compose:/app/ragflow_compose:ro "
         f"{backup_cfg_mount} "
         "-v /opt/ragflowauth/backups:/app/data/backups "
+        f"-v {NAS_MOUNT_POINT}:{NAS_MOUNT_POINT} "
         "-v /mnt/replica:/mnt/replica "
         "-v /var/run/docker.sock:/var/run/docker.sock:ro "
         f"--restart unless-stopped {backend_image}"
