@@ -1,6 +1,9 @@
+from tool.maintenance.core.constants import DEFAULT_LOCAL_BACKUP_DIR
+
+
 def resolve_pack_dir(*, pack_dir, path_cls, feature_list_local_backups, ui_log):
     if pack_dir is None:
-        root_dir = path_cls(r"D:\datas\RagflowAuth")
+        root_dir = path_cls(DEFAULT_LOCAL_BACKUP_DIR)
         entries = feature_list_local_backups(root_dir)
         if not entries:
             raise RuntimeError(f"未找到可用备份（需要包含 auth.db）：{root_dir}")

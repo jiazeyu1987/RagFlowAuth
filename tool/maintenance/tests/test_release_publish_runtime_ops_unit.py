@@ -47,6 +47,7 @@ class TestReleasePublishRuntimeOpsUnit(unittest.TestCase):
         )
         self.assertIn(f"UVICORN_WORKERS={DEFAULT_UVICORN_WORKERS}", cmd)
         self.assertEqual(cmd.count("UVICORN_WORKERS="), 1)
+        self.assertIn("/mnt/nas:/mnt/nas", cmd)
 
     def test_build_recreate_does_not_inject_uvicorn_workers_for_frontend(self) -> None:
         cmd = build_recreate_from_inspect(
@@ -55,6 +56,7 @@ class TestReleasePublishRuntimeOpsUnit(unittest.TestCase):
             new_image="ragflowauth-frontend:test",
         )
         self.assertNotIn("UVICORN_WORKERS=", cmd)
+        self.assertNotIn("/mnt/nas:/mnt/nas", cmd)
 
     def test_recreate_starts_backend_before_frontend(self) -> None:
         backend_inspect = self._inspect(["PORT=8001"])
@@ -107,6 +109,7 @@ class TestReleasePublishRuntimeOpsUnit(unittest.TestCase):
 
     def test_bootstrap_starts_backend_before_frontend(self) -> None:
         events: list[str] = []
+        backend_runs: list[str] = []
 
         def ssh_cmd(_ip: str, command: str):
             if "test -f /opt/ragflowauth/ragflow_config.json" in command:
@@ -116,6 +119,7 @@ class TestReleasePublishRuntimeOpsUnit(unittest.TestCase):
             if "test -f /opt/ragflowauth/backup_config.json" in command:
                 return True, ""
             if "docker run -d --name ragflowauth-backend" in command:
+                backend_runs.append(command)
                 events.append("RUN_BACKEND")
                 return True, "backend_id"
             if "docker run -d --name ragflowauth-frontend" in command:
@@ -147,6 +151,8 @@ class TestReleasePublishRuntimeOpsUnit(unittest.TestCase):
         )
 
         self.assertTrue(ok, msg)
+        self.assertTrue(backend_runs)
+        self.assertIn("/mnt/nas:/mnt/nas", backend_runs[0])
         self.assertIn("RUN_BACKEND", events)
         self.assertIn("RUN_FRONTEND", events)
         self.assertIn("WAIT_READY", events)

@@ -3,6 +3,8 @@ from __future__ import annotations
 import time
 from typing import Callable
 
+from tool.maintenance.core.constants import NAS_MOUNT_POINT
+
 DEFAULT_UVICORN_WORKERS = "2"
 
 
@@ -64,6 +66,11 @@ def build_recreate_from_inspect(
         for bind in binds:
             if isinstance(bind, str) and bind.strip():
                 parts += ["-v", bind.strip()]
+    if container_name == "ragflowauth-backend":
+        nas_bind = f"{NAS_MOUNT_POINT}:{NAS_MOUNT_POINT}"
+        bind_values = [str(bind).strip() for bind in binds if isinstance(bind, str)]
+        if nas_bind not in bind_values:
+            parts += ["-v", nas_bind]
 
     envs = cfg.get("Env") or []
     has_uvicorn_workers = False
@@ -225,7 +232,7 @@ def bootstrap_server_containers_impl(
     # Ensure required directories exist
     ok, out = ssh_cmd(
         server_ip,
-        f"mkdir -p {app_dir}/data {app_dir}/uploads {app_dir}/backups {app_dir}/releases /mnt/replica && echo OK",
+        f"mkdir -p {app_dir}/data {app_dir}/uploads {app_dir}/backups {app_dir}/releases /mnt/replica {NAS_MOUNT_POINT} && echo OK",
     )
     if not ok:
         return False, f"mkdir failed: {out}"
@@ -288,6 +295,7 @@ def bootstrap_server_containers_impl(
         f"-v {app_dir}/ragflow_config.json:/app/ragflow_config.json:ro "
         f"-v {app_dir}/ragflow_compose:/app/ragflow_compose:ro "
         f"-v {app_dir}/backups:/app/data/backups "
+        f"-v {NAS_MOUNT_POINT}:{NAS_MOUNT_POINT} "
         "-v /mnt/replica:/mnt/replica "
         "-v /var/run/docker.sock:/var/run/docker.sock:ro "
         "--restart unless-stopped "

@@ -1,4 +1,5 @@
 from ._shared import TEXT_HINT_TITLE, TEXT_RESTORE_FIXED_DIR, _tool_mod
+from tool.maintenance.core.constants import DEFAULT_LOCAL_BACKUP_DIR
 
 
 def select_restore_folder(app, *args, **kwargs):
@@ -21,7 +22,7 @@ def refresh_local_restore_list_impl(app):
     feature_list_local_backups = tool_mod.feature_list_local_backups
     tk = tool_mod.tk
 
-    root_dir = path_cls(r"D:\datas\RagflowAuth")
+    root_dir = path_cls(DEFAULT_LOCAL_BACKUP_DIR)
     entries = feature_list_local_backups(root_dir)
 
     app.restore_backup_map = {}

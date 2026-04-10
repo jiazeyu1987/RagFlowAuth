@@ -97,6 +97,9 @@ export default function useDataSecurityPage() {
       try {
         const response = await dataSecurityApi.updateSettings({
           enabled: Boolean(settings.enabled),
+          incremental_schedule: String(settings.incremental_schedule || '').trim() || null,
+          full_backup_enabled: Boolean(settings.full_backup_enabled),
+          full_backup_schedule: String(settings.full_backup_schedule || '').trim() || null,
           ragflow_compose_path: String(settings.ragflow_compose_path || '').trim(),
           ragflow_stop_services: Boolean(settings.ragflow_stop_services),
           auth_db_path: String(settings.auth_db_path || 'data/auth.db').trim(),

@@ -41,23 +41,19 @@ def _settings(**overrides) -> DataSecuritySettings:
 
 
 class TestDataSecurityModelsUnit(unittest.TestCase):
-    def test_local_backup_target_path_uses_repo_data_backups_on_host_runtime(self) -> None:
-        expected = str((Path(r"D:\ProjectPackage\RagflowAuth\data") / "backups").resolve())
-        with patch("backend.services.data_security.models._running_inside_container", return_value=False), patch(
-            "backend.services.data_security.models.managed_data_root",
-            return_value=Path(r"D:\ProjectPackage\RagflowAuth\data"),
-        ):
+    def test_local_backup_target_path_uses_nas_target_on_host_runtime(self) -> None:
+        with patch("backend.services.data_security.models._running_inside_container", return_value=False):
             settings = _settings()
             actual = settings.local_backup_target_path()
 
-        self.assertEqual(actual, expected)
+        self.assertEqual(str(actual).replace("\\", "/"), "/mnt/nas/auth")
 
     def test_local_backup_target_path_keeps_container_path_inside_container_runtime(self) -> None:
         with patch("backend.services.data_security.models._running_inside_container", return_value=True):
             settings = _settings()
             actual = settings.local_backup_target_path()
 
-        self.assertEqual(str(actual).replace("\\", "/"), "/app/data/backups")
+        self.assertEqual(str(actual).replace("\\", "/"), "/mnt/nas/auth")
 
     def test_windows_target_path_uses_standard_mount_when_active(self) -> None:
         settings = _settings(
@@ -102,11 +98,7 @@ class TestDataSecurityModelsUnit(unittest.TestCase):
         self.assertEqual(settings.windows_target_path(), r"\\10.0.0.9\Backups\RagflowAuth")
 
     def test_to_dict_includes_resolved_runtime_paths(self) -> None:
-        expected_local = str((Path(r"D:\ProjectPackage\RagflowAuth\data") / "backups").resolve())
-        with patch("backend.services.data_security.models._running_inside_container", return_value=False), patch(
-            "backend.services.data_security.models.managed_data_root",
-            return_value=Path(r"D:\ProjectPackage\RagflowAuth\data"),
-        ):
+        with patch("backend.services.data_security.models._running_inside_container", return_value=False):
             settings = _settings(
                 target_ip="10.0.0.8",
                 target_share_name="BackupShare",
@@ -116,7 +108,7 @@ class TestDataSecurityModelsUnit(unittest.TestCase):
             actual = settings.to_dict()
 
         self.assertEqual(actual["auth_db_path"], "data/auth.db")
-        self.assertEqual(actual["resolved_local_backup_target_path"], expected_local)
+        self.assertEqual(str(actual["resolved_local_backup_target_path"]).replace("\\", "/"), "/mnt/nas/auth")
         self.assertEqual(actual["resolved_target_path"], r"\\10.0.0.8\BackupShare\RagflowAuth")
         self.assertEqual(actual["resolved_windows_target_path"], r"\\10.0.0.9\Backups\RagflowAuth")
 

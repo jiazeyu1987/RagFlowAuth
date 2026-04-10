@@ -2,6 +2,8 @@ import unittest
 from pathlib import Path
 from types import SimpleNamespace
 
+from tool.maintenance.core.constants import DEFAULT_LOCAL_BACKUP_DIR
+
 
 class _Var:
     def __init__(self, value=""):
@@ -43,8 +45,8 @@ class TestReleaseLocalBackupListUnit(unittest.TestCase):
 
         # Fake entries (already sorted newest-first by list_local_backups)
         entries = [
-            BackupCatalogEntry(path=Path(r"D:\datas\RagflowAuth\migration_pack_20260201_010101"), label="2026-02-01 01:01:01", sort_key=(-3, "a")),
-            BackupCatalogEntry(path=Path(r"D:\datas\RagflowAuth\migration_pack_20260131_235959"), label="2026-01-31 23:59:59", sort_key=(-2, "b")),
+            BackupCatalogEntry(path=Path(DEFAULT_LOCAL_BACKUP_DIR) / "migration_pack_20260201_010101", label="2026-02-01 01:01:01", sort_key=(-3, "a")),
+            BackupCatalogEntry(path=Path(DEFAULT_LOCAL_BACKUP_DIR) / "migration_pack_20260131_235959", label="2026-01-31 23:59:59", sort_key=(-2, "b")),
         ]
 
         app = SimpleNamespace()

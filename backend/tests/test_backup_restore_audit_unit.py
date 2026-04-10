@@ -269,6 +269,30 @@ class TestBackupRestoreAuditUnit(unittest.TestCase):
         finally:
             cleanup_dir(result["td"])
 
+    def test_finalize_local_backup_moves_pack_across_staging_roots(self):
+        td = make_temp_dir(prefix="ragflowauth_finalize_local_backup")
+        try:
+            from backend.services.data_security.backup_service import _finalize_local_backup
+
+            td_path = Path(td)
+            staging_root = td_path / "managed" / "backups" / "_staging_local" / "job_9"
+            pack_dir = staging_root / "migration_pack_test"
+            pack_dir.mkdir(parents=True, exist_ok=True)
+            (pack_dir / "auth.db").write_text("sqlite", encoding="utf-8")
+
+            local_root = td_path / "nas_target"
+            final_dir = _finalize_local_backup(pack_dir=pack_dir, local_root=local_root)
+
+            self.assertEqual(final_dir, local_root / "migration_pack_test")
+            self.assertTrue(final_dir.exists())
+            self.assertEqual((final_dir / "auth.db").read_text(encoding="utf-8"), "sqlite")
+            self.assertFalse(pack_dir.exists())
+            self.assertFalse((staging_root / "migration_pack_test").exists())
+            self.assertFalse((staging_root).exists())
+            self.assertTrue((td_path / "managed" / "backups" / "_staging_local").exists())
+        finally:
+            cleanup_dir(td)
+
     def test_restore_drill_router_executes_real_verification_path(self):
         td = make_temp_dir(prefix="ragflowauth_restore_drill")
         try:

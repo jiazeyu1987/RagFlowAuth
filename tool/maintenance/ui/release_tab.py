@@ -3,7 +3,11 @@ from __future__ import annotations
 import tkinter as tk
 from tkinter import ttk, scrolledtext
 
-from tool.maintenance.core.constants import PROD_SERVER_IP, TEST_SERVER_IP
+from tool.maintenance.core.constants import (
+    DEFAULT_LOCAL_BACKUP_DIR_TEXT,
+    PROD_SERVER_IP,
+    TEST_SERVER_IP,
+)
 
 
 def build_release_tab(app) -> None:
@@ -93,13 +97,17 @@ def _create_release_local_to_test_tab(app) -> None:
 
     hint = ttk.Label(
         tab,
-        text="提示：勾选后会自动选择本机固定目录 D:\\datas\\RagflowAuth 下最新的 migration_pack_* 备份进行同步。",
+        text=f"提示：勾选后会自动选择固定目录 {DEFAULT_LOCAL_BACKUP_DIR_TEXT} 下最新的 migration_pack_* 备份进行同步。",
         foreground="gray",
         justify=tk.LEFT,
     )
     hint.pack(fill=tk.X, padx=20, pady=(0, 8), anchor=tk.W)
 
-    backup_frame = ttk.LabelFrame(tab, text="数据同步来源（本机固定目录：D:\\datas\\RagflowAuth）", padding=10)
+    backup_frame = ttk.LabelFrame(
+        tab,
+        text=f"数据同步来源（固定目录：{DEFAULT_LOCAL_BACKUP_DIR_TEXT}）",
+        padding=10,
+    )
     backup_frame.pack(fill=tk.X, padx=20, pady=(0, 10))
     row = ttk.Frame(backup_frame)
     row.pack(fill=tk.X)
