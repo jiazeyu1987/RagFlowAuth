@@ -2,6 +2,14 @@ from __future__ import annotations
 
 import unittest
 
+from backend.app.core import config as config_module
+
+config_module.settings = config_module.Settings(
+    _env_file=None,
+    DEBUG=True,
+    JWT_SECRET_KEY="unit-test-secret",
+)
+
 from backend.app.main import _build_router_registration_specs, create_app
 
 

@@ -8,6 +8,7 @@ import {
   canWithCapabilities,
   hasAnyRole,
   isAuthorized as evaluateAuthorization,
+  isPermissionKeyAllowed,
   normalizeAuthenticatedUser,
 } from '../shared/auth/capabilities';
 
@@ -203,12 +204,19 @@ export const AuthProvider = ({ children }) => {
     if (!user) return false;
     return canWithCapabilities(capabilities, resource, action, target);
   }, [user, capabilities]);
-  const isReviewer = useCallback(() => can('kb_documents', 'review'), [can]);
+  const canByPermissionKey = useCallback((key, target = null) => {
+    if (!user) return false;
+    return isPermissionKeyAllowed(capabilities, key, target);
+  }, [user, capabilities]);
+  const isReviewer = useCallback(() => canByPermissionKey('canReview'), [canByPermissionKey]);
   const isOperator = useCallback(
-    () => can('kb_documents', 'upload') || can('kb_documents', 'review'),
-    [can]
+    () => canByPermissionKey('canUpload') || canByPermissionKey('canReview'),
+    [canByPermissionKey]
   );
-  const canManageKnowledgeTree = useCallback(() => can('kb_directory', 'manage'), [can]);
+  const canManageKnowledgeTree = useCallback(
+    () => canByPermissionKey('canManageKbDirectory'),
+    [canByPermissionKey]
+  );
   const canAccessKb = useCallback((kbId) => can('kb_documents', 'view', kbId), [can]);
   const isAuthorized = useCallback((options = {}) => evaluateAuthorization({
     user,
@@ -217,6 +225,9 @@ export const AuthProvider = ({ children }) => {
     permission: options.permission,
     permissions: options.permissions,
     anyPermissions: options.anyPermissions,
+    permissionKey: options.permissionKey,
+    permissionKeys: options.permissionKeys,
+    anyPermissionKeys: options.anyPermissionKeys,
   }), [user, capabilities]);
 
   const value = {
@@ -239,15 +250,15 @@ export const AuthProvider = ({ children }) => {
     isAuthorized,
     managedKbRootNodeId: user?.managed_kb_root_node_id || null,
     managedKbRootPath: user?.managed_kb_root_path || null,
-    canUpload: () => can('kb_documents', 'upload'),
-    canReview: () => can('kb_documents', 'review'),
-    canDownload: () => can('kb_documents', 'download'),
-    canCopy: () => can('kb_documents', 'copy'),
-    canDelete: () => can('kb_documents', 'delete'),
-    canManageKbDirectory: () => can('kb_directory', 'manage'),
-    canViewKbConfig: () => can('kbs_config', 'view'),
-    canViewTools: () => can('tools', 'view'),
-    canAccessTool: (toolId) => can('tools', 'view', toolId),
+    canUpload: () => canByPermissionKey('canUpload'),
+    canReview: () => canByPermissionKey('canReview'),
+    canDownload: () => canByPermissionKey('canDownload'),
+    canCopy: () => canByPermissionKey('canCopy'),
+    canDelete: () => canByPermissionKey('canDelete'),
+    canManageKbDirectory: () => canByPermissionKey('canManageKbDirectory'),
+    canViewKbConfig: () => canByPermissionKey('canViewKbConfig'),
+    canViewTools: () => canByPermissionKey('canViewTools'),
+    canAccessTool: (toolId) => canByPermissionKey('canViewTools', toolId),
     isAuthenticated: !!user,
   };
 

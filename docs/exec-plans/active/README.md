@@ -6,6 +6,16 @@
 
 - `system-refactor-plan-2026-04.md`
 - `operation-approval-refactor-phase-1.md`
+- `data-security-refactor-phase-1.md`
+- `notification-refactor-phase-1.md`
+- `permission-model-refactor-phase-1.md`
+- `document-browser-preview-refactor-phase-1.md`
+- `route-navigation-refactor-phase-1.md`
+- `knowledge-management-refactor-phase-1.md`
+- `documents-document-audit-refactor-phase-1.md`
+- `org-directory-refactor-phase-1.md`
+- `training-compliance-refactor-phase-1.md`
+- `refactor-hotspots-consolidation-2026-04.md`
 
 当前真实在跑的细粒度任务工件仍主要位于 `docs/tasks/`。
 

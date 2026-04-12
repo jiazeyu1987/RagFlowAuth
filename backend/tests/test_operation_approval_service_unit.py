@@ -1561,8 +1561,12 @@ class TestOperationApprovalServiceUnit(unittest.TestCase):
         self.assertEqual(approver_inbox["unread_count"], 1)
 
         created_jobs = self.notification_store.list_jobs(limit=20)
-        self.assertEqual(len(created_jobs), 3)
-        self.assertEqual(sum(1 for item in created_jobs if item["status"] == "sent"), 3)
+        self.assertEqual(len(created_jobs), 2)
+        self.assertEqual(sum(1 for item in created_jobs if item["status"] == "sent"), 2)
+        self.assertSetEqual(
+            {str(item.get("event_type") or "") for item in created_jobs},
+            {"operation_approval_submitted", "operation_approval_todo"},
+        )
 
         detail = self._approve(request_id, self.approver_1)
         self.assertEqual(detail["status"], "executed")
@@ -1582,10 +1586,10 @@ class TestOperationApprovalServiceUnit(unittest.TestCase):
         self.assertEqual(applicant_inbox_after["total"], 0)
         self.assertEqual(applicant_inbox_after["unread_count"], 0)
         self.assertEqual(approver_inbox_after["total"], 1)
-        self.assertEqual(len(self.notification_store.list_jobs(limit=20)), 4)
+        self.assertEqual(len(self.notification_store.list_jobs(limit=20)), 3)
         self.assertEqual(
             sum(1 for item in self.notification_store.list_jobs(limit=20) if item["status"] == "sent"),
-            4,
+            3,
         )
 
         request_detail = self.service.get_request_detail_for_user(

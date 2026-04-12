@@ -11,7 +11,7 @@ from typing import Callable
 from fastapi import APIRouter, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from backend.app.core.config import settings
+from backend.app.core.config import settings, validate_jwt_secret
 from backend.app.core.errors import register_exception_handlers
 from backend.app.core.request_id import RequestIdMiddleware
 from backend.core.security import auth as authx_auth
@@ -162,6 +162,7 @@ async def lifespan(app: FastAPI):
 
 
 def create_app() -> FastAPI:
+    validate_jwt_secret(settings)
     app = FastAPI(
         title=settings.APP_NAME,
         description="Knowledge base authentication and authorization service",

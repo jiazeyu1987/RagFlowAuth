@@ -7,6 +7,7 @@ const FRONTEND_BASE_URL = process.env.E2E_FRONTEND_BASE_URL || 'http://localhost
 const BACKEND_BASE_URL = process.env.E2E_BACKEND_BASE_URL || 'http://localhost:8001';
 const REPO_ROOT = path.resolve(__dirname, '..');
 const TEST_DB_PATH = process.env.E2E_TEST_DB_PATH || path.join(REPO_ROOT, 'data', 'e2e', 'auth.db');
+const JWT_SECRET_KEY = process.env.E2E_JWT_SECRET_KEY || 'ragflowauth-real-e2e-jwt-secret';
 const FRONTEND_PORT = new URL(FRONTEND_BASE_URL).port || '3001';
 const BACKEND_PORT = new URL(BACKEND_BASE_URL).port || '8001';
 const FRONTEND_ORIGIN = new URL(FRONTEND_BASE_URL).origin;
@@ -57,6 +58,7 @@ module.exports = defineConfig({
         E2E_TEST_DB_PATH: TEST_DB_PATH,
         PORT: BACKEND_PORT,
         CORS_ORIGINS,
+        JWT_SECRET_KEY,
       },
     },
     {

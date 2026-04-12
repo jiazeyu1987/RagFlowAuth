@@ -4,7 +4,7 @@ import logging
 from typing import Any, Optional
 
 from fastapi import APIRouter, Body, HTTPException
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from backend.app.core.authz import AuthContextDep
 from backend.app.core.datasets import list_visible_datasets
@@ -40,15 +40,13 @@ class DatasetCreateBody(BaseModel):
     name: Any = None
     node_id: str | None = None
 
-    class Config:
-        extra = "allow"
+    model_config = ConfigDict(extra="allow")
 
 
 class DatasetUpdateBody(BaseModel):
     name: Any = None
 
-    class Config:
-        extra = "allow"
+    model_config = ConfigDict(extra="allow")
 
 
 @router.post("/search")

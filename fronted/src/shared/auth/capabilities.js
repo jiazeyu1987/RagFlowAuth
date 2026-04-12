@@ -14,6 +14,17 @@ export const DEFAULT_AUTH_PERMISSIONS = Object.freeze({
 
 export const DEFAULT_AUTH_CAPABILITIES = Object.freeze({});
 
+export const PERMISSION_REQUIREMENT_CATALOG = Object.freeze({
+  canUpload: Object.freeze({ resource: 'kb_documents', action: 'upload' }),
+  canReview: Object.freeze({ resource: 'kb_documents', action: 'review' }),
+  canDownload: Object.freeze({ resource: 'kb_documents', action: 'download' }),
+  canCopy: Object.freeze({ resource: 'kb_documents', action: 'copy' }),
+  canDelete: Object.freeze({ resource: 'kb_documents', action: 'delete' }),
+  canManageKbDirectory: Object.freeze({ resource: 'kb_directory', action: 'manage' }),
+  canViewKbConfig: Object.freeze({ resource: 'kbs_config', action: 'view' }),
+  canViewTools: Object.freeze({ resource: 'tools', action: 'view' }),
+});
+
 const EMPTY_CAPABILITY = Object.freeze({
   scope: 'none',
   targets: Object.freeze([]),
@@ -155,6 +166,32 @@ const normalizePermissionRequirements = ({ permission, permissions }) => {
   return [];
 };
 
+const normalizePermissionKeyList = (value) => {
+  if (Array.isArray(value)) {
+    return value
+      .filter((item) => typeof item === 'string')
+      .map((item) => item.trim())
+      .filter((item) => item.length > 0);
+  }
+  if (typeof value === 'string') {
+    const clean = value.trim();
+    return clean ? [clean] : [];
+  }
+  return [];
+};
+
+const resolvePermissionRequirementKey = (key) => {
+  const cleanKey = String(key ?? '').trim();
+  if (!cleanKey) {
+    throw new Error('auth_user_invalid_permission_key');
+  }
+  const requirement = PERMISSION_REQUIREMENT_CATALOG[cleanKey];
+  if (!requirement) {
+    throw new Error('auth_user_invalid_permission_key');
+  }
+  return requirement;
+};
+
 const isPermissionAllowed = (capabilities, item) => {
   const resource = typeof item?.resource === 'string' ? item.resource : '';
   const action = typeof item?.action === 'string' ? item.action : '';
@@ -166,6 +203,26 @@ const isPermissionAllowed = (capabilities, item) => {
   return canWithCapabilities(capabilities, resource, action, item?.target ?? null);
 };
 
+export const resolvePermissionRequirement = (key, target = null) => {
+  const requirement = resolvePermissionRequirementKey(key);
+  if (target === null || target === undefined || String(target).trim() === '') {
+    return requirement;
+  }
+  return { ...requirement, target: String(target).trim() };
+};
+
+export const resolvePermissionRequirements = (keys) => (
+  normalizePermissionKeyList(keys).map((key) => resolvePermissionRequirement(key))
+);
+
+export const isPermissionRequirementAllowed = (capabilities, requirement) => (
+  isPermissionAllowed(capabilities, requirement)
+);
+
+export const isPermissionKeyAllowed = (capabilities, key, target = null) => (
+  isPermissionRequirementAllowed(capabilities, resolvePermissionRequirement(key, target))
+);
+
 export const isAuthorized = ({
   user,
   capabilities,
@@ -173,6 +230,9 @@ export const isAuthorized = ({
   permission,
   permissions,
   anyPermissions,
+  permissionKey,
+  permissionKeys,
+  anyPermissionKeys,
 }) => {
   if (!user) {
     return false;
@@ -182,14 +242,30 @@ export const isAuthorized = ({
     return false;
   }
 
-  if (Array.isArray(anyPermissions) && anyPermissions.length > 0) {
-    const hasAnyPermission = anyPermissions.some((item) => isPermissionAllowed(capabilities, item));
+  const requiredPermissionKeys = [
+    ...normalizePermissionKeyList(permissionKey),
+    ...normalizePermissionKeyList(permissionKeys),
+  ];
+  const requiredPermissions = [
+    ...normalizePermissionRequirements({ permission, permissions }),
+    ...resolvePermissionRequirements(requiredPermissionKeys),
+  ];
+  const anyPermissionKeyList = normalizePermissionKeyList(anyPermissionKeys);
+  const anyPermissionRequirements = [
+    ...(Array.isArray(anyPermissions) ? anyPermissions : []),
+    ...resolvePermissionRequirements(anyPermissionKeyList),
+  ];
+
+  if (anyPermissionRequirements.length > 0) {
+    const hasAnyPermission = anyPermissionRequirements.some((item) => (
+      isPermissionAllowed(capabilities, item)
+    ));
     if (!hasAnyPermission) {
       return false;
     }
   }
 
-  return normalizePermissionRequirements({ permission, permissions }).every((item) => (
+  return requiredPermissions.every((item) => (
     isPermissionAllowed(capabilities, item)
   ));
 };

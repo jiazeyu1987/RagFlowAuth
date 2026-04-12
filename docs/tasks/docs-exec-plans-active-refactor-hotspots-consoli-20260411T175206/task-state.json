@@ -1,0 +1,206 @@
+{
+  "schema_version": 2,
+  "task_id": "docs-exec-plans-active-refactor-hotspots-consoli-20260411T175206",
+  "mode": "full",
+  "status": "completed",
+  "current_phase": null,
+  "phase_statuses": [
+    {
+      "phase_id": "P1",
+      "title": "验证入口与文档树权威边界落地",
+      "status": "completed",
+      "objective": "明确 `docs/` 与 `doc/e2e` 的职责边界，修正文档入口与验证命令描述，消除“文档写 A、脚本跑 B”的冲突。",
+      "owned_paths": [],
+      "dependencies": [
+        "`scripts/run_doc_e2e.py`",
+        "`scripts/check_doc_e2e_docs.py`"
+      ],
+      "deliverables": [],
+      "evidence_expectation": "文档更新提交 + 验证命令可执行（或明确 fail-fast 的缺失前提）。",
+      "evidence": [
+        "execution-log.md#Phase-P1"
+      ],
+      "notes": "- check_doc_e2e_docs.py fail-fast due to missing doc/e2e/unit and doc/e2e/role in current worktree; manifest list command verified.",
+      "last_reviewed_at": "2026-04-11T18:04:59",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P1-AC1",
+          "text": "`AGENTS.md` 与 `VALIDATION.md` 对文档树与验证入口的说明一致且可执行。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P1",
+            "test-report.md#T1",
+            "test-report.md#T3",
+            "test-report.md#T5",
+            "test-report.md#T7"
+          ]
+        },
+        {
+          "ac_id": "P1-AC2",
+          "text": "`doc/e2e` 与 `docs/` 的职责边界有明确、可检索的权威描述。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P1",
+            "test-report.md#T1",
+            "test-report.md#T3",
+            "test-report.md#T5",
+            "test-report.md#T7"
+          ]
+        }
+      ]
+    },
+    {
+      "phase_id": "P2",
+      "title": "安全基线补齐（JWT default secret fail-fast + token 策略）",
+      "status": "completed",
+      "objective": "生产环境禁止默认 JWT secret，启动即 fail-fast；前端 token 存储策略形成明确文档与迁移约束。",
+      "owned_paths": [],
+      "dependencies": [
+        "`.env` 配置",
+        "现有启动流程"
+      ],
+      "deliverables": [],
+      "evidence_expectation": "后端单元/集成测试覆盖 + 文档更新。",
+      "evidence": [
+        "execution-log.md#Phase-P2"
+      ],
+      "notes": "- JWT default/empty secret now fail-fast in non-debug runtime; targeted backend tests passed. Broad -k command remains collection-blocked by inaccessible backend/tests/_tmp* directories.",
+      "last_reviewed_at": "2026-04-11T18:18:31",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P2-AC1",
+          "text": "生产环境检测到默认 JWT secret 时，服务启动直接失败并给出可定位错误信息。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P2",
+            "test-report.md#T1",
+            "test-report.md#T3",
+            "test-report.md#T5",
+            "test-report.md#T7"
+          ]
+        },
+        {
+          "ac_id": "P2-AC2",
+          "text": "Token 存储策略形成可执行的约束与迁移说明（含触发条件、风险与回滚点）。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P2",
+            "test-report.md#T1",
+            "test-report.md#T3",
+            "test-report.md#T5",
+            "test-report.md#T7"
+          ]
+        }
+      ]
+    },
+    {
+      "phase_id": "P3",
+      "title": "责任边界最小拆分（Operation Approval）",
+      "status": "completed",
+      "objective": "对 `operation_approval` 域做最小且可验证的职责拆分，入口层只负责编排，存储/通知/动作逻辑下沉到子服务。",
+      "owned_paths": [],
+      "dependencies": [
+        "现有审批流程与通知通道"
+      ],
+      "deliverables": [],
+      "evidence_expectation": "代码变更 + 对应测试通过。",
+      "evidence": [
+        "execution-log.md#Phase-P3"
+      ],
+      "notes": "- Workflow build/materialize responsibility extracted to dedicated builder; focused builder + core operation approval tests passed. Broad selector still collection-blocked by inaccessible backend/tests/_tmp* directories.",
+      "last_reviewed_at": "2026-04-11T18:25:28",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P3-AC1",
+          "text": "Operation Approval 主服务减少至少一个高风险职责，入口层仅负责编排。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P3",
+            "test-report.md#T1",
+            "test-report.md#T3",
+            "test-report.md#T5",
+            "test-report.md#T7"
+          ]
+        },
+        {
+          "ac_id": "P3-AC2",
+          "text": "拆分后的新边界有 focused tests 或现有测试更新覆盖。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P3",
+            "test-report.md#T1",
+            "test-report.md#T3",
+            "test-report.md#T5",
+            "test-report.md#T7"
+          ]
+        }
+      ]
+    },
+    {
+      "phase_id": "P4",
+      "title": "前后端权限规则双写降低",
+      "status": "completed",
+      "objective": "后端为单一事实源，前端统一适配层收敛语义分支，避免多处重复实现。",
+      "owned_paths": [],
+      "dependencies": [
+        "现有权限快照与前端消费路径"
+      ],
+      "deliverables": [],
+      "evidence_expectation": "权限回归用例说明 + 后端/前端测试通过。",
+      "evidence": [
+        "execution-log.md#Phase-P4"
+      ],
+      "notes": "",
+      "last_reviewed_at": "2026-04-11T18:38:56",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P4-AC1",
+          "text": "新增/变更权限点的主要改动集中在后端 resolver 与前端单一适配层。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P4",
+            "test-report.md#T1",
+            "test-report.md#T3",
+            "test-report.md#T5",
+            "test-report.md#T7"
+          ]
+        },
+        {
+          "ac_id": "P4-AC2",
+          "text": "前端不再分散实现同一权限语义（重复逻辑被收敛）。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P4",
+            "test-report.md#T1",
+            "test-report.md#T3",
+            "test-report.md#T5",
+            "test-report.md#T7"
+          ]
+        }
+      ]
+    }
+  ],
+  "planner_review_status": "approved",
+  "test_status": "passed",
+  "blocking_prereqs": [],
+  "iteration_counts": {
+    "planner_revisions": 0,
+    "executor_loops": 4,
+    "test_loops": 1
+  },
+  "created_at": "2026-04-11T17:52:06",
+  "updated_at": "2026-04-12T00:12:00",
+  "branch": "int_latest",
+  "baseline_revision": "1de0acd2426d3dc4c3b8401f148fdf223a768515",
+  "workspace_root": "D:\\ProjectPackage\\RagflowAuth",
+  "tasks_root": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks",
+  "task_dir": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\docs-exec-plans-active-refactor-hotspots-consoli-20260411T175206",
+  "goal": "按照 docs/exec-plans/active/refactor-hotspots-consolidation-2026-04.md 的方案进行重构",
+  "artifacts": {
+    "prd": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\docs-exec-plans-active-refactor-hotspots-consoli-20260411T175206\\prd.md",
+    "test_plan": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\docs-exec-plans-active-refactor-hotspots-consoli-20260411T175206\\test-plan.md",
+    "task_state": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\docs-exec-plans-active-refactor-hotspots-consoli-20260411T175206\\task-state.json",
+    "execution_log": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\docs-exec-plans-active-refactor-hotspots-consoli-20260411T175206\\execution-log.md",
+    "test_report": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\docs-exec-plans-active-refactor-hotspots-consoli-20260411T175206\\test-report.md"
+  }
+}

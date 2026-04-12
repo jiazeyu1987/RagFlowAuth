@@ -8,6 +8,9 @@ const PermissionGuard = ({
   permission,
   permissions,
   anyPermissions,
+  permissionKey,
+  permissionKeys,
+  anyPermissionKeys,
   fallback,
 }) => {
   const { user, loading, isAuthorized } = useAuth();
@@ -20,7 +23,15 @@ const PermissionGuard = ({
     return <Navigate to="/login" replace />;
   }
 
-  if (!isAuthorized({ allowedRoles, permission, permissions, anyPermissions })) {
+  if (!isAuthorized({
+    allowedRoles,
+    permission,
+    permissions,
+    anyPermissions,
+    permissionKey,
+    permissionKeys,
+    anyPermissionKeys,
+  })) {
     return fallback !== undefined ? fallback : <Navigate to="/unauthorized" replace />;
   }
 

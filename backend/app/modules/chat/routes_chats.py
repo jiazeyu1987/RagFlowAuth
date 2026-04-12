@@ -4,7 +4,7 @@ import logging
 from typing import Any, Optional
 
 from fastapi import APIRouter, Body, HTTPException
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel, ConfigDict, ValidationError
 
 from backend.app.core.authz import AuthContextDep
 from backend.app.core.pydantic_compat import model_dump, model_validate
@@ -22,15 +22,13 @@ logger = logging.getLogger(__name__)
 class ChatCreateBody(BaseModel):
     name: Any = None
 
-    class Config:
-        extra = "allow"
+    model_config = ConfigDict(extra="allow")
 
 
 class ChatUpdateBody(BaseModel):
     name: Any = None
 
-    class Config:
-        extra = "allow"
+    model_config = ConfigDict(extra="allow")
 
 
 def _wrap_result(message: str, **extra: object) -> dict[str, dict[str, object]]:

@@ -16,6 +16,11 @@ class _PermissionGroupStore:
         return None
 
 
+class _UserToolPermissionStore:
+    def list_tool_ids(self, user_id: str):  # noqa: ARG002
+        return []
+
+
 class _RagflowService:
     def list_datasets(self):
         return [{"id": "ds_1", "name": "KB 1"}]
@@ -69,6 +74,7 @@ class TestPermissionResolverSubAdminManagementUnit(unittest.TestCase):
 
         deps = SimpleNamespace(
             permission_group_store=_PermissionGroupStore(),
+            user_tool_permission_store=_UserToolPermissionStore(),
             ragflow_service=self.ragflow_service,
             knowledge_directory_manager=self.tree_manager,
             knowledge_management_manager=self.management_manager,
@@ -97,6 +103,7 @@ class TestPermissionResolverSubAdminManagementUnit(unittest.TestCase):
     def test_invalid_sub_admin_root_keeps_management_permissions_disabled(self):
         deps = SimpleNamespace(
             permission_group_store=_PermissionGroupStore(),
+            user_tool_permission_store=_UserToolPermissionStore(),
             ragflow_service=self.ragflow_service,
             knowledge_directory_manager=self.tree_manager,
             knowledge_management_manager=self.management_manager,

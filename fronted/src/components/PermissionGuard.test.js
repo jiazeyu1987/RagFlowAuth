@@ -66,15 +66,21 @@ describe('PermissionGuard', () => {
     renderGuard({
       allowedRoles: ['admin'],
       permission: { resource: 'tools', action: 'view', target: 'nmpa' },
+      permissionKey: 'canUpload',
+      permissionKeys: ['canViewTools'],
       anyPermissions: [{ resource: 'kb_documents', action: 'view', target: 'kb-1' }],
+      anyPermissionKeys: ['canReview'],
     });
 
     expect(screen.getByText('protected content')).toBeInTheDocument();
     expect(isAuthorized).toHaveBeenCalledWith({
       allowedRoles: ['admin'],
       permission: { resource: 'tools', action: 'view', target: 'nmpa' },
+      permissionKey: 'canUpload',
+      permissionKeys: ['canViewTools'],
       permissions: undefined,
       anyPermissions: [{ resource: 'kb_documents', action: 'view', target: 'kb-1' }],
+      anyPermissionKeys: ['canReview'],
     });
   });
 

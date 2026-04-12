@@ -1,4 +1,3 @@
-import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -6,11 +5,13 @@ from unittest.mock import patch
 from fastapi import FastAPI
 
 from backend.app.dependencies import create_dependencies, get_tenant_dependencies, initialize_application_dependencies
+from backend.tests._util_tempdir import cleanup_dir, make_temp_dir
 
 
 class TestDependenciesUnit(unittest.TestCase):
     def test_operation_approval_reuses_shared_signature_service_when_control_db_is_separate(self):
-        with tempfile.TemporaryDirectory(prefix="ragflowauth_deps_") as temp_dir:
+        temp_dir = make_temp_dir(prefix="ragflowauth_deps_")
+        try:
             root = Path(temp_dir)
             main_db = root / "main_auth.db"
             approval_db = root / "approval_auth.db"
@@ -26,9 +27,12 @@ class TestDependenciesUnit(unittest.TestCase):
                 deps.operation_approval_service._signature_service,
                 deps.electronic_signature_service,
             )
+        finally:
+            cleanup_dir(temp_dir)
 
     def test_initialize_application_dependencies_sets_global_state_and_tenant_cache(self):
-        with tempfile.TemporaryDirectory(prefix="ragflowauth_deps_app_") as temp_dir:
+        temp_dir = make_temp_dir(prefix="ragflowauth_deps_app_")
+        try:
             root = Path(temp_dir)
             global_db = root / "global" / "auth.db"
             app = FastAPI()
@@ -51,6 +55,8 @@ class TestDependenciesUnit(unittest.TestCase):
 
             self.assertIn("/tenants/company_7/auth.db", tenant_kb_path)
             self.assertTrue(approval_control_path.endswith("/global/auth.db"))
+        finally:
+            cleanup_dir(temp_dir)
 
 
 if __name__ == "__main__":

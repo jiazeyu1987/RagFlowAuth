@@ -1,16 +1,17 @@
 import os
-import tempfile
 import unittest
 
 from backend.app.core.permission_resolver import ResourceScope, resolve_permissions
 from backend.database.schema.ensure import ensure_schema
 from backend.services.knowledge_directory.manager import KnowledgeDirectoryManager
 from backend.services.knowledge_directory.store import KnowledgeDirectoryStore
+from backend.tests._util_tempdir import cleanup_dir, make_temp_dir
 
 
 class _User:
     def __init__(self):
         self.role = "viewer"
+        self.user_id = "u-viewer"
         self.group_ids = [1]
 
 
@@ -39,23 +40,32 @@ class _RagflowService:
         }
 
 
+class _UserToolPermissionStore:
+    def __init__(self, values: dict[str, list[str]] | None = None):
+        self._values = values or {}
+
+    def list_tool_ids(self, user_id: str):
+        return list(self._values.get(str(user_id), []))
+
+
 class _Deps:
     def __init__(self, manager: KnowledgeDirectoryManager, node_id: str):
         self.permission_group_store = _PermissionGroupStore(node_id=node_id)
+        self.user_tool_permission_store = _UserToolPermissionStore({"u-viewer": []})
         self.knowledge_directory_manager = manager
         self.ragflow_service = _RagflowService()
 
 
 class TestKnowledgeDirectoryAndResolverUnit(unittest.TestCase):
     def setUp(self):
-        self._tmp = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
-        self.db_path = os.path.join(self._tmp.name, "auth.db")
+        self._tmp = make_temp_dir(prefix="ragflowauth_kd_resolver")
+        self.db_path = os.path.join(str(self._tmp), "auth.db")
         ensure_schema(self.db_path)
         self.store = KnowledgeDirectoryStore(self.db_path)
         self.manager = KnowledgeDirectoryManager(self.store)
 
     def tearDown(self):
-        self._tmp.cleanup()
+        cleanup_dir(self._tmp)
 
     def test_resolve_dataset_ids_from_parent_node_includes_descendants(self):
         parent = self.store.create_node("Parent", None, created_by="u1")

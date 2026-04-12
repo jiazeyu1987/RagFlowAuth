@@ -2,6 +2,11 @@
 
 This repository uses the following pass/fail contract for the `doc/e2e` full-real-chain rollout.
 
+## Authority Boundary
+
+- `docs/` is the main engineering documentation tree.
+- `doc/e2e/` is the authoritative location for document E2E business docs and manifest entries used by the validation scripts.
+
 ## Required Commands
 
 ```powershell

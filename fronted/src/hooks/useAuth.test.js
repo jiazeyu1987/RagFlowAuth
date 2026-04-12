@@ -120,6 +120,10 @@ describe('useAuth', () => {
     expect(result.current.isAuthenticated).toBe(true);
     expect(result.current.accessibleKbs).toEqual(['kb-1', 'kb-2']);
     expect(result.current.can('tools', 'view', 'paper_download')).toBe(true);
+    expect(result.current.canUpload()).toBe(true);
+    expect(result.current.canViewTools()).toBe(true);
+    expect(result.current.canAccessTool('paper_download')).toBe(true);
+    expect(result.current.isAuthorized({ permissionKey: 'canUpload' })).toBe(true);
     expect(result.current.can('users', 'manage')).toBe(true);
   });
 
@@ -190,6 +194,10 @@ describe('useAuth', () => {
     expect(result.current.can('tools', 'view')).toBe(true);
     expect(result.current.can('tools', 'view', 'nmpa')).toBe(true);
     expect(result.current.can('tools', 'view', 'paper_download')).toBe(false);
+    expect(result.current.canUpload()).toBe(false);
+    expect(result.current.canViewTools()).toBe(true);
+    expect(result.current.canAccessTool('nmpa')).toBe(true);
+    expect(result.current.canAccessTool('paper_download')).toBe(false);
     expect(result.current.can('kb_documents', 'upload')).toBe(false);
     expect(result.current.isAuthorized({
       anyPermissions: [
@@ -203,6 +211,8 @@ describe('useAuth', () => {
         { resource: 'tools', action: 'view', target: 'paper_download' },
       ],
     })).toBe(false);
+    expect(result.current.isAuthorized({ permissionKey: 'canReview' })).toBe(false);
+    expect(result.current.isAuthorized({ anyPermissionKeys: ['canReview', 'canViewTools'] })).toBe(true);
   });
 
   it('fails fast when the auth payload does not include capabilities', async () => {

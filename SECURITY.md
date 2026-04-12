@@ -96,6 +96,29 @@ AuthX 当前允许 token 来自：
 - XSS 风险直接影响 token
 - 前端依赖严格的脚本来源控制
 
+### 7.2.1 Token 存储策略（现状 + 迁移/回滚）
+
+当前存储策略（as-is）：
+- `fronted/src/shared/auth/tokenStore.js` 将 access token、refresh token 与 user 快照写入 localStorage。
+- 前端调用 API 时从 localStorage 读取 token，刷新后继续覆盖写入。
+
+触发条件与风险：
+- 触发条件：发现 XSS 漏洞或安全审计判定不通过、引入第三方嵌入/富文本导致脚本面扩大、合规要求必须使用 HttpOnly cookie。
+- 主要风险：XSS/恶意扩展可直接读取 localStorage token；token 持久化导致共享设备泄露风险；localStorage 清理失败时存在遗留。
+
+迁移策略（具体步骤）：
+1. 后端改为签发 HttpOnly + Secure + SameSite cookie 承载 access/refresh token，并补齐 CSRF 防护（例如双重提交或同源限制）。
+2. 前端停止写入 localStorage，改为仅依赖 cookie 与内存态；登录成功时清理旧的 localStorage token。
+3. 发布时同步旋转 JWT secret 并使旧 refresh token 失效，避免混用。
+
+回滚策略（仅用于重大线上阻断）：
+- 回滚到上一个稳定发布版本，恢复 localStorage 写入逻辑，撤销 cookie 依赖。
+- 同步旋转 JWT secret，并清理 cookie，以避免旧 token 残留。
+
+移除策略（迁移稳定后）：
+- 删除 localStorage token 相关代码与键名常量。
+- 增加/更新回归用例，确保不再写入 localStorage。
+
 ### 7.3 多来源 token
 
 AuthX 接受 headers、cookies、query string 三种 token 位置。对于某些部署环境，这会放大误传或日志泄露风险。

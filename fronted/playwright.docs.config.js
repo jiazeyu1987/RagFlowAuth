@@ -9,6 +9,7 @@ process.env.E2E_BACKEND_BASE_URL ||= 'http://127.0.0.1:38002';
 process.env.E2E_TEST_DB_PATH ||= path.join(REPO_ROOT, 'data', 'e2e', 'doc_auth.db');
 process.env.E2E_BOOTSTRAP_SCRIPT ||= path.join(REPO_ROOT, 'scripts', 'bootstrap_doc_test_env.py');
 process.env.E2E_BOOTSTRAP_REQUIRE_RAGFLOW ||= '1';
+process.env.E2E_JWT_SECRET_KEY ||= 'ragflowauth-doc-e2e-jwt-secret';
 
 const FRONTEND_BASE_URL = process.env.E2E_FRONTEND_BASE_URL;
 const BACKEND_BASE_URL = process.env.E2E_BACKEND_BASE_URL;
@@ -27,6 +28,7 @@ const CORS_ORIGINS = JSON.stringify([
 ]);
 const BACKEND_HEALTH_URL = new URL('/health', `${BACKEND_BASE_URL.replace(/\/+$/, '')}/`).toString();
 const OUTPUT_DIR = process.env.E2E_OUTPUT_DIR || path.join(os.tmpdir(), 'ragflowauth_playwright_docs');
+const JWT_SECRET_KEY = process.env.E2E_JWT_SECRET_KEY;
 
 module.exports = defineConfig({
   testDir: './e2e/tests',
@@ -58,6 +60,7 @@ module.exports = defineConfig({
         E2E_TEST_DB_PATH: TEST_DB_PATH,
         PORT: BACKEND_PORT,
         CORS_ORIGINS,
+        JWT_SECRET_KEY,
       },
     },
     {

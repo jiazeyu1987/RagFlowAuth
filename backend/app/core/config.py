@@ -1,5 +1,5 @@
 from pydantic import field_validator
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 DEFAULT_CORS_ORIGINS = [
@@ -8,6 +8,7 @@ DEFAULT_CORS_ORIGINS = [
     "http://localhost:3001",
     "http://127.0.0.1:3001",
 ]
+DEFAULT_JWT_SECRET_KEY = "your-secret-key-change-in-production"
 
 
 class Settings(BaseSettings):
@@ -22,7 +23,7 @@ class Settings(BaseSettings):
     UVICORN_WORKERS: int = 1
 
     # AuthX JWT
-    JWT_SECRET_KEY: str = "your-secret-key-change-in-production"
+    JWT_SECRET_KEY: str = DEFAULT_JWT_SECRET_KEY
     JWT_ALGORITHM: str = "HS256"
     JWT_ACCESS_TOKEN_EXPIRES: int = 60 * 15  # 15 minutes
     JWT_REFRESH_TOKEN_EXPIRES: int = 60 * 60 * 24 * 7  # 7 days
@@ -91,9 +92,27 @@ class Settings(BaseSettings):
             return False
         return value
 
-    class Config:
-        env_file = ".env"
-        case_sensitive = True
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        case_sensitive=True,
+    )
 
 
 settings = Settings()
+
+
+def _is_default_jwt_secret(secret: str | None) -> bool:
+    normalized = str(secret or "").strip()
+    if not normalized:
+        return True
+    return normalized == DEFAULT_JWT_SECRET_KEY
+
+
+def validate_jwt_secret(settings_obj: Settings) -> None:
+    if settings_obj.DEBUG:
+        return
+    if _is_default_jwt_secret(settings_obj.JWT_SECRET_KEY):
+        raise RuntimeError(
+            "jwt_secret_key_default_or_empty: Set JWT_SECRET_KEY to a non-default value "
+            "before starting in non-debug mode."
+        )

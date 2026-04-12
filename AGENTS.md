@@ -73,6 +73,7 @@ docs/
 
 - `docs/maintance/` 的目录名当前就是 `maintance`，不要擅自改成 `maintenance`，除非用户明确要求迁移。
 - 当前 spec-driven-delivery 的任务根目录是 `docs/tasks/`，不是 `doc/tasks/`。
+- `doc/e2e/` 是当前文档 E2E 业务脚本与 manifest 的权威位置（验证入口也以此为准），不代表主文档树已回退到 `doc/`。
 - 维护工具当前仍会把发布历史写到 `doc/maintenance/release_history.md`；这是现有代码事实，不代表主文档树已经迁回 `doc/`。
 - 更新文档时，优先把内容写到拥有该主题的目录，不要把运维内容散落到根目录总览文档里。
 

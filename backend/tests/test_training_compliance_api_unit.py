@@ -59,6 +59,7 @@ class _Deps:
         self.permission_group_store = SimpleNamespace(get_group=lambda *_args, **_kwargs: None)
         self.user_kb_permission_store = SimpleNamespace(get_user_kbs=lambda *_args, **_kwargs: [])
         self.user_chat_permission_store = SimpleNamespace(get_user_chats=lambda *_args, **_kwargs: [])
+        self.user_tool_permission_store = SimpleNamespace(list_tool_ids=lambda *_args, **_kwargs: [])
         self.kb_store = SimpleNamespace(db_path=db_path)
         self.audit_log_store = audit_store
         self.audit_log_manager = AuditLogManager(store=audit_store)
