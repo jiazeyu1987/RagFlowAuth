@@ -20,7 +20,9 @@ from backend.services.electronic_signature.service import AuthorizedSignatureCon
 
 from scripts.bootstrap_real_test_env import (
     EnvUserSpec,
+    _build_dataset_create_payload,
     _ensure_bootstrap_employee_profile,
+    _probe_ragflow_datasets,
     _upsert_user,
     bootstrap_real_test_env,
     parse_args as parse_base_args,
@@ -39,6 +41,7 @@ DOC_USER_MANAGEMENT_USERNAME = "doc_user_management_user"
 DOC_USER_MANAGEMENT_FULL_NAME = "Doc User Management User"
 DOC_PASSWORD_CHANGE_USERNAME = "doc_password_change_user"
 DOC_PASSWORD_CHANGE_FULL_NAME = "Doc Password Change User"
+DOC_EMPTY_DATASET_BASE_NAME = "RagflowAuth Doc Empty Dataset"
 
 GLOBAL_CLEAR_TABLES = (
     "operation_approval_events",
@@ -719,6 +722,47 @@ def _seed_notifications(
     }
 
 
+def _ensure_empty_dataset_fixture(tenant_deps: Any, *, node_id: str) -> dict[str, str]:
+    clean_node_id = str(node_id or "").strip()
+    if not clean_node_id:
+        raise RuntimeError("doc_empty_dataset_node_required")
+
+    dataset_name = f"{DOC_EMPTY_DATASET_BASE_NAME} [{uuid4().hex[:8]}]"
+    datasets = _probe_ragflow_datasets(tenant_deps.ragflow_service)
+    payload = _build_dataset_create_payload(existing_datasets=datasets, dataset_name=dataset_name)
+    try:
+        created = tenant_deps.ragflow_service.create_dataset(payload)
+    except Exception as exc:
+        raise RuntimeError(f"doc_empty_dataset_create_failed:{dataset_name}; {exc}") from exc
+
+    dataset = created if isinstance(created, dict) else None
+    if dataset is None:
+        datasets = _probe_ragflow_datasets(tenant_deps.ragflow_service)
+        dataset = next((item for item in datasets if str(item.get("name") or "").strip() == dataset_name), None)
+    if dataset is None:
+        raise RuntimeError(f"doc_empty_dataset_missing:{dataset_name}")
+
+    dataset_id = str(dataset.get("id") or "").strip()
+    resolved_name = str(dataset.get("name") or dataset_name).strip() or dataset_name
+    if not dataset_id:
+        raise RuntimeError(f"doc_empty_dataset_missing_id:{dataset_name}")
+
+    tenant_deps.knowledge_directory_store.assign_dataset(dataset_id, clean_node_id)
+    documents = [
+        item
+        for item in tenant_deps.ragflow_service.list_documents(dataset_id)
+        if isinstance(item, dict)
+    ]
+    if documents:
+        raise RuntimeError(f"doc_empty_dataset_not_empty:{resolved_name}")
+
+    return {
+        "id": dataset_id,
+        "name": resolved_name,
+        "node_id": clean_node_id,
+    }
+
+
 def bootstrap_doc_test_env(config) -> dict[str, Any]:
     base_summary = bootstrap_real_test_env(config)
     global_db_path = Path(base_summary["paths"]["global_db_path"]).resolve()
@@ -888,8 +932,16 @@ def bootstrap_doc_test_env(config) -> dict[str, Any]:
         approval_requests=approval_fixtures,
         seed_configuration=False,
     )
+    empty_dataset_fixture = _ensure_empty_dataset_fixture(
+        tenant_deps,
+        node_id=str(base_summary["knowledge"]["managed_root_node_id"]),
+    )
 
     summary = dict(base_summary)
+    summary["knowledge"] = {
+        **base_summary["knowledge"],
+        "empty_dataset": empty_dataset_fixture,
+    }
     summary["users"] = {
         **base_summary["users"],
         "company_admin": {

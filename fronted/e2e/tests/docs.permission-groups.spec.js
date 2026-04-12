@@ -32,9 +32,29 @@ test('Permission groups page covers real folder create/rename/delete and group c
     subAdminSession = await loginApiAs(summary.users.sub_admin.username, subAdminPassword);
     subAdminUi = await openSessionPage(browser, subAdminSession);
     const { page } = subAdminUi;
+    const initialGroupsResponsePromise = page.waitForResponse((response) => (
+      response.request().method() === 'GET'
+      && /\/api\/permission-groups(?:\?|$)/.test(response.url())
+    ), { timeout: 30_000 });
+    const initialFoldersResponsePromise = page.waitForResponse((response) => (
+      response.request().method() === 'GET'
+      && /\/api\/permission-groups\/resources\/group-folders(?:\?|$)/.test(response.url())
+    ), { timeout: 30_000 });
+    const initialKnowledgeTreeResponsePromise = page.waitForResponse((response) => (
+      response.request().method() === 'GET'
+      && /\/api\/permission-groups\/resources\/knowledge-tree(?:\?|$)/.test(response.url())
+    ), { timeout: 30_000 });
+    const initialChatsResponsePromise = page.waitForResponse((response) => (
+      response.request().method() === 'GET'
+      && /\/api\/permission-groups\/resources\/chats(?:\?|$)/.test(response.url())
+    ), { timeout: 30_000 });
     await page.goto(`${FRONTEND_BASE_URL}/permission-groups`);
     await expect(page.getByTestId('pg-toolbar-actions')).toBeVisible();
     await expect(page.getByTestId('pg-create-open')).toBeVisible();
+    await expect((await initialGroupsResponsePromise).ok()).toBeTruthy();
+    await expect((await initialFoldersResponsePromise).ok()).toBeTruthy();
+    await expect((await initialKnowledgeTreeResponsePromise).ok()).toBeTruthy();
+    await expect((await initialChatsResponsePromise).ok()).toBeTruthy();
     const rootFolderButton = page.getByRole('button', { name: /\u6839\u76ee\u5f55/ }).first();
     if (await rootFolderButton.count()) {
       await rootFolderButton.click();
@@ -69,17 +89,12 @@ test('Permission groups page covers real folder create/rename/delete and group c
       response.request().method() === 'PUT'
       && response.url().includes(`/api/permission-groups/folders/${encodeURIComponent(folderId)}`)
     ), { timeout: 20_000 });
-    const refreshFoldersAfterRenamePromise = page.waitForResponse((response) => (
-      response.request().method() === 'GET'
-      && /\/api\/permission-groups\/resources\/group-folders(?:\?|$)/.test(response.url())
-    ), { timeout: 20_000 });
-    page.once('dialog', async (dialog) => {
-      await dialog.accept(renamedFolderName);
-    });
+    await page.evaluate((nextName) => {
+      window.prompt = () => nextName;
+    }, renamedFolderName);
     await page.getByTestId('pg-toolbar-rename-folder').click();
     const renameFolderResponse = await renameFolderResponsePromise;
     await expect(renameFolderResponse.ok()).toBeTruthy();
-    await expect((await refreshFoldersAfterRenamePromise).ok()).toBeTruthy();
     const renameFolderBody = await renameFolderResponse.json().catch(() => ({}));
     currentFolderName = String(renameFolderBody?.folder?.name || renamedFolderName).trim() || renamedFolderName;
     await expect(

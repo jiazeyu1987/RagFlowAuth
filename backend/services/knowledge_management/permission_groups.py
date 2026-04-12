@@ -76,10 +76,62 @@ class KnowledgePermissionGroupAccess:
         user: Any,
         groups: list[dict[str, Any]] | None,
     ) -> list[dict[str, Any]]:
+        try:
+            scope = self._scope_resolver.assert_can_manage(user)
+        except KnowledgeManagementError:
+            return []
+
+        dataset_ref_cache: dict[str, str | None] = {}
         manageable: list[dict[str, Any]] = []
         for group in groups or []:
             try:
-                manageable.append(self.assert_permission_group_manageable(user=user, group=group))
+                if not isinstance(group, dict):
+                    raise KnowledgeManagementError("permission_group_not_found", status_code=404)
+                if self._is_group_within_scope(
+                    group=group,
+                    scope=scope,
+                    dataset_ref_cache=dataset_ref_cache,
+                ):
+                    manageable.append(group)
             except KnowledgeManagementError:
                 continue
         return manageable
+
+    def _is_group_within_scope(
+        self,
+        *,
+        group: dict[str, Any],
+        scope: Any,
+        dataset_ref_cache: dict[str, str | None],
+    ) -> bool:
+        for raw_node_id in group.get("accessible_kb_nodes") or []:
+            if not isinstance(raw_node_id, str):
+                continue
+            node_id = raw_node_id.strip()
+            if not node_id:
+                continue
+            if node_id not in scope.node_ids:
+                return False
+
+        for raw_ref in group.get("accessible_kbs") or []:
+            if not isinstance(raw_ref, str):
+                continue
+            ref = raw_ref.strip()
+            if not ref:
+                continue
+            if ref.startswith("node:"):
+                if ref[5:].strip() not in scope.node_ids:
+                    return False
+                continue
+            if ref.startswith("dataset:"):
+                ref = ref[8:].strip()
+            dataset_id = dataset_ref_cache.get(ref)
+            if ref not in dataset_ref_cache:
+                dataset_id = self._scope_resolver.resolve_dataset_id(ref)
+                dataset_ref_cache[ref] = dataset_id
+            if not dataset_id:
+                return False
+            if not scope.is_admin and dataset_id not in scope.dataset_ids:
+                return False
+
+        return True
