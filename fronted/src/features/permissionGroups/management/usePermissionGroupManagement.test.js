@@ -269,4 +269,40 @@ describe('usePermissionGroupManagement', () => {
       expect(result.current.hint).toBe('权限组已移动');
     });
   });
+
+  it('renames the selected folder and refreshes the visible folder path', async () => {
+    const promptSpy = jest.spyOn(window, 'prompt').mockReturnValue('Renamed Folder');
+    try {
+      permissionGroupsApi.updateFolder.mockResolvedValue({
+        id: 'folder-1',
+        name: 'Renamed Folder',
+        parent_id: null,
+      });
+
+      const { result } = renderHook(() => usePermissionGroupManagement());
+
+      await waitFor(() => expect(result.current.loading).toBe(false));
+
+      act(() => {
+        result.current.openFolder('folder-1');
+      });
+
+      await act(async () => {
+        await result.current.renameFolder();
+      });
+
+      await waitFor(() => {
+        expect(permissionGroupsApi.updateFolder).toHaveBeenCalledWith('folder-1', {
+          name: 'Renamed Folder',
+        });
+        expect(result.current.folderPath).toEqual([
+          expect.objectContaining({ id: '', name: expect.any(String) }),
+          expect.objectContaining({ id: 'folder-1', name: 'Renamed Folder' }),
+        ]);
+        expect(result.current.error).toBe('');
+      });
+    } finally {
+      promptSpy.mockRestore();
+    }
+  });
 });

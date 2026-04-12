@@ -148,10 +148,26 @@ class ChatManagementManager:
         user: Any,
         groups: list[dict[str, Any]] | None,
     ) -> list[dict[str, Any]]:
+        if self._role(user) == "admin":
+            return [group for group in groups or [] if isinstance(group, dict)]
+
+        try:
+            self.assert_sub_admin_can_manage(user)
+        except ChatManagementError:
+            return []
+
+        allowed_refs = {
+            str(item.get("id") or "").strip()
+            for item in self.list_manageable_chat_resources(user)
+            if isinstance(item, dict) and str(item.get("id") or "").strip()
+        }
         manageable: list[dict[str, Any]] = []
         for group in groups or []:
             try:
-                manageable.append(self.assert_permission_group_manageable(user=user, group=group))
+                if not isinstance(group, dict):
+                    raise ChatManagementError("permission_group_not_found", status_code=404)
+                if self._group_chats_within_scope(group=group, allowed_refs=allowed_refs):
+                    manageable.append(group)
             except ChatManagementError:
                 continue
         return manageable
@@ -162,6 +178,18 @@ class ChatManagementManager:
             if not group:
                 raise ChatManagementError(f"permission_group_not_found:{group_id}", status_code=400)
             self.assert_permission_group_manageable(user=user, group=group)
+
+    def _group_chats_within_scope(self, *, group: dict[str, Any], allowed_refs: set[str]) -> bool:
+        for raw_ref in group.get("accessible_chats") or []:
+            if not isinstance(raw_ref, str):
+                continue
+            ref = raw_ref.strip()
+            if not ref:
+                continue
+            canonical = self._normalize_chat_ref(ref)
+            if not canonical.startswith("chat_") or canonical not in allowed_refs:
+                return False
+        return True
 
     def assert_sub_admin_can_manage(self, user: Any) -> Any:
         if self._role(user) != "sub_admin":

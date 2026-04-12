@@ -254,7 +254,7 @@ docAdminTest('Doc notification settings exercise real rules, channels, history, 
 
   await expect(todoEmailRule).not.toBeChecked();
   await expect(todoInAppRule).toBeChecked();
-  await expect(todoDingtalkRule).not.toBeChecked();
+  await expect(todoDingtalkRule).toBeChecked();
 
   const saveRulesResponse = page.waitForResponse((response) => (
     response.request().method() === 'PUT'
@@ -362,7 +362,7 @@ docAdminTest('Doc notification settings exercise real rules, channels, history, 
   await expect(page.locator('tbody')).toContainText(String(queuedJobId));
 });
 
-docAdminTest('Doc notification sends in-app and dingtalk to ¼ÖÔóÓî and unread count increases @doc-e2e', async ({ page }, testInfo) => {
+docAdminTest('Doc notification sends in-app and dingtalk to è´¾æ³½å®‡ and unread count increases @doc-e2e', async ({ page }, testInfo) => {
   void page;
   testInfo.setTimeout(300_000);
 

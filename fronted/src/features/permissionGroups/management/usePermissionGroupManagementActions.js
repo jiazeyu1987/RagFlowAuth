@@ -23,6 +23,7 @@ export default function usePermissionGroupManagementActions({
   setError,
   setExpandedFolderIds,
   setFormData,
+  setGroupFolders,
   setHint,
   setMode,
   setSaving,
@@ -239,8 +240,18 @@ export default function usePermissionGroupManagementActions({
     clearFeedback();
 
     try {
-      await permissionGroupsApi.updateFolder(targetFolderId, { name: nextName.trim() });
-      await fetchAll({ includeSupplemental: false });
+      const updatedFolder = await permissionGroupsApi.updateFolder(targetFolderId, { name: nextName.trim() });
+      setGroupFolders((previous) =>
+        (previous || []).map((item) =>
+          item?.id === targetFolderId
+            ? {
+                ...item,
+                ...updatedFolder,
+                id: targetFolderId,
+              }
+            : item
+        )
+      );
       ensureFolderExpanded(targetFolderId);
       setHint('文件夹已重命名');
     } catch (renameError) {
@@ -249,10 +260,10 @@ export default function usePermissionGroupManagementActions({
   }, [
     clearFeedback,
     ensureFolderExpanded,
-    fetchAll,
     folderIndexesById,
     selectedFolderId,
     setError,
+    setGroupFolders,
     setHint,
   ]);
 

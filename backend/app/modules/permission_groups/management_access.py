@@ -44,6 +44,8 @@ def assert_group_management(ctx) -> None:
 
 
 def validate_group_scope(ctx, *, accessible_kbs, accessible_kb_nodes, accessible_chats) -> None:
+    if not _has_scope_entries(accessible_kbs, accessible_kb_nodes, accessible_chats):
+        return
     try:
         knowledge_management_manager(ctx).validate_group_kb_scope(
             user=ctx.user,
@@ -52,6 +54,16 @@ def validate_group_scope(ctx, *, accessible_kbs, accessible_kb_nodes, accessible
         )
     except Exception as exc:
         raise HTTPException(status_code=int(getattr(exc, "status_code", 400) or 400), detail=str(exc)) from exc
+
+
+def _has_scope_entries(*collections) -> bool:
+    for values in collections:
+        if not isinstance(values, list):
+            continue
+        for value in values:
+            if isinstance(value, str) and value.strip():
+                return True
+    return False
     try:
         chat_management_manager(ctx).validate_group_chat_scope(
             user=ctx.user,

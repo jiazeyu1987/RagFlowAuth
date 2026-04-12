@@ -20,6 +20,23 @@ const summary = loadBootstrapSummary();
 const subAdminPassword = process.env.E2E_SUB_ADMIN_PASS || process.env.E2E_ADMIN_PASS || 'admin123';
 const reviewerPassword = process.env.E2E_REVIEWER_PASS || process.env.E2E_ADMIN_PASS || 'admin123';
 
+async function readJson(response, fallbackMessage) {
+  if (!response.ok()) {
+    const body = await response.text().catch(() => '');
+    throw new Error(`${fallbackMessage}: ${response.status()} ${body}`.trim());
+  }
+  return response.json();
+}
+
+async function listLocalKnowledgeDocuments(api, headers, kbRef) {
+  return readJson(
+    await api.get(`/api/knowledge/documents?kb_id=${encodeURIComponent(String(kbRef || '').trim())}&limit=100`, {
+      headers,
+    }),
+    `list local knowledge documents failed for ${kbRef}`
+  );
+}
+
 async function openDirectoryFromTree(page, nodeId) {
   const node = page.getByTestId(`kbs-tree-node-${toSafeId(nodeId)}`);
   await expect(node).toBeVisible();
@@ -36,9 +53,9 @@ docSubAdminTest('Knowledge-base config covers real directory create/rename, KB c
   const renamedDirName = `doc_kbs_dir_renamed_${stamp}`;
   const primaryKbName = `doc_kbs_primary_${stamp}`;
   const savedKbName = `doc_kbs_saved_${stamp}`;
-  const emptyKbName = `doc_kbs_empty_${stamp}`;
+  const guardedKbName = `doc_kbs_guarded_${stamp}`;
   let primaryKbId = '';
-  let emptyKbId = '';
+  let guardedKbId = '';
   let deleteRequestId = '';
   /** @type {ReturnType<typeof loginApiAs> extends Promise<infer T> ? T : never | null} */
   let subAdminSession = null;
@@ -46,6 +63,9 @@ docSubAdminTest('Knowledge-base config covers real directory create/rename, KB c
   let reviewerSession = null;
 
   try {
+    expect(summary?.knowledge?.empty_dataset?.id).toBeTruthy();
+    expect(summary?.knowledge?.empty_dataset?.node_id).toBeTruthy();
+
     subAdminSession = await loginApiAs(summary.users.sub_admin.username, subAdminPassword);
     reviewerSession = await loginApiAs(summary.users.reviewer.username, reviewerPassword);
 
@@ -166,29 +186,50 @@ docSubAdminTest('Knowledge-base config covers real directory create/rename, KB c
     await expect(page.getByTestId('kbs-delete-kb')).toBeDisabled({ timeout: 60_000 });
 
     await page.getByTestId('kbs-create-kb').click();
-    const emptyDialog = page.getByTestId('create-kb-dialog');
-    await expect(emptyDialog).toBeVisible();
-    await emptyDialog.getByTestId('create-kb-name-input').fill(emptyKbName);
-    await emptyDialog.getByTestId('create-kb-dir-select').selectOption(dirId);
+    const guardedDialog = page.getByTestId('create-kb-dialog');
+    await expect(guardedDialog).toBeVisible();
+    await guardedDialog.getByTestId('create-kb-name-input').fill(guardedKbName);
+    await guardedDialog.getByTestId('create-kb-dir-select').selectOption(dirId);
 
-    const createEmptyKbResponsePromise = page.waitForResponse((response) => (
+    const createGuardedKbResponsePromise = page.waitForResponse((response) => (
       response.request().method() === 'POST'
       && /\/api\/datasets$/.test(new URL(response.url()).pathname)
     ));
-    await emptyDialog.getByTestId('create-kb-confirm').click();
-    const createEmptyKbResponse = await createEmptyKbResponsePromise;
-    await expect(createEmptyKbResponse.ok()).toBeTruthy();
-    const createEmptyKbBody = await createEmptyKbResponse.json();
-    emptyKbId = String(createEmptyKbBody?.dataset?.id || '').trim();
-    expect(emptyKbId).toBeTruthy();
+    await guardedDialog.getByTestId('create-kb-confirm').click();
+    const createGuardedKbResponse = await createGuardedKbResponsePromise;
+    await expect(createGuardedKbResponse.ok()).toBeTruthy();
+    const createGuardedKbBody = await createGuardedKbResponse.json();
+    guardedKbId = String(createGuardedKbBody?.dataset?.id || '').trim();
+    expect(guardedKbId).toBeTruthy();
 
-    const emptyRow = page.getByTestId(`kbs-row-dataset-${toSafeId(emptyKbId)}`);
-    await expect(emptyRow).toBeVisible();
-    await emptyRow.click();
+    await expect.poll(
+      () => listLocalKnowledgeDocuments(subAdminSession.api, subAdminSession.headers, guardedKbId),
+      { timeout: 60_000, intervals: [500, 1_000, 2_000] }
+    ).toMatchObject({
+      count: 1,
+      documents: [
+        expect.objectContaining({
+          filename: 'ReadMe.txt',
+        }),
+      ],
+    });
+
+    const guardedRow = page.getByTestId(`kbs-row-dataset-${toSafeId(guardedKbId)}`);
+    await expect(guardedRow).toBeVisible();
+    await guardedRow.click();
+    await expect(page.getByTestId('kbs-delete-kb')).toBeDisabled({ timeout: 60_000 });
+
+    await openDirectoryFromTree(page, summary.knowledge.empty_dataset.node_id);
+    const emptyFixtureRow = page.getByTestId(
+      `kbs-row-dataset-${toSafeId(summary.knowledge.empty_dataset.id)}`
+    );
+    await expect(emptyFixtureRow).toBeVisible({ timeout: 60_000 });
+    await emptyFixtureRow.click();
+    await expect(page.getByTestId('kbs-delete-kb')).toBeEnabled({ timeout: 60_000 });
 
     const deleteEmptyKbResponsePromise = page.waitForResponse((response) => (
       response.request().method() === 'DELETE'
-      && response.url().includes(`/api/datasets/${encodeURIComponent(emptyKbId)}`)
+      && response.url().includes(`/api/datasets/${encodeURIComponent(summary.knowledge.empty_dataset.id)}`)
     ));
     page.once('dialog', async (dialog) => {
       expect(dialog.type()).toBe('confirm');
@@ -201,7 +242,7 @@ docSubAdminTest('Knowledge-base config covers real directory create/rename, KB c
     deleteRequestId = String(
       readOperationRequestEnvelope(
         deleteEmptyKbBody,
-        `delete empty KB returned invalid approval envelope for ${emptyKbId}`
+        `delete empty KB returned invalid approval envelope for ${summary.knowledge.empty_dataset.id}`
       ).request_id || ''
     ).trim();
     expect(deleteRequestId).toBeTruthy();
@@ -213,7 +254,7 @@ docSubAdminTest('Knowledge-base config covers real directory create/rename, KB c
       'in_approval',
       { timeoutMs: 60_000, intervalMs: 1_000 }
     );
-    await expect(emptyRow).toBeVisible();
+    await expect(emptyFixtureRow).toBeVisible();
   } finally {
     if (subAdminSession && deleteRequestId) {
       await withdrawOperationRequestViaApi(subAdminSession.api, subAdminSession.headers, {

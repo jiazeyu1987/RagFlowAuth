@@ -19,14 +19,14 @@ from backend.models.permission_group import (
 
 def register_folder_routes(router: APIRouter) -> None:
     @router.get("/permission-groups/resources/group-folders", response_model=PermissionGroupFolderSnapshotEnvelope)
-    async def get_group_folders(
+    def get_group_folders(
         ctx: AuthContextDep,
         service: PermissionGroupsService = Depends(get_service),
     ):
         return permission_folders.folder_snapshot_result(ctx, service)
 
     @router.post("/permission-groups/folders", response_model=PermissionGroupFolderEnvelope)
-    async def create_group_folder(
+    def create_group_folder(
         data: PermissionGroupFolderCreate,
         ctx: AuthContextDep,
         service: PermissionGroupsService = Depends(get_service),
@@ -34,7 +34,7 @@ def register_folder_routes(router: APIRouter) -> None:
         return permission_folders.create_group_folder_result(ctx, service, data)
 
     @router.put("/permission-groups/folders/{folder_id}", response_model=PermissionGroupFolderEnvelope)
-    async def update_group_folder(
+    def update_group_folder(
         folder_id: str,
         data: PermissionGroupFolderUpdate,
         ctx: AuthContextDep,
@@ -43,7 +43,7 @@ def register_folder_routes(router: APIRouter) -> None:
         return permission_folders.update_group_folder_result(ctx, service, folder_id, data)
 
     @router.delete("/permission-groups/folders/{folder_id}", response_model=ResultEnvelope)
-    async def delete_group_folder(
+    def delete_group_folder(
         folder_id: str,
         ctx: AuthContextDep,
         service: PermissionGroupsService = Depends(get_service),

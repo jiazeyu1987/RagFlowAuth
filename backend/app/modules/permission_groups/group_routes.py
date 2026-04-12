@@ -21,21 +21,21 @@ from backend.models.permission_group import (
 
 def register_group_routes(router: APIRouter) -> None:
     @router.get("/permission-groups", response_model=PermissionGroupListEnvelope)
-    async def list_permission_groups(
+    def list_permission_groups(
         ctx: AuthContextDep,
         service: PermissionGroupsService = Depends(get_service),
     ):
         return permission_queries.list_permission_groups_result(ctx, service)
 
     @router.get("/permission-groups/assignable", response_model=PermissionGroupListEnvelope)
-    async def list_assignable_permission_groups(
+    def list_assignable_permission_groups(
         ctx: AuthContextDep,
         service: PermissionGroupsService = Depends(get_service),
     ):
         return permission_queries.list_assignable_permission_groups_result(ctx, service)
 
     @router.get("/permission-groups/{group_id}", response_model=PermissionGroupEnvelope)
-    async def get_permission_group(
+    def get_permission_group(
         group_id: int,
         ctx: AuthContextDep,
         service: PermissionGroupsService = Depends(get_service),
@@ -43,7 +43,7 @@ def register_group_routes(router: APIRouter) -> None:
         return permission_queries.get_permission_group_result(ctx, service, group_id)
 
     @router.post("/permission-groups", response_model=PermissionGroupCreateResultEnvelope)
-    async def create_permission_group(
+    def create_permission_group(
         data: PermissionGroupCreate,
         ctx: AuthContextDep,
         service: PermissionGroupsService = Depends(get_service),
@@ -51,7 +51,7 @@ def register_group_routes(router: APIRouter) -> None:
         return permission_mutations.create_permission_group_result(ctx, service, data)
 
     @router.put("/permission-groups/{group_id}", response_model=ResultEnvelope)
-    async def update_permission_group(
+    def update_permission_group(
         group_id: int,
         data: PermissionGroupUpdate,
         ctx: AuthContextDep,
@@ -60,7 +60,7 @@ def register_group_routes(router: APIRouter) -> None:
         return permission_mutations.update_permission_group_result(ctx, service, group_id, data)
 
     @router.delete("/permission-groups/{group_id}", response_model=ResultEnvelope)
-    async def delete_permission_group(
+    def delete_permission_group(
         group_id: int,
         ctx: AuthContextDep,
         service: PermissionGroupsService = Depends(get_service),

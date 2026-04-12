@@ -124,6 +124,7 @@ export default function usePermissionGroupManagement() {
     setError,
     setExpandedFolderIds,
     setFormData,
+    setGroupFolders,
     setHint,
     setMode,
     setSaving,
