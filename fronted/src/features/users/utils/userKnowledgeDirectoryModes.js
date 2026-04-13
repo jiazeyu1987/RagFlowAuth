@@ -3,6 +3,7 @@ export const buildUserKnowledgeDirectoryModes = ({ createManagement, policyManag
     isOpen: createManagement.showCreateModal,
     userType: createManagement.newUser.user_type,
     companyId: createManagement.newUser.company_id,
+    selectedManagedKbRootNodeId: createManagement.newUser.managed_kb_root_node_id,
     onRootCreated: (nodeId) =>
       createManagement.setNewUserField('managed_kb_root_node_id', nodeId),
   },

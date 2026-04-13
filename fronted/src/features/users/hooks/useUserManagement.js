@@ -106,6 +106,7 @@ export const useUserManagement = () => {
 
   const {
     kbDirectoryNodes,
+    kbDirectoryDisabledNodeIds,
     kbDirectoryLoading,
     kbDirectoryError,
     kbDirectoryCreatingRoot,
@@ -115,6 +116,7 @@ export const useUserManagement = () => {
     handleCreateModalRootDirectory,
     handlePolicyRootDirectory,
   } = useUserKnowledgeDirectories({
+    allUsers,
     isAdminUser: capabilities.isAdminUser,
     createMode: knowledgeDirectoryModes.createMode,
     policyMode: knowledgeDirectoryModes.policyMode,
@@ -194,6 +196,7 @@ export const useUserManagement = () => {
     policyManagement,
     knowledgeDirectoryState: {
       kbDirectoryNodes,
+      kbDirectoryDisabledNodeIds,
       kbDirectoryLoading,
       kbDirectoryError,
       kbDirectoryCreatingRoot,

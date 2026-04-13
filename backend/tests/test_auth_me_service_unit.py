@@ -104,6 +104,10 @@ class TestAuthMeServiceUnit(unittest.TestCase):
         self.assertEqual(payload["capabilities"]["users"]["manage"], {"scope": "all", "targets": []})
         self.assertEqual(payload["capabilities"]["kb_documents"]["view"], {"scope": "all", "targets": []})
         self.assertEqual(payload["capabilities"]["tools"]["view"], {"scope": "all", "targets": []})
+        self.assertEqual(payload["capabilities"]["quality_system"]["view"], {"scope": "all", "targets": []})
+        self.assertEqual(payload["capabilities"]["quality_system"]["manage"], {"scope": "all", "targets": []})
+        self.assertEqual(payload["capabilities"]["document_control"]["create"], {"scope": "all", "targets": []})
+        self.assertEqual(payload["capabilities"]["complaints"], {})
 
     def test_build_payload_set_scope(self):
         deps = SimpleNamespace(
@@ -149,6 +153,51 @@ class TestAuthMeServiceUnit(unittest.TestCase):
         self.assertEqual(payload["capabilities"]["kb_documents"]["view"], {"scope": "set", "targets": ["id-k1"]})
         self.assertEqual(payload["capabilities"]["ragflow_documents"]["preview"], {"scope": "set", "targets": ["id-k1"]})
         self.assertEqual(payload["capabilities"]["tools"]["view"], {"scope": "set", "targets": ["nmpa"]})
+        self.assertEqual(payload["capabilities"]["quality_system"]["view"], {"scope": "none", "targets": []})
+        self.assertEqual(payload["capabilities"]["quality_system"]["manage"], {"scope": "none", "targets": []})
+        self.assertEqual(payload["capabilities"]["audit_events"]["view"], {"scope": "none", "targets": []})
+        self.assertEqual(payload["capabilities"]["complaints"], {})
+
+    def test_build_payload_sub_admin_gets_quality_system_shell_access_without_manage(self):
+        deps = SimpleNamespace(
+            ragflow_service=_RagflowService(),
+            ragflow_chat_service=_RagflowChatService(),
+            permission_group_store=_PermissionGroupStore(),
+        )
+        user = SimpleNamespace(
+            user_id="u-sub",
+            username="quality-sub",
+            email="quality-sub@example.com",
+            role="sub_admin",
+            status="active",
+            group_id=None,
+            group_ids=[],
+            max_login_sessions=3,
+            idle_timeout_minutes=120,
+        )
+        snapshot = PermissionSnapshot(
+            is_admin=False,
+            can_upload=False,
+            can_review=False,
+            can_download=False,
+            can_copy=False,
+            can_delete=False,
+            can_manage_kb_directory=False,
+            can_view_kb_config=False,
+            can_view_tools=False,
+            kb_scope=ResourceScope.NONE,
+            kb_names=frozenset(),
+            chat_scope=ResourceScope.NONE,
+            chat_ids=frozenset(),
+            tool_scope=ResourceScope.NONE,
+            tool_ids=frozenset(),
+            can_manage_users=True,
+        )
+
+        payload = build_auth_me_payload(deps=deps, user=user, snapshot=snapshot)
+        self.assertEqual(payload["capabilities"]["quality_system"]["view"], {"scope": "all", "targets": []})
+        self.assertEqual(payload["capabilities"]["quality_system"]["manage"], {"scope": "none", "targets": []})
+        self.assertEqual(payload["capabilities"]["document_control"]["create"], {"scope": "none", "targets": []})
 
     def test_build_payload_does_not_silence_management_scope_failures(self):
         deps = SimpleNamespace(

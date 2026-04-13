@@ -114,7 +114,8 @@ def ensure_audit_events_table(conn: sqlite3.Connection) -> None:
                 kb_id TEXT,
                 kb_dataset_id TEXT,
                 kb_name TEXT,
-                meta_json TEXT
+                meta_json TEXT,
+                evidence_json TEXT
             )
             """
         )
@@ -135,6 +136,14 @@ def ensure_audit_events_table(conn: sqlite3.Connection) -> None:
     add_column_if_missing(conn, "audit_events", "client_ip TEXT")
     add_column_if_missing(conn, "audit_events", "prev_hash TEXT")
     add_column_if_missing(conn, "audit_events", "event_hash TEXT")
+    add_column_if_missing(conn, "audit_events", "source TEXT")
+    add_column_if_missing(conn, "audit_events", "doc_id TEXT")
+    add_column_if_missing(conn, "audit_events", "filename TEXT")
+    add_column_if_missing(conn, "audit_events", "kb_id TEXT")
+    add_column_if_missing(conn, "audit_events", "kb_dataset_id TEXT")
+    add_column_if_missing(conn, "audit_events", "kb_name TEXT")
+    add_column_if_missing(conn, "audit_events", "meta_json TEXT")
+    add_column_if_missing(conn, "audit_events", "evidence_json TEXT")
 
     conn.execute("CREATE INDEX IF NOT EXISTS idx_audit_events_time ON audit_events(created_at_ms)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_audit_events_action ON audit_events(action)")

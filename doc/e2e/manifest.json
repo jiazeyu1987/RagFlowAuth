@@ -18,7 +18,7 @@
   "coverage": {
     "automated_doc_count": 30,
     "pending_doc_count": 0,
-    "unique_spec_count": 25,
+    "unique_spec_count": 26,
     "scopes": {
       "unit_automated": 19,
       "role_automated": 11
@@ -95,7 +95,8 @@
       {
         "doc": "doc/e2e/unit/权限分组.md",
         "specs": [
-          "fronted/e2e/tests/docs.permission-groups.spec.js"
+          "fronted/e2e/tests/docs.permission-groups.spec.js",
+          "fronted/e2e/tests/docs.permission-groups.folder-visibility.spec.js"
         ]
       },
       {

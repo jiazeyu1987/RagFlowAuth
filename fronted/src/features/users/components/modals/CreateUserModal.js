@@ -7,6 +7,10 @@ import SessionLimitFields from './SessionLimitFields';
 import UserModalFrame from './UserModalFrame';
 import UserProfileFields from './UserProfileFields';
 import { orgDirectoryApi } from '../../../orgDirectory/api';
+import {
+  buildAutoUsernameFromFullName,
+  shouldApplyAutoUsername,
+} from '../../utils/userAutoUsername';
 
 const normalizeSearchText = (value) => String(value || '').trim();
 
@@ -81,6 +85,7 @@ export default function CreateUserModal({
   subAdminOptions,
   availableTools = [],
   kbDirectoryNodes,
+  kbDirectoryDisabledNodeIds,
   kbDirectoryLoading,
   kbDirectoryError,
   kbDirectoryCreateError,
@@ -108,6 +113,7 @@ export default function CreateUserModal({
   }));
 
   const blurTimerRef = useRef(null);
+  const lastAutoUsernameRef = useRef('');
   const orgPeopleRequestedRef = useRef(false);
 
   const isSubAdmin = String(newUser.user_type || 'normal') === 'sub_admin';
@@ -268,6 +274,7 @@ export default function CreateUserModal({
       return;
     }
     clearBlurTimer();
+    lastAutoUsernameRef.current = '';
     orgPeopleRequestedRef.current = false;
     setOrgPeople([]);
     setEmployeeSearch({
@@ -340,16 +347,28 @@ export default function CreateUserModal({
       if (!employeeUserId) {
         return;
       }
+      const nextFullName = normalizeSearchText(item?.full_name);
+      const nextAutoUsername = buildAutoUsernameFromFullName(nextFullName);
+      const currentUsername = normalizeSearchText(newUser.username);
+      const shouldOverwriteUsername = shouldApplyAutoUsername({
+        currentUsername,
+        lastAutoUsername: lastAutoUsernameRef.current,
+      });
+
       onFieldChange('employee_user_id', employeeUserId);
-      onFieldChange('full_name', normalizeSearchText(item?.full_name));
+      onFieldChange('full_name', nextFullName);
       onFieldChange('company_id', normalizeSearchText(item?.company_id));
       onFieldChange('department_id', normalizeSearchText(item?.department_id));
+      if (shouldOverwriteUsername) {
+        onFieldChange('username', nextAutoUsername);
+        lastAutoUsernameRef.current = nextAutoUsername;
+      }
       setEmployeeSearch((previous) => ({
         ...previous,
         open: false,
       }));
     },
-    [onFieldChange]
+    [newUser.username, onFieldChange]
   );
 
   const showEmployeeDropdown = employeeSearch.open && (
@@ -559,6 +578,7 @@ export default function CreateUserModal({
               label={TEXT.kbRoot}
               hint={TEXT.kbRootHint}
               nodes={kbDirectoryNodes}
+              disabledNodeIds={kbDirectoryDisabledNodeIds}
               selectedNodeId={newUser.managed_kb_root_node_id || ''}
               onSelect={(nodeId) => onFieldChange('managed_kb_root_node_id', nodeId)}
               loading={kbDirectoryLoading}

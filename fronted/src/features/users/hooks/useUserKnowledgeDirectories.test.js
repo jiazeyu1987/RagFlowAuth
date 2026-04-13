@@ -10,11 +10,13 @@ jest.mock('../../knowledge/api', () => ({
 }));
 
 const baseOptions = () => ({
+  allUsers: [],
   isAdminUser: true,
   createMode: {
     isOpen: false,
     userType: 'normal',
     companyId: '',
+    selectedManagedKbRootNodeId: '',
     onRootCreated: jest.fn(),
   },
   policyMode: {
@@ -62,6 +64,48 @@ describe('useUserKnowledgeDirectories', () => {
       ])
     );
     expect(result.current.kbDirectoryError).toBeNull();
+  });
+
+  it('filters occupied managed-root subtrees and exposes disabled ancestor nodes', async () => {
+    knowledgeApi.listKnowledgeDirectories.mockResolvedValueOnce({
+      nodes: [
+        { id: 'node-root-a', name: 'Root A', parent_id: '', path: '/Root A' },
+        { id: 'node-root-a-owned', name: 'Owned', parent_id: 'node-root-a', path: '/Root A/Owned' },
+        { id: 'node-root-a-free', name: 'Free', parent_id: 'node-root-a', path: '/Root A/Free' },
+        { id: 'node-root-b', name: 'Root B', parent_id: '', path: '/Root B' },
+      ],
+    });
+
+    const options = {
+      ...baseOptions(),
+      allUsers: [
+        {
+          user_id: 'sub-occupied',
+          role: 'sub_admin',
+          status: 'active',
+          company_id: 2,
+          managed_kb_root_node_id: 'node-root-a-owned',
+        },
+      ],
+      createMode: {
+        isOpen: true,
+        userType: 'sub_admin',
+        companyId: '2',
+        selectedManagedKbRootNodeId: '',
+        onRootCreated: jest.fn(),
+      },
+    };
+    const { result } = renderHook(() => useUserKnowledgeDirectories(options));
+
+    await waitFor(() => expect(knowledgeApi.listKnowledgeDirectories).toHaveBeenCalledWith({ companyId: 2 }));
+    await waitFor(() =>
+      expect(result.current.kbDirectoryNodes.map((node) => node.id)).toEqual([
+        'node-root-a',
+        'node-root-a-free',
+        'node-root-b',
+      ])
+    );
+    expect(result.current.kbDirectoryDisabledNodeIds).toEqual(['node-root-a']);
   });
 
   it('creates a root directory, reloads directories, and forwards the created node id', async () => {
@@ -138,6 +182,7 @@ describe('useUserKnowledgeDirectories', () => {
     await waitFor(() => {
       expect(result.current.kbDirectoryNodes).toEqual([]);
     });
+    expect(result.current.kbDirectoryDisabledNodeIds).toEqual([]);
     expect(result.current.kbDirectoryCreateError).toBeNull();
     expect(result.current.kbDirectoryCreatingRoot).toBe(false);
   });

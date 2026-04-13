@@ -44,6 +44,7 @@ const UserManagementModals = ({
   departments,
   orgDirectoryError,
   kbDirectoryNodes,
+  kbDirectoryDisabledNodeIds,
   kbDirectoryLoading,
   kbDirectoryError,
   kbDirectoryCreateError,
@@ -102,6 +103,7 @@ const UserManagementModals = ({
       availableGroups={availableGroups}
       availableTools={availableTools}
       kbDirectoryNodes={kbDirectoryNodes}
+      kbDirectoryDisabledNodeIds={kbDirectoryDisabledNodeIds}
       kbDirectoryLoading={kbDirectoryLoading}
       kbDirectoryError={kbDirectoryError}
       kbDirectoryCreateError={kbDirectoryCreateError}
@@ -142,6 +144,7 @@ const UserManagementModals = ({
         subAdminOptions={subAdminOptions}
         availableTools={availableTools}
         kbDirectoryNodes={kbDirectoryNodes}
+        kbDirectoryDisabledNodeIds={kbDirectoryDisabledNodeIds}
         kbDirectoryLoading={kbDirectoryLoading}
         kbDirectoryError={kbDirectoryError}
         kbDirectoryCreateError={kbDirectoryCreateError}

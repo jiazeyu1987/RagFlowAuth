@@ -21,6 +21,9 @@ CODE_OWNED_DINGTALK_CHANNEL = {
 
 CODE_OWNED_EVENT_RULES = {
     "operation_approval_todo": ["in_app", "dingtalk"],
+    "equipment_due_soon": ["in_app"],
+    "metrology_due_soon": ["in_app"],
+    "maintenance_due_soon": ["in_app"],
 }
 
 

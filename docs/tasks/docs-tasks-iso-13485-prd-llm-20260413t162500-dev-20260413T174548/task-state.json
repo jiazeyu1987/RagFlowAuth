@@ -1,0 +1,121 @@
+{
+  "schema_version": 2,
+  "task_id": "docs-tasks-iso-13485-prd-llm-20260413t162500-dev-20260413T174548",
+  "mode": "full",
+  "status": "completed",
+  "current_phase": null,
+  "phase_statuses": [
+    {
+      "phase_id": "P1",
+      "title": "Deliver quality system hub shell and capability contract",
+      "status": "completed",
+      "objective": "接入 `质量体系` 根入口、固定子路由前缀、壳层页面与质量域 capability 快照扩展，且不侵入其他子工作流业务模块。",
+      "owned_paths": [
+        "`fronted/src/routes/routeRegistry.js`",
+        "`fronted/src/components/layout/LayoutSidebar.js`",
+        "`fronted/src/shared/auth/capabilities.js`",
+        "`fronted/src/pages/QualitySystem.js`",
+        "`fronted/src/features/qualitySystem/*`",
+        "`backend/app/core/permission_models.py`",
+        "`fronted/src/routes/routeRegistry.test.js`",
+        "`fronted/src/components/Layout.test.js`",
+        "`fronted/src/pages/QualitySystem.test.js`",
+        "`backend/tests/test_auth_me_service_unit.py`"
+      ],
+      "dependencies": [
+        "WS02 development doc and shared interface doc remain authoritative",
+        "existing auth payload continues to come from `backend/services/auth_me_service.py` via `snapshot.capabilities_dict()`",
+        "existing frontend routing continues to use flat `APP_ROUTES`"
+      ],
+      "deliverables": [
+        "`/quality-system` 根入口和固定子路由前缀预留",
+        "`质量体系` 壳层页，包含模块卡片、选中模块态和待办容器",
+        "前后端一致的质量域 capability/resource/action 目录",
+        "自动化测试覆盖关键路由、守卫和 auth payload"
+      ],
+      "evidence_expectation": "评审人仅通过查看产品代码、窄范围测试结果和 `execution-log.md`，即可确认 WS02 已把入口、权限和壳层接入现有系统，同时未越界实现其他子领域业务。",
+      "evidence": [
+        "execution-log.md#Phase-P1"
+      ],
+      "notes": "- Implementation, narrow automated validation, and same-thread browser evidence are complete; independent tester review remains pending in test-report.md.",
+      "last_reviewed_at": "2026-04-13T19:00:37",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P1-AC1",
+          "text": "`routeRegistry.js` 注册 `/quality-system` 根路由和以下固定子路由前缀：`/quality-system/doc-control`、`/quality-system/training`、`/quality-system/change-control`、`/quality-system/equipment`、`/quality-system/batch-records`、`/quality-system/audit`、`/quality-system/governance-closure`；左侧导航出现 `体系文件`，且进入任一子路由时根导航保持激活。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P1",
+            "test-report.md#T1",
+            "test-report.md#T2",
+            "test-report.md#T3",
+            "test-report.md#T4",
+            "test-report.md#T5"
+          ]
+        },
+        {
+          "ac_id": "P1-AC2",
+          "text": "`backend/app/core/permission_models.py` 与 `fronted/src/shared/auth/capabilities.js` 都包含 WS02 冻结的质量域 resource/action 目录；auth payload 至少为 `admin` 和 `sub_admin` 输出 `quality_system.view`，并为 `admin` 输出 `quality_system.manage`，从而让 `sub_admin` 能通过 capability 进入壳层。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P1",
+            "test-report.md#T1",
+            "test-report.md#T2",
+            "test-report.md#T3",
+            "test-report.md#T4",
+            "test-report.md#T5"
+          ]
+        },
+        {
+          "ac_id": "P1-AC3",
+          "text": "`QualitySystem` 页面只交付入口壳层，不实现子域业务细节，但必须包含模块卡片、固定子路由上下文、能力说明、显式的“已预留/待接入”状态，以及基于现有站内信接口的待办容器。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P1",
+            "test-report.md#T1",
+            "test-report.md#T2",
+            "test-report.md#T3",
+            "test-report.md#T4",
+            "test-report.md#T5"
+          ]
+        },
+        {
+          "ac_id": "P1-AC4",
+          "text": "自动化测试能证明路由元数据、导航可见性、auth capability snapshot 和 `QualitySystem` 壳层页面行为符合预期，且没有通过角色名硬编码绕过页面守卫。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P1",
+            "test-report.md#T1",
+            "test-report.md#T2",
+            "test-report.md#T3",
+            "test-report.md#T4",
+            "test-report.md#T5"
+          ]
+        }
+      ]
+    }
+  ],
+  "planner_review_status": "approved",
+  "test_status": "passed",
+  "blocking_prereqs": [],
+  "iteration_counts": {
+    "planner_revisions": 0,
+    "executor_loops": 1,
+    "test_loops": 1
+  },
+  "created_at": "2026-04-13T17:45:48",
+  "updated_at": "2026-04-13T20:07:40",
+  "branch": "int_latest",
+  "baseline_revision": "1274287b5d2da34421b677a83c264d4b808617b9",
+  "workspace_root": "D:\\ProjectPackage\\RagflowAuth",
+  "tasks_root": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks",
+  "task_dir": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\docs-tasks-iso-13485-prd-llm-20260413t162500-dev-20260413T174548",
+  "goal": "基于 docs/tasks/iso-13485-prd-llm-20260413T162500/development-docs/WS02-quality-system-hub-and-auth.md 开发 WS02：新增体系文件根入口、子路由前缀预留、工作台壳层与质量域 capability 扩展",
+  "artifacts": {
+    "prd": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\docs-tasks-iso-13485-prd-llm-20260413t162500-dev-20260413T174548\\prd.md",
+    "test_plan": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\docs-tasks-iso-13485-prd-llm-20260413t162500-dev-20260413T174548\\test-plan.md",
+    "task_state": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\docs-tasks-iso-13485-prd-llm-20260413t162500-dev-20260413T174548\\task-state.json",
+    "execution_log": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\docs-tasks-iso-13485-prd-llm-20260413t162500-dev-20260413T174548\\execution-log.md",
+    "test_report": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\docs-tasks-iso-13485-prd-llm-20260413t162500-dev-20260413T174548\\test-report.md"
+  }
+}

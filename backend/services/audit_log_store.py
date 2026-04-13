@@ -40,6 +40,7 @@ class AuditEvent:
     kb_dataset_id: Optional[str] = None
     kb_name: Optional[str] = None
     meta_json: Optional[str] = None
+    evidence_json: Optional[str] = None
 
 
 def _to_json_text(value: Any) -> str | None:
@@ -102,11 +103,13 @@ class AuditLogStore:
         kb_dataset_id: str | None = None,
         kb_name: str | None = None,
         meta: dict[str, Any] | None = None,
+        evidence_refs: list[dict[str, Any]] | None = None,
     ) -> AuditEvent:
         now_ms = int(time.time() * 1000)
         meta_json = _to_json_text(meta)
         before_json = _to_json_text(before)
         after_json = _to_json_text(after)
+        evidence_json = _to_json_text(evidence_refs)
 
         conn = self._get_connection()
         cursor = conn.cursor()
@@ -136,11 +139,12 @@ class AuditLogStore:
                     "kb_dataset_id": (kb_dataset_id or None),
                     "kb_name": (kb_name or kb_id or None),
                     "meta_json": meta_json,
+                    "evidence_json": evidence_json,
                     "prev_hash": prev_hash,
                 }
             )
 
-            placeholders = ", ".join(["?"] * 26)
+            placeholders = ", ".join(["?"] * 27)
             cursor.execute(
                 f"""
                 INSERT INTO audit_events (
@@ -151,7 +155,7 @@ class AuditLogStore:
                     prev_hash, event_hash,
                     source, doc_id, filename,
                     kb_id, kb_dataset_id, kb_name,
-                    meta_json
+                    meta_json, evidence_json
                 ) VALUES ({placeholders})
                 """,
                 (
@@ -181,6 +185,7 @@ class AuditLogStore:
                     (kb_dataset_id or None),
                     (kb_name or kb_id or None),
                     meta_json,
+                    evidence_json,
                 ),
             )
             conn.commit()
@@ -214,6 +219,7 @@ class AuditLogStore:
                 kb_dataset_id=(kb_dataset_id or None),
                 kb_name=(kb_name or kb_id or None),
                 meta_json=meta_json,
+                evidence_json=evidence_json,
             )
         finally:
             conn.close()
@@ -325,7 +331,7 @@ class AuditLogStore:
                     prev_hash, event_hash,
                     source, doc_id, filename,
                     kb_id, kb_dataset_id, kb_name,
-                    meta_json
+                    meta_json, evidence_json
                 FROM audit_events
                 {where}
                 ORDER BY created_at_ms DESC

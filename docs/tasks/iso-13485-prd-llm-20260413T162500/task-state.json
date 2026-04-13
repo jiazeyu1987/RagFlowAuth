@@ -1,0 +1,119 @@
+{
+  "schema_version": 2,
+  "task_id": "iso-13485-prd-llm-20260413T162500",
+  "mode": "full",
+  "status": "executing",
+  "current_phase": null,
+  "phase_statuses": [
+    {
+      "phase_id": "P1",
+      "title": "交付多 LLM 独立开发文档包",
+      "status": "completed",
+      "objective": "将现有 ISO 13485 整改 PRD 拆成一组可以独立开发的工作流文档，并配套工作流总览、共享契约和独立评审测试计划。",
+      "owned_paths": [
+        "docs/tasks/iso-13485-prd-llm-20260413T162500/prd.md",
+        "docs/tasks/iso-13485-prd-llm-20260413T162500/test-plan.md",
+        "docs/tasks/iso-13485-prd-llm-20260413T162500/development-docs/00-overview.md",
+        "docs/tasks/iso-13485-prd-llm-20260413T162500/development-docs/01-shared-interfaces.md",
+        "docs/tasks/iso-13485-prd-llm-20260413T162500/development-docs/WS01-controlled-doc-baseline.md",
+        "docs/tasks/iso-13485-prd-llm-20260413T162500/development-docs/WS02-quality-system-hub-and-auth.md",
+        "docs/tasks/iso-13485-prd-llm-20260413T162500/development-docs/WS03-training-and-inbox-loop.md",
+        "docs/tasks/iso-13485-prd-llm-20260413T162500/development-docs/WS04-change-control-ledger.md",
+        "docs/tasks/iso-13485-prd-llm-20260413T162500/development-docs/WS05-equipment-metrology-maintenance.md",
+        "docs/tasks/iso-13485-prd-llm-20260413T162500/development-docs/WS06-batch-records-and-signature.md",
+        "docs/tasks/iso-13485-prd-llm-20260413T162500/development-docs/WS07-audit-and-evidence-export.md",
+        "docs/tasks/iso-13485-prd-llm-20260413T162500/development-docs/WS08-complaints-and-governance-closure.md"
+      ],
+      "dependencies": [
+        "源整改 PRD 可读取",
+        "仓库结构可读取",
+        "现有导航/权限/文档/培训/审计代码可定位"
+      ],
+      "deliverables": [
+        "多工作流总览文档",
+        "共享接口契约文档",
+        "8 份可独立开发的工作流文档",
+        "独立评审测试计划"
+      ],
+      "evidence_expectation": "评审人阅读 `prd.md`、`test-plan.md` 和 `development-docs/*` 后，可以知道每个工作流该由谁做、能改哪里、依赖什么、何时合并。",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P1-AC1",
+          "text": "文档包把源整改 PRD 拆成一组有限、清晰、可命名的工作流，而不是继续保留一份大总纲。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P1"
+          ]
+        },
+        {
+          "ac_id": "P1-AC2",
+          "text": "每个工作流文档都至少包含目标、来源需求、负责边界、不负责范围、代码写入边界、共享接口、依赖关系、验收标准和 LLM 交接约束。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P1"
+          ]
+        },
+        {
+          "ac_id": "P1-AC3",
+          "text": "总览文档明确给出并行开发顺序、冲突风险、共享文件 owner 和建议的 LLM 分配方式。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P1"
+          ]
+        },
+        {
+          "ac_id": "P1-AC4",
+          "text": "共享契约文档明确冻结通用实体名、能力名、路由前缀、通知载荷和审计事件结构，避免不同 LLM 自行发明。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P1"
+          ]
+        },
+        {
+          "ac_id": "P1-AC5",
+          "text": "文档包如实记录源 PRD 尚未足够开发化的事项，明确这些内容不能直接分配为编码任务。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P1"
+          ]
+        },
+        {
+          "ac_id": "P1-AC6",
+          "text": "`test-plan.md` 能让独立评审人仅通过阅读文档与检查路径，即可确认拆解包是否完整、可并行、可落地。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P1"
+          ]
+        }
+      ],
+      "evidence": [
+        "execution-log.md#Phase-P1"
+      ],
+      "notes": "",
+      "last_reviewed_at": "2026-04-13T17:20:56"
+    }
+  ],
+  "planner_review_status": "approved",
+  "test_status": "not_started",
+  "blocking_prereqs": [],
+  "iteration_counts": {
+    "planner_revisions": 0,
+    "executor_loops": 1,
+    "test_loops": 0
+  },
+  "created_at": "2026-04-13T16:25:01",
+  "updated_at": "2026-04-13T17:20:56",
+  "branch": "int_latest",
+  "baseline_revision": "1274287b5d2da34421b677a83c264d4b808617b9",
+  "workspace_root": "D:\\ProjectPackage\\RagflowAuth",
+  "tasks_root": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks",
+  "task_dir": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\iso-13485-prd-llm-20260413T162500",
+  "goal": "基于现有 ISO 13485 整改 PRD，将其拆解成若干份可以独立开发、可分别分配给不同 LLM 的开发文档包，明确每个工作流的目标、边界、依赖、接口、验收标准与交接约束",
+  "artifacts": {
+    "prd": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\iso-13485-prd-llm-20260413T162500\\prd.md",
+    "test_plan": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\iso-13485-prd-llm-20260413T162500\\test-plan.md",
+    "task_state": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\iso-13485-prd-llm-20260413T162500\\task-state.json",
+    "execution_log": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\iso-13485-prd-llm-20260413T162500\\execution-log.md",
+    "test_report": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\iso-13485-prd-llm-20260413T162500\\test-report.md"
+  }
+}

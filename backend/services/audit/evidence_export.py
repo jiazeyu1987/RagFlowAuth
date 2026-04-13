@@ -96,6 +96,7 @@ class AuditEvidenceExportService:
                 "before_json",
                 "after_json",
                 "meta_json",
+                "evidence_json",
             ],
         )
         files["electronic_signatures.json"] = self._json_bytes(signatures)
@@ -228,7 +229,18 @@ class AuditEvidenceExportService:
             if value is None or value == "":
                 continue
             normalized[key] = int(value)
-        for key in ("doc_id", "actor", "signature_id", "request_id", "event_type", "filename"):
+        for key in (
+            "action",
+            "doc_id",
+            "actor",
+            "signature_id",
+            "request_id",
+            "event_type",
+            "filename",
+            "resource_type",
+            "resource_id",
+            "source",
+        ):
             value = str(filters.get(key) or "").strip()
             if value:
                 normalized[key] = value
@@ -246,7 +258,18 @@ class AuditEvidenceExportService:
         if filters.get("to_ms") is not None:
             where.append("created_at_ms <= ?")
             params.append(int(filters["to_ms"]))
-        for key in ("doc_id", "actor", "signature_id", "request_id", "event_type", "filename"):
+        for key in (
+            "action",
+            "doc_id",
+            "actor",
+            "signature_id",
+            "request_id",
+            "event_type",
+            "filename",
+            "resource_type",
+            "resource_id",
+            "source",
+        ):
             value = filters.get(key)
             if value:
                 where.append(f"{key} = ?")
@@ -256,14 +279,19 @@ class AuditEvidenceExportService:
                 id, action, actor, actor_username, company_id, company_name, department_id, department_name,
                 created_at_ms, resource_type, resource_id, event_type, before_json, after_json, reason,
                 signature_id, request_id, client_ip, prev_hash, event_hash, source, doc_id, filename,
-                kb_id, kb_dataset_id, kb_name, meta_json
+                kb_id, kb_dataset_id, kb_name, meta_json, evidence_json
             FROM audit_events
             WHERE {' AND '.join(where)}
             ORDER BY created_at_ms ASC, id ASC
         """
         with self._conn() as conn:
             rows = conn.execute(query, params).fetchall()
-        return [dict(row) for row in rows]
+        items: list[dict[str, Any]] = []
+        for row in rows:
+            item = dict(row)
+            item["evidence_refs"] = self._decode_json(item.get("evidence_json")) or []
+            items.append(item)
+        return items
 
     def _list_electronic_signatures(self, filters: dict[str, Any]) -> list[dict[str, Any]]:
         where = ["1=1"]

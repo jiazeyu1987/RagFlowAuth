@@ -8,12 +8,15 @@ jest.mock('../../config/backend', () => ({
 jest.mock('../../shared/http/httpClient', () => ({
   httpClient: {
     requestJson: jest.fn(),
+    request: jest.fn(),
   },
 }));
 
 describe('auditApi', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    window.URL.createObjectURL = jest.fn(() => 'blob:mock');
+    window.URL.revokeObjectURL = jest.fn();
   });
 
   it('normalizes audit list endpoints to stable objects and arrays', async () => {
@@ -51,6 +54,30 @@ describe('auditApi', () => {
       'http://auth.local/api/ragflow/downloads?limit=10',
       { method: 'GET' }
     );
+  });
+
+  it('exports the evidence package through the authenticated download path', async () => {
+    const clickSpy = jest.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+    const response = {
+      ok: true,
+      headers: {
+        get: jest.fn(() => 'attachment; filename="inspection_evidence_test.zip"'),
+      },
+      blob: jest.fn().mockResolvedValue(new Blob(['zip-bytes'])),
+    };
+    httpClient.request.mockResolvedValue(response);
+
+    await expect(auditApi.exportEvidence({ source: 'global_search', request_id: 'rid-1' })).resolves.toEqual({
+      success: true,
+      filename: 'inspection_evidence_test.zip',
+    });
+
+    expect(httpClient.request).toHaveBeenCalledWith(
+      'http://auth.local/api/audit/evidence-export?source=global_search&request_id=rid-1',
+      { method: 'GET' }
+    );
+
+    clickSpy.mockRestore();
   });
 
   it('normalizes document versions payload to a stable object shape', async () => {

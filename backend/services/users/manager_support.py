@@ -22,6 +22,32 @@ class UserAccessAssignment:
 
 class UserManagementMutationSupport:
     @staticmethod
+    def _normalize_managed_kb_root_path(path: str | None) -> str | None:
+        raw_path = str(path or "").strip()
+        if not raw_path:
+            return None
+        if raw_path == "/":
+            return "/"
+        parts = [str(part or "").strip() for part in raw_path.split("/") if str(part or "").strip()]
+        if not parts:
+            return "/"
+        return f"/{'/'.join(parts)}"
+
+    @classmethod
+    def _managed_kb_root_paths_overlap(cls, left: str | None, right: str | None) -> bool:
+        normalized_left = cls._normalize_managed_kb_root_path(left)
+        normalized_right = cls._normalize_managed_kb_root_path(right)
+        if not normalized_left or not normalized_right:
+            return False
+        if normalized_left == "/" or normalized_right == "/":
+            return True
+        return (
+            normalized_left == normalized_right
+            or normalized_left.startswith(f"{normalized_right}/")
+            or normalized_right.startswith(f"{normalized_left}/")
+        )
+
+    @staticmethod
     def _requires_manager_assignment(
         *,
         role: str,
@@ -78,10 +104,16 @@ class UserManagementMutationSupport:
             user_data.managed_kb_root_node_id
         )
         if role == "sub_admin":
-            managed_kb_root_node_id, _ = self._validate_managed_kb_root_node(
+            managed_kb_root_node_id, managed_kb_root_path = self._validate_managed_kb_root_node(
                 company_id=company_id,
                 node_id=managed_kb_root_node_id,
                 required=True,
+            )
+            self._validate_managed_kb_root_assignment_conflict(
+                company_id=company_id,
+                user_id=None,
+                node_id=managed_kb_root_node_id,
+                node_path=managed_kb_root_path,
             )
             manager_user_id = None
         else:
@@ -134,10 +166,16 @@ class UserManagementMutationSupport:
         if effective_role == "sub_admin":
             if "managed_kb_root_node_id" in fields_set:
                 managed_kb_root_node_id = user_data.managed_kb_root_node_id
-            managed_kb_root_node_id, _ = self._validate_managed_kb_root_node(
+            managed_kb_root_node_id, managed_kb_root_path = self._validate_managed_kb_root_node(
                 company_id=company_id,
                 node_id=managed_kb_root_node_id,
                 required=True,
+            )
+            self._validate_managed_kb_root_assignment_conflict(
+                company_id=company_id,
+                user_id=user_id,
+                node_id=managed_kb_root_node_id,
+                node_path=managed_kb_root_path,
             )
             manager_user_id = None
         else:
@@ -184,6 +222,55 @@ class UserManagementMutationSupport:
             return [user_data.group_id]
 
         return None
+
+    def _validate_managed_kb_root_assignment_conflict(
+        self,
+        *,
+        company_id: int | None,
+        user_id: str | None,
+        node_id: str | None,
+        node_path: str | None,
+    ) -> None:
+        clean_node_id = self._normalize_managed_kb_root_node_id(node_id)
+        normalized_target_path = self._normalize_managed_kb_root_path(node_path)
+        if company_id is None or not clean_node_id or not normalized_target_path:
+            return
+
+        assigned_users = self._port.list_users(
+            q=None,
+            role="sub_admin",
+            status="active",
+            group_id=None,
+            company_id=company_id,
+            department_id=None,
+            created_from_ms=None,
+            created_to_ms=None,
+            manager_user_id=None,
+            limit=1000,
+        )
+        current_user_id = str(user_id or "").strip()
+        for assigned_user in assigned_users or []:
+            assigned_user_id = str(getattr(assigned_user, "user_id", "") or "").strip()
+            if current_user_id and assigned_user_id == current_user_id:
+                continue
+
+            assigned_node_id = self._normalize_managed_kb_root_node_id(
+                getattr(assigned_user, "managed_kb_root_node_id", None)
+            )
+            if not assigned_node_id:
+                continue
+
+            assigned_path = self._normalize_managed_kb_root_path(
+                self._port.get_managed_kb_root_path(
+                    company_id=company_id,
+                    node_id=assigned_node_id,
+                )
+            )
+            if not assigned_path:
+                continue
+
+            if self._managed_kb_root_paths_overlap(normalized_target_path, assigned_path):
+                raise self._error("managed_kb_root_node_conflict", status_code=409)
 
     def _normalize_tool_ids(self, raw_tool_ids: list[str] | None) -> list[str]:
         try:

@@ -5,6 +5,7 @@ export default function ManagedKbRootSection({
   label,
   hint,
   nodes,
+  disabledNodeIds = [],
   selectedNodeId,
   onSelect,
   loading,
@@ -40,6 +41,7 @@ export default function ManagedKbRootSection({
       ) : null}
       <KnowledgeRootNodeSelector
         nodes={nodes}
+        disabledNodeIds={disabledNodeIds}
         selectedNodeId={selectedNodeId}
         onSelect={onSelect}
         disabled={false}

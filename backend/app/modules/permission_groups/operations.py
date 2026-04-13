@@ -38,3 +38,14 @@ def get_visible_folder_ids_for_target(ctx, service, *, folder_id: str) -> set[st
     visible_folder_ids = get_visible_folder_ids(ctx, service)
     permission_access.assert_folder_visible(folder_id, visible_folder_ids)
     return visible_folder_ids
+
+
+def get_manageable_folder_ids(ctx, service) -> set[str]:
+    _folder_snapshot, manageable_folder_ids = permission_access.get_writable_folder_scope(ctx, service)
+    return manageable_folder_ids
+
+
+def get_manageable_folder_ids_for_target(ctx, service, *, folder_id: str) -> set[str]:
+    manageable_folder_ids = get_manageable_folder_ids(ctx, service)
+    permission_access.assert_folder_manageable(folder_id, manageable_folder_ids)
+    return manageable_folder_ids

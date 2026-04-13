@@ -1,0 +1,188 @@
+{
+  "schema_version": 2,
+  "task_id": "docs-tasks-iso-13485-prd-llm-20260413t162500-dev-20260413T173859",
+  "mode": "full",
+  "status": "ready_for_execution",
+  "current_phase": "P1",
+  "phase_statuses": [
+    {
+      "phase_id": "P1",
+      "title": "实现 WS05 后端域与提醒/导出基础",
+      "status": "pending",
+      "objective": "落地设备、计量、维护三组表结构、服务、路由和提醒/导出能力，并接入依赖装配与审计。",
+      "owned_paths": [
+        "`backend/database/schema/equipment.py`",
+        "`backend/database/schema/metrology.py`",
+        "`backend/database/schema/maintenance.py`",
+        "`backend/database/schema/ensure.py`",
+        "`backend/services/equipment/*`",
+        "`backend/services/metrology/*`",
+        "`backend/services/maintenance/*`",
+        "`backend/app/modules/equipment/*`",
+        "`backend/app/modules/metrology/*`",
+        "`backend/app/modules/maintenance/*`",
+        "`backend/app/dependency_factory.py`",
+        "`backend/app/main.py`",
+        "`backend/services/notification/event_catalog.py`",
+        "`backend/services/notification/code_defaults.py`",
+        "`backend/tests/test_equipment_api_unit.py`",
+        "`backend/tests/test_metrology_api_unit.py`",
+        "`backend/tests/test_maintenance_api_unit.py`",
+        "`backend/tests/test_dependencies_unit.py`"
+      ],
+      "dependencies": [
+        "现有 SQLite schema ensure 机制可复用；现有通知与审计服务可注入；`WS07` 附件结构按共享契约保存为引用对象。"
+      ],
+      "deliverables": [
+        "三组新表；三组服务与 API；生命周期状态流转；确认/批准动作；CSV 导出；站内信提醒；后端单元测试。"
+      ],
+      "evidence_expectation": "`execution-log.md` 记录新增表、服务、接口、提醒事件和测试命令；后端测试输出与通知/审计查询结果能证明功能闭环。",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P1-AC1",
+          "text": "设备主档支持采购、验收、投用、维护中、计量中、报废等状态流转，且状态变化能写入独立留痕与审计。",
+          "status": "pending",
+          "evidence": []
+        },
+        {
+          "ac_id": "P1-AC2",
+          "text": "计量记录与维护记录支持附件引用、责任人、到期时间、确认/批准动作和导出接口。",
+          "status": "pending",
+          "evidence": []
+        },
+        {
+          "ac_id": "P1-AC3",
+          "text": "WS05 能通过现有通知系统发出 `equipment_due_soon`、`metrology_due_soon`、`maintenance_due_soon` 站内信提醒，缺少 recipient 或 channel 时直接失败，不静默跳过。",
+          "status": "pending",
+          "evidence": []
+        },
+        {
+          "ac_id": "P1-AC4",
+          "text": "后端测试覆盖创建、查询、状态流转、提醒派发、导出与审计关键路径。",
+          "status": "pending",
+          "evidence": []
+        }
+      ],
+      "evidence": [],
+      "notes": "",
+      "last_reviewed_at": null
+    },
+    {
+      "phase_id": "P2",
+      "title": "实现 WS05 前端页面与特性层",
+      "status": "pending",
+      "objective": "在不修改路由注册与 capability owner 文件的前提下，交付三张可直接接入的管理页面和其配套 API/状态管理。",
+      "owned_paths": [
+        "`fronted/src/features/equipment/*`",
+        "`fronted/src/features/metrology/*`",
+        "`fronted/src/features/maintenance/*`",
+        "`fronted/src/pages/EquipmentLifecycle.js`",
+        "`fronted/src/pages/MetrologyManagement.js`",
+        "`fronted/src/pages/MaintenanceManagement.js`",
+        "`fronted/src/pages/EquipmentLifecycle.test.js`",
+        "`fronted/src/pages/MetrologyManagement.test.js`",
+        "`fronted/src/pages/MaintenanceManagement.test.js`"
+      ],
+      "dependencies": [
+        "P1 的接口契约稳定；现有 `httpClient`、`useAuth`、页面测试栈可复用；`WS02` 路由/权限接入仍由其 own。"
+      ],
+      "deliverables": [
+        "三张页面；三组前端 API client；表单交互；列表刷新；提醒/导出按钮；页面级测试。"
+      ],
+      "evidence_expectation": "`execution-log.md` 记录新增前端文件和页面测试命令；Jest 结果能证明页面交互与 API 调用契约一致。",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P2-AC1",
+          "text": "三张页面都能加载各自列表、创建记录，并触发 WS05 对应的状态/确认/批准动作。",
+          "status": "pending",
+          "evidence": []
+        },
+        {
+          "ac_id": "P2-AC2",
+          "text": "页面提供显式的提醒派发和导出入口，并对接口错误给出可见错误提示，不吞错。",
+          "status": "pending",
+          "evidence": []
+        },
+        {
+          "ac_id": "P2-AC3",
+          "text": "页面代码不修改 `routeRegistry.js`、`capabilities.js`、`permission_models.py`，而是以可独立接入的页面模块形式交付给 `WS02`。",
+          "status": "pending",
+          "evidence": []
+        },
+        {
+          "ac_id": "P2-AC4",
+          "text": "页面测试覆盖成功路径、失败提示和关键交互提交，不依赖隐藏上下文。",
+          "status": "pending",
+          "evidence": []
+        }
+      ],
+      "evidence": [],
+      "notes": "",
+      "last_reviewed_at": null
+    },
+    {
+      "phase_id": "P3",
+      "title": "完成验证与任务证据归档",
+      "status": "pending",
+      "objective": "运行窄范围后端/前端验证，补 execution/test 工件，并把状态推进到可测试完成态。",
+      "owned_paths": [
+        "`docs/tasks/docs-tasks-iso-13485-prd-llm-20260413t162500-dev-20260413T173859/execution-log.md`",
+        "`docs/tasks/docs-tasks-iso-13485-prd-llm-20260413t162500-dev-20260413T173859/test-report.md`",
+        "`docs/tasks/docs-tasks-iso-13485-prd-llm-20260413t162500-dev-20260413T173859/task-state.json`"
+      ],
+      "dependencies": [
+        "P1、P2 已交付；本地 `pytest` 与前端 Jest 可运行；任务工件校验脚本可运行。"
+      ],
+      "deliverables": [
+        "通过的验证命令；执行证据；测试报告；同步后的任务状态。"
+      ],
+      "evidence_expectation": "状态脚本、验证脚本、测试命令与任务工件中的证据引用互相一致。",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P3-AC1",
+          "text": "`validate_artifacts.py` 通过，且 `task-state.json` 已同步到可执行/测试后的正确阶段。",
+          "status": "pending",
+          "evidence": []
+        },
+        {
+          "ac_id": "P3-AC2",
+          "text": "后端与前端窄范围命令全部通过，失败项为零。",
+          "status": "pending",
+          "evidence": []
+        },
+        {
+          "ac_id": "P3-AC3",
+          "text": "`execution-log.md` 和 `test-report.md` 都记录了每个 acceptance id 的对应证据与剩余风险。",
+          "status": "pending",
+          "evidence": []
+        }
+      ],
+      "evidence": [],
+      "notes": "",
+      "last_reviewed_at": null
+    }
+  ],
+  "planner_review_status": "approved",
+  "test_status": "not_started",
+  "blocking_prereqs": [],
+  "iteration_counts": {
+    "planner_revisions": 0,
+    "executor_loops": 0,
+    "test_loops": 0
+  },
+  "created_at": "2026-04-13T17:39:00",
+  "updated_at": "2026-04-13T18:04:26",
+  "branch": "int_latest",
+  "baseline_revision": "1274287b5d2da34421b677a83c264d4b808617b9",
+  "workspace_root": "D:\\ProjectPackage\\RagflowAuth",
+  "tasks_root": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks",
+  "task_dir": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\docs-tasks-iso-13485-prd-llm-20260413t162500-dev-20260413T173859",
+  "goal": "参考 docs/tasks/iso-13485-prd-llm-20260413T162500/development-docs/WS05-equipment-metrology-maintenance.md 开发设备全生命周期、计量与维护保养功能",
+  "artifacts": {
+    "prd": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\docs-tasks-iso-13485-prd-llm-20260413t162500-dev-20260413T173859\\prd.md",
+    "test_plan": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\docs-tasks-iso-13485-prd-llm-20260413t162500-dev-20260413T173859\\test-plan.md",
+    "task_state": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\docs-tasks-iso-13485-prd-llm-20260413t162500-dev-20260413T173859\\task-state.json",
+    "execution_log": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\docs-tasks-iso-13485-prd-llm-20260413t162500-dev-20260413T173859\\execution-log.md",
+    "test_report": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\docs-tasks-iso-13485-prd-llm-20260413t162500-dev-20260413T173859\\test-report.md"
+  }
+}

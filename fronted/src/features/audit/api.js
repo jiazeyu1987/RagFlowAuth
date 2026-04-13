@@ -25,9 +25,57 @@ const normalizeCountField = (payload, field, action) => {
   return value;
 };
 
+const buildQueryString = (params = {}) => {
+  const query = new URLSearchParams();
+  Object.entries(params).forEach(([key, value]) => {
+    if (value === undefined || value === null || value === '') return;
+    query.set(key, String(value));
+  });
+  return query.toString();
+};
+
+const parseMaybeJson = async (response) => {
+  try {
+    return await response.json();
+  } catch {
+    return null;
+  }
+};
+
+const parseContentDispositionFilename = (contentDisposition, fallbackName) => {
+  let filename = fallbackName;
+  const header = String(contentDisposition || '');
+  if (!header) return filename;
+
+  const utf8Match = header.match(/filename\*=UTF-8''([^;\s]+)/i);
+  if (utf8Match?.[1]) return decodeURIComponent(utf8Match[1]);
+
+  const filenameMatch = header.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
+  if (filenameMatch?.[1]) return filenameMatch[1].replace(/['"]/g, '');
+
+  return filename;
+};
+
+const saveResponseToBrowser = async (response, fallbackName) => {
+  const filename = parseContentDispositionFilename(
+    response.headers?.get?.('Content-Disposition'),
+    fallbackName
+  );
+  const blob = await response.blob();
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(url);
+  return { success: true, filename };
+};
+
 export const auditApi = {
   async listEvents(params = {}) {
-    const query = new URLSearchParams(params).toString();
+    const query = buildQueryString(params);
     const path = query ? `/api/audit/events?${query}` : '/api/audit/events';
     const payload = await httpClient.requestJson(authBackendUrl(path), { method: 'GET' });
     return {
@@ -37,7 +85,7 @@ export const auditApi = {
   },
 
   async listDocuments(params = {}) {
-    const query = new URLSearchParams(params).toString();
+    const query = buildQueryString(params);
     const path = query ? `/api/knowledge/documents?${query}` : '/api/knowledge/documents';
     return normalizeArrayField(
       await httpClient.requestJson(authBackendUrl(path), { method: 'GET' }),
@@ -66,7 +114,7 @@ export const auditApi = {
   },
 
   async listDeletions(params = {}) {
-    const query = new URLSearchParams(params).toString();
+    const query = buildQueryString(params);
     const path = query ? `/api/knowledge/deletions?${query}` : '/api/knowledge/deletions';
     const payload = await httpClient.requestJson(authBackendUrl(path), { method: 'GET' });
     normalizeCountField(payload, 'count', 'audit_deletions_list');
@@ -74,12 +122,28 @@ export const auditApi = {
   },
 
   async listDownloads(params = {}) {
-    const query = new URLSearchParams(params).toString();
+    const query = buildQueryString(params);
     const path = query ? `/api/ragflow/downloads?${query}` : '/api/ragflow/downloads';
     return normalizeArrayField(
       await httpClient.requestJson(authBackendUrl(path), { method: 'GET' }),
       'downloads',
       'audit_downloads_list'
     );
+  },
+
+  async exportEvidence(params = {}) {
+    const query = buildQueryString(params);
+    const path = query ? `/api/audit/evidence-export?${query}` : '/api/audit/evidence-export';
+    const response = await httpClient.request(authBackendUrl(path), { method: 'GET' });
+    if (!response.ok) {
+      const payload = await parseMaybeJson(response);
+      const message =
+        payload?.detail || payload?.message || payload?.error || `Request failed (${response.status})`;
+      const error = new Error(message);
+      error.status = response.status;
+      error.data = payload;
+      throw error;
+    }
+    return saveResponseToBrowser(response, `inspection_evidence_${Date.now()}.zip`);
   },
 };

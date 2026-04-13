@@ -7,7 +7,7 @@ import time
 import uuid
 from pathlib import Path
 
-from backend.app.core.config import settings
+from backend.app.core.config import settings, validate_jwt_secret
 from backend.app.core.paths import repo_root, resolve_repo_path
 from backend.runtime.backup import run_backup, write_default_backup_config
 from backend.database.paths import resolve_auth_db_path
@@ -116,6 +116,8 @@ def run_server(
     reload: bool = False,
     workers: int | None = None,
 ) -> None:
+    validate_jwt_secret(settings)
+
     try:
         import uvicorn
     except Exception as exc:  # pragma: no cover

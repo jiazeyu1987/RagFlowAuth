@@ -14,9 +14,10 @@ from zipfile import ZIP_DEFLATED, ZipFile
 from backend.app.core.config import settings
 from backend.app.core.paths import resolve_repo_path
 from backend.database.tenant_paths import tenant_key_for_company
+from backend.services.document_control import controlled_compliance_relpath
 
 
-REGISTER_RELATIVE_PATH = "doc/compliance/controlled_document_register.md"
+REGISTER_RELATIVE_PATH = controlled_compliance_relpath("controlled_document_register.md")
 REQUIRED_REGISTER_COLUMNS = (
     "doc_code",
     "title",

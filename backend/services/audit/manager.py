@@ -124,6 +124,8 @@ class AuditLogManager:
                     "kb_name": r.kb_name,
                     "meta": _decode_meta_json(r.meta_json),
                     "meta_json": r.meta_json,
+                    "evidence_refs": _decode_meta_json(r.evidence_json) or [],
+                    "evidence_json": r.evidence_json,
                 }
                 for r in rows
             ],

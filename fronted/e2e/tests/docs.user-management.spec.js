@@ -1,6 +1,11 @@
 // @ts-check
 const { test, expect } = require('@playwright/test');
 const { loadBootstrapSummary } = require('../helpers/bootstrapSummary');
+const {
+  createKnowledgeDirectory,
+  deleteKnowledgeDirectory,
+  listKnowledgeDirectories,
+} = require('../helpers/knowledgeDirectoryFlow');
 const { openSessionPage } = require('../helpers/docSessionPage');
 const { FRONTEND_BASE_URL } = require('../helpers/docRealFlow');
 const {
@@ -55,6 +60,7 @@ test('User management covers real create, reset password, disable/enable, login 
   let subAdminUi = null;
   let createdUserId = '';
   let createdSubAdminId = '';
+  let createdManagedRootId = '';
 
   try {
     adminSession = await loginApiAs(adminUsername, adminPassword);
@@ -76,6 +82,20 @@ test('User management covers real create, reset password, disable/enable, login 
     const bootstrapSubAdminId = String(subAdminUser?.user_id || '').trim();
     expect(bootstrapSubAdminId).toBeTruthy();
     const bootstrapSubAdmin = await getUser(adminSession.api, adminSession.headers, bootstrapSubAdminId);
+    const knowledgeTree = await listKnowledgeDirectories(adminSession.api, adminSession.headers);
+    const occupiedManagedRootId = String(
+      bootstrapSubAdmin.managed_kb_root_node_id || summary?.knowledge?.managed_root_node_id || ''
+    ).trim();
+    expect(occupiedManagedRootId).toBeTruthy();
+    expect(
+      knowledgeTree.nodes.some((node) => String(node?.id || '').trim() === occupiedManagedRootId)
+    ).toBeTruthy();
+    const createdManagedRoot = await createKnowledgeDirectory(adminSession.api, adminSession.headers, {
+      name: `doc_user_management_root_${Date.now()}`,
+      parentId: null,
+    });
+    createdManagedRootId = String(createdManagedRoot.id || '').trim();
+    expect(createdManagedRootId).toBeTruthy();
 
     const createSubAdminResponse = await adminSession.api.post('/api/users', {
       headers: adminSession.headers,
@@ -87,7 +107,7 @@ test('User management covers real create, reset password, disable/enable, login 
         role: 'sub_admin',
         company_id: bootstrapSubAdmin.company_id || viewerUser.company_id,
         department_id: bootstrapSubAdmin.department_id || viewerUser.department_id,
-        managed_kb_root_node_id: bootstrapSubAdmin.managed_kb_root_node_id,
+        managed_kb_root_node_id: createdManagedRootId,
         tool_ids: [],
         status: 'active',
         max_login_sessions: 3,
@@ -153,6 +173,14 @@ test('User management covers real create, reset password, disable/enable, login 
     await expect(page.getByTestId('users-management-layout')).toBeVisible();
     await page.reload();
     await expect(page.getByTestId(`users-row-${createdUserId}`)).toBeVisible();
+    await expect(page.getByTestId(`users-row-${createdSubAdminId}`)).toBeVisible();
+
+    await page.getByTestId(`users-edit-policy-${createdSubAdminId}`).click();
+    await expect(page.getByTestId('users-policy-modal')).toBeVisible();
+    await expect(page.getByTestId(`users-kb-root-node-${createdManagedRootId}`)).toBeVisible();
+    await expect(page.getByTestId(`users-kb-root-node-${occupiedManagedRootId}`)).toHaveCount(0);
+    await page.getByTestId('users-policy-cancel').click();
+    await expect(page.getByTestId('users-policy-modal')).toHaveCount(0);
 
     const resetResponsePromise = page.waitForResponse((response) => (
       response.request().method() === 'PUT'
@@ -257,6 +285,9 @@ test('User management covers real create, reset password, disable/enable, login 
         await deleteUserById(adminSession.api, adminSession.headers, createdSubAdminId).catch(() => {});
       } else {
         await ensureUserDeletedByUsername(adminSession.api, adminSession.headers, managedSubAdminUsername).catch(() => {});
+      }
+      if (createdManagedRootId) {
+        await deleteKnowledgeDirectory(adminSession.api, adminSession.headers, createdManagedRootId).catch(() => {});
       }
     }
     if (subAdminUi) await subAdminUi.context.close();

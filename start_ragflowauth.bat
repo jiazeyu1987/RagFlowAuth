@@ -3,13 +3,17 @@ setlocal
 cd /d "%~dp0"
 
 set "BACKEND_PORT=8001"
+set "BACKEND_HOST=0.0.0.0"
 set "FRONTEND_PORT=3001"
 set "OPEN_URL=http://127.0.0.1:%FRONTEND_PORT%/chat"
+set "JWT_SECRET_VALUE="
 
 call :is_listening %BACKEND_PORT%
 if errorlevel 1 (
+  call :resolve_jwt_secret
+  if errorlevel 1 exit /b 1
   echo [INFO] Starting backend on port %BACKEND_PORT% ...
-  start "RagflowAuth Backend" cmd /k "cd /d ""%~dp0"" && python -m uvicorn backend.app.main:app --host 0.0.0.0 --port %BACKEND_PORT%"
+  start "RagflowAuth Backend" cmd /k "cd /d ""%~dp0"" && python -m backend run --host %BACKEND_HOST% --port %BACKEND_PORT%"
 ) else (
   echo [INFO] Backend already listening on port %BACKEND_PORT%.
 )
@@ -24,6 +28,31 @@ if errorlevel 1 (
 
 echo [INFO] Opening %OPEN_URL%
 start "" "%OPEN_URL%"
+exit /b 0
+
+:resolve_jwt_secret
+if defined JWT_SECRET_KEY (
+  set "JWT_SECRET_VALUE=%JWT_SECRET_KEY%"
+)
+
+if not defined JWT_SECRET_VALUE if exist ".env" (
+  for /f "usebackq tokens=1* delims==" %%A in (".env") do (
+    if /I "%%A"=="JWT_SECRET_KEY" (
+      set "JWT_SECRET_VALUE=%%B"
+    )
+  )
+)
+
+if not defined JWT_SECRET_VALUE (
+  echo [ERROR] Missing JWT_SECRET_KEY. Set it in the current shell or in .env before starting backend.
+  exit /b 1
+)
+
+if "%JWT_SECRET_VALUE%"=="your-secret-key-change-in-production" (
+  echo [ERROR] JWT_SECRET_KEY is still using the default insecure value. Update it before starting backend.
+  exit /b 1
+)
+
 exit /b 0
 
 :is_listening

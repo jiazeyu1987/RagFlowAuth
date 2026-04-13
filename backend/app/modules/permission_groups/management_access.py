@@ -54,6 +54,13 @@ def validate_group_scope(ctx, *, accessible_kbs, accessible_kb_nodes, accessible
         )
     except Exception as exc:
         raise HTTPException(status_code=int(getattr(exc, "status_code", 400) or 400), detail=str(exc)) from exc
+    try:
+        chat_management_manager(ctx).validate_group_chat_scope(
+            user=ctx.user,
+            accessible_chats=accessible_chats,
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=int(getattr(exc, "status_code", 400) or 400), detail=str(exc)) from exc
 
 
 def _has_scope_entries(*collections) -> bool:
@@ -64,13 +71,6 @@ def _has_scope_entries(*collections) -> bool:
             if isinstance(value, str) and value.strip():
                 return True
     return False
-    try:
-        chat_management_manager(ctx).validate_group_chat_scope(
-            user=ctx.user,
-            accessible_chats=accessible_chats,
-        )
-    except Exception as exc:
-        raise HTTPException(status_code=int(getattr(exc, "status_code", 400) or 400), detail=str(exc)) from exc
 
 
 def list_manageable_groups(ctx, service: PermissionGroupsService) -> list[dict]:

@@ -5,6 +5,8 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 import re
 
+from backend.services.document_control import controlled_compliance_relpath
+
 from .r7_validator import ComplianceIssue
 
 
@@ -30,7 +32,7 @@ class Gbz05ComplianceReport:
 
 
 REQUIRED_DOCS: dict[str, tuple[str, ...]] = {
-    "doc/compliance/training_matrix.md": (
+    controlled_compliance_relpath("training_matrix.md"): (
         "版本:",
         "更新时间:",
         "TR-001",
@@ -39,7 +41,7 @@ REQUIRED_DOCS: dict[str, tuple[str, ...]] = {
         "restore_drill_execute",
         "curriculum_version",
     ),
-    "doc/compliance/training_operator_qualification_status.md": (
+    controlled_compliance_relpath("training_operator_qualification_status.md"): (
         "版本:",
         "更新时间:",
         "最后仓库复核日期:",
@@ -48,19 +50,19 @@ REQUIRED_DOCS: dict[str, tuple[str, ...]] = {
         "仓库外证据状态:",
         "Residual gap 边界:",
     ),
-    "doc/compliance/controlled_document_register.md": (
-        "doc/compliance/training_matrix.md",
-        "doc/compliance/training_operator_qualification_status.md",
+    controlled_compliance_relpath("controlled_document_register.md"): (
+        controlled_compliance_relpath("training_matrix.md"),
+        controlled_compliance_relpath("training_operator_qualification_status.md"),
     ),
-    "doc/compliance/urs.md": ("URS-017", "GBZ-05"),
-    "doc/compliance/srs.md": ("SRS-017", "URS-017"),
-    "doc/compliance/traceability_matrix.md": ("GBZ-05", "SRS-017"),
-    "doc/compliance/validation_plan.md": (
+    controlled_compliance_relpath("urs.md"): ("URS-017", "GBZ-05"),
+    controlled_compliance_relpath("srs.md"): ("SRS-017", "URS-017"),
+    controlled_compliance_relpath("traceability_matrix.md"): ("GBZ-05", "SRS-017"),
+    controlled_compliance_relpath("validation_plan.md"): (
         "validate_gbz05_repo_compliance.py",
         "test_training_compliance_api_unit",
         "test_gbz05_compliance_gate_unit",
     ),
-    "doc/compliance/validation_report.md": (
+    controlled_compliance_relpath("validation_report.md"): (
         "GBZ-05",
         "validate_gbz05_repo_compliance.py",
         "external_training_qualification_records_pending",
@@ -86,17 +88,17 @@ REQUIRED_FILES: tuple[str, ...] = (
 
 REQUIRED_PATTERNS: tuple[tuple[str, str, str], ...] = (
     (
-        "doc/compliance/traceability_matrix.md",
+        controlled_compliance_relpath("traceability_matrix.md"),
         r"\|\s*GBZ-05\s*\|\s*URS-017\s*\|\s*SRS-017\s*\|",
         "追踪矩阵缺少 GBZ-05 映射",
     ),
     (
-        "doc/compliance/traceability_matrix.md",
+        controlled_compliance_relpath("traceability_matrix.md"),
         r"backend/services/training_compliance\.py",
         "追踪矩阵缺少培训与操作员认证实现映射",
     ),
     (
-        "doc/compliance/traceability_matrix.md",
+        controlled_compliance_relpath("traceability_matrix.md"),
         r"backend\.tests\.test_training_compliance_api_unit",
         "追踪矩阵缺少 GBZ-05 测试映射",
     ),
@@ -153,7 +155,7 @@ def validate_gbz05_repo_state(repo_root: str | Path, *, as_of: date | None = Non
                 ComplianceIssue(code="required_mapping_missing", message=message, path=rel_path)
             )
 
-    status_path = "doc/compliance/training_operator_qualification_status.md"
+    status_path = controlled_compliance_relpath("training_operator_qualification_status.md")
     status_text = docs_cache.get(status_path, "")
     if status_text:
         repo_status = _extract_value(status_text, "仓库内证据状态:")

@@ -2,8 +2,12 @@ import { act, renderHook } from '@testing-library/react';
 
 import usePermissionGroupManagement from './usePermissionGroupManagement';
 import usePermissionGroupManagementPage from './usePermissionGroupManagementPage';
+import { useAuth } from '../../../hooks/useAuth';
 
 jest.mock('./usePermissionGroupManagement', () => jest.fn());
+jest.mock('../../../hooks/useAuth', () => ({
+  useAuth: jest.fn(),
+}));
 
 const buildManagementState = (overrides = {}) => ({
   groups: [],
@@ -51,6 +55,7 @@ const buildManagementState = (overrides = {}) => ({
 describe('usePermissionGroupManagementPage', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    useAuth.mockReturnValue({ user: { user_id: 'u-1' } });
     usePermissionGroupManagement.mockReturnValue(buildManagementState());
   });
 
@@ -83,7 +88,12 @@ describe('usePermissionGroupManagementPage', () => {
     const startCreateGroup = jest.fn();
     usePermissionGroupManagement.mockReturnValue(
       buildManagementState({
+        currentFolderId: 'folder-1',
         selectedFolderId: 'folder-1',
+        folderIndexes: {
+          byId: new Map([['folder-1', { id: 'folder-1', created_by: 'u-1' }]]),
+          childrenByParent: new Map(),
+        },
         startCreateGroup,
       })
     );
@@ -95,6 +105,7 @@ describe('usePermissionGroupManagementPage', () => {
     });
 
     expect(result.current.hasEditableFolder).toBe(true);
+    expect(result.current.canCreateFolder).toBe(true);
 
     act(() => {
       result.current.handleCreateGroup();
@@ -102,5 +113,23 @@ describe('usePermissionGroupManagementPage', () => {
 
     expect(startCreateGroup).toHaveBeenCalledTimes(1);
     expect(result.current.pendingDeleteGroup).toBe(null);
+  });
+
+  it('treats other users folders as visible but read-only', () => {
+    usePermissionGroupManagement.mockReturnValue(
+      buildManagementState({
+        currentFolderId: 'folder-2',
+        selectedFolderId: 'folder-2',
+        folderIndexes: {
+          byId: new Map([['folder-2', { id: 'folder-2', created_by: 'u-other' }]]),
+          childrenByParent: new Map(),
+        },
+      })
+    );
+
+    const { result } = renderHook(() => usePermissionGroupManagementPage());
+
+    expect(result.current.hasEditableFolder).toBe(false);
+    expect(result.current.canCreateFolder).toBe(false);
   });
 });

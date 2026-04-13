@@ -39,6 +39,7 @@ function pathLabel(node) {
 
 export default function KnowledgeRootNodeSelector({
   nodes,
+  disabledNodeIds = [],
   selectedNodeId,
   onSelect,
   disabled = false,
@@ -50,6 +51,15 @@ export default function KnowledgeRootNodeSelector({
   onCreateRoot,
 }) {
   const indexes = useMemo(() => buildIndexes(nodes), [nodes]);
+  const disabledNodeIdSet = useMemo(
+    () =>
+      new Set(
+        (Array.isArray(disabledNodeIds) ? disabledNodeIds : [])
+          .map((nodeId) => String(nodeId || '').trim())
+          .filter(Boolean)
+      ),
+    [disabledNodeIds]
+  );
   const [expanded, setExpanded] = useState(() => new Set());
   const [rootName, setRootName] = useState('');
 
@@ -77,6 +87,8 @@ export default function KnowledgeRootNodeSelector({
     const hasChildren = children.length > 0;
     const isExpanded = expanded.has(id);
     const isSelected = String(selectedNodeId || '') === id;
+    const isNodeDisabled = disabledNodeIdSet.has(id);
+    const selectionDisabled = disabled || isNodeDisabled;
     return (
       <div key={id}>
         <div
@@ -112,15 +124,15 @@ export default function KnowledgeRootNodeSelector({
               flex: 1,
               display: 'flex',
               gap: 10,
-              cursor: disabled ? 'not-allowed' : 'pointer',
-              opacity: disabled ? 0.6 : 1,
+              cursor: selectionDisabled ? 'not-allowed' : 'pointer',
+              opacity: selectionDisabled ? 0.6 : 1,
             }}
           >
             <input
               type="radio"
               name="users-kb-root-node"
               checked={isSelected}
-              disabled={disabled}
+              disabled={selectionDisabled}
               onChange={() => onSelect?.(id)}
               data-testid={`users-kb-root-node-${id}`}
               style={{ marginTop: 2 }}

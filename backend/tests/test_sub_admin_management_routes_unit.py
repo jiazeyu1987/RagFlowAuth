@@ -296,6 +296,8 @@ class _PermissionGroupsService:
         self.created_payloads = []
         self.updated_calls = []
         self.deleted_group_ids = []
+        self.updated_folder_calls = []
+        self.deleted_folder_ids = []
 
     def list_groups(self):
         return [
@@ -376,15 +378,19 @@ class _PermissionGroupsService:
             folders.append({"id": "folder-hidden", "name": "Hidden", "parent_id": None, "created_by": "u_sub"})
             bindings["99"] = "folder-hidden"
         folders.append({"id": "folder-other", "name": "Other", "parent_id": None, "created_by": "u_other_sub"})
+        if 77 in visible_group_ids:
+            bindings["77"] = "folder-other"
         return {"folders": folders, "group_bindings": bindings, "root_group_count": 0}
 
     def create_group_folder(self, name, parent_id, *, created_by):  # noqa: ARG002
         return {"id": "folder-1", "name": name, "parent_id": parent_id}
 
     def update_group_folder(self, folder_id, payload):  # noqa: ARG002
+        self.updated_folder_calls.append((folder_id, dict(payload)))
         return {"id": folder_id, **payload}
 
     def delete_group_folder(self, folder_id):  # noqa: ARG002
+        self.deleted_folder_ids.append(folder_id)
         return True
 
 
@@ -735,7 +741,10 @@ class TestSubAdminPermissionGroupRoutesUnit(unittest.TestCase):
         with client:
             resp = client.get("/api/permission-groups/resources/group-folders")
         self.assertEqual(resp.status_code, 200)
-        self.assertEqual([item["id"] for item in resp.json()["folder_snapshot"]["folders"]], ["folder-visible", "folder-hidden"])
+        self.assertEqual(
+            [item["id"] for item in resp.json()["folder_snapshot"]["folders"]],
+            ["folder-visible", "folder-hidden", "folder-other"],
+        )
 
     def test_permission_group_list_fails_fast_on_invalid_service_payload(self):
         client, _, _, service = _make_permission_group_client()
@@ -792,6 +801,25 @@ class TestSubAdminPermissionGroupRoutesUnit(unittest.TestCase):
             )
         self.assertEqual(resp.status_code, 403)
         self.assertEqual(resp.json()["detail"], "permission_group_folder_out_of_management_scope")
+
+    def test_permission_group_folder_update_rejects_visible_other_owner_folder(self):
+        client, _, _, service = _make_permission_group_client()
+        with client:
+            resp = client.put(
+                "/api/permission-groups/folders/folder-other",
+                json={"name": "Renamed"},
+            )
+        self.assertEqual(resp.status_code, 403)
+        self.assertEqual(resp.json()["detail"], "permission_group_folder_out_of_management_scope")
+        self.assertEqual(service.updated_folder_calls, [])
+
+    def test_permission_group_folder_delete_rejects_visible_other_owner_folder(self):
+        client, _, _, service = _make_permission_group_client()
+        with client:
+            resp = client.delete("/api/permission-groups/folders/folder-other")
+        self.assertEqual(resp.status_code, 403)
+        self.assertEqual(resp.json()["detail"], "permission_group_folder_out_of_management_scope")
+        self.assertEqual(service.deleted_folder_ids, [])
 
 
 class TestSubAdminUserGroupAssignmentRoutesUnit(unittest.TestCase):

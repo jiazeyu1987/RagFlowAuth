@@ -7,6 +7,7 @@ jest.mock('./api', () => ({
   __esModule: true,
   auditApi: {
     listEvents: jest.fn(),
+    exportEvidence: jest.fn(),
   },
 }));
 
@@ -41,6 +42,7 @@ describe('useAuditLogsPage', () => {
         },
       ],
     });
+    auditApi.exportEvidence.mockResolvedValue({ success: true, filename: 'inspection_evidence.zip' });
   });
 
   it('loads directory data and audit rows into stable hook state', async () => {
@@ -75,6 +77,10 @@ describe('useAuditLogsPage', () => {
 
     await act(async () => {
       result.current.updateFilter('action', 'document_download');
+      result.current.updateFilter('source', 'global_search');
+      result.current.updateFilter('event_type', 'search');
+      result.current.updateFilter('request_id', 'rid-1');
+      result.current.updateFilter('resource_id', 'resource-1');
       result.current.updateFilter('company_id', '1');
       result.current.updateFilter('department_id', '10');
       result.current.updateFilter('username', 'alice');
@@ -91,9 +97,13 @@ describe('useAuditLogsPage', () => {
       action: 'document_download',
       company_id: '1',
       department_id: '10',
+      event_type: 'search',
       from_ms: String(Date.parse('2026-04-01T09:00')),
       limit: 20,
       offset: 0,
+      request_id: 'rid-1',
+      resource_id: 'resource-1',
+      source: 'global_search',
       to_ms: String(Date.parse('2026-04-02T10:30')),
       username: 'alice',
     });
@@ -129,5 +139,29 @@ describe('useAuditLogsPage', () => {
         offset: 0,
       })
     );
+  });
+
+  it('exports the current filter combination through the feature api', async () => {
+    const { result } = renderHook(() => useAuditLogsPage());
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    act(() => {
+      result.current.updateFilter('source', 'smart_chat');
+      result.current.updateFilter('event_type', 'completion');
+      result.current.updateFilter('request_id', 'rid-chat');
+    });
+
+    await act(async () => {
+      await result.current.exportEvidencePackage();
+    });
+
+    expect(auditApi.exportEvidence).toHaveBeenCalledWith({
+      event_type: 'completion',
+      limit: 200,
+      offset: 0,
+      request_id: 'rid-chat',
+      source: 'smart_chat',
+    });
   });
 });

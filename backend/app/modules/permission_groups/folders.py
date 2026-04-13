@@ -20,8 +20,8 @@ def folder_snapshot_result(ctx, service):
 def create_group_folder_result(ctx, service, data) -> dict:
     def create_folder():
         if data.parent_id:
-            visible_folder_ids = permission_operations.get_visible_folder_ids(ctx, service)
-            permission_access.validate_folder_parent(data.parent_id, visible_folder_ids)
+            manageable_folder_ids = permission_operations.get_manageable_folder_ids(ctx, service)
+            permission_access.validate_folder_parent(data.parent_id, manageable_folder_ids)
         folder = service.create_group_folder(name=data.name, parent_id=data.parent_id, created_by=ctx.user.user_id)
         folder = permission_contracts.require_object_payload(folder, detail="permission_group_folder_invalid_payload")
         return permission_contracts.wrap_folder(folder)
@@ -31,12 +31,12 @@ def create_group_folder_result(ctx, service, data) -> dict:
 
 def update_group_folder_result(ctx, service, folder_id: str, data) -> dict:
     def update_folder():
-        visible_folder_ids = permission_operations.get_visible_folder_ids_for_target(
+        manageable_folder_ids = permission_operations.get_manageable_folder_ids_for_target(
             ctx,
             service,
             folder_id=folder_id,
         )
-        payload = permission_access.build_group_folder_update_payload(data, visible_ids=visible_folder_ids)
+        payload = permission_access.build_group_folder_update_payload(data, visible_ids=manageable_folder_ids)
         folder = service.update_group_folder(folder_id, payload)
         folder = permission_contracts.require_object_payload(folder, detail="permission_group_folder_invalid_payload")
         return permission_contracts.wrap_folder(folder)
@@ -46,7 +46,7 @@ def update_group_folder_result(ctx, service, folder_id: str, data) -> dict:
 
 def delete_group_folder_result(ctx, service, folder_id: str) -> dict:
     def delete_folder():
-        permission_operations.get_visible_folder_ids_for_target(ctx, service, folder_id=folder_id)
+        permission_operations.get_manageable_folder_ids_for_target(ctx, service, folder_id=folder_id)
         ok = service.delete_group_folder(folder_id)
         if not ok:
             raise HTTPException(status_code=404, detail="folder_not_found")

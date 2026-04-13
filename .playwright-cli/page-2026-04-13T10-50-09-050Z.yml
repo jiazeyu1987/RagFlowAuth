@@ -1,0 +1,528 @@
+- generic [ref=e4]:
+  - complementary [ref=e5]:
+    - generic [ref=e6]:
+      - generic [ref=e7]:
+        - heading "知识库系统" [level=2] [ref=e8]
+        - generic [ref=e9]: 6567f115-49f7-49a3-86cf-2282ae823975
+      - button "切换侧边栏" [ref=e10] [cursor=pointer]: <
+    - navigation [ref=e11]:
+      - link "用户管理" [ref=e12] [cursor=pointer]:
+        - /url: /users
+        - generic [ref=e13]: 👥
+        - generic [ref=e14]: 用户管理
+      - link "文档记录" [ref=e15] [cursor=pointer]:
+        - /url: /document-history
+        - generic [ref=e16]: 🗂️
+        - generic [ref=e17]: 文档记录
+      - link "修改密码" [ref=e18] [cursor=pointer]:
+        - /url: /change-password
+        - generic [ref=e19]: 🔑
+        - generic [ref=e20]: 修改密码
+      - link "审批中心" [ref=e21] [cursor=pointer]:
+        - /url: /approvals
+        - generic [ref=e22]: 📋
+        - generic [ref=e23]: 审批中心
+      - link "审批配置" [ref=e24] [cursor=pointer]:
+        - /url: /approval-config
+        - generic [ref=e25]: 🔧
+        - generic [ref=e26]: 审批配置
+      - link "站内信" [ref=e27] [cursor=pointer]:
+        - /url: /inbox
+        - generic [ref=e28]: 📬
+        - generic [ref=e29]: 站内信
+      - link "组织管理" [ref=e30] [cursor=pointer]:
+        - /url: /org-directory
+        - generic [ref=e31]: 🏢
+        - generic [ref=e32]: 组织管理
+      - link "数据安全" [ref=e33] [cursor=pointer]:
+        - /url: /data-security
+        - generic [ref=e34]: 🔒
+        - generic [ref=e35]: 数据安全
+      - link "通知设置" [ref=e36] [cursor=pointer]:
+        - /url: /notification-settings
+        - generic [ref=e37]: 🔔
+        - generic [ref=e38]: 通知设置
+      - link "电子签名" [ref=e39] [cursor=pointer]:
+        - /url: /electronic-signatures
+        - generic [ref=e40]: ✍️
+        - generic [ref=e41]: 电子签名
+      - link "培训合规" [ref=e42] [cursor=pointer]:
+        - /url: /training-compliance
+        - generic [ref=e43]: 🎓
+        - generic [ref=e44]: 培训合规
+      - link "体系文件" [ref=e45] [cursor=pointer]:
+        - /url: /quality-system
+        - generic [ref=e46]: 🧪
+        - generic [ref=e47]: 体系文件
+      - link "日志审计" [ref=e48] [cursor=pointer]:
+        - /url: /logs
+        - generic [ref=e49]: 📋
+        - generic [ref=e50]: 日志审计
+    - generic [ref=e51]:
+      - generic [ref=e53]: 管理员
+      - button "退出" [ref=e54] [cursor=pointer]
+  - main [ref=e55]:
+    - heading "日志审计" [level=1] [ref=e57]
+    - generic [ref=e59]:
+      - generic [ref=e60]:
+        - generic [ref=e61]:
+          - generic [ref=e62]:
+            - generic [ref=e63]: 类型
+            - combobox [ref=e64]:
+              - option "全部" [selected]
+              - option "登录"
+              - option "退出登录"
+              - option "凭证锁定"
+              - option "重置用户密码"
+              - option "查看/预览文档"
+              - option "上传文档"
+              - option "下载文档"
+              - option "删除文档"
+              - option "文档审核通过"
+              - option "文档审核驳回"
+              - option "文档归档"
+              - option "新建知识库"
+              - option "修改知识库"
+              - option "删除知识库"
+              - option "更新上传设置"
+              - option "论文添加到本地论文库"
+              - option "论文批量添加到本地论文库"
+              - option "删除论文条目"
+              - option "删除论文会话"
+              - option "专利添加到本地专利库"
+              - option "专利批量添加到本地专利库"
+              - option "删除专利条目"
+              - option "删除专利会话"
+              - option "提交操作审批"
+              - option "通过操作审批"
+              - option "驳回操作审批"
+              - option "撤回操作审批"
+              - option "开始执行操作审批"
+              - option "操作审批执行成功"
+              - option "操作审批执行失败"
+              - option "执行备份"
+              - option "取消备份"
+              - option "新建恢复演练"
+              - option "查询恢复演练"
+              - option "更新数据安全设置"
+              - option "新增或更新培训要求"
+              - option "新增培训记录"
+              - option "新增操作员认证"
+              - option "新增或更新供应商组件"
+              - option "变更供应商组件版本"
+              - option "登记环境资质记录"
+              - option "更新电子签名授权"
+              - option "全局搜索"
+              - option "导出审计证据包"
+              - option "导出审查资料包"
+              - option "下载归档文档"
+              - option "导出归档记录包"
+              - option "智能对话"
+              - option "覆盖入库"
+          - generic [ref=e65]:
+            - generic [ref=e66]: 来源
+            - combobox [ref=e67]:
+              - option "全部"
+              - option "审计"
+              - option "认证"
+              - option "本地知识库"
+              - option "文档审核"
+              - option "全局搜索"
+              - option "智能对话" [selected]
+              - option "操作审批"
+              - option "通知"
+              - option "维护"
+          - generic [ref=e68]:
+            - generic [ref=e69]: 事件类型
+            - textbox "如 search / completion" [ref=e70]
+          - generic [ref=e71]:
+            - generic [ref=e72]: 请求 ID
+            - textbox "精确匹配 request_id" [ref=e73]
+          - generic [ref=e74]:
+            - generic [ref=e75]: 资源 ID
+            - textbox "精确匹配 resource_id" [ref=e76]
+          - generic [ref=e77]:
+            - generic [ref=e78]: 公司
+            - combobox [ref=e79]:
+              - option "全部" [selected]
+              - option "七木医疗"
+              - option "上海瑛泰医疗器械股份有限公司"
+              - option "吉尔邦医学"
+              - option "唯强医疗"
+              - option "山东瑛泰"
+              - option "山东瑛盛"
+              - option "德柯医疗"
+              - option "德诺电生理"
+              - option "珠海德瑞"
+              - option "珠海璞瑞"
+              - option "瑛泰医疗"
+              - option "瑛泰昇活"
+              - option "瑛泰生物"
+              - option "瑛泰自动化"
+              - option "璞康医疗"
+              - option "璞慧医疗"
+              - option "璞润医疗"
+              - option "璞跃医疗"
+              - option "璞霖医疗"
+              - option "移视科技"
+              - option "翰凌医疗"
+          - generic [ref=e80]:
+            - generic [ref=e81]: 部门
+            - combobox [ref=e82]:
+              - option "全部" [selected]
+              - option "瑛泰医疗 / 生产制造中心"
+              - option "瑛泰医疗 / 研发创新中心"
+              - option "瑛泰医疗 / 质量体系中心"
+              - option "瑛泰医疗 / 人力资源中心"
+              - option "瑛泰医疗 / 市场营销中心"
+              - option "瑛泰医疗 / 注册服务中心"
+              - option "瑛泰医疗 / 总经办"
+              - option "瑛泰医疗 / 行政服务中心"
+              - option "瑛泰医疗 / 资财管控中心"
+              - option "瑛泰医疗 / 检测中心"
+              - option "瑛泰医疗 / 董办"
+              - option "瑛泰医疗 / 供应链中心"
+              - option "瑛泰医疗 / 人力资源中心 / 外部人员"
+              - option "瑛泰医疗 / 供应链中心 / 仓储物流"
+              - option "瑛泰医疗 / 市场营销中心 / 泛血管BU"
+              - option "瑛泰医疗 / 总经办 / 总经办"
+              - option "瑛泰医疗 / 检测中心 / 检测实验室"
+              - option "瑛泰医疗 / 注册服务中心 / 注册部"
+              - option "瑛泰医疗 / 生产制造中心 / 外围车间"
+              - option "瑛泰医疗 / 研发创新中心 / 新品开发部"
+              - option "瑛泰医疗 / 行政服务中心 / 行政后勤"
+              - option "瑛泰医疗 / 质量体系中心 / QA"
+              - option "瑛泰医疗 / 资财管控中心 / 财务"
+              - option "瑛泰医疗 / 人力资源中心 / 明我信息"
+              - option "瑛泰医疗 / 供应链中心 / 生产计划"
+              - option "瑛泰医疗 / 市场营销中心 / 外贸部"
+              - option "瑛泰医疗 / 检测中心 / CNAS实验室"
+              - option "瑛泰医疗 / 生产制造中心 / 组装车间"
+              - option "瑛泰医疗 / 研发创新中心 / 设备开发部"
+              - option "瑛泰医疗 / 行政服务中心 / 网络信息"
+              - option "瑛泰医疗 / 质量体系中心 / QC"
+              - option "瑛泰医疗 / 供应链中心 / 包装设计组"
+              - option "瑛泰医疗 / 市场营销中心 / 外派德诺电生理"
+              - option "瑛泰医疗 / 生产制造中心 / 注塑车间"
+              - option "瑛泰医疗 / 研发创新中心 / 生产技术部"
+              - option "瑛泰医疗 / 行政服务中心 / 工程维修"
+              - option "瑛泰医疗 / 质量体系中心 / QMS"
+              - option "瑛泰医疗 / 供应链中心 / 生产采购"
+              - option "瑛泰医疗 / 市场营销中心 / 市场服务部"
+              - option "瑛泰医疗 / 生产制造中心 / 生产管理"
+              - option "瑛泰医疗 / 市场营销中心 / 外派珠海"
+              - option "瑛泰医疗 / 市场营销中心 / 泛血管BU / 冠脉&外周BU"
+              - option "瑛泰医疗 / 注册服务中心 / 注册部 / 国内注册"
+              - option "瑛泰医疗 / 生产制造中心 / 外围车间 / 外围计件"
+              - option "瑛泰医疗 / 生产制造中心 / 注塑车间 / 注塑计件"
+              - option "瑛泰医疗 / 生产制造中心 / 组装车间 / 组装车间1"
+              - option "瑛泰医疗 / 研发创新中心 / 新品开发部 / 中试车间"
+              - option "瑛泰医疗 / 行政服务中心 / 工程维修 / 物业维修"
+              - option "瑛泰医疗 / 行政服务中心 / 网络信息 / 钉钉工程师"
+              - option "瑛泰医疗 / 行政服务中心 / 行政后勤 / 食堂"
+              - option "瑛泰医疗 / 质量体系中心 / QC / 过程检验PQC"
+              - option "瑛泰医疗 / 资财管控中心 / 财务 / 项目部"
+              - option "瑛泰医疗 / 市场营销中心 / 泛血管BU / 数据运营"
+              - option "瑛泰医疗 / 注册服务中心 / 注册部 / 国际注册"
+              - option "瑛泰医疗 / 生产制造中心 / 外围车间 / 外围计时"
+              - option "瑛泰医疗 / 生产制造中心 / 注塑车间 / 注塑计时"
+              - option "瑛泰医疗 / 生产制造中心 / 组装车间 / 组装车间2"
+              - option "瑛泰医疗 / 研发创新中心 / 新品开发部 / 新品开发"
+              - option "瑛泰医疗 / 行政服务中心 / 行政后勤 / 保洁"
+              - option "瑛泰医疗 / 质量体系中心 / QC / 来料检IQC"
+              - option "瑛泰医疗 / 市场营销中心 / 泛血管BU / 市场部"
+              - option "瑛泰医疗 / 注册服务中心 / 注册部 / 唯强"
+              - option "瑛泰医疗 / 生产制造中心 / 注塑车间 / 注塑临时工"
+              - option "瑛泰医疗 / 生产制造中心 / 组装车间 / 组装车间3"
+              - option "瑛泰医疗 / 行政服务中心 / 行政后勤 / 司机"
+              - option "瑛泰医疗 / 质量体系中心 / QC / 质量品质QE"
+              - option "瑛泰医疗 / 市场营销中心 / 泛血管BU / 骨科部"
+              - option "瑛泰医疗 / 行政服务中心 / 行政后勤 / 保安"
+              - option "瑛泰医疗 / 市场营销中心 / 泛血管BU / 综合部"
+              - option "瑛泰医疗 / 市场营销中心 / 泛血管BU / 商务部"
+              - option "瑛泰医疗 / 市场营销中心 / 泛血管BU / 培训部"
+              - option "瑛泰医疗 / 市场营销中心 / 泛血管BU / 冠脉&外周BU / 南中国BU"
+              - option "瑛泰医疗 / 市场营销中心 / 泛血管BU / 市场部 / 冠脉外周市场"
+              - option "瑛泰医疗 / 市场营销中心 / 泛血管BU / 综合部 / 财务部"
+              - option "瑛泰医疗 / 市场营销中心 / 泛血管BU / 骨科部 / 山东、河南区域"
+              - option "瑛泰医疗 / 生产制造中心 / 组装车间 / 组装车间1 / 组装1临时"
+              - option "瑛泰医疗 / 生产制造中心 / 组装车间 / 组装车间2 / 组装2临时"
+              - option "瑛泰医疗 / 生产制造中心 / 组装车间 / 组装车间3 / 组装3临时"
+              - option "瑛泰医疗 / 研发创新中心 / 新品开发部 / 中试车间 / 中试车间3"
+              - option "瑛泰医疗 / 研发创新中心 / 新品开发部 / 新品开发 / 导管组"
+              - option "瑛泰医疗 / 市场营销中心 / 泛血管BU / 冠脉&外周BU / 北中国BU"
+              - option "瑛泰医疗 / 市场营销中心 / 泛血管BU / 综合部 / 行政部"
+              - option "瑛泰医疗 / 生产制造中心 / 组装车间 / 组装车间1 / 组装1计件"
+              - option "瑛泰医疗 / 生产制造中心 / 组装车间 / 组装车间2 / 组装2计件"
+              - option "瑛泰医疗 / 生产制造中心 / 组装车间 / 组装车间3 / 组装3计件"
+              - option "瑛泰医疗 / 研发创新中心 / 新品开发部 / 中试车间 / 中试4临时"
+              - option "瑛泰医疗 / 研发创新中心 / 新品开发部 / 新品开发 / 导管鞘组"
+              - option "瑛泰医疗 / 市场营销中心 / 泛血管BU / 综合部 / 人事部"
+              - option "瑛泰医疗 / 生产制造中心 / 组装车间 / 组装车间1 / 组装1计时"
+              - option "瑛泰医疗 / 生产制造中心 / 组装车间 / 组装车间2 / 组装2计时"
+              - option "瑛泰医疗 / 生产制造中心 / 组装车间 / 组装车间3 / 组装3计时"
+              - option "瑛泰医疗 / 研发创新中心 / 新品开发部 / 中试车间 / 中试车间4"
+              - option "瑛泰医疗 / 研发创新中心 / 新品开发部 / 新品开发 / 导丝组"
+              - option "瑛泰医疗 / 生产制造中心 / 组装车间 / 组装车间1 / 设备维护"
+              - option "瑛泰医疗 / 生产制造中心 / 组装车间 / 组装车间2 / 内衬管工段"
+              - option "瑛泰医疗 / 生产制造中心 / 组装车间 / 组装车间3 / 精密导管车间"
+              - option "瑛泰医疗 / 研发创新中心 / 新品开发部 / 新品开发 / 临床技术组"
+              - option "瑛泰医疗 / 生产制造中心 / 组装车间 / 组装车间2 / 设备维护"
+              - option "瑛泰医疗 / 研发创新中心 / 新品开发部 / 新品开发 / 球囊组"
+              - option "瑛泰医疗 / 研发创新中心 / 新品开发部 / 新品开发 / 支架组"
+              - option "瑛泰医疗 / 研发创新中心 / 新品开发部 / 新品开发 / 新材料组"
+              - option "瑛泰医疗 / 研发创新中心 / 新品开发部 / 新品开发 / 有源组"
+              - option "瑛泰医疗 / 研发创新中心 / 新品开发部 / 新品开发 / 骨科组"
+              - option "瑛泰医疗 / 研发创新中心 / 新品开发部 / 新品开发 / 综合组"
+              - option "瑛泰医疗 / 研发创新中心 / 新品开发部 / 新品开发 / 材料组"
+              - option "瑛泰医疗 / 研发创新中心 / 新品开发部 / 新品开发 / 输注组"
+              - option "瑛泰医疗 / 研发创新中心 / 新品开发部 / 新品开发 / 药球组"
+              - option "瑛泰医疗 / 研发创新中心 / 新品开发部 / 新品开发 / 中试3/4"
+              - option "瑛泰医疗 / 市场营销中心 / 泛血管BU / 冠脉&外周BU / 北中国BU / 北四区"
+              - option "瑛泰医疗 / 市场营销中心 / 泛血管BU / 冠脉&外周BU / 南中国BU / 华南大区"
+              - option "瑛泰医疗 / 市场营销中心 / 泛血管BU / 市场部 / 冠脉外周市场 / 市场1"
+              - option "瑛泰医疗 / 市场营销中心 / 泛血管BU / 冠脉&外周BU / 北中国BU / 华北大区"
+              - option "瑛泰医疗 / 市场营销中心 / 泛血管BU / 冠脉&外周BU / 南中国BU / 华东大区"
+              - option "瑛泰医疗 / 市场营销中心 / 泛血管BU / 市场部 / 冠脉外周市场 / 市场2"
+              - option "瑛泰医疗 / 市场营销中心 / 泛血管BU / 冠脉&外周BU / 北中国BU / 华中大区"
+              - option "瑛泰医疗 / 市场营销中心 / 泛血管BU / 冠脉&外周BU / 南中国BU / 西南特区"
+              - option "瑛泰医疗 / 市场营销中心 / 泛血管BU / 冠脉&外周BU / 北中国BU / 北二区"
+              - option "瑛泰医疗 / 市场营销中心 / 泛血管BU / 冠脉&外周BU / 北中国BU / 华中大区 / 华中区"
+              - option "瑛泰医疗 / 市场营销中心 / 泛血管BU / 冠脉&外周BU / 北中国BU / 华北大区 / 北三区"
+              - option "瑛泰医疗 / 市场营销中心 / 泛血管BU / 冠脉&外周BU / 南中国BU / 华东大区 / 南三区1"
+              - option "瑛泰医疗 / 市场营销中心 / 泛血管BU / 冠脉&外周BU / 南中国BU / 华南大区 / 南四区"
+              - option "瑛泰医疗 / 市场营销中心 / 泛血管BU / 冠脉&外周BU / 南中国BU / 西南特区 / 西南区"
+              - option "瑛泰医疗 / 市场营销中心 / 泛血管BU / 冠脉&外周BU / 北中国BU / 华中大区 / 北五区"
+              - option "瑛泰医疗 / 市场营销中心 / 泛血管BU / 冠脉&外周BU / 北中国BU / 华北大区 / 北一区"
+              - option "瑛泰医疗 / 市场营销中心 / 泛血管BU / 冠脉&外周BU / 南中国BU / 华东大区 / 南二区"
+              - option "瑛泰医疗 / 市场营销中心 / 泛血管BU / 冠脉&外周BU / 南中国BU / 华东大区 / 南三区"
+              - option "瑛泰医疗 / 市场营销中心 / 泛血管BU / 冠脉&外周BU / 南中国BU / 华东大区 / 南一区"
+              - option "璞润医疗 / 研发部"
+              - option "璞润医疗 / 产品部"
+              - option "璞润医疗 / 生产部"
+              - option "璞润医疗 / 注册质量部"
+              - option "璞润医疗 / 行政人事部"
+              - option "璞润医疗 / 生产部 / 制造"
+              - option "璞润医疗 / 研发部 / ICE"
+              - option "璞润医疗 / 生产部 / 供应链"
+              - option "璞润医疗 / 研发部 / 产品开发部"
+              - option "璞润医疗 / 研发部 / 声学部"
+              - option "七木医疗 / 市场部"
+              - option "七木医疗 / 质量部"
+              - option "七木医疗 / 生产部"
+              - option "七木医疗 / 技术部"
+              - option "七木医疗 / 财务部"
+              - option "七木医疗 / 总经理"
+              - option "七木医疗 / 行政部"
+              - option "璞慧医疗 / 销售部"
+              - option "璞慧医疗 / 技术部"
+              - option "璞慧医疗 / 行政部"
+              - option "璞慧医疗 / 生产部"
+              - option "璞慧医疗 / 质量部"
+              - option "璞慧医疗 / 市场部"
+              - option "璞慧医疗 / 销售部 / 泛血管BU"
+              - option "璞慧医疗 / 销售部 / 泛血管BU / 神经BU"
+              - option "璞慧医疗 / 销售部 / 泛血管BU / 市场部"
+              - option "璞慧医疗 / 销售部 / 泛血管BU / 商务部"
+              - option "璞慧医疗 / 销售部 / 泛血管BU / 市场部 / 神经产品"
+              - option "璞慧医疗 / 销售部 / 泛血管BU / 神经BU / 北大区"
+              - option "璞慧医疗 / 销售部 / 泛血管BU / 神经BU / 中大区"
+              - option "璞慧医疗 / 销售部 / 泛血管BU / 神经BU / 南大区"
+              - option "璞慧医疗 / 销售部 / 泛血管BU / 神经BU / OCT产品"
+              - option "璞慧医疗 / 销售部 / 泛血管BU / 神经BU / OCT技术"
+              - option "璞慧医疗 / 销售部 / 泛血管BU / 神经BU / 中大区 / 山河战区"
+              - option "璞慧医疗 / 销售部 / 泛血管BU / 神经BU / 北大区 / 东北战区"
+              - option "璞慧医疗 / 销售部 / 泛血管BU / 神经BU / 南大区 / 西南战区"
+              - option "璞慧医疗 / 销售部 / 泛血管BU / 神经BU / 中大区 / 中部战区"
+              - option "璞慧医疗 / 销售部 / 泛血管BU / 神经BU / 北大区 / 华北战区"
+              - option "璞慧医疗 / 销售部 / 泛血管BU / 神经BU / 南大区 / 华南战区1"
+              - option "璞慧医疗 / 销售部 / 泛血管BU / 神经BU / 中大区 / 华东战区"
+              - option "璞慧医疗 / 销售部 / 泛血管BU / 神经BU / 北大区 / 西北战区"
+              - option "璞霖医疗 / 商务部"
+              - option "璞霖医疗 / 测试"
+              - option "山东瑛泰 / 行政人事部"
+              - option "山东瑛泰 / 生产部"
+              - option "山东瑛泰 / 质量部"
+              - option "山东瑛泰 / 财务部"
+              - option "山东瑛泰 / 市场营销部"
+              - option "山东瑛泰 / 技术部"
+              - option "山东瑛泰 / 生产部 / 组装车间"
+              - option "山东瑛泰 / 行政人事部 / 外协劳务"
+              - option "山东瑛泰 / 财务部 / 统计"
+              - option "山东瑛泰 / 质量部 / PQC"
+              - option "山东瑛泰 / 生产部 / 吸塑盒车间"
+              - option "山东瑛泰 / 质量部 / QA"
+              - option "山东瑛泰 / 生产部 / 注塑车间"
+              - option "山东瑛泰 / 质量部 / 实验室"
+              - option "山东瑛泰 / 生产部 / 外围车间"
+              - option "山东瑛泰 / 生产部 / 供应链"
+              - option "山东瑛泰 / 生产部 / 设备维护"
+              - option "山东瑛泰 / 生产部 / 食品车间"
+              - option "山东瑛泰 / 生产部 / 供应链 / 生产计划"
+              - option "山东瑛泰 / 生产部 / 外围车间 / 仓库"
+              - option "山东瑛泰 / 生产部 / 注塑车间 / 设备维护"
+              - option "山东瑛泰 / 生产部 / 组装车间 / 设备维护"
+              - option "山东瑛泰 / 生产部 / 设备维护 / 设备验证"
+              - option "山东瑛泰 / 生产部 / 供应链 / 生产采购"
+              - option "山东瑛泰 / 生产部 / 注塑车间 / 硅胶车间"
+              - option "山东瑛泰 / 生产部 / 设备维护 / 设备维修"
+              - option "山东瑛泰 / 生产部 / 注塑车间 / 注塑车间"
+              - option "山东瑛泰 / 生产部 / 注塑车间 / 止血带车间"
+              - option "瑛泰生物 / 研发部"
+              - option "瑛泰生物 / 生产部"
+              - option "瑛泰生物 / 行政部"
+              - option "瑛泰生物 / 质量部"
+              - option "璞跃医疗 / 市场部"
+              - option "璞跃医疗 / 生产技术部"
+              - option "璞跃医疗 / 器械研发部"
+              - option "璞跃医疗 / 质量部"
+              - option "璞跃医疗 / 采购部"
+              - option "璞跃医疗 / 行政部"
+              - option "璞跃医疗 / 总经办"
+              - option "璞跃医疗 / 电子研发部"
+              - option "瑛泰自动化 / 生产部"
+              - option "瑛泰自动化 / 自动化技术部"
+              - option "瑛泰自动化 / 质量部"
+              - option "瑛泰自动化 / 自动化办公室"
+              - option "瑛泰自动化 / 人力资源部"
+              - option "瑛泰自动化 / 临时工"
+              - option "瑛泰自动化 / 生产部 / 标准件车间"
+              - option "瑛泰自动化 / 自动化技术部 / 设备技术科"
+              - option "瑛泰自动化 / 生产部 / 设备车间"
+              - option "瑛泰自动化 / 自动化技术部 / 模具技术科"
+              - option "瑛泰自动化 / 生产部 / 模具车间"
+              - option "瑛泰自动化 / 自动化技术部 / 生产技术科"
+              - option "瑛泰自动化 / 生产部 / 机加工车间"
+              - option "瑛泰自动化 / 生产部 / 激光切割车间"
+              - option "瑛泰自动化 / 生产部 / 标准件车间 / 压力表车间"
+              - option "瑛泰自动化 / 生产部 / 标准件车间 / 海波管"
+              - option "瑛泰自动化 / 生产部 / 标准件车间 / 芯丝车间"
+              - option "瑛泰自动化 / 生产部 / 标准件车间 / 压力表车间 / 压力表临时工"
+              - option "瑛泰自动化 / 生产部 / 标准件车间 / 海波管 / 海波管临时工"
+              - option "瑛泰自动化 / 生产部 / 标准件车间 / 芯丝车间 / 导丝临时工"
+              - option "唯强医疗 / 西大区"
+              - option "唯强医疗 / 北大区"
+              - option "唯强医疗 / 南大区"
+              - option "唯强医疗 / 西南大区"
+              - option "唯强医疗 / 东大区"
+              - option "唯强医疗 / 鄂湘赣大区"
+              - option "唯强医疗 / 东大区 / 东区（李鹏飞）"
+              - option "唯强医疗 / 北大区 / 北区（段晓宁）"
+              - option "唯强医疗 / 南大区 / 南区（陈宁）"
+              - option "唯强医疗 / 西南大区 / 西南区（冯亮）"
+              - option "唯强医疗 / 西大区 / 西区（张延涛）"
+              - option "唯强医疗 / 鄂湘赣大区 / 鄂湘赣（尹晓晶）"
+              - option "唯强医疗 / 东大区 / 东区（罗春辉）"
+              - option "唯强医疗 / 北大区 / 北区（张龙好）"
+              - option "唯强医疗 / 南大区 / 南区（冼颖毅）"
+              - option "唯强医疗 / 西南大区 / 西南区（李铖）"
+              - option "唯强医疗 / 西大区 / 西区（冀刚）"
+              - option "唯强医疗 / 鄂湘赣大区 / 鄂湘赣（柴小元）"
+              - option "唯强医疗 / 北大区 / 北区（辛代弟）"
+              - option "唯强医疗 / 西南大区 / 西南区（庞璐）"
+              - option "唯强医疗 / 西大区 / 西区（任红波）"
+              - option "唯强医疗 / 鄂湘赣大区 / 鄂湘赣（王磊）"
+              - option "唯强医疗 / 北大区 / 北区（侯阳）"
+              - option "唯强医疗 / 鄂湘赣大区 / 鄂湘赣（梁立纬）"
+              - option "唯强医疗 / 北大区 / 北区（赵蕾）"
+              - option "唯强医疗 / 北大区 / 北区（张星唯）"
+              - option "唯强医疗 / 北大区 / 北区（张凯）"
+              - option "唯强医疗 / 北大区 / 北区（刘松源）"
+              - option "吉尔邦医学 / 质量体系部"
+              - option "珠海德瑞 / 营销中心"
+              - option "珠海德瑞 / 质量部"
+              - option "珠海德瑞 / 技术部"
+              - option "珠海德瑞 / 生产部"
+              - option "珠海德瑞 / 研发工时组"
+              - option "珠海德瑞 / 设备动力部"
+              - option "珠海德瑞 / 注册部"
+              - option "珠海德瑞 / 财务部"
+              - option "珠海德瑞 / 人力资源部"
+              - option "珠海德瑞 / 行政部"
+              - option "珠海德瑞 / 总经办"
+              - option "翰凌医疗 / 研发中心"
+              - option "翰凌医疗 / 临床部"
+              - option "翰凌医疗 / 制造部"
+              - option "翰凌医疗 / 质量部"
+              - option "翰凌医疗 / 项目管理部"
+              - option "翰凌医疗 / 运营部"
+              - option "翰凌医疗 / 人事行政部"
+              - option "翰凌医疗 / 临床部 / 临床组"
+              - option "翰凌医疗 / 制造部 / 生产部"
+              - option "翰凌医疗 / 研发中心 / 研发二部"
+              - option "翰凌医疗 / 质量部 / QC"
+              - option "翰凌医疗 / 项目管理部 / 项目部"
+              - option "翰凌医疗 / 研发中心 / 工艺部"
+              - option "翰凌医疗 / 质量部 / QA"
+              - option "翰凌医疗 / 研发中心 / 研发一部"
+              - option "翰凌医疗 / 质量部 / QMS"
+              - option "翰凌医疗 / 制造部 / 生产部 / 缝瓣组"
+              - option "翰凌医疗 / 研发中心 / 研发二部 / 一组"
+              - option "翰凌医疗 / 质量部 / QC / 实验室"
+              - option "翰凌医疗 / 制造部 / 生产部 / 二车间组"
+              - option "翰凌医疗 / 研发中心 / 研发二部 / 二组"
+              - option "翰凌医疗 / 质量部 / QC / PQC"
+              - option "翰凌医疗 / 制造部 / 生产部 / 心包组"
+              - option "翰凌医疗 / 质量部 / QC / IQC/FQC"
+              - option "翰凌医疗 / 制造部 / 生产部 / 热处理组"
+              - option "璞康医疗 / 财务部"
+              - option "璞康医疗 / 生产部"
+              - option "璞康医疗 / 研发部"
+              - option "璞康医疗 / 质量部"
+              - option "璞康医疗 / 销售部"
+              - option "璞康医疗 / 行政部"
+              - option "璞康医疗 / 采购部"
+          - generic [ref=e83]:
+            - generic [ref=e84]: 账号
+            - textbox "用户名精确匹配" [ref=e85]
+          - generic [ref=e86]:
+            - generic [ref=e87]: 每页条数
+            - combobox [ref=e88]:
+              - option "1"
+              - option "20"
+              - option "50"
+              - option "200" [selected]
+          - generic [ref=e89]:
+            - generic [ref=e90]: 开始时间
+            - textbox [ref=e91]
+          - generic [ref=e92]:
+            - generic [ref=e93]: 结束时间
+            - textbox [ref=e94]
+        - generic [ref=e95]:
+          - generic [ref=e96]: 总条数 1
+          - generic [ref=e97]:
+            - button "查询" [ref=e98] [cursor=pointer]
+            - button "导出证据包" [ref=e99] [cursor=pointer]
+            - button "上一页" [disabled] [ref=e100] [cursor=pointer]
+            - button "下一页" [disabled] [ref=e101] [cursor=pointer]
+      - table [ref=e104]:
+        - rowgroup [ref=e105]:
+          - row "时间 类型 账号 公司 部门 来源 上下文 证据 文件" [ref=e106]:
+            - columnheader "时间" [ref=e107]
+            - columnheader "类型" [ref=e108]
+            - columnheader "账号" [ref=e109]
+            - columnheader "公司" [ref=e110]
+            - columnheader "部门" [ref=e111]
+            - columnheader "来源" [ref=e112]
+            - columnheader "上下文" [ref=e113]
+            - columnheader "证据" [ref=e114]
+            - columnheader "文件" [ref=e115]
+        - rowgroup [ref=e116]:
+          - row "2026/4/13 18:41:40 智能对话 admin 智能对话 问题：请用一句话概括记录管理的要求，并列出你引用的依据。 会话：3e1cbf14372511f1b56626860569fd6b 引用：20 条 20 条引用 2024大模型典型示范应用案例集.pdf 知识库调研 2024大模型典型示范应用案例集.pdf ef8a727cd8a311f0ad1fa2b134471365" [ref=e2574]:
+            - cell "2026/4/13 18:41:40" [ref=e2575]
+            - cell "智能对话" [ref=e2576]
+            - cell "admin" [ref=e2577]
+            - cell [ref=e2578]
+            - cell [ref=e2579]
+            - cell "智能对话" [ref=e2580]
+            - cell "问题：请用一句话概括记录管理的要求，并列出你引用的依据。 会话：3e1cbf14372511f1b56626860569fd6b 引用：20 条" [ref=e2581]:
+              - generic [ref=e2582]: 问题：请用一句话概括记录管理的要求，并列出你引用的依据。
+              - generic [ref=e2583]: 会话：3e1cbf14372511f1b56626860569fd6b
+              - generic [ref=e2584]: 引用：20 条
+            - cell "20 条引用 2024大模型典型示范应用案例集.pdf 知识库调研" [ref=e2585]:
+              - generic [ref=e2586]: 20 条引用
+              - generic [ref=e2587]: 2024大模型典型示范应用案例集.pdf
+              - generic [ref=e2588]: 知识库调研
+            - cell "2024大模型典型示范应用案例集.pdf ef8a727cd8a311f0ad1fa2b134471365" [ref=e2589]:
+              - generic [ref=e2590]: 2024大模型典型示范应用案例集.pdf
+              - generic [ref=e2591]: ef8a727cd8a311f0ad1fa2b134471365

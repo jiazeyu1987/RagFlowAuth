@@ -1,0 +1,192 @@
+{
+  "schema_version": 2,
+  "task_id": "docs-tasks-iso-13485-prd-llm-20260413t162500-dev-20260413T173942",
+  "mode": "full",
+  "status": "completed",
+  "current_phase": null,
+  "phase_statuses": [
+    {
+      "phase_id": "P1",
+      "title": "后端受控文件基线与单一受控根对齐",
+      "status": "completed",
+      "objective": "新增受控文件主档/修订模型、生命周期服务与 API，并让审核包与合规校验器通过单一受控根解析仓库文档。",
+      "owned_paths": [],
+      "dependencies": [],
+      "deliverables": [],
+      "evidence_expectation": "`execution-log.md#Phase-P1`、相关后端测试输出和审核包/校验器单测可以证明后端能力、根路径对齐和审计事件都已落地。",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P1-AC1",
+          "text": "受控文件主档与修订记录可以持久化，并且至少包含 `doc_code`、`title`、`document_type`、`product`、`registration_ref`、`target_kb`、`revision_no`、`status`。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P1",
+            "test-report.md#T1",
+            "test-report.md#T2",
+            "test-report.md#T3",
+            "test-report.md#T4",
+            "test-report.md#T5",
+            "test-report.md#T6"
+          ]
+        },
+        {
+          "ac_id": "P1-AC2",
+          "text": "生命周期只能沿 `draft -> in_review -> approved -> effective -> obsolete` 受控流转，并强制同一 `doc_code` 同时只有一个 `effective` 修订。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P1",
+            "test-report.md#T1",
+            "test-report.md#T2",
+            "test-report.md#T3",
+            "test-report.md#T4",
+            "test-report.md#T5",
+            "test-report.md#T6"
+          ]
+        },
+        {
+          "ac_id": "P1-AC3",
+          "text": "新修订生效时会显式作废上一现行修订，并写入 `controlled_revision_effective` 与 `controlled_revision_obsolete` 审计事件证据。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P1",
+            "test-report.md#T1",
+            "test-report.md#T2",
+            "test-report.md#T3",
+            "test-report.md#T4",
+            "test-report.md#T5",
+            "test-report.md#T6"
+          ]
+        },
+        {
+          "ac_id": "P1-AC4",
+          "text": "审核包导出和 `GBZ-02/04/05` 合规校验器通过同一受控根工具解析仓库文档，不再各自硬编码旧主根。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P1",
+            "test-report.md#T1",
+            "test-report.md#T2",
+            "test-report.md#T3",
+            "test-report.md#T4",
+            "test-report.md#T5",
+            "test-report.md#T6"
+          ]
+        },
+        {
+          "ac_id": "P1-AC5",
+          "text": "`docs/compliance/controlled_document_register.md` 由同一文控数据生成或校验，导出内容中的路径、版本、状态、分组与当前实现一致。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P1",
+            "test-report.md#T1",
+            "test-report.md#T2",
+            "test-report.md#T3",
+            "test-report.md#T4",
+            "test-report.md#T5",
+            "test-report.md#T6"
+          ]
+        }
+      ],
+      "evidence": [
+        "execution-log.md#Phase-P1"
+      ],
+      "notes": "",
+      "last_reviewed_at": "2026-04-13T23:04:09"
+    },
+    {
+      "phase_id": "P2",
+      "title": "前端文控页面与 API 适配层",
+      "status": "completed",
+      "objective": "提供一个不依赖 `WS02` 导航改造的文控页面模块，支持受控文件列表、筛选、详情和状态操作。",
+      "owned_paths": [],
+      "dependencies": [],
+      "deliverables": [],
+      "evidence_expectation": "`execution-log.md#Phase-P2`、前端测试输出和页面逻辑测试能证明页面模块可独立挂载并正确调用后端 API。",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P2-AC1",
+          "text": "前端文控页面可以按编号、标题、类别、产品和注册证过滤受控文件列表，并展示当前修订状态。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P2",
+            "test-report.md#T1",
+            "test-report.md#T2",
+            "test-report.md#T3",
+            "test-report.md#T4",
+            "test-report.md#T5",
+            "test-report.md#T6"
+          ]
+        },
+        {
+          "ac_id": "P2-AC2",
+          "text": "页面可以创建受控文件或新增修订，并能触发至少 `in_review`、`approved`、`effective`、`obsolete` 的状态操作。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P2",
+            "test-report.md#T1",
+            "test-report.md#T2",
+            "test-report.md#T3",
+            "test-report.md#T4",
+            "test-report.md#T5",
+            "test-report.md#T6"
+          ]
+        },
+        {
+          "ac_id": "P2-AC3",
+          "text": "页面可以查看版本历史和当前现行修订，不依赖修改 `routeRegistry.js`、`LayoutSidebar.js` 或 capability 共享文件。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P2",
+            "test-report.md#T1",
+            "test-report.md#T2",
+            "test-report.md#T3",
+            "test-report.md#T4",
+            "test-report.md#T5",
+            "test-report.md#T6"
+          ]
+        },
+        {
+          "ac_id": "P2-AC4",
+          "text": "前端测试覆盖 API 归一化、页面状态管理和关键用户动作的成功/失败分支。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P2",
+            "test-report.md#T1",
+            "test-report.md#T2",
+            "test-report.md#T3",
+            "test-report.md#T4",
+            "test-report.md#T5",
+            "test-report.md#T6"
+          ]
+        }
+      ],
+      "evidence": [
+        "execution-log.md#Phase-P2"
+      ],
+      "notes": "",
+      "last_reviewed_at": "2026-04-13T23:04:16"
+    }
+  ],
+  "planner_review_status": "approved",
+  "test_status": "passed",
+  "blocking_prereqs": [],
+  "iteration_counts": {
+    "planner_revisions": 0,
+    "executor_loops": 2,
+    "test_loops": 1
+  },
+  "created_at": "2026-04-13T17:39:42",
+  "updated_at": "2026-04-13T23:04:29",
+  "branch": "int_latest",
+  "baseline_revision": "1274287b5d2da34421b677a83c264d4b808617b9",
+  "workspace_root": "D:\\ProjectPackage\\RagflowAuth",
+  "tasks_root": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks",
+  "task_dir": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\docs-tasks-iso-13485-prd-llm-20260413t162500-dev-20260413T173942",
+  "goal": "参考 docs/tasks/iso-13485-prd-llm-20260413T162500/development-docs/WS01-controlled-doc-baseline.md 开发 WS01 受控文件基线与合规门禁",
+  "artifacts": {
+    "prd": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\docs-tasks-iso-13485-prd-llm-20260413t162500-dev-20260413T173942\\prd.md",
+    "test_plan": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\docs-tasks-iso-13485-prd-llm-20260413t162500-dev-20260413T173942\\test-plan.md",
+    "task_state": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\docs-tasks-iso-13485-prd-llm-20260413t162500-dev-20260413T173942\\task-state.json",
+    "execution_log": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\docs-tasks-iso-13485-prd-llm-20260413t162500-dev-20260413T173942\\execution-log.md",
+    "test_report": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\docs-tasks-iso-13485-prd-llm-20260413t162500-dev-20260413T173942\\test-report.md"
+  }
+}

@@ -31,6 +31,7 @@ class _User:
         self.status = "active"
         self.group_id = None
         self.group_ids = []
+        self.tool_ids = []
         self.company_id = 1
         self.department_id = 2
 
@@ -59,14 +60,14 @@ class _UserChatPermissionStore:
 
 
 class _Deps:
-    def __init__(self, *, db_path: str, role: str):
+    def __init__(self, *, db_path: str, role: str, with_manager: bool = True):
         audit_store = AuditLogStore(db_path=db_path)
         self.user_store = _UserStore(_User(role=role))
         self.permission_group_store = _PermissionGroupStore()
         self.user_kb_permission_store = _UserKbPermissionStore()
         self.user_chat_permission_store = _UserChatPermissionStore()
         self.audit_log_store = audit_store
-        self.audit_log_manager = AuditLogManager(store=audit_store)
+        self.audit_log_manager = AuditLogManager(store=audit_store) if with_manager else None
 
 
 def _override_get_current_payload(_: Request) -> TokenPayload:
@@ -95,6 +96,14 @@ def _seed_evidence(db_path: str) -> None:
         filename="evidence.txt",
         request_id="rid-fda02",
         meta={"inspection": True},
+        evidence_refs=[
+            {
+                "resource_id": "doc-fda02",
+                "filename": "evidence.txt",
+                "kb_name": "kb-a",
+                "evidence_role": "inspection_record",
+            }
+        ],
     )
     conn = connect_sqlite(db_path)
     try:
@@ -257,6 +266,7 @@ class TestAuditEvidenceExportApiUnit(unittest.TestCase):
             )
             audit_events = json.loads(archive.read("audit_events.json").decode("utf-8"))
             self.assertEqual(audit_events[0]["doc_id"], "doc-fda02")
+            self.assertEqual(audit_events[0]["evidence_refs"][0]["resource_id"], "doc-fda02")
             notifications = json.loads(archive.read("notification_jobs.json").decode("utf-8"))
             self.assertEqual(notifications[0]["payload"]["approval_target"]["doc_id"], "doc-fda02")
             self.assertEqual(len(notifications[0]["delivery_logs"]), 1)
@@ -286,6 +296,26 @@ class TestAuditEvidenceExportApiUnit(unittest.TestCase):
 
             self.assertEqual(resp.status_code, 403, resp.text)
             self.assertEqual(resp.json()["detail"], "admin_required")
+        finally:
+            cleanup_dir(td)
+
+    def test_export_fails_when_audit_log_manager_missing(self):
+        td = make_temp_dir(prefix="ragflowauth_fda02_export_no_manager")
+        try:
+            db_path = os.path.join(str(td), "auth.db")
+            ensure_schema(db_path)
+            _seed_evidence(db_path)
+
+            app = FastAPI()
+            app.state.deps = _Deps(db_path=db_path, role="admin", with_manager=False)
+            app.include_router(audit_router, prefix="/api")
+            app.dependency_overrides[auth_module.get_current_payload] = _override_get_current_payload
+
+            with TestClient(app) as client:
+                resp = client.get("/api/audit/evidence-export?doc_id=doc-fda02")
+
+            self.assertEqual(resp.status_code, 500, resp.text)
+            self.assertEqual(resp.json()["detail"], "audit_log_manager_unavailable")
         finally:
             cleanup_dir(td)
 

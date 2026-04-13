@@ -25,6 +25,7 @@ function buildHookState(overrides = {}) {
     isMobile: false,
     pendingDeleteGroup: null,
     hasEditableFolder: false,
+    canCreateFolder: true,
     groups: [{ group_id: 1, group_name: 'G1' }, { group_id: 2, group_name: 'G2' }],
     loading: false,
     saving: false,
@@ -97,6 +98,7 @@ describe('PermissionGroupManagement', () => {
   it('disables folder rename and delete when no editable folder is selected and keeps other actions clickable', () => {
     const hookState = buildHookState({
       hasEditableFolder: false,
+      canCreateFolder: true,
     });
     usePermissionGroupManagementPage.mockReturnValue(hookState);
 
@@ -118,6 +120,22 @@ describe('PermissionGroupManagement', () => {
     expect(hookState.fetchAll).toHaveBeenCalledTimes(1);
     expect(hookState.createFolder).toHaveBeenCalledTimes(1);
     expect(hookState.handleCreateGroup).toHaveBeenCalledTimes(1);
+  });
+
+  it('disables create-folder when the current folder is read-only', () => {
+    const hookState = buildHookState({
+      canCreateFolder: false,
+    });
+    usePermissionGroupManagementPage.mockReturnValue(hookState);
+
+    render(<PermissionGroupManagement />);
+
+    const createFolderButton = screen.getByRole('button', { name: LABELS.createFolder });
+    expect(createFolderButton).toBeDisabled();
+
+    fireEvent.click(createFolderButton);
+
+    expect(hookState.createFolder).not.toHaveBeenCalled();
   });
 
   it('renders pending delete confirmation actions and wires cancel and confirm callbacks', () => {

@@ -42,6 +42,7 @@ export const buildUserManagementState = ({
   departments: dataState.departments,
   orgDirectoryError: dataState.orgDirectoryError,
   kbDirectoryNodes: knowledgeDirectoryState.kbDirectoryNodes,
+  kbDirectoryDisabledNodeIds: knowledgeDirectoryState.kbDirectoryDisabledNodeIds,
   kbDirectoryLoading: knowledgeDirectoryState.kbDirectoryLoading,
   kbDirectoryError: knowledgeDirectoryState.kbDirectoryError,
   kbDirectoryCreateError: knowledgeDirectoryState.kbDirectoryCreateError,

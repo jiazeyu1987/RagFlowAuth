@@ -6,6 +6,7 @@ import {
   buildKnowledgeDirectoryQuery,
   buildKnowledgeDirectoryListingSuccessState,
 } from '../utils/userKnowledgeDirectories';
+import { buildManagedKbRootSelectionState } from '../utils/userManagedKbRoots';
 import { isManagedKbRootSelectionInvalid } from '../utils/userManagementDerivedState';
 import { runStateAction } from '../utils/userManagementActionRunners';
 import { runUserManagementMutation } from '../utils/userManagementMutations';
@@ -13,6 +14,7 @@ import { useKnowledgeDirectoryModeLoader } from './useKnowledgeDirectoryModeLoad
 import { useKnowledgeDirectoryModeReset } from './useKnowledgeDirectoryModeReset';
 
 export const useKnowledgeDirectoryListing = ({
+  allUsers,
   isAdminUser,
   createMode,
   policyMode,
@@ -20,12 +22,12 @@ export const useKnowledgeDirectoryListing = ({
   mapErrorMessage,
   loadErrorMessage,
 }) => {
-  const [kbDirectoryNodes, setKbDirectoryNodes] = useState([]);
+  const [kbDirectorySourceNodes, setKbDirectorySourceNodes] = useState([]);
   const [kbDirectoryLoading, setKbDirectoryLoading] = useState(false);
   const [kbDirectoryError, setKbDirectoryError] = useState(null);
 
   const applyKnowledgeDirectoryListingState = useCallback((nextState) => {
-    setKbDirectoryNodes(nextState.nodes);
+    setKbDirectorySourceNodes(nextState.nodes);
     setKbDirectoryError(nextState.error);
   }, []);
 
@@ -40,9 +42,9 @@ export const useKnowledgeDirectoryListing = ({
     async (companyId) => {
       const query = buildKnowledgeDirectoryQuery({ companyId, isAdminUser });
       if (query == null) {
-        clearKnowledgeDirectoryListing();
-        return [];
-      }
+      clearKnowledgeDirectoryListing();
+      return [];
+    }
 
       let nodes = [];
       const mutation = await runUserManagementMutation({
@@ -103,6 +105,59 @@ export const useKnowledgeDirectoryListing = ({
     resetKnowledgeDirectoryState: resetKnowledgeDirectoryListing,
   });
 
+  const managedKbRootSelectionContext = useMemo(() => {
+    if (policyMode.isOpen && String(policyMode.userType || 'normal') === 'sub_admin') {
+      return {
+        companyId: policyMode.companyId,
+        excludeUserId: policyUser?.user_id,
+        selectedNodeId: policyMode.selectedManagedKbRootNodeId,
+      };
+    }
+    if (createMode.isOpen && String(createMode.userType || 'normal') === 'sub_admin') {
+      return {
+        companyId: createMode.companyId,
+        excludeUserId: '',
+        selectedNodeId: createMode.selectedManagedKbRootNodeId,
+      };
+    }
+    return {
+      companyId: null,
+      excludeUserId: '',
+      selectedNodeId: '',
+    };
+  }, [
+    createMode.companyId,
+    createMode.isOpen,
+    createMode.selectedManagedKbRootNodeId,
+    createMode.userType,
+    policyMode.companyId,
+    policyMode.isOpen,
+    policyMode.selectedManagedKbRootNodeId,
+    policyMode.userType,
+    policyUser?.user_id,
+  ]);
+
+  const managedKbRootSelectionState = useMemo(
+    () =>
+      buildManagedKbRootSelectionState({
+        nodes: kbDirectorySourceNodes,
+        users: allUsers,
+        companyId: managedKbRootSelectionContext.companyId,
+        excludeUserId: managedKbRootSelectionContext.excludeUserId,
+        selectedNodeId: managedKbRootSelectionContext.selectedNodeId,
+      }),
+    [
+      allUsers,
+      kbDirectorySourceNodes,
+      managedKbRootSelectionContext.companyId,
+      managedKbRootSelectionContext.excludeUserId,
+      managedKbRootSelectionContext.selectedNodeId,
+    ]
+  );
+
+  const kbDirectoryNodes = managedKbRootSelectionState.nodes;
+  const kbDirectoryDisabledNodeIds = managedKbRootSelectionState.disabledNodeIds;
+
   const managedKbRootInvalid = useMemo(
     () =>
       isManagedKbRootSelectionInvalid({
@@ -123,6 +178,7 @@ export const useKnowledgeDirectoryListing = ({
 
   return {
     kbDirectoryNodes,
+    kbDirectoryDisabledNodeIds,
     kbDirectoryLoading,
     kbDirectoryError,
     managedKbRootInvalid,

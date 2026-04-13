@@ -4,6 +4,7 @@ import json
 import os
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from zipfile import ZipFile
 
 from authx import TokenPayload
@@ -111,6 +112,7 @@ class _Deps:
         self.permission_group_store = _PermissionGroupStore()
         self.user_kb_permission_store = _UserKbPermissionStore()
         self.user_chat_permission_store = _UserChatPermissionStore()
+        self.user_tool_permission_store = SimpleNamespace(list_tool_ids=lambda *_args, **_kwargs: [])
         self.audit_log_store = audit_store
         self.audit_log_manager = AuditLogManager(store=audit_store)
 

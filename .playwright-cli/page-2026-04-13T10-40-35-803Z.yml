@@ -1,0 +1,193 @@
+- generic [ref=e27]:
+  - complementary [ref=e28]:
+    - generic [ref=e29]:
+      - generic [ref=e30]:
+        - heading "知识库系统" [level=2] [ref=e31]
+        - generic [ref=e32]: 6567f115-49f7-49a3-86cf-2282ae823975
+      - button "切换侧边栏" [ref=e33] [cursor=pointer]: <
+    - navigation [ref=e34]:
+      - link "用户管理" [ref=e35] [cursor=pointer]:
+        - /url: /users
+        - generic [ref=e36]: 👥
+        - generic [ref=e37]: 用户管理
+      - link "文档记录" [ref=e38] [cursor=pointer]:
+        - /url: /document-history
+        - generic [ref=e39]: 🗂️
+        - generic [ref=e40]: 文档记录
+      - link "修改密码" [ref=e41] [cursor=pointer]:
+        - /url: /change-password
+        - generic [ref=e42]: 🔑
+        - generic [ref=e43]: 修改密码
+      - link "审批中心" [ref=e44] [cursor=pointer]:
+        - /url: /approvals
+        - generic [ref=e45]: 📋
+        - generic [ref=e46]: 审批中心
+      - link "审批配置" [ref=e47] [cursor=pointer]:
+        - /url: /approval-config
+        - generic [ref=e48]: 🔧
+        - generic [ref=e49]: 审批配置
+      - link "站内信" [ref=e50] [cursor=pointer]:
+        - /url: /inbox
+        - generic [ref=e51]: 📬
+        - generic [ref=e52]: 站内信
+      - link "组织管理" [ref=e53] [cursor=pointer]:
+        - /url: /org-directory
+        - generic [ref=e54]: 🏢
+        - generic [ref=e55]: 组织管理
+      - link "数据安全" [ref=e56] [cursor=pointer]:
+        - /url: /data-security
+        - generic [ref=e57]: 🔒
+        - generic [ref=e58]: 数据安全
+      - link "通知设置" [ref=e59] [cursor=pointer]:
+        - /url: /notification-settings
+        - generic [ref=e60]: 🔔
+        - generic [ref=e61]: 通知设置
+      - link "电子签名" [ref=e62] [cursor=pointer]:
+        - /url: /electronic-signatures
+        - generic [ref=e63]: ✍️
+        - generic [ref=e64]: 电子签名
+      - link "培训合规" [ref=e65] [cursor=pointer]:
+        - /url: /training-compliance
+        - generic [ref=e66]: 🎓
+        - generic [ref=e67]: 培训合规
+      - link "体系文件" [ref=e68] [cursor=pointer]:
+        - /url: /quality-system
+        - generic [ref=e69]: 🧪
+        - generic [ref=e70]: 体系文件
+      - link "日志审计" [ref=e71] [cursor=pointer]:
+        - /url: /logs
+        - generic [ref=e72]: 📋
+        - generic [ref=e73]: 日志审计
+    - generic [ref=e74]:
+      - generic [ref=e76]: 管理员
+      - button "退出" [ref=e77] [cursor=pointer]
+  - main [ref=e78]:
+    - heading "体系文件" [level=1] [ref=e2536]
+    - generic [ref=e2537]:
+      - generic [ref=e2539]:
+        - generic [ref=e2540]:
+          - heading "质量体系工作台" [level=2] [ref=e2541]
+          - paragraph [ref=e2542]: 这里只承接入口、路由与权限壳层，后续各工作流在固定子路由下接入。
+        - generic [ref=e2543]:
+          - generic [ref=e2544]: 入口管理
+          - generic [ref=e2545]: admin
+      - generic [ref=e2546]:
+        - generic [ref=e2547]:
+          - heading "模块接入面" [level=3] [ref=e2548]
+          - generic [ref=e2549]: 7 modules
+        - generic [ref=e2550]:
+          - article [ref=e2551]:
+            - generic [ref=e2552]:
+              - strong [ref=e2553]: 文控基线
+              - generic [ref=e2554]: WS01
+            - paragraph [ref=e2555]: 受控文件、版本生效与作废入口在此预留。
+            - generic [ref=e2556]:
+              - generic [ref=e2557]:
+                - strong [ref=e2558]: "路由:"
+                - text: /quality-system/doc-control
+              - generic [ref=e2559]:
+                - strong [ref=e2560]: "资源:"
+                - text: document_control
+              - generic [ref=e2561]:
+                - strong [ref=e2562]: "能力:"
+                - text: create, review, approve, effective, obsolete, publish, export
+            - button "进入该模块" [ref=e2564] [cursor=pointer]
+          - article [ref=e2565]:
+            - generic [ref=e2566]:
+              - strong [ref=e2567]: 培训与知晓
+              - generic [ref=e2568]: WS03
+            - paragraph [ref=e2569]: 培训分派、知晓确认与疑问闭环在此预留。
+            - generic [ref=e2570]:
+              - generic [ref=e2571]:
+                - strong [ref=e2572]: "路由:"
+                - text: /quality-system/training
+              - generic [ref=e2573]:
+                - strong [ref=e2574]: "资源:"
+                - text: training_ack
+              - generic [ref=e2575]:
+                - strong [ref=e2576]: "能力:"
+                - text: assign, acknowledge, review_questions
+            - button "进入该模块" [ref=e2578] [cursor=pointer]
+          - article [ref=e2579]:
+            - generic [ref=e2580]:
+              - strong [ref=e2581]: 变更控制
+              - generic [ref=e2582]: WS04
+            - paragraph [ref=e2583]: 变更台账、评估、计划与关闭在此预留。
+            - generic [ref=e2584]:
+              - generic [ref=e2585]:
+                - strong [ref=e2586]: "路由:"
+                - text: /quality-system/change-control
+              - generic [ref=e2587]:
+                - strong [ref=e2588]: "资源:"
+                - text: change_control
+              - generic [ref=e2589]:
+                - strong [ref=e2590]: "能力:"
+                - text: create, evaluate, approve, plan, confirm, close
+            - button "进入该模块" [ref=e2592] [cursor=pointer]
+          - article [ref=e2593]:
+            - generic [ref=e2594]:
+              - strong [ref=e2595]: 设备与计量
+              - generic [ref=e2596]: WS05
+            - paragraph [ref=e2597]: 设备全生命周期、计量与维护保养在此预留。
+            - generic [ref=e2598]:
+              - generic [ref=e2599]:
+                - strong [ref=e2600]: "路由:"
+                - text: /quality-system/equipment
+              - generic [ref=e2601]:
+                - strong [ref=e2602]: "资源:"
+                - text: equipment_lifecycle
+              - generic [ref=e2603]:
+                - strong [ref=e2604]: "能力:"
+                - text: create, accept, maintain, meter, retire, record, confirm, approve, plan, record, approve
+            - button "进入该模块" [ref=e2606] [cursor=pointer]
+          - article [ref=e2607]:
+            - generic [ref=e2608]:
+              - strong [ref=e2609]: 批记录与签名
+              - generic [ref=e2610]: WS06
+            - paragraph [ref=e2611]: 批记录模板、执行、签名与导出在此预留。
+            - generic [ref=e2612]:
+              - generic [ref=e2613]:
+                - strong [ref=e2614]: "路由:"
+                - text: /quality-system/batch-records
+              - generic [ref=e2615]:
+                - strong [ref=e2616]: "资源:"
+                - text: batch_records
+              - generic [ref=e2617]:
+                - strong [ref=e2618]: "能力:"
+                - text: template_manage, execute, sign, review, export
+            - button "进入该模块" [ref=e2620] [cursor=pointer]
+          - article [ref=e2621]:
+            - generic [ref=e2622]:
+              - strong [ref=e2623]: 审计与证据
+              - generic [ref=e2624]: WS07
+            - paragraph [ref=e2625]: 质量审计事件、证据导出与检索在此预留。
+            - generic [ref=e2626]:
+              - generic [ref=e2627]:
+                - strong [ref=e2628]: "路由:"
+                - text: /quality-system/audit
+              - generic [ref=e2629]:
+                - strong [ref=e2630]: "资源:"
+                - text: audit_events
+              - generic [ref=e2631]:
+                - strong [ref=e2632]: "能力:"
+                - text: view, export
+            - button "进入该模块" [ref=e2634] [cursor=pointer]
+          - article [ref=e2635]:
+            - generic [ref=e2636]:
+              - strong [ref=e2637]: 投诉与治理闭环
+              - generic [ref=e2638]: WS08
+            - paragraph [ref=e2639]: 投诉、CAPA、内审与管理评审在此预留。
+            - generic [ref=e2640]:
+              - generic [ref=e2641]:
+                - strong [ref=e2642]: "路由:"
+                - text: /quality-system/governance-closure
+              - generic [ref=e2643]:
+                - strong [ref=e2644]: "资源:"
+                - text: complaints
+              - generic [ref=e2645]:
+                - strong [ref=e2646]: "能力:"
+                - text: 上游 action 待冻结
+            - button "进入该模块" [ref=e2648] [cursor=pointer]
+      - generic [ref=e2649]:
+        - heading "质量工作队列" [level=3] [ref=e2650]
+        - generic [ref=e2651]: 当前没有与质量体系路由相关的站内信。

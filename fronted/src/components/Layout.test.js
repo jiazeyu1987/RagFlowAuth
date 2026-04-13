@@ -45,6 +45,7 @@ describe('Layout permission group navigation visibility', () => {
     expect(screen.queryByTestId('nav-kbs')).not.toBeInTheDocument();
     expect(screen.getByTestId('nav-document-history')).toBeInTheDocument();
     expect(screen.getByTestId('nav-training-compliance')).toBeInTheDocument();
+    expect(screen.getByTestId('nav-quality-system')).toBeInTheDocument();
     expect(screen.queryByTestId('nav-documents')).not.toBeInTheDocument();
   });
 
@@ -70,6 +71,7 @@ describe('Layout permission group navigation visibility', () => {
 
     expect(screen.getByTestId('nav-permission-groups')).toBeInTheDocument();
     expect(screen.getByTestId('nav-kbs')).toBeInTheDocument();
+    expect(screen.getByTestId('nav-quality-system')).toBeInTheDocument();
     expect(screen.queryByTestId('nav-training-compliance')).not.toBeInTheDocument();
   });
 
@@ -128,6 +130,7 @@ describe('Layout permission group navigation visibility', () => {
     );
 
     expect(screen.queryByTestId('nav-kbs')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('nav-quality-system')).not.toBeInTheDocument();
   });
 
   it('hides document history navigation when shared auth evaluation denies both view and review access', () => {
@@ -175,6 +178,25 @@ describe('Layout permission group navigation visibility', () => {
 
     expect(screen.queryByTestId('nav-notification-settings')).not.toBeInTheDocument();
     expect(screen.queryByTestId('nav-electronic-signatures')).not.toBeInTheDocument();
+  });
+
+  it('keeps the quality-system root navigation highlighted for reserved child routes', () => {
+    useAuth.mockReturnValue({
+      user: { user_id: 'sub-1', username: 'sub', role: 'sub_admin', permission_groups: [] },
+      logout: jest.fn(),
+      hasRole: (roles) => roles.includes('sub_admin'),
+      isAuthorized: ({ allowedRoles }) => !allowedRoles || allowedRoles.includes('sub_admin'),
+    });
+
+    render(
+      <MemoryRouter initialEntries={['/quality-system/training']}>
+        <Layout>
+          <div>content</div>
+        </Layout>
+      </MemoryRouter>
+    );
+
+    expect(screen.getByTestId('nav-quality-system')).toHaveStyle({ backgroundColor: '#374151' });
   });
 
   it('updates inbox unread badge immediately when unread count event is published', async () => {

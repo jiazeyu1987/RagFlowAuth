@@ -69,6 +69,7 @@ export const buildUserManagementModalProps = (page) => ({
   departments: page.departments,
   orgDirectoryError: page.orgDirectoryError,
   kbDirectoryNodes: page.kbDirectoryNodes,
+  kbDirectoryDisabledNodeIds: page.kbDirectoryDisabledNodeIds,
   kbDirectoryLoading: page.kbDirectoryLoading,
   kbDirectoryError: page.kbDirectoryError,
   kbDirectoryCreateError: page.kbDirectoryCreateError,

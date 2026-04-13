@@ -13,6 +13,7 @@ import {
 export default function PermissionGroupSidebar({
   isMobile,
   hasEditableFolder,
+  canCreateFolder,
   groups,
   currentFolderId,
   selectedFolderId,
@@ -51,6 +52,7 @@ export default function PermissionGroupSidebar({
         label: '新建文件夹',
         icon: <FolderAddIcon />,
         onClick: createFolder,
+        disabled: !canCreateFolder,
         tone: 'blue',
         testId: 'pg-toolbar-create-folder',
       },
@@ -71,7 +73,7 @@ export default function PermissionGroupSidebar({
         testId: 'pg-toolbar-delete-folder',
       },
     ],
-    [createFolder, deleteFolder, fetchAll, hasEditableFolder, renameFolder]
+    [canCreateFolder, createFolder, deleteFolder, fetchAll, hasEditableFolder, renameFolder]
   );
 
   return (

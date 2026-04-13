@@ -50,6 +50,7 @@ describe('userManagementState', () => {
       },
       knowledgeDirectoryState: {
         kbDirectoryNodes: [{ id: 'node-1' }],
+        kbDirectoryDisabledNodeIds: ['node-2'],
         kbDirectoryLoading: true,
         kbDirectoryError: 'kb error',
         kbDirectoryCreateError: 'kb create error',
@@ -105,6 +106,7 @@ describe('userManagementState', () => {
         companies: [{ id: 1 }],
         departments: [{ id: 11 }],
         kbDirectoryNodes: [{ id: 'node-1' }],
+        kbDirectoryDisabledNodeIds: ['node-2'],
         filteredUsers: [{ user_id: 'u-1' }],
         subAdminOptions: [{ value: 'sub-1' }],
         policySubAdminOptions: [{ value: 'sub-2' }],

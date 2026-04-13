@@ -10,11 +10,16 @@ describe('AuditLogs', () => {
   beforeEach(() => {
     useAuditLogsPage.mockReturnValue({
       loading: false,
+      exporting: false,
       error: '',
       companies: [{ id: 1, name: 'Company A' }],
       departments: [{ id: 10, company_id: 1, name: 'Dept A', path_name: 'Company A / Dept A' }],
       filters: {
         action: '',
+        source: '',
+        event_type: '',
+        request_id: '',
+        resource_id: '',
         company_id: '',
         department_id: '',
         username: '',
@@ -65,26 +70,32 @@ describe('AuditLogs', () => {
           {
             id: 'event-4',
             created_at_ms: 1712214000000,
-            action: 'notification_channel_recipient_map_rebuild',
+            action: 'global_search_execute',
             username: 'dave',
             company_name: 'Company A',
             department_name: 'Dept A',
-            source: 'notification',
-            kb_name: '',
-            filename: '',
-            doc_id: '',
+            source: 'global_search',
+            filename: 'search-hit.pdf',
+            doc_id: 'doc-search',
+            request_id: 'rid-search',
+            before: { question: '设备点检规范', dataset_ids: ['KB-1'] },
+            after: { returned_chunks: 2 },
+            evidence_refs: [{ resource_id: 'doc-search', filename: 'search-hit.pdf', kb_name: 'KB-1' }],
           },
           {
             id: 'event-5',
             created_at_ms: 1712217600000,
-            action: 'notification_channel_upsert',
+            action: 'smart_chat_completion',
             username: 'erin',
             company_name: 'Company A',
             department_name: 'Dept A',
-            source: 'maintenance',
-            kb_name: '',
-            filename: '',
-            doc_id: '',
+            source: 'smart_chat',
+            filename: 'citation-spec.pdf',
+            doc_id: 'doc-chat',
+            resource_id: 'session-1',
+            before: { question: '这份记录为什么要复核？' },
+            meta: { session_id: 'session-1', source_count: 1 },
+            evidence_refs: [{ resource_id: 'doc-chat', filename: 'citation-spec.pdf', kb_name: 'KB-2' }],
           },
         ],
       },
@@ -128,26 +139,32 @@ describe('AuditLogs', () => {
         {
           id: 'event-4',
           created_at_ms: 1712214000000,
-          action: 'notification_channel_recipient_map_rebuild',
+          action: 'global_search_execute',
           username: 'dave',
           company_name: 'Company A',
           department_name: 'Dept A',
-          source: 'notification',
-          kb_name: '',
-          filename: '',
-          doc_id: '',
+          source: 'global_search',
+          filename: 'search-hit.pdf',
+          doc_id: 'doc-search',
+          request_id: 'rid-search',
+          before: { question: '设备点检规范', dataset_ids: ['KB-1'] },
+          after: { returned_chunks: 2 },
+          evidence_refs: [{ resource_id: 'doc-search', filename: 'search-hit.pdf', kb_name: 'KB-1' }],
         },
         {
           id: 'event-5',
           created_at_ms: 1712217600000,
-          action: 'notification_channel_upsert',
+          action: 'smart_chat_completion',
           username: 'erin',
           company_name: 'Company A',
           department_name: 'Dept A',
-          source: 'maintenance',
-          kb_name: '',
-          filename: '',
-          doc_id: '',
+          source: 'smart_chat',
+          filename: 'citation-spec.pdf',
+          doc_id: 'doc-chat',
+          resource_id: 'session-1',
+          before: { question: '这份记录为什么要复核？' },
+          meta: { session_id: 'session-1', source_count: 1 },
+          evidence_refs: [{ resource_id: 'doc-chat', filename: 'citation-spec.pdf', kb_name: 'KB-2' }],
         },
       ],
       visibleDepartments: [
@@ -159,6 +176,7 @@ describe('AuditLogs', () => {
       applyFilters: jest.fn(),
       goPrev: jest.fn(),
       goNext: jest.fn(),
+      exportEvidencePackage: jest.fn(),
     });
   });
 
@@ -176,15 +194,16 @@ describe('AuditLogs', () => {
 
     expect(within(screen.getByTestId('audit-row-event-3')).getByText('新增/更新通知事件规则')).toBeInTheDocument();
     expect(within(screen.getByTestId('audit-row-event-3')).getByText('系统')).toBeInTheDocument();
-    expect(
-      within(screen.getByTestId('audit-row-event-4')).getByText('重建通知通道收件人映射')
-    ).toBeInTheDocument();
-    expect(within(screen.getByTestId('audit-row-event-4')).getByText('通知')).toBeInTheDocument();
-    expect(within(screen.getByTestId('audit-row-event-5')).getByText('新增/更新通知通道')).toBeInTheDocument();
-    expect(within(screen.getByTestId('audit-row-event-5')).getByText('维护')).toBeInTheDocument();
+    expect(within(screen.getByTestId('audit-row-event-4')).getAllByText('全局搜索')).toHaveLength(2);
+    expect(within(screen.getByTestId('audit-row-event-4')).getByText('查询：设备点检规范')).toBeInTheDocument();
+    expect(within(screen.getByTestId('audit-row-event-5')).getAllByText('智能对话')).toHaveLength(2);
+    expect(within(screen.getByTestId('audit-row-event-5')).getByText('问题：这份记录为什么要复核？')).toBeInTheDocument();
 
     await user.click(screen.getByTestId('audit-apply'));
     expect(useAuditLogsPage.mock.results[0].value.applyFilters).toHaveBeenCalledTimes(1);
+
+    await user.click(screen.getByTestId('audit-export'));
+    expect(useAuditLogsPage.mock.results[0].value.exportEvidencePackage).toHaveBeenCalledTimes(1);
 
     await user.click(screen.getByTestId('audit-prev'));
     expect(useAuditLogsPage.mock.results[0].value.goPrev).toHaveBeenCalledTimes(1);

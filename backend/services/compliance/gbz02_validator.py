@@ -5,6 +5,8 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 import re
 
+from backend.services.document_control import controlled_compliance_relpath
+
 from .r7_validator import ComplianceIssue
 
 
@@ -30,7 +32,7 @@ class Gbz02ComplianceReport:
 
 
 REQUIRED_DOCS: dict[str, tuple[str, ...]] = {
-    "doc/compliance/emergency_change_sop.md": (
+    controlled_compliance_relpath("emergency_change_sop.md"): (
         "版本:",
         "更新时间:",
         "先授权后部署再复盘",
@@ -39,7 +41,7 @@ REQUIRED_DOCS: dict[str, tuple[str, ...]] = {
         "post_review_summary",
         "capa_actions",
     ),
-    "doc/compliance/emergency_change_status.md": (
+    controlled_compliance_relpath("emergency_change_status.md"): (
         "版本:",
         "更新时间:",
         "最后仓库复核日期:",
@@ -48,23 +50,23 @@ REQUIRED_DOCS: dict[str, tuple[str, ...]] = {
         "仓库外证据状态:",
         "Residual gap 边界:",
     ),
-    "doc/compliance/change_control_sop.md": ("紧急变更", "先授权", "后部署", "事后评审"),
-    "doc/compliance/urs.md": ("URS-014", "GBZ-02"),
-    "doc/compliance/srs.md": ("SRS-014", "URS-014"),
-    "doc/compliance/traceability_matrix.md": ("GBZ-02", "SRS-014"),
-    "doc/compliance/validation_plan.md": (
+    controlled_compliance_relpath("change_control_sop.md"): ("紧急变更", "先授权", "后部署", "事后评审"),
+    controlled_compliance_relpath("urs.md"): ("URS-014", "GBZ-02"),
+    controlled_compliance_relpath("srs.md"): ("SRS-014", "URS-014"),
+    controlled_compliance_relpath("traceability_matrix.md"): ("GBZ-02", "SRS-014"),
+    controlled_compliance_relpath("validation_plan.md"): (
         "validate_gbz02_repo_compliance.py",
         "test_emergency_change_api_unit",
         "test_gbz02_compliance_gate_unit",
     ),
-    "doc/compliance/validation_report.md": (
+    controlled_compliance_relpath("validation_report.md"): (
         "GBZ-02",
         "validate_gbz02_repo_compliance.py",
         "external_emergency_change_execution_pending",
     ),
-    "doc/compliance/controlled_document_register.md": (
-        "doc/compliance/emergency_change_sop.md",
-        "doc/compliance/emergency_change_status.md",
+    controlled_compliance_relpath("controlled_document_register.md"): (
+        controlled_compliance_relpath("emergency_change_sop.md"),
+        controlled_compliance_relpath("emergency_change_status.md"),
     ),
 }
 
@@ -81,17 +83,17 @@ REQUIRED_FILES: tuple[str, ...] = (
 
 REQUIRED_PATTERNS: tuple[tuple[str, str, str], ...] = (
     (
-        "doc/compliance/traceability_matrix.md",
+        controlled_compliance_relpath("traceability_matrix.md"),
         r"\|\s*GBZ-02\s*\|\s*URS-014\s*\|\s*SRS-014\s*\|",
         "追踪矩阵缺少 GBZ-02 映射",
     ),
     (
-        "doc/compliance/traceability_matrix.md",
+        controlled_compliance_relpath("traceability_matrix.md"),
         r"backend/services/emergency_change\.py",
         "追踪矩阵缺少紧急变更实现映射",
     ),
     (
-        "doc/compliance/traceability_matrix.md",
+        controlled_compliance_relpath("traceability_matrix.md"),
         r"backend\.tests\.test_emergency_change_api_unit",
         "追踪矩阵缺少 GBZ-02 API 测试映射",
     ),
@@ -148,7 +150,7 @@ def validate_gbz02_repo_state(repo_root: str | Path, *, as_of: date | None = Non
                 ComplianceIssue(code="required_mapping_missing", message=message, path=rel_path)
             )
 
-    status_path = "doc/compliance/emergency_change_status.md"
+    status_path = controlled_compliance_relpath("emergency_change_status.md")
     status_text = docs_cache.get(status_path, "")
     if status_text:
         repo_status = _extract_value(status_text, "仓库内证据状态:")

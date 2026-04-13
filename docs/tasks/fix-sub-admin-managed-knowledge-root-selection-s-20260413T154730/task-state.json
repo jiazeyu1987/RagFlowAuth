@@ -1,0 +1,103 @@
+{
+  "schema_version": 2,
+  "task_id": "fix-sub-admin-managed-knowledge-root-selection-s-20260413T154730",
+  "mode": "lite",
+  "status": "completed",
+  "current_phase": "P1",
+  "phase_statuses": [
+    {
+      "phase_id": "P1",
+      "title": "Frontend, Backend, and Regression Coverage",
+      "status": "completed",
+      "objective": "Ship the managed-root isolation rule end to end for sub-admin create/edit flows.",
+      "owned_paths": [
+        "fronted/src/features/users/**",
+        "backend/services/users/manager_support.py",
+        "backend/tests/test_users_manager_manager_user_unit.py",
+        "fronted/e2e/tests/admin.users.managed-kb-root-visibility.spec.js",
+        "fronted/e2e/tests/docs.user-management.spec.js",
+        "fronted/e2e/tests/docs.permission-groups.folder-visibility.spec.js"
+      ],
+      "dependencies": [
+        "Existing user-management page",
+        "Knowledge-directory APIs",
+        "Doc E2E bootstrap fixtures"
+      ],
+      "deliverables": [
+        "Frontend hidden/disabled managed-root behavior",
+        "Backend overlap rejection",
+        "Updated browser regressions"
+      ],
+      "evidence_expectation": "Execution log and test report contain passing unit and browser commands.",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P1-AC1",
+          "text": "Create/edit sub-admin UI hides or disables roots already assigned to other active same-company sub-admins while preserving navigation to free descendants.",
+          "status": "completed",
+          "evidence": [
+            "docs/tasks/fix-sub-admin-managed-knowledge-root-selection-s-20260413T154730/execution-log.md#phase-p1",
+            "docs/tasks/fix-sub-admin-managed-knowledge-root-selection-s-20260413T154730/test-report.md#t1-frontend-selection-state-utility-and-selector-rendering",
+            "docs/tasks/fix-sub-admin-managed-knowledge-root-selection-s-20260413T154730/test-report.md#t3-browser-regression-for-create-sub-admin-modal"
+          ]
+        },
+        {
+          "ac_id": "P1-AC2",
+          "text": "Backend user create/update flows reject overlapping managed knowledge-root assignments for active same-company sub-admins with a 409 conflict.",
+          "status": "completed",
+          "evidence": [
+            "docs/tasks/fix-sub-admin-managed-knowledge-root-selection-s-20260413T154730/execution-log.md#phase-p1",
+            "docs/tasks/fix-sub-admin-managed-knowledge-root-selection-s-20260413T154730/test-report.md#t2-backend-overlap-rejection"
+          ]
+        },
+        {
+          "ac_id": "P1-AC3",
+          "text": "Automated tests cover frontend selection-state logic, selector rendering, backend validation, and a browser regression for the create flow.",
+          "status": "completed",
+          "evidence": [
+            "docs/tasks/fix-sub-admin-managed-knowledge-root-selection-s-20260413T154730/test-report.md#t1-frontend-selection-state-utility-and-selector-rendering",
+            "docs/tasks/fix-sub-admin-managed-knowledge-root-selection-s-20260413T154730/test-report.md#t2-backend-overlap-rejection",
+            "docs/tasks/fix-sub-admin-managed-knowledge-root-selection-s-20260413T154730/test-report.md#t3-browser-regression-for-create-sub-admin-modal"
+          ]
+        },
+        {
+          "ac_id": "P1-AC4",
+          "text": "Existing doc E2E coverage that creates extra sub-admins remains green under the new backend conflict rule.",
+          "status": "completed",
+          "evidence": [
+            "docs/tasks/fix-sub-admin-managed-knowledge-root-selection-s-20260413T154730/test-report.md#t4-real-doc-user-management-flow-compatibility",
+            "docs/tasks/fix-sub-admin-managed-knowledge-root-selection-s-20260413T154730/test-report.md#t5-real-doc-permission-group-flow-compatibility"
+          ]
+        }
+      ],
+      "evidence": [
+        "docs/tasks/fix-sub-admin-managed-knowledge-root-selection-s-20260413T154730/execution-log.md#phase-p1",
+        "docs/tasks/fix-sub-admin-managed-knowledge-root-selection-s-20260413T154730/test-report.md"
+      ],
+      "notes": "Completed on 2026-04-13 after frontend prop-chain fix, backend validation, and E2E compatibility updates.",
+      "last_reviewed_at": "2026-04-13T16:55:48.3207932+08:00"
+    }
+  ],
+  "planner_review_status": "approved",
+  "test_status": "passed",
+  "blocking_prereqs": [],
+  "iteration_counts": {
+    "planner_revisions": 1,
+    "executor_loops": 1,
+    "test_loops": 1
+  },
+  "created_at": "2026-04-13T15:47:30",
+  "updated_at": "2026-04-13T16:55:48.3207932+08:00",
+  "branch": "int_latest",
+  "baseline_revision": "1274287b5d2da34421b677a83c264d4b808617b9",
+  "workspace_root": "D:\\ProjectPackage\\RagflowAuth",
+  "tasks_root": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks",
+  "task_dir": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\fix-sub-admin-managed-knowledge-root-selection-s-20260413T154730",
+  "goal": "Fix sub-admin managed knowledge root selection so a new or edited sub-admin cannot see or select directories already assigned to other active sub-admins; enforce the rule in both UI and backend; add automated tests.",
+  "artifacts": {
+    "prd": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\fix-sub-admin-managed-knowledge-root-selection-s-20260413T154730\\prd.md",
+    "test_plan": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\fix-sub-admin-managed-knowledge-root-selection-s-20260413T154730\\test-plan.md",
+    "task_state": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\fix-sub-admin-managed-knowledge-root-selection-s-20260413T154730\\task-state.json",
+    "execution_log": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\fix-sub-admin-managed-knowledge-root-selection-s-20260413T154730\\execution-log.md",
+    "test_report": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\fix-sub-admin-managed-knowledge-root-selection-s-20260413T154730\\test-report.md"
+  }
+}

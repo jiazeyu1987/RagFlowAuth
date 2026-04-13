@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import json
-
 from fastapi import APIRouter, HTTPException, Request, Response
 
 from backend.app.core.authz import AdminOnly, AuthContextDep
@@ -10,6 +8,13 @@ from backend.services.audit import AuditEvidenceExportService
 from backend.services.compliance import ComplianceReviewPackageService, RetiredRecordsService
 
 router = APIRouter()
+
+
+def _require_audit_log_manager(ctx: AuthContextDep):
+    manager = getattr(ctx.deps, "audit_log_manager", None)
+    if manager is None or not hasattr(manager, "list_events") or not hasattr(manager, "log_ctx_event"):
+        raise HTTPException(status_code=500, detail="audit_log_manager_unavailable")
+    return manager
 
 
 @router.get("/audit/events")
@@ -45,95 +50,30 @@ async def list_audit_events(
     - auth_login/auth_logout
     - document_preview/document_upload/document_download/document_delete
     """
-    manager = getattr(ctx.deps, "audit_log_manager", None)
-    if manager is None:
-        manager = ctx.deps.audit_log_store
-    if hasattr(manager, "list_events") and manager is not ctx.deps.audit_log_store:
-        result = manager.list_events(
-            action=action,
-            actor=actor,
-            actor_username=username,
-            company_id=company_id,
-            department_id=department_id,
-            resource_type=resource_type,
-            resource_id=resource_id,
-            event_type=event_type,
-            signature_id=signature_id,
-            request_id=request_id,
-            source=source,
-            doc_id=doc_id,
-            filename=filename,
-            kb_id=kb_id,
-            kb_dataset_id=kb_dataset_id,
-            kb_name=kb_name,
-            kb_ref=kb_ref,
-            from_ms=from_ms,
-            to_ms=to_ms,
-            offset=offset,
-            limit=limit,
-        )
-    else:
-        total, rows = ctx.deps.audit_log_store.list_events(
-            action=action,
-            actor=actor,
-            actor_username=username,
-            company_id=company_id,
-            department_id=department_id,
-            resource_type=resource_type,
-            resource_id=resource_id,
-            event_type=event_type,
-            signature_id=signature_id,
-            request_id=request_id,
-            source=source,
-            doc_id=doc_id,
-            filename=filename,
-            kb_id=kb_id,
-            kb_dataset_id=kb_dataset_id,
-            kb_name=kb_name,
-            kb_ref=kb_ref,
-            from_ms=from_ms,
-            to_ms=to_ms,
-            offset=offset,
-            limit=limit,
-        )
-        result = {
-            "total": total,
-            "items": [
-                {
-                    "id": r.id,
-                    "action": r.action,
-                    "actor": r.actor,
-                    "username": r.actor_username,
-                    "company_id": r.company_id,
-                    "company_name": r.company_name,
-                    "department_id": r.department_id,
-                    "department_name": r.department_name,
-                    "created_at_ms": r.created_at_ms,
-                    "resource_type": r.resource_type,
-                    "resource_id": r.resource_id,
-                    "event_type": r.event_type,
-                    "before": _decode_meta_json(r.before_json),
-                    "after": _decode_meta_json(r.after_json),
-                    "before_json": r.before_json,
-                    "after_json": r.after_json,
-                    "reason": r.reason,
-                    "signature_id": r.signature_id,
-                    "request_id": r.request_id,
-                    "client_ip": r.client_ip,
-                    "prev_hash": r.prev_hash,
-                    "event_hash": r.event_hash,
-                    "source": r.source,
-                    "doc_id": r.doc_id,
-                    "filename": r.filename,
-                    "kb_id": r.kb_id,
-                    "kb_dataset_id": r.kb_dataset_id,
-                    "kb_name": r.kb_name,
-                    "meta": _decode_meta_json(r.meta_json),
-                    "meta_json": r.meta_json,
-                }
-                for r in rows
-            ],
-        }
+    manager = _require_audit_log_manager(ctx)
+    result = manager.list_events(
+        action=action,
+        actor=actor,
+        actor_username=username,
+        company_id=company_id,
+        department_id=department_id,
+        resource_type=resource_type,
+        resource_id=resource_id,
+        event_type=event_type,
+        signature_id=signature_id,
+        request_id=request_id,
+        source=source,
+        doc_id=doc_id,
+        filename=filename,
+        kb_id=kb_id,
+        kb_dataset_id=kb_dataset_id,
+        kb_name=kb_name,
+        kb_ref=kb_ref,
+        from_ms=from_ms,
+        to_ms=to_ms,
+        offset=offset,
+        limit=limit,
+    )
     items = list(result.get("items") or [])
     names = resolve_user_display_names(ctx.deps, {str(item.get("actor") or "").strip() for item in items if item.get("actor")})
     for item in items:
@@ -142,16 +82,6 @@ async def list_audit_events(
             item["full_name"] = names.get(actor_id)
     result["items"] = items
     return result
-
-
-def _decode_meta_json(meta_json: str | None):
-    if not meta_json:
-        return None
-    try:
-        return json.loads(meta_json)
-    except Exception:
-        return None
-
 
 def _resolve_evidence_export_service(ctx: AuthContextDep) -> AuditEvidenceExportService:
     store = getattr(ctx.deps, "audit_log_store", None)
@@ -180,12 +110,16 @@ async def export_audit_evidence(
     _: AdminOnly,
     from_ms: int | None = None,
     to_ms: int | None = None,
+    action: str | None = None,
     doc_id: str | None = None,
     actor: str | None = None,
     signature_id: str | None = None,
     request_id: str | None = None,
     event_type: str | None = None,
     filename: str | None = None,
+    resource_type: str | None = None,
+    resource_id: str | None = None,
+    source: str | None = None,
 ):
     service = _resolve_evidence_export_service(ctx)
     result = service.export_package(
@@ -194,30 +128,33 @@ async def export_audit_evidence(
         filters={
             "from_ms": from_ms,
             "to_ms": to_ms,
+            "action": action,
             "doc_id": doc_id,
             "actor": actor,
             "signature_id": signature_id,
             "request_id": request_id,
             "event_type": event_type,
             "filename": filename,
+            "resource_type": resource_type,
+            "resource_id": resource_id,
+            "source": source,
         },
     )
-    manager = getattr(ctx.deps, "audit_log_manager", None)
-    if manager is not None:
-        manager.safe_log_ctx_event(
-            ctx=ctx,
-            action="audit_evidence_export",
-            source="audit",
-            resource_type="inspection_evidence_package",
-            resource_id=result.package_filename,
-            event_type="export",
-            meta={
-                "package_filename": result.package_filename,
-                "package_sha256": result.package_sha256,
-                "counts": result.counts,
-                "filters": result.manifest.get("metadata", {}).get("filters", {}),
-            },
-        )
+    manager = _require_audit_log_manager(ctx)
+    manager.log_ctx_event(
+        ctx=ctx,
+        action="audit_evidence_export",
+        source="audit",
+        resource_type="inspection_evidence_package",
+        resource_id=result.package_filename,
+        event_type="export",
+        meta={
+            "package_filename": result.package_filename,
+            "package_sha256": result.package_sha256,
+            "counts": result.counts,
+            "filters": result.manifest.get("metadata", {}).get("filters", {}),
+        },
+    )
     return Response(
         content=result.package_bytes,
         media_type="application/zip",
@@ -259,23 +196,22 @@ async def export_review_package(
         )
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
-    manager = getattr(ctx.deps, "audit_log_manager", None)
-    if manager is not None:
-        manager.safe_log_ctx_event(
-            ctx=ctx,
-            action="compliance_review_package_export",
-            source="audit",
-            resource_type="controlled_document_review_package",
-            resource_id=result.package_filename,
-            event_type="export",
-            meta={
-                "package_filename": result.package_filename,
-                "package_sha256": result.package_sha256,
-                "release_version": result.manifest.get("metadata", {}).get("release_version"),
-                "company_id": result.manifest.get("metadata", {}).get("company_id"),
-                "document_count": len(result.manifest.get("documents") or []),
-            },
-        )
+    manager = _require_audit_log_manager(ctx)
+    manager.log_ctx_event(
+        ctx=ctx,
+        action="compliance_review_package_export",
+        source="audit",
+        resource_type="controlled_document_review_package",
+        resource_id=result.package_filename,
+        event_type="export",
+        meta={
+            "package_filename": result.package_filename,
+            "package_sha256": result.package_sha256,
+            "release_version": result.manifest.get("metadata", {}).get("release_version"),
+            "company_id": result.manifest.get("metadata", {}).get("company_id"),
+            "document_count": len(result.manifest.get("documents") or []),
+        },
+    )
     return Response(
         content=result.package_bytes,
         media_type="application/zip",
@@ -347,23 +283,22 @@ async def export_retired_record_package(
     except RuntimeError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
-    manager = getattr(ctx.deps, "audit_log_manager", None)
-    if manager is not None:
-        manager.safe_log_ctx_event(
-            ctx=ctx,
-            action="retired_record_package_export",
-            source="audit",
-            resource_type="retired_record_package",
-            resource_id=result.package_filename,
-            event_type="export",
-            meta={
-                "doc_id": doc_id,
-                "package_filename": result.package_filename,
-                "package_sha256": result.package_sha256,
-                "archived_at_ms": result.retired_document.get("archived_at_ms"),
-                "retention_until_ms": result.retired_document.get("retention_until_ms"),
-            },
-        )
+    manager = _require_audit_log_manager(ctx)
+    manager.log_ctx_event(
+        ctx=ctx,
+        action="retired_record_package_export",
+        source="audit",
+        resource_type="retired_record_package",
+        resource_id=result.package_filename,
+        event_type="export",
+        meta={
+            "doc_id": doc_id,
+            "package_filename": result.package_filename,
+            "package_sha256": result.package_sha256,
+            "archived_at_ms": result.retired_document.get("archived_at_ms"),
+            "retention_until_ms": result.retired_document.get("retention_until_ms"),
+        },
+    )
     return Response(
         content=result.package_bytes,
         media_type="application/zip",

@@ -5,6 +5,10 @@ import { orgDirectoryApi } from '../orgDirectory/api';
 
 const DEFAULT_FILTERS = {
   action: '',
+  source: '',
+  event_type: '',
+  request_id: '',
+  resource_id: '',
   company_id: '',
   department_id: '',
   username: '',
@@ -27,6 +31,10 @@ const buildEventParams = (filters) => {
   };
 
   if (filters.action) params.action = filters.action;
+  if (filters.source) params.source = filters.source;
+  if (filters.event_type) params.event_type = filters.event_type;
+  if (filters.request_id) params.request_id = filters.request_id;
+  if (filters.resource_id) params.resource_id = filters.resource_id;
   if (filters.username) params.username = filters.username;
   if (filters.company_id) params.company_id = filters.company_id;
   if (filters.department_id) params.department_id = filters.department_id;
@@ -42,6 +50,7 @@ const buildEventParams = (filters) => {
 
 export default function useAuditLogsPage() {
   const [loading, setLoading] = useState(true);
+  const [exporting, setExporting] = useState(false);
   const [error, setError] = useState('');
   const [companies, setCompanies] = useState([]);
   const [departments, setDepartments] = useState([]);
@@ -134,8 +143,21 @@ export default function useAuditLogsPage() {
     await loadLogs(nextFilters);
   }, [filters, loadLogs]);
 
+  const exportEvidencePackage = useCallback(async () => {
+    setExporting(true);
+    setError('');
+    try {
+      await auditApi.exportEvidence(buildEventParams(filters));
+    } catch (requestError) {
+      setError(mapUserFacingErrorMessage(requestError?.message, '导出审计证据包失败'));
+    } finally {
+      setExporting(false);
+    }
+  }, [filters]);
+
   return {
     loading,
+    exporting,
     error,
     companies,
     departments,
@@ -149,5 +171,6 @@ export default function useAuditLogsPage() {
     applyFilters,
     goPrev,
     goNext,
+    exportEvidencePackage,
   };
 }

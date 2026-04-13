@@ -1,4 +1,6 @@
 import { lazy } from 'react';
+import { QUALITY_SYSTEM_ROUTE_PERMISSION } from '../shared/auth/capabilities';
+import { QUALITY_SYSTEM_MODULES, QUALITY_SYSTEM_ROOT_PATH } from '../features/qualitySystem/moduleCatalog';
 
 export const ROUTE_TEXT = {
   home: '\u9996\u9875',
@@ -22,6 +24,7 @@ export const ROUTE_TEXT = {
     notificationSettings: '\u901a\u77e5\u8bbe\u7f6e',
     electronicSignatures: '\u7535\u5b50\u7b7e\u540d',
     trainingCompliance: '\u57f9\u8bad\u5408\u89c4',
+    qualitySystem: '\u4f53\u7cfb\u6587\u4ef6',
   },
   toolTitles: {
     patentDownload: '\u4e13\u5229\u4e0b\u8f7d',
@@ -62,6 +65,7 @@ const PackageDrawingTool = lazy(() => import('../pages/PackageDrawingTool'));
 const SearchConfigsPanel = lazy(() => import('../pages/SearchConfigsPanel'));
 const ChatConfigsPanel = lazy(() => import('../pages/ChatConfigsPanel'));
 const DocumentAudit = lazy(() => import('../pages/DocumentAudit'));
+const QualitySystem = lazy(() => import('../pages/QualitySystem'));
 
 export const APP_ROUTES = [
   { path: '/login', component: LoginPage, public: true },
@@ -135,6 +139,7 @@ export const APP_ROUTES = [
     icon: '\ud83e\uddf0',
     guard: { permission: { resource: 'tools', action: 'view' } },
     navHiddenRoles: ['admin'],
+    matchPrefixes: ['/tools/'],
   },
   {
     path: '/tools/patent-download',
@@ -273,6 +278,22 @@ export const APP_ROUTES = [
     icon: '\ud83c\udf93',
     guard: { allowedRoles: ['admin'] },
   },
+  {
+    path: QUALITY_SYSTEM_ROOT_PATH,
+    component: QualitySystem,
+    title: ROUTE_TEXT.nav.qualitySystem,
+    showInNav: true,
+    icon: '\ud83e\uddea',
+    guard: { permission: QUALITY_SYSTEM_ROUTE_PERMISSION },
+    navGuard: { allowedRoles: ['admin', 'sub_admin'] },
+    matchPrefixes: [`${QUALITY_SYSTEM_ROOT_PATH}/`],
+  },
+  ...QUALITY_SYSTEM_MODULES.map((module) => ({
+    path: module.path,
+    component: QualitySystem,
+    title: module.title,
+    guard: { permission: QUALITY_SYSTEM_ROUTE_PERMISSION },
+  })),
   {
     path: '/messages',
     component: InboxPage,

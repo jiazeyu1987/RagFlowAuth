@@ -23,6 +23,9 @@ class TestDependenciesUnit(unittest.TestCase):
 
             self.assertIsNotNone(deps.electronic_signature_service)
             self.assertIsNotNone(deps.operation_approval_service)
+            self.assertIsNotNone(deps.equipment_service)
+            self.assertIsNotNone(deps.metrology_service)
+            self.assertIsNotNone(deps.maintenance_service)
             self.assertIs(
                 deps.operation_approval_service._signature_service,
                 deps.electronic_signature_service,

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 from fastapi import HTTPException
 
 from backend.app.modules.permission_groups.contracts import (
@@ -10,32 +12,38 @@ from backend.app.modules.permission_groups.management_access import list_managea
 from backend.app.modules.permission_groups.service import PermissionGroupsService
 
 
-def list_manageable_folder_snapshot(ctx, service: PermissionGroupsService) -> dict:
-    groups = list_manageable_groups(ctx, service)
-    snapshot = require_folder_snapshot(
-        service.list_group_folders(),
-        detail="permission_group_folder_snapshot_invalid_payload",
-    )
-    clean_user_id = str(getattr(ctx.user, "user_id", "") or "").strip()
-    folders = list(snapshot.get("folders", []))
-    by_id = {
+def _current_user_id(ctx) -> str:
+    return str(getattr(ctx.user, "user_id", "") or "").strip()
+
+
+def _folder_map(folders: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    return {
         str(folder.get("id")): folder
         for folder in folders
-        if isinstance(folder.get("id"), str) and folder.get("id")
+        if isinstance(folder, dict) and isinstance(folder.get("id"), str) and folder.get("id")
     }
-    visible_ids: set[str] = set()
+
+
+def _include_with_ancestors(
+    folder_id: str | None,
+    *,
+    by_id: dict[str, dict[str, Any]],
+    collected_ids: set[str],
+) -> None:
+    current_id = str(folder_id or "").strip()
+    guard: set[str] = set()
+    while current_id and current_id not in guard:
+        guard.add(current_id)
+        collected_ids.add(current_id)
+        parent_id = by_id.get(current_id, {}).get("parent_id")
+        current_id = str(parent_id).strip() if isinstance(parent_id, str) and parent_id.strip() else ""
+
+
+def _manageable_group_bindings(
+    groups: list[dict[str, Any]],
+) -> tuple[dict[str, str | None], int]:
     group_bindings: dict[str, str | None] = {}
     root_group_count = 0
-
-    def include_with_ancestors(folder_id: str | None) -> None:
-        current_id = str(folder_id or "").strip()
-        guard: set[str] = set()
-        while current_id and current_id not in guard:
-            guard.add(current_id)
-            visible_ids.add(current_id)
-            parent_id = by_id.get(current_id, {}).get("parent_id")
-            current_id = str(parent_id).strip() if isinstance(parent_id, str) and parent_id.strip() else ""
-
     for group in groups:
         if not isinstance(group, dict):
             continue
@@ -46,10 +54,44 @@ def list_manageable_folder_snapshot(ctx, service: PermissionGroupsService) -> di
         group_bindings[str(group_id)] = clean_folder_id
         if clean_folder_id is None:
             root_group_count += 1
-        include_with_ancestors(clean_folder_id)
+    return group_bindings, root_group_count
+
+
+def _readable_folder_ids(
+    *,
+    snapshot: dict[str, Any],
+    folders: list[dict[str, Any]],
+    by_id: dict[str, dict[str, Any]],
+    user_id: str,
+) -> set[str]:
+    readable_ids: set[str] = set()
+    raw_group_bindings = snapshot.get("group_bindings")
+    if isinstance(raw_group_bindings, dict):
+        for folder_id in raw_group_bindings.values():
+            if folder_id is None or isinstance(folder_id, str):
+                _include_with_ancestors(folder_id, by_id=by_id, collected_ids=readable_ids)
     for folder in folders:
-        if str(folder.get("created_by") or "").strip() == clean_user_id:
-            include_with_ancestors(folder.get("id"))
+        if str(folder.get("created_by") or "").strip() == user_id:
+            _include_with_ancestors(folder.get("id"), by_id=by_id, collected_ids=readable_ids)
+    return readable_ids
+
+
+def list_manageable_folder_snapshot(ctx, service: PermissionGroupsService) -> dict:
+    groups = list_manageable_groups(ctx, service)
+    snapshot = require_folder_snapshot(
+        service.list_group_folders(),
+        detail="permission_group_folder_snapshot_invalid_payload",
+    )
+    clean_user_id = _current_user_id(ctx)
+    folders = list(snapshot.get("folders", []))
+    by_id = _folder_map(folders)
+    visible_ids = _readable_folder_ids(
+        snapshot=snapshot,
+        folders=folders,
+        by_id=by_id,
+        user_id=clean_user_id,
+    )
+    group_bindings, root_group_count = _manageable_group_bindings(groups)
 
     return {
         **snapshot,
@@ -64,8 +106,31 @@ def get_visible_folder_scope(ctx, service: PermissionGroupsService) -> tuple[dic
     return folder_snapshot, visible_folder_ids(folder_snapshot)
 
 
+def writable_folder_ids(folder_snapshot: dict, *, user_id: str) -> set[str]:
+    if not user_id:
+        return set()
+    return {
+        str(folder.get("id"))
+        for folder in (folder_snapshot or {}).get("folders", [])
+        if isinstance(folder, dict)
+        and isinstance(folder.get("id"), str)
+        and folder.get("id")
+        and str(folder.get("created_by") or "").strip() == user_id
+    }
+
+
+def get_writable_folder_scope(ctx, service: PermissionGroupsService) -> tuple[dict, set[str]]:
+    folder_snapshot = list_manageable_folder_snapshot(ctx, service)
+    return folder_snapshot, writable_folder_ids(folder_snapshot, user_id=_current_user_id(ctx))
+
+
 def assert_folder_visible(folder_id: str, visible_ids: set[str]) -> None:
     if folder_id not in visible_ids:
+        raise HTTPException(status_code=403, detail="permission_group_folder_out_of_management_scope")
+
+
+def assert_folder_manageable(folder_id: str, manageable_ids: set[str]) -> None:
+    if folder_id not in manageable_ids:
         raise HTTPException(status_code=403, detail="permission_group_folder_out_of_management_scope")
 
 

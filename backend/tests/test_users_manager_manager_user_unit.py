@@ -15,6 +15,7 @@ def _make_user(
     department_id: int = 10,
     status: str = "active",
     manager_user_id: str | None = None,
+    managed_kb_root_node_id: str | None = None,
 ):
     return SimpleNamespace(
         user_id=user_id,
@@ -36,7 +37,7 @@ def _make_user(
         idle_timeout_minutes=120,
         created_at_ms=1,
         last_login_at_ms=None,
-        managed_kb_root_node_id=None,
+        managed_kb_root_node_id=managed_kb_root_node_id,
         tool_ids=[],
     )
 
@@ -69,6 +70,7 @@ class _FakePort:
             "sub_admin_invalid_root": SimpleNamespace(name="Sub Admin Invalid Root", company_id=1, department_id=10),
             "sub_admin_missing_root": SimpleNamespace(name="Sub Admin Missing Root", company_id=1, department_id=10),
             "sub_admin_tools": SimpleNamespace(name="Sub Admin Tools", company_id=1, department_id=10),
+            "sub_admin_conflict_create": SimpleNamespace(name="Sub Admin Conflict Create", company_id=1, department_id=10),
             "cross_company_user": SimpleNamespace(name="Cross Company User", company_id=1, department_id=20),
         }
         self.create_calls: list[dict] = []
@@ -77,6 +79,10 @@ class _FakePort:
         self.tool_permission_sync_calls: list[dict] = []
         self.managed_roots = {
             (1, "node-1"): "/Root 1",
+            (1, "node-root-1"): "/Root 1",
+            (1, "node-owned"): "/Root 1/Owned",
+            (1, "node-owned-child"): "/Root 1/Owned/Child",
+            (1, "node-root-2"): "/Root 2",
             (2, "node-2"): "/Root 2",
         }
         self.default_departments = {
@@ -84,8 +90,33 @@ class _FakePort:
             2: 20,
         }
 
-    def list_users(self, **_kwargs):
-        return [self.users["user-1"]]
+    def list_users(self, **kwargs):
+        users = list(self.users.values())
+        role = kwargs.get("role")
+        status = kwargs.get("status")
+        company_id = kwargs.get("company_id")
+        department_id = kwargs.get("department_id")
+        manager_user_id = kwargs.get("manager_user_id")
+        limit = kwargs.get("limit")
+
+        if role is not None:
+            users = [user for user in users if getattr(user, "role", None) == role]
+        if status is not None:
+            users = [user for user in users if getattr(user, "status", None) == status]
+        if company_id is not None:
+            users = [user for user in users if getattr(user, "company_id", None) == company_id]
+        if department_id is not None:
+            users = [user for user in users if getattr(user, "department_id", None) == department_id]
+        if manager_user_id is not None:
+            users = [
+                user
+                for user in users
+                if str(getattr(user, "manager_user_id", "") or "").strip()
+                == str(manager_user_id or "").strip()
+            ]
+        if isinstance(limit, int):
+            users = users[:limit]
+        return users
 
     def get_user(self, user_id: str):
         return self.users.get(str(user_id))
@@ -260,7 +291,10 @@ class _FakePort:
         return {"active_session_count": 0, "active_session_last_activity_at_ms": None}
 
     def get_login_session_summaries(self, _idle_timeout_by_user: dict[str, int | None]):
-        return {"user-1": {"active_session_count": 0, "active_session_last_activity_at_ms": None}}
+        return {
+            user_id: {"active_session_count": 0, "active_session_last_activity_at_ms": None}
+            for user_id in _idle_timeout_by_user
+        }
 
 
 class UserManagementManagerManagerUserTests(unittest.TestCase):
@@ -502,6 +536,27 @@ class UserManagementManagerManagerUserTests(unittest.TestCase):
 
         self.assertEqual("managed_kb_root_node_required_for_sub_admin", ctx.exception.code)
 
+    def test_create_sub_admin_rejects_overlapping_root_with_other_active_sub_admin(self):
+        self.port.users["mgr-1"].managed_kb_root_node_id = "node-owned"
+
+        with self.assertRaises(UserManagementError) as ctx:
+            self.manager.create_user(
+                user_data=UserCreate(
+                    username="sub_admin_conflict_create",
+                    password="Pass1234",
+                    employee_user_id="sub_admin_conflict_create",
+                    full_name="Sub Admin Conflict Create",
+                    company_id=1,
+                    department_id=10,
+                    role="sub_admin",
+                    managed_kb_root_node_id="node-owned-child",
+                ),
+                created_by="admin-1",
+            )
+
+        self.assertEqual("managed_kb_root_node_conflict", ctx.exception.code)
+        self.assertEqual(409, ctx.exception.status_code)
+
     def test_create_sub_admin_keeps_permission_groups(self):
         response = self.manager.create_user(
             user_data=UserCreate(
@@ -542,6 +597,22 @@ class UserManagementManagerManagerUserTests(unittest.TestCase):
             )
 
         self.assertEqual("managed_kb_root_node_not_found", ctx.exception.code)
+
+    def test_update_sub_admin_rejects_overlapping_root_with_other_active_sub_admin(self):
+        self.port.users["mgr-1"].managed_kb_root_node_id = "node-owned"
+        self.port.users["user-1"].role = "sub_admin"
+        self.port.users["user-1"].company_id = 1
+        self.port.users["user-1"].department_id = 10
+        self.port.users["user-1"].managed_kb_root_node_id = "node-root-2"
+
+        with self.assertRaises(UserManagementError) as ctx:
+            self.manager.update_user(
+                user_id="user-1",
+                user_data=UserUpdate(managed_kb_root_node_id="node-root-1"),
+            )
+
+        self.assertEqual("managed_kb_root_node_conflict", ctx.exception.code)
+        self.assertEqual(409, ctx.exception.status_code)
 
     def test_update_non_sub_admin_clears_managed_root(self):
         self.port.users["user-1"].managed_kb_root_node_id = "node-1"
@@ -635,8 +706,9 @@ class UserManagementManagerManagerUserTests(unittest.TestCase):
 
         self.assertEqual("mgr-1", detail.manager_user_id)
         self.assertEqual("manager_one", detail.manager_username)
-        self.assertEqual("mgr-1", listing[0].manager_user_id)
-        self.assertEqual("manager_one", listing[0].manager_username)
+        listed_user = next(item for item in listing if item.user_id == "user-1")
+        self.assertEqual("mgr-1", listed_user.manager_user_id)
+        self.assertEqual("manager_one", listed_user.manager_username)
 
         sub_admin_detail = self.manager.get_user("mgr-1")
         self.assertEqual("/Root 1", sub_admin_detail.managed_kb_root_path)

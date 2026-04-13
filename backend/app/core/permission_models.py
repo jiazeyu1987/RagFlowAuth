@@ -13,6 +13,23 @@ class ResourceScope(str, Enum):
     NONE = "NONE"
 
 
+QUALITY_CAPABILITY_ACTIONS: dict[str, tuple[str, ...]] = {
+    "quality_system": ("view", "manage"),
+    "document_control": ("create", "review", "approve", "effective", "obsolete", "publish", "export"),
+    "training_ack": ("assign", "acknowledge", "review_questions"),
+    "change_control": ("create", "evaluate", "approve", "plan", "confirm", "close"),
+    "equipment_lifecycle": ("create", "accept", "maintain", "meter", "retire"),
+    "metrology": ("record", "confirm", "approve"),
+    "maintenance": ("plan", "record", "approve"),
+    "batch_records": ("template_manage", "execute", "sign", "review", "export"),
+    "audit_events": ("view", "export"),
+    "complaints": (),
+    "capa": (),
+    "internal_audit": (),
+    "management_review": (),
+}
+
+
 def _normalize_capability_targets(values: Iterable[str]) -> list[str]:
     targets: set[str] = set()
     for item in values:
@@ -36,6 +53,26 @@ def _scoped_capability(scope: ResourceScope, targets: Iterable[str] = ()) -> dic
         "scope": str(scope.value).lower(),
         "targets": _normalize_capability_targets(targets) if scope == ResourceScope.SET else [],
     }
+
+
+def _quality_capability_map(*, is_admin: bool, can_manage_users: bool) -> dict[str, dict[str, Any]]:
+    capabilities: dict[str, dict[str, Any]] = {}
+    enabled_quality_system_actions = {"view"} if (is_admin or can_manage_users) else set()
+    if is_admin:
+        enabled_quality_system_actions.add("manage")
+
+    for resource, actions in QUALITY_CAPABILITY_ACTIONS.items():
+        action_map: dict[str, Any] = {}
+        for action in actions:
+            enabled = False
+            if resource == "quality_system":
+                enabled = action in enabled_quality_system_actions
+            elif is_admin:
+                enabled = True
+            action_map[action] = _boolean_capability(enabled)
+        capabilities[resource] = action_map
+
+    return capabilities
 
 
 @dataclass(frozen=True)
@@ -118,6 +155,10 @@ class PermissionSnapshot:
             "chats": {
                 "view": _scoped_capability(self.chat_scope, chat_targets),
             },
+            **_quality_capability_map(
+                is_admin=self.is_admin,
+                can_manage_users=self.can_manage_users,
+            ),
         }
 
 

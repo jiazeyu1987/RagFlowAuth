@@ -1,0 +1,111 @@
+{
+  "schema_version": 2,
+  "task_id": "iso-13485-20260413T153016",
+  "mode": "full",
+  "status": "executing",
+  "current_phase": null,
+  "phase_statuses": [
+    {
+      "phase_id": "P1",
+      "title": "交付 ISO 13485 整改文档包",
+      "status": "completed",
+      "objective": "产出一份基于当前仓库证据和会议纪要的详细整改文档，明确`体系文件`治理中枢方案、问题清单、关键流程和实施路线图，并配套可独立复核的测试计划。",
+      "owned_paths": [
+        "docs/tasks/iso-13485-20260413T153016/prd.md",
+        "docs/tasks/iso-13485-20260413T153016/test-plan.md",
+        "docs/tasks/iso-13485-20260413T153016/execution-log.md",
+        "docs/tasks/iso-13485-20260413T153016/test-report.md"
+      ],
+      "dependencies": [
+        "可读取当前仓库结构与相关证据文件",
+        "会议纪要和用户补充诉求完整可用"
+      ],
+      "deliverables": [
+        "证据化整改文档",
+        "`体系文件`治理中枢方案",
+        "文控、培训、变更、设备、计量、维护、批记录、审计等整改要求",
+        "后续实施路线图",
+        "独立评审测试计划"
+      ],
+      "evidence_expectation": "",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P1-AC1",
+          "text": "PRD 明确记录当前仓库的关键现实，包括文档主根冲突、`tobedeleted/compliance/*` 现状、导航接入方式、现有权限模型边界和审计/站内信/电子签名基础能力。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P1"
+          ]
+        },
+        {
+          "ac_id": "P1-AC2",
+          "text": "PRD 提供覆盖文控、设计开发文件、培训、`体系文件`入口、变更、设备、计量、维护、批记录、审计日志、投诉待定等事项的整改问题清单，并且每项都能追溯到仓库证据或会议纪要。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P1"
+          ]
+        },
+        {
+          "ac_id": "P1-AC3",
+          "text": "PRD 对`体系文件`治理中枢给出清晰方案，至少包含入口定位、一级模块、目标用户、接入方式以及基于现有 capability 模型的扩展建议。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P1"
+          ]
+        },
+        {
+          "ac_id": "P1-AC4",
+          "text": "PRD 把会议纪要中的关键流程要求细化为可执行规则，至少覆盖文件上传与上一版确认、审核/批准、生效/作废、培训 15 分钟知晓与提问闭环、知识库下发、变更台账与计划、设备与计量、批记录实时性与签名、搜索和智能对话留痕。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P1"
+          ]
+        },
+        {
+          "ac_id": "P1-AC5",
+          "text": "PRD 给出明确的整改优先级与路线图，并明确“文控 + 设备”是前期重点，同时强调单一受控主根和禁止 fallback 的实施原则。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P1"
+          ]
+        },
+        {
+          "ac_id": "P1-AC6",
+          "text": "`test-plan.md` 能让独立评审人在不依赖隐藏上下文的前提下，通过明确命令和人工检查步骤验证上述文档内容。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P1"
+          ]
+        }
+      ],
+      "evidence": [
+        "execution-log.md#Phase-P1"
+      ],
+      "notes": "",
+      "last_reviewed_at": "2026-04-13T16:06:12"
+    }
+  ],
+  "planner_review_status": "approved",
+  "test_status": "not_started",
+  "blocking_prereqs": [],
+  "iteration_counts": {
+    "planner_revisions": 0,
+    "executor_loops": 1,
+    "test_loops": 0
+  },
+  "created_at": "2026-04-13T15:30:16",
+  "updated_at": "2026-04-13T16:06:12",
+  "branch": "int_latest",
+  "baseline_revision": "1274287b5d2da34421b677a83c264d4b808617b9",
+  "workspace_root": "D:\\ProjectPackage\\RagflowAuth",
+  "tasks_root": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks",
+  "task_dir": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\iso-13485-20260413T153016",
+  "goal": "根据已识别的 ISO 13485 不符合项、会议纪要关于文控/设备/变更/批记录/体系文件入口的讨论，以及新增体系文件页签的设想，整理一份详尽的整改文档与验收工件",
+  "artifacts": {
+    "prd": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\iso-13485-20260413T153016\\prd.md",
+    "test_plan": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\iso-13485-20260413T153016\\test-plan.md",
+    "task_state": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\iso-13485-20260413T153016\\task-state.json",
+    "execution_log": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\iso-13485-20260413T153016\\execution-log.md",
+    "test_report": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\iso-13485-20260413T153016\\test-report.md"
+  }
+}

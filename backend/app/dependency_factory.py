@@ -19,6 +19,7 @@ from backend.services.deletion_log_store import DeletionLogStore
 from backend.services.download_log_store import DownloadLogStore
 from backend.services.electronic_signature import ElectronicSignatureService, ElectronicSignatureStore
 from backend.services.emergency_change import EmergencyChangeService
+from backend.services.equipment import EquipmentService
 from backend.services.inbox_service import UserInboxService
 from backend.services.inbox_store import UserInboxStore
 from backend.services.kb.store import KbStore
@@ -26,6 +27,8 @@ from backend.services.knowledge_directory.store import KnowledgeDirectoryStore
 from backend.services.knowledge_ingestion import KnowledgeIngestionManager
 from backend.services.knowledge_management import KnowledgeManagementManager
 from backend.services.knowledge_tree import KnowledgeTreeManager
+from backend.services.maintenance import MaintenanceService
+from backend.services.metrology import MetrologyService
 from backend.services.notification import NotificationManager, NotificationStore
 from backend.services.operation_approval import OperationApprovalService, OperationApprovalStore
 from backend.services.org_directory_store import OrgDirectoryStore, OrgStructureManager
@@ -84,6 +87,9 @@ class AppDependencies:
     emergency_change_service: EmergencyChangeService | None = None
     supplier_qualification_service: SupplierQualificationService | None = None
     training_compliance_service: TrainingComplianceService | None = None
+    equipment_service: EquipmentService | None = None
+    metrology_service: MetrologyService | None = None
+    maintenance_service: MaintenanceService | None = None
     notification_manager: NotificationManager | None = None
     notification_service: NotificationManager | None = None
     user_inbox_store: UserInboxStore | None = None
@@ -142,6 +148,9 @@ class _SharedRuntime:
     emergency_change_service: EmergencyChangeService
     supplier_qualification_service: SupplierQualificationService
     training_compliance_service: TrainingComplianceService
+    equipment_service: EquipmentService
+    metrology_service: MetrologyService
+    maintenance_service: MaintenanceService
     watermark_policy_store: WatermarkPolicyStore
     user_store: UserStore
     kb_store: KbStore
@@ -306,6 +315,18 @@ class DependencyFactory:
             emergency_change_service=EmergencyChangeService(db_path=auth_db_path),
             supplier_qualification_service=SupplierQualificationService(db_path=auth_db_path),
             training_compliance_service=TrainingComplianceService(db_path=training_db_path),
+            equipment_service=EquipmentService(
+                db_path=auth_db_path,
+                notification_manager=notification_manager,
+            ),
+            metrology_service=MetrologyService(
+                db_path=auth_db_path,
+                notification_manager=notification_manager,
+            ),
+            maintenance_service=MaintenanceService(
+                db_path=auth_db_path,
+                notification_manager=notification_manager,
+            ),
             watermark_policy_store=WatermarkPolicyStore(db_path=auth_db_path),
             user_store=UserStore(db_path=auth_db_path),
             kb_store=KbStore(db_path=auth_db_path),
@@ -366,6 +387,9 @@ class DependencyFactory:
             emergency_change_service=runtime.emergency_change_service,
             supplier_qualification_service=runtime.supplier_qualification_service,
             training_compliance_service=runtime.training_compliance_service,
+            equipment_service=runtime.equipment_service,
+            metrology_service=runtime.metrology_service,
+            maintenance_service=runtime.maintenance_service,
             notification_manager=runtime.notification_manager,
             notification_service=runtime.notification_manager,
             user_inbox_store=runtime.user_inbox_store,

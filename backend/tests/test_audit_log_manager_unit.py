@@ -59,6 +59,13 @@ class TestAuditLogManagerUnit(unittest.TestCase):
                 request_id="rid-1",
                 client_ip="127.0.0.1",
                 meta={"session_id": "s1"},
+                evidence_refs=[
+                    {
+                        "resource_id": "s1",
+                        "filename": "session.json",
+                        "evidence_role": "record_change",
+                    }
+                ],
             )
             data = mgr.list_events(action="paper_session_delete", limit=10)
 
@@ -72,6 +79,7 @@ class TestAuditLogManagerUnit(unittest.TestCase):
             self.assertEqual(item["before"], {"exists": True})
             self.assertEqual(item["after"], {"exists": False})
             self.assertEqual(item["meta"], {"session_id": "s1"})
+            self.assertEqual(item["evidence_refs"][0]["resource_id"], "s1")
             self.assertIsNotNone(item["event_hash"])
         finally:
             cleanup_dir(td)

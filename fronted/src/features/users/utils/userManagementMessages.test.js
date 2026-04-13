@@ -21,6 +21,9 @@ describe('userManagementMessages', () => {
     expect(mapUserManagementErrorMessage('managed_kb_root_node_not_found')).toContain(
       '\u5f53\u524d\u8d1f\u8d23\u76ee\u5f55\u5df2\u5931\u6548'
     );
+    expect(mapUserManagementErrorMessage('managed_kb_root_node_conflict')).toBe(
+      '\u8be5\u77e5\u8bc6\u5e93\u76ee\u5f55\u5df2\u7531\u5176\u4ed6\u5b50\u7ba1\u7406\u5458\u8d1f\u8d23\uff0c\u8bf7\u91cd\u65b0\u9009\u62e9\u4e00\u4e2a\u672a\u88ab\u5360\u7528\u7684\u76ee\u5f55\u3002'
+    );
     expect(mapUserManagementErrorMessage('managed_kb_root_node_required_for_sub_admin')).toBe(
       '\u8bf7\u9009\u62e9\u5b50\u7ba1\u7406\u5458\u8d1f\u8d23\u7684\u77e5\u8bc6\u5e93\u76ee\u5f55'
     );

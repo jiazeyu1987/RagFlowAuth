@@ -45,13 +45,17 @@ def _build_router_registration_specs() -> tuple[RouterRegistrationSpec, ...]:
     from backend.app.modules.chat.router import router as chat_router
     from backend.app.modules.data_security.router import router as data_security_router
     from backend.app.modules.diagnostics.router import router as diagnostics_router
+    from backend.app.modules.document_control.router import router as document_control_router
     from backend.app.modules.documents.router import router as documents_router
     from backend.app.modules.drug_admin.router import router as drug_admin_router
     from backend.app.modules.electronic_signature.router import router as electronic_signature_router
     from backend.app.modules.emergency_changes.router import router as emergency_changes_router
+    from backend.app.modules.equipment.router import router as equipment_router
     from backend.app.modules.inbox.router import router as inbox_router
     from backend.app.modules.knowledge.router import router as knowledge_router
+    from backend.app.modules.maintenance.router import router as maintenance_router
     from backend.app.modules.me.router import router as me_router
+    from backend.app.modules.metrology.router import router as metrology_router
     from backend.app.modules.nas.router import router as nas_router
     from backend.app.modules.onlyoffice.router import router as onlyoffice_router
     from backend.app.modules.operation_approvals.router import router as operation_approvals_router
@@ -73,12 +77,16 @@ def _build_router_registration_specs() -> tuple[RouterRegistrationSpec, ...]:
         RouterRegistrationSpec(prefix="/api", tags=("Audit",), router=audit_router),
         RouterRegistrationSpec(prefix="/api", tags=("Admin Notifications",), router=admin_notifications_router),
         RouterRegistrationSpec(prefix="/api", tags=("Emergency Changes",), router=emergency_changes_router),
+        RouterRegistrationSpec(prefix="/api", tags=("Equipment",), router=equipment_router),
+        RouterRegistrationSpec(prefix="/api", tags=("Metrology",), router=metrology_router),
+        RouterRegistrationSpec(prefix="/api", tags=("Maintenance",), router=maintenance_router),
         RouterRegistrationSpec(prefix="/api", tags=("Supplier Qualification",), router=supplier_qualification_router),
         RouterRegistrationSpec(prefix="/api", tags=("Training Compliance",), router=training_compliance_router),
         RouterRegistrationSpec(prefix="/api/users", tags=("Users",), router=users_router),
         RouterRegistrationSpec(prefix="/api/knowledge", tags=("Knowledge Base",), router=knowledge_router),
         RouterRegistrationSpec(prefix="/api", tags=("Operation Approvals",), router=operation_approvals_router),
         RouterRegistrationSpec(prefix="/api", tags=("Inbox",), router=inbox_router),
+        RouterRegistrationSpec(prefix="/api", tags=("Document Control",), router=document_control_router),
         RouterRegistrationSpec(prefix="/api/ragflow", tags=("RAGFlow Integration",), router=ragflow_router),
         RouterRegistrationSpec(prefix="/api", tags=("Preview Gateway",), router=preview_router),
         RouterRegistrationSpec(prefix="/api", tags=("Documents",), router=documents_router),

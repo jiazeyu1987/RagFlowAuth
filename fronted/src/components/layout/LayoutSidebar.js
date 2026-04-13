@@ -4,9 +4,11 @@ import { NAVIGATION_ROUTES } from '../../routes/routeRegistry';
 import PermissionGuard from '../PermissionGuard';
 import { formatRoleLabel, LAYOUT_TEXT } from './layoutConfig';
 
-const isActiveRoute = (pathname, routePath) => {
-  if (pathname === routePath) return true;
-  if (routePath === '/tools' && pathname.startsWith('/tools/')) return true;
+const isActiveRoute = (pathname, route) => {
+  if (pathname === route.path) return true;
+  if (Array.isArray(route.matchPrefixes)) {
+    return route.matchPrefixes.some((prefix) => pathname.startsWith(prefix));
+  }
   return false;
 };
 
@@ -94,7 +96,7 @@ const LayoutSidebar = ({
           if (route.navHiddenRoles && route.navHiddenRoles.includes(user?.role)) return null;
 
           const navGuard = route.navGuard || route.guard || {};
-          const active = isActiveRoute(pathname, route.path);
+          const active = isActiveRoute(pathname, route);
 
           return (
             <PermissionGuard

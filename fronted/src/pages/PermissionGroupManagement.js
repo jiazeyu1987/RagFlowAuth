@@ -9,6 +9,7 @@ export default function PermissionGroupManagement() {
     isMobile,
     pendingDeleteGroup,
     hasEditableFolder,
+    canCreateFolder,
     groups,
     loading,
     saving,
@@ -64,6 +65,7 @@ export default function PermissionGroupManagement() {
         <PermissionGroupSidebar
           isMobile={isMobile}
           hasEditableFolder={hasEditableFolder}
+          canCreateFolder={canCreateFolder}
           groups={groups}
           currentFolderId={currentFolderId}
           selectedFolderId={selectedFolderId}

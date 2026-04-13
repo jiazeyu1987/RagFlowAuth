@@ -50,13 +50,13 @@ class _UserChatPermissionStore:
 
 
 class _Deps:
-    def __init__(self, user: _User, audit_log_store: AuditLogStore):
+    def __init__(self, user: _User, audit_log_store: AuditLogStore, *, with_manager: bool = True):
         self.user_store = _UserStore(user)
         self.permission_group_store = _PermissionGroupStore()
         self.user_kb_permission_store = _UserKbPermissionStore()
         self.user_chat_permission_store = _UserChatPermissionStore()
         self.audit_log_store = audit_log_store
-        self.audit_log_manager = AuditLogManager(store=audit_log_store)
+        self.audit_log_manager = AuditLogManager(store=audit_log_store) if with_manager else None
 
 
 def _override_get_current_payload(_: Request) -> TokenPayload:
@@ -88,6 +88,14 @@ class TestAuditEventsApiUnit(unittest.TestCase):
                 event_type="preview",
                 request_id="rid-audit",
                 meta={"render": "default", "type": "markdown"},
+                evidence_refs=[
+                    {
+                        "resource_id": "d1",
+                        "filename": "a.md",
+                        "kb_name": "kb-a",
+                        "evidence_role": "previewed_document",
+                    }
+                ],
             )
 
             app = FastAPI()
@@ -119,5 +127,29 @@ class TestAuditEventsApiUnit(unittest.TestCase):
             self.assertEqual(data["items"][0]["resource_type"], "knowledge_document")
             self.assertEqual(data["items"][0]["request_id"], "rid-audit")
             self.assertEqual(data["items"][0]["meta"], {"render": "default", "type": "markdown"})
+            self.assertEqual(
+                data["items"][0]["evidence_refs"][0]["evidence_role"],
+                "previewed_document",
+            )
+        finally:
+            cleanup_dir(td)
+
+    def test_list_fails_when_audit_log_manager_missing(self):
+        td = make_temp_dir(prefix="ragflowauth_audit_api_no_manager")
+        try:
+            db_path = os.path.join(str(td), "auth.db")
+            ensure_schema(db_path)
+            store = AuditLogStore(db_path=db_path)
+
+            app = FastAPI()
+            app.state.deps = _Deps(_User(role="admin"), store, with_manager=False)
+            app.include_router(audit_router, prefix="/api")
+            app.dependency_overrides[auth_module.get_current_payload] = _override_get_current_payload
+
+            with TestClient(app) as client:
+                resp = client.get("/api/audit/events?limit=10")
+
+            self.assertEqual(resp.status_code, 500, resp.text)
+            self.assertEqual(resp.json()["detail"], "audit_log_manager_unavailable")
         finally:
             cleanup_dir(td)

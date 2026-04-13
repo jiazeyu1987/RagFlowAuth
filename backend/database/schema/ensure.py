@@ -34,6 +34,7 @@ from .data_security import (
 )
 from .restore_drills import ensure_restore_drills_table
 from .kb_documents import ensure_kb_documents_table
+from .document_control import ensure_document_control_tables
 from .patent_downloads import ensure_patent_download_tables
 from .paper_downloads import ensure_paper_download_tables
 from .package_drawings import ensure_package_drawing_tables
@@ -55,6 +56,9 @@ from .auth_sessions import ensure_auth_login_sessions_table
 from .approval_workflow import ensure_approval_workflow_tables
 from .electronic_signatures import ensure_electronic_signature_tables
 from .emergency_changes import ensure_emergency_change_tables
+from .equipment import ensure_equipment_tables
+from .maintenance import ensure_maintenance_tables
+from .metrology import ensure_metrology_tables
 from .notification import ensure_notification_tables
 from .supplier_qualification import ensure_supplier_qualification_tables
 from .training_compliance import ensure_training_compliance_tables
@@ -103,6 +107,7 @@ def ensure_schema(db_path: str | Path) -> None:
         ensure_password_history_table(conn)
         ensure_auth_login_sessions_table(conn)
         ensure_kb_documents_table(conn)
+        ensure_document_control_tables(conn)
         ensure_chat_sessions_table(conn)
         ensure_chat_ownerships_table(conn)
         ensure_chat_message_sources_table(conn)
@@ -154,6 +159,9 @@ def ensure_schema(db_path: str | Path) -> None:
         ensure_approval_workflow_tables(conn)
         ensure_electronic_signature_tables(conn)
         ensure_emergency_change_tables(conn)
+        ensure_equipment_tables(conn)
+        ensure_metrology_tables(conn)
+        ensure_maintenance_tables(conn)
         ensure_notification_tables(conn)
         ensure_operation_approval_tables(conn)
         ensure_user_inbox_tables(conn)

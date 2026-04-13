@@ -10,6 +10,11 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
 from backend.app.core.authz import AuthContextDep
+from backend.services.audit_helpers import (
+    build_audit_evidence_refs,
+    first_evidence_document_context,
+    log_quality_audit_event,
+)
 
 from .shared import ChatCompletionRequest, assert_chat_access
 from .source_builder import build_retrieval_sources, persist_assistant_sources
@@ -188,9 +193,12 @@ async def chat_completion(
                 yield frame
 
             try:
-                if sources_task and (not sources_sent) and sources_task.done():
+                if sources_task and not sources_sent:
                     sources_sent = True
-                    built_sources = sources_task.result() or []
+                    if sources_task.done():
+                        built_sources = sources_task.result() or []
+                    else:
+                        built_sources = await sources_task or []
 
                 persist_assistant_sources(
                     deps=deps,
@@ -199,6 +207,46 @@ async def chat_completion(
                     assistant_text=assistant_text_for_hash,
                     sources=built_sources,
                     logger=logger,
+                )
+                evidence_refs = build_audit_evidence_refs(
+                    built_sources,
+                    default_role="chat_citation",
+                )
+                doc_context = first_evidence_document_context(evidence_refs)
+                log_quality_audit_event(
+                    deps=deps,
+                    ctx=ctx,
+                    action="smart_chat_completion",
+                    source="smart_chat",
+                    resource_type="chat_session",
+                    resource_id=effective_session_id or (trace_id if trace_id != "-" else chat_id),
+                    event_type="completion",
+                    request_id=(request_id if request_id != "-" else None),
+                    before={
+                        "chat_id": chat_id,
+                        "session_id": effective_session_id,
+                        "trace_id": trace_id if trace_id != "-" else None,
+                        "question": body.question,
+                    },
+                    after={
+                        "answer_length": len(str(assistant_text_for_hash or "")),
+                        "source_count": len(evidence_refs),
+                    },
+                    doc_id=doc_context["doc_id"],
+                    filename=doc_context["filename"],
+                    kb_id=doc_context["kb_id"],
+                    kb_dataset_id=doc_context["kb_dataset_id"],
+                    kb_name=doc_context["kb_name"],
+                    evidence_refs=evidence_refs,
+                    meta={
+                        "chat_id": chat_id,
+                        "session_id": effective_session_id,
+                        "trace_id": trace_id if trace_id != "-" else None,
+                        "question": body.question,
+                        "answer_excerpt": str(assistant_text_for_hash or "")[:400],
+                        "answer_length": len(str(assistant_text_for_hash or "")),
+                        "source_count": len(evidence_refs),
+                    },
                 )
                 elapsed_ms = int((time.perf_counter() - stream_started_at) * 1000)
                 _chat_log(

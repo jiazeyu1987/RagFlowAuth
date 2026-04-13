@@ -6,12 +6,28 @@ from unittest.mock import Mock, patch
 
 
 class RunnerWorkersUnitTests(unittest.TestCase):
+    def test_run_server_validates_jwt_secret_before_starting_uvicorn(self):
+        from backend.runtime import runner
+
+        fake_uvicorn = types.SimpleNamespace(run=Mock())
+
+        with patch.dict("sys.modules", {"uvicorn": fake_uvicorn}):
+            with patch.object(runner, "validate_jwt_secret", side_effect=RuntimeError("jwt_secret_key_default_or_empty")):
+                with self.assertRaisesRegex(RuntimeError, "jwt_secret_key_default_or_empty"):
+                    runner.run_server(workers=1, reload=False)
+
+        fake_uvicorn.run.assert_not_called()
+
     def test_run_server_uses_import_string_when_workers_gt_one(self):
         from backend.runtime import runner
 
         fake_uvicorn = types.SimpleNamespace(run=Mock())
         with patch.dict("sys.modules", {"uvicorn": fake_uvicorn}):
-            with patch.object(runner.settings, "HOST", "127.0.0.1"), patch.object(runner.settings, "PORT", 8001):
+            with (
+                patch.object(runner, "validate_jwt_secret"),
+                patch.object(runner.settings, "HOST", "127.0.0.1"),
+                patch.object(runner.settings, "PORT", 8001),
+            ):
                 runner.run_server(host="0.0.0.0", port=9000, workers=2, reload=False)
 
         fake_uvicorn.run.assert_called_once()
@@ -29,7 +45,11 @@ class RunnerWorkersUnitTests(unittest.TestCase):
         fake_app_module = types.SimpleNamespace(app=object())
 
         with patch.dict("sys.modules", {"uvicorn": fake_uvicorn, "backend.app.main": fake_app_module}):
-            with patch.object(runner.settings, "HOST", "127.0.0.1"), patch.object(runner.settings, "PORT", 8001):
+            with (
+                patch.object(runner, "validate_jwt_secret"),
+                patch.object(runner.settings, "HOST", "127.0.0.1"),
+                patch.object(runner.settings, "PORT", 8001),
+            ):
                 runner.run_server(workers=1, reload=False)
 
         fake_uvicorn.run.assert_called_once()
@@ -46,6 +66,7 @@ class RunnerWorkersUnitTests(unittest.TestCase):
 
         with patch.dict("sys.modules", {"uvicorn": fake_uvicorn, "backend.app.main": fake_app_module}):
             with (
+                patch.object(runner, "validate_jwt_secret"),
                 patch.object(runner.settings, "HOST", "127.0.0.1"),
                 patch.object(runner.settings, "PORT", 8001),
                 patch.object(runner.settings, "UVICORN_WORKERS", 1),
@@ -63,7 +84,11 @@ class RunnerWorkersUnitTests(unittest.TestCase):
 
         fake_uvicorn = types.SimpleNamespace(run=Mock())
         with patch.dict("sys.modules", {"uvicorn": fake_uvicorn}):
-            with patch.object(runner.settings, "HOST", "127.0.0.1"), patch.object(runner.settings, "PORT", 8001):
+            with (
+                patch.object(runner, "validate_jwt_secret"),
+                patch.object(runner.settings, "HOST", "127.0.0.1"),
+                patch.object(runner.settings, "PORT", 8001),
+            ):
                 runner.run_server(workers=3, reload=True)
 
         fake_uvicorn.run.assert_called_once()

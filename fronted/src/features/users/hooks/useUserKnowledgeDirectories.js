@@ -2,6 +2,7 @@ import { useKnowledgeDirectoryListing } from './useKnowledgeDirectoryListing';
 import { useKnowledgeDirectoryRootCreation } from './useKnowledgeDirectoryRootCreation';
 
 export const useUserKnowledgeDirectories = ({
+  allUsers,
   isAdminUser,
   createMode,
   policyMode,
@@ -14,11 +15,13 @@ export const useUserKnowledgeDirectories = ({
 }) => {
   const {
     kbDirectoryNodes,
+    kbDirectoryDisabledNodeIds,
     kbDirectoryLoading,
     kbDirectoryError,
     managedKbRootInvalid,
     fetchKnowledgeDirectories,
   } = useKnowledgeDirectoryListing({
+    allUsers,
     isAdminUser,
     createMode,
     policyMode,
@@ -46,6 +49,7 @@ export const useUserKnowledgeDirectories = ({
 
   return {
     kbDirectoryNodes,
+    kbDirectoryDisabledNodeIds,
     kbDirectoryLoading,
     kbDirectoryError,
     kbDirectoryCreatingRoot,

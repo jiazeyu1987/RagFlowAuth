@@ -1,0 +1,178 @@
+{
+  "schema_version": 2,
+  "task_id": "docs-tasks-iso-13485-prd-llm-20260413t162500-dev-20260413T173900",
+  "mode": "full",
+  "status": "completed",
+  "current_phase": null,
+  "phase_statuses": [
+    {
+      "phase_id": "P1",
+      "title": "后端统一留痕与证据导出",
+      "status": "completed",
+      "objective": "",
+      "owned_paths": [],
+      "dependencies": [],
+      "deliverables": [],
+      "evidence_expectation": "",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P1-AC1",
+          "text": "后端存在单一、稳定的审计事件字段集合，能够承载搜索、对话、文档调用和证据引用场景，并继续以 `/api/audit/events` 输出稳定 JSON 结构。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P1",
+            "test-report.md#T1",
+            "test-report.md#T2",
+            "test-report.md#T3",
+            "test-report.md#T4",
+            "test-report.md#T5",
+            "test-report.md#T6"
+          ]
+        },
+        {
+          "ac_id": "P1-AC2",
+          "text": "`/api/search` 在成功检索时写入 `global_search` 领域事件，事件至少包含查询内容、目标数据集、分页参数、结果统计和请求上下文，且这些事件可被现有审计查询接口检索。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P1",
+            "test-report.md#T1",
+            "test-report.md#T2",
+            "test-report.md#T3",
+            "test-report.md#T4",
+            "test-report.md#T5",
+            "test-report.md#T6"
+          ]
+        },
+        {
+          "ac_id": "P1-AC3",
+          "text": "`/api/chats/{chat_id}/completions` 在完成对话时写入 `smart_chat` 领域事件，事件至少包含 chat/session/question 关键信息、回答关联来源或文档证据，并能被审计查询接口检索。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P1",
+            "test-report.md#T1",
+            "test-report.md#T2",
+            "test-report.md#T3",
+            "test-report.md#T4",
+            "test-report.md#T5",
+            "test-report.md#T6"
+          ]
+        },
+        {
+          "ac_id": "P1-AC4",
+          "text": "审计证据导出结果中包含上述搜索/对话相关事件及其便携式 JSON/CSV 副本，manifest/checksum 仍保持可验证。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P1",
+            "test-report.md#T1",
+            "test-report.md#T2",
+            "test-report.md#T3",
+            "test-report.md#T4",
+            "test-report.md#T5",
+            "test-report.md#T6"
+          ]
+        },
+        {
+          "ac_id": "P1-AC5",
+          "text": "后端单测覆盖新增的审计写入、查询和导出路径，并在缺少必要前提时显式失败而不是静默跳过。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P1",
+            "test-report.md#T1",
+            "test-report.md#T2",
+            "test-report.md#T3",
+            "test-report.md#T4",
+            "test-report.md#T5",
+            "test-report.md#T6"
+          ]
+        }
+      ],
+      "evidence": [
+        "execution-log.md#Phase-P1"
+      ],
+      "notes": "",
+      "last_reviewed_at": "2026-04-13T18:26:29"
+    },
+    {
+      "phase_id": "P2",
+      "title": "前端审计工作台与可验证交付",
+      "status": "completed",
+      "objective": "",
+      "owned_paths": [],
+      "dependencies": [],
+      "deliverables": [],
+      "evidence_expectation": "",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P2-AC1",
+          "text": "审计页支持查询 WS07 所需的关键字段组合，至少包括 source、event type 或 request/resource 维度中的新增检索能力，并可触发证据导出。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P2",
+            "test-report.md#T1",
+            "test-report.md#T2",
+            "test-report.md#T3",
+            "test-report.md#T4",
+            "test-report.md#T5",
+            "test-report.md#T6"
+          ]
+        },
+        {
+          "ac_id": "P2-AC2",
+          "text": "审计页对搜索/对话/文档调用类事件展示可读的上下文摘要，不要求新增路由或权限资源名。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P2",
+            "test-report.md#T1",
+            "test-report.md#T2",
+            "test-report.md#T3",
+            "test-report.md#T4",
+            "test-report.md#T5",
+            "test-report.md#T6"
+          ]
+        },
+        {
+          "ac_id": "P2-AC3",
+          "text": "前端测试覆盖新增 API、页面状态和交互行为，且不会破坏现有审计列表基础行为。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P2",
+            "test-report.md#T1",
+            "test-report.md#T2",
+            "test-report.md#T3",
+            "test-report.md#T4",
+            "test-report.md#T5",
+            "test-report.md#T6"
+          ]
+        }
+      ],
+      "evidence": [
+        "execution-log.md#Phase-P2"
+      ],
+      "notes": "",
+      "last_reviewed_at": "2026-04-13T18:26:45"
+    }
+  ],
+  "planner_review_status": "approved",
+  "test_status": "passed",
+  "blocking_prereqs": [],
+  "iteration_counts": {
+    "planner_revisions": 0,
+    "executor_loops": 2,
+    "test_loops": 1
+  },
+  "created_at": "2026-04-13T17:39:00",
+  "updated_at": "2026-04-13T19:04:34",
+  "branch": "int_latest",
+  "baseline_revision": "1274287b5d2da34421b677a83c264d4b808617b9",
+  "workspace_root": "D:\\ProjectPackage\\RagflowAuth",
+  "tasks_root": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks",
+  "task_dir": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\docs-tasks-iso-13485-prd-llm-20260413t162500-dev-20260413T173900",
+  "goal": "参考 docs/tasks/iso-13485-prd-llm-20260413T162500/development-docs/WS07-audit-and-evidence-export.md 开发 WS07：补齐统一审计事件、证据导出、全局搜索与智能对话留痕，并完成后端/前端/测试交付",
+  "artifacts": {
+    "prd": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\docs-tasks-iso-13485-prd-llm-20260413t162500-dev-20260413T173900\\prd.md",
+    "test_plan": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\docs-tasks-iso-13485-prd-llm-20260413t162500-dev-20260413T173900\\test-plan.md",
+    "task_state": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\docs-tasks-iso-13485-prd-llm-20260413t162500-dev-20260413T173900\\task-state.json",
+    "execution_log": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\docs-tasks-iso-13485-prd-llm-20260413t162500-dev-20260413T173900\\execution-log.md",
+    "test_report": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\docs-tasks-iso-13485-prd-llm-20260413t162500-dev-20260413T173900\\test-report.md"
+  }
+}

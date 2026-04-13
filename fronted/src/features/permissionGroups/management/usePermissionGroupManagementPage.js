@@ -2,11 +2,13 @@ import { useCallback, useEffect, useState } from 'react';
 
 import { ROOT } from './constants';
 import usePermissionGroupManagement from './usePermissionGroupManagement';
+import { useAuth } from '../../../hooks/useAuth';
 
 const MOBILE_BREAKPOINT = 768;
 
 export default function usePermissionGroupManagementPage() {
   const management = usePermissionGroupManagement();
+  const { user } = useAuth();
   const [isMobile, setIsMobile] = useState(() => {
     if (typeof window === 'undefined') return false;
     return window.innerWidth <= MOBILE_BREAKPOINT;
@@ -22,7 +24,17 @@ export default function usePermissionGroupManagementPage() {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  const hasEditableFolder = !!management.selectedFolderId && management.selectedFolderId !== ROOT;
+  const currentUserId = String(user?.user_id || '').trim();
+  const isOwnedFolder = useCallback(
+    (folderId) => {
+      if (!folderId || folderId === ROOT) return false;
+      const folder = management.folderIndexes?.byId?.get(folderId);
+      return String(folder?.created_by || '').trim() === currentUserId;
+    },
+    [currentUserId, management.folderIndexes]
+  );
+  const hasEditableFolder = isOwnedFolder(management.selectedFolderId);
+  const canCreateFolder = management.currentFolderId === ROOT || isOwnedFolder(management.currentFolderId);
 
   const handleCreateGroup = useCallback(() => {
     setPendingDeleteGroup(null);
@@ -65,6 +77,7 @@ export default function usePermissionGroupManagementPage() {
     isMobile,
     pendingDeleteGroup,
     hasEditableFolder,
+    canCreateFolder,
     handleCreateGroup,
     handleViewGroup,
     handleEditGroup,

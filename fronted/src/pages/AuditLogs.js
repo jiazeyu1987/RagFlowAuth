@@ -26,6 +26,7 @@ const ACTION_LABELS = {
   document_delete: '删除文档',
   electronic_signature_authorization_update: '更新电子签名授权',
   environment_qualification_record: '登记环境资质记录',
+  global_search_execute: '全局搜索',
   operation_approval_submit: '提交操作审批',
   operation_approval_approve: '通过操作审批',
   operation_approval_reject: '驳回操作审批',
@@ -46,6 +47,7 @@ const ACTION_LABELS = {
   retired_record_package_export: '导出归档记录包',
   supplier_component_upsert: '新增或更新供应商组件',
   supplier_component_version_change: '变更供应商组件版本',
+  smart_chat_completion: '智能对话',
   tenant_a_event: '租户 A 事件',
   tenant_b_event: '租户 B 事件',
   training_record_create: '新增培训记录',
@@ -64,12 +66,14 @@ const SOURCE_LABELS = {
   knowledge_retired: '归档文档',
   operation_approval: '操作审批',
   ragflow: 'RAGFlow',
+  global_search: '全局搜索',
   patent_download: '专利下载',
   paper_download: '论文下载',
   patent: '专利',
   paper: '论文',
   review: '文档审核',
   supplier_qualification: '供应商资质',
+  smart_chat: '智能对话',
   training_compliance: '培训合规',
   users: '用户管理',
 };
@@ -180,10 +184,12 @@ const ACTION_FILTER_VALUES = [
   'supplier_component_version_change',
   'environment_qualification_record',
   'electronic_signature_authorization_update',
+  'global_search_execute',
   'audit_evidence_export',
   'compliance_review_package_export',
   'retired_document_download',
   'retired_record_package_export',
+  'smart_chat_completion',
   'overwrite',
 ];
 
@@ -192,6 +198,26 @@ const ACTION_OPTIONS = [
   ...ACTION_FILTER_VALUES.map((value) => ({
     value,
     label: actionLabel(value),
+  })),
+];
+
+const SOURCE_FILTER_VALUES = [
+  'audit',
+  'auth',
+  'knowledge',
+  'review',
+  'global_search',
+  'smart_chat',
+  'operation_approval',
+  'notification',
+  'maintenance',
+];
+
+const SOURCE_OPTIONS = [
+  { value: '', label: '全部' },
+  ...SOURCE_FILTER_VALUES.map((value) => ({
+    value,
+    label: sourceLabel(value),
   })),
 ];
 
@@ -204,6 +230,63 @@ const formatMs = (value) => {
   }
 };
 
+const truncateText = (value, maxChars = 48) => {
+  const text = String(value || '').trim();
+  if (!text) return '';
+  if (text.length <= maxChars) return text;
+  return `${text.slice(0, maxChars)}...`;
+};
+
+const getEvidenceRefs = (item) => (
+  Array.isArray(item?.evidence_refs) ? item.evidence_refs.filter((entry) => entry && typeof entry === 'object') : []
+);
+
+const summarizeAuditContext = (item) => {
+  const before = item?.before && typeof item.before === 'object' ? item.before : {};
+  const after = item?.after && typeof item.after === 'object' ? item.after : {};
+  const meta = item?.meta && typeof item.meta === 'object' ? item.meta : {};
+  const lines = [];
+
+  if (item?.source === 'global_search') {
+    if (before.question) lines.push(`查询：${truncateText(before.question)}`);
+    const datasetIds = Array.isArray(before.dataset_ids)
+      ? before.dataset_ids
+      : (Array.isArray(meta.dataset_ids) ? meta.dataset_ids : []);
+    if (datasetIds.length) {
+      lines.push(`知识库：${datasetIds.slice(0, 2).join('、')}${datasetIds.length > 2 ? ' 等' : ''}`);
+    }
+    const resultCount = after.returned_chunks ?? meta.result_total ?? after.total;
+    if (resultCount != null) lines.push(`结果：${resultCount} 条`);
+  }
+
+  if (item?.source === 'smart_chat') {
+    if (before.question) lines.push(`问题：${truncateText(before.question)}`);
+    if (meta.session_id || item?.resource_id) {
+      lines.push(`会话：${meta.session_id || item.resource_id}`);
+    }
+    const sourceCount = meta.source_count ?? getEvidenceRefs(item).length;
+    lines.push(`引用：${sourceCount} 条`);
+  }
+
+  if (!lines.length) {
+    if (item?.event_type) lines.push(`事件：${item.event_type}`);
+    if (item?.request_id) lines.push(`请求：${truncateText(item.request_id, 32)}`);
+    if (item?.resource_id) lines.push(`资源：${truncateText(item.resource_id, 32)}`);
+  }
+
+  return lines.slice(0, 3);
+};
+
+const summarizeEvidence = (item) => {
+  const refs = getEvidenceRefs(item);
+  if (!refs.length) return ['-'];
+  const first = refs[0];
+  const lines = [`${refs.length} 条引用`];
+  if (first?.filename) lines.push(first.filename);
+  if (first?.kb_name || first?.kb_id) lines.push(first.kb_name || first.kb_id);
+  return lines.slice(0, 3);
+};
+
 const AuditLogs = () => {
   const [isMobile, setIsMobile] = useState(() => {
     if (typeof window === 'undefined') return false;
@@ -211,6 +294,7 @@ const AuditLogs = () => {
   });
   const {
     loading,
+    exporting,
     error,
     companies,
     filters,
@@ -223,6 +307,7 @@ const AuditLogs = () => {
     applyFilters,
     goPrev,
     goNext,
+    exportEvidencePackage,
   } = useAuditLogsPage();
 
   useEffect(() => {
@@ -249,7 +334,7 @@ const AuditLogs = () => {
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns: isMobile ? '1fr' : 'repeat(7, minmax(0, 1fr))',
+            gridTemplateColumns: isMobile ? '1fr' : 'repeat(6, minmax(0, 1fr))',
             gap: '10px',
             alignItems: 'end',
           }}
@@ -268,6 +353,55 @@ const AuditLogs = () => {
                 </option>
               ))}
             </select>
+          </div>
+
+          <div>
+            <div style={{ fontSize: '0.85rem', color: '#6b7280', marginBottom: 4 }}>来源</div>
+            <select
+              value={filters.source}
+              onChange={(event) => updateFilter('source', event.target.value)}
+              style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: 6 }}
+              data-testid="audit-filter-source"
+            >
+              {SOURCE_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <div style={{ fontSize: '0.85rem', color: '#6b7280', marginBottom: 4 }}>事件类型</div>
+            <input
+              value={filters.event_type}
+              onChange={(event) => updateFilter('event_type', event.target.value)}
+              placeholder="如 search / completion"
+              style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: 6 }}
+              data-testid="audit-filter-event-type"
+            />
+          </div>
+
+          <div>
+            <div style={{ fontSize: '0.85rem', color: '#6b7280', marginBottom: 4 }}>请求 ID</div>
+            <input
+              value={filters.request_id}
+              onChange={(event) => updateFilter('request_id', event.target.value)}
+              placeholder="精确匹配 request_id"
+              style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: 6 }}
+              data-testid="audit-filter-request-id"
+            />
+          </div>
+
+          <div>
+            <div style={{ fontSize: '0.85rem', color: '#6b7280', marginBottom: 4 }}>资源 ID</div>
+            <input
+              value={filters.resource_id}
+              onChange={(event) => updateFilter('resource_id', event.target.value)}
+              placeholder="精确匹配 resource_id"
+              style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: 6 }}
+              data-testid="audit-filter-resource-id"
+            />
           </div>
 
           <div>
@@ -381,7 +515,7 @@ const AuditLogs = () => {
             <button
               type="button"
               onClick={applyFilters}
-              disabled={loading}
+              disabled={loading || exporting}
               style={{
                 padding: '8px 12px',
                 backgroundColor: '#3b82f6',
@@ -398,8 +532,26 @@ const AuditLogs = () => {
             </button>
             <button
               type="button"
+              onClick={exportEvidencePackage}
+              disabled={loading || exporting}
+              style={{
+                padding: '8px 12px',
+                backgroundColor: '#111827',
+                color: 'white',
+                border: 'none',
+                borderRadius: 6,
+                cursor: 'pointer',
+                opacity: loading || exporting ? 0.6 : 1,
+                width: isMobile ? '100%' : 'auto',
+              }}
+              data-testid="audit-export"
+            >
+              {exporting ? '导出中...' : '导出证据包'}
+            </button>
+            <button
+              type="button"
               onClick={goPrev}
-              disabled={loading || !canGoPrev}
+              disabled={loading || exporting || !canGoPrev}
               style={{
                 padding: '8px 12px',
                 backgroundColor: '#f3f4f6',
@@ -416,7 +568,7 @@ const AuditLogs = () => {
             <button
               type="button"
               onClick={goNext}
-              disabled={loading || !canGoNext}
+              disabled={loading || exporting || !canGoNext}
               style={{
                 padding: '8px 12px',
                 backgroundColor: '#f3f4f6',
@@ -447,7 +599,7 @@ const AuditLogs = () => {
       >
         <div style={{ overflowX: 'auto' }}>
           <table
-            style={{ ...tableStyle, minWidth: isMobile ? '900px' : '100%' }}
+            style={{ ...tableStyle, minWidth: isMobile ? '1200px' : '100%' }}
             data-testid="audit-table"
           >
             <thead>
@@ -458,21 +610,22 @@ const AuditLogs = () => {
                 <th style={thStyle}>公司</th>
                 <th style={thStyle}>部门</th>
                 <th style={thStyle}>来源</th>
-                <th style={thStyle}>知识库</th>
+                <th style={thStyle}>上下文</th>
+                <th style={thStyle}>证据</th>
                 <th style={thStyle}>文件</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 <tr>
-                  <td style={tdStyle} colSpan={8}>
+                  <td style={tdStyle} colSpan={9}>
                     加载中...
                   </td>
                 </tr>
               ) : null}
               {!loading && rows.length === 0 ? (
                 <tr>
-                  <td style={tdStyle} colSpan={8}>
+                  <td style={tdStyle} colSpan={9}>
                     暂无日志
                   </td>
                 </tr>
@@ -490,11 +643,19 @@ const AuditLogs = () => {
                           (item.company_id != null ? String(item.company_id) : '')}
                       </td>
                       <td style={tdStyle}>
-                        {item.department_name ||
-                          (item.department_id != null ? String(item.department_id) : '')}
+                        {item.department_name || (item.department_id != null ? String(item.department_id) : '')}
                       </td>
                       <td style={tdStyle}>{sourceLabel(item.source)}</td>
-                      <td style={tdStyle}>{item.kb_name || item.kb_id || ''}</td>
+                      <td style={tdStyle}>
+                        {summarizeAuditContext(item).map((line) => (
+                          <div key={line}>{line}</div>
+                        ))}
+                      </td>
+                      <td style={tdStyle}>
+                        {summarizeEvidence(item).map((line) => (
+                          <div key={line}>{line}</div>
+                        ))}
+                      </td>
                       <td style={tdStyle}>
                         <div style={{ fontWeight: 600 }}>{item.filename || ''}</div>
                         <div style={{ color: '#6b7280', fontSize: '0.8rem' }}>

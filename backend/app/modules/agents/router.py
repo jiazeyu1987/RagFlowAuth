@@ -3,7 +3,7 @@
 import logging
 from typing import Any, Optional
 
-from fastapi import APIRouter, Body, HTTPException
+from fastapi import APIRouter, Body, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from backend.app.core.authz import AuthContextDep
@@ -13,6 +13,11 @@ from backend.app.core.permission_resolver import allowed_dataset_ids, assert_kb_
 from backend.app.core.pydantic_compat import model_dump, model_validate
 from backend.models.knowledge import DatasetEnvelope, DatasetListEnvelope
 from backend.services.audit_helpers import actor_fields_from_ctx
+from backend.services.audit_helpers import (
+    build_audit_evidence_refs,
+    first_evidence_document_context,
+    log_quality_audit_event,
+)
 from backend.models.operation_approval import OperationApprovalRequestBrief, OperationApprovalRequestEnvelope
 from backend.services.knowledge_ingestion import KnowledgeIngestionError, KnowledgeIngestionManager
 
@@ -53,6 +58,7 @@ class DatasetUpdateBody(BaseModel):
 async def search_chunks(
     request_data: SearchRequest,
     ctx: AuthContextDep,
+    request: Request,
 ):
     deps = ctx.deps
     snapshot = ctx.snapshot
@@ -90,7 +96,7 @@ async def search_chunks(
         raise HTTPException(status_code=403, detail="no_accessible_knowledge_bases")
 
     try:
-        return deps.ragflow_chat_service.retrieve_chunks(
+        result = deps.ragflow_chat_service.retrieve_chunks(
             question=question,
             dataset_ids=dataset_ids,
             page=request_data.page,
@@ -100,6 +106,52 @@ async def search_chunks(
             keyword=request_data.keyword,
             highlight=request_data.highlight,
         )
+        chunks = result.get("chunks") if isinstance(result, dict) else []
+        evidence_refs = build_audit_evidence_refs(
+            chunks if isinstance(chunks, list) else [],
+            default_role="search_hit",
+        )
+        doc_context = first_evidence_document_context(evidence_refs)
+        request_id = str(getattr(getattr(request, "state", None), "request_id", "") or "").strip() or None
+        log_quality_audit_event(
+            deps=deps,
+            ctx=ctx,
+            action="global_search_execute",
+            source="global_search",
+            resource_type="search_request",
+            resource_id=request_id,
+            event_type="search",
+            request_id=request_id,
+            before={
+                "question": question,
+                "dataset_ids": list(dataset_ids),
+                "page": request_data.page,
+                "page_size": request_data.page_size,
+                "similarity_threshold": request_data.similarity_threshold,
+                "top_k": request_data.top_k,
+                "keyword": request_data.keyword,
+                "highlight": request_data.highlight,
+            },
+            after={
+                "total": int(result.get("total") or 0) if isinstance(result, dict) else 0,
+                "returned_chunks": len(chunks) if isinstance(chunks, list) else 0,
+            },
+            doc_id=doc_context["doc_id"],
+            filename=doc_context["filename"],
+            kb_id=doc_context["kb_id"],
+            kb_dataset_id=doc_context["kb_dataset_id"],
+            kb_name=doc_context["kb_name"],
+            evidence_refs=evidence_refs,
+            meta={
+                "query": question,
+                "dataset_ids": list(dataset_ids),
+                "dataset_count": len(dataset_ids),
+                "result_total": int(result.get("total") or 0) if isinstance(result, dict) else 0,
+                "returned_chunks": len(chunks) if isinstance(chunks, list) else 0,
+                "evidence_count": len(evidence_refs),
+            },
+        )
+        return result
     except Exception as exc:
         logger.error("[SEARCH] Error: %s", exc, exc_info=True)
         raise HTTPException(status_code=500, detail="search_failed")

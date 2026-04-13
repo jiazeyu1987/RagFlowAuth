@@ -35,6 +35,15 @@ _EVENT_GROUPS: tuple[dict[str, Any], ...] = (
             {"event_type": "credential_lockout", "event_label": "\u51ed\u8bc1\u9501\u5b9a\u544a\u8b66"},
         ),
     },
+    {
+        "group_key": "quality_system",
+        "group_label": "\u8d28\u91cf\u4f53\u7cfb",
+        "items": (
+            {"event_type": "equipment_due_soon", "event_label": "\u8bbe\u5907\u4e34\u671f\u63d0\u9192"},
+            {"event_type": "metrology_due_soon", "event_label": "\u8ba1\u91cf\u4e34\u671f\u63d0\u9192"},
+            {"event_type": "maintenance_due_soon", "event_label": "\u7ef4\u62a4\u4fdd\u517b\u4e34\u671f\u63d0\u9192"},
+        ),
+    },
 )
 
 _EVENT_META_BY_TYPE: dict[str, dict[str, str]] = {}

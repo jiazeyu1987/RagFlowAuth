@@ -52,6 +52,7 @@ export default function PolicyModal({
   policySubAdminOptions,
   availableTools = [],
   kbDirectoryNodes,
+  kbDirectoryDisabledNodeIds,
   kbDirectoryLoading,
   kbDirectoryError,
   kbDirectoryCreateError,
@@ -130,6 +131,7 @@ export default function PolicyModal({
                 label={TEXT.kbRoot}
                 hint={TEXT.kbRootHint}
                 nodes={kbDirectoryNodes}
+                disabledNodeIds={kbDirectoryDisabledNodeIds}
                 selectedNodeId={policyForm.managed_kb_root_node_id || ''}
                 onSelect={(nodeId) => onChangePolicyForm({ ...policyForm, managed_kb_root_node_id: nodeId })}
                 loading={kbDirectoryLoading}

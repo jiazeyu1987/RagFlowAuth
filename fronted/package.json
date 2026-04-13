@@ -8,6 +8,7 @@
     "jszip": "^3.10.1",
     "mammoth": "^1.11.0",
     "pdfjs-dist": "^5.4.530",
+    "pinyin-pro": "^3.28.1",
     "react": "^18.2.0",
     "react-diff-viewer-continued": "^4.0.6",
     "react-dom": "^18.2.0",

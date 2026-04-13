@@ -14,6 +14,27 @@ export const DEFAULT_AUTH_PERMISSIONS = Object.freeze({
 
 export const DEFAULT_AUTH_CAPABILITIES = Object.freeze({});
 
+export const QUALITY_CAPABILITY_ACTIONS = Object.freeze({
+  quality_system: Object.freeze(['view', 'manage']),
+  document_control: Object.freeze(['create', 'review', 'approve', 'effective', 'obsolete', 'publish', 'export']),
+  training_ack: Object.freeze(['assign', 'acknowledge', 'review_questions']),
+  change_control: Object.freeze(['create', 'evaluate', 'approve', 'plan', 'confirm', 'close']),
+  equipment_lifecycle: Object.freeze(['create', 'accept', 'maintain', 'meter', 'retire']),
+  metrology: Object.freeze(['record', 'confirm', 'approve']),
+  maintenance: Object.freeze(['plan', 'record', 'approve']),
+  batch_records: Object.freeze(['template_manage', 'execute', 'sign', 'review', 'export']),
+  audit_events: Object.freeze(['view', 'export']),
+  complaints: Object.freeze([]),
+  capa: Object.freeze([]),
+  internal_audit: Object.freeze([]),
+  management_review: Object.freeze([]),
+});
+
+export const QUALITY_SYSTEM_ROUTE_PERMISSION = Object.freeze({
+  resource: 'quality_system',
+  action: 'view',
+});
+
 export const PERMISSION_REQUIREMENT_CATALOG = Object.freeze({
   canUpload: Object.freeze({ resource: 'kb_documents', action: 'upload' }),
   canReview: Object.freeze({ resource: 'kb_documents', action: 'review' }),

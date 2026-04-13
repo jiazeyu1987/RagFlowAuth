@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 from backend.app.modules.permission_groups.folder_access import (
+    assert_folder_manageable,
     assert_folder_visible,
     build_group_folder_update_payload,
     get_visible_folder_scope,
+    get_writable_folder_scope,
     list_manageable_folder_snapshot,
     validate_folder_parent,
+    writable_folder_ids,
 )
 from backend.app.modules.permission_groups.management_access import (
     assert_group_management,

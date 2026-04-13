@@ -75,11 +75,47 @@ const ORG_TREE_WITH_NULL_DEPARTMENT = [
   },
 ];
 
+const ORG_TREE_WITH_PINYIN_EDGE_CASES = [
+  {
+    id: 2,
+    node_type: 'company',
+    name: '\u5176\u4ed6\u516c\u53f8',
+    children: [
+      {
+        id: 22,
+        node_type: 'department',
+        name: '\u7814\u53d1\u90e8',
+        path_name: '\u5176\u4ed6\u516c\u53f8 / \u7814\u53d1\u90e8',
+        children: [
+          {
+            id: 1004,
+            node_type: 'person',
+            name: '\u66fe\u4e50\u4e50',
+            employee_user_id: 'zenglele-001',
+            company_id: 2,
+            department_id: 22,
+            children: [],
+          },
+          {
+            id: 1005,
+            node_type: 'person',
+            name: 'A\u5f20-\u4e09 007',
+            employee_user_id: 'mixed-007',
+            company_id: 2,
+            department_id: 22,
+            children: [],
+          },
+        ],
+      },
+    ],
+  },
+];
+
 const buildLargeWangOrgTree = () => {
   const wangPeople = Array.from({ length: 12 }, (_, index) => ({
     id: 2000 + index,
     node_type: 'person',
-    name: `王同事${index + 1}`,
+    name: `\u738b\u540c\u4e8b${index + 1}`,
     employee_user_id: `wang-${index + 1}`,
     company_id: 2,
     department_id: 22,
@@ -89,7 +125,7 @@ const buildLargeWangOrgTree = () => {
   wangPeople.push({
     id: 2999,
     node_type: 'person',
-    name: '王歆',
+    name: '\u738b\u6b23',
     employee_user_id: 'wangxin-special',
     company_id: 2,
     department_id: 22,
@@ -100,13 +136,13 @@ const buildLargeWangOrgTree = () => {
     {
       id: 2,
       node_type: 'company',
-      name: '其他公司',
+      name: '\u5176\u4ed6\u516c\u53f8',
       children: [
         {
           id: 22,
           node_type: 'department',
-          name: '研发部',
-          path_name: '其他公司 / 研发部',
+          name: '\u7814\u53d1\u90e8',
+          path_name: '\u5176\u4ed6\u516c\u53f8 / \u7814\u53d1\u90e8',
           children: wangPeople,
         },
       ],
@@ -147,7 +183,12 @@ function CreateModalHarness({ allUsers = [] }) {
           { id: 2, name: '\u5176\u4ed6\u516c\u53f8' },
         ]}
         departments={[
-          { id: 22, company_id: 2, name: '\u7814\u53d1\u90e8', path_name: '\u5176\u4ed6\u516c\u53f8 / \u7814\u53d1\u90e8' },
+          {
+            id: 22,
+            company_id: 2,
+            name: '\u7814\u53d1\u90e8',
+            path_name: '\u5176\u4ed6\u516c\u53f8 / \u7814\u53d1\u90e8',
+          },
         ]}
         subAdminOptions={[
           { value: 'sub-1', label: '\u5b50\u7ba1\u7406\u5458A', username: 'sub_admin_a' },
@@ -189,6 +230,21 @@ describe('CreateUserModal employee dropdown binding', () => {
     expect(screen.getByTestId('draft-employee-user-id')).toHaveTextContent('');
   });
 
+  it('autofills username from selected employee full name when username is blank', async () => {
+    const user = userEvent.setup();
+    render(<CreateModalHarness />);
+
+    const fullNameInput = screen.getByTestId('users-create-full-name');
+    await user.click(fullNameInput);
+    await user.type(fullNameInput, '\u738b');
+    await user.click(await screen.findByTestId('users-create-full-name-result-wangxiaoming'));
+
+    expect(screen.getByTestId('users-create-username')).toHaveValue('wangxiaoming');
+    expect(screen.getByTestId('draft-employee-user-id')).toHaveTextContent('wangxiaoming');
+    expect(screen.getByTestId('users-create-company')).toHaveValue('2');
+    expect(screen.getByTestId('users-create-department')).toHaveValue('22');
+  });
+
   it('keeps username editable and autofills organization fields after selecting employee', async () => {
     const user = userEvent.setup();
     render(<CreateModalHarness />);
@@ -208,6 +264,51 @@ describe('CreateUserModal employee dropdown binding', () => {
     expect(screen.getByTestId('users-create-department')).toHaveValue('22');
     expect(screen.getByTestId('users-create-company')).toBeDisabled();
     expect(screen.getByTestId('users-create-department')).toBeDisabled();
+  });
+
+  it('replaces the prior auto-generated username when the selected employee changes', async () => {
+    const user = userEvent.setup();
+    render(<CreateModalHarness />);
+
+    const fullNameInput = screen.getByTestId('users-create-full-name');
+
+    await user.click(fullNameInput);
+    await user.type(fullNameInput, '\u738b');
+    await user.click(await screen.findByTestId('users-create-full-name-result-wangxiaoming'));
+    expect(screen.getByTestId('users-create-username')).toHaveValue('wangxiaoming');
+
+    await user.clear(fullNameInput);
+    await user.type(fullNameInput, '\u674e');
+    await user.click(await screen.findByTestId('users-create-full-name-result-lisi'));
+
+    expect(screen.getByTestId('users-create-username')).toHaveValue('lisi');
+    expect(screen.getByTestId('draft-employee-user-id')).toHaveTextContent('lisi');
+  });
+
+  it('autofills surname polyphone names with surname-aware pinyin', async () => {
+    const user = userEvent.setup();
+    orgDirectoryApi.getTree.mockResolvedValueOnce(ORG_TREE_WITH_PINYIN_EDGE_CASES);
+    render(<CreateModalHarness />);
+
+    const fullNameInput = screen.getByTestId('users-create-full-name');
+    await user.click(fullNameInput);
+    await user.type(fullNameInput, '\u66fe');
+    await user.click(await screen.findByTestId('users-create-full-name-result-zenglele-001'));
+
+    expect(screen.getByTestId('users-create-username')).toHaveValue('zenglele');
+  });
+
+  it('strips non alphanumeric characters when building usernames from mixed names', async () => {
+    const user = userEvent.setup();
+    orgDirectoryApi.getTree.mockResolvedValueOnce(ORG_TREE_WITH_PINYIN_EDGE_CASES);
+    render(<CreateModalHarness />);
+
+    const fullNameInput = screen.getByTestId('users-create-full-name');
+    await user.click(fullNameInput);
+    await user.type(fullNameInput, '007');
+    await user.click(await screen.findByTestId('users-create-full-name-result-mixed-007'));
+
+    expect(screen.getByTestId('users-create-username')).toHaveValue('azhangsan007');
   });
 
   it('allows selecting employee without department by filling company default department', async () => {
@@ -257,14 +358,14 @@ describe('CreateUserModal employee dropdown binding', () => {
     expect(screen.getByTestId('draft-employee-user-id')).toHaveTextContent('');
   });
 
-  it('does not truncate fuzzy results so later matches like 王歆 remain selectable', async () => {
+  it('does not truncate fuzzy results so later matches remain selectable', async () => {
     const user = userEvent.setup();
     orgDirectoryApi.getTree.mockResolvedValueOnce(buildLargeWangOrgTree());
     render(<CreateModalHarness />);
 
     const fullNameInput = screen.getByTestId('users-create-full-name');
     await user.click(fullNameInput);
-    await user.type(fullNameInput, '王');
+    await user.type(fullNameInput, '\u738b');
 
     await waitFor(() => expect(orgDirectoryApi.getTree).toHaveBeenCalledTimes(1));
     expect(screen.getByTestId('users-create-full-name-result-wang-12')).toBeInTheDocument();
