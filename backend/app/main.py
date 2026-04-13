@@ -44,6 +44,7 @@ def _build_router_registration_specs() -> tuple[RouterRegistrationSpec, ...]:
     from backend.app.modules.auth.router import router as auth_router
     from backend.app.modules.chat.router import router as chat_router
     from backend.app.modules.change_control.router import router as change_control_router
+    from backend.app.modules.complaints.router import router as complaints_router
     from backend.app.modules.data_security.router import router as data_security_router
     from backend.app.modules.diagnostics.router import router as diagnostics_router
     from backend.app.modules.document_control.router import router as document_control_router
@@ -54,7 +55,9 @@ def _build_router_registration_specs() -> tuple[RouterRegistrationSpec, ...]:
     from backend.app.modules.equipment.router import router as equipment_router
     from backend.app.modules.inbox.router import router as inbox_router
     from backend.app.modules.knowledge.router import router as knowledge_router
+    from backend.app.modules.internal_audit.router import router as internal_audit_router
     from backend.app.modules.maintenance.router import router as maintenance_router
+    from backend.app.modules.management_review.router import router as management_review_router
     from backend.app.modules.me.router import router as me_router
     from backend.app.modules.metrology.router import router as metrology_router
     from backend.app.modules.nas.router import router as nas_router
@@ -71,6 +74,7 @@ def _build_router_registration_specs() -> tuple[RouterRegistrationSpec, ...]:
     from backend.app.modules.supplier_qualification.router import router as supplier_qualification_router
     from backend.app.modules.training_compliance.router import router as training_compliance_router
     from backend.app.modules.users.router import router as users_router
+    from backend.app.modules.capa.router import router as capa_router
 
     return (
         RouterRegistrationSpec(prefix="/api/auth", tags=("Authentication",), router=auth_router),
@@ -84,6 +88,10 @@ def _build_router_registration_specs() -> tuple[RouterRegistrationSpec, ...]:
         RouterRegistrationSpec(prefix="/api", tags=("Maintenance",), router=maintenance_router),
         RouterRegistrationSpec(prefix="/api", tags=("Supplier Qualification",), router=supplier_qualification_router),
         RouterRegistrationSpec(prefix="/api", tags=("Training Compliance",), router=training_compliance_router),
+        RouterRegistrationSpec(prefix="/api", tags=("Complaints",), router=complaints_router),
+        RouterRegistrationSpec(prefix="/api", tags=("CAPA",), router=capa_router),
+        RouterRegistrationSpec(prefix="/api", tags=("Internal Audit",), router=internal_audit_router),
+        RouterRegistrationSpec(prefix="/api", tags=("Management Review",), router=management_review_router),
         RouterRegistrationSpec(prefix="/api/users", tags=("Users",), router=users_router),
         RouterRegistrationSpec(prefix="/api/knowledge", tags=("Knowledge Base",), router=knowledge_router),
         RouterRegistrationSpec(prefix="/api", tags=("Operation Approvals",), router=operation_approvals_router),

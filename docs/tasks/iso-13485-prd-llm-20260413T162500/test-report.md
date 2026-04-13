@@ -79,3 +79,30 @@ For `real-browser` validation, include at least one evidence ref that resolves t
 - Verified acceptance ids: WS03 acceptance bullets (task generation, read-time gate, explicit decision, question loop traceability)
 - Blocking prerequisites: none
 - Summary: WS03 training-and-inbox loop is now implemented with auditable entities, APIs, notifications, UI flow, and passing targeted tests.
+
+## WS08 Validation (2026-04-14)
+
+### T-WS08-1: complaint -> capa -> audit -> management review lifecycle
+
+- Result: passed
+- Covers: WS08 acceptance bullets (independent entities + bounded ownership for complaint/CAPA/internal-audit/management-review)
+- Command run: `python -m pytest backend/tests/test_governance_closure_api_unit.py -q`
+- Environment proof: FastAPI `TestClient` against isolated sqlite DB via `make_temp_dir`
+- Evidence refs: `backend/tests/test_governance_closure_api_unit.py::TestGovernanceClosureApiUnit::test_happy_path_complaint_capa_audit_management_review`
+- Notes: Verified complaint/CAPA linkage, CAPA verification-before-close gate, internal audit completion, management review completion, and audit event write-out.
+
+### T-WS08-2: ws08 shell rendering on governance-closure route
+
+- Result: passed
+- Covers: WS08 frontend integration on existing `quality-system` shell
+- Command run: `npm test -- --runInBand --watchAll=false src/pages/QualitySystem.test.js`
+- Environment proof: react-scripts test runtime (Jest + RTL)
+- Evidence refs: `src/pages/QualitySystem.test.js` suite summary `6 passed`
+- Notes: Confirmed `/quality-system/governance-closure` renders WS08 workspace without altering route registry ownership boundaries.
+
+## Final Verdict
+
+- Outcome: passed
+- Verified acceptance ids: WS08 acceptance bullets in `WS08-complaints-and-governance-closure.md`
+- Blocking prerequisites: none for implemented WS08 code scope; upstream process-freeze gaps remain tracked as documented
+- Summary: WS08 now has executable backend entities/APIs, app wiring, frontend workspace integration, and passing targeted backend/frontend tests.

@@ -22,6 +22,11 @@ jest.mock('./ChangeControl', () => ({
   default: () => <div data-testid="change-control-page" />,
 }));
 
+jest.mock('../features/governanceClosure/GovernanceClosureWorkspace', () => ({
+  __esModule: true,
+  default: () => <div data-testid="governance-closure-workspace" />,
+}));
+
 const baseUser = {
   user_id: 'sub-1',
   username: 'quality-sub',
@@ -116,5 +121,12 @@ describe('QualitySystem', () => {
 
     expect(await screen.findByTestId('change-control-page')).toBeInTheDocument();
     expect(screen.queryByTestId('quality-system-page')).not.toBeInTheDocument();
+  });
+
+  it('renders WS08 workspace inside quality-system shell', async () => {
+    renderPage(['/quality-system/governance-closure']);
+
+    expect(await screen.findByTestId('quality-system-page')).toBeInTheDocument();
+    expect(await screen.findByTestId('governance-closure-workspace')).toBeInTheDocument();
   });
 });

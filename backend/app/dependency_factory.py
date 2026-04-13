@@ -11,6 +11,7 @@ from backend.services.audit import AuditLogManager
 from backend.services.audit_log_store import AuditLogStore
 from backend.services.auth_session import AuthSessionManager
 from backend.services.auth_session_store import AuthSessionStore
+from backend.services.capa import CapaService
 from backend.services.chat_management import ChatManagementManager, ChatOwnershipStore
 from backend.services.chat_message_sources_store import ChatMessageSourcesStore
 from backend.services.chat_session_store import ChatSessionStore
@@ -89,6 +90,10 @@ class AppDependencies:
     change_control_service: ChangeControlService | None = None
     supplier_qualification_service: SupplierQualificationService | None = None
     training_compliance_service: TrainingComplianceService | None = None
+    complaint_service: ComplaintService | None = None
+    capa_service: CapaService | None = None
+    internal_audit_service: InternalAuditService | None = None
+    management_review_service: ManagementReviewService | None = None
     equipment_service: EquipmentService | None = None
     metrology_service: MetrologyService | None = None
     maintenance_service: MaintenanceService | None = None
@@ -151,6 +156,10 @@ class _SharedRuntime:
     change_control_service: ChangeControlService
     supplier_qualification_service: SupplierQualificationService
     training_compliance_service: TrainingComplianceService
+    complaint_service: ComplaintService
+    capa_service: CapaService
+    internal_audit_service: InternalAuditService
+    management_review_service: ManagementReviewService
     equipment_service: EquipmentService
     metrology_service: MetrologyService
     maintenance_service: MaintenanceService
@@ -322,6 +331,10 @@ class DependencyFactory:
             ),
             supplier_qualification_service=SupplierQualificationService(db_path=auth_db_path),
             training_compliance_service=TrainingComplianceService(db_path=training_db_path),
+            complaint_service=ComplaintService(db_path=auth_db_path),
+            capa_service=CapaService(db_path=auth_db_path),
+            internal_audit_service=InternalAuditService(db_path=auth_db_path),
+            management_review_service=ManagementReviewService(db_path=auth_db_path),
             equipment_service=EquipmentService(
                 db_path=auth_db_path,
                 notification_manager=notification_manager,
@@ -395,6 +408,10 @@ class DependencyFactory:
             change_control_service=runtime.change_control_service,
             supplier_qualification_service=runtime.supplier_qualification_service,
             training_compliance_service=runtime.training_compliance_service,
+            complaint_service=runtime.complaint_service,
+            capa_service=runtime.capa_service,
+            internal_audit_service=runtime.internal_audit_service,
+            management_review_service=runtime.management_review_service,
             equipment_service=runtime.equipment_service,
             metrology_service=runtime.metrology_service,
             maintenance_service=runtime.maintenance_service,
@@ -469,3 +486,6 @@ def create_app_dependencies(
             operation_approval_execution_deps_resolver=operation_approval_execution_deps_resolver,
         )
     ).build()
+from backend.services.complaints import ComplaintService
+from backend.services.internal_audit import InternalAuditService
+from backend.services.management_review import ManagementReviewService

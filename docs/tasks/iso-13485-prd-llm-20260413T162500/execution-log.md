@@ -72,3 +72,43 @@
   - `P1-AC4` (training/inbox shared payload + event type freeze)
 - Remaining risks:
   - Training assignment generation is currently explicit API-triggered by WS03 owner, not auto-fired from document-control transition.
+
+### WS08 Implementation (2026-04-14)
+
+- Reviewed work:
+  - Implemented WS08 backend entities and APIs for `ComplaintCase`, `CapaAction`, `InternalAuditRecord`, and `ManagementReviewRecord`.
+  - Added governance closure schema migration and dependency injection wiring so WS08 services load with app startup.
+  - Added governance closure workspace under `/quality-system/governance-closure` and API client wiring in frontend.
+  - Added focused backend unit tests for WS08 API lifecycle and frontend route-level rendering test coverage.
+- Changed paths:
+  - `backend/database/schema/governance_closure.py`
+  - `backend/database/schema/ensure.py`
+  - `backend/services/governance_shared.py`
+  - `backend/services/complaints/__init__.py`
+  - `backend/services/complaints/service.py`
+  - `backend/services/capa/__init__.py`
+  - `backend/services/capa/service.py`
+  - `backend/services/internal_audit/__init__.py`
+  - `backend/services/internal_audit/service.py`
+  - `backend/services/management_review/__init__.py`
+  - `backend/services/management_review/service.py`
+  - `backend/app/modules/complaints/router.py`
+  - `backend/app/modules/capa/router.py`
+  - `backend/app/modules/internal_audit/router.py`
+  - `backend/app/modules/management_review/router.py`
+  - `backend/app/dependency_factory.py`
+  - `backend/app/main.py`
+  - `backend/tests/test_governance_closure_api_unit.py`
+  - `fronted/src/features/governanceClosure/api.js`
+  - `fronted/src/features/governanceClosure/GovernanceClosureWorkspace.js`
+  - `fronted/src/pages/QualitySystem.js`
+  - `fronted/src/pages/QualitySystem.test.js`
+- Validation run:
+  - `python -m pytest backend/tests/test_governance_closure_api_unit.py -q`
+  - `npm test -- --runInBand --watchAll=false src/pages/QualitySystem.test.js`
+- Acceptance ids covered:
+  - `WS08` acceptance bullets (independent entities and boundaries for complaint/CAPA/internal-audit/management-review)
+  - `WS08` code-boundary requirement (new modules under allowed WS08 paths without modifying forbidden files)
+- Remaining risks:
+  - WS08 workflow detail depth is still limited by upstream requirement freeze gaps noted in `00-overview.md`.
+  - WS08 currently enforces admin-only API access because WS02 capability actions for WS08 resources are still empty.
