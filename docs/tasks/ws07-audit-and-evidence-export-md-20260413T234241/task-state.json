@@ -1,0 +1,110 @@
+{
+  "schema_version": 2,
+  "task_id": "ws07-audit-and-evidence-export-md-20260413T234241",
+  "mode": "full",
+  "status": "completed",
+  "current_phase": null,
+  "phase_statuses": [
+    {
+      "phase_id": "P1",
+      "title": "Verify And Finalize WS07 Delivery",
+      "status": "completed",
+      "objective": "",
+      "owned_paths": [],
+      "dependencies": [],
+      "deliverables": [],
+      "evidence_expectation": "",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P1-AC1",
+          "text": "`audit_events` schema supports unified WS07 fields for action/source/resource/event metadata, before/after snapshots, request/signature trace, and evidence references.",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P1",
+            "test-report.md#Results",
+            "test-report.md#Final-Verdict"
+          ]
+        },
+        {
+          "ac_id": "P1-AC2",
+          "text": "audit API query supports unified filtering and returns normalized event payloads including decoded `meta` and `evidence_refs`.",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P1",
+            "test-report.md#Results",
+            "test-report.md#Final-Verdict"
+          ]
+        },
+        {
+          "ac_id": "P1-AC3",
+          "text": "global search flow writes `global_search_execute` quality audit event with request context and evidence references.",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P1",
+            "test-report.md#Results",
+            "test-report.md#Final-Verdict"
+          ]
+        },
+        {
+          "ac_id": "P1-AC4",
+          "text": "smart chat completion flow writes `smart_chat_completion` quality audit event with citation evidence references.",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P1",
+            "test-report.md#Results",
+            "test-report.md#Final-Verdict"
+          ]
+        },
+        {
+          "ac_id": "P1-AC5",
+          "text": "evidence export API returns downloadable package containing csv/json record copies and integrity metadata (`manifest.json` + `checksums.json`) with expected evidence counts.",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P1",
+            "test-report.md#Results",
+            "test-report.md#Final-Verdict"
+          ]
+        },
+        {
+          "ac_id": "P1-AC6",
+          "text": "frontend audit log page can render/search/export WS07 event classes (including global search and smart chat records).",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P1",
+            "test-report.md#Results",
+            "test-report.md#Final-Verdict"
+          ]
+        }
+      ],
+      "evidence": [
+        "execution-log.md#Phase-P1",
+        "test-report.md#Results"
+      ],
+      "notes": "- WS07 scoped backend/frontend validation passed; no in-scope product code gap found.",
+      "last_reviewed_at": "2026-04-13T23:54:50"
+    }
+  ],
+  "planner_review_status": "approved",
+  "test_status": "passed",
+  "blocking_prereqs": [],
+  "iteration_counts": {
+    "planner_revisions": 0,
+    "executor_loops": 1,
+    "test_loops": 1
+  },
+  "created_at": "2026-04-13T23:42:42",
+  "updated_at": "2026-04-13T23:55:05",
+  "branch": "int_latest",
+  "baseline_revision": "02970ac8c39d70765ede2b5bb7ecd2d82259300b",
+  "workspace_root": "D:\\ProjectPackage\\RagflowAuth",
+  "tasks_root": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks",
+  "task_dir": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\ws07-audit-and-evidence-export-md-20260413T234241",
+  "goal": "完成 WS07-audit-and-evidence-export.md 下的工作（审计事件统一结构、证据导出、搜索/对话留痕）",
+  "artifacts": {
+    "prd": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\ws07-audit-and-evidence-export-md-20260413T234241\\prd.md",
+    "test_plan": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\ws07-audit-and-evidence-export-md-20260413T234241\\test-plan.md",
+    "task_state": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\ws07-audit-and-evidence-export-md-20260413T234241\\task-state.json",
+    "execution_log": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\ws07-audit-and-evidence-export-md-20260413T234241\\execution-log.md",
+    "test_report": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\ws07-audit-and-evidence-export-md-20260413T234241\\test-report.md"
+  }
+}
