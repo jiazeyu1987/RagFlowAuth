@@ -35,6 +35,12 @@ class _UserStore:
     def get_by_user_id(self, user_id: str):
         return self._users.get(user_id)
 
+    def list_users(self, status: str | None = None, limit: int = 1000):  # noqa: ARG002
+        items = list(self._users.values())
+        if status is None:
+            return items[:limit]
+        return [item for item in items if str(getattr(item, "status", "") or "") == status][:limit]
+
 
 class _OrgStore:
     def get_company(self, company_id):  # noqa: ARG002
@@ -42,6 +48,18 @@ class _OrgStore:
 
     def get_department(self, department_id):  # noqa: ARG002
         return SimpleNamespace(name="QA")
+
+
+class _NotificationManager:
+    def __init__(self):
+        self.events: list[dict] = []
+
+    def notify_event(self, **kwargs):
+        self.events.append(dict(kwargs))
+        return [{"job_id": len(self.events)}]
+
+    def dispatch_pending(self, **kwargs):  # noqa: ARG002
+        return {"total": 0, "items": []}
 
 
 class _Deps:
@@ -64,6 +82,7 @@ class _Deps:
         self.audit_log_store = audit_store
         self.audit_log_manager = AuditLogManager(store=audit_store)
         self.training_compliance_service = TrainingComplianceService(db_path=training_db_path)
+        self.notification_manager = _NotificationManager()
         self.data_security_store = DataSecurityStore(db_path=db_path)
         self.org_directory_store = _OrgStore()
         self.org_structure_manager = self.org_directory_store
@@ -223,6 +242,135 @@ class TestTrainingComplianceApiUnit(unittest.TestCase):
                 )
                 self.assertEqual(response.status_code, 403, response.text)
                 self.assertEqual(response.json()["detail"], "admin_required")
+        finally:
+            cleanup_dir(td)
+
+    def test_generate_assignment_acknowledge_and_resolve_question_thread(self):
+        td = make_temp_dir(prefix="ragflowauth_training_ack_loop")
+        try:
+            db_path = os.path.join(str(td), "auth.db")
+            ensure_schema(db_path)
+            users = {
+                "admin-1": _make_user(user_id="admin-1", role="admin"),
+                "reviewer-1": _make_user(user_id="reviewer-1", role="reviewer"),
+            }
+            deps = _Deps(db_path=db_path, users=users)
+            app = self._build_app(current_user_id="admin-1", deps=deps)
+
+            conn = sqlite3.connect(db_path)
+            try:
+                conn.execute(
+                    """
+                    INSERT INTO controlled_documents (
+                        controlled_document_id,
+                        doc_code,
+                        title,
+                        document_type,
+                        target_kb_id,
+                        current_revision_id,
+                        effective_revision_id,
+                        created_by,
+                        created_at_ms,
+                        updated_at_ms
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        "cdoc-1",
+                        "DOC-TR-001",
+                        "培训材料",
+                        "SOP",
+                        "default",
+                        "crev-1",
+                        "crev-1",
+                        "admin-1",
+                        1_770_000_000_000,
+                        1_770_000_000_000,
+                    ),
+                )
+                conn.execute(
+                    """
+                    INSERT INTO controlled_revisions (
+                        controlled_revision_id,
+                        controlled_document_id,
+                        kb_doc_id,
+                        revision_no,
+                        status,
+                        approved_by,
+                        approved_at_ms,
+                        effective_at_ms,
+                        created_by,
+                        created_at_ms,
+                        updated_at_ms
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        "crev-1",
+                        "cdoc-1",
+                        "kb-doc-1",
+                        1,
+                        "effective",
+                        "admin-1",
+                        1_770_000_000_000,
+                        1_770_000_000_000,
+                        "admin-1",
+                        1_770_000_000_000,
+                        1_770_000_000_000,
+                    ),
+                )
+                conn.commit()
+            finally:
+                conn.close()
+
+            with TestClient(app) as client:
+                generate_resp = client.post(
+                    "/api/training-compliance/assignments/generate",
+                    json={
+                        "controlled_revision_id": "crev-1",
+                        "assignee_user_ids": ["reviewer-1"],
+                        "min_read_minutes": 1,
+                    },
+                )
+                self.assertEqual(generate_resp.status_code, 200, generate_resp.text)
+                assignment = generate_resp.json()["items"][0]
+                self.assertEqual(assignment["status"], "pending")
+                self.assertEqual(len(deps.notification_manager.events), 1)
+                conn = sqlite3.connect(db_path)
+                try:
+                    conn.execute(
+                        "UPDATE training_assignments SET min_ack_at_ms = ? WHERE assignment_id = ?",
+                        (0, assignment["assignment_id"]),
+                    )
+                    conn.commit()
+                finally:
+                    conn.close()
+
+            reviewer_app = self._build_app(current_user_id="reviewer-1", deps=deps)
+            with TestClient(reviewer_app) as reviewer_client:
+                list_resp = reviewer_client.get("/api/training-compliance/assignments")
+                self.assertEqual(list_resp.status_code, 200, list_resp.text)
+                self.assertEqual(list_resp.json()["count"], 1)
+                assignment_id = list_resp.json()["items"][0]["assignment_id"]
+
+                questioned_resp = reviewer_client.post(
+                    f"/api/training-compliance/assignments/{assignment_id}/acknowledge",
+                    json={"decision": "questioned", "question_text": "需要补充关键步骤说明"},
+                )
+                self.assertEqual(questioned_resp.status_code, 200, questioned_resp.text)
+                thread_id = questioned_resp.json()["assignment"]["question_thread_id"]
+                self.assertTrue(thread_id)
+
+                my_threads = reviewer_client.get("/api/training-compliance/question-threads")
+                self.assertEqual(my_threads.status_code, 200, my_threads.text)
+                self.assertEqual(my_threads.json()["count"], 1)
+
+            with TestClient(app) as admin_client:
+                resolve_resp = admin_client.post(
+                    f"/api/training-compliance/question-threads/{thread_id}/resolve",
+                    json={"resolution_text": "已补充 SOP 附录 A，请按最新版本执行。"},
+                )
+                self.assertEqual(resolve_resp.status_code, 200, resolve_resp.text)
+                self.assertEqual(resolve_resp.json()["thread"]["status"], "resolved")
+                self.assertGreaterEqual(len(deps.notification_manager.events), 3)
         finally:
             cleanup_dir(td)
 

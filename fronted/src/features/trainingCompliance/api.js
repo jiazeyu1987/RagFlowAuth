@@ -108,6 +108,88 @@ export const trainingComplianceApi = {
       'training_compliance_certifications_list'
     );
   },
+
+  async listEffectiveRevisions({ limit = 100 } = {}) {
+    return normalizeArrayField(
+      await httpClient.requestJson(
+        authBackendUrl(`/api/training-compliance/effective-revisions${buildQuery({ limit })}`),
+        { method: 'GET' }
+      ),
+      'items',
+      'training_compliance_effective_revisions_list'
+    );
+  },
+
+  async generateAssignments(payload) {
+    return normalizeArrayField(
+      await httpClient.requestJson(authBackendUrl('/api/training-compliance/assignments/generate'), {
+        method: 'POST',
+        body: JSON.stringify(payload || {}),
+      }),
+      'items',
+      'training_compliance_assignments_generate'
+    );
+  },
+
+  async listAssignments({ limit = 100, status } = {}) {
+    return normalizeArrayField(
+      await httpClient.requestJson(
+        authBackendUrl(
+          `/api/training-compliance/assignments${buildQuery({
+            limit,
+            status,
+          })}`
+        ),
+        { method: 'GET' }
+      ),
+      'items',
+      'training_compliance_assignments_list'
+    );
+  },
+
+  async acknowledgeAssignment(assignmentId, payload) {
+    return normalizeObjectField(
+      await httpClient.requestJson(
+        authBackendUrl(`/api/training-compliance/assignments/${encodeURIComponent(assignmentId)}/acknowledge`),
+        {
+          method: 'POST',
+          body: JSON.stringify(payload || {}),
+        }
+      ),
+      'assignment',
+      'training_compliance_assignment_acknowledge'
+    );
+  },
+
+  async listQuestionThreads({ limit = 100, status } = {}) {
+    return normalizeArrayField(
+      await httpClient.requestJson(
+        authBackendUrl(
+          `/api/training-compliance/question-threads${buildQuery({
+            limit,
+            status,
+          })}`
+        ),
+        { method: 'GET' }
+      ),
+      'items',
+      'training_compliance_question_threads_list'
+    );
+  },
+
+  async resolveQuestionThread(threadId, payload) {
+    return normalizeObjectField(
+      await httpClient.requestJson(
+        authBackendUrl(`/api/training-compliance/question-threads/${encodeURIComponent(threadId)}/resolve`),
+        {
+          method: 'POST',
+          body: JSON.stringify(payload || {}),
+        }
+      ),
+      'thread',
+      'training_compliance_question_thread_resolve'
+    );
+  },
 };
 
 export default trainingComplianceApi;

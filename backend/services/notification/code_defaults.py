@@ -24,6 +24,9 @@ CODE_OWNED_EVENT_RULES = {
     "equipment_due_soon": ["in_app"],
     "metrology_due_soon": ["in_app"],
     "maintenance_due_soon": ["in_app"],
+    "training_assignment_created": ["in_app"],
+    "training_assignment_questioned": ["in_app"],
+    "training_question_resolved": ["in_app"],
 }
 
 

@@ -1,5 +1,6 @@
 import React from 'react';
 import useQualitySystemPage from '../features/qualitySystem/useQualitySystemPage';
+import TrainingAckWorkspace from '../features/qualitySystem/training/TrainingAckWorkspace';
 
 const TEXT = {
   pageTitle: '\u8d28\u91cf\u4f53\u7cfb\u5de5\u4f5c\u53f0',
@@ -173,6 +174,11 @@ export default function QualitySystem() {
               {TEXT.returnRoot}
             </button>
           </div>
+          {selectedModule.key === 'training' ? (
+            <div style={{ marginTop: '14px' }}>
+              <TrainingAckWorkspace />
+            </div>
+          ) : null}
         </section>
       ) : null}
 

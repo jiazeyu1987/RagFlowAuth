@@ -50,6 +50,22 @@ class OperatorCertificationBody(BaseModel):
     granted_at_ms: int | None = None
 
 
+class TrainingAssignmentGenerateBody(BaseModel):
+    controlled_revision_id: str
+    assignee_user_ids: list[str] | None = None
+    min_read_minutes: int = 15
+    note: str | None = None
+
+
+class AssignmentAcknowledgeBody(BaseModel):
+    decision: str
+    question_text: str | None = None
+
+
+class QuestionResolveBody(BaseModel):
+    resolution_text: str
+
+
 def _service_from_ctx(ctx: AuthContextDep):
     return resolve_training_compliance_service(ctx.deps)
 
@@ -73,6 +89,50 @@ def _wrap_payload(field: str, item: object) -> dict[str, object]:
     if not isinstance(item, dict):
         raise HTTPException(status_code=500, detail=f"{field}_invalid_payload")
     return {field: item}
+
+
+def _capability_allowed(ctx: AuthContextDep, *, resource: str, action: str) -> bool:
+    capabilities = ctx.snapshot.capabilities_dict()
+    capability = capabilities.get(resource, {}).get(action, {})
+    scope = str(capability.get("scope") or "none")
+    return scope == "all" or (scope == "set" and bool(capability.get("targets")))
+
+
+def _ensure_training_ack_capability(ctx: AuthContextDep, *, action: str) -> None:
+    if _capability_allowed(ctx, resource="training_ack", action=action):
+        return
+    raise HTTPException(status_code=403, detail="training_ack_forbidden")
+
+
+def _active_user_ids(ctx: AuthContextDep) -> list[str]:
+    users = ctx.deps.user_store.list_users(status="active", limit=1000)
+    return [str(item.user_id) for item in users if getattr(item, "user_id", None)]
+
+
+def _notify_training_event(
+    ctx: AuthContextDep,
+    *,
+    event_type: str,
+    recipients: list[str],
+    payload: dict,
+) -> None:
+    manager = getattr(ctx.deps, "notification_manager", None)
+    if manager is None:
+        raise HTTPException(status_code=500, detail="notification_manager_unavailable")
+    dedupe_key = f"{event_type}:{payload.get('dedupe_ref') or payload.get('assignment_id') or payload.get('thread_id') or ''}"
+    manager.notify_event(
+        event_type=event_type,
+        payload=payload,
+        recipients=[{"user_id": uid} for uid in recipients if str(uid or "").strip()],
+        dedupe_key=dedupe_key,
+        allow_duplicate=False,
+        channel_types=["in_app"],
+        audit={
+            "actor_user_id": str(ctx.user.user_id),
+            "actor_username": str(getattr(ctx.user, "username", "") or ""),
+        },
+    )
+    manager.dispatch_pending(limit=200)
 
 
 @router.post("/training-compliance/requirements")
@@ -256,3 +316,165 @@ def get_action_training_status(
     except TrainingComplianceError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.code) from exc
     return _wrap_payload("status", item)
+
+
+@router.get("/training-compliance/effective-revisions")
+def list_effective_revisions(ctx: AuthContextDep, limit: int = 100):
+    _ensure_training_ack_capability(ctx, action="assign")
+    service = _service_from_ctx(ctx)
+    items = service.list_effective_revisions(limit=limit)
+    return {"items": items, "count": len(items)}
+
+
+@router.post("/training-compliance/assignments/generate")
+def generate_training_assignments(body: TrainingAssignmentGenerateBody, ctx: AuthContextDep):
+    _ensure_training_ack_capability(ctx, action="assign")
+    service = _service_from_ctx(ctx)
+    assignee_user_ids = body.assignee_user_ids or _active_user_ids(ctx)
+    for assignee in assignee_user_ids:
+        _ensure_user_exists(ctx, assignee, field_name="assignee_user_id")
+    try:
+        items = service.create_training_assignments(
+            controlled_revision_id=body.controlled_revision_id,
+            assigned_by_user_id=str(ctx.user.user_id),
+            assignee_user_ids=assignee_user_ids,
+            min_read_minutes=body.min_read_minutes,
+            note=body.note,
+        )
+    except TrainingComplianceError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.code) from exc
+    for item in items:
+        _notify_training_event(
+            ctx,
+            event_type="training_assignment_created",
+            recipients=[str(item["assignee_user_id"])],
+            payload={
+                "title": "培训任务待确认",
+                "body": f"{item['doc_code']} v{item['revision_no']} 已生效，请完成培训确认。",
+                "link_path": f"/quality-system/training?assignment_id={item['assignment_id']}",
+                "assignment_id": item["assignment_id"],
+                "controlled_revision_id": item["controlled_revision_id"],
+                "dedupe_ref": item["assignment_id"],
+            },
+        )
+    manager = getattr(ctx.deps, "audit_log_manager", None)
+    if manager is not None:
+        manager.safe_log_ctx_event(
+            ctx=ctx,
+            action="training_assignment_generate",
+            source="training_compliance",
+            resource_type="training_assignment_batch",
+            resource_id=body.controlled_revision_id,
+            event_type="create",
+            meta={"count": len(items), "min_read_minutes": body.min_read_minutes},
+        )
+    return {"items": items, "count": len(items)}
+
+
+@router.get("/training-compliance/assignments")
+def list_my_training_assignments(ctx: AuthContextDep, status: str | None = None, limit: int = 100):
+    service = _service_from_ctx(ctx)
+    items = service.list_assignments(
+        assignee_user_id=str(ctx.user.user_id),
+        status=status,
+        limit=limit,
+    )
+    return {"items": items, "count": len(items)}
+
+
+@router.post("/training-compliance/assignments/{assignment_id}/acknowledge")
+def acknowledge_training_assignment(assignment_id: str, body: AssignmentAcknowledgeBody, ctx: AuthContextDep):
+    service = _service_from_ctx(ctx)
+    try:
+        item = service.acknowledge_assignment(
+            assignment_id=assignment_id,
+            assignee_user_id=str(ctx.user.user_id),
+            decision=body.decision,
+            question_text=body.question_text,
+        )
+    except TrainingComplianceError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.code) from exc
+
+    manager = getattr(ctx.deps, "audit_log_manager", None)
+    if manager is not None:
+        manager.safe_log_ctx_event(
+            ctx=ctx,
+            action="training_assignment_acknowledge",
+            source="training_compliance",
+            resource_type="training_assignment",
+            resource_id=item["assignment_id"],
+            event_type="update",
+            meta={"decision": item["decision"], "status": item["status"]},
+        )
+
+    if item["decision"] == "questioned" and item.get("question_thread_id"):
+        reviewers = [
+            entry.user_id
+            for entry in ctx.deps.user_store.list_users(status="active", limit=1000)
+            if str(getattr(entry, "role", "") or "") in {"admin", "sub_admin"}
+        ]
+        _notify_training_event(
+            ctx,
+            event_type="training_assignment_questioned",
+            recipients=[str(uid) for uid in reviewers],
+            payload={
+                "title": "培训疑问待处理",
+                "body": f"{item['doc_code']} v{item['revision_no']} 收到疑问，请处理。",
+                "link_path": f"/quality-system/training?thread_id={item['question_thread_id']}",
+                "assignment_id": item["assignment_id"],
+                "thread_id": item["question_thread_id"],
+                "controlled_revision_id": item["controlled_revision_id"],
+                "dedupe_ref": item["question_thread_id"],
+            },
+        )
+
+    return {"assignment": item}
+
+
+@router.get("/training-compliance/question-threads")
+def list_question_threads(ctx: AuthContextDep, status: str | None = None, limit: int = 100):
+    service = _service_from_ctx(ctx)
+    can_review_questions = _capability_allowed(ctx, resource="training_ack", action="review_questions")
+    assignee_user_id = None if can_review_questions else str(ctx.user.user_id)
+    items = service.list_question_threads(status=status, assignee_user_id=assignee_user_id, limit=limit)
+    return {"items": items, "count": len(items)}
+
+
+@router.post("/training-compliance/question-threads/{thread_id}/resolve")
+def resolve_question_thread(thread_id: str, body: QuestionResolveBody, ctx: AuthContextDep):
+    _ensure_training_ack_capability(ctx, action="review_questions")
+    service = _service_from_ctx(ctx)
+    try:
+        item = service.resolve_question_thread(
+            thread_id=thread_id,
+            resolver_user_id=str(ctx.user.user_id),
+            resolution_text=body.resolution_text,
+        )
+    except TrainingComplianceError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.code) from exc
+    _notify_training_event(
+        ctx,
+        event_type="training_question_resolved",
+        recipients=[item["assignee_user_id"]],
+        payload={
+            "title": "培训疑问已回复",
+            "body": "你的培训疑问已处理，请查看回复并完成记录。",
+            "link_path": f"/quality-system/training?thread_id={item['thread_id']}",
+            "thread_id": item["thread_id"],
+            "assignment_id": item["assignment_id"],
+            "controlled_revision_id": item["controlled_revision_id"],
+            "dedupe_ref": item["thread_id"],
+        },
+    )
+    manager = getattr(ctx.deps, "audit_log_manager", None)
+    if manager is not None:
+        manager.safe_log_ctx_event(
+            ctx=ctx,
+            action="training_question_resolve",
+            source="training_compliance",
+            resource_type="quality_question_thread",
+            resource_id=item["thread_id"],
+            event_type="update",
+            meta={"status": item["status"]},
+        )
+    return {"thread": item}

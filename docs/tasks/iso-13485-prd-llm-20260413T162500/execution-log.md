@@ -42,3 +42,33 @@
 ## Outstanding Blockers
 
 - 独立测试复核尚未执行。
+
+### WS03 Implementation (2026-04-13)
+
+- Reviewed work:
+  - Implemented training assignment + inbox loop for WS03 using existing `training_compliance` module boundary.
+  - Added auditable `TrainingAssignment` and `QualityQuestionThread` data model.
+  - Added 15-minute minimum-read acknowledgement gate, explicit `acknowledged/questioned` decision, and question resolution loop.
+  - Added in-app notification event types and dispatch wiring for assignment create/question/resolution.
+  - Added `/quality-system/training` interactive workspace on top of the existing shell route.
+- Changed paths:
+  - `backend/database/schema/training_ack.py`
+  - `backend/database/schema/ensure.py`
+  - `backend/services/training_compliance.py`
+  - `backend/app/modules/training_compliance/router.py`
+  - `backend/services/notification/event_catalog.py`
+  - `backend/services/notification/code_defaults.py`
+  - `fronted/src/features/trainingCompliance/api.js`
+  - `fronted/src/features/qualitySystem/training/useTrainingAckPage.js`
+  - `fronted/src/features/qualitySystem/training/TrainingAckWorkspace.js`
+  - `fronted/src/pages/QualitySystem.js`
+  - `backend/tests/test_training_compliance_api_unit.py`
+- Validation run:
+  - `python -m pytest backend/tests/test_training_compliance_api_unit.py -k "generate_assignment_acknowledge_and_resolve_question_thread" -q`
+  - `python -m pytest backend/tests/test_training_compliance_api_unit.py -q`
+  - `npm test -- --runInBand --watchAll=false src/pages/QualitySystem.test.js`
+- Acceptance ids covered:
+  - `P1-AC2` (WS03 delivery doc fields + executable handoff)
+  - `P1-AC4` (training/inbox shared payload + event type freeze)
+- Remaining risks:
+  - Training assignment generation is currently explicit API-triggered by WS03 owner, not auto-fired from document-control transition.
