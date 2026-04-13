@@ -1,5 +1,6 @@
 import React from 'react';
 import useQualitySystemPage from '../features/qualitySystem/useQualitySystemPage';
+import ChangeControl from './ChangeControl';
 import TrainingAckWorkspace from '../features/qualitySystem/training/TrainingAckWorkspace';
 
 const TEXT = {
@@ -116,6 +117,14 @@ export default function QualitySystem() {
 
   const queueTitle = selectedModule ? TEXT.moduleQueueTitle : TEXT.queueTitle;
   const queueEmptyText = selectedModule ? TEXT.moduleQueueEmpty : TEXT.queueEmpty;
+
+  if (selectedModule?.key === 'change-control') {
+    return (
+      <ChangeControl
+        onReturnToQualitySystem={goToRoot}
+      />
+    );
+  }
 
   return (
     <div style={pageStyle} data-testid="quality-system-page">

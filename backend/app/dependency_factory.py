@@ -14,6 +14,7 @@ from backend.services.auth_session_store import AuthSessionStore
 from backend.services.chat_management import ChatManagementManager, ChatOwnershipStore
 from backend.services.chat_message_sources_store import ChatMessageSourcesStore
 from backend.services.chat_session_store import ChatSessionStore
+from backend.services.change_control import ChangeControlService
 from backend.services.data_security.store import DataSecurityStore
 from backend.services.deletion_log_store import DeletionLogStore
 from backend.services.download_log_store import DownloadLogStore
@@ -85,6 +86,7 @@ class AppDependencies:
     electronic_signature_store: ElectronicSignatureStore | None = None
     electronic_signature_service: ElectronicSignatureService | None = None
     emergency_change_service: EmergencyChangeService | None = None
+    change_control_service: ChangeControlService | None = None
     supplier_qualification_service: SupplierQualificationService | None = None
     training_compliance_service: TrainingComplianceService | None = None
     equipment_service: EquipmentService | None = None
@@ -146,6 +148,7 @@ class _SharedRuntime:
     electronic_signature_store: ElectronicSignatureStore
     electronic_signature_service: ElectronicSignatureService
     emergency_change_service: EmergencyChangeService
+    change_control_service: ChangeControlService
     supplier_qualification_service: SupplierQualificationService
     training_compliance_service: TrainingComplianceService
     equipment_service: EquipmentService
@@ -313,6 +316,10 @@ class DependencyFactory:
             electronic_signature_store=electronic_signature_store,
             electronic_signature_service=electronic_signature_service,
             emergency_change_service=EmergencyChangeService(db_path=auth_db_path),
+            change_control_service=ChangeControlService(
+                db_path=auth_db_path,
+                user_inbox_service=user_inbox_service,
+            ),
             supplier_qualification_service=SupplierQualificationService(db_path=auth_db_path),
             training_compliance_service=TrainingComplianceService(db_path=training_db_path),
             equipment_service=EquipmentService(
@@ -385,6 +392,7 @@ class DependencyFactory:
             electronic_signature_store=runtime.electronic_signature_store,
             electronic_signature_service=runtime.electronic_signature_service,
             emergency_change_service=runtime.emergency_change_service,
+            change_control_service=runtime.change_control_service,
             supplier_qualification_service=runtime.supplier_qualification_service,
             training_compliance_service=runtime.training_compliance_service,
             equipment_service=runtime.equipment_service,

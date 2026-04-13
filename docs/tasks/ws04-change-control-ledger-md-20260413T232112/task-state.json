@@ -1,0 +1,182 @@
+{
+  "schema_version": 2,
+  "task_id": "ws04-change-control-ledger-md-20260413T232112",
+  "mode": "full",
+  "status": "completed",
+  "current_phase": null,
+  "phase_statuses": [
+    {
+      "phase_id": "P1",
+      "title": "Backend WS04 Ledger and Workflow API",
+      "status": "completed",
+      "objective": "Deliver WS04 backend data model and workflow transitions including change requests, plan items, reminders, cross-department confirmation, and closure writeback fields.",
+      "owned_paths": [],
+      "dependencies": [],
+      "deliverables": [],
+      "evidence_expectation": "API unit tests cover happy-path and guard-path transitions, with execution log entries listing commands and changed paths.",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P1-AC1",
+          "text": "Backend exposes `change_control` APIs for create/list/get workflow requests with strict required-field validation.",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P1",
+            "test-report.md#Final-Verdict"
+          ]
+        },
+        {
+          "ac_id": "P1-AC2",
+          "text": "Backend supports plan-item create/update/list and enforces parent request state rules.",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P1",
+            "test-report.md#Final-Verdict"
+          ]
+        },
+        {
+          "ac_id": "P1-AC3",
+          "text": "Backend supports due reminder dispatch using existing inbox notification structure (no custom notification schema).",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P1",
+            "test-report.md#Final-Verdict"
+          ]
+        },
+        {
+          "ac_id": "P1-AC4",
+          "text": "Backend supports cross-department confirmation and transition to closable state.",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P1",
+            "test-report.md#Final-Verdict"
+          ]
+        },
+        {
+          "ac_id": "P1-AC5",
+          "text": "Backend close operation records ledger writeback fields, controlled revision references, and closure metadata.",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P1",
+            "test-report.md#Final-Verdict"
+          ]
+        }
+      ],
+      "evidence": [
+        "execution-log.md#Phase-P1"
+      ],
+      "notes": "",
+      "last_reviewed_at": "2026-04-13T23:43:14"
+    },
+    {
+      "phase_id": "P2",
+      "title": "Frontend WS04 Page and API Client",
+      "status": "completed",
+      "objective": "Expose WS04 workflow from `/quality-system/change-control` without changing route registry wiring.",
+      "owned_paths": [],
+      "dependencies": [],
+      "deliverables": [],
+      "evidence_expectation": "frontend unit tests validate rendering and API interaction behavior.",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P2-AC1",
+          "text": "`/quality-system/change-control` renders WS04 feature page instead of placeholder shell content.",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P2",
+            "test-report.md#Final-Verdict"
+          ]
+        },
+        {
+          "ac_id": "P2-AC2",
+          "text": "Frontend change-control API client maps backend response contracts and propagates backend errors.",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P2",
+            "test-report.md#Final-Verdict"
+          ]
+        },
+        {
+          "ac_id": "P2-AC3",
+          "text": "WS04 page supports at least create request, add plan item, dispatch reminders, confirm, and close actions.",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P2",
+            "test-report.md#Final-Verdict"
+          ]
+        }
+      ],
+      "evidence": [
+        "execution-log.md#Phase-P2"
+      ],
+      "notes": "",
+      "last_reviewed_at": "2026-04-13T23:43:21"
+    },
+    {
+      "phase_id": "P3",
+      "title": "Verification and Task Artifacts Completion",
+      "status": "completed",
+      "objective": "Validate WS04 implementation with unit tests and update task evidence artifacts.",
+      "owned_paths": [],
+      "dependencies": [],
+      "deliverables": [],
+      "evidence_expectation": "concrete command outputs summarized in test report and referenced from state evidence entries.",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P3-AC1",
+          "text": "Backend WS04 tests pass in local repo test run.",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P3",
+            "test-report.md#Final-Verdict"
+          ]
+        },
+        {
+          "ac_id": "P3-AC2",
+          "text": "Frontend WS04 tests pass in local repo test run.",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P3",
+            "test-report.md#Final-Verdict"
+          ]
+        },
+        {
+          "ac_id": "P3-AC3",
+          "text": "`execution-log.md` and `test-report.md` contain acceptance-id traceable evidence for P1/P2/P3 criteria.",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P3",
+            "test-report.md#Final-Verdict"
+          ]
+        }
+      ],
+      "evidence": [
+        "execution-log.md#Phase-P3"
+      ],
+      "notes": "",
+      "last_reviewed_at": "2026-04-13T23:43:28"
+    }
+  ],
+  "planner_review_status": "approved",
+  "test_status": "passed",
+  "blocking_prereqs": [],
+  "iteration_counts": {
+    "planner_revisions": 0,
+    "executor_loops": 3,
+    "test_loops": 1
+  },
+  "created_at": "2026-04-13T23:21:13",
+  "updated_at": "2026-04-13T23:44:15",
+  "branch": "int_latest",
+  "baseline_revision": "8b6ece9e55f6a691a5c8831b418524e93a75d68c",
+  "workspace_root": "D:\\ProjectPackage\\RagflowAuth",
+  "tasks_root": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks",
+  "task_dir": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\ws04-change-control-ledger-md-20260413T232112",
+  "goal": "完成WS04-change-control-ledger.md下的工作",
+  "artifacts": {
+    "prd": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\ws04-change-control-ledger-md-20260413T232112\\prd.md",
+    "test_plan": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\ws04-change-control-ledger-md-20260413T232112\\test-plan.md",
+    "task_state": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\ws04-change-control-ledger-md-20260413T232112\\task-state.json",
+    "execution_log": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\ws04-change-control-ledger-md-20260413T232112\\execution-log.md",
+    "test_report": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\ws04-change-control-ledger-md-20260413T232112\\test-report.md"
+  }
+}

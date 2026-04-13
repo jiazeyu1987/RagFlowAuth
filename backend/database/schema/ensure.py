@@ -56,6 +56,7 @@ from .auth_sessions import ensure_auth_login_sessions_table
 from .approval_workflow import ensure_approval_workflow_tables
 from .electronic_signatures import ensure_electronic_signature_tables
 from .emergency_changes import ensure_emergency_change_tables
+from .change_control import ensure_change_control_tables
 from .equipment import ensure_equipment_tables
 from .maintenance import ensure_maintenance_tables
 from .metrology import ensure_metrology_tables
@@ -160,6 +161,7 @@ def ensure_schema(db_path: str | Path) -> None:
         ensure_approval_workflow_tables(conn)
         ensure_electronic_signature_tables(conn)
         ensure_emergency_change_tables(conn)
+        ensure_change_control_tables(conn)
         ensure_equipment_tables(conn)
         ensure_metrology_tables(conn)
         ensure_maintenance_tables(conn)

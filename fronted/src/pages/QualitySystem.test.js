@@ -17,6 +17,11 @@ jest.mock('../hooks/useAuth', () => ({
   useAuth: jest.fn(),
 }));
 
+jest.mock('./ChangeControl', () => ({
+  __esModule: true,
+  default: () => <div data-testid="change-control-page" />,
+}));
+
 const baseUser = {
   user_id: 'sub-1',
   username: 'quality-sub',
@@ -104,5 +109,12 @@ describe('QualitySystem', () => {
     expect(await screen.findByTestId('quality-system-page')).toBeInTheDocument();
     expect(await screen.findByTestId('quality-system-queue-error')).toBeInTheDocument();
     expect(screen.getByTestId('quality-system-module-audit')).toBeInTheDocument();
+  });
+
+  it('renders WS04 page directly on change-control subroute', async () => {
+    renderPage(['/quality-system/change-control']);
+
+    expect(await screen.findByTestId('change-control-page')).toBeInTheDocument();
+    expect(screen.queryByTestId('quality-system-page')).not.toBeInTheDocument();
   });
 });
