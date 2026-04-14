@@ -100,7 +100,7 @@ class EquipmentApiUnitTests(unittest.TestCase):
                     },
                 )
                 self.assertEqual(response.status_code, 403, response.text)
-                self.assertEqual(response.json()["detail"], "admin_required")
+                self.assertEqual(response.json()["detail"], "equipment_lifecycle_forbidden")
         finally:
             cleanup_dir(td)
 
@@ -176,6 +176,48 @@ class EquipmentApiUnitTests(unittest.TestCase):
             self.assertIn("equipment_asset_commission", actions)
             self.assertIn("equipment_asset_retire", actions)
             self.assertIn("equipment_asset_export", actions)
+        finally:
+            cleanup_dir(td)
+
+    def test_sub_admin_can_create_transition_export_and_dispatch_reminder(self):
+        td = make_temp_dir(prefix="ragflowauth_equipment_sub_admin_happy")
+        try:
+            db_path = os.path.join(str(td), "auth.db")
+            ensure_schema(db_path)
+            users = {
+                "sub-admin-1": _make_user(user_id="sub-admin-1", role="sub_admin"),
+                "owner-1": _make_user(user_id="owner-1", role="viewer"),
+            }
+            deps = _Deps(db_path=db_path, users=users)
+            app = self._build_app(current_user_id="sub-admin-1", deps=deps)
+            due_date = (date.today() + timedelta(days=3)).isoformat()
+
+            with TestClient(app) as client:
+                create_resp = client.post(
+                    "/api/equipment/assets",
+                    json={
+                        "asset_code": "EQ-002",
+                        "equipment_name": "温湿度计",
+                        "owner_user_id": "owner-1",
+                        "location": "二号实验室",
+                        "retirement_due_date": due_date,
+                    },
+                )
+                self.assertEqual(create_resp.status_code, 200, create_resp.text)
+                equipment = create_resp.json()
+
+                reminder_resp = client.post("/api/equipment/reminders/dispatch?window_days=7")
+                self.assertEqual(reminder_resp.status_code, 200, reminder_resp.text)
+
+                accept_resp = client.post(
+                    f"/api/equipment/assets/{equipment['equipment_id']}/accept",
+                    json={"status_date": date.today().isoformat(), "notes": "完成入厂验收"},
+                )
+                self.assertEqual(accept_resp.status_code, 200, accept_resp.text)
+
+                export_resp = client.get("/api/equipment/assets/export")
+                self.assertEqual(export_resp.status_code, 200, export_resp.text)
+                self.assertIn("EQ-002", export_resp.text)
         finally:
             cleanup_dir(td)
 

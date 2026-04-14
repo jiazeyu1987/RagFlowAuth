@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel
 
-from backend.app.core.authz import AuthContextDep
+from backend.app.core.authz import AuthContextDep, assert_capability
 from backend.app.core.kb_refs import resolve_kb_ref
 from backend.app.core.permission_resolver import ResourceScope, assert_kb_allowed
 from backend.services.document_control import DocumentControlError, DocumentControlService
@@ -66,6 +66,7 @@ def list_controlled_documents(
     query: str | None = None,
     limit: int = 100,
 ):
+    assert_capability(ctx, resource="document_control", action="review")
     _assert_can_view(ctx)
     items = _service(ctx).list_documents(
         allowed_kb_refs=_allowed_kb_refs(ctx),
@@ -83,6 +84,7 @@ def list_controlled_documents(
 
 @router.get("/quality-system/doc-control/documents/{controlled_document_id}")
 def get_controlled_document(controlled_document_id: str, ctx: AuthContextDep):
+    assert_capability(ctx, resource="document_control", action="review")
     _assert_can_view(ctx)
     try:
         document = _service(ctx).get_document(controlled_document_id=controlled_document_id)
@@ -103,11 +105,12 @@ def create_controlled_document(
     title: str = Form(...),
     document_type: str = Form(...),
     target_kb_id: str = Form(...),
-    product_name: str | None = Form(None),
-    registration_ref: str | None = Form(None),
+    product_name: str = Form(...),
+    registration_ref: str = Form(...),
     change_summary: str | None = Form(None),
     file: UploadFile = File(...),
 ):
+    assert_capability(ctx, resource="document_control", action="create")
     _assert_can_create(ctx, target_kb_id)
     try:
         document = _service(ctx).create_document(
@@ -133,6 +136,7 @@ def create_controlled_revision(
     change_summary: str | None = Form(None),
     file: UploadFile = File(...),
 ):
+    assert_capability(ctx, resource="document_control", action="create")
     try:
         current = _service(ctx).get_document(controlled_document_id=controlled_document_id)
     except DocumentControlError as exc:
@@ -156,6 +160,13 @@ def transition_controlled_revision(
     body: RevisionTransitionRequest,
     ctx: AuthContextDep,
 ):
+    required_action = {
+        "in_review": "review",
+        "approved": "approve",
+        "effective": "effective",
+        "obsolete": "obsolete",
+    }.get(str(body.target_status or "").strip(), "review")
+    assert_capability(ctx, resource="document_control", action=required_action)
     try:
         revision = _service(ctx).get_revision(controlled_revision_id=controlled_revision_id)
     except DocumentControlError as exc:

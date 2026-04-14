@@ -187,6 +187,15 @@ class TestDocumentControlServiceUnit(unittest.TestCase):
                 department_id=None,
             ),
         )
+        self.approver_ctx = SimpleNamespace(
+            payload=SimpleNamespace(sub="approver-1"),
+            user=SimpleNamespace(
+                user_id="approver-1",
+                username="approver",
+                company_id=None,
+                department_id=None,
+            ),
+        )
 
     def tearDown(self):
         settings.UPLOAD_DIR = self._old_upload_dir
@@ -220,18 +229,20 @@ class TestDocumentControlServiceUnit(unittest.TestCase):
         self.service.transition_revision(
             controlled_revision_id=revision1_id,
             target_status="approved",
-            ctx=self.ctx,
+            ctx=self.approver_ctx,
             note="approved",
         )
         effective_first = self.service.transition_revision(
             controlled_revision_id=revision1_id,
             target_status="effective",
-            ctx=self.ctx,
+            ctx=self.approver_ctx,
             note="release",
         )
 
         self.assertEqual(effective_first.current_revision.status, "effective")
         self.assertEqual(effective_first.effective_revision.status, "effective")
+        self.assertEqual(effective_first.current_revision.reviewed_by, "reviewer-1")
+        self.assertEqual(effective_first.current_revision.approved_by, "approver-1")
 
         revised = self.service.create_revision(
             controlled_document_id=created.controlled_document_id,
@@ -253,13 +264,13 @@ class TestDocumentControlServiceUnit(unittest.TestCase):
         self.service.transition_revision(
             controlled_revision_id=revision2_id,
             target_status="approved",
-            ctx=self.ctx,
+            ctx=self.approver_ctx,
             note="approve v2",
         )
         effective_second = self.service.transition_revision(
             controlled_revision_id=revision2_id,
             target_status="effective",
-            ctx=self.ctx,
+            ctx=self.approver_ctx,
             note="release v2",
         )
 
@@ -293,6 +304,38 @@ class TestDocumentControlServiceUnit(unittest.TestCase):
         self.assertIn("controlled_revision_effective", event_types)
         self.assertIn("controlled_revision_obsolete", event_types)
 
+    def test_reviewer_and_approver_must_be_different_users(self):
+        created = self.service.create_document(
+            doc_code="DOC-010",
+            title="Approval Separation",
+            document_type="sop",
+            target_kb_id="Quality KB",
+            created_by="reviewer-1",
+            upload_file=_UploadFile("approval.md", b"# approval\n"),
+            product_name="Product A",
+            registration_ref="REG-001",
+            change_summary="baseline",
+        )
+
+        revision_id = created.current_revision.controlled_revision_id
+        self.service.transition_revision(
+            controlled_revision_id=revision_id,
+            target_status="in_review",
+            ctx=self.ctx,
+            note="submit for review",
+        )
+
+        with self.assertRaises(DocumentControlError) as same_actor_error:
+            self.service.transition_revision(
+                controlled_revision_id=revision_id,
+                target_status="approved",
+                ctx=self.ctx,
+                note="same actor approval",
+            )
+
+        self.assertEqual(same_actor_error.exception.code, "document_control_approval_role_conflict")
+        self.assertEqual(same_actor_error.exception.status_code, 409)
+
     def test_duplicate_doc_code_returns_conflict_error(self):
         self.service.create_document(
             doc_code="DOC-001",
@@ -301,6 +344,8 @@ class TestDocumentControlServiceUnit(unittest.TestCase):
             target_kb_id="Quality KB",
             created_by="reviewer-1",
             upload_file=_UploadFile("urs.md", b"# urs\n"),
+            product_name="Product A",
+            registration_ref="REG-001",
         )
 
         with self.assertRaises(DocumentControlError) as ctx:
@@ -311,10 +356,43 @@ class TestDocumentControlServiceUnit(unittest.TestCase):
                 target_kb_id="Quality KB",
                 created_by="reviewer-1",
                 upload_file=_UploadFile("urs-copy.md", b"# urs copy\n"),
+                product_name="Product A",
+                registration_ref="REG-001",
             )
 
         self.assertEqual(ctx.exception.code, "doc_code_conflict")
         self.assertEqual(ctx.exception.status_code, 409)
+
+    def test_create_document_requires_product_and_registration_metadata(self):
+        with self.assertRaises(DocumentControlError) as missing_product:
+            self.service.create_document(
+                doc_code="DOC-002",
+                title="Quality SRS",
+                document_type="srs",
+                target_kb_id="Quality KB",
+                created_by="reviewer-1",
+                upload_file=_UploadFile("srs.md", b"# srs\n"),
+                product_name="",
+                registration_ref="REG-001",
+            )
+
+        self.assertEqual(missing_product.exception.code, "product_name_required")
+        self.assertEqual(missing_product.exception.status_code, 400)
+
+        with self.assertRaises(DocumentControlError) as missing_registration:
+            self.service.create_document(
+                doc_code="DOC-003",
+                title="Quality WI",
+                document_type="wi",
+                target_kb_id="Quality KB",
+                created_by="reviewer-1",
+                upload_file=_UploadFile("wi.md", b"# wi\n"),
+                product_name="Product A",
+                registration_ref="",
+            )
+
+        self.assertEqual(missing_registration.exception.code, "registration_ref_required")
+        self.assertEqual(missing_registration.exception.status_code, 400)
 
 
 if __name__ == "__main__":

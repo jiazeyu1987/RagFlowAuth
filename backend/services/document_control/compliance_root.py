@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path, PurePosixPath
 
 
-CONTROLLED_COMPLIANCE_ROOT = PurePosixPath("doc/compliance")
+CONTROLLED_COMPLIANCE_ROOT = PurePosixPath("docs/compliance")
 
 
 def controlled_compliance_relpath(*parts: str) -> str:

@@ -15,7 +15,7 @@ def _write(path: Path, content: str) -> None:
 
 def _build_repo(root: Path) -> None:
     docs = {
-        "doc/compliance/training_matrix.md": """# 培训矩阵
+        "docs/compliance/training_matrix.md": """# 培训矩阵
 
 版本: v1.1
 更新时间: 2026-04-03
@@ -25,7 +25,7 @@ document_review
 restore_drill_execute
 curriculum_version
 """,
-        "doc/compliance/training_operator_qualification_status.md": """# 培训与操作员认证状态
+        "docs/compliance/training_operator_qualification_status.md": """# 培训与操作员认证状态
 
 版本: v1.0
 更新时间: 2026-04-03
@@ -35,30 +35,30 @@ curriculum_version
 仓库外证据状态: pending_archive
 Residual gap 边界: 线下培训签到、考核签字和例外放行记录仍需归档
 """,
-        "doc/compliance/controlled_document_register.md": """# 受控文档登记表
+        "docs/compliance/controlled_document_register.md": """# 受控文档登记表
 
 版本: v1.3
 更新时间: 2026-04-03
 当前发布版本: 2.0.0
 
-doc/compliance/training_matrix.md
-doc/compliance/training_operator_qualification_status.md
+docs/compliance/training_matrix.md
+docs/compliance/training_operator_qualification_status.md
 """,
-        "doc/compliance/urs.md": "# URS\n\nURS-017 GBZ-05\n",
-        "doc/compliance/srs.md": "# SRS\n\nSRS-017 URS-017\n",
-        "doc/compliance/traceability_matrix.md": """# TM
+        "docs/compliance/urs.md": "# URS\n\nURS-017 GBZ-05\n",
+        "docs/compliance/srs.md": "# SRS\n\nSRS-017 URS-017\n",
+        "docs/compliance/traceability_matrix.md": """# TM
 
 | 需求 ID | URS | SRS | 实现证据 | 测试证据 | 文档证据 | 状态 |
 |---|---|---|---|---|---|---|
-| GBZ-05 | URS-017 | SRS-017 | `backend/services/training_compliance.py` | `backend.tests.test_training_compliance_api_unit`, `backend.tests.test_gbz05_compliance_gate_unit` | `doc/compliance/training_matrix.md` | 已验证（仓库内） |
+| GBZ-05 | URS-017 | SRS-017 | `backend/services/training_compliance.py` | `backend.tests.test_training_compliance_api_unit`, `backend.tests.test_gbz05_compliance_gate_unit` | `docs/compliance/training_matrix.md` | 已验证（仓库内） |
 """,
-        "doc/compliance/validation_plan.md": """# VP
+        "docs/compliance/validation_plan.md": """# VP
 
 validate_gbz05_repo_compliance.py
 test_training_compliance_api_unit
 test_gbz05_compliance_gate_unit
 """,
-        "doc/compliance/validation_report.md": """# VR
+        "docs/compliance/validation_report.md": """# VR
 
 GBZ-05
 validate_gbz05_repo_compliance.py

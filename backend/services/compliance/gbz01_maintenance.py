@@ -7,10 +7,11 @@ import re
 from typing import Any
 
 from backend.services.config_change_log_store import ConfigChangeLogStore
+from backend.services.document_control import controlled_compliance_relpath
 
 
-TRACEABILITY_MATRIX_PATH = "doc/compliance/traceability_matrix.md"
-INTENDED_USE_PATH = "doc/compliance/intended_use.md"
+TRACEABILITY_MATRIX_PATH = controlled_compliance_relpath("traceability_matrix.md")
+INTENDED_USE_PATH = controlled_compliance_relpath("intended_use.md")
 
 SUPPORTED_CHANGE_CATEGORIES = ("os", "database", "api", "config", "intended_use")
 REVALIDATION_CONFIG_DOMAINS = {"upload_allowed_extensions", "data_security_settings"}
@@ -25,37 +26,37 @@ REQUIREMENT_HINTS: dict[str, tuple[str, ...]] = {
 
 BASE_ARTIFACTS: dict[str, tuple[str, ...]] = {
     "os": (
-        "doc/compliance/maintenance_plan.md",
-        "doc/compliance/maintenance_review_status.md",
-        "doc/compliance/validation_plan.md",
-        "doc/compliance/validation_report.md",
+        controlled_compliance_relpath("maintenance_plan.md"),
+        controlled_compliance_relpath("maintenance_review_status.md"),
+        controlled_compliance_relpath("validation_plan.md"),
+        controlled_compliance_relpath("validation_report.md"),
     ),
     "database": (
-        "doc/compliance/maintenance_plan.md",
-        "doc/compliance/maintenance_review_status.md",
-        "doc/compliance/validation_plan.md",
-        "doc/compliance/validation_report.md",
+        controlled_compliance_relpath("maintenance_plan.md"),
+        controlled_compliance_relpath("maintenance_review_status.md"),
+        controlled_compliance_relpath("validation_plan.md"),
+        controlled_compliance_relpath("validation_report.md"),
     ),
     "api": (
-        "doc/compliance/maintenance_plan.md",
-        "doc/compliance/validation_plan.md",
-        "doc/compliance/validation_report.md",
-        "doc/compliance/traceability_matrix.md",
+        controlled_compliance_relpath("maintenance_plan.md"),
+        controlled_compliance_relpath("validation_plan.md"),
+        controlled_compliance_relpath("validation_report.md"),
+        controlled_compliance_relpath("traceability_matrix.md"),
     ),
     "config": (
-        "doc/compliance/change_control_sop.md",
-        "doc/compliance/maintenance_plan.md",
-        "doc/compliance/maintenance_review_status.md",
-        "doc/compliance/validation_plan.md",
-        "doc/compliance/validation_report.md",
+        controlled_compliance_relpath("change_control_sop.md"),
+        controlled_compliance_relpath("maintenance_plan.md"),
+        controlled_compliance_relpath("maintenance_review_status.md"),
+        controlled_compliance_relpath("validation_plan.md"),
+        controlled_compliance_relpath("validation_report.md"),
     ),
     "intended_use": (
-        "doc/compliance/intended_use.md",
-        "doc/compliance/maintenance_plan.md",
-        "doc/compliance/maintenance_review_status.md",
-        "doc/compliance/validation_plan.md",
-        "doc/compliance/validation_report.md",
-        "doc/compliance/traceability_matrix.md",
+        controlled_compliance_relpath("intended_use.md"),
+        controlled_compliance_relpath("maintenance_plan.md"),
+        controlled_compliance_relpath("maintenance_review_status.md"),
+        controlled_compliance_relpath("validation_plan.md"),
+        controlled_compliance_relpath("validation_report.md"),
+        controlled_compliance_relpath("traceability_matrix.md"),
     ),
 }
 

@@ -52,7 +52,7 @@ describe('LoginPage', () => {
     const user = userEvent.setup();
     const loginMock = jest.fn().mockResolvedValue({
       success: false,
-      error: '用户名或密码错误',
+      error: 'Invalid username or password.',
     });
 
     useAuth.mockReturnValue({
@@ -65,7 +65,7 @@ describe('LoginPage', () => {
     await user.type(screen.getByTestId('login-password'), 'Wrong123');
     await user.click(screen.getByTestId('login-submit'));
 
-    expect(await screen.findByTestId('login-error')).toHaveTextContent('用户名或密码错误');
+    expect(await screen.findByTestId('login-error')).toHaveTextContent('Invalid username or password.');
     expect(mockNavigate).not.toHaveBeenCalled();
   });
 });

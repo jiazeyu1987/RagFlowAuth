@@ -1,10 +1,9 @@
-import { useEffect, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import operationApprovalApi from '../operationApproval/api';
 import { useAuth } from '../../hooks/useAuth';
 import { mapUserFacingErrorMessage } from '../../shared/errors/userFacingErrorMessages';
 import {
-  findQualitySystemModuleByPath,
   QUALITY_SYSTEM_MODULES,
   QUALITY_SYSTEM_ROOT_PATH,
 } from './moduleCatalog';
@@ -18,23 +17,29 @@ const isQualitySystemQueueItem = (item) => {
   return linkPath.startsWith(QUALITY_SYSTEM_ROOT_PATH);
 };
 
-const isModuleQueueItem = (item, modulePath) => {
-  const linkPath = String(item?.link_path || '').trim();
-  return linkPath.startsWith(modulePath);
-};
-
 export default function useQualitySystemPage() {
   const navigate = useNavigate();
-  const location = useLocation();
-  const { can, user } = useAuth();
+  const { can, isAuthorized, user } = useAuth();
   const [queueLoading, setQueueLoading] = useState(true);
   const [queueError, setQueueError] = useState('');
   const [queueItems, setQueueItems] = useState([]);
 
-  const selectedModule = findQualitySystemModuleByPath(location.pathname);
   const canManageQualitySystem = typeof can === 'function'
     ? can('quality_system', 'manage')
     : false;
+
+  const visibleModules = useMemo(() => {
+    if (typeof isAuthorized !== 'function') return [];
+    return QUALITY_SYSTEM_MODULES.filter((module) => {
+      if (module.accessPermission) {
+        return isAuthorized({ permission: module.accessPermission });
+      }
+      if (Array.isArray(module.accessAnyPermissions) && module.accessAnyPermissions.length > 0) {
+        return isAuthorized({ anyPermissions: module.accessAnyPermissions });
+      }
+      return false;
+    });
+  }, [isAuthorized]);
 
   useEffect(() => {
     let cancelled = false;
@@ -64,18 +69,13 @@ export default function useQualitySystemPage() {
     };
   }, []);
 
-  const visibleQueueItems = selectedModule
-    ? queueItems.filter((item) => isModuleQueueItem(item, selectedModule.path))
-    : queueItems;
-
   return {
     user,
-    modules: QUALITY_SYSTEM_MODULES,
-    selectedModule,
+    modules: visibleModules,
     canManageQualitySystem,
     queueLoading,
     queueError,
-    queueItems: visibleQueueItems,
+    queueItems,
     goToRoot: () => navigate(QUALITY_SYSTEM_ROOT_PATH),
     goToModule: (path) => navigate(path),
     openQueueItem: (item) => {

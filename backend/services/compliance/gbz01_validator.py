@@ -5,6 +5,8 @@ from datetime import date, datetime
 from pathlib import Path
 import re
 
+from backend.services.document_control import controlled_compliance_relpath
+
 from .gbz01_maintenance import ChangeItem, Gbz01MaintenanceService
 from .r7_validator import ComplianceIssue
 
@@ -31,7 +33,7 @@ class Gbz01ComplianceReport:
 
 
 REQUIRED_DOCS: dict[str, tuple[str, ...]] = {
-    "doc/compliance/maintenance_plan.md": (
+    controlled_compliance_relpath("maintenance_plan.md"): (
         "版本:",
         "更新时间:",
         "当前环境:",
@@ -41,7 +43,7 @@ REQUIRED_DOCS: dict[str, tuple[str, ...]] = {
         "下次维护计划复核日期:",
         "仓库外残余项:",
     ),
-    "doc/compliance/maintenance_review_status.md": (
+    controlled_compliance_relpath("maintenance_review_status.md"): (
         "版本:",
         "更新时间:",
         "最后仓库复核日期:",
@@ -52,16 +54,16 @@ REQUIRED_DOCS: dict[str, tuple[str, ...]] = {
         "仓库外证据状态:",
         "Residual gap 边界:",
     ),
-    "doc/compliance/intended_use.md": ("版本:", "更新时间:", "维护阶段复核", "旧验证结论"),
-    "doc/compliance/urs.md": ("URS-013", "GBZ-01"),
-    "doc/compliance/srs.md": ("SRS-013", "URS-013"),
-    "doc/compliance/traceability_matrix.md": ("GBZ-01", "SRS-013"),
-    "doc/compliance/validation_plan.md": (
+    controlled_compliance_relpath("intended_use.md"): ("版本:", "更新时间:", "维护阶段复核", "旧验证结论"),
+    controlled_compliance_relpath("urs.md"): ("URS-013", "GBZ-01"),
+    controlled_compliance_relpath("srs.md"): ("SRS-013", "URS-013"),
+    controlled_compliance_relpath("traceability_matrix.md"): ("GBZ-01", "SRS-013"),
+    controlled_compliance_relpath("validation_plan.md"): (
         "validate_gbz01_repo_compliance.py",
         "test_gbz01_maintenance_unit",
         "test_gbz01_compliance_gate_unit",
     ),
-    "doc/compliance/validation_report.md": (
+    controlled_compliance_relpath("validation_report.md"): (
         "GBZ-01",
         "validate_gbz01_repo_compliance.py",
         "residual gap",
@@ -78,17 +80,17 @@ REQUIRED_FILES: tuple[str, ...] = (
 
 REQUIRED_PATTERNS: tuple[tuple[str, str, str], ...] = (
     (
-        "doc/compliance/traceability_matrix.md",
+        controlled_compliance_relpath("traceability_matrix.md"),
         r"\|\s*GBZ-01\s*\|\s*URS-013\s*\|\s*SRS-013\s*\|",
         "追踪矩阵缺少 GBZ-01 映射",
     ),
     (
-        "doc/compliance/traceability_matrix.md",
+        controlled_compliance_relpath("traceability_matrix.md"),
         r"backend/services/compliance/gbz01_maintenance\.py",
         "追踪矩阵缺少 GBZ-01 维护判定实现映射",
     ),
     (
-        "doc/compliance/traceability_matrix.md",
+        controlled_compliance_relpath("traceability_matrix.md"),
         r"backend\.tests\.test_gbz01_compliance_gate_unit",
         "追踪矩阵缺少 GBZ-01 gate 测试映射",
     ),
@@ -152,7 +154,8 @@ def validate_gbz01_repo_state(repo_root: str | Path, *, as_of: date | None = Non
                 ComplianceIssue(code="required_mapping_missing", message=message, path=rel_path)
             )
 
-    review_text = docs_cache.get("doc/compliance/maintenance_review_status.md", "")
+    review_status_path = controlled_compliance_relpath("maintenance_review_status.md")
+    review_text = docs_cache.get(review_status_path, "")
     if review_text:
         repo_status = _extract_value(review_text, "仓库内证据状态:")
         external_status = _extract_value(review_text, "仓库外证据状态:")
@@ -162,7 +165,7 @@ def validate_gbz01_repo_state(repo_root: str | Path, *, as_of: date | None = Non
                 ComplianceIssue(
                     code="repo_evidence_incomplete",
                     message="GBZ-01 仓库内证据状态不是 complete",
-                    path="doc/compliance/maintenance_review_status.md",
+                    path=review_status_path,
                 )
             )
         if external_status and external_status != "archived":
@@ -170,7 +173,7 @@ def validate_gbz01_repo_state(repo_root: str | Path, *, as_of: date | None = Non
                 ComplianceIssue(
                     code="external_maintenance_evidence_pending",
                     message=f"线下维护执行证据仍待归档: {external_status}",
-                    path="doc/compliance/maintenance_review_status.md",
+                    path=review_status_path,
                 )
             )
         if next_review_raw:
@@ -178,18 +181,19 @@ def validate_gbz01_repo_state(repo_root: str | Path, *, as_of: date | None = Non
                 next_review_raw,
                 code="invalid_maintenance_review_date",
                 report=report,
-                path="doc/compliance/maintenance_review_status.md",
+                path=review_status_path,
             )
             if next_review and next_review < current_date:
                 report.blocking_issues.append(
                     ComplianceIssue(
                         code="maintenance_review_overdue",
                         message="GBZ-01 维护复核已过期",
-                        path="doc/compliance/maintenance_review_status.md",
+                        path=review_status_path,
                     )
                 )
 
-    plan_text = docs_cache.get("doc/compliance/maintenance_plan.md", "")
+    plan_path = controlled_compliance_relpath("maintenance_plan.md")
+    plan_text = docs_cache.get(plan_path, "")
     if plan_text:
         next_plan_raw = _extract_value(plan_text, "下次维护计划复核日期:")
         if next_plan_raw:
@@ -197,14 +201,14 @@ def validate_gbz01_repo_state(repo_root: str | Path, *, as_of: date | None = Non
                 next_plan_raw,
                 code="invalid_maintenance_plan_review_date",
                 report=report,
-                path="doc/compliance/maintenance_plan.md",
+                path=plan_path,
             )
             if next_plan and next_plan < current_date:
                 report.blocking_issues.append(
                     ComplianceIssue(
                         code="maintenance_plan_review_overdue",
                         message="GBZ-01 维护计划复核已过期",
-                        path="doc/compliance/maintenance_plan.md",
+                        path=plan_path,
                     )
                 )
 
@@ -258,11 +262,12 @@ def validate_gbz01_repo_state(repo_root: str | Path, *, as_of: date | None = Non
                 )
             )
         if not assessment.traceability_refs:
+            traceability_path = controlled_compliance_relpath("traceability_matrix.md")
             report.blocking_issues.append(
                 ComplianceIssue(
                     code="traceability_refs_missing",
                     message=f"{assessment.category} 变更未关联追踪矩阵输入",
-                    path="doc/compliance/traceability_matrix.md",
+                    path=traceability_path,
                 )
             )
 

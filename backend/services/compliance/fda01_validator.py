@@ -5,6 +5,8 @@ from datetime import datetime
 import re
 from pathlib import Path
 
+from backend.services.document_control import controlled_compliance_relpath
+
 from .r7_validator import ComplianceIssue
 
 
@@ -30,9 +32,14 @@ class Fda01ComplianceReport:
 
 
 REQUIRED_DOCS: dict[str, tuple[str, ...]] = {
-    "doc/compliance/electronic_signature_policy.md": ("版本:", "更新时间:", "账号唯一性声明:", "仓库外残余项:"),
-    "doc/compliance/signature_authorization_matrix.md": ("版本:", "更新时间:"),
-    "doc/compliance/approval_workflow_sop.md": ("版本:", "更新时间:"),
+    controlled_compliance_relpath("electronic_signature_policy.md"): (
+        "版本:",
+        "更新时间:",
+        "账号唯一性声明:",
+        "仓库外残余项:",
+    ),
+    controlled_compliance_relpath("signature_authorization_matrix.md"): ("版本:", "更新时间:"),
+    controlled_compliance_relpath("approval_workflow_sop.md"): ("版本:", "更新时间:"),
 }
 
 REQUIRED_FILES: tuple[str, ...] = (
@@ -47,11 +54,31 @@ REQUIRED_FILES: tuple[str, ...] = (
 )
 
 REQUIRED_PATTERNS: tuple[tuple[str, str, str], ...] = (
-    ("doc/compliance/signature_authorization_matrix.md", r"operation_request_not_current_approver", "责任矩阵未引用当前步骤授权校验"),
-    ("doc/compliance/signature_authorization_matrix.md", r"signature_user_disabled", "责任矩阵未引用停权签名阻断"),
-    ("doc/compliance/electronic_signature_policy.md", r"账号不得共用", "电子签名策略缺少账号唯一性/禁共用声明"),
-    ("doc/compliance/electronic_signature_policy.md", r"仓库外残余项", "电子签名策略缺少仓库外残余项说明"),
-    ("doc/compliance/electronic_signature_policy.md", r"当前步骤被授权审批人", "电子签名策略缺少授权审批人与签名绑定说明"),
+    (
+        controlled_compliance_relpath("signature_authorization_matrix.md"),
+        r"operation_request_not_current_approver",
+        "责任矩阵未引用当前步骤授权校验",
+    ),
+    (
+        controlled_compliance_relpath("signature_authorization_matrix.md"),
+        r"signature_user_disabled",
+        "责任矩阵未引用停权签名阻断",
+    ),
+    (
+        controlled_compliance_relpath("electronic_signature_policy.md"),
+        r"账号不得共用",
+        "电子签名策略缺少账号唯一性/禁共用声明",
+    ),
+    (
+        controlled_compliance_relpath("electronic_signature_policy.md"),
+        r"仓库外残余项",
+        "电子签名策略缺少仓库外残余项说明",
+    ),
+    (
+        controlled_compliance_relpath("electronic_signature_policy.md"),
+        r"当前步骤被授权审批人",
+        "电子签名策略缺少授权审批人与签名绑定说明",
+    ),
 )
 
 
@@ -94,13 +121,14 @@ def validate_fda01_repo_state(repo_root: str | Path) -> Fda01ComplianceReport:
                 ComplianceIssue(code="required_mapping_missing", message=message, path=rel_path)
             )
 
-    policy = docs_cache.get("doc/compliance/electronic_signature_policy.md", "")
+    policy_path = controlled_compliance_relpath("electronic_signature_policy.md")
+    policy = docs_cache.get(policy_path, "")
     if "线下离岗/转岗签名权限回收记录" in policy:
         report.external_gaps.append(
             ComplianceIssue(
                 code="external_revocation_records_pending",
                 message="线下离岗/转岗签名权限回收记录仍需在线下体系归档",
-                path="doc/compliance/electronic_signature_policy.md",
+                path=policy_path,
             )
         )
 

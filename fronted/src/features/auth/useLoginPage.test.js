@@ -76,7 +76,7 @@ describe('useLoginPage', () => {
   it('keeps the user on the page and surfaces the login error when login fails', async () => {
     const loginMock = jest.fn().mockResolvedValue({
       success: false,
-      error: '用户名或密码错误',
+      error: 'Invalid username or password.',
     });
     useAuth.mockReturnValue({
       login: loginMock,
@@ -95,6 +95,6 @@ describe('useLoginPage', () => {
 
     expect(loginMock).toHaveBeenCalledWith('alice', 'Wrong123');
     expect(mockNavigate).not.toHaveBeenCalled();
-    expect(result.current.error).toBe('用户名或密码错误');
+    expect(result.current.error).toBe('Invalid username or password.');
   });
 });

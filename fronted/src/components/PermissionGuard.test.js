@@ -39,7 +39,7 @@ describe('PermissionGuard', () => {
 
     renderGuard();
 
-    expect(screen.getByText('加载中...')).toBeInTheDocument();
+    expect(screen.getByText('Loading...')).toBeInTheDocument();
   });
 
   it('redirects unauthenticated users to login', () => {

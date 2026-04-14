@@ -15,7 +15,7 @@ def _write(path: Path, content: str) -> None:
 
 def _build_repo(root: Path) -> None:
     docs = {
-        "doc/compliance/release_and_retirement_sop.md": """# 发布与退役 SOP
+        "docs/compliance/release_and_retirement_sop.md": """# 发布与退役 SOP
 
 版本: v1.0
 更新时间: 2026-04-03
@@ -27,7 +27,7 @@ def _build_repo(root: Path) -> None:
 retirement_manifest.json
 checksums.json
 """,
-        "doc/compliance/retirement_plan.md": """# 退役计划
+        "docs/compliance/retirement_plan.md": """# 退役计划
 
 版本: v1.0
 更新时间: 2026-04-03
@@ -37,7 +37,7 @@ checksums.json
 归档包校验: 对 ZIP 包和 manifest 执行 SHA-256 复核
 仓库外残余项: 线下签字版批准页、介质保管记录、纸质作废回收记录仍需线下归档
 """,
-        "doc/compliance/retirement_archive_status.md": """# 退役归档状态
+        "docs/compliance/retirement_archive_status.md": """# 退役归档状态
 
 版本: v1.0
 更新时间: 2026-04-03
@@ -47,30 +47,30 @@ checksums.json
 仓库外证据状态: pending_archive
 Residual gap 边界: 线下签字版批准页、介质保管记录和作废回收单不在仓库内伪造
 """,
-        "doc/compliance/controlled_document_register.md": """# 受控文档登记表
+        "docs/compliance/controlled_document_register.md": """# 受控文档登记表
 
 版本: v1.0
 更新时间: 2026-04-03
 当前发布版本: 2.0.0
 
-doc/compliance/retirement_plan.md
-doc/compliance/retirement_archive_status.md
+docs/compliance/retirement_plan.md
+docs/compliance/retirement_archive_status.md
 """,
-        "doc/compliance/urs.md": "# URS\n\nURS-015 GBZ-03\n",
-        "doc/compliance/srs.md": "# SRS\n\nSRS-015 URS-015\n",
-        "doc/compliance/traceability_matrix.md": """# TM
+        "docs/compliance/urs.md": "# URS\n\nURS-015 GBZ-03\n",
+        "docs/compliance/srs.md": "# SRS\n\nSRS-015 URS-015\n",
+        "docs/compliance/traceability_matrix.md": """# TM
 
 | 需求 ID | URS | SRS | 实现证据 | 测试证据 | 文档证据 | 状态 |
 |---|---|---|---|---|---|---|
-| GBZ-03 | URS-015 | SRS-015 | `backend/services/compliance/retired_records.py`, `backend/app/modules/knowledge/routes/retired.py`, `backend/app/modules/audit/router.py` | `backend.tests.test_retired_document_access_unit`, `backend.tests.test_gbz03_compliance_gate_unit`, `python scripts/validate_gbz03_repo_compliance.py` | `doc/compliance/release_and_retirement_sop.md`, `doc/compliance/retirement_plan.md`, `doc/compliance/retirement_archive_status.md` | 已验证（仓库内） |
+| GBZ-03 | URS-015 | SRS-015 | `backend/services/compliance/retired_records.py`, `backend/app/modules/knowledge/routes/retired.py`, `backend/app/modules/audit/router.py` | `backend.tests.test_retired_document_access_unit`, `backend.tests.test_gbz03_compliance_gate_unit`, `python scripts/validate_gbz03_repo_compliance.py` | `docs/compliance/release_and_retirement_sop.md`, `docs/compliance/retirement_plan.md`, `docs/compliance/retirement_archive_status.md` | 已验证（仓库内） |
 """,
-        "doc/compliance/validation_plan.md": """# VP
+        "docs/compliance/validation_plan.md": """# VP
 
 validate_gbz03_repo_compliance.py
 test_retired_document_access_unit
 test_gbz03_compliance_gate_unit
 """,
-        "doc/compliance/validation_report.md": """# VR
+        "docs/compliance/validation_report.md": """# VR
 
 GBZ-03
 validate_gbz03_repo_compliance.py

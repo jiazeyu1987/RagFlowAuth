@@ -11,44 +11,44 @@ const toProvinceToolId = (name) => (
 const baseToolDefinitions = [
   {
     id: 'paper_download',
-    name: '论文下载分析',
-    description: '进入论文下载页面：配置关键词、下载源和上限，下载后可加入 [本地论文]。',
+    name: 'Paper Download and Analysis',
+    description: 'Open the paper download workspace to configure keywords, data sources, and limits. Downloaded files can be added to [Local Papers].',
     route: '/tools/paper-download',
   },
   {
     id: 'patent_download',
-    name: '专利下载分析',
-    description: '进入专利下载页面：配置关键词、数据源和上限，下载后可加入 [本地专利]。',
+    name: 'Patent Download and Analysis',
+    description: 'Open the patent download workspace to configure keywords, data sources, and limits. Downloaded files can be added to [Local Patents].',
     route: '/tools/patent-download',
   },
   {
     id: 'package_drawing',
-    name: '包装图纸',
-    description: '按型号查询包装图纸信息，支持通过 Excel 导入型号、条形码、产品参数和示意图。',
+    name: 'Packaging Drawing',
+    description: 'Search packaging drawing details by model. Supports Excel import for model numbers, barcodes, product parameters, and reference images.',
     route: '/tools/package-drawing',
   },
   {
     id: 'nhsa_code_search',
-    name: '医保编码查询工具',
-    description: '打开国家医保服务平台：医保编码查询（新窗口）。',
+    name: 'NHSA Code Search Tool',
+    description: 'Open the National Healthcare Security service platform for medical insurance code lookup (new window).',
     href: 'https://code.nhsa.gov.cn/toSearch.html?sysflag=1004',
   },
   {
     id: 'shanghai_tax',
-    name: '上海电子税务局',
-    description: '打开上海电子税务局登录页面（新窗口）。',
+    name: 'Shanghai Electronic Tax Bureau',
+    description: 'Open the Shanghai Electronic Tax Bureau login page (new window).',
     href: 'https://tpass.shanghai.chinatax.gov.cn:8443/#/login?response_type=code&client_id=d3f156f230415796834bed5e954ed4de&redirect_uri=https%3A%2F%2Fdppt.shanghai.chinatax.gov.cn%3A8443%2Fszzhzz%2FOauth2HandleServlet%3FcdPath%3DL2RlZGV1Y3Rpb24tdHlwZS1jaGVja2VkLWJ1c2luZXNzP3J1dWlkPTE3Njg1Mzg4ODUyMDUmb2F1dGgyc3RhdGU9N2Q4YTRlZDMzOWQyNGVhMWI3OTNlNzRjNDc5OWZlYzk%3D&state=1039c7dafc8d4ac69dcd1fac61121679&ruuid=1770379445455',
   },
   {
     id: 'drug_admin',
-    name: '药监导航',
-    description: '进入省级与国家药监官网导航页，可进一步查看各地真实入口。',
+    name: 'Drug Administration Navigation',
+    description: 'Open provincial and national drug administration portal entries to access official websites by region.',
     route: '/tools/drug-admin',
   },
   {
     id: 'nmpa',
     name: 'NMPA',
-    description: '国家药监局器审中心。',
+    description: 'National Medical Products Administration service portal.',
     route: '/tools/nmpa',
   },
 ];
@@ -64,8 +64,8 @@ const buildProvinceTools = (provinces) => (
       return {
         id: toProvinceToolId(name),
         permissionKey: 'drug_admin',
-        name: `${name}药监入口`,
-        description: `打开 ${name} 药监相关官网入口（新窗口）。`,
+        name: `${name} Drug Administration Portal`,
+        description: `Open the ${name} drug administration official portal (new window).`,
         href: urls[0],
       };
     })
@@ -192,10 +192,10 @@ const Tools = () => {
               width: isMobile ? '100%' : 'auto',
             }}
           >
-            上一页
+            Previous Page
           </button>
           <div style={{ color: '#6b7280', fontSize: '0.9rem' }} data-testid="tools-page-indicator">
-            第 <span style={{ color: '#111827', fontWeight: 700 }}>{safePage}</span> / {pageCount} 页
+            Page <span style={{ color: '#111827', fontWeight: 700 }}>{safePage}</span> of {pageCount}
           </div>
           <button
             type="button"
@@ -211,7 +211,7 @@ const Tools = () => {
               width: isMobile ? '100%' : 'auto',
             }}
           >
-            下一页
+            Next Page
           </button>
         </div>
       </div>
@@ -239,7 +239,7 @@ const Tools = () => {
             data-testid="tools-empty-state"
             style={{ gridColumn: '1 / -1', color: '#6b7280', padding: 8 }}
           >
-            暂无可访问的实用工具
+            No accessible utility tools are available.
           </div>
         ) : null}
         {pageItems.map((tool, index) => (

@@ -66,6 +66,28 @@ const SearchConfigsPanel = lazy(() => import('../pages/SearchConfigsPanel'));
 const ChatConfigsPanel = lazy(() => import('../pages/ChatConfigsPanel'));
 const DocumentAudit = lazy(() => import('../pages/DocumentAudit'));
 const QualitySystem = lazy(() => import('../pages/QualitySystem'));
+const QualitySystemTraining = lazy(() => import('../pages/QualitySystemTraining'));
+const QualitySystemEquipment = lazy(() => import('../pages/QualitySystemEquipment'));
+const QualitySystemBatchRecords = lazy(() => import('../pages/QualitySystemBatchRecords'));
+const QualitySystemGovernanceClosure = lazy(() => import('../pages/QualitySystemGovernanceClosure'));
+const DocumentControl = lazy(() => import('../pages/DocumentControl'));
+const ChangeControl = lazy(() => import('../pages/ChangeControl'));
+
+const requireQualitySystemModule = (key) => {
+  const module = QUALITY_SYSTEM_MODULES.find((item) => item.key === key);
+  if (!module) {
+    throw new Error(`quality_system_module_not_found:${key}`);
+  }
+  return module;
+};
+
+const QUALITY_SYSTEM_DOC_CONTROL = requireQualitySystemModule('doc-control');
+const QUALITY_SYSTEM_TRAINING = requireQualitySystemModule('training');
+const QUALITY_SYSTEM_CHANGE_CONTROL = requireQualitySystemModule('change-control');
+const QUALITY_SYSTEM_EQUIPMENT = requireQualitySystemModule('equipment');
+const QUALITY_SYSTEM_BATCH_RECORDS = requireQualitySystemModule('batch-records');
+const QUALITY_SYSTEM_AUDIT = requireQualitySystemModule('audit');
+const QUALITY_SYSTEM_GOVERNANCE_CLOSURE = requireQualitySystemModule('governance-closure');
 
 export const APP_ROUTES = [
   { path: '/login', component: LoginPage, public: true },
@@ -285,15 +307,94 @@ export const APP_ROUTES = [
     showInNav: true,
     icon: '\ud83e\uddea',
     guard: { permission: QUALITY_SYSTEM_ROUTE_PERMISSION },
-    navGuard: { allowedRoles: ['admin', 'sub_admin'] },
     matchPrefixes: [`${QUALITY_SYSTEM_ROOT_PATH}/`],
   },
-  ...QUALITY_SYSTEM_MODULES.map((module) => ({
-    path: module.path,
-    component: QualitySystem,
-    title: module.title,
-    guard: { permission: QUALITY_SYSTEM_ROUTE_PERMISSION },
-  })),
+  {
+    path: QUALITY_SYSTEM_DOC_CONTROL.path,
+    component: DocumentControl,
+    title: QUALITY_SYSTEM_DOC_CONTROL.title,
+    guard: {
+      permission: QUALITY_SYSTEM_ROUTE_PERMISSION,
+      anyPermissions: QUALITY_SYSTEM_DOC_CONTROL.accessAnyPermissions,
+    },
+  },
+  {
+    path: QUALITY_SYSTEM_TRAINING.path,
+    component: QualitySystemTraining,
+    title: QUALITY_SYSTEM_TRAINING.title,
+    guard: {
+      permission: QUALITY_SYSTEM_ROUTE_PERMISSION,
+      anyPermissions: QUALITY_SYSTEM_TRAINING.accessAnyPermissions,
+    },
+  },
+  {
+    path: QUALITY_SYSTEM_CHANGE_CONTROL.path,
+    component: ChangeControl,
+    title: QUALITY_SYSTEM_CHANGE_CONTROL.title,
+    guard: {
+      permission: QUALITY_SYSTEM_ROUTE_PERMISSION,
+      anyPermissions: QUALITY_SYSTEM_CHANGE_CONTROL.accessAnyPermissions,
+    },
+  },
+  {
+    path: QUALITY_SYSTEM_EQUIPMENT.path,
+    component: QualitySystemEquipment,
+    title: QUALITY_SYSTEM_EQUIPMENT.title,
+    guard: {
+      permission: QUALITY_SYSTEM_ROUTE_PERMISSION,
+      anyPermissions: QUALITY_SYSTEM_EQUIPMENT.accessAnyPermissions,
+    },
+    matchPrefixes: [
+      `${QUALITY_SYSTEM_ROOT_PATH}/equipment/`,
+    ],
+  },
+  {
+    path: `${QUALITY_SYSTEM_ROOT_PATH}/equipment/metrology`,
+    component: QualitySystemEquipment,
+    title: '\u8ba1\u91cf\u7ba1\u7406',
+    guard: {
+      permission: QUALITY_SYSTEM_ROUTE_PERMISSION,
+      anyPermissions: QUALITY_SYSTEM_EQUIPMENT.accessAnyPermissions,
+    },
+  },
+  {
+    path: `${QUALITY_SYSTEM_ROOT_PATH}/equipment/maintenance`,
+    component: QualitySystemEquipment,
+    title: '\u7ef4\u62a4\u4fdd\u517b\u7ba1\u7406',
+    guard: {
+      permission: QUALITY_SYSTEM_ROUTE_PERMISSION,
+      anyPermissions: QUALITY_SYSTEM_EQUIPMENT.accessAnyPermissions,
+    },
+  },
+  {
+    path: QUALITY_SYSTEM_BATCH_RECORDS.path,
+    component: QualitySystemBatchRecords,
+    title: QUALITY_SYSTEM_BATCH_RECORDS.title,
+    guard: {
+      permission: QUALITY_SYSTEM_ROUTE_PERMISSION,
+      anyPermissions: QUALITY_SYSTEM_BATCH_RECORDS.accessAnyPermissions,
+    },
+  },
+  {
+    path: QUALITY_SYSTEM_AUDIT.path,
+    component: AuditLogs,
+    title: QUALITY_SYSTEM_AUDIT.title,
+    guard: {
+      permission: QUALITY_SYSTEM_ROUTE_PERMISSION,
+      anyPermissions: QUALITY_SYSTEM_AUDIT.accessAnyPermissions,
+    },
+  },
+  {
+    path: QUALITY_SYSTEM_GOVERNANCE_CLOSURE.path,
+    component: QualitySystemGovernanceClosure,
+    title: QUALITY_SYSTEM_GOVERNANCE_CLOSURE.title,
+    guard: {
+      permissions: [
+        QUALITY_SYSTEM_ROUTE_PERMISSION,
+        QUALITY_SYSTEM_GOVERNANCE_CLOSURE.accessPermission,
+      ],
+    },
+  },
   {
     path: '/messages',
     component: InboxPage,

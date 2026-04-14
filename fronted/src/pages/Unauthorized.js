@@ -6,12 +6,12 @@ const Unauthorized = () => {
 
   return (
     <div style={{ maxWidth: 720, width: '100%' }}>
-      <h2 style={{ marginTop: 0 }} data-testid="unauthorized-title">无权限访问</h2>
+      <h2 style={{ marginTop: 0 }} data-testid="unauthorized-title">Access Denied</h2>
       <div style={{ color: '#6b7280', marginBottom: 16, wordBreak: 'break-all' }}>
-        当前账号没有权限访问该页面：{location.pathname}
+        Your account does not have permission to access this page: {location.pathname}
       </div>
       <Link to="/" style={{ color: '#2563eb', textDecoration: 'none' }}>
-        返回首页
+        Return to Home
       </Link>
     </div>
   );

@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException, Response
 from pydantic import BaseModel
 
-from backend.app.core.authz import AdminOnly, AuthContextDep
+from backend.app.core.authz import AuthContextDep, assert_capability
 from backend.services.equipment import EquipmentServiceError
 
 router = APIRouter()
@@ -61,7 +61,8 @@ def _audit(ctx: AuthContextDep, *, action: str, event_type: str, resource_id: st
 
 
 @router.post("/equipment/assets")
-def create_equipment_asset(body: EquipmentAssetBody, ctx: AuthContextDep, _: AdminOnly):
+def create_equipment_asset(body: EquipmentAssetBody, ctx: AuthContextDep):
+    assert_capability(ctx, resource="equipment_lifecycle", action="create")
     _ensure_user_exists(ctx, body.owner_user_id, field_name="owner_user_id")
     service = _service_from_ctx(ctx)
     try:
@@ -98,11 +99,11 @@ def create_equipment_asset(body: EquipmentAssetBody, ctx: AuthContextDep, _: Adm
 @router.get("/equipment/assets")
 def list_equipment_assets(
     ctx: AuthContextDep,
-    _: AdminOnly,
     limit: int = 100,
     status: str | None = None,
     owner_user_id: str | None = None,
 ):
+    assert_capability(ctx, resource="equipment_lifecycle", action="maintain")
     service = _service_from_ctx(ctx)
     try:
         items = service.list_assets(limit=limit, status=status, owner_user_id=owner_user_id)
@@ -112,7 +113,8 @@ def list_equipment_assets(
 
 
 @router.get("/equipment/assets/by-id/{equipment_id}")
-def get_equipment_asset(equipment_id: str, ctx: AuthContextDep, _: AdminOnly):
+def get_equipment_asset(equipment_id: str, ctx: AuthContextDep):
+    assert_capability(ctx, resource="equipment_lifecycle", action="maintain")
     service = _service_from_ctx(ctx)
     try:
         return service.get_asset(equipment_id)
@@ -146,22 +148,26 @@ def _transition_asset(equipment_id: str, body: EquipmentStatusBody, ctx: AuthCon
 
 
 @router.post("/equipment/assets/{equipment_id}/accept")
-def accept_equipment_asset(equipment_id: str, body: EquipmentStatusBody, ctx: AuthContextDep, _: AdminOnly):
+def accept_equipment_asset(equipment_id: str, body: EquipmentStatusBody, ctx: AuthContextDep):
+    assert_capability(ctx, resource="equipment_lifecycle", action="accept")
     return _transition_asset(equipment_id, body, ctx, "accept")
 
 
 @router.post("/equipment/assets/{equipment_id}/commission")
-def commission_equipment_asset(equipment_id: str, body: EquipmentStatusBody, ctx: AuthContextDep, _: AdminOnly):
+def commission_equipment_asset(equipment_id: str, body: EquipmentStatusBody, ctx: AuthContextDep):
+    assert_capability(ctx, resource="equipment_lifecycle", action="accept")
     return _transition_asset(equipment_id, body, ctx, "commission")
 
 
 @router.post("/equipment/assets/{equipment_id}/retire")
-def retire_equipment_asset(equipment_id: str, body: EquipmentStatusBody, ctx: AuthContextDep, _: AdminOnly):
+def retire_equipment_asset(equipment_id: str, body: EquipmentStatusBody, ctx: AuthContextDep):
+    assert_capability(ctx, resource="equipment_lifecycle", action="retire")
     return _transition_asset(equipment_id, body, ctx, "retire")
 
 
 @router.post("/equipment/reminders/dispatch")
-def dispatch_equipment_reminders(ctx: AuthContextDep, _: AdminOnly, window_days: int = 7):
+def dispatch_equipment_reminders(ctx: AuthContextDep, window_days: int = 7):
+    assert_capability(ctx, resource="equipment_lifecycle", action="maintain")
     service = _service_from_ctx(ctx)
     try:
         result = service.dispatch_due_reminders(actor_user_id=str(ctx.user.user_id), window_days=window_days)
@@ -182,10 +188,10 @@ def dispatch_equipment_reminders(ctx: AuthContextDep, _: AdminOnly, window_days:
 @router.get("/equipment/assets/export")
 def export_equipment_assets(
     ctx: AuthContextDep,
-    _: AdminOnly,
     limit: int = 200,
     status: str | None = None,
 ):
+    assert_capability(ctx, resource="equipment_lifecycle", action="maintain")
     service = _service_from_ctx(ctx)
     try:
         content = service.export_assets_csv(limit=limit, status=status)

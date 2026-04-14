@@ -5,6 +5,8 @@ from datetime import date, datetime, timezone
 import re
 from pathlib import Path
 
+from backend.services.document_control import controlled_compliance_relpath
+
 
 @dataclass(slots=True)
 class ComplianceIssue:
@@ -40,15 +42,27 @@ class R7ComplianceReport:
 
 
 REQUIRED_DOCS: dict[str, tuple[str, ...]] = {
-    "doc/compliance/gmp_regulatory_baseline.md": ("版本:", "更新时间:", "最新已发布 GMP 基线核对日期:", "下次基线复核截止日期:"),
-    "doc/compliance/r7_periodic_review_status.md": ("版本:", "更新时间:", "最后仓库复核日期:", "下次仓库复核截止日期:", "仓库内证据状态:", "仓库外证据状态:"),
-    "doc/compliance/intended_use.md": ("版本:", "更新时间:"),
-    "doc/compliance/urs.md": ("版本:", "更新时间:"),
-    "doc/compliance/srs.md": ("版本:", "更新时间:"),
-    "doc/compliance/risk_assessment.md": ("版本:", "更新时间:"),
-    "doc/compliance/traceability_matrix.md": ("版本:", "更新时间:"),
-    "doc/compliance/validation_plan.md": ("版本:", "更新时间:"),
-    "doc/compliance/validation_report.md": ("版本:", "更新时间:"),
+    controlled_compliance_relpath("gmp_regulatory_baseline.md"): (
+        "版本:",
+        "更新时间:",
+        "最新已发布 GMP 基线核对日期:",
+        "下次基线复核截止日期:",
+    ),
+    controlled_compliance_relpath("r7_periodic_review_status.md"): (
+        "版本:",
+        "更新时间:",
+        "最后仓库复核日期:",
+        "下次仓库复核截止日期:",
+        "仓库内证据状态:",
+        "仓库外证据状态:",
+    ),
+    controlled_compliance_relpath("intended_use.md"): ("版本:", "更新时间:"),
+    controlled_compliance_relpath("urs.md"): ("版本:", "更新时间:"),
+    controlled_compliance_relpath("srs.md"): ("版本:", "更新时间:"),
+    controlled_compliance_relpath("risk_assessment.md"): ("版本:", "更新时间:"),
+    controlled_compliance_relpath("traceability_matrix.md"): ("版本:", "更新时间:"),
+    controlled_compliance_relpath("validation_plan.md"): ("版本:", "更新时间:"),
+    controlled_compliance_relpath("validation_report.md"): ("版本:", "更新时间:"),
 }
 
 REQUIRED_ARTIFACTS: tuple[str, ...] = (
@@ -62,15 +76,39 @@ REQUIRED_ARTIFACTS: tuple[str, ...] = (
 )
 
 REQUIRED_TEXT_PATTERNS: tuple[tuple[str, str, str], ...] = (
-    ("doc/compliance/urs.md", r"\|\s*URS-007\s*\|\s*R7\s*\|", "R7 的 URS 映射缺失"),
-    ("doc/compliance/srs.md", r"\|\s*SRS-007\s*\|\s*URS-007\s*\|", "R7 的 SRS 映射缺失"),
-    ("doc/compliance/risk_assessment.md", r"\|\s*RA-010\s*\|", "R7 的风险条目 RA-010 缺失"),
-    ("doc/compliance/traceability_matrix.md", r"\|\s*R7\s*\|\s*URS-007\s*\|\s*SRS-007\s*\|", "追踪矩阵中 R7 行缺失"),
-    ("doc/compliance/traceability_matrix.md", r"backend/services/compliance/r7_validator\.py", "追踪矩阵未引用 R7 校验器"),
-    ("doc/compliance/traceability_matrix.md", r"backend\.tests\.test_r7_compliance_gate_unit", "追踪矩阵未引用 R7 门禁测试"),
-    ("doc/compliance/validation_plan.md", r"validate_r7_repo_compliance\.py", "验证计划未包含 R7 门禁命令"),
-    ("doc/compliance/validation_report.md", r"仓库内门禁校验", "验证报告未记录 R7 门禁结论"),
-    ("doc/compliance/validation_report.md", r"不替代线下签字", "验证报告未保留仓库外证据边界说明"),
+    (controlled_compliance_relpath("urs.md"), r"\|\s*URS-007\s*\|\s*R7\s*\|", "R7 的 URS 映射缺失"),
+    (controlled_compliance_relpath("srs.md"), r"\|\s*SRS-007\s*\|\s*URS-007\s*\|", "R7 的 SRS 映射缺失"),
+    (controlled_compliance_relpath("risk_assessment.md"), r"\|\s*RA-010\s*\|", "R7 的风险条目 RA-010 缺失"),
+    (
+        controlled_compliance_relpath("traceability_matrix.md"),
+        r"\|\s*R7\s*\|\s*URS-007\s*\|\s*SRS-007\s*\|",
+        "追踪矩阵中 R7 行缺失",
+    ),
+    (
+        controlled_compliance_relpath("traceability_matrix.md"),
+        r"backend/services/compliance/r7_validator\.py",
+        "追踪矩阵未引用 R7 校验器",
+    ),
+    (
+        controlled_compliance_relpath("traceability_matrix.md"),
+        r"backend\.tests\.test_r7_compliance_gate_unit",
+        "追踪矩阵未引用 R7 门禁测试",
+    ),
+    (
+        controlled_compliance_relpath("validation_plan.md"),
+        r"validate_r7_repo_compliance\.py",
+        "验证计划未包含 R7 门禁命令",
+    ),
+    (
+        controlled_compliance_relpath("validation_report.md"),
+        r"仓库内门禁校验",
+        "验证报告未记录 R7 门禁结论",
+    ),
+    (
+        controlled_compliance_relpath("validation_report.md"),
+        r"不替代线下签字",
+        "验证报告未保留仓库外证据边界说明",
+    ),
 )
 
 
@@ -129,7 +167,7 @@ def validate_r7_repo_state(repo_root: str | Path, *, as_of: date | None = None) 
                 ComplianceIssue(code="missing_required_artifact", message="缺少 R7 必需实现或测试文件", path=rel_path)
             )
 
-    baseline_path = "doc/compliance/gmp_regulatory_baseline.md"
+    baseline_path = controlled_compliance_relpath("gmp_regulatory_baseline.md")
     baseline_text = docs_cache.get(baseline_path, "")
     if baseline_text:
         for token in ("国家药监局令第64号", "2025-11-04", "2026-11-01", "latest_published_pending_effective"):
@@ -145,7 +183,7 @@ def validate_r7_repo_state(repo_root: str | Path, *, as_of: date | None = None) 
                     ComplianceIssue(code="baseline_review_overdue", message="GMP 基线复核已过期", path=baseline_path)
                 )
 
-    review_path = "doc/compliance/r7_periodic_review_status.md"
+    review_path = controlled_compliance_relpath("r7_periodic_review_status.md")
     review_text = docs_cache.get(review_path, "")
     if review_text:
         repo_status = _extract_value(review_text, "仓库内证据状态:")

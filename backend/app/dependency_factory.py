@@ -11,6 +11,7 @@ from backend.services.audit import AuditLogManager
 from backend.services.audit_log_store import AuditLogStore
 from backend.services.auth_session import AuthSessionManager
 from backend.services.auth_session_store import AuthSessionStore
+from backend.services.batch_records import BatchRecordsService
 from backend.services.capa import CapaService
 from backend.services.chat_management import ChatManagementManager, ChatOwnershipStore
 from backend.services.chat_message_sources_store import ChatMessageSourcesStore
@@ -97,6 +98,7 @@ class AppDependencies:
     equipment_service: EquipmentService | None = None
     metrology_service: MetrologyService | None = None
     maintenance_service: MaintenanceService | None = None
+    batch_records_service: BatchRecordsService | None = None
     notification_manager: NotificationManager | None = None
     notification_service: NotificationManager | None = None
     user_inbox_store: UserInboxStore | None = None
@@ -163,6 +165,7 @@ class _SharedRuntime:
     equipment_service: EquipmentService
     metrology_service: MetrologyService
     maintenance_service: MaintenanceService
+    batch_records_service: BatchRecordsService
     watermark_policy_store: WatermarkPolicyStore
     user_store: UserStore
     kb_store: KbStore
@@ -347,6 +350,7 @@ class DependencyFactory:
                 db_path=auth_db_path,
                 notification_manager=notification_manager,
             ),
+            batch_records_service=BatchRecordsService(db_path=auth_db_path),
             watermark_policy_store=WatermarkPolicyStore(db_path=auth_db_path),
             user_store=UserStore(db_path=auth_db_path),
             kb_store=KbStore(db_path=auth_db_path),
@@ -415,6 +419,7 @@ class DependencyFactory:
             equipment_service=runtime.equipment_service,
             metrology_service=runtime.metrology_service,
             maintenance_service=runtime.maintenance_service,
+            batch_records_service=runtime.batch_records_service,
             notification_manager=runtime.notification_manager,
             notification_service=runtime.notification_manager,
             user_inbox_store=runtime.user_inbox_store,

@@ -7,7 +7,7 @@ import { getDefaultLandingRoute } from './features/auth/defaultLandingRoute';
 import { APP_ROUTES } from './routes/routeRegistry';
 
 function RouteLoadingFallback() {
-  return <div style={{ padding: 16 }}>加载中...</div>;
+  return <div style={{ padding: 16 }}>Loading...</div>;
 }
 
 function DefaultRouteRedirect() {
@@ -64,3 +64,4 @@ function App() {
 }
 
 export default App;
+

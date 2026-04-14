@@ -1,4 +1,4 @@
-﻿// @ts-check
+// @ts-check
 const { expect } = require('@playwright/test');
 const { docAdminTest } = require('../helpers/docAuth');
 const { loadBootstrapSummary } = require('../helpers/bootstrapSummary');
@@ -9,7 +9,7 @@ const workflowName = 'E2E Upload Approval Flow';
 const firstStepName = 'E2E Completeness Review';
 const secondStepName = 'E2E Manager Signoff';
 
-docAdminTest('瀹℃壒閰嶇疆鏂囨。娴佺▼浣跨敤鐪熷疄宸ヤ綔娴併€佹垚鍛樻悳绱笌淇濆瓨缁撴灉 @doc-e2e', async ({ page }) => {
+docAdminTest('approval configuration workflow uses real members and persists saved results @doc-e2e', async ({ page }) => {
   await page.goto('/approval-config');
 
   await expect(page.getByTestId('approval-config-page')).toBeVisible();
@@ -40,14 +40,14 @@ docAdminTest('瀹℃壒閰嶇疆鏂囨。娴佺▼浣跨敤鐪熷疄宸ヤ綔娴
   await page.getByTestId(`approval-config-member-ref-knowledge_file_upload-0-1-result-${operatorUserId}`).click();
   await expect(
     page.getByTestId('approval-config-member-ref-knowledge_file_upload-0-1-selected')
-  ).not.toContainText('鏈€夋嫨鐢ㄦ埛');
+  ).not.toContainText(/No user selected|未选择用户/);
 
   const firstMemberRow = page.getByTestId('approval-config-member-knowledge_file_upload-0-0');
   await firstMemberRow.getByRole('button', { name: /\u5220\u9664\u6210\u5458/ }).click();
   await expect(page.getByTestId('approval-config-member-knowledge_file_upload-0-0')).toBeVisible();
   await expect(
     page.getByTestId('approval-config-member-ref-knowledge_file_upload-0-0-selected')
-  ).not.toContainText('鏈€夋嫨鐢ㄦ埛');
+  ).not.toContainText(/No user selected|未选择用户/);
 
   await page.getByTestId('approval-config-add-step-knowledge_file_upload').click();
   await expect(page.getByTestId('approval-config-step-knowledge_file_upload-1')).toBeVisible();
@@ -61,7 +61,7 @@ docAdminTest('瀹℃壒閰嶇疆鏂囨。娴佺▼浣跨敤鐪熷疄宸ヤ綔娴
   const secondStepNameInput = page.getByTestId('approval-config-step-name-knowledge_file_upload-1');
   await secondStepNameInput.fill(secondStepName);
   await page.getByTestId('approval-config-member-type-knowledge_file_upload-1-0').selectOption('special_role');
-  await expect(page.getByTestId('approval-config-member-role-knowledge_file_upload-1-0')).toContainText(/\u76f4\u5c5e\u4e3b\u7ba1/);
+  await expect(page.getByTestId('approval-config-member-role-knowledge_file_upload-1-0')).toContainText(/Direct Manager|直属主管/);
 
   const saveResponse = page.waitForResponse(
     (response) =>
@@ -70,7 +70,7 @@ docAdminTest('瀹℃壒閰嶇疆鏂囨。娴佺▼浣跨敤鐪熷疄宸ヤ綔娴
   );
   await page.getByTestId('approval-config-save-knowledge_file_upload').click();
   await saveResponse;
-  await expect(page.getByTestId('approval-config-success')).toContainText(/\u5ba1\u6279\u6d41\u7a0b\u5df2\u4fdd\u5b58/);
+  await expect(page.getByTestId('approval-config-success')).toContainText(/Approval workflow saved|审批流程已保存/);
 
   const reloadResponse = page.waitForResponse(
     (response) =>
@@ -83,8 +83,8 @@ docAdminTest('瀹℃壒閰嶇疆鏂囨。娴佺▼浣跨敤鐪熷疄宸ヤ綔娴
   await expect(page.getByTestId('approval-config-step-name-knowledge_file_upload-0')).toHaveValue(firstStepName);
   await expect(
     page.getByTestId('approval-config-member-ref-knowledge_file_upload-0-0-selected')
-  ).not.toContainText('鏈€夋嫨鐢ㄦ埛');
+  ).not.toContainText(/No user selected|未选择用户/);
   await expect(page.getByTestId('approval-config-step-name-knowledge_file_upload-1')).toHaveValue(secondStepName);
-  await expect(page.getByTestId('approval-config-member-role-knowledge_file_upload-1-0')).toContainText(/\u76f4\u5c5e\u4e3b\u7ba1/);
+  await expect(page.getByTestId('approval-config-member-role-knowledge_file_upload-1-0')).toContainText(/Direct Manager|直属主管/);
 });
 

@@ -36,7 +36,7 @@ describe('Tools', () => {
     drugAdminApi.listProvinces.mockResolvedValue({
       provinces: [
         {
-          name: '上海',
+          name: 'Shanghai',
           urls: ['https://example.com/shanghai'],
         },
       ],
@@ -53,7 +53,7 @@ describe('Tools', () => {
 
     render(<Tools />);
 
-    const provinceCard = await screen.findByTestId('tool-card-drug_admin_上海');
+    const provinceCard = await screen.findByTestId('tool-card-drug_admin_Shanghai');
     expect(drugAdminApi.listProvinces).toHaveBeenCalledTimes(1);
 
     await user.click(provinceCard);

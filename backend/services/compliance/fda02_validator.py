@@ -5,6 +5,8 @@ from datetime import datetime
 from pathlib import Path
 import re
 
+from backend.services.document_control import controlled_compliance_relpath
+
 from .r7_validator import ComplianceIssue
 
 
@@ -30,16 +32,16 @@ class Fda02ComplianceReport:
 
 
 REQUIRED_DOCS: dict[str, tuple[str, ...]] = {
-    "doc/compliance/inspection_evidence_export_sop.md": (
+    controlled_compliance_relpath("inspection_evidence_export_sop.md"): (
         "版本:",
         "更新时间:",
         "人可读副本:",
         "便携格式:",
         "仓库外残余项:",
     ),
-    "doc/compliance/urs.md": ("URS-011", "FDA-02"),
-    "doc/compliance/srs.md": ("SRS-011", "URS-011"),
-    "doc/compliance/traceability_matrix.md": ("FDA-02", "SRS-011"),
+    controlled_compliance_relpath("urs.md"): ("URS-011", "FDA-02"),
+    controlled_compliance_relpath("srs.md"): ("SRS-011", "URS-011"),
+    controlled_compliance_relpath("traceability_matrix.md"): ("FDA-02", "SRS-011"),
 }
 
 REQUIRED_FILES: tuple[str, ...] = (
@@ -52,22 +54,22 @@ REQUIRED_FILES: tuple[str, ...] = (
 
 REQUIRED_PATTERNS: tuple[tuple[str, str, str], ...] = (
     (
-        "doc/compliance/inspection_evidence_export_sop.md",
+        controlled_compliance_relpath("inspection_evidence_export_sop.md"),
         r"manifest\.json",
         "检查取证 SOP 缺少 manifest.json 完整性摘要说明",
     ),
     (
-        "doc/compliance/inspection_evidence_export_sop.md",
+        controlled_compliance_relpath("inspection_evidence_export_sop.md"),
         r"checksums\.json",
         "检查取证 SOP 缺少 checksums.json 完整性摘要说明",
     ),
     (
-        "doc/compliance/inspection_evidence_export_sop.md",
+        controlled_compliance_relpath("inspection_evidence_export_sop.md"),
         r"/api/audit/evidence-export",
         "检查取证 SOP 未引用受控导出接口",
     ),
     (
-        "doc/compliance/traceability_matrix.md",
+        controlled_compliance_relpath("traceability_matrix.md"),
         r"test_audit_evidence_export_api_unit",
         "追踪矩阵缺少 FDA-02 自动化测试映射",
     ),
@@ -113,13 +115,14 @@ def validate_fda02_repo_state(repo_root: str | Path) -> Fda02ComplianceReport:
                 ComplianceIssue(code="required_mapping_missing", message=message, path=rel_path)
             )
 
-    sop = docs_cache.get("doc/compliance/inspection_evidence_export_sop.md", "")
+    sop_path = controlled_compliance_relpath("inspection_evidence_export_sop.md")
+    sop = docs_cache.get(sop_path, "")
     if "线下交付签收" in sop:
         report.external_gaps.append(
             ComplianceIssue(
                 code="external_chain_of_custody_pending",
                 message="线下导出介质交付签收或检查员取证链路记录仍需在线下受控体系归档",
-                path="doc/compliance/inspection_evidence_export_sop.md",
+                path=sop_path,
             )
         )
 

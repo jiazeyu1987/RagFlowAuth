@@ -133,6 +133,8 @@ describe('DocumentControl page', () => {
     await user.type(screen.getByTestId('document-control-create-title'), 'Controlled SRS');
     await user.type(screen.getByTestId('document-control-create-document-type'), 'srs');
     await user.type(screen.getByTestId('document-control-create-target-kb'), 'Quality KB');
+    await user.type(screen.getByTestId('document-control-create-product-name'), 'Product B');
+    await user.type(screen.getByTestId('document-control-create-registration-ref'), 'REG-002');
     await user.upload(
       screen.getByTestId('document-control-create-file'),
       new File(['hello'], 'srs.md', { type: 'text/markdown' })
@@ -160,6 +162,28 @@ describe('DocumentControl page', () => {
       expect(documentControlApi.transitionRevision).toHaveBeenCalledWith('rev-1', {
         target_status: 'in_review',
       })
+    );
+  });
+
+  it('requires product name and registration reference before creating a document', async () => {
+    const user = userEvent.setup();
+    render(<DocumentControl />);
+
+    await screen.findByTestId('document-control-page');
+
+    await user.type(screen.getByTestId('document-control-create-doc-code'), 'DOC-003');
+    await user.type(screen.getByTestId('document-control-create-title'), 'Controlled WI');
+    await user.type(screen.getByTestId('document-control-create-document-type'), 'wi');
+    await user.type(screen.getByTestId('document-control-create-target-kb'), 'Quality KB');
+    await user.upload(
+      screen.getByTestId('document-control-create-file'),
+      new File(['hello'], 'wi.md', { type: 'text/markdown' })
+    );
+    await user.click(screen.getByTestId('document-control-create-submit'));
+
+    expect(documentControlApi.createDocument).not.toHaveBeenCalled();
+    expect(await screen.findByTestId('document-control-error')).toHaveTextContent(
+      'Please provide the product name.'
     );
   });
 });

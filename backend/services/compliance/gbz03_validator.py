@@ -5,6 +5,8 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 import re
 
+from backend.services.document_control import controlled_compliance_relpath
+
 from .r7_validator import ComplianceIssue
 
 
@@ -30,7 +32,7 @@ class Gbz03ComplianceReport:
 
 
 REQUIRED_DOCS: dict[str, tuple[str, ...]] = {
-    "doc/compliance/release_and_retirement_sop.md": (
+    controlled_compliance_relpath("release_and_retirement_sop.md"): (
         "版本:",
         "更新时间:",
         "/api/knowledge/documents/{doc_id}/retire",
@@ -39,7 +41,7 @@ REQUIRED_DOCS: dict[str, tuple[str, ...]] = {
         "retirement_manifest.json",
         "checksums.json",
     ),
-    "doc/compliance/retirement_plan.md": (
+    controlled_compliance_relpath("retirement_plan.md"): (
         "版本:",
         "更新时间:",
         "当前发布版本:",
@@ -48,7 +50,7 @@ REQUIRED_DOCS: dict[str, tuple[str, ...]] = {
         "归档包校验:",
         "仓库外残余项:",
     ),
-    "doc/compliance/retirement_archive_status.md": (
+    controlled_compliance_relpath("retirement_archive_status.md"): (
         "版本:",
         "更新时间:",
         "最后仓库复核日期:",
@@ -57,19 +59,19 @@ REQUIRED_DOCS: dict[str, tuple[str, ...]] = {
         "仓库外证据状态:",
         "Residual gap 边界:",
     ),
-    "doc/compliance/controlled_document_register.md": (
-        "doc/compliance/retirement_plan.md",
-        "doc/compliance/retirement_archive_status.md",
+    controlled_compliance_relpath("controlled_document_register.md"): (
+        controlled_compliance_relpath("retirement_plan.md"),
+        controlled_compliance_relpath("retirement_archive_status.md"),
     ),
-    "doc/compliance/urs.md": ("URS-015", "GBZ-03"),
-    "doc/compliance/srs.md": ("SRS-015", "URS-015"),
-    "doc/compliance/traceability_matrix.md": ("GBZ-03", "SRS-015"),
-    "doc/compliance/validation_plan.md": (
+    controlled_compliance_relpath("urs.md"): ("URS-015", "GBZ-03"),
+    controlled_compliance_relpath("srs.md"): ("SRS-015", "URS-015"),
+    controlled_compliance_relpath("traceability_matrix.md"): ("GBZ-03", "SRS-015"),
+    controlled_compliance_relpath("validation_plan.md"): (
         "validate_gbz03_repo_compliance.py",
         "test_retired_document_access_unit",
         "test_gbz03_compliance_gate_unit",
     ),
-    "doc/compliance/validation_report.md": (
+    controlled_compliance_relpath("validation_report.md"): (
         "GBZ-03",
         "validate_gbz03_repo_compliance.py",
         "external_retirement_archive_records_pending",
@@ -89,22 +91,22 @@ REQUIRED_FILES: tuple[str, ...] = (
 
 REQUIRED_PATTERNS: tuple[tuple[str, str, str], ...] = (
     (
-        "doc/compliance/traceability_matrix.md",
+        controlled_compliance_relpath("traceability_matrix.md"),
         r"\|\s*GBZ-03\s*\|\s*URS-015\s*\|\s*SRS-015\s*\|",
         "追踪矩阵缺少 GBZ-03 映射",
     ),
     (
-        "doc/compliance/traceability_matrix.md",
+        controlled_compliance_relpath("traceability_matrix.md"),
         r"backend/services/compliance/retired_records\.py",
         "追踪矩阵缺少退役记录实现映射",
     ),
     (
-        "doc/compliance/traceability_matrix.md",
+        controlled_compliance_relpath("traceability_matrix.md"),
         r"backend\.tests\.test_retired_document_access_unit",
         "追踪矩阵缺少退役记录测试映射",
     ),
     (
-        "doc/compliance/release_and_retirement_sop.md",
+        controlled_compliance_relpath("release_and_retirement_sop.md"),
         r"/api/audit/retired-records\b",
         "发布与退役 SOP 缺少退役记录审计检索路径",
     ),
@@ -161,7 +163,7 @@ def validate_gbz03_repo_state(repo_root: str | Path, *, as_of: date | None = Non
                 ComplianceIssue(code="required_mapping_missing", message=message, path=rel_path)
             )
 
-    status_path = "doc/compliance/retirement_archive_status.md"
+    status_path = controlled_compliance_relpath("retirement_archive_status.md")
     status_text = docs_cache.get(status_path, "")
     if status_text:
         repo_status = _extract_value(status_text, "仓库内证据状态:")

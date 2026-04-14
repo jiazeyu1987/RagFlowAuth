@@ -514,6 +514,8 @@ class DocumentControlService:
         clean_type = self._require_text(document_type, "document_type_required")
         clean_target_kb = self._require_text(target_kb_id, "target_kb_id_required")
         clean_created_by = self._require_text(created_by, "created_by_required")
+        clean_product_name = self._require_text(product_name, "product_name_required")
+        clean_registration_ref = self._require_text(registration_ref, "registration_ref_required")
         controlled_document_id = str(uuid.uuid4())
         revision_id = str(uuid.uuid4())
         now_ms = self._now_ms()
@@ -550,8 +552,8 @@ class DocumentControlService:
                     doc_code=clean_doc_code,
                     title=clean_title,
                     document_type=clean_type,
-                    product_name=(str(product_name).strip() if product_name else None),
-                    registration_ref=(str(registration_ref).strip() if registration_ref else None),
+                    product_name=clean_product_name,
+                    registration_ref=clean_registration_ref,
                     target_kb_id=kb_id,
                     target_kb_name=kb_name,
                     revision_id=revision_id,
@@ -724,7 +726,18 @@ class DocumentControlService:
         now_ms = self._now_ms()
         approved_by = revision.approved_by
         approved_at_ms = revision.approved_at_ms
+        reviewed_by = revision.reviewed_by
+        reviewed_at_ms = revision.reviewed_at_ms
+        review_notes = revision.review_notes
+        if target_status == "in_review":
+            reviewed_by = actor_user_id
+            reviewed_at_ms = now_ms
+            review_notes = note
         if target_status == "approved":
+            if not reviewed_by:
+                raise DocumentControlError("document_control_reviewer_required", status_code=409)
+            if reviewed_by == actor_user_id:
+                raise DocumentControlError("document_control_approval_role_conflict", status_code=409)
             approved_by = actor_user_id
             approved_at_ms = now_ms
 
@@ -765,9 +778,9 @@ class DocumentControlService:
             """,
             (
                 target_status,
-                actor_user_id,
-                now_ms,
-                note,
+                reviewed_by,
+                reviewed_at_ms,
+                review_notes,
                 target_status,
                 revision.kb_doc_id,
             ),
@@ -867,9 +880,9 @@ class DocumentControlService:
                 """
                 UPDATE kb_documents
                 SET status = 'obsolete',
-                    reviewed_by = ?,
-                    reviewed_at_ms = ?,
-                    review_notes = ?,
+                    reviewed_by = COALESCE(reviewed_by, ?),
+                    reviewed_at_ms = COALESCE(reviewed_at_ms, ?),
+                    review_notes = COALESCE(review_notes, ?),
                     ragflow_doc_id = NULL,
                     is_current = 0,
                     effective_status = 'obsolete'
@@ -931,9 +944,9 @@ class DocumentControlService:
             """
             UPDATE kb_documents
             SET status = 'effective',
-                reviewed_by = ?,
-                reviewed_at_ms = ?,
-                review_notes = ?,
+                reviewed_by = COALESCE(reviewed_by, ?),
+                reviewed_at_ms = COALESCE(reviewed_at_ms, ?),
+                review_notes = COALESCE(review_notes, ?),
                 ragflow_doc_id = ?,
                 is_current = 1,
                 effective_status = 'effective'
@@ -994,9 +1007,9 @@ class DocumentControlService:
             """
             UPDATE kb_documents
             SET status = 'obsolete',
-                reviewed_by = ?,
-                reviewed_at_ms = ?,
-                review_notes = ?,
+                reviewed_by = COALESCE(reviewed_by, ?),
+                reviewed_at_ms = COALESCE(reviewed_at_ms, ?),
+                review_notes = COALESCE(review_notes, ?),
                 ragflow_doc_id = NULL,
                 is_current = 0,
                 effective_status = 'obsolete'

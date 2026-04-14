@@ -14,7 +14,7 @@ const adminUsername = process.env.E2E_ADMIN_USER || summary?.users?.admin?.usern
 const adminPassword = process.env.E2E_ADMIN_PASS || 'admin123';
 
 function readPageCount(text) {
-  const match = String(text || '').match(/\/\s*(\d+)\s*页/);
+  const match = String(text || '').match(/Page\s+\d+\s+of\s+(\d+)/i);
   return match ? Number(match[1]) : 0;
 }
 
@@ -45,12 +45,12 @@ test('Tools page covers real pagination, internal navigation, external popup, an
 
     const firstPageLeadCard = await page.locator('[data-testid^="tool-card-"]').first().textContent();
     await page.getByTestId('tools-next-page').click();
-    await expect(page.getByTestId('tools-page-indicator')).toContainText('第 2 /');
+    await expect(page.getByTestId('tools-page-indicator')).toContainText('Page 2 of');
     const secondPageLeadCard = await page.locator('[data-testid^="tool-card-"]').first().textContent();
     expect(String(secondPageLeadCard || '').trim()).not.toBe(String(firstPageLeadCard || '').trim());
 
     await page.getByTestId('tools-prev-page').click();
-    await expect(page.getByTestId('tools-page-indicator')).toContainText('第 1 /');
+    await expect(page.getByTestId('tools-page-indicator')).toContainText('Page 1 of');
 
     await page.getByTestId('tool-card-nmpa').click();
     await expect(page).toHaveURL(/\/tools\/nmpa$/);

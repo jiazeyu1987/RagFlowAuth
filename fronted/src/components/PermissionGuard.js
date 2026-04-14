@@ -16,7 +16,7 @@ const PermissionGuard = ({
   const { user, loading, isAuthorized } = useAuth();
 
   if (loading) {
-    return <div>加载中...</div>;
+    return <div>Loading...</div>;
   }
 
   if (!user) {
@@ -39,3 +39,4 @@ const PermissionGuard = ({
 };
 
 export default PermissionGuard;
+

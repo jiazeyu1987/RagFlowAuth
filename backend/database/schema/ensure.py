@@ -65,6 +65,7 @@ from .supplier_qualification import ensure_supplier_qualification_tables
 from .training_compliance import ensure_training_compliance_tables
 from .training_ack import ensure_training_ack_tables
 from .governance_closure import ensure_governance_closure_tables
+from .batch_records import ensure_batch_records_tables
 from .watermark_policy import ensure_watermark_policy_tables
 from .operation_approval import (
     ensure_operation_approval_tables,
@@ -174,6 +175,7 @@ def ensure_schema(db_path: str | Path) -> None:
         ensure_training_compliance_tables(conn)
         ensure_training_ack_tables(conn)
         ensure_governance_closure_tables(conn)
+        ensure_batch_records_tables(conn)
         ensure_watermark_policy_tables(conn)
 
         # Cross-table KB reference columns & indexes

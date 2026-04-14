@@ -44,6 +44,7 @@ def _build_router_registration_specs() -> tuple[RouterRegistrationSpec, ...]:
     from backend.app.modules.auth.router import router as auth_router
     from backend.app.modules.chat.router import router as chat_router
     from backend.app.modules.change_control.router import router as change_control_router
+    from backend.app.modules.batch_records.router import router as batch_records_router
     from backend.app.modules.complaints.router import router as complaints_router
     from backend.app.modules.data_security.router import router as data_security_router
     from backend.app.modules.diagnostics.router import router as diagnostics_router
@@ -83,6 +84,7 @@ def _build_router_registration_specs() -> tuple[RouterRegistrationSpec, ...]:
         RouterRegistrationSpec(prefix="/api", tags=("Admin Notifications",), router=admin_notifications_router),
         RouterRegistrationSpec(prefix="/api", tags=("Emergency Changes",), router=emergency_changes_router),
         RouterRegistrationSpec(prefix="/api", tags=("Change Control",), router=change_control_router),
+        RouterRegistrationSpec(prefix="/api", tags=("Batch Records",), router=batch_records_router),
         RouterRegistrationSpec(prefix="/api", tags=("Equipment",), router=equipment_router),
         RouterRegistrationSpec(prefix="/api", tags=("Metrology",), router=metrology_router),
         RouterRegistrationSpec(prefix="/api", tags=("Maintenance",), router=maintenance_router),

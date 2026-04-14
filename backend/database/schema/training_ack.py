@@ -19,6 +19,9 @@ def ensure_training_ack_tables(conn: sqlite3.Connection) -> None:
                 assignee_user_id TEXT NOT NULL,
                 assigned_by_user_id TEXT NOT NULL,
                 assigned_at_ms INTEGER NOT NULL,
+                required_read_ms INTEGER NOT NULL DEFAULT 900000,
+                read_progress_ms INTEGER NOT NULL DEFAULT 0,
+                last_read_ping_at_ms INTEGER,
                 min_ack_at_ms INTEGER NOT NULL,
                 acknowledged_at_ms INTEGER,
                 decision TEXT,
@@ -39,6 +42,9 @@ def ensure_training_ack_tables(conn: sqlite3.Connection) -> None:
     add_column_if_missing(conn, "training_assignments", "assignee_user_id TEXT")
     add_column_if_missing(conn, "training_assignments", "assigned_by_user_id TEXT")
     add_column_if_missing(conn, "training_assignments", "assigned_at_ms INTEGER")
+    add_column_if_missing(conn, "training_assignments", "required_read_ms INTEGER NOT NULL DEFAULT 900000")
+    add_column_if_missing(conn, "training_assignments", "read_progress_ms INTEGER NOT NULL DEFAULT 0")
+    add_column_if_missing(conn, "training_assignments", "last_read_ping_at_ms INTEGER")
     add_column_if_missing(conn, "training_assignments", "min_ack_at_ms INTEGER")
     add_column_if_missing(conn, "training_assignments", "acknowledged_at_ms INTEGER")
     add_column_if_missing(conn, "training_assignments", "decision TEXT")

@@ -1,0 +1,113 @@
+{
+  "schema_version": 2,
+  "task_id": "task-3123a2e437-20260414T100514",
+  "mode": "full",
+  "status": "ready_for_execution",
+  "current_phase": "P1",
+  "phase_statuses": [
+    {
+      "phase_id": "P1",
+      "title": "统一全局壳层与共享加载/错误文案",
+      "status": "pending",
+      "objective": "将全局 Suspense / 权限守卫 / 用户管理 / 上传页 / OnlyOffice 预览中用户可见的英文 loading、error、empty copy 统一为正式中文。",
+      "owned_paths": [],
+      "dependencies": [],
+      "deliverables": [],
+      "evidence_expectation": "对应单元测试通过，real-browser 验证能看到这些中文文案并留有截图、trace 或视频证据。",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P1-AC1",
+          "text": "`App` 与 `PermissionGuard` 的加载态对用户显示正式中文，不再出现 `Loading...` 这类英文壳层文案。",
+          "status": "pending",
+          "evidence": []
+        },
+        {
+          "ac_id": "P1-AC2",
+          "text": "`UserManagement`、`KnowledgeUpload` 与 `OnlyOfficeViewer` 的用户可见错误/加载/空态文案为正式中文。",
+          "status": "pending",
+          "evidence": []
+        }
+      ],
+      "evidence": [],
+      "notes": "",
+      "last_reviewed_at": null
+    },
+    {
+      "phase_id": "P2",
+      "title": "统一 Tools 页面用户可见文案",
+      "status": "pending",
+      "objective": "将 `Tools` 页面中用户可见的英文描述、分页、空态和操作提示统一为正式中文。",
+      "owned_paths": [],
+      "dependencies": [],
+      "deliverables": [],
+      "evidence_expectation": "单元测试与 Playwright real-browser 测试都覆盖 `Tools` 页面中文文案和分页可见性。",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P2-AC1",
+          "text": "`/tools` 页面上的标题、描述、分页、空态与错误提示均为正式中文，用户仍可看到必要的专有名词，但不再看到英文自然语言描述。",
+          "status": "pending",
+          "evidence": []
+        },
+        {
+          "ac_id": "P2-AC2",
+          "text": "`/tools` 页面的分页切换、空态与工具打开行为保持不变。",
+          "status": "pending",
+          "evidence": []
+        }
+      ],
+      "evidence": [],
+      "notes": "",
+      "last_reviewed_at": null
+    },
+    {
+      "phase_id": "P3",
+      "title": "统一既有业务页与共享用户错误映射文案",
+      "status": "pending",
+      "objective": "将 `/unauthorized`、质量体系壳层、WS04、WS08 以及共享错误映射中的用户可见英文统一为正式中文。",
+      "owned_paths": [],
+      "dependencies": [],
+      "deliverables": [],
+      "evidence_expectation": "单元测试覆盖共享错误映射，real-browser 覆盖上述路由并保存可回溯证据文件。",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P3-AC1",
+          "text": "`/unauthorized`、`/quality-system`、`/quality-system/change-control`、`/quality-system/governance-closure` 的用户可见文案为正式中文。",
+          "status": "pending",
+          "evidence": []
+        },
+        {
+          "ac_id": "P3-AC2",
+          "text": "`mapUserFacingErrorMessage` 对已知错误码与前缀返回正式中文，不再输出英文默认提示。",
+          "status": "pending",
+          "evidence": []
+        }
+      ],
+      "evidence": [],
+      "notes": "",
+      "last_reviewed_at": null
+    }
+  ],
+  "planner_review_status": "approved",
+  "test_status": "not_started",
+  "blocking_prereqs": [],
+  "iteration_counts": {
+    "planner_revisions": 2,
+    "executor_loops": 0,
+    "test_loops": 0
+  },
+  "created_at": "2026-04-14T10:05:15",
+  "updated_at": "2026-04-14T12:40:54",
+  "branch": "int_latest",
+  "baseline_revision": "18cc2c0714766fab865cfec9781944fa1b3b8d21",
+  "workspace_root": "D:\\ProjectPackage\\RagflowAuth",
+  "tasks_root": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks",
+  "task_dir": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\task-3123a2e437-20260414T100514",
+  "goal": "解决当前前端里的乱码问题,英文不是中文的问题,描述不正式的问题",
+  "artifacts": {
+    "prd": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\task-3123a2e437-20260414T100514\\prd.md",
+    "test_plan": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\task-3123a2e437-20260414T100514\\test-plan.md",
+    "task_state": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\task-3123a2e437-20260414T100514\\task-state.json",
+    "execution_log": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\task-3123a2e437-20260414T100514\\execution-log.md",
+    "test_report": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\task-3123a2e437-20260414T100514\\test-report.md"
+  }
+}

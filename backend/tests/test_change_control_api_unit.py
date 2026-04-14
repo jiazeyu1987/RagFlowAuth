@@ -71,10 +71,10 @@ class TestChangeControlApiUnit(unittest.TestCase):
             ensure_schema(db_path)
             users = {
                 "admin-1": _make_user(user_id="admin-1", role="admin"),
-                "owner-1": _make_user(user_id="owner-1", role="reviewer"),
-                "eval-1": _make_user(user_id="eval-1", role="reviewer"),
-                "qa-1": _make_user(user_id="qa-1", role="reviewer"),
-                "ops-1": _make_user(user_id="ops-1", role="reviewer"),
+                "owner-1": _make_user(user_id="owner-1", role="sub_admin"),
+                "eval-1": _make_user(user_id="eval-1", role="sub_admin"),
+                "qa-1": _make_user(user_id="qa-1", role="sub_admin"),
+                "ops-1": _make_user(user_id="ops-1", role="sub_admin"),
             }
             deps = _Deps(db_path=db_path, users=users)
 
@@ -181,8 +181,8 @@ class TestChangeControlApiUnit(unittest.TestCase):
             ensure_schema(db_path)
             users = {
                 "admin-1": _make_user(user_id="admin-1", role="admin"),
-                "owner-1": _make_user(user_id="owner-1", role="reviewer"),
-                "eval-1": _make_user(user_id="eval-1", role="reviewer"),
+                "owner-1": _make_user(user_id="owner-1", role="sub_admin"),
+                "eval-1": _make_user(user_id="eval-1", role="sub_admin"),
             }
             deps = _Deps(db_path=db_path, users=users)
 
@@ -242,8 +242,8 @@ class TestChangeControlApiUnit(unittest.TestCase):
             ensure_schema(db_path)
             users = {
                 "admin-1": _make_user(user_id="admin-1", role="admin"),
-                "owner-1": _make_user(user_id="owner-1", role="reviewer"),
-                "eval-1": _make_user(user_id="eval-1", role="reviewer"),
+                "owner-1": _make_user(user_id="owner-1", role="sub_admin"),
+                "eval-1": _make_user(user_id="eval-1", role="sub_admin"),
             }
             deps = _Deps(db_path=db_path, users=users)
 

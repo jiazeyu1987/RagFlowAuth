@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException, Response
 from pydantic import BaseModel
 
-from backend.app.core.authz import AdminOnly, AuthContextDep
+from backend.app.core.authz import AuthContextDep, assert_capability
 from backend.services.maintenance import MaintenanceServiceError
 
 router = APIRouter()
@@ -66,7 +66,8 @@ def _audit(ctx: AuthContextDep, *, action: str, event_type: str, resource_id: st
 
 
 @router.post("/maintenance/records")
-def create_maintenance_record(body: MaintenanceRecordBody, ctx: AuthContextDep, _: AdminOnly):
+def create_maintenance_record(body: MaintenanceRecordBody, ctx: AuthContextDep):
+    assert_capability(ctx, resource="maintenance", action="plan")
     _ensure_user_exists(ctx, body.responsible_user_id, field_name="responsible_user_id")
     service = _service_from_ctx(ctx)
     try:
@@ -100,11 +101,11 @@ def create_maintenance_record(body: MaintenanceRecordBody, ctx: AuthContextDep, 
 @router.get("/maintenance/records")
 def list_maintenance_records(
     ctx: AuthContextDep,
-    _: AdminOnly,
     limit: int = 100,
     equipment_id: str | None = None,
     status: str | None = None,
 ):
+    assert_capability(ctx, resource="maintenance", action="plan")
     service = _service_from_ctx(ctx)
     try:
         items = service.list_records(limit=limit, equipment_id=equipment_id, status=status)
@@ -114,7 +115,8 @@ def list_maintenance_records(
 
 
 @router.post("/maintenance/records/{record_id}/record")
-def record_maintenance_execution(record_id: str, body: MaintenanceExecutionBody, ctx: AuthContextDep, _: AdminOnly):
+def record_maintenance_execution(record_id: str, body: MaintenanceExecutionBody, ctx: AuthContextDep):
+    assert_capability(ctx, resource="maintenance", action="record")
     service = _service_from_ctx(ctx)
     before = service.get_record(record_id)
     try:
@@ -143,7 +145,8 @@ def record_maintenance_execution(record_id: str, body: MaintenanceExecutionBody,
 
 
 @router.post("/maintenance/records/{record_id}/approve")
-def approve_maintenance_record(record_id: str, body: MaintenanceDecisionBody, ctx: AuthContextDep, _: AdminOnly):
+def approve_maintenance_record(record_id: str, body: MaintenanceDecisionBody, ctx: AuthContextDep):
+    assert_capability(ctx, resource="maintenance", action="approve")
     service = _service_from_ctx(ctx)
     before = service.get_record(record_id)
     try:
@@ -167,7 +170,8 @@ def approve_maintenance_record(record_id: str, body: MaintenanceDecisionBody, ct
 
 
 @router.post("/maintenance/reminders/dispatch")
-def dispatch_maintenance_reminders(ctx: AuthContextDep, _: AdminOnly, window_days: int = 7):
+def dispatch_maintenance_reminders(ctx: AuthContextDep, window_days: int = 7):
+    assert_capability(ctx, resource="maintenance", action="plan")
     service = _service_from_ctx(ctx)
     try:
         result = service.dispatch_due_reminders(actor_user_id=str(ctx.user.user_id), window_days=window_days)
@@ -188,11 +192,11 @@ def dispatch_maintenance_reminders(ctx: AuthContextDep, _: AdminOnly, window_day
 @router.get("/maintenance/records/export")
 def export_maintenance_records(
     ctx: AuthContextDep,
-    _: AdminOnly,
     limit: int = 200,
     equipment_id: str | None = None,
     status: str | None = None,
 ):
+    assert_capability(ctx, resource="maintenance", action="plan")
     service = _service_from_ctx(ctx)
     try:
         content = service.export_records_csv(limit=limit, equipment_id=equipment_id, status=status)

@@ -14,7 +14,7 @@ def _write(path: Path, content: str) -> None:
 
 def _build_repo(root: Path) -> None:
     docs = {
-        "doc/compliance/emergency_change_sop.md": """# 紧急变更 SOP
+        "docs/compliance/emergency_change_sop.md": """# 紧急变更 SOP
 
 版本: v1.0
 更新时间: 2026-04-03
@@ -25,7 +25,7 @@ risk_control
 post_review_summary
 capa_actions
 """,
-        "doc/compliance/emergency_change_status.md": """# 紧急变更状态
+        "docs/compliance/emergency_change_status.md": """# 紧急变更状态
 
 版本: v1.0
 更新时间: 2026-04-03
@@ -35,37 +35,37 @@ capa_actions
 仓库外证据状态: pending_archive
 Residual gap 边界: 线下紧急变更执行单、签字版授权和产品评审记录仍需在线下归档
 """,
-        "doc/compliance/change_control_sop.md": """# 变更控制 SOP
+        "docs/compliance/change_control_sop.md": """# 变更控制 SOP
 
 紧急变更
 先授权
 后部署
 事后评审
 """,
-        "doc/compliance/urs.md": "# URS\n\n| URS ID | 对应需求 | 用户需求 |\n|---|---|---|\n| URS-014 | GBZ-02 | 紧急变更必须先授权后部署再补齐评审。 |\n",
-        "doc/compliance/srs.md": "# SRS\n\n| SRS ID | 对应 URS | 软件要求 | 主要实现证据 |\n|---|---|---|---|\n| SRS-014 | URS-014 | 紧急变更流程落库。 | `backend/services/emergency_change.py` |\n",
-        "doc/compliance/traceability_matrix.md": """# TM
+        "docs/compliance/urs.md": "# URS\n\n| URS ID | 对应需求 | 用户需求 |\n|---|---|---|\n| URS-014 | GBZ-02 | 紧急变更必须先授权后部署再补齐评审。 |\n",
+        "docs/compliance/srs.md": "# SRS\n\n| SRS ID | 对应 URS | 软件要求 | 主要实现证据 |\n|---|---|---|---|\n| SRS-014 | URS-014 | 紧急变更流程落库。 | `backend/services/emergency_change.py` |\n",
+        "docs/compliance/traceability_matrix.md": """# TM
 
 | 需求 ID | URS | SRS | 实现证据 | 测试证据 | 文档证据 | 状态 |
 |---|---|---|---|---|---|---|
-| GBZ-02 | URS-014 | SRS-014 | `backend/services/emergency_change.py` | `backend.tests.test_emergency_change_api_unit`, `backend.tests.test_gbz02_compliance_gate_unit` | `doc/compliance/emergency_change_sop.md` | 已验证（仓库内） |
+| GBZ-02 | URS-014 | SRS-014 | `backend/services/emergency_change.py` | `backend.tests.test_emergency_change_api_unit`, `backend.tests.test_gbz02_compliance_gate_unit` | `docs/compliance/emergency_change_sop.md` | 已验证（仓库内） |
 """,
-        "doc/compliance/validation_plan.md": """# VP
+        "docs/compliance/validation_plan.md": """# VP
 
 validate_gbz02_repo_compliance.py
 test_emergency_change_api_unit
 test_gbz02_compliance_gate_unit
 """,
-        "doc/compliance/validation_report.md": """# VR
+        "docs/compliance/validation_report.md": """# VR
 
 GBZ-02
 validate_gbz02_repo_compliance.py
 external_emergency_change_execution_pending
 """,
-        "doc/compliance/controlled_document_register.md": """# 受控文档登记表
+        "docs/compliance/controlled_document_register.md": """# 受控文档登记表
 
-doc/compliance/emergency_change_sop.md
-doc/compliance/emergency_change_status.md
+docs/compliance/emergency_change_sop.md
+docs/compliance/emergency_change_status.md
 """,
     }
     for rel_path, content in docs.items():
@@ -95,7 +95,7 @@ class TestGbz02ComplianceGateUnit(unittest.TestCase):
         try:
             root = Path(tmp)
             _build_repo(root)
-            (root / "doc/compliance/traceability_matrix.md").write_text("# TM\n", encoding="utf-8")
+            (root / "docs/compliance/traceability_matrix.md").write_text("# TM\n", encoding="utf-8")
             report = validate_gbz02_repo_state(root)
             self.assertFalse(report.passed)
             self.assertTrue(any(item.code == "required_mapping_missing" for item in report.blocking_issues))

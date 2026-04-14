@@ -15,7 +15,7 @@ def _write(path: Path, content: str) -> None:
 
 def _build_repo(root: Path) -> None:
     docs = {
-        "doc/compliance/supplier_assessment.md": """# 供应商与第三方组件评估
+        "docs/compliance/supplier_assessment.md": """# 供应商与第三方组件评估
 
 版本: v1.0
 更新时间: 2026-04-03
@@ -25,7 +25,7 @@ OTSS
 已知问题
 再确认触发
 """,
-        "doc/compliance/environment_qualification_status.md": """# 环境确认状态
+        "docs/compliance/environment_qualification_status.md": """# 环境确认状态
 
 版本: v1.0
 更新时间: 2026-04-03
@@ -38,30 +38,30 @@ IQ
 OQ
 PQ
 """,
-        "doc/compliance/controlled_document_register.md": """# 受控文档登记表
+        "docs/compliance/controlled_document_register.md": """# 受控文档登记表
 
 版本: v1.0
 更新时间: 2026-04-03
 当前发布版本: 2.0.0
 
-doc/compliance/supplier_assessment.md
-doc/compliance/environment_qualification_status.md
+docs/compliance/supplier_assessment.md
+docs/compliance/environment_qualification_status.md
 """,
-        "doc/compliance/urs.md": "# URS\n\nURS-016 GBZ-04\n",
-        "doc/compliance/srs.md": "# SRS\n\nSRS-016 URS-016\n",
-        "doc/compliance/traceability_matrix.md": """# TM
+        "docs/compliance/urs.md": "# URS\n\nURS-016 GBZ-04\n",
+        "docs/compliance/srs.md": "# SRS\n\nSRS-016 URS-016\n",
+        "docs/compliance/traceability_matrix.md": """# TM
 
 | 需求 ID | URS | SRS | 实现证据 | 测试证据 | 文档证据 | 状态 |
 |---|---|---|---|---|---|---|
-| GBZ-04 | URS-016 | SRS-016 | `backend/services/supplier_qualification.py` | `backend.tests.test_supplier_qualification_api_unit`, `backend.tests.test_gbz04_compliance_gate_unit` | `doc/compliance/supplier_assessment.md` | 已验证（仓库内） |
+| GBZ-04 | URS-016 | SRS-016 | `backend/services/supplier_qualification.py` | `backend.tests.test_supplier_qualification_api_unit`, `backend.tests.test_gbz04_compliance_gate_unit` | `docs/compliance/supplier_assessment.md` | 已验证（仓库内） |
 """,
-        "doc/compliance/validation_plan.md": """# VP
+        "docs/compliance/validation_plan.md": """# VP
 
 validate_gbz04_repo_compliance.py
 test_supplier_qualification_api_unit
 test_gbz04_compliance_gate_unit
 """,
-        "doc/compliance/validation_report.md": """# VR
+        "docs/compliance/validation_report.md": """# VR
 
 GBZ-04
 validate_gbz04_repo_compliance.py
@@ -129,7 +129,7 @@ class TestGbz04ComplianceGateUnit(unittest.TestCase):
         try:
             root = Path(tmp)
             _build_repo(root)
-            (root / "doc/compliance/traceability_matrix.md").write_text("# TM\n", encoding="utf-8")
+            (root / "docs/compliance/traceability_matrix.md").write_text("# TM\n", encoding="utf-8")
             report = validate_gbz04_repo_state(root, as_of=date(2026, 4, 3))
             self.assertFalse(report.passed)
             self.assertTrue(any(item.code == "required_mapping_missing" for item in report.blocking_issues))

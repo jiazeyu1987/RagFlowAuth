@@ -14,7 +14,7 @@ def _write(path: Path, content: str) -> None:
 
 def _build_repo(root: Path) -> None:
     _write(
-        root / "doc/compliance/inspection_evidence_export_sop.md",
+        root / "docs/compliance/inspection_evidence_export_sop.md",
         """# 检查取证导出 SOP
 版本: v1.0
 更新时间: 2026-04-02
@@ -28,7 +28,7 @@ def _build_repo(root: Path) -> None:
 """,
     )
     _write(
-        root / "doc/compliance/urs.md",
+        root / "docs/compliance/urs.md",
         """# URS
 版本: v1.0
 更新时间: 2026-04-02
@@ -36,7 +36,7 @@ def _build_repo(root: Path) -> None:
 """,
     )
     _write(
-        root / "doc/compliance/srs.md",
+        root / "docs/compliance/srs.md",
         """# SRS
 版本: v1.0
 更新时间: 2026-04-02
@@ -44,11 +44,11 @@ def _build_repo(root: Path) -> None:
 """,
     )
     _write(
-        root / "doc/compliance/traceability_matrix.md",
+        root / "docs/compliance/traceability_matrix.md",
         """# Matrix
 版本: v1.0
 更新时间: 2026-04-02
-| FDA-02 | URS-011 | SRS-011 | `backend/services/audit/evidence_export.py` | `backend.tests.test_audit_evidence_export_api_unit` | `doc/compliance/inspection_evidence_export_sop.md` | 已验证 |
+| FDA-02 | URS-011 | SRS-011 | `backend/services/audit/evidence_export.py` | `backend.tests.test_audit_evidence_export_api_unit` | `docs/compliance/inspection_evidence_export_sop.md` | 已验证 |
 """,
     )
     for rel in (
@@ -73,7 +73,7 @@ class TestFda02ComplianceGateUnit(unittest.TestCase):
         try:
             root = Path(tmp)
             _build_repo(root)
-            (root / "doc/compliance/traceability_matrix.md").write_text(
+            (root / "docs/compliance/traceability_matrix.md").write_text(
                 "# Matrix\n版本: v1.0\n更新时间: 2026-04-02\n",
                 encoding="utf-8",
             )

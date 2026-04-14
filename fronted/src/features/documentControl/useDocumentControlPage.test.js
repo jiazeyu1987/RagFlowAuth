@@ -159,7 +159,7 @@ describe('useDocumentControlPage', () => {
     await act(async () => {
       await result.current.handleCreateDocument();
     });
-    expect(result.current.error).toBe('file_required');
+    expect(result.current.error).toBe('product_name_required');
 
     act(() => {
       result.current.setDocumentForm((previous) => ({
@@ -168,6 +168,8 @@ describe('useDocumentControlPage', () => {
         title: 'Controlled SRS',
         document_type: 'srs',
         target_kb_id: 'Quality KB',
+        product_name: 'Product B',
+        registration_ref: 'REG-002',
         file: new File(['hello'], 'srs.md', { type: 'text/markdown' }),
       }));
     });

@@ -118,7 +118,11 @@ describe('Layout permission group navigation visibility', () => {
       canViewKbConfig: () => true,
       canViewTools: () => true,
       hasRole: () => false,
-      isAuthorized: ({ allowedRoles }) => !allowedRoles,
+      isAuthorized: ({ allowedRoles, permission }) => {
+        if (allowedRoles) return false;
+        if (permission?.resource === 'quality_system') return false;
+        return true;
+      },
     });
 
     render(

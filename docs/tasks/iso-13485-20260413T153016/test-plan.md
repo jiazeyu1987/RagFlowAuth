@@ -7,7 +7,12 @@
 
 ## Test Scope
 
-本测试计划只验证本次交付的整改文档包是否完整、真实、可执行，不验证后续功能是否已经实现。
+本测试计划验证以下交付：
+
+- P1：ISO 13485 整改文档包（`prd.md` / `test-plan.md` 的完整性、真实性、可执行性）。
+- P2-P3：质量 capability 合同冻结与后端 API 鉴权收敛（以 capability 为主授权入口，fail-fast 403，无角色名 fallback），并用后端单测验证。
+- P4：批记录后端闭环（模板/执行/步骤写入/签名/复核/导出 + 审计留痕），并用后端单测验证。
+- P5：批记录前端工作区与浏览器验证（Jest + Playwright 证据）。
 
 本轮测试应覆盖：
 
@@ -16,12 +21,16 @@
 - `prd.md` 是否对`体系文件`治理中枢给出可落地的页面、权限和流程设计。
 - `prd.md` 是否明确了优先级、路线图、阻断条件和禁止 fallback 的原则。
 - `test-plan.md` 是否能让独立评审人复现实锤证据并给出通过/不通过结论。
+- 质量 capability 合同（资源集合与 action 集）在前后端常量中一致，且 `auth/me` capability 快照结构稳定可消费。
+- 质量域相关 API 鉴权不再依赖 `AdminOnly` 作为默认门，而是统一走 capability 校验，并且未授权返回明确 `403`。
+- 批记录后端能力（模板/执行/步骤/签名/复核/导出）具备最小闭环与明确的拒绝语义，并写入审计日志。
+- 批记录前端入口受 capability 守卫，Jest 覆盖主要交互，并通过 Playwright 浏览器验证产生证据。
 
 以下内容不在本轮范围内：
 
 - 实际新增 `体系文件` 页面。
 - 实际迁移受控文件到新主根。
-- 实际实现设备、变更、计量、批记录等业务功能。
+- 实现设备、变更、计量、维护、投诉、内审、管理评审等业务域的完整能力与页面交互闭环（本轮仍只验证其 capability 合同与 API 鉴权收敛）。
 
 ## Environment
 
@@ -30,9 +39,13 @@
 - 依赖工具：
   - `rg`
   - `python`
+  - `python -m pytest`
+  - `node` / `npm`
+  - `playwright`（通过 `npx playwright`）
 - 说明：
   - 若 `rg` 不可用，评审人必须记录缺失前提并判定为 `blocked`。
   - 若需执行合规校验基线命令而 `python` 不可用，也必须记录缺失前提并判定为 `blocked`。
+  - 若需验证 P5（Jest / Playwright）而 `node`/`npm` 或 `playwright` 不可用，评审人必须记录缺失前提并判定为 `blocked`（不得以跳过代替通过）。
 
 ## Accounts and Fixtures
 
@@ -95,8 +108,8 @@ Get-Content -Raw backend\app\core\permission_models.py
 
 期望：
 
-- 现有 capability 主要围绕知识库、工具、聊天、用户管理等资源。
-- 尚未出现 `quality_system`、`document_control`、`change_control`、`equipment_lifecycle` 等质量域资源。
+- capability 覆盖知识库、工具、聊天、用户管理等资源，并已扩展质量域资源（`quality_system`、`document_control`、`training_ack`、`change_control`、`equipment_lifecycle`、`metrology`、`maintenance`、`audit_events` 等）。
+- 前后端 `QUALITY_CAPABILITY_ACTIONS` 的资源与 action 集保持一致，前端可无二义性消费 `auth/me` capability 快照。
 
 ### 5. 核对审计、站内信、电子签名基础能力
 
@@ -126,6 +139,63 @@ python scripts\validate_gbz05_repo_compliance.py --json
 Fail-fast 规则：
 
 - 若命令无法执行，评审人应明确记录是工具缺失、环境缺失还是仓库事实变化，不能把失败当作通过。
+
+### 7. 运行质量权限与 API 鉴权单测（P2-P3）
+
+```powershell
+python -m pytest `
+  backend/tests/test_auth_me_service_unit.py `
+  backend/tests/test_document_control_api_unit.py `
+  backend/tests/test_training_compliance_api_unit.py `
+  backend/tests/test_change_control_api_unit.py `
+  backend/tests/test_equipment_api_unit.py `
+  backend/tests/test_metrology_api_unit.py `
+  backend/tests/test_maintenance_api_unit.py `
+  backend/tests/test_audit_events_api_unit.py -q
+```
+
+期望：
+
+- 全部用例通过。
+- 未授权访问返回明确 `403`，且 detail 不出现 `admin_required` 作为兼容兜底。
+- 至少包含非 `admin`（质量子管理员）成功访问质量域 API 的用例。
+
+### 8. 运行批记录后端单测（P4）
+
+```powershell
+python -m pytest backend/tests/test_batch_records_api_unit.py -q
+```
+
+期望：
+
+- 用例通过。
+- 未授权路径返回明确 `403`。
+- 签名复用电子签名能力，关键动作写入审计日志。
+
+### 9. 运行批记录前端 Jest 单测（P5）
+
+```powershell
+Set-Location 'D:\ProjectPackage\RagflowAuth\fronted'
+$env:CI='true'
+npm test -- --watch=false --runInBand src/pages/QualitySystemBatchRecords.test.js
+```
+
+期望：
+
+- 用例通过。
+- 页面渲染、能力守卫与主要交互具备覆盖。
+
+### 10. 运行批记录 Playwright 浏览器验证（P5）
+
+```powershell
+Set-Location 'D:\ProjectPackage\RagflowAuth\fronted'
+npx playwright test --config=playwright.docs.config.js docs.quality-system.batch-records.spec.js --workers=1
+```
+
+期望：
+
+- 用例通过。
+- 至少产生截图、trace、HAR 或等效证据文件。
 
 ## Test Cases
 
@@ -171,6 +241,55 @@ Fail-fast 规则：
 - Command: 阅读 `docs/tasks/iso-13485-20260413T153016/test-plan.md`。
 - Expected: 测试计划包含具体命令、可执行的人工校验步骤、评审独立性约束和明确的通过/不通过标准。
 
+### T7: 质量 capability 合同与 `auth/me` 快照稳定
+
+- Covers: P2-AC1; P2-AC2
+- Level: automated (pytest)
+- Command: `python -m pytest backend/tests/test_auth_me_service_unit.py -q`
+- Expected: 用例通过；并断言前后端质量 capability 资源/action 集一致，且质量子管理员（非 `admin`）在 `auth/me` 返回真实质量 action。
+
+### T8: 未授权访问质量域 API 明确拒绝（403）
+
+- Covers: P2-AC3; P3-AC2
+- Level: automated (pytest)
+- Command: `python -m pytest backend/tests/test_equipment_api_unit.py backend/tests/test_metrology_api_unit.py backend/tests/test_maintenance_api_unit.py -q`
+- Expected: 非授权用户访问质量域写接口返回 `403`，detail 不为 `admin_required`。
+
+### T9: 非 admin（质量子管理员）可基于 capability 执行质量域动作
+
+- Covers: P3-AC2
+- Level: automated (pytest)
+- Command: `python -m pytest backend/tests/test_document_control_api_unit.py backend/tests/test_training_compliance_api_unit.py backend/tests/test_change_control_api_unit.py -q`
+- Expected: 至少一个非 `admin` 用户成功调用质量域写接口；其他未授权路径返回明确 `403`。
+
+### T10: 建议质量域回归命令全量通过
+
+- Covers: P3-AC1; P3-AC3
+- Level: automated (pytest)
+- Command: 执行“运行质量权限与 API 鉴权单测（P2-P3）”中的 pytest 命令。
+- Expected: 全部通过，且输出无静默跳过/伪通过。
+
+### T11: 批记录后端闭环通过单测
+
+- Covers: P4-AC1; P4-AC2; P4-AC3; P4-AC4
+- Level: automated (pytest)
+- Command: `python -m pytest backend/tests/test_batch_records_api_unit.py -q`
+- Expected: 覆盖模板、执行、步骤写入、签名/复核、导出与拒绝路径；签名复用电子签名能力；关键动作写入审计日志。
+
+### T12: 批记录前端工作区通过目标 Jest 测试
+
+- Covers: P5-AC1; P5-AC2; P5-AC3
+- Level: automated (jest)
+- Command: `Set-Location 'D:\ProjectPackage\RagflowAuth\fronted'; $env:CI='true'; npm test -- --watch=false --runInBand src/pages/QualitySystemBatchRecords.test.js`
+- Expected: 页面渲染、能力守卫与主要交互通过单测验证。
+
+### T13: 批记录入口 Playwright 浏览器验证通过
+
+- Covers: P5-AC4
+- Level: e2e
+- Command: `Set-Location 'D:\ProjectPackage\RagflowAuth\fronted'; npx playwright test --config=playwright.docs.config.js docs.quality-system.batch-records.spec.js --workers=1`
+- Expected: 真实浏览器中验证质量系统入口与批记录工作区可访问，并覆盖至少一个能力受限场景，且产出截图/trace/HAR 等证据。
+
 ## Coverage Matrix
 
 | Case ID | Area | Scenario | Level | Acceptance IDs | Evidence |
@@ -181,12 +300,19 @@ Fail-fast 规则：
 | T4 | 流程规则 | 文控、培训、变更、设备、批记录、审计等规则足够具体 | manual | P1-AC4 | `test-report.md` |
 | T5 | 实施原则 | 路线图、优先级与 no-fallback 原则明确 | manual | P1-AC5 | `test-report.md` |
 | T6 | 独立评审 | 测试计划本身具备独立评审能力 | manual | P1-AC6 | `test-report.md` |
+| T7 | capability 合同 | 质量 capability 与 `auth/me` 快照稳定可消费 | automated (pytest) | P2-AC1; P2-AC2 | `test-report.md` |
+| T8 | API 鉴权 | 未授权访问质量域 API 返回明确 403 | automated (pytest) | P2-AC3; P3-AC2 | `test-report.md` |
+| T9 | API 鉴权 | 质量子管理员可基于 capability 执行质量域动作 | automated (pytest) | P3-AC2 | `test-report.md` |
+| T10 | 回归 | 质量域相关 pytest 命令全量通过 | automated (pytest) | P3-AC1; P3-AC3 | `test-report.md` |
+| T11 | 批记录后端 | 批记录模板/执行/签名/复核/导出闭环 | automated (pytest) | P4-AC1; P4-AC2; P4-AC3; P4-AC4 | `test-report.md` |
+| T12 | 批记录前端 | 工作区渲染、能力守卫与主要交互 | automated (jest) | P5-AC1; P5-AC2; P5-AC3 | `test-report.md` |
+| T13 | 批记录浏览器 | Playwright 浏览器入口与受限场景验证 | e2e | P5-AC4 | `test-report.md` |
 
 ## Evaluator Independence
 
 - Mode: blind-first-pass
-- Validation surface: real-runtime
-- Required tools: `rg`, PowerShell；`python` 用于可选基线核验
+- Validation surface: real-browser
+- Required tools: rg, PowerShell, python, python -m pytest, node, npm, playwright
 - First-pass readable artifacts: prd.md, test-plan.md
 - Withheld artifacts: execution-log.md, task-state.json
 - Real environment expectation: 评审应以当前真实仓库为准；如果仓库事实变化，应先记录差异再判定结果。
@@ -196,21 +322,35 @@ Fail-fast 规则：
 
 - Pass when:
   - `prd.md` 与 `test-plan.md` 完整、结构正确，并满足 P1-AC1 至 P1-AC6。
+  - 质量 capability 合同冻结与 `auth/me` 快照满足 P2-AC1 至 P2-AC3。
+  - 质量域 API 鉴权收敛与单测满足 P3-AC1 至 P3-AC3。
+  - 批记录后端闭环与单测满足 P4-AC1 至 P4-AC4。
+  - 批记录前端工作区、Jest 与 Playwright 证据满足 P5-AC1 至 P5-AC4。
   - PRD 中的关键事实均能通过仓库命令或会议纪要核实。
   - 文档明确说明本次仅交付整改方案，不伪装成系统已整改完成。
 - Fail when:
   - 文档泛泛而谈，无法对照仓库事实。
   - `体系文件`只被描述为普通文件页，没有治理中枢定位。
   - 缺少文控、培训、变更、设备、批记录、审计等关键要求。
+  - 质量域 API 仍依赖 `AdminOnly` 或角色名硬编码作为主要鉴权入口。
+  - 未授权路径未返回明确 `403`，或出现角色名 fallback 的兼容兜底。
+  - 批记录签名未复用电子签名能力，或关键动作未写入审计日志。
+  - Playwright 用例未产出可复核证据文件（截图/trace/HAR 等）。
   - 文档建议使用双路径兼容、占位文件、静默降级等方式来通过合规门禁。
 - Blocked when:
   - 评审环境缺少必要工具，导致关键事实无法验证。
+  - 缺少 node/npm 或 playwright，导致 P5 无法验证。
 
 ## Regression Scope
 
-本次任务是文档交付，严格来说没有产品代码回归范围。
+P1 是文档交付；P2-P3 包含后端权限与鉴权代码变更，因此需要最小回归范围：
 
-但为支持后续实施，评审人应特别关注下列耦合区域是否在 PRD 中被正确点名：
+- `auth/me` capability 快照结构与前端消费一致性。
+- 质量域路由的 capability 鉴权与 403 拒绝语义。
+- 质量域相关后端单测覆盖与稳定性。
+- 批记录后端与前端工作区的最小闭环测试（pytest/Jest/Playwright）。
+
+为支持后续实施与评审，评审人仍应关注下列耦合区域是否在 PRD 中被正确点名：
 
 - 合规校验脚本与审核包导出。
 - 导航与权限接入模式。

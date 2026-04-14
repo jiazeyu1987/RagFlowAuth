@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from backend.app.core.authz import AdminOnly, AuthContextDep
+from backend.app.core.authz import AuthContextDep, assert_capability
 from backend.services.governance_shared import GovernanceClosureError
 
 router = APIRouter()
@@ -30,7 +30,8 @@ def _service_from_ctx(ctx: AuthContextDep):
 
 
 @router.post("/internal-audits/records")
-def create_internal_audit_record(body: InternalAuditCreateBody, ctx: AuthContextDep, _: AdminOnly):
+def create_internal_audit_record(body: InternalAuditCreateBody, ctx: AuthContextDep):
+    assert_capability(ctx, resource="internal_audit", action="create")
     service = _service_from_ctx(ctx)
     try:
         item = service.create_record(
@@ -61,14 +62,16 @@ def create_internal_audit_record(body: InternalAuditCreateBody, ctx: AuthContext
 
 
 @router.get("/internal-audits/records")
-def list_internal_audit_records(ctx: AuthContextDep, _: AdminOnly, status: str | None = None, limit: int = 100):
+def list_internal_audit_records(ctx: AuthContextDep, status: str | None = None, limit: int = 100):
+    assert_capability(ctx, resource="internal_audit", action="view")
     service = _service_from_ctx(ctx)
     items = service.list_records(status=status, limit=limit)
     return {"items": items, "count": len(items)}
 
 
 @router.post("/internal-audits/records/{audit_id}/complete")
-def complete_internal_audit_record(audit_id: str, body: InternalAuditCompleteBody, ctx: AuthContextDep, _: AdminOnly):
+def complete_internal_audit_record(audit_id: str, body: InternalAuditCompleteBody, ctx: AuthContextDep):
+    assert_capability(ctx, resource="internal_audit", action="complete")
     service = _service_from_ctx(ctx)
     try:
         item = service.complete_record(

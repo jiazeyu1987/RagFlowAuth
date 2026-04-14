@@ -3,6 +3,7 @@ import sqlite3
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import patch
 
 from authx import TokenPayload
 from fastapi import FastAPI, HTTPException, Request
@@ -234,14 +235,14 @@ class TestTrainingComplianceApiUnit(unittest.TestCase):
                         "role_code": "reviewer",
                         "controlled_action": "document_review",
                         "curriculum_version": "2026.05",
-                        "training_material_ref": "doc/compliance/training_matrix.md#tr-100",
+                        "training_material_ref": "docs/compliance/training_matrix.md#tr-100",
                         "effectiveness_required": True,
                         "recertification_interval_days": 180,
                         "active": True,
                     },
                 )
                 self.assertEqual(response.status_code, 403, response.text)
-                self.assertEqual(response.json()["detail"], "admin_required")
+                self.assertEqual(response.json()["detail"], "training_ack_forbidden")
         finally:
             cleanup_dir(td)
 
@@ -334,22 +335,53 @@ class TestTrainingComplianceApiUnit(unittest.TestCase):
                 assignment = generate_resp.json()["items"][0]
                 self.assertEqual(assignment["status"], "pending")
                 self.assertEqual(len(deps.notification_manager.events), 1)
-                conn = sqlite3.connect(db_path)
-                try:
-                    conn.execute(
-                        "UPDATE training_assignments SET min_ack_at_ms = ? WHERE assignment_id = ?",
-                        (0, assignment["assignment_id"]),
-                    )
-                    conn.commit()
-                finally:
-                    conn.close()
-
             reviewer_app = self._build_app(current_user_id="reviewer-1", deps=deps)
             with TestClient(reviewer_app) as reviewer_client:
                 list_resp = reviewer_client.get("/api/training-compliance/assignments")
                 self.assertEqual(list_resp.status_code, 200, list_resp.text)
                 self.assertEqual(list_resp.json()["count"], 1)
                 assignment_id = list_resp.json()["items"][0]["assignment_id"]
+
+                with patch("backend.services.training_compliance.time.time", return_value=1_770_000_000):
+                    start_read_resp = reviewer_client.post(
+                        f"/api/training-compliance/assignments/{assignment_id}/read-progress",
+                        json={"event": "start"},
+                    )
+                self.assertEqual(start_read_resp.status_code, 200, start_read_resp.text)
+                self.assertEqual(start_read_resp.json()["assignment"]["read_progress_ms"], 0)
+
+                with patch("backend.services.training_compliance.time.time", return_value=1_770_000_030):
+                    progress_resp = reviewer_client.post(
+                        f"/api/training-compliance/assignments/{assignment_id}/read-progress",
+                        json={"event": "heartbeat"},
+                    )
+                self.assertEqual(progress_resp.status_code, 200, progress_resp.text)
+                self.assertEqual(progress_resp.json()["assignment"]["read_progress_ms"], 15_000)
+
+                blocked_ack_resp = reviewer_client.post(
+                    f"/api/training-compliance/assignments/{assignment_id}/acknowledge",
+                    json={"decision": "acknowledged"},
+                )
+                self.assertEqual(blocked_ack_resp.status_code, 409, blocked_ack_resp.text)
+                self.assertEqual(blocked_ack_resp.json()["detail"], "training_assignment_read_time_not_reached")
+
+                with patch("backend.services.training_compliance.time.time", return_value=1_770_000_045):
+                    reviewer_client.post(
+                        f"/api/training-compliance/assignments/{assignment_id}/read-progress",
+                        json={"event": "heartbeat"},
+                    )
+                with patch("backend.services.training_compliance.time.time", return_value=1_770_000_060):
+                    reviewer_client.post(
+                        f"/api/training-compliance/assignments/{assignment_id}/read-progress",
+                        json={"event": "heartbeat"},
+                    )
+                with patch("backend.services.training_compliance.time.time", return_value=1_770_000_075):
+                    ready_resp = reviewer_client.post(
+                        f"/api/training-compliance/assignments/{assignment_id}/read-progress",
+                        json={"event": "heartbeat"},
+                    )
+                self.assertEqual(ready_resp.status_code, 200, ready_resp.text)
+                self.assertEqual(ready_resp.json()["assignment"]["read_progress_ms"], 60_000)
 
                 questioned_resp = reviewer_client.post(
                     f"/api/training-compliance/assignments/{assignment_id}/acknowledge",
@@ -358,6 +390,9 @@ class TestTrainingComplianceApiUnit(unittest.TestCase):
                 self.assertEqual(questioned_resp.status_code, 200, questioned_resp.text)
                 thread_id = questioned_resp.json()["assignment"]["question_thread_id"]
                 self.assertTrue(thread_id)
+                questioned_event = deps.notification_manager.events[-1]
+                self.assertEqual(questioned_event["event_type"], "training_assignment_questioned")
+                self.assertEqual(questioned_event["recipients"], [{"user_id": "admin-1"}])
 
                 my_threads = reviewer_client.get("/api/training-compliance/question-threads")
                 self.assertEqual(my_threads.status_code, 200, my_threads.text)
@@ -395,7 +430,7 @@ class TestTrainingComplianceApiUnit(unittest.TestCase):
                         "role_code": "reviewer",
                         "controlled_action": "document_review",
                         "curriculum_version": "2026.04",
-                        "training_material_ref": "doc/compliance/training_matrix.md#tr-001",
+                        "training_material_ref": "docs/compliance/training_matrix.md#tr-001",
                         "effectiveness_required": True,
                         "recertification_interval_days": 365,
                         "active": True,

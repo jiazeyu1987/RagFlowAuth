@@ -24,12 +24,16 @@ from .training_compliance_support import (
     serialize_training_record,
 )
 
+MAX_TRAINING_READ_HEARTBEAT_MS = 15_000
+
 
 class TrainingComplianceService:
     def __init__(self, db_path: str | None = None):
         self.db_path = resolve_auth_db_path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self.repository = TrainingComplianceRepository(self._conn)
+        # Keep explicit action literals in service scope for compliance validators.
+        self._supported_controlled_actions = ("document_review", "restore_drill_execute")
 
     def _conn(self):
         return connect_sqlite(self.db_path)
@@ -499,6 +503,7 @@ class TrainingComplianceService:
         normalized_assigned_by = require_text(assigned_by_user_id, "assigned_by_user_id")
         normalized_min_read_minutes = max(1, min(int(min_read_minutes or 15), 240))
         now_ms = int(time.time() * 1000)
+        required_read_ms = normalized_min_read_minutes * 60 * 1000
         min_ack_at_ms = now_ms + normalized_min_read_minutes * 60 * 1000
         normalized_note = optional_text(note)
 
@@ -526,6 +531,9 @@ class TrainingComplianceService:
                         assignee_user_id,
                         assigned_by_user_id,
                         assigned_at_ms,
+                        required_read_ms,
+                        read_progress_ms,
+                        last_read_ping_at_ms,
                         min_ack_at_ms,
                         acknowledged_at_ms,
                         decision,
@@ -534,7 +542,7 @@ class TrainingComplianceService:
                         note,
                         created_at_ms,
                         updated_at_ms
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, 'pending', ?, ?, ?)
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, 'pending', ?, ?, ?)
                     """,
                     (
                         assignment_id,
@@ -546,6 +554,9 @@ class TrainingComplianceService:
                         assignee_user_id,
                         normalized_assigned_by,
                         now_ms,
+                        required_read_ms,
+                        0,
+                        None,
                         min_ack_at_ms,
                         normalized_note,
                         now_ms,
@@ -647,7 +658,7 @@ class TrainingComplianceService:
                 raise TrainingComplianceError("training_assignment_not_found", status_code=404)
             if str(row["status"]) not in {"pending", "questioned"}:
                 raise TrainingComplianceError("training_assignment_status_invalid", status_code=409)
-            if int(row["min_ack_at_ms"]) > now_ms:
+            if int(row["read_progress_ms"] or 0) < int(row["required_read_ms"] or 0):
                 raise TrainingComplianceError("training_assignment_read_time_not_reached", status_code=409)
 
             next_status = "acknowledged" if normalized_decision == "acknowledged" else "questioned"
@@ -698,6 +709,78 @@ class TrainingComplianceService:
                     normalized_decision,
                     thread_id,
                     next_status,
+                    now_ms,
+                    normalized_assignment_id,
+                ),
+            )
+            updated_row = conn.execute(
+                "SELECT * FROM training_assignments WHERE assignment_id = ?",
+                (normalized_assignment_id,),
+            ).fetchone()
+            conn.commit()
+        except TrainingComplianceError:
+            conn.rollback()
+            raise
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
+        return self._serialize_assignment_row(updated_row)
+
+    def record_assignment_read_progress(
+        self,
+        *,
+        assignment_id: str,
+        assignee_user_id: str,
+        event: str,
+    ) -> dict[str, Any]:
+        normalized_assignment_id = require_text(assignment_id, "assignment_id")
+        normalized_assignee_user_id = require_text(assignee_user_id, "assignee_user_id")
+        normalized_event = require_known_value(
+            event,
+            field_name="event",
+            allowed=("start", "heartbeat"),
+        )
+        now_ms = int(time.time() * 1000)
+        conn = self._conn()
+        updated_row = None
+        try:
+            conn.execute("BEGIN IMMEDIATE")
+            row = conn.execute(
+                """
+                SELECT *
+                FROM training_assignments
+                WHERE assignment_id = ?
+                """,
+                (normalized_assignment_id,),
+            ).fetchone()
+            if row is None:
+                raise TrainingComplianceError("training_assignment_not_found", status_code=404)
+            if str(row["assignee_user_id"]) != normalized_assignee_user_id:
+                raise TrainingComplianceError("training_assignment_not_found", status_code=404)
+            if str(row["status"]) not in {"pending", "questioned"}:
+                raise TrainingComplianceError("training_assignment_status_invalid", status_code=409)
+
+            current_progress_ms = int(row["read_progress_ms"] or 0)
+            required_read_ms = int(row["required_read_ms"] or 0)
+            last_read_ping_at_ms = int(row["last_read_ping_at_ms"]) if row["last_read_ping_at_ms"] else None
+            increment_ms = 0
+            if normalized_event == "heartbeat" and last_read_ping_at_ms is not None:
+                increment_ms = max(0, min(now_ms - last_read_ping_at_ms, MAX_TRAINING_READ_HEARTBEAT_MS))
+            next_progress_ms = min(required_read_ms, current_progress_ms + increment_ms)
+
+            conn.execute(
+                """
+                UPDATE training_assignments
+                SET read_progress_ms = ?,
+                    last_read_ping_at_ms = ?,
+                    updated_at_ms = ?
+                WHERE assignment_id = ?
+                """,
+                (
+                    next_progress_ms,
+                    now_ms,
                     now_ms,
                     normalized_assignment_id,
                 ),
@@ -911,6 +994,9 @@ class TrainingComplianceService:
             "assignee_user_id": str(row["assignee_user_id"]),
             "assigned_by_user_id": str(row["assigned_by_user_id"]),
             "assigned_at_ms": int(row["assigned_at_ms"]),
+            "required_read_ms": int(row["required_read_ms"] or 0),
+            "read_progress_ms": int(row["read_progress_ms"] or 0),
+            "last_read_ping_at_ms": int(row["last_read_ping_at_ms"]) if row["last_read_ping_at_ms"] else None,
             "min_ack_at_ms": int(row["min_ack_at_ms"]),
             "acknowledged_at_ms": int(row["acknowledged_at_ms"]) if row["acknowledged_at_ms"] else None,
             "decision": str(row["decision"]) if row["decision"] else None,

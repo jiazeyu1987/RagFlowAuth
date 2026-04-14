@@ -1,0 +1,247 @@
+{
+  "schema_version": 2,
+  "task_id": "docs-tasks-iso-13485-20260413t153016-prd-md-iso--20260414T122156",
+  "mode": "full",
+  "status": "ready_for_execution",
+  "current_phase": null,
+  "phase_statuses": [
+    {
+      "phase_id": "P1",
+      "title": "质量 capability 与 API 鉴权对齐",
+      "status": "pending",
+      "objective": "让质量子管理员能够基于 capability/resource/action 获得真实授权，并把质量域 API 从 `AdminOnly`/通用 KB 权限改成一致的质量 capability 校验。",
+      "owned_paths": [],
+      "dependencies": [],
+      "deliverables": [],
+      "evidence_expectation": "",
+      "evidence": [],
+      "notes": "",
+      "last_reviewed_at": null,
+      "acceptance_criteria": [
+        {
+          "ac_id": "P1-AC1",
+          "text": "`auth/me` 返回的 capability 快照对质量子管理员不再只有 `quality_system.view`，而是能按质量域资源返回真实可执行 action。",
+          "status": "pending",
+          "evidence": []
+        },
+        {
+          "ac_id": "P1-AC2",
+          "text": "文控、变更、设备、计量、维保、投诉、CAPA、内审、管评、质量审计等路由不再依赖 `AdminOnly` 作为唯一授权入口，而是使用显式质量 capability 校验。",
+          "status": "pending",
+          "evidence": []
+        },
+        {
+          "ac_id": "P1-AC3",
+          "text": "非授权用户访问对应质量域接口会得到明确 `403`，授权用户在不具备全局 `admin` 时仍可完成对应域操作。",
+          "status": "pending",
+          "evidence": []
+        },
+        {
+          "ac_id": "P1-AC4",
+          "text": "与质量 capability 相关的后端单测覆盖授权成功、授权拒绝和 `auth/me` 快照输出。",
+          "status": "pending",
+          "evidence": []
+        }
+      ]
+    },
+    {
+      "phase_id": "P2",
+      "title": "质量系统前端入口与真实页面接线",
+      "status": "completed",
+      "objective": "把 `/quality-system` 从壳层导航补齐为真实工作台，让文控、设备/计量/维保、治理闭环等子模块渲染已有页面或工作区，并由 capability 控制进入与操作。",
+      "owned_paths": [],
+      "dependencies": [],
+      "deliverables": [],
+      "evidence_expectation": "",
+      "evidence": [
+        "execution-log.md#Phase-P2"
+      ],
+      "notes": "",
+      "last_reviewed_at": "2026-04-14T14:40:20",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P2-AC1",
+          "text": "`/quality-system/doc-control`、`/quality-system/equipment`、`/quality-system/batch-records`、`/quality-system/audit` 等子路由不再只显示预留壳层，而是进入真实页面或工作区。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P2"
+          ]
+        },
+        {
+          "ac_id": "P2-AC2",
+          "text": "质量系统导航、模块按钮与子模块访问统一使用 capability 守卫，不绕回角色名硬编码。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P2"
+          ]
+        },
+        {
+          "ac_id": "P2-AC3",
+          "text": "现有 `DocumentControl`、`EquipmentLifecycle`、`MaintenanceManagement`、`MetrologyManagement`、`GovernanceClosureWorkspace` 被接入真实路由并具备对应入口测试。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P2"
+          ]
+        },
+        {
+          "ac_id": "P2-AC4",
+          "text": "前端单测覆盖子路由落点、守卫可见性与关键模块渲染。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P2"
+          ]
+        }
+      ]
+    },
+    {
+      "phase_id": "P3",
+      "title": "文控单一受控根迁移到 `docs/compliance`",
+      "status": "completed",
+      "objective": "把受控合规文档根从 `doc/compliance` 收敛到 `docs/compliance`，并同步运行时、校验器、种子引用和测试，确保仓库内只存在一个受控主根。",
+      "owned_paths": [],
+      "dependencies": [],
+      "deliverables": [],
+      "evidence_expectation": "",
+      "evidence": [
+        "execution-log.md#Phase-P3"
+      ],
+      "notes": "",
+      "last_reviewed_at": "2026-04-14T14:49:37",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P3-AC1",
+          "text": "运行时代码、合规校验器、review package、training requirement 种子与相关测试统一引用 `docs/compliance/*`。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P3"
+          ]
+        },
+        {
+          "ac_id": "P3-AC2",
+          "text": "仓库内受控主根收敛为 `docs/compliance/`，不存在新的双根运行时兼容逻辑。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P3"
+          ]
+        },
+        {
+          "ac_id": "P3-AC3",
+          "text": "`validate_fda03_repo_compliance.py`、`validate_gbz02_repo_compliance.py`、`validate_gbz04_repo_compliance.py`、`validate_gbz05_repo_compliance.py` 在迁移后仍可通过。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P3"
+          ]
+        },
+        {
+          "ac_id": "P3-AC4",
+          "text": "review package 与 training compliance 相关单测对新主根通过。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P3"
+          ]
+        }
+      ]
+    },
+    {
+      "phase_id": "P4",
+      "title": "批记录后端闭环",
+      "status": "pending",
+      "objective": "从零补齐批记录后端域模型、API、审计与电子签名集成，覆盖模板管理、执行实例、步骤填写、签名、复核和导出基础能力。",
+      "owned_paths": [],
+      "dependencies": [],
+      "deliverables": [],
+      "evidence_expectation": "",
+      "evidence": [],
+      "notes": "",
+      "last_reviewed_at": null,
+      "acceptance_criteria": [
+        {
+          "ac_id": "P4-AC1",
+          "text": "后端存在批记录模板、执行实例、步骤写入、复核与导出基础模型和 API。",
+          "status": "pending",
+          "evidence": []
+        },
+        {
+          "ac_id": "P4-AC2",
+          "text": "批记录签名复用现有电子签名能力，不另建第二套签名体系。",
+          "status": "pending",
+          "evidence": []
+        },
+        {
+          "ac_id": "P4-AC3",
+          "text": "批记录关键动作写入审计日志，且未授权用户无法执行模板管理、签名或复核动作。",
+          "status": "pending",
+          "evidence": []
+        },
+        {
+          "ac_id": "P4-AC4",
+          "text": "后端单测覆盖模板创建、执行填写、签名/复核、导出与拒绝路径。",
+          "status": "pending",
+          "evidence": []
+        }
+      ]
+    },
+    {
+      "phase_id": "P5",
+      "title": "批记录前端工作区与浏览器验证资产",
+      "status": "pending",
+      "objective": "为批记录提供真实前端工作区并接入 `/quality-system/batch-records`，同时补齐单测与 Playwright 证据路径，形成可独立复核的浏览器验证面。",
+      "owned_paths": [],
+      "dependencies": [],
+      "deliverables": [],
+      "evidence_expectation": "",
+      "evidence": [],
+      "notes": "",
+      "last_reviewed_at": null,
+      "acceptance_criteria": [
+        {
+          "ac_id": "P5-AC1",
+          "text": "`/quality-system/batch-records` 存在真实前端工作区，可完成模板查看、执行记录填写、签名/复核入口与导出触发。",
+          "status": "pending",
+          "evidence": []
+        },
+        {
+          "ac_id": "P5-AC2",
+          "text": "批记录前端入口遵循质量 capability 守卫，并与质量系统模块目录一致。",
+          "status": "pending",
+          "evidence": []
+        },
+        {
+          "ac_id": "P5-AC3",
+          "text": "前端单测覆盖批记录页面渲染、能力守卫与主要交互。",
+          "status": "pending",
+          "evidence": []
+        },
+        {
+          "ac_id": "P5-AC4",
+          "text": "Playwright 用例在真实浏览器中验证质量系统入口、批记录工作区与至少一个能力受限场景，并产生截图或等效证据文件。",
+          "status": "pending",
+          "evidence": []
+        }
+      ]
+    }
+  ],
+  "planner_review_status": "approved",
+  "test_status": "not_started",
+  "blocking_prereqs": [],
+  "iteration_counts": {
+    "planner_revisions": 0,
+    "executor_loops": 1,
+    "test_loops": 0
+  },
+  "created_at": "2026-04-14T12:21:57",
+  "updated_at": "2026-04-14T14:49:37",
+  "branch": "int_latest",
+  "baseline_revision": "18cc2c0714766fab865cfec9781944fa1b3b8d21",
+  "workspace_root": "D:\\ProjectPackage\\RagflowAuth",
+  "tasks_root": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks",
+  "task_dir": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\docs-tasks-iso-13485-20260413t153016-prd-md-iso--20260414T122156",
+  "goal": "基于 docs/tasks/iso-13485-20260413T153016/prd.md 中识别出的差距，完善当前系统中未满足的 ISO 13485 体系文件治理需求，重点补齐质量权限模型、质量系统前端接线、文控单一受控根迁移与批记录模块实现，并提供可独立复核的测试工件",
+  "artifacts": {
+    "prd": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\docs-tasks-iso-13485-20260413t153016-prd-md-iso--20260414T122156\\prd.md",
+    "test_plan": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\docs-tasks-iso-13485-20260413t153016-prd-md-iso--20260414T122156\\test-plan.md",
+    "task_state": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\docs-tasks-iso-13485-20260413t153016-prd-md-iso--20260414T122156\\task-state.json",
+    "execution_log": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\docs-tasks-iso-13485-20260413t153016-prd-md-iso--20260414T122156\\execution-log.md",
+    "test_report": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\docs-tasks-iso-13485-20260413t153016-prd-md-iso--20260414T122156\\test-report.md"
+  }
+}

@@ -6,6 +6,8 @@ const DEFAULT_LOAD_ERROR = '加载培训任务失败';
 const DEFAULT_SAVE_ERROR = '培训任务处理失败';
 const DEFAULT_RESOLVE_ERROR = '疑问处理失败';
 const DEFAULT_GENERATE_ERROR = '生成培训任务失败';
+const READ_PROGRESS_ERROR = '阅读进度同步失败';
+const READ_HEARTBEAT_MS = 5000;
 
 export default function useTrainingAckPage({ canAssign, canAcknowledge, canReviewQuestions }) {
   const [loading, setLoading] = useState(true);
@@ -19,6 +21,7 @@ export default function useTrainingAckPage({ canAssign, canAcknowledge, canRevie
   const [resolutionDrafts, setResolutionDrafts] = useState({});
   const [busyIds, setBusyIds] = useState([]);
   const [generateBusy, setGenerateBusy] = useState(false);
+  const [trackingAssignmentId, setTrackingAssignmentId] = useState('');
 
   const setBusy = useCallback((key, active) => {
     setBusyIds((previous) => {
@@ -72,6 +75,68 @@ export default function useTrainingAckPage({ canAssign, canAcknowledge, canRevie
     () => assignments.filter((item) => String(item?.status || '') === 'pending'),
     [assignments]
   );
+
+  const replaceAssignment = useCallback((nextAssignment) => {
+    const assignmentId = String(nextAssignment?.assignment_id || '').trim();
+    if (!assignmentId) return;
+    setAssignments((previous) => previous.map((item) => (
+      String(item?.assignment_id || '') === assignmentId ? nextAssignment : item
+    )));
+  }, []);
+
+  useEffect(() => {
+    if (!trackingAssignmentId) return;
+    const tracked = assignments.find((item) => String(item?.assignment_id || '') === trackingAssignmentId);
+    if (!tracked || String(tracked?.status || '') !== 'pending') {
+      setTrackingAssignmentId('');
+    }
+  }, [assignments, trackingAssignmentId]);
+
+  useEffect(() => {
+    if (!trackingAssignmentId) {
+      return undefined;
+    }
+    let cancelled = false;
+    const timerId = window.setInterval(async () => {
+      try {
+        const updated = await trainingComplianceApi.recordReadProgress(trackingAssignmentId, {
+          event: 'heartbeat',
+        });
+        if (!cancelled) {
+          replaceAssignment(updated);
+        }
+      } catch (requestError) {
+        if (!cancelled) {
+          setError(mapUserFacingErrorMessage(requestError?.message, READ_PROGRESS_ERROR));
+          setTrackingAssignmentId('');
+        }
+      }
+    }, READ_HEARTBEAT_MS);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timerId);
+    };
+  }, [replaceAssignment, trackingAssignmentId]);
+
+  const handleStartReading = useCallback(async (assignmentId) => {
+    const cleanAssignmentId = String(assignmentId || '').trim();
+    if (!cleanAssignmentId) return null;
+    setBusy(cleanAssignmentId, true);
+    setError('');
+    try {
+      const updated = await trainingComplianceApi.recordReadProgress(cleanAssignmentId, {
+        event: 'start',
+      });
+      replaceAssignment(updated);
+      setTrackingAssignmentId(cleanAssignmentId);
+      return updated;
+    } catch (requestError) {
+      setError(mapUserFacingErrorMessage(requestError?.message, READ_PROGRESS_ERROR));
+      return null;
+    } finally {
+      setBusy(cleanAssignmentId, false);
+    }
+  }, [replaceAssignment, setBusy]);
 
   const handleAcknowledge = useCallback(async (assignmentId, decision) => {
     setBusy(assignmentId, true);
@@ -146,9 +211,12 @@ export default function useTrainingAckPage({ canAssign, canAcknowledge, canRevie
     resolutionDrafts,
     busyIds,
     generateBusy,
+    trackingAssignmentId,
+    readHeartbeatMs: READ_HEARTBEAT_MS,
     setSelectedRevisionId,
     setQuestionDrafts,
     setResolutionDrafts,
+    handleStartReading,
     handleAcknowledge,
     handleResolveThread,
     handleGenerateAssignments,

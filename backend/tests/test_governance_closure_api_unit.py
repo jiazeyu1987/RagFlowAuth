@@ -99,7 +99,7 @@ class TestGovernanceClosureApiUnit(unittest.TestCase):
                     },
                 )
             self.assertEqual(response.status_code, 403, response.text)
-            self.assertEqual(response.json()["detail"], "admin_required")
+            self.assertEqual(response.json()["detail"], "complaints_forbidden")
         finally:
             cleanup_dir(td)
 

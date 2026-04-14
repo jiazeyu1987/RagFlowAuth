@@ -64,3 +64,17 @@ def get_tenant_dependencies(app: Any, *, company_id: int | str) -> AppDependenci
         ),
     )
     return cache_tenant_dependencies(app, company_id=cid, deps=deps)
+
+
+def get_training_compliance_service(deps: AppDependencies):
+    service = getattr(deps, "training_compliance_service", None)
+    if service is None:
+        raise RuntimeError("training_compliance_service_unavailable")
+    return service
+
+
+def get_supplier_qualification_service(deps: AppDependencies):
+    service = getattr(deps, "supplier_qualification_service", None)
+    if service is None:
+        raise RuntimeError("supplier_qualification_service_unavailable")
+    return service

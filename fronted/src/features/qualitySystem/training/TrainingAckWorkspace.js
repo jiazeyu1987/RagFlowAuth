@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../../../hooks/useAuth';
 import useTrainingAckPage from './useTrainingAckPage';
 
@@ -31,10 +31,19 @@ const formatTime = (value) => {
   return new Date(ms).toLocaleString();
 };
 
+const formatDuration = (value) => {
+  const ms = Number(value || 0);
+  if (!Number.isFinite(ms) || ms <= 0) return '00:00';
+  const totalSeconds = Math.ceil(ms / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+};
+
 export default function TrainingAckWorkspace() {
   const { can } = useAuth();
   const canAssign = typeof can === 'function' ? can('training_ack', 'assign') : false;
-  const canAcknowledge = true;
+  const canAcknowledge = typeof can === 'function' ? can('training_ack', 'acknowledge') : false;
   const canReviewQuestions = typeof can === 'function' ? can('training_ack', 'review_questions') : false;
   const {
     loading,
@@ -49,13 +58,54 @@ export default function TrainingAckWorkspace() {
     resolutionDrafts,
     busyIds,
     generateBusy,
+    trackingAssignmentId,
+    readHeartbeatMs,
     setSelectedRevisionId,
     setQuestionDrafts,
     setResolutionDrafts,
+    handleStartReading,
     handleAcknowledge,
     handleResolveThread,
     handleGenerateAssignments,
   } = useTrainingAckPage({ canAssign, canAcknowledge, canReviewQuestions });
+  const [nowMs, setNowMs] = useState(() => Date.now());
+
+  useEffect(() => {
+    if (!canAcknowledge || pendingAssignments.length === 0) {
+      return undefined;
+    }
+    setNowMs(Date.now());
+    const timerId = window.setInterval(() => {
+      setNowMs(Date.now());
+    }, 1000);
+    return () => window.clearInterval(timerId);
+  }, [canAcknowledge, pendingAssignments.length]);
+
+  const pendingAssignmentMeta = useMemo(() => {
+    const result = {};
+    pendingAssignments.forEach((item) => {
+      const assignmentId = String(item?.assignment_id || '').trim();
+      if (!assignmentId) return;
+      const assignedAtMs = Number(item?.assigned_at_ms || 0);
+      const requiredReadMs = Number(item?.required_read_ms || 0) > 0
+        ? Number(item?.required_read_ms || 0)
+        : Math.max(0, Number(item?.min_ack_at_ms || 0) - assignedAtMs);
+      const persistedReadMs = Math.max(0, Number(item?.read_progress_ms || 0));
+      const isTracking = trackingAssignmentId === assignmentId;
+      const lastReadPingAtMs = Number(item?.last_read_ping_at_ms || 0);
+      const localReadMs = isTracking && Number.isFinite(lastReadPingAtMs) && lastReadPingAtMs > 0
+        ? Math.max(0, Math.min(nowMs - lastReadPingAtMs, Number(readHeartbeatMs || 0)))
+        : 0;
+      const effectiveReadMs = Math.min(requiredReadMs, persistedReadMs + localReadMs);
+      result[assignmentId] = {
+        requiredReadMinutes: Math.max(1, Math.ceil(requiredReadMs / 60000) || 15),
+        effectiveReadMs,
+        remainingMs: Math.max(0, requiredReadMs - effectiveReadMs),
+        isTracking,
+      };
+    });
+    return result;
+  }, [nowMs, pendingAssignments, readHeartbeatMs, trackingAssignmentId]);
 
   if (loading) {
     return <div style={cardStyle}>正在加载培训任务...</div>;
@@ -102,11 +152,38 @@ export default function TrainingAckWorkspace() {
             <div style={{ marginTop: '10px', display: 'grid', gap: '10px' }}>
               {pendingAssignments.map((item) => {
                 const busy = busyIds.includes(item.assignment_id);
+                const meta = pendingAssignmentMeta[item.assignment_id] || {
+                  requiredReadMinutes: 15,
+                  effectiveReadMs: 0,
+                  remainingMs: 0,
+                  isTracking: false,
+                };
+                const canSubmit = meta.remainingMs <= 0;
                 return (
                   <article key={item.assignment_id} style={{ border: '1px solid #e2e8f0', borderRadius: '10px', padding: '10px' }}>
                     <div style={{ fontWeight: 700 }}>{`${item.doc_code} v${item.revision_no}`}</div>
-                    <div style={{ color: '#64748b', marginTop: '4px' }}>
-                      最早确认时间: {formatTime(item.min_ack_at_ms)}
+                    <div style={{ color: '#475569', marginTop: '4px' }}>
+                      阅读要求: 至少 {meta.requiredReadMinutes} 分钟
+                    </div>
+                    <div style={{ color: '#475569', marginTop: '4px' }}>
+                      已累计阅读: {formatDuration(meta.effectiveReadMs)}
+                    </div>
+                    <div
+                      style={{ color: canSubmit ? '#166534' : '#b45309', marginTop: '4px', fontWeight: 600 }}
+                      data-testid={`training-ack-countdown-${item.assignment_id}`}
+                    >
+                      {canSubmit ? '已达到确认时间' : `剩余阅读时间: ${formatDuration(meta.remainingMs)}`}
+                    </div>
+                    <div style={{ marginTop: '8px' }}>
+                      <button
+                        type="button"
+                        style={meta.isTracking ? primaryButtonStyle : buttonStyle}
+                        disabled={busy}
+                        data-testid={`training-ack-start-reading-${item.assignment_id}`}
+                        onClick={() => handleStartReading(item.assignment_id)}
+                      >
+                        {meta.isTracking ? '阅读中...' : '开始阅读'}
+                      </button>
                     </div>
                     <textarea
                       value={questionDrafts[item.assignment_id] || ''}
@@ -115,10 +192,10 @@ export default function TrainingAckWorkspace() {
                       style={{ width: '100%', marginTop: '8px', minHeight: '68px' }}
                     />
                     <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
-                      <button type="button" style={primaryButtonStyle} disabled={busy} onClick={() => handleAcknowledge(item.assignment_id, 'acknowledged')}>
+                      <button type="button" style={primaryButtonStyle} disabled={busy || !canSubmit} onClick={() => handleAcknowledge(item.assignment_id, 'acknowledged')}>
                         已知晓
                       </button>
-                      <button type="button" style={buttonStyle} disabled={busy} onClick={() => handleAcknowledge(item.assignment_id, 'questioned')}>
+                      <button type="button" style={buttonStyle} disabled={busy || !canSubmit} onClick={() => handleAcknowledge(item.assignment_id, 'questioned')}>
                         有疑问
                       </button>
                     </div>

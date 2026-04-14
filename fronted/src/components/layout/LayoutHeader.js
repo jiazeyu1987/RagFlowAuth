@@ -33,7 +33,7 @@ const LayoutHeader = ({
           cursor: 'pointer',
           flexShrink: 0,
         }}
-        aria-label="打开侧边栏"
+        aria-label="Open sidebar"
       >
         \u2630
       </button>

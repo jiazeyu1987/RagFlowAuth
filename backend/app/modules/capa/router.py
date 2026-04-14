@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from backend.app.core.authz import AdminOnly, AuthContextDep
+from backend.app.core.authz import AuthContextDep, assert_capability
 from backend.services.governance_shared import GovernanceClosureError
 
 router = APIRouter()
@@ -36,7 +36,8 @@ def _service_from_ctx(ctx: AuthContextDep):
 
 
 @router.post("/capa/actions")
-def create_capa_action(body: CapaCreateBody, ctx: AuthContextDep, _: AdminOnly):
+def create_capa_action(body: CapaCreateBody, ctx: AuthContextDep):
+    assert_capability(ctx, resource="capa", action="create")
     service = _service_from_ctx(ctx)
     try:
         item = service.create_capa(
@@ -71,14 +72,16 @@ def create_capa_action(body: CapaCreateBody, ctx: AuthContextDep, _: AdminOnly):
 
 
 @router.get("/capa/actions")
-def list_capa_actions(ctx: AuthContextDep, _: AdminOnly, status: str | None = None, limit: int = 100):
+def list_capa_actions(ctx: AuthContextDep, status: str | None = None, limit: int = 100):
+    assert_capability(ctx, resource="capa", action="view")
     service = _service_from_ctx(ctx)
     items = service.list_capas(status=status, limit=limit)
     return {"items": items, "count": len(items)}
 
 
 @router.post("/capa/actions/{capa_id}/verify")
-def verify_capa_action(capa_id: str, body: CapaVerifyBody, ctx: AuthContextDep, _: AdminOnly):
+def verify_capa_action(capa_id: str, body: CapaVerifyBody, ctx: AuthContextDep):
+    assert_capability(ctx, resource="capa", action="verify")
     service = _service_from_ctx(ctx)
     try:
         item = service.verify_capa(
@@ -104,7 +107,8 @@ def verify_capa_action(capa_id: str, body: CapaVerifyBody, ctx: AuthContextDep, 
 
 
 @router.post("/capa/actions/{capa_id}/close")
-def close_capa_action(capa_id: str, body: CapaCloseBody, ctx: AuthContextDep, _: AdminOnly):
+def close_capa_action(capa_id: str, body: CapaCloseBody, ctx: AuthContextDep):
+    assert_capability(ctx, resource="capa", action="close")
     service = _service_from_ctx(ctx)
     try:
         item = service.close_capa(

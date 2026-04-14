@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from backend.app.core.authz import AdminOnly, AuthContextDep
+from backend.app.core.authz import AuthContextDep, assert_capability
 from backend.services.governance_shared import GovernanceClosureError
 
 router = APIRouter()
@@ -40,7 +40,8 @@ def _service_from_ctx(ctx: AuthContextDep):
 
 
 @router.post("/complaints/cases")
-def create_complaint_case(body: ComplaintCreateBody, ctx: AuthContextDep, _: AdminOnly):
+def create_complaint_case(body: ComplaintCreateBody, ctx: AuthContextDep):
+    assert_capability(ctx, resource="complaints", action="create")
     service = _service_from_ctx(ctx)
     try:
         item = service.create_complaint(
@@ -78,14 +79,16 @@ def create_complaint_case(body: ComplaintCreateBody, ctx: AuthContextDep, _: Adm
 
 
 @router.get("/complaints/cases")
-def list_complaint_cases(ctx: AuthContextDep, _: AdminOnly, status: str | None = None, limit: int = 100):
+def list_complaint_cases(ctx: AuthContextDep, status: str | None = None, limit: int = 100):
+    assert_capability(ctx, resource="complaints", action="view")
     service = _service_from_ctx(ctx)
     items = service.list_complaints(status=status, limit=limit)
     return {"items": items, "count": len(items)}
 
 
 @router.post("/complaints/cases/{complaint_id}/assess")
-def assess_complaint_case(complaint_id: str, body: ComplaintAssessBody, ctx: AuthContextDep, _: AdminOnly):
+def assess_complaint_case(complaint_id: str, body: ComplaintAssessBody, ctx: AuthContextDep):
+    assert_capability(ctx, resource="complaints", action="assess")
     service = _service_from_ctx(ctx)
     try:
         item = service.assess_complaint(
@@ -115,7 +118,8 @@ def assess_complaint_case(complaint_id: str, body: ComplaintAssessBody, ctx: Aut
 
 
 @router.post("/complaints/cases/{complaint_id}/close")
-def close_complaint_case(complaint_id: str, body: ComplaintCloseBody, ctx: AuthContextDep, _: AdminOnly):
+def close_complaint_case(complaint_id: str, body: ComplaintCloseBody, ctx: AuthContextDep):
+    assert_capability(ctx, resource="complaints", action="close")
     service = _service_from_ctx(ctx)
     try:
         item = service.close_complaint(

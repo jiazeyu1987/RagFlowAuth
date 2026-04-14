@@ -32,7 +32,7 @@ describe('routeRegistry', () => {
     ]);
     expect(tools.matchPrefixes).toEqual(['/tools/']);
     expect(qualitySystem.guard.permission).toEqual({ resource: 'quality_system', action: 'view' });
-    expect(qualitySystem.navGuard.allowedRoles).toEqual(['admin', 'sub_admin']);
+    expect(qualitySystem.navGuard).toBeUndefined();
     expect(qualitySystem.matchPrefixes).toEqual(['/quality-system/']);
   });
 

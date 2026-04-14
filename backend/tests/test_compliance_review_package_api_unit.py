@@ -26,22 +26,22 @@ def _write(path: Path, content: str) -> None:
 
 def _build_compliance_repo(root: Path) -> None:
     docs = {
-        "doc/compliance/urs.md": "# URS\n\n版本: v1.0\n更新时间: 2026-04-03\n\nURS-012 FDA-03\n",
-        "doc/compliance/srs.md": "# SRS\n\n版本: v1.0\n更新时间: 2026-04-03\n\nSRS-012 URS-012\n",
-        "doc/compliance/traceability_matrix.md": "# Matrix\n\n版本: v1.0\n更新时间: 2026-04-03\n\nFDA-03 SRS-012 test_fda03_compliance_gate_unit\n",
-        "doc/compliance/validation_plan.md": (
+        "docs/compliance/urs.md": "# URS\n\n版本: v1.0\n更新时间: 2026-04-03\n\nURS-012 FDA-03\n",
+        "docs/compliance/srs.md": "# SRS\n\n版本: v1.0\n更新时间: 2026-04-03\n\nSRS-012 URS-012\n",
+        "docs/compliance/traceability_matrix.md": "# Matrix\n\n版本: v1.0\n更新时间: 2026-04-03\n\nFDA-03 SRS-012 test_fda03_compliance_gate_unit\n",
+        "docs/compliance/validation_plan.md": (
             "# Plan\n\n版本: v1.0\n更新时间: 2026-04-03\n\n"
             "validate_fda03_repo_compliance.py\n"
             "test_compliance_review_package_api_unit\n"
         ),
-        "doc/compliance/validation_report.md": (
+        "docs/compliance/validation_report.md": (
             "# Report\n\n版本: v1.0\n更新时间: 2026-04-03\n\nFDA-03\nvalidate_fda03_repo_compliance.py\n"
         ),
-        "doc/compliance/release_and_retirement_sop.md": "# SOP\n\n版本: v1.0\n更新时间: 2026-04-03\n",
-        "doc/compliance/approval_workflow_sop.md": "# SOP\n\n版本: v1.1\n更新时间: 2026-04-03\n",
-        "doc/compliance/electronic_signature_policy.md": "# Policy\n\n版本: v1.1\n更新时间: 2026-04-03\n",
-        "doc/compliance/backup_restore_sop.md": "# Backup SOP\n\n版本: v1.1\n更新时间: 2026-04-03\n",
-        "doc/compliance/review_package_sop.md": (
+        "docs/compliance/release_and_retirement_sop.md": "# SOP\n\n版本: v1.0\n更新时间: 2026-04-03\n",
+        "docs/compliance/approval_workflow_sop.md": "# SOP\n\n版本: v1.1\n更新时间: 2026-04-03\n",
+        "docs/compliance/electronic_signature_policy.md": "# Policy\n\n版本: v1.1\n更新时间: 2026-04-03\n",
+        "docs/compliance/backup_restore_sop.md": "# Backup SOP\n\n版本: v1.1\n更新时间: 2026-04-03\n",
+        "docs/compliance/review_package_sop.md": (
             "# Review Package SOP\n\n版本: v1.0\n更新时间: 2026-04-03\n"
             "/api/audit/controlled-documents\n/api/audit/review-package\nreview_package_manifest.json\n"
             "线下签字版批准页\n"
@@ -50,7 +50,7 @@ def _build_compliance_repo(root: Path) -> None:
     for rel_path, content in docs.items():
         _write(root / rel_path, content)
     _write(
-        root / "doc/compliance/controlled_document_register.md",
+        root / "docs/compliance/controlled_document_register.md",
         """# Register
 
 版本: v1.0
@@ -59,12 +59,12 @@ def _build_compliance_repo(root: Path) -> None:
 
 | doc_code | title | file_path | version | status | effective_date | review_due_date | approved_release_version | package_group |
 |---|---|---|---|---|---|---|---|---|
-| CD-001 | URS | doc/compliance/urs.md | v1.0 | effective | 2026-04-03 | 2026-10-03 | 2.0.0 | requirements |
-| CD-002 | SRS | doc/compliance/srs.md | v1.0 | effective | 2026-04-03 | 2026-10-03 | 2.0.0 | requirements |
-| CD-003 | Traceability | doc/compliance/traceability_matrix.md | v1.0 | effective | 2026-04-03 | 2026-10-03 | 2.0.0 | validation |
-| CD-004 | Validation Plan | doc/compliance/validation_plan.md | v1.0 | effective | 2026-04-03 | 2026-10-03 | 2.0.0 | validation |
-| CD-005 | Release SOP | doc/compliance/release_and_retirement_sop.md | v1.0 | effective | 2026-04-03 | 2026-10-03 | 2.0.0 | sop |
-| CD-006 | Review Package SOP | doc/compliance/review_package_sop.md | v1.0 | effective | 2026-04-03 | 2026-10-03 | 2.0.0 | package |
+| CD-001 | URS | docs/compliance/urs.md | v1.0 | effective | 2026-04-03 | 2026-10-03 | 2.0.0 | requirements |
+| CD-002 | SRS | docs/compliance/srs.md | v1.0 | effective | 2026-04-03 | 2026-10-03 | 2.0.0 | requirements |
+| CD-003 | Traceability | docs/compliance/traceability_matrix.md | v1.0 | effective | 2026-04-03 | 2026-10-03 | 2.0.0 | validation |
+| CD-004 | Validation Plan | docs/compliance/validation_plan.md | v1.0 | effective | 2026-04-03 | 2026-10-03 | 2.0.0 | validation |
+| CD-005 | Release SOP | docs/compliance/release_and_retirement_sop.md | v1.0 | effective | 2026-04-03 | 2026-10-03 | 2.0.0 | sop |
+| CD-006 | Review Package SOP | docs/compliance/review_package_sop.md | v1.0 | effective | 2026-04-03 | 2026-10-03 | 2.0.0 | package |
 """,
     )
 
@@ -169,7 +169,7 @@ class TestComplianceReviewPackageApiUnit(unittest.TestCase):
             self.assertEqual(manifest["metadata"]["release_version"], "2.0.0")
             self.assertEqual(manifest["metadata"]["company_id"], 9)
             self.assertEqual(manifest["metadata"]["tenant_key"], "company_9")
-            self.assertEqual(manifest["metadata"]["register_path"], "doc/compliance/controlled_document_register.md")
+            self.assertEqual(manifest["metadata"]["register_path"], "docs/compliance/controlled_document_register.md")
             self.assertEqual(
                 {item["package_group"] for item in manifest["documents"]},
                 {"requirements", "validation", "sop", "package"},
@@ -206,7 +206,7 @@ class TestComplianceReviewPackageApiUnit(unittest.TestCase):
                 resp = client.get("/api/audit/review-package")
 
             self.assertEqual(resp.status_code, 403, resp.text)
-            self.assertEqual(resp.json()["detail"], "admin_required")
+            self.assertEqual(resp.json()["detail"], "audit_events_forbidden")
         finally:
             cleanup_dir(td)
 

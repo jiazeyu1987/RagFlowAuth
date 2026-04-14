@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from backend.app.core.authz import AdminOnly, AuthContextDep
+from backend.app.core.authz import AuthContextDep, assert_capability
 from backend.services.governance_shared import GovernanceClosureError
 
 router = APIRouter()
@@ -30,7 +30,8 @@ def _service_from_ctx(ctx: AuthContextDep):
 
 
 @router.post("/management-reviews/records")
-def create_management_review_record(body: ManagementReviewCreateBody, ctx: AuthContextDep, _: AdminOnly):
+def create_management_review_record(body: ManagementReviewCreateBody, ctx: AuthContextDep):
+    assert_capability(ctx, resource="management_review", action="create")
     service = _service_from_ctx(ctx)
     try:
         item = service.create_record(
@@ -61,7 +62,8 @@ def create_management_review_record(body: ManagementReviewCreateBody, ctx: AuthC
 
 
 @router.get("/management-reviews/records")
-def list_management_review_records(ctx: AuthContextDep, _: AdminOnly, status: str | None = None, limit: int = 100):
+def list_management_review_records(ctx: AuthContextDep, status: str | None = None, limit: int = 100):
+    assert_capability(ctx, resource="management_review", action="view")
     service = _service_from_ctx(ctx)
     items = service.list_records(status=status, limit=limit)
     return {"items": items, "count": len(items)}
@@ -72,8 +74,8 @@ def complete_management_review_record(
     review_id: str,
     body: ManagementReviewCompleteBody,
     ctx: AuthContextDep,
-    _: AdminOnly,
 ):
+    assert_capability(ctx, resource="management_review", action="complete")
     service = _service_from_ctx(ctx)
     try:
         item = service.complete_record(

@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from backend.app.core.authz import AdminOnly, AuthContextDep
+from backend.app.core.authz import AuthContextDep, assert_capability
 from backend.services.change_control import ChangeControlServiceError
 
 router = APIRouter()
@@ -70,7 +70,8 @@ def _is_admin(ctx: AuthContextDep) -> bool:
 
 
 @router.post("/change-control/requests")
-def create_change_request(body: ChangeRequestCreateBody, ctx: AuthContextDep, _: AdminOnly):
+def create_change_request(body: ChangeRequestCreateBody, ctx: AuthContextDep):
+    assert_capability(ctx, resource="change_control", action="create")
     service = _service_from_ctx(ctx)
     try:
         return service.create_request(
@@ -88,7 +89,8 @@ def create_change_request(body: ChangeRequestCreateBody, ctx: AuthContextDep, _:
 
 
 @router.get("/change-control/requests")
-def list_change_requests(ctx: AuthContextDep, _: AdminOnly, limit: int = 100, status: str | None = None):
+def list_change_requests(ctx: AuthContextDep, limit: int = 100, status: str | None = None):
+    assert_capability(ctx, resource="change_control", action="evaluate")
     service = _service_from_ctx(ctx)
     items = service.list_requests(limit=limit, status=status)
     return {"items": items, "count": len(items)}
@@ -106,13 +108,14 @@ def get_change_request(request_id: str, ctx: AuthContextDep):
         str(item["owner_user_id"]),
         str(item["evaluator_user_id"]),
     }
-    if not _is_admin(ctx) and str(ctx.user.user_id) not in participants:
-        raise HTTPException(status_code=403, detail="change_request_access_denied")
+    if str(ctx.user.user_id) not in participants:
+        assert_capability(ctx, resource="change_control", action="evaluate")
     return item
 
 
 @router.post("/change-control/requests/{request_id}/evaluate")
 def evaluate_change_request(request_id: str, body: ChangeEvaluationBody, ctx: AuthContextDep):
+    assert_capability(ctx, resource="change_control", action="evaluate")
     service = _service_from_ctx(ctx)
     try:
         return service.evaluate_request(
@@ -127,6 +130,7 @@ def evaluate_change_request(request_id: str, body: ChangeEvaluationBody, ctx: Au
 
 @router.post("/change-control/requests/{request_id}/plan-items")
 def create_change_plan_item(request_id: str, body: ChangePlanItemCreateBody, ctx: AuthContextDep):
+    assert_capability(ctx, resource="change_control", action="plan")
     service = _service_from_ctx(ctx)
     try:
         return service.create_plan_item(
@@ -148,6 +152,7 @@ def update_change_plan_item_status(
     body: ChangePlanItemStatusBody,
     ctx: AuthContextDep,
 ):
+    assert_capability(ctx, resource="change_control", action="plan")
     service = _service_from_ctx(ctx)
     try:
         return service.update_plan_item_status(
@@ -164,6 +169,7 @@ def update_change_plan_item_status(
 
 @router.post("/change-control/requests/{request_id}/plan")
 def mark_change_request_planned(request_id: str, body: ChangePlanConfirmBody, ctx: AuthContextDep):
+    assert_capability(ctx, resource="change_control", action="plan")
     service = _service_from_ctx(ctx)
     try:
         return service.mark_planned(
@@ -178,6 +184,7 @@ def mark_change_request_planned(request_id: str, body: ChangePlanConfirmBody, ct
 
 @router.post("/change-control/requests/{request_id}/start-execution")
 def start_change_request_execution(request_id: str, ctx: AuthContextDep):
+    assert_capability(ctx, resource="change_control", action="plan")
     service = _service_from_ctx(ctx)
     try:
         return service.start_execution(
@@ -191,6 +198,7 @@ def start_change_request_execution(request_id: str, ctx: AuthContextDep):
 
 @router.post("/change-control/requests/{request_id}/complete-execution")
 def complete_change_request_execution(request_id: str, body: ChangeExecutionCompleteBody, ctx: AuthContextDep):
+    assert_capability(ctx, resource="change_control", action="plan")
     service = _service_from_ctx(ctx)
     try:
         return service.complete_execution(
@@ -205,6 +213,7 @@ def complete_change_request_execution(request_id: str, body: ChangeExecutionComp
 
 @router.post("/change-control/requests/{request_id}/confirmations")
 def confirm_change_request_department(request_id: str, body: ChangeConfirmationBody, ctx: AuthContextDep):
+    assert_capability(ctx, resource="change_control", action="confirm")
     service = _service_from_ctx(ctx)
     try:
         return service.confirm_department(
@@ -218,7 +227,8 @@ def confirm_change_request_department(request_id: str, body: ChangeConfirmationB
 
 
 @router.post("/change-control/reminders/dispatch")
-def dispatch_change_request_reminders(ctx: AuthContextDep, _: AdminOnly, window_days: int = 7):
+def dispatch_change_request_reminders(ctx: AuthContextDep, window_days: int = 7):
+    assert_capability(ctx, resource="change_control", action="plan")
     service = _service_from_ctx(ctx)
     try:
         return service.dispatch_due_reminders(actor_user_id=str(ctx.user.user_id), window_days=window_days)
@@ -228,6 +238,7 @@ def dispatch_change_request_reminders(ctx: AuthContextDep, _: AdminOnly, window_
 
 @router.post("/change-control/requests/{request_id}/close")
 def close_change_request(request_id: str, body: ChangeCloseBody, ctx: AuthContextDep):
+    assert_capability(ctx, resource="change_control", action="close")
     service = _service_from_ctx(ctx)
     try:
         return service.close_request(

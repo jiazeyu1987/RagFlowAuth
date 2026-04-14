@@ -1,7 +1,7 @@
 import React from 'react';
 import { MemoryRouter } from 'react-router-dom';
 import { render, screen, waitFor } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
+
 import QualitySystem from './QualitySystem';
 import operationApprovalApi from '../features/operationApproval/api';
 import { useAuth } from '../hooks/useAuth';
@@ -15,16 +15,6 @@ jest.mock('../features/operationApproval/api', () => ({
 
 jest.mock('../hooks/useAuth', () => ({
   useAuth: jest.fn(),
-}));
-
-jest.mock('./ChangeControl', () => ({
-  __esModule: true,
-  default: () => <div data-testid="change-control-page" />,
-}));
-
-jest.mock('../features/governanceClosure/GovernanceClosureWorkspace', () => ({
-  __esModule: true,
-  default: () => <div data-testid="governance-closure-workspace" />,
 }));
 
 const baseUser = {
@@ -44,7 +34,8 @@ describe('QualitySystem', () => {
     jest.clearAllMocks();
     useAuth.mockReturnValue({
       user: baseUser,
-      can: jest.fn((resource, action) => resource === 'quality_system' && action === 'view'),
+      can: jest.fn((resource, action) => resource === 'quality_system' && action === 'manage'),
+      isAuthorized: jest.fn(() => true),
     });
     operationApprovalApi.listInbox.mockResolvedValue({
       items: [
@@ -66,12 +57,12 @@ describe('QualitySystem', () => {
     });
   });
 
-  it('renders module cards and quality-system-scoped queue items on the root shell', async () => {
+  it('renders authorized module cards and quality-system queue items', async () => {
     renderPage();
 
     expect(await screen.findByTestId('quality-system-page')).toBeInTheDocument();
     expect(screen.getByTestId('quality-system-module-doc-control')).toBeInTheDocument();
-    expect(screen.getByTestId('quality-system-module-training')).toBeInTheDocument();
+    expect(screen.getByTestId('quality-system-module-batch-records')).toBeInTheDocument();
 
     await waitFor(() => {
       expect(operationApprovalApi.listInbox).toHaveBeenCalledWith({ limit: 20 });
@@ -81,52 +72,17 @@ describe('QualitySystem', () => {
     expect(screen.queryByTestId('quality-system-queue-item-queue-2')).not.toBeInTheDocument();
   });
 
-  it('renders selected child-route context and filters queue items to the current module', async () => {
-    renderPage(['/quality-system/training']);
-
-    expect(await screen.findByTestId('quality-system-selected-module')).toBeInTheDocument();
-    expect(screen.getByTestId('quality-system-selected-title')).toHaveTextContent('\u57f9\u8bad');
-
-    await waitFor(() => {
-      expect(screen.getByTestId('quality-system-queue-item-queue-1')).toBeInTheDocument();
+  it('shows an empty module hint when no modules are authorized', async () => {
+    useAuth.mockReturnValue({
+      user: baseUser,
+      can: jest.fn(() => false),
+      isAuthorized: jest.fn(() => false),
     });
-  });
-
-  it('navigates to module routes and back to the shell root', async () => {
-    const user = userEvent.setup();
-
-    renderPage();
-
-    await user.click(await screen.findByTestId('quality-system-open-training'));
-    expect(await screen.findByTestId('quality-system-selected-title')).toHaveTextContent('\u57f9\u8bad');
-
-    await user.click(screen.getByTestId('quality-system-return-root'));
-    await waitFor(() => {
-      expect(screen.queryByTestId('quality-system-selected-module')).not.toBeInTheDocument();
-    });
-  });
-
-  it('shows a queue error without hiding the shell when inbox loading fails', async () => {
-    operationApprovalApi.listInbox.mockRejectedValue(new Error('operation_approval_service_unavailable'));
 
     renderPage();
 
     expect(await screen.findByTestId('quality-system-page')).toBeInTheDocument();
-    expect(await screen.findByTestId('quality-system-queue-error')).toBeInTheDocument();
-    expect(screen.getByTestId('quality-system-module-audit')).toBeInTheDocument();
-  });
-
-  it('renders WS04 page directly on change-control subroute', async () => {
-    renderPage(['/quality-system/change-control']);
-
-    expect(await screen.findByTestId('change-control-page')).toBeInTheDocument();
-    expect(screen.queryByTestId('quality-system-page')).not.toBeInTheDocument();
-  });
-
-  it('renders WS08 workspace inside quality-system shell', async () => {
-    renderPage(['/quality-system/governance-closure']);
-
-    expect(await screen.findByTestId('quality-system-page')).toBeInTheDocument();
-    expect(await screen.findByTestId('governance-closure-workspace')).toBeInTheDocument();
+    expect(await screen.findByTestId('quality-system-modules-empty')).toBeInTheDocument();
   });
 });
+

@@ -5,6 +5,8 @@ from datetime import datetime
 from pathlib import Path
 import re
 
+from backend.services.document_control import controlled_compliance_relpath
+
 from .r7_validator import ComplianceIssue
 from .review_package import ComplianceReviewPackageService, REQUIRED_REVIEW_PACKAGE_GROUPS
 
@@ -31,13 +33,27 @@ class Fda03ComplianceReport:
 
 
 REQUIRED_DOCS: dict[str, tuple[str, ...]] = {
-    "doc/compliance/controlled_document_register.md": ("版本:", "更新时间:", "当前发布版本:"),
-    "doc/compliance/review_package_sop.md": ("版本:", "更新时间:", "/api/audit/review-package"),
-    "doc/compliance/urs.md": ("URS-012", "FDA-03"),
-    "doc/compliance/srs.md": ("SRS-012", "URS-012"),
-    "doc/compliance/traceability_matrix.md": ("FDA-03", "SRS-012"),
-    "doc/compliance/validation_plan.md": ("validate_fda03_repo_compliance.py", "test_compliance_review_package_api_unit"),
-    "doc/compliance/validation_report.md": ("FDA-03", "validate_fda03_repo_compliance.py"),
+    controlled_compliance_relpath("controlled_document_register.md"): (
+        "版本:",
+        "更新时间:",
+        "当前发布版本:",
+    ),
+    controlled_compliance_relpath("review_package_sop.md"): (
+        "版本:",
+        "更新时间:",
+        "/api/audit/review-package",
+    ),
+    controlled_compliance_relpath("urs.md"): ("URS-012", "FDA-03"),
+    controlled_compliance_relpath("srs.md"): ("SRS-012", "URS-012"),
+    controlled_compliance_relpath("traceability_matrix.md"): ("FDA-03", "SRS-012"),
+    controlled_compliance_relpath("validation_plan.md"): (
+        "validate_fda03_repo_compliance.py",
+        "test_compliance_review_package_api_unit",
+    ),
+    controlled_compliance_relpath("validation_report.md"): (
+        "FDA-03",
+        "validate_fda03_repo_compliance.py",
+    ),
 }
 
 REQUIRED_FILES: tuple[str, ...] = (
@@ -51,17 +67,17 @@ REQUIRED_FILES: tuple[str, ...] = (
 
 REQUIRED_PATTERNS: tuple[tuple[str, str, str], ...] = (
     (
-        "doc/compliance/review_package_sop.md",
+        controlled_compliance_relpath("review_package_sop.md"),
         r"/api/audit/controlled-documents",
         "审查包 SOP 未引用受控文档登记接口",
     ),
     (
-        "doc/compliance/review_package_sop.md",
+        controlled_compliance_relpath("review_package_sop.md"),
         r"review_package_manifest\.json",
         "审查包 SOP 缺少 review_package_manifest.json 摘要说明",
     ),
     (
-        "doc/compliance/traceability_matrix.md",
+        controlled_compliance_relpath("traceability_matrix.md"),
         r"test_fda03_compliance_gate_unit",
         "追踪矩阵缺少 FDA-03 gate 测试映射",
     ),
@@ -111,11 +127,12 @@ def validate_fda03_repo_state(repo_root: str | Path) -> Fda03ComplianceReport:
         service = ComplianceReviewPackageService(repo_root=root)
         documents = service.list_controlled_documents()
     except Exception as exc:
+        register_path = controlled_compliance_relpath("controlled_document_register.md")
         report.blocking_issues.append(
             ComplianceIssue(
                 code="controlled_document_registry_invalid",
                 message=f"受控文档登记解析失败: {exc}",
-                path="doc/compliance/controlled_document_register.md",
+                path=register_path,
             )
         )
         documents = []
@@ -151,21 +168,23 @@ def validate_fda03_repo_state(repo_root: str | Path) -> Fda03ComplianceReport:
 
     missing_groups = sorted(REQUIRED_REVIEW_PACKAGE_GROUPS - eligible_groups)
     if missing_groups:
+        register_path = controlled_compliance_relpath("controlled_document_register.md")
         report.blocking_issues.append(
             ComplianceIssue(
                 code="review_package_group_missing",
                 message=f"审查包缺少必需文档分组: {', '.join(missing_groups)}",
-                path="doc/compliance/controlled_document_register.md",
+                path=register_path,
             )
         )
 
-    sop = docs_cache.get("doc/compliance/review_package_sop.md", "")
+    sop_path = controlled_compliance_relpath("review_package_sop.md")
+    sop = docs_cache.get(sop_path, "")
     if "线下签字版批准页" in sop:
         report.external_gaps.append(
             ComplianceIssue(
                 code="external_release_signoff_pending",
                 message="线下签字版批准页、纸质作废回收记录和真实发布批次签核仍需在线下受控体系归档",
-                path="doc/compliance/review_package_sop.md",
+                path=sop_path,
             )
         )
 

@@ -161,6 +161,20 @@ export const trainingComplianceApi = {
     );
   },
 
+  async recordReadProgress(assignmentId, payload = {}) {
+    return normalizeObjectField(
+      await httpClient.requestJson(
+        authBackendUrl(`/api/training-compliance/assignments/${encodeURIComponent(assignmentId)}/read-progress`),
+        {
+          method: 'POST',
+          body: JSON.stringify(payload || {}),
+        }
+      ),
+      'assignment',
+      'training_compliance_assignment_read_progress'
+    );
+  },
+
   async listQuestionThreads({ limit = 100, status } = {}) {
     return normalizeArrayField(
       await httpClient.requestJson(

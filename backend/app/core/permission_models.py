@@ -23,10 +23,10 @@ QUALITY_CAPABILITY_ACTIONS: dict[str, tuple[str, ...]] = {
     "maintenance": ("plan", "record", "approve"),
     "batch_records": ("template_manage", "execute", "sign", "review", "export"),
     "audit_events": ("view", "export"),
-    "complaints": (),
-    "capa": (),
-    "internal_audit": (),
-    "management_review": (),
+    "complaints": ("view", "create", "assess", "close"),
+    "capa": ("view", "create", "verify", "close"),
+    "internal_audit": ("view", "create", "complete"),
+    "management_review": ("view", "create", "complete"),
 }
 
 
@@ -57,17 +57,20 @@ def _scoped_capability(scope: ResourceScope, targets: Iterable[str] = ()) -> dic
 
 def _quality_capability_map(*, is_admin: bool, can_manage_users: bool) -> dict[str, dict[str, Any]]:
     capabilities: dict[str, dict[str, Any]] = {}
-    enabled_quality_system_actions = {"view"} if (is_admin or can_manage_users) else set()
-    if is_admin:
-        enabled_quality_system_actions.add("manage")
 
     for resource, actions in QUALITY_CAPABILITY_ACTIONS.items():
         action_map: dict[str, Any] = {}
         for action in actions:
             enabled = False
             if resource == "quality_system":
-                enabled = action in enabled_quality_system_actions
-            elif is_admin:
+                if action == "view":
+                    enabled = is_admin or can_manage_users
+                elif action == "manage":
+                    enabled = is_admin
+            elif is_admin or can_manage_users:
+                enabled = True
+            elif resource == "training_ack" and action == "acknowledge":
+                # Training acknowledgment is a user action; keep it enabled without granting management actions.
                 enabled = True
             action_map[action] = _boolean_capability(enabled)
         capabilities[resource] = action_map

@@ -107,7 +107,7 @@ class TestAuthMeServiceUnit(unittest.TestCase):
         self.assertEqual(payload["capabilities"]["quality_system"]["view"], {"scope": "all", "targets": []})
         self.assertEqual(payload["capabilities"]["quality_system"]["manage"], {"scope": "all", "targets": []})
         self.assertEqual(payload["capabilities"]["document_control"]["create"], {"scope": "all", "targets": []})
-        self.assertEqual(payload["capabilities"]["complaints"], {})
+        self.assertEqual(payload["capabilities"]["complaints"]["view"], {"scope": "all", "targets": []})
 
     def test_build_payload_set_scope(self):
         deps = SimpleNamespace(
@@ -156,9 +156,10 @@ class TestAuthMeServiceUnit(unittest.TestCase):
         self.assertEqual(payload["capabilities"]["quality_system"]["view"], {"scope": "none", "targets": []})
         self.assertEqual(payload["capabilities"]["quality_system"]["manage"], {"scope": "none", "targets": []})
         self.assertEqual(payload["capabilities"]["audit_events"]["view"], {"scope": "none", "targets": []})
-        self.assertEqual(payload["capabilities"]["complaints"], {})
+        self.assertEqual(payload["capabilities"]["complaints"]["view"], {"scope": "none", "targets": []})
+        self.assertEqual(payload["capabilities"]["training_ack"]["acknowledge"], {"scope": "all", "targets": []})
 
-    def test_build_payload_sub_admin_gets_quality_system_shell_access_without_manage(self):
+    def test_build_payload_sub_admin_gets_quality_capabilities_without_quality_system_manage(self):
         deps = SimpleNamespace(
             ragflow_service=_RagflowService(),
             ragflow_chat_service=_RagflowChatService(),
@@ -197,7 +198,8 @@ class TestAuthMeServiceUnit(unittest.TestCase):
         payload = build_auth_me_payload(deps=deps, user=user, snapshot=snapshot)
         self.assertEqual(payload["capabilities"]["quality_system"]["view"], {"scope": "all", "targets": []})
         self.assertEqual(payload["capabilities"]["quality_system"]["manage"], {"scope": "none", "targets": []})
-        self.assertEqual(payload["capabilities"]["document_control"]["create"], {"scope": "none", "targets": []})
+        self.assertEqual(payload["capabilities"]["document_control"]["create"], {"scope": "all", "targets": []})
+        self.assertEqual(payload["capabilities"]["change_control"]["create"], {"scope": "all", "targets": []})
 
     def test_build_payload_does_not_silence_management_scope_failures(self):
         deps = SimpleNamespace(

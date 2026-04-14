@@ -43,7 +43,7 @@ export default function useLoginPage() {
       return;
     }
 
-    setError(result.error || '登录失败');
+    setError(result.error || 'Login failed.');
   };
 
   return {
@@ -57,3 +57,4 @@ export default function useLoginPage() {
     handleSubmit,
   };
 }
+

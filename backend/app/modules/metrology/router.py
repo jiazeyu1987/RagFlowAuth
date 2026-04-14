@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException, Response
 from pydantic import BaseModel
 
-from backend.app.core.authz import AdminOnly, AuthContextDep
+from backend.app.core.authz import AuthContextDep, assert_capability
 from backend.services.metrology import MetrologyServiceError
 
 router = APIRouter()
@@ -65,7 +65,8 @@ def _audit(ctx: AuthContextDep, *, action: str, event_type: str, resource_id: st
 
 
 @router.post("/metrology/records")
-def create_metrology_record(body: MetrologyRecordBody, ctx: AuthContextDep, _: AdminOnly):
+def create_metrology_record(body: MetrologyRecordBody, ctx: AuthContextDep):
+    assert_capability(ctx, resource="metrology", action="record")
     _ensure_user_exists(ctx, body.responsible_user_id, field_name="responsible_user_id")
     service = _service_from_ctx(ctx)
     try:
@@ -98,11 +99,11 @@ def create_metrology_record(body: MetrologyRecordBody, ctx: AuthContextDep, _: A
 @router.get("/metrology/records")
 def list_metrology_records(
     ctx: AuthContextDep,
-    _: AdminOnly,
     limit: int = 100,
     equipment_id: str | None = None,
     status: str | None = None,
 ):
+    assert_capability(ctx, resource="metrology", action="record")
     service = _service_from_ctx(ctx)
     try:
         items = service.list_records(limit=limit, equipment_id=equipment_id, status=status)
@@ -112,7 +113,8 @@ def list_metrology_records(
 
 
 @router.post("/metrology/records/{record_id}/record")
-def record_metrology_result(record_id: str, body: MetrologyRecordResultBody, ctx: AuthContextDep, _: AdminOnly):
+def record_metrology_result(record_id: str, body: MetrologyRecordResultBody, ctx: AuthContextDep):
+    assert_capability(ctx, resource="metrology", action="record")
     service = _service_from_ctx(ctx)
     before = service.get_record(record_id)
     try:
@@ -141,7 +143,8 @@ def record_metrology_result(record_id: str, body: MetrologyRecordResultBody, ctx
 
 
 @router.post("/metrology/records/{record_id}/confirm")
-def confirm_metrology_record(record_id: str, body: MetrologyDecisionBody, ctx: AuthContextDep, _: AdminOnly):
+def confirm_metrology_record(record_id: str, body: MetrologyDecisionBody, ctx: AuthContextDep):
+    assert_capability(ctx, resource="metrology", action="confirm")
     service = _service_from_ctx(ctx)
     before = service.get_record(record_id)
     try:
@@ -165,7 +168,8 @@ def confirm_metrology_record(record_id: str, body: MetrologyDecisionBody, ctx: A
 
 
 @router.post("/metrology/records/{record_id}/approve")
-def approve_metrology_record(record_id: str, body: MetrologyDecisionBody, ctx: AuthContextDep, _: AdminOnly):
+def approve_metrology_record(record_id: str, body: MetrologyDecisionBody, ctx: AuthContextDep):
+    assert_capability(ctx, resource="metrology", action="approve")
     service = _service_from_ctx(ctx)
     before = service.get_record(record_id)
     try:
@@ -189,7 +193,8 @@ def approve_metrology_record(record_id: str, body: MetrologyDecisionBody, ctx: A
 
 
 @router.post("/metrology/reminders/dispatch")
-def dispatch_metrology_reminders(ctx: AuthContextDep, _: AdminOnly, window_days: int = 7):
+def dispatch_metrology_reminders(ctx: AuthContextDep, window_days: int = 7):
+    assert_capability(ctx, resource="metrology", action="record")
     service = _service_from_ctx(ctx)
     try:
         result = service.dispatch_due_reminders(actor_user_id=str(ctx.user.user_id), window_days=window_days)
@@ -210,11 +215,11 @@ def dispatch_metrology_reminders(ctx: AuthContextDep, _: AdminOnly, window_days:
 @router.get("/metrology/records/export")
 def export_metrology_records(
     ctx: AuthContextDep,
-    _: AdminOnly,
     limit: int = 200,
     equipment_id: str | None = None,
     status: str | None = None,
 ):
+    assert_capability(ctx, resource="metrology", action="record")
     service = _service_from_ctx(ctx)
     try:
         content = service.export_records_csv(limit=limit, equipment_id=equipment_id, status=status)

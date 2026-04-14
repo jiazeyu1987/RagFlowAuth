@@ -2,7 +2,7 @@
   "schema_version": 2,
   "task_id": "iso-13485-20260413T153016",
   "mode": "full",
-  "status": "executing",
+  "status": "completed",
   "current_phase": null,
   "phase_statuses": [
     {
@@ -28,13 +28,20 @@
         "独立评审测试计划"
       ],
       "evidence_expectation": "",
+      "evidence": [
+        "execution-log.md#Phase-P1"
+      ],
+      "notes": "",
+      "last_reviewed_at": "2026-04-13T16:06:12",
       "acceptance_criteria": [
         {
           "ac_id": "P1-AC1",
           "text": "PRD 明确记录当前仓库的关键现实，包括文档主根冲突、`tobedeleted/compliance/*` 现状、导航接入方式、现有权限模型边界和审计/站内信/电子签名基础能力。",
           "status": "completed",
           "evidence": [
-            "execution-log.md#Phase-P1"
+            "execution-log.md#Phase-P1",
+            "test-report.md#Final-Verdict",
+            "execution-log.md#Phase-P3"
           ]
         },
         {
@@ -42,7 +49,9 @@
           "text": "PRD 提供覆盖文控、设计开发文件、培训、`体系文件`入口、变更、设备、计量、维护、批记录、审计日志、投诉待定等事项的整改问题清单，并且每项都能追溯到仓库证据或会议纪要。",
           "status": "completed",
           "evidence": [
-            "execution-log.md#Phase-P1"
+            "execution-log.md#Phase-P1",
+            "test-report.md#Final-Verdict",
+            "execution-log.md#Phase-P3"
           ]
         },
         {
@@ -50,7 +59,9 @@
           "text": "PRD 对`体系文件`治理中枢给出清晰方案，至少包含入口定位、一级模块、目标用户、接入方式以及基于现有 capability 模型的扩展建议。",
           "status": "completed",
           "evidence": [
-            "execution-log.md#Phase-P1"
+            "execution-log.md#Phase-P1",
+            "test-report.md#Final-Verdict",
+            "execution-log.md#Phase-P3"
           ]
         },
         {
@@ -58,7 +69,9 @@
           "text": "PRD 把会议纪要中的关键流程要求细化为可执行规则，至少覆盖文件上传与上一版确认、审核/批准、生效/作废、培训 15 分钟知晓与提问闭环、知识库下发、变更台账与计划、设备与计量、批记录实时性与签名、搜索和智能对话留痕。",
           "status": "completed",
           "evidence": [
-            "execution-log.md#Phase-P1"
+            "execution-log.md#Phase-P1",
+            "test-report.md#Final-Verdict",
+            "execution-log.md#Phase-P3"
           ]
         },
         {
@@ -66,7 +79,9 @@
           "text": "PRD 给出明确的整改优先级与路线图，并明确“文控 + 设备”是前期重点，同时强调单一受控主根和禁止 fallback 的实施原则。",
           "status": "completed",
           "evidence": [
-            "execution-log.md#Phase-P1"
+            "execution-log.md#Phase-P1",
+            "test-report.md#Final-Verdict",
+            "execution-log.md#Phase-P3"
           ]
         },
         {
@@ -74,27 +89,316 @@
           "text": "`test-plan.md` 能让独立评审人在不依赖隐藏上下文的前提下，通过明确命令和人工检查步骤验证上述文档内容。",
           "status": "completed",
           "evidence": [
-            "execution-log.md#Phase-P1"
+            "execution-log.md#Phase-P1",
+            "test-report.md#Final-Verdict",
+            "execution-log.md#Phase-P3"
+          ]
+        }
+      ]
+    },
+    {
+      "phase_id": "P2",
+      "title": "冻结质量 capability 合同（对应工作包 P0）",
+      "status": "completed",
+      "objective": "以 `docs/tasks/iso-13485-20260413T153016/p0-p1-quality-permission-api.md` 为权威，冻结质量域 capability 的资源集合、action 集、`auth/me` capability 快照结构与拒绝语义，并保证前后端常量一致、前端可无二义性消费。",
+      "owned_paths": [
+        "backend/app/core/permission_models.py",
+        "backend/services/auth_me_service.py",
+        "fronted/src/shared/auth/capabilities.js",
+        "backend/tests/test_auth_me_service_unit.py",
+        "docs/tasks/iso-13485-20260413T153016/execution-log.md"
+      ],
+      "dependencies": [
+        "PermissionSnapshot 仍是后端 capability 计算的唯一入口",
+        "前端 normalizeCapabilities 逻辑保持不变"
+      ],
+      "deliverables": [
+        "稳定的质量 capability 合同（资源与 action 集）",
+        "`auth/me` 对质量子管理员返回真实质量 action",
+        "明确的 403 拒绝语义（无角色名 fallback）"
+      ],
+      "evidence_expectation": "",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P2-AC1",
+          "text": "`backend/app/core/permission_models.py` 与 `fronted/src/shared/auth/capabilities.js` 中的 `QUALITY_CAPABILITY_ACTIONS` 资源集合与 action 集一致，并覆盖本工作包定义的质量资源。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P2",
+            "test-report.md#T7",
+            "test-report.md#Final-Verdict",
+            "execution-log.md#Phase-P3"
+          ]
+        },
+        {
+          "ac_id": "P2-AC2",
+          "text": "`auth/me` 的 capability 快照结构稳定且可被前端 `normalizeCapabilities` 无二义性消费；质量子管理员（非 `admin`）至少具备一个非 `quality_system` 的质量 action。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P2",
+            "test-report.md#T7",
+            "test-report.md#Final-Verdict",
+            "execution-log.md#Phase-P3"
+          ]
+        },
+        {
+          "ac_id": "P2-AC3",
+          "text": "capability 缺失或未授权时，后端拒绝语义为明确 `403`，detail 不回退到角色名硬编码（不出现 `admin_required` 作为兼容兜底）。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P2",
+            "test-report.md#T7",
+            "test-report.md#Final-Verdict",
+            "execution-log.md#Phase-P3"
           ]
         }
       ],
       "evidence": [
-        "execution-log.md#Phase-P1"
+        "execution-log.md#Phase-P2",
+        "test-report.md#T7"
       ],
-      "notes": "",
-      "last_reviewed_at": "2026-04-13T16:06:12"
+      "notes": "- Aligned quality capability contract across backend/frontend and ensured auth/me returns real quality actions for non-admin.",
+      "last_reviewed_at": "2026-04-14T14:47:05"
+    },
+    {
+      "phase_id": "P3",
+      "title": "质量域 API 鉴权收敛到 capability（对应工作包 P1）",
+      "status": "completed",
+      "objective": "将质量域相关后端 API 从 `AdminOnly` 或零散判断收敛到统一 capability 校验（fail-fast 403），并补齐/更新后端单测覆盖成功、拒绝与快照输出三类路径。",
+      "owned_paths": [
+        "backend/app/core/authz.py",
+        "backend/app/core/permission_resolver.py",
+        "backend/app/core/permission_models.py",
+        "backend/app/modules/document_control/router.py",
+        "backend/app/modules/training_compliance/router.py",
+        "backend/app/modules/change_control/router.py",
+        "backend/app/modules/equipment/router.py",
+        "backend/app/modules/metrology/router.py",
+        "backend/app/modules/maintenance/router.py",
+        "backend/app/modules/complaints/router.py",
+        "backend/app/modules/capa/router.py",
+        "backend/app/modules/internal_audit/router.py",
+        "backend/app/modules/management_review/router.py",
+        "backend/app/modules/audit/router.py",
+        "backend/tests/test_document_control_api_unit.py",
+        "backend/tests/test_training_compliance_api_unit.py",
+        "backend/tests/test_change_control_api_unit.py",
+        "backend/tests/test_equipment_api_unit.py",
+        "backend/tests/test_metrology_api_unit.py",
+        "backend/tests/test_maintenance_api_unit.py",
+        "backend/tests/test_audit_events_api_unit.py",
+        "docs/tasks/iso-13485-20260413T153016/execution-log.md",
+        "docs/tasks/iso-13485-20260413T153016/test-report.md"
+      ],
+      "dependencies": [
+        "`python -m pytest` 可用",
+        "质量域相关服务可在单测中用临时 sqlite db 验证"
+      ],
+      "deliverables": [
+        "capability 合同摘要",
+        "被替换掉的 `AdminOnly` 路由清单",
+        "通过的 pytest 命令与结果"
+      ],
+      "evidence_expectation": "",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P3-AC1",
+          "text": "文控、培训、变更、设备、计量、维保、投诉、CAPA、内审、管评、质量审计相关 API 以 capability 作为主鉴权入口，且不再使用 `AdminOnly` 作为质量域默认门。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P3",
+            "test-report.md#T10",
+            "test-report.md#Final-Verdict"
+          ]
+        },
+        {
+          "ac_id": "P3-AC2",
+          "text": "非 `admin` 用户在具备对应 capability 时可成功调用被授权的质量域 API；未授权访问明确返回 `403`。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P3",
+            "test-report.md#T10",
+            "test-report.md#Final-Verdict"
+          ]
+        },
+        {
+          "ac_id": "P3-AC3",
+          "text": "后端测试覆盖成功、拒绝、快照输出三类路径，并在建议的 pytest 命令下通过。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P3",
+            "test-report.md#T10",
+            "test-report.md#Final-Verdict"
+          ]
+        }
+      ],
+      "evidence": [
+        "execution-log.md#Phase-P3",
+        "test-report.md#T10"
+      ],
+      "notes": "- Switched quality-domain routers to capability-based authz with fail-fast 403 and updated/extended pytest coverage including sub_admin success paths.",
+      "last_reviewed_at": "2026-04-14T14:47:14"
+    },
+    {
+      "phase_id": "P4",
+      "title": "批记录后端闭环",
+      "status": "completed",
+      "objective": "实现批记录后端数据模型、模板/执行/步骤写入/签名/复核/导出 API，并复用现有电子签名能力与审计日志。",
+      "owned_paths": [
+        "backend/database/schema/batch_records.py",
+        "backend/database/schema/ensure.py",
+        "backend/services/batch_records/service.py",
+        "backend/app/modules/batch_records/router.py",
+        "backend/app/main.py",
+        "backend/app/dependency_factory.py",
+        "backend/tests/test_batch_records_api_unit.py",
+        "docs/tasks/iso-13485-20260413T153016/execution-log.md",
+        "docs/tasks/iso-13485-20260413T153016/test-report.md"
+      ],
+      "dependencies": [
+        "P2 capability 合同已冻结并包含 `batch_records.*`",
+        "现有电子签名服务可复用"
+      ],
+      "deliverables": [
+        "批记录 schema/service/router",
+        "电子签名与审计集成",
+        "后端单测证据"
+      ],
+      "evidence_expectation": "",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P4-AC1",
+          "text": "后端存在批记录模板、执行实例、步骤写入、复核与导出基础模型和 API。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P4",
+            "test-report.md#T11",
+            "test-report.md#Final-Verdict"
+          ]
+        },
+        {
+          "ac_id": "P4-AC2",
+          "text": "批记录签名复用现有电子签名能力，不另建第二套签名体系。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P4",
+            "test-report.md#T11",
+            "test-report.md#Final-Verdict"
+          ]
+        },
+        {
+          "ac_id": "P4-AC3",
+          "text": "批记录关键动作写入审计日志，且未授权用户无法执行模板管理、签名或复核动作。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P4",
+            "test-report.md#T11",
+            "test-report.md#Final-Verdict"
+          ]
+        },
+        {
+          "ac_id": "P4-AC4",
+          "text": "后端单测覆盖模板创建、执行填写、签名/复核、导出与拒绝路径。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P4",
+            "test-report.md#T11",
+            "test-report.md#Final-Verdict"
+          ]
+        }
+      ],
+      "evidence": [
+        "execution-log.md#Phase-P4",
+        "test-report.md#T11"
+      ],
+      "notes": "- Added batch records backend schema/service/router with append-only step entries, audit logging, and shared electronic-signature integration.",
+      "last_reviewed_at": "2026-04-14T15:27:10"
+    },
+    {
+      "phase_id": "P5",
+      "title": "批记录前端工作区与浏览器验证",
+      "status": "completed",
+      "objective": "实现 `/quality-system/batch-records` 前端真实工作区，并补齐 capability 守卫、前端测试与浏览器验证证据。",
+      "owned_paths": [
+        "fronted/src/features/batchRecords/api.js",
+        "fronted/src/features/batchRecords/BatchRecordsWorkspace.js",
+        "fronted/src/pages/QualitySystemBatchRecords.js",
+        "fronted/src/pages/QualitySystemBatchRecords.test.js",
+        "fronted/e2e/tests/docs.quality-system.batch-records.spec.js",
+        "docs/tasks/iso-13485-20260413T153016/execution-log.md",
+        "docs/tasks/iso-13485-20260413T153016/test-report.md"
+      ],
+      "dependencies": [
+        "P4 批记录 API 已可用",
+        "质量体系路由与 module catalog 已挂接"
+      ],
+      "deliverables": [
+        "批记录前端工作区",
+        "Jest 测试证据",
+        "Playwright 浏览器证据"
+      ],
+      "evidence_expectation": "",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P5-AC1",
+          "text": "`/quality-system/batch-records` 存在真实前端工作区，可完成模板查看、执行记录填写、签名/复核入口与导出触发。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P4",
+            "test-report.md#T12",
+            "test-report.md#Final-Verdict"
+          ]
+        },
+        {
+          "ac_id": "P5-AC2",
+          "text": "批记录前端入口遵循质量 capability 守卫，并与质量系统模块目录一致。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P4",
+            "test-report.md#T12",
+            "test-report.md#Final-Verdict"
+          ]
+        },
+        {
+          "ac_id": "P5-AC3",
+          "text": "前端单测覆盖批记录页面渲染、能力守卫与主要交互。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P4",
+            "test-report.md#T12",
+            "test-report.md#Final-Verdict"
+          ]
+        },
+        {
+          "ac_id": "P5-AC4",
+          "text": "Playwright 用例在真实浏览器中验证质量系统入口、批记录工作区与至少一个能力受限场景，并产生截图或等效证据文件。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Phase-P4",
+            "test-report.md#T13",
+            "test-report.md#Final-Verdict"
+          ]
+        }
+      ],
+      "evidence": [
+        "execution-log.md#Phase-P4",
+        "test-report.md#T12",
+        "test-report.md#T13"
+      ],
+      "notes": "- Added live batch-records workspace under quality-system and validated the browser entry path with Playwright docs config.",
+      "last_reviewed_at": "2026-04-14T15:27:10"
     }
   ],
   "planner_review_status": "approved",
-  "test_status": "not_started",
+  "test_status": "passed",
   "blocking_prereqs": [],
   "iteration_counts": {
     "planner_revisions": 0,
-    "executor_loops": 1,
-    "test_loops": 0
+    "executor_loops": 3,
+    "test_loops": 3
   },
   "created_at": "2026-04-13T15:30:16",
-  "updated_at": "2026-04-13T16:06:12",
+  "updated_at": "2026-04-14T15:27:10",
   "branch": "int_latest",
   "baseline_revision": "1274287b5d2da34421b677a83c264d4b808617b9",
   "workspace_root": "D:\\ProjectPackage\\RagflowAuth",

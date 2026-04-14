@@ -57,3 +57,65 @@ def admin_only(
 
 
 AdminOnly = Annotated[TokenPayload, Depends(admin_only)]
+
+
+def capability_allowed(
+    snapshot: PermissionSnapshot,
+    *,
+    resource: str,
+    action: str,
+    target: str | None = None,
+) -> bool:
+    clean_resource = str(resource or "").strip()
+    clean_action = str(action or "").strip()
+    if not clean_resource or not clean_action:
+        return False
+
+    resource_map = snapshot.capabilities_dict().get(clean_resource, {})
+    if not isinstance(resource_map, dict):
+        return False
+    entry = resource_map.get(clean_action, {})
+    if not isinstance(entry, dict):
+        return False
+
+    scope = str(entry.get("scope") or "none").strip().lower()
+    if scope == "all":
+        return True
+    if scope != "set":
+        return False
+
+    targets = entry.get("targets")
+    if not isinstance(targets, list):
+        return False
+
+    clean_target = str(target or "").strip()
+    normalized_targets = {str(item).strip() for item in targets if isinstance(item, str) and item.strip()}
+    if not clean_target:
+        return bool(normalized_targets)
+    return clean_target in normalized_targets
+
+
+def assert_capability(
+    ctx: AuthContextDep,
+    *,
+    resource: str,
+    action: str,
+    target: str | None = None,
+    detail: str | None = None,
+) -> None:
+    if capability_allowed(ctx.snapshot, resource=resource, action=action, target=target):
+        return
+    raise HTTPException(status_code=403, detail=detail or f"{str(resource or '').strip()}_forbidden")
+
+
+def require_capability(
+    *,
+    resource: str,
+    action: str,
+    target: str | None = None,
+    detail: str | None = None,
+) -> Any:
+    def _dep(ctx: AuthContextDep) -> None:
+        assert_capability(ctx, resource=resource, action=action, target=target, detail=detail)
+
+    return Depends(_dep)

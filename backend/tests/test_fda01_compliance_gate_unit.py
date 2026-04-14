@@ -15,7 +15,7 @@ def _write(path: Path, content: str) -> None:
 
 def _build_repo(root: Path) -> None:
     _write(
-        root / "doc/compliance/electronic_signature_policy.md",
+        root / "docs/compliance/electronic_signature_policy.md",
         """# Policy
 版本: v1.0
 更新时间: 2026-04-02
@@ -25,7 +25,7 @@ def _build_repo(root: Path) -> None:
 """,
     )
     _write(
-        root / "doc/compliance/signature_authorization_matrix.md",
+        root / "docs/compliance/signature_authorization_matrix.md",
         """# Matrix
 版本: v1.0
 更新时间: 2026-04-02
@@ -33,7 +33,7 @@ operation_request_not_current_approver
 signature_user_disabled
 """,
     )
-    _write(root / "doc/compliance/approval_workflow_sop.md", "# SOP\n版本: v1.0\n更新时间: 2026-04-02\n")
+    _write(root / "docs/compliance/approval_workflow_sop.md", "# SOP\n版本: v1.0\n更新时间: 2026-04-02\n")
     for rel in (
         "backend/app/modules/operation_approvals/router.py",
         "backend/services/operation_approval/service.py",
@@ -59,7 +59,7 @@ class TestFda01ComplianceGateUnit(unittest.TestCase):
         try:
             root = Path(tmp)
             _build_repo(root)
-            (root / "doc/compliance/signature_authorization_matrix.md").write_text(
+            (root / "docs/compliance/signature_authorization_matrix.md").write_text(
                 "# Matrix\n版本: v1.0\n更新时间: 2026-04-02\n",
                 encoding="utf-8",
             )

@@ -24,10 +24,10 @@ export const QUALITY_CAPABILITY_ACTIONS = Object.freeze({
   maintenance: Object.freeze(['plan', 'record', 'approve']),
   batch_records: Object.freeze(['template_manage', 'execute', 'sign', 'review', 'export']),
   audit_events: Object.freeze(['view', 'export']),
-  complaints: Object.freeze([]),
-  capa: Object.freeze([]),
-  internal_audit: Object.freeze([]),
-  management_review: Object.freeze([]),
+  complaints: Object.freeze(['view', 'create', 'assess', 'close']),
+  capa: Object.freeze(['view', 'create', 'verify', 'close']),
+  internal_audit: Object.freeze(['view', 'create', 'complete']),
+  management_review: Object.freeze(['view', 'create', 'complete']),
 });
 
 export const QUALITY_SYSTEM_ROUTE_PERMISSION = Object.freeze({

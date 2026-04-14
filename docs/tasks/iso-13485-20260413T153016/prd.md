@@ -16,19 +16,24 @@
 
 ## Scope
 
-本次任务只交付整改文档与验收工件，范围包括：
+本次任务交付整改文档与验收工件，并在同一任务内完成部分关键能力的最小落地（见 Phase Plan，P1-P5），范围包括：
 
 - 对当前仓库中的 ISO 13485 差距进行证据化梳理。
 - 结合会议纪要，整理`体系文件`页签的目标定位、信息架构、权限模型和核心流程。
 - 把文控、培训、变更、设备、计量、维护、批记录、审计日志、投诉待定等要求整理成可执行的整改清单。
+- 冻结质量 capability 合同并保证前后端常量对齐、`auth/me` capability 快照稳定可消费（P2）。
+- 将质量域相关 API 的鉴权收敛到 capability（fail-fast 403，无角色名兜底），并用后端单测固化（P3）。
+- 落地批记录最小闭环：后端模型/API/签名复用/审计留痕 + 前端工作区 + Jest/Playwright 证据（P4-P5）。
 - 给出推荐优先级、前置条件、阻断条件和后续实施路线图。
-- 提供独立评审可复用的测试计划。
+- 提供独立评审可复用的测试计划与测试报告。
 
 ## Non-Goals
 
-- 本次任务不直接实现前端页面、后端接口、数据库表结构或历史文档迁移。
+- 本次任务不实现除批记录之外的设备/变更/计量/维护/投诉/内审/管评等业务域的完整流程闭环与页面交互（本任务仅覆盖其 capability 合同与后端鉴权收敛）。
+- 本次任务不做历史文档迁移，也不对现有受控文件做批量“内容改写”；仅以当前仓库事实为准整理证据与门禁一致性。
 - 本次任务不把 `tobedeleted/compliance/*` 直接认定为当前有效受控文件。
-- 本次任务不宣称系统已经符合 ISO 13485，只输出整改依据与落地方案。
+- 本次任务不宣称系统已经符合 ISO 13485；即使 P2-P5 有代码交付，也只代表按本任务范围完成最小落地与证据化验证。
+- 批记录不在本任务内覆盖所有产品/工艺/检验场景模板，也不替代质量负责人对“手签/口令”等效电子签名策略的最终确认。
 - 不允许为了“先跑通”而引入双文档根、占位文件、静默降级或兼容分支。
 
 ## Preconditions
@@ -80,13 +85,13 @@
 
 | 事实 | 仓库证据 | 影响 |
 | --- | --- | --- |
-| 当前主文档树是 `docs/`，但合规校验和导出仍硬编码引用 `doc/compliance/*`。 | `AGENTS.md`；`backend/services/compliance/review_package.py`；`backend/services/compliance/*_validator.py` | 文控单一受控源断裂，审核包、校验器、培训矩阵引用都不可信。 |
-| 现存合规材料主要在 `tobedeleted/compliance/*`，包括 `urs.md`、`srs.md`、`traceability_matrix.md`、`validation_plan.md`、`validation_report.md`、`training_matrix.md` 等。 | `tobedeleted/compliance/*` | 这些材料不能直接当作当前生效的受控文件。 |
-| 培训数据种子仍引用 `doc/compliance/training_matrix.md#...`。 | `backend/database/schema/training_compliance.py` | 训练矩阵与培训确认链路缺少有效受控源。 |
+| 当前唯一受控合规文档主根已切到 `docs/compliance/`，合规门禁脚本与导出路径已对齐并通过。 | `backend/services/document_control/compliance_root.py`；`backend/services/compliance/review_package.py`；`scripts/validate_*_repo_compliance.py` | 文控主根断裂已消除，独立评审应以 `docs/compliance/` 为准。 |
+| `tobedeleted/compliance/*` 仍保留历史副本，可作为迁移来源，但不能直接当作当前生效受控文件。 | `tobedeleted/compliance/*`；`docs/compliance/*` | 评审时必须区分“历史副本”与“现行受控文档”。 |
+| 培训数据种子、培训矩阵和培训确认链路已经统一引用 `docs/compliance/training_matrix.md#...`。 | `backend/database/schema/training_compliance.py`；`docs/compliance/training_matrix.md` | 培训受控源已恢复，但后续仍需补强培训审计导出。 |
 | 前端导航通过 `routeRegistry.js` 的 `showInNav` 生成，侧边栏通过 `LayoutSidebar.js` + `PermissionGuard` 做展示与权限控制。 | `fronted/src/routes/routeRegistry.js`；`fronted/src/components/layout/LayoutSidebar.js` | 新增`体系文件`页签在技术上可行，但必须接入现有路由与权限模型。 |
-| 当前 capability snapshot 覆盖 `users`、`kb_documents`、`ragflow_documents`、`kb_directory`、`kbs_config`、`tools`、`chats`，尚未覆盖质量体系域。 | `backend/app/core/permission_models.py`；`fronted/src/shared/auth/capabilities.js` | 质量部子管理员无法以现有资源模型完成体系工作。 |
-| 审计日志、站内信、电子签名已有部分基础能力，但还不是面向质量体系的完整闭环。 | `backend/app/modules/audit/router.py`；`backend/database/schema/audit_logs.py`；`backend/services/notification/inbox_service.py`；`backend/app/modules/electronic_signature/routes/manage.py` | 可复用为整改基础，但还需要扩展事件类型、流程联动和证据导出。 |
-| 部分校验器对现行后端结构已经漂移。 | `backend/services/compliance/gbz04_validator.py`；`backend/services/compliance/gbz05_validator.py`；`backend/app/dependency_factory.py` | 需要同时修正文控基线和校验器自身的结构漂移，否则会持续出现误报。 |
+| 当前 capability snapshot 已覆盖质量体系域资源，`auth/me` 可向非 `admin` 的质量子管理员返回真实质量 action。 | `backend/app/core/permission_models.py`；`backend/services/auth_me_service.py`；`fronted/src/shared/auth/capabilities.js` | 质量域权限合同已建立，可用于后端鉴权与前端显隐。 |
+| 审计日志、站内信、电子签名、培训读时、批记录图片证据等基础能力已接入质量域关键流程，但培训读时审计导出仍可继续补强。 | `backend/app/modules/audit/router.py`；`backend/database/schema/audit_logs.py`；`backend/app/modules/training_compliance/router.py`；`backend/services/batch_records/service.py` | 质量域基础闭环已形成，但仍存在可继续深化的审计细项。 |
+| 合规校验器、受控文档根和后端现行结构已收敛一致；当前 9 个门禁脚本全部通过。 | `backend/services/compliance/*_validator.py`；`scripts/validate_*_repo_compliance.py` | 门禁误报风险已显著下降，当前剩余风险主要在环境与非仓库证据。 |
 
 ## 整改问题清单
 
@@ -94,19 +99,19 @@
 
 | 编号 | 关注点 | 当前不符合/不足 | 证据 | 风险 | 整改要求 | 优先级 |
 | --- | --- | --- | --- | --- | --- | --- |
-| DC-01 | 4.2.4 文档控制 | 受控体系文件没有唯一主根，`docs/` 与 `doc/compliance/*` 发生断裂。 | `backend/services/compliance/review_package.py`；合规校验脚本；`AGENTS.md` | 审核包、验证、培训和文控链路均不可审计。 | 明确唯一受控主根，推荐切到 `docs/compliance/`，并一次性修正代码、校验器、种子、导出逻辑。 | 第一优先级 |
+| DC-01 | 4.2.4 文档控制 | 受控体系文件主根已统一到 `docs/compliance/`，原 `doc/compliance/*` 断裂问题已修复。 | `backend/services/document_control/compliance_root.py`；合规门禁脚本 | 当前主要风险转为“评审误读历史副本”而非系统主根断裂。 | 保持 `docs/compliance/` 作为唯一受控主根，并在文档与脚本中持续禁止回退到双路径。 | 已完成 |
 | DC-02 | 4.2.4/4.2.5 文档与记录控制 | 文件上传、上一版确认、审核、批准、生效、作废、下发、培训尚未形成统一闭环。 | 会议纪要 | 受控状态、版本关系、作废留痕与发布责任无法证明。 | 建立完整文控状态机和留痕记录，禁止同编号双“现行有效”。 | 第一优先级 |
 | DC-03 | 文件检索与分类 | 文件无法从“文件编号 + 文件名”快速定位，且缺少“文件类别 + 从属产品/注册证”二维治理。 | 会议纪要 | 审核、培训、下发、变更影响分析无法精准检索。 | 文控模型必须补齐编号、名称、类别、产品、注册证、知识库目标等元数据。 | 第一优先级 |
-| DD-01 | 7.3 设计开发文件 | `URS/SRS/追溯矩阵/验证计划/验证报告` 仅存在于 `tobedeleted/compliance/*`。 | `tobedeleted/compliance/*` | 无法作为当前受控设计开发证据。 | 迁入唯一受控主根并完成审批、生效、版本头、登记表挂接。 | 第一优先级 |
-| TR-01 | 6.2 培训 | 培训矩阵引用失效，培训确认流程不满足“阅读 15 分钟、确认动作、提问闭环”要求。 | `backend/database/schema/training_compliance.py`；会议纪要 | 培训证据、知晓确认和疑问闭环均不完整。 | 生效后自动触发培训，记录阅读时长、已知晓/有疑问、站内信提问和处理结果。 | 第一优先级 |
-| GOV-01 | 治理入口与授权 | 质量部子管理员没有独立入口，也没有覆盖质量域的 capability。 | `fronted/src/routes/routeRegistry.js`；`fronted/src/components/layout/LayoutSidebar.js`；`backend/app/core/permission_models.py` | 体系工作仍需依赖全局管理员或散落功能点。 | 新增`体系文件`治理中枢，扩展 capability/resource/action 模型。 | 第一优先级 |
+| DD-01 | 7.3 设计开发文件 | `URS/SRS/追溯矩阵/验证计划/验证报告` 已迁入 `docs/compliance/*` 并纳入受控登记表。 | `docs/compliance/urs.md`；`docs/compliance/srs.md`；`docs/compliance/traceability_matrix.md`；`docs/compliance/validation_plan.md`；`docs/compliance/validation_report.md` | 当前剩余风险主要在独立评审文档是否同步更新，而非设计开发证据缺失。 | 保持受控登记表、验证文档和门禁脚本的一致性。 | 已完成 |
+| TR-01 | 6.2 培训 | 培训矩阵引用已修复；培训确认已支持读时持久化、已知晓/有疑问和定向疑问闭环。 | `backend/database/schema/training_compliance.py`；`backend/app/modules/training_compliance/router.py`；`fronted/src/features/qualitySystem/training/*` | 当前剩余风险在于培训读时的审计导出能力仍可继续补强。 | 保持“生效触发培训 + 持久化阅读时长 + 定向提问闭环”，并补训练审计导出。 | 部分完成 |
+| GOV-01 | 治理入口与授权 | `体系文件`治理中枢与质量域 capability 已落地，非 `admin` 的质量子管理员可使用真实质量 action。 | `fronted/src/routes/routeRegistry.js`；`fronted/src/components/layout/LayoutSidebar.js`；`backend/app/core/permission_models.py` | 当前主要风险不再是入口缺失，而是后续模块深度与测试覆盖需持续补强。 | 继续按 capability 合同扩展质量域模块，禁止回退到角色名硬编码。 | 已完成 |
 | CC-01 | 7.3.9 变更控制 | 变更台账、评估、计划、审批、执行、跨部门确认、回归台账、文控联动尚未闭环。 | 会议纪要；`backend/services/compliance/gbz02_validator.py` | 变更完成后无法自动回归清单，也无法确保文件同步更新。 | 建立变更台账与计划闭环，强制挂接受控文件更新与确认。 | 第二优先级 |
 | EQ-01 | 设备全生命周期 | 设备从采购到报废的全过程未形成统一台账、提醒和审批。 | 会议纪要 | 设备验收、使用、维护、计量、报废的记录链断裂。 | 建立设备资产主档与生命周期台账，按节点提醒责任人。 | 第一优先级 |
 | MT-01 | 计量管理 | 计量附件、计量结果确认审批、到期提醒缺失。 | 会议纪要 | 设备合规状态与使用许可不可追溯。 | 计量记录、附件、审批、提醒与设备资产联动。 | 第二优先级 |
 | MA-01 | 维护保养 | 维护计划、执行记录、到期提醒、确认审批缺失。 | 会议纪要 | 维护保养无法形成可审计台账。 | 维护计划与执行、审批、提醒能力与设备台账联动。 | 第二优先级 |
-| BR-01 | 批记录管理 | 生产/检验批记录模板、实时填写、拍照、电子签名、手签加口令未落地。 | 会议纪要 | 批记录无法成为可信电子记录。 | 建立模板版控、实时记录、照片附件、签名与导出能力。 | 第三优先级 |
+| BR-01 | 批记录管理 | 模板版控、实时填写、现场拍照、电子签名与导出能力已落地；后续仍需确认手签等效策略和更完整的生产/检验模板覆盖。 | `backend/app/modules/batch_records/router.py`；`backend/services/batch_records/service.py`；`fronted/src/features/batchRecords/BatchRecordsWorkspace.js` | 批记录基础链路已可用，但合规策略细化和业务模板覆盖仍有扩展空间。 | 保持模板版控、实时记录、照片证据、签名与导出能力，并补细化合规策略。 | 部分完成 |
 | AUD-01 | 审计追踪 | 全局搜索、智能对话、文档调用记录没有纳入质量体系审计口径。 | 会议纪要；`backend/app/modules/audit/router.py`；`backend/database/schema/audit_logs.py` | 关键操作缺证据，不满足审计追踪要求。 | 扩展质量事件 taxonomy，记录搜索、对话、文档调用、审批、确认、作废、导出。 | 第二优先级 |
-| VAL-01 | 合规校验器一致性 | 部分校验器仍检查历史路径或旧模块位置。 | `backend/services/compliance/gbz04_validator.py`；`backend/services/compliance/gbz05_validator.py`；`backend/app/dependency_factory.py` | 即便业务整改后，门禁仍可能误报。 | 将校验器与现行代码结构一起纳入整改范围。 | 第一优先级 |
+| VAL-01 | 合规校验器一致性 | 合规校验器已与现行代码结构和 `docs/compliance/` 收敛一致。 | `backend/services/compliance/*_validator.py`；`scripts/validate_*_repo_compliance.py` | 当前门禁误报已不再是主要风险。 | 继续把新增流程能力同步纳入门禁与单测。 | 已完成 |
 | PMS-01 | 投诉/反馈/内审/管理评审 | 投诉待定，内审与管理评审尚无明确体系对象和记录出口。 | 会议纪要；仓库中未见对应受控域 | ISO 13485 后续闭环缺口仍在。 | 在路线图中预留独立工作流与受控记录域。 | 第三优先级 |
 
 ## `体系文件`治理中枢方案
@@ -310,7 +315,7 @@
 ### R1. 文控基线恢复
 
 - 目标：确定唯一受控主根，恢复受控文件登记表、设计开发文件和培训矩阵的有效链路。
-- 重点：优先处理 `doc/compliance/*` 与 `docs/` 的断裂问题。
+- 重点：保持 `docs/compliance/` 作为唯一受控主根，并防止回退到双路径或历史副本混用。
 - 结果：文控和校验器能基于真实受控文件工作。
 
 ### R2. `体系文件`入口与质量权限落地
@@ -352,6 +357,34 @@
 - Dependencies: 可读取当前仓库结构与相关证据文件; 会议纪要和用户补充诉求完整可用
 - Deliverables: 证据化整改文档; `体系文件`治理中枢方案; 文控、培训、变更、设备、计量、维护、批记录、审计等整改要求; 后续实施路线图; 独立评审测试计划
 
+### P2: 冻结质量 capability 合同（对应工作包 P0）
+
+- Objective: 以 `docs/tasks/iso-13485-20260413T153016/p0-p1-quality-permission-api.md` 为权威，冻结质量域 capability 的资源集合、action 集、`auth/me` capability 快照结构与拒绝语义，并保证前后端常量一致、前端可无二义性消费。
+- Owned paths: backend/app/core/permission_models.py; backend/services/auth_me_service.py; fronted/src/shared/auth/capabilities.js; backend/tests/test_auth_me_service_unit.py; docs/tasks/iso-13485-20260413T153016/execution-log.md
+- Dependencies: PermissionSnapshot 仍是后端 capability 计算的唯一入口; 前端 normalizeCapabilities 逻辑保持不变
+- Deliverables: 稳定的质量 capability 合同（资源与 action 集）; `auth/me` 对质量子管理员返回真实质量 action; 明确的 403 拒绝语义（无角色名 fallback）
+
+### P3: 质量域 API 鉴权收敛到 capability（对应工作包 P1）
+
+- Objective: 将质量域相关后端 API 从 `AdminOnly` 或零散判断收敛到统一 capability 校验（fail-fast 403），并补齐/更新后端单测覆盖成功、拒绝与快照输出三类路径。
+- Owned paths: backend/app/core/authz.py; backend/app/core/permission_resolver.py; backend/app/core/permission_models.py; backend/app/modules/document_control/router.py; backend/app/modules/training_compliance/router.py; backend/app/modules/change_control/router.py; backend/app/modules/equipment/router.py; backend/app/modules/metrology/router.py; backend/app/modules/maintenance/router.py; backend/app/modules/complaints/router.py; backend/app/modules/capa/router.py; backend/app/modules/internal_audit/router.py; backend/app/modules/management_review/router.py; backend/app/modules/audit/router.py; backend/tests/test_document_control_api_unit.py; backend/tests/test_training_compliance_api_unit.py; backend/tests/test_change_control_api_unit.py; backend/tests/test_equipment_api_unit.py; backend/tests/test_metrology_api_unit.py; backend/tests/test_maintenance_api_unit.py; backend/tests/test_audit_events_api_unit.py; docs/tasks/iso-13485-20260413T153016/execution-log.md; docs/tasks/iso-13485-20260413T153016/test-report.md
+- Dependencies: `python -m pytest` 可用; 质量域相关服务可在单测中用临时 sqlite db 验证
+- Deliverables: capability 合同摘要; 被替换掉的 `AdminOnly` 路由清单; 通过的 pytest 命令与结果
+
+### P4: 批记录后端闭环
+
+- Objective: 实现批记录后端数据模型、模板/执行/步骤写入/签名/复核/导出 API，并复用现有电子签名能力与审计日志。
+- Owned paths: backend/database/schema/batch_records.py; backend/database/schema/ensure.py; backend/services/batch_records/service.py; backend/app/modules/batch_records/router.py; backend/app/main.py; backend/app/dependency_factory.py; backend/tests/test_batch_records_api_unit.py; docs/tasks/iso-13485-20260413T153016/execution-log.md; docs/tasks/iso-13485-20260413T153016/test-report.md
+- Dependencies: P2 capability 合同已冻结并包含 `batch_records.*`; 现有电子签名服务可复用
+- Deliverables: 批记录 schema/service/router; 电子签名与审计集成; 后端单测证据
+
+### P5: 批记录前端工作区与浏览器验证
+
+- Objective: 实现 `/quality-system/batch-records` 前端真实工作区，并补齐 capability 守卫、前端测试与浏览器验证证据。
+- Owned paths: fronted/src/features/batchRecords/api.js; fronted/src/features/batchRecords/BatchRecordsWorkspace.js; fronted/src/pages/QualitySystemBatchRecords.js; fronted/src/pages/QualitySystemBatchRecords.test.js; fronted/e2e/tests/docs.quality-system.batch-records.spec.js; docs/tasks/iso-13485-20260413T153016/execution-log.md; docs/tasks/iso-13485-20260413T153016/test-report.md
+- Dependencies: P4 批记录 API 已可用; 质量体系路由与 module catalog 已挂接
+- Deliverables: 批记录前端工作区; Jest 测试证据; Playwright 浏览器证据
+
 ## Phase Acceptance Criteria
 
 ### P1
@@ -365,14 +398,44 @@
 - Evidence expectation:
   - 评审人仅阅读 `prd.md` 与 `test-plan.md`，即可定位仓库证据、核对整改逻辑、判断文档是否完整可执行。
 
+### P2
+
+- P2-AC1: `backend/app/core/permission_models.py` 与 `fronted/src/shared/auth/capabilities.js` 中的 `QUALITY_CAPABILITY_ACTIONS` 资源集合与 action 集一致，并覆盖本工作包定义的质量资源。
+- P2-AC2: `auth/me` 的 capability 快照结构稳定且可被前端 `normalizeCapabilities` 无二义性消费；质量子管理员（非 `admin`）至少具备一个非 `quality_system` 的质量 action。
+- P2-AC3: capability 缺失或未授权时，后端拒绝语义为明确 `403`，detail 不回退到角色名硬编码（不出现 `admin_required` 作为兼容兜底）。
+- Evidence expectation:
+  - 代码常量对齐 + 单测断言（`test_auth_me_service_unit.py`）。
+
+### P3
+
+- P3-AC1: 文控、培训、变更、设备、计量、维保、投诉、CAPA、内审、管评、质量审计相关 API 以 capability 作为主鉴权入口，且不再使用 `AdminOnly` 作为质量域默认门。
+- P3-AC2: 非 `admin` 用户在具备对应 capability 时可成功调用被授权的质量域 API；未授权访问明确返回 `403`。
+- P3-AC3: 后端测试覆盖成功、拒绝、快照输出三类路径，并在建议的 pytest 命令下通过。
+- Evidence expectation:
+  - 更新后的 API 单测与 pytest 运行记录。
+
+### P4
+
+- P4-AC1: 后端存在批记录模板、执行实例、步骤写入、复核与导出基础模型和 API。
+- P4-AC2: 批记录签名复用现有电子签名能力，不另建第二套签名体系。
+- P4-AC3: 批记录关键动作写入审计日志，且未授权用户无法执行模板管理、签名或复核动作。
+- P4-AC4: 后端单测覆盖模板创建、执行填写、签名/复核、导出与拒绝路径。
+
+### P5
+
+- P5-AC1: `/quality-system/batch-records` 存在真实前端工作区，可完成模板查看、执行记录填写、签名/复核入口与导出触发。
+- P5-AC2: 批记录前端入口遵循质量 capability 守卫，并与质量系统模块目录一致。
+- P5-AC3: 前端单测覆盖批记录页面渲染、能力守卫与主要交互。
+- P5-AC4: Playwright 用例在真实浏览器中验证质量系统入口、批记录工作区与至少一个能力受限场景，并产生截图或等效证据文件。
+
 ## Done Definition
 
 本次任务完成的标准是：
 
 - `prd.md` 与 `test-plan.md` 均已完成，且内容符合模板要求。
 - `validate_artifacts.py` 通过。
-- P1 的验收标准具备可复核性。
-- 文档明确说明本次仅交付整改文档包，不伪装成已完成系统整改。
+- P1-P5 的验收标准具备可复核性（文档 + capability 合同 + API 鉴权 + 批记录后端/前端与测试证据）。
+- 文档阶段（P1）明确说明仅交付整改方案；本任务范围内的代码交付（P2-P5）不等同于“系统已满足 ISO 13485”。
 
 ## Blocking Conditions
 

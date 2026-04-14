@@ -295,7 +295,7 @@ class TestAuditEvidenceExportApiUnit(unittest.TestCase):
                 resp = client.get("/api/audit/evidence-export?doc_id=doc-fda02")
 
             self.assertEqual(resp.status_code, 403, resp.text)
-            self.assertEqual(resp.json()["detail"], "admin_required")
+            self.assertEqual(resp.json()["detail"], "audit_events_forbidden")
         finally:
             cleanup_dir(td)
 

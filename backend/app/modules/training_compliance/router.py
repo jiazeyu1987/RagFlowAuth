@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from backend.app.core.authz import AdminOnly, AuthContextDep
+from backend.app.core.authz import AuthContextDep, assert_capability, capability_allowed
 from backend.app.core.training_support import resolve_training_compliance_service
 from backend.services.training_compliance import TrainingComplianceError
 from backend.services.users.store import UserStore
@@ -57,6 +57,10 @@ class TrainingAssignmentGenerateBody(BaseModel):
     note: str | None = None
 
 
+class TrainingReadProgressBody(BaseModel):
+    event: str = "heartbeat"
+
+
 class AssignmentAcknowledgeBody(BaseModel):
     decision: str
     question_text: str | None = None
@@ -91,19 +95,6 @@ def _wrap_payload(field: str, item: object) -> dict[str, object]:
     return {field: item}
 
 
-def _capability_allowed(ctx: AuthContextDep, *, resource: str, action: str) -> bool:
-    capabilities = ctx.snapshot.capabilities_dict()
-    capability = capabilities.get(resource, {}).get(action, {})
-    scope = str(capability.get("scope") or "none")
-    return scope == "all" or (scope == "set" and bool(capability.get("targets")))
-
-
-def _ensure_training_ack_capability(ctx: AuthContextDep, *, action: str) -> None:
-    if _capability_allowed(ctx, resource="training_ack", action=action):
-        return
-    raise HTTPException(status_code=403, detail="training_ack_forbidden")
-
-
 def _active_user_ids(ctx: AuthContextDep) -> list[str]:
     users = ctx.deps.user_store.list_users(status="active", limit=1000)
     return [str(item.user_id) for item in users if getattr(item, "user_id", None)]
@@ -135,8 +126,16 @@ def _notify_training_event(
     manager.dispatch_pending(limit=200)
 
 
+def _resolve_question_review_recipients(item: dict) -> list[str]:
+    owner_user_id = str(item.get("assigned_by_user_id") or "").strip()
+    if not owner_user_id:
+        raise HTTPException(status_code=500, detail="training_question_reviewer_missing")
+    return [owner_user_id]
+
+
 @router.post("/training-compliance/requirements")
-def upsert_training_requirement(body: TrainingRequirementBody, ctx: AuthContextDep, _: AdminOnly):
+def upsert_training_requirement(body: TrainingRequirementBody, ctx: AuthContextDep):
+    assert_capability(ctx, resource="training_ack", action="assign")
     service = _service_from_ctx(ctx)
     try:
         item = service.upsert_requirement(
@@ -175,18 +174,19 @@ def upsert_training_requirement(body: TrainingRequirementBody, ctx: AuthContextD
 @router.get("/training-compliance/requirements")
 def list_training_requirements(
     ctx: AuthContextDep,
-    _: AdminOnly,
     limit: int = 100,
     controlled_action: str | None = None,
     role_code: str | None = None,
 ):
+    assert_capability(ctx, resource="training_ack", action="assign")
     service = _service_from_ctx(ctx)
     items = service.list_requirements(limit=limit, controlled_action=controlled_action, role_code=role_code)
     return {"items": items, "count": len(items)}
 
 
 @router.post("/training-compliance/records")
-def create_training_record(body: TrainingRecordBody, ctx: AuthContextDep, _: AdminOnly):
+def create_training_record(body: TrainingRecordBody, ctx: AuthContextDep):
+    assert_capability(ctx, resource="training_ack", action="assign")
     _ensure_user_exists(ctx, body.user_id, field_name="user_id")
     _ensure_user_exists(ctx, body.trainer_user_id, field_name="trainer_user_id")
     if body.effectiveness_reviewed_by_user_id:
@@ -236,18 +236,19 @@ def create_training_record(body: TrainingRecordBody, ctx: AuthContextDep, _: Adm
 @router.get("/training-compliance/records")
 def list_training_records(
     ctx: AuthContextDep,
-    _: AdminOnly,
     limit: int = 100,
     requirement_code: str | None = None,
     user_id: str | None = None,
 ):
+    assert_capability(ctx, resource="training_ack", action="assign")
     service = _service_from_ctx(ctx)
     items = service.list_training_records(limit=limit, requirement_code=requirement_code, user_id=user_id)
     return {"items": items, "count": len(items)}
 
 
 @router.post("/training-compliance/certifications")
-def create_operator_certification(body: OperatorCertificationBody, ctx: AuthContextDep, _: AdminOnly):
+def create_operator_certification(body: OperatorCertificationBody, ctx: AuthContextDep):
+    assert_capability(ctx, resource="training_ack", action="assign")
     _ensure_user_exists(ctx, body.user_id, field_name="user_id")
     granted_by_user_id = body.granted_by_user_id or str(ctx.user.user_id)
     _ensure_user_exists(ctx, granted_by_user_id, field_name="granted_by_user_id")
@@ -288,11 +289,11 @@ def create_operator_certification(body: OperatorCertificationBody, ctx: AuthCont
 @router.get("/training-compliance/certifications")
 def list_operator_certifications(
     ctx: AuthContextDep,
-    _: AdminOnly,
     limit: int = 100,
     requirement_code: str | None = None,
     user_id: str | None = None,
 ):
+    assert_capability(ctx, resource="training_ack", action="assign")
     service = _service_from_ctx(ctx)
     items = service.list_certifications(limit=limit, requirement_code=requirement_code, user_id=user_id)
     return {"items": items, "count": len(items)}
@@ -303,8 +304,8 @@ def get_action_training_status(
     controlled_action: str,
     user_id: str,
     ctx: AuthContextDep,
-    _: AdminOnly,
 ):
+    assert_capability(ctx, resource="training_ack", action="assign")
     user = _ensure_user_exists(ctx, user_id, field_name="user_id")
     service = _service_from_ctx(ctx)
     try:
@@ -320,7 +321,7 @@ def get_action_training_status(
 
 @router.get("/training-compliance/effective-revisions")
 def list_effective_revisions(ctx: AuthContextDep, limit: int = 100):
-    _ensure_training_ack_capability(ctx, action="assign")
+    assert_capability(ctx, resource="training_ack", action="assign")
     service = _service_from_ctx(ctx)
     items = service.list_effective_revisions(limit=limit)
     return {"items": items, "count": len(items)}
@@ -328,7 +329,7 @@ def list_effective_revisions(ctx: AuthContextDep, limit: int = 100):
 
 @router.post("/training-compliance/assignments/generate")
 def generate_training_assignments(body: TrainingAssignmentGenerateBody, ctx: AuthContextDep):
-    _ensure_training_ack_capability(ctx, action="assign")
+    assert_capability(ctx, resource="training_ack", action="assign")
     service = _service_from_ctx(ctx)
     assignee_user_ids = body.assignee_user_ids or _active_user_ids(ctx)
     for assignee in assignee_user_ids:
@@ -373,6 +374,7 @@ def generate_training_assignments(body: TrainingAssignmentGenerateBody, ctx: Aut
 
 @router.get("/training-compliance/assignments")
 def list_my_training_assignments(ctx: AuthContextDep, status: str | None = None, limit: int = 100):
+    assert_capability(ctx, resource="training_ack", action="acknowledge")
     service = _service_from_ctx(ctx)
     items = service.list_assignments(
         assignee_user_id=str(ctx.user.user_id),
@@ -382,8 +384,24 @@ def list_my_training_assignments(ctx: AuthContextDep, status: str | None = None,
     return {"items": items, "count": len(items)}
 
 
+@router.post("/training-compliance/assignments/{assignment_id}/read-progress")
+def record_training_assignment_read_progress(assignment_id: str, body: TrainingReadProgressBody, ctx: AuthContextDep):
+    assert_capability(ctx, resource="training_ack", action="acknowledge")
+    service = _service_from_ctx(ctx)
+    try:
+        item = service.record_assignment_read_progress(
+            assignment_id=assignment_id,
+            assignee_user_id=str(ctx.user.user_id),
+            event=body.event,
+        )
+    except TrainingComplianceError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.code) from exc
+    return {"assignment": item}
+
+
 @router.post("/training-compliance/assignments/{assignment_id}/acknowledge")
 def acknowledge_training_assignment(assignment_id: str, body: AssignmentAcknowledgeBody, ctx: AuthContextDep):
+    assert_capability(ctx, resource="training_ack", action="acknowledge")
     service = _service_from_ctx(ctx)
     try:
         item = service.acknowledge_assignment(
@@ -408,15 +426,10 @@ def acknowledge_training_assignment(assignment_id: str, body: AssignmentAcknowle
         )
 
     if item["decision"] == "questioned" and item.get("question_thread_id"):
-        reviewers = [
-            entry.user_id
-            for entry in ctx.deps.user_store.list_users(status="active", limit=1000)
-            if str(getattr(entry, "role", "") or "") in {"admin", "sub_admin"}
-        ]
         _notify_training_event(
             ctx,
             event_type="training_assignment_questioned",
-            recipients=[str(uid) for uid in reviewers],
+            recipients=_resolve_question_review_recipients(item),
             payload={
                 "title": "培训疑问待处理",
                 "body": f"{item['doc_code']} v{item['revision_no']} 收到疑问，请处理。",
@@ -433,8 +446,9 @@ def acknowledge_training_assignment(assignment_id: str, body: AssignmentAcknowle
 
 @router.get("/training-compliance/question-threads")
 def list_question_threads(ctx: AuthContextDep, status: str | None = None, limit: int = 100):
+    assert_capability(ctx, resource="training_ack", action="acknowledge")
     service = _service_from_ctx(ctx)
-    can_review_questions = _capability_allowed(ctx, resource="training_ack", action="review_questions")
+    can_review_questions = capability_allowed(ctx.snapshot, resource="training_ack", action="review_questions")
     assignee_user_id = None if can_review_questions else str(ctx.user.user_id)
     items = service.list_question_threads(status=status, assignee_user_id=assignee_user_id, limit=limit)
     return {"items": items, "count": len(items)}
@@ -442,7 +456,7 @@ def list_question_threads(ctx: AuthContextDep, status: str | None = None, limit:
 
 @router.post("/training-compliance/question-threads/{thread_id}/resolve")
 def resolve_question_thread(thread_id: str, body: QuestionResolveBody, ctx: AuthContextDep):
-    _ensure_training_ack_capability(ctx, action="review_questions")
+    assert_capability(ctx, resource="training_ack", action="review_questions")
     service = _service_from_ctx(ctx)
     try:
         item = service.resolve_question_thread(

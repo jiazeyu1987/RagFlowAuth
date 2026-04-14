@@ -1,5 +1,6 @@
 import React from 'react';
 import useDocumentControlPage from '../features/documentControl/useDocumentControlPage';
+import { mapUserFacingErrorMessage } from '../shared/errors/userFacingErrorMessages';
 
 const panelStyle = {
   background: '#ffffff',
@@ -88,7 +89,7 @@ export default function DocumentControl() {
     handleCreateDocument,
     handleCreateRevision,
     handleTransitionRevision,
-  } = useDocumentControlPage();
+  } = useDocumentControlPage({ mapErrorMessage: mapUserFacingErrorMessage });
 
   return (
     <div
@@ -272,11 +273,12 @@ export default function DocumentControl() {
                 />
               </label>
               <label style={labelStyle}>
-                Product
+                Product *
                 <input
                   data-testid="document-control-create-product-name"
                   style={inputStyle}
                   value={documentForm.product_name}
+                  required
                   onChange={(event) =>
                     setDocumentForm((previous) => ({
                       ...previous,
@@ -286,11 +288,12 @@ export default function DocumentControl() {
                 />
               </label>
               <label style={labelStyle}>
-                Registration Ref
+                Registration Ref *
                 <input
                   data-testid="document-control-create-registration-ref"
                   style={inputStyle}
                   value={documentForm.registration_ref}
+                  required
                   onChange={(event) =>
                     setDocumentForm((previous) => ({
                       ...previous,

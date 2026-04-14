@@ -173,6 +173,18 @@ export default function useDocumentControlPage({ text = DEFAULT_TEXT, mapErrorMe
 
   const handleCreateDocument = useCallback(async () => {
     resetMessages();
+    if (!String(documentForm.product_name || '').trim()) {
+      setError(
+        normalizeError('product_name_required', resolvedText.createDocumentError, mapErrorMessage)
+      );
+      return null;
+    }
+    if (!String(documentForm.registration_ref || '').trim()) {
+      setError(
+        normalizeError('registration_ref_required', resolvedText.createDocumentError, mapErrorMessage)
+      );
+      return null;
+    }
     if (!documentForm.file) {
       setError(normalizeError('file_required', resolvedText.createDocumentError, mapErrorMessage));
       return null;

@@ -18,7 +18,7 @@ def _write(path: Path, content: str) -> None:
 
 def _build_repo(root: Path, *, intended_use_version: str = "v1.0") -> None:
     _write(
-        root / "doc/compliance/intended_use.md",
+        root / "docs/compliance/intended_use.md",
         f"""# 预期用途
 版本: {intended_use_version}
 更新时间: 2026-04-03
@@ -29,7 +29,7 @@ def _build_repo(root: Path, *, intended_use_version: str = "v1.0") -> None:
 """,
     )
     _write(
-        root / "doc/compliance/traceability_matrix.md",
+        root / "docs/compliance/traceability_matrix.md",
         """# 追踪矩阵
 
 版本: v1.0
@@ -37,15 +37,15 @@ def _build_repo(root: Path, *, intended_use_version: str = "v1.0") -> None:
 
 | 需求ID | URS | SRS | 实现证据 | 测试证据 | 文档证据 | 状态 |
 |---|---|---|---|---|---|---|
-| R4 | URS-004 | SRS-004 | `backend/app/modules/review/routes/workflow.py` | `backend.tests.test_review_workflow_api_unit` | `doc/compliance/approval_workflow_sop.md` | 已验证 |
-| R5 | URS-005 | SRS-005 | `backend/services/notification/service.py` | `backend.tests.test_review_notification_integration_unit` | `doc/compliance/approval_notification_sop.md` | 已验证 |
-| R7 | URS-007 | SRS-007 | `backend/services/compliance/r7_validator.py`, `backend/services/config_change_log_store.py` | `backend.tests.test_r7_compliance_gate_unit` | `doc/compliance/validation_plan.md` | 已验证 |
-| R8 | URS-008 | SRS-008 | `backend/services/audit/manager.py`, `backend/app/modules/audit/router.py` | `backend.tests.test_audit_events_api_unit` | `doc/compliance/validation_report.md` | 已验证 |
-| R9 | URS-009 | SRS-009 | `backend/database/tenant_paths.py`, `backend/app/core/tenant.py` | `backend.tests.test_tenant_db_isolation_unit` | `doc/compliance/tenant_db_migration_plan.md` | 已验证 |
-| R10 | URS-010 | SRS-010 | `backend/services/data_security/restore_service.py`, `backend/services/data_security/store.py` | `backend.tests.test_backup_restore_audit_unit` | `doc/compliance/validation_report.md` | 已验证 |
-| FDA-02 | URS-011 | SRS-011 | `backend/app/modules/audit/router.py` | `backend.tests.test_audit_evidence_export_api_unit` | `doc/compliance/validation_report.md` | 已验证 |
-| FDA-03 | URS-012 | SRS-012 | `backend/services/compliance/review_package.py` | `backend.tests.test_compliance_review_package_api_unit` | `doc/compliance/review_package_sop.md` | 已验证 |
-| GBZ-01 | URS-013 | SRS-013 | `backend/services/compliance/gbz01_maintenance.py`, `backend/services/config_change_log_store.py` | `backend.tests.test_gbz01_maintenance_unit`, `backend.tests.test_gbz01_compliance_gate_unit` | `doc/compliance/intended_use.md`, `doc/compliance/validation_plan.md`, `doc/compliance/validation_report.md` | 已验证 |
+| R4 | URS-004 | SRS-004 | `backend/app/modules/review/routes/workflow.py` | `backend.tests.test_review_workflow_api_unit` | `docs/compliance/approval_workflow_sop.md` | 已验证 |
+| R5 | URS-005 | SRS-005 | `backend/services/notification/service.py` | `backend.tests.test_review_notification_integration_unit` | `docs/compliance/approval_notification_sop.md` | 已验证 |
+| R7 | URS-007 | SRS-007 | `backend/services/compliance/r7_validator.py`, `backend/services/config_change_log_store.py` | `backend.tests.test_r7_compliance_gate_unit` | `docs/compliance/validation_plan.md` | 已验证 |
+| R8 | URS-008 | SRS-008 | `backend/services/audit/manager.py`, `backend/app/modules/audit/router.py` | `backend.tests.test_audit_events_api_unit` | `docs/compliance/validation_report.md` | 已验证 |
+| R9 | URS-009 | SRS-009 | `backend/database/tenant_paths.py`, `backend/app/core/tenant.py` | `backend.tests.test_tenant_db_isolation_unit` | `docs/compliance/tenant_db_migration_plan.md` | 已验证 |
+| R10 | URS-010 | SRS-010 | `backend/services/data_security/restore_service.py`, `backend/services/data_security/store.py` | `backend.tests.test_backup_restore_audit_unit` | `docs/compliance/validation_report.md` | 已验证 |
+| FDA-02 | URS-011 | SRS-011 | `backend/app/modules/audit/router.py` | `backend.tests.test_audit_evidence_export_api_unit` | `docs/compliance/validation_report.md` | 已验证 |
+| FDA-03 | URS-012 | SRS-012 | `backend/services/compliance/review_package.py` | `backend.tests.test_compliance_review_package_api_unit` | `docs/compliance/review_package_sop.md` | 已验证 |
+| GBZ-01 | URS-013 | SRS-013 | `backend/services/compliance/gbz01_maintenance.py`, `backend/services/config_change_log_store.py` | `backend.tests.test_gbz01_maintenance_unit`, `backend.tests.test_gbz01_compliance_gate_unit` | `docs/compliance/intended_use.md`, `docs/compliance/validation_plan.md`, `docs/compliance/validation_report.md` | 已验证 |
 """,
     )
 
@@ -107,7 +107,7 @@ class TestGbz01MaintenanceUnit(unittest.TestCase):
         )
         self.assertTrue(assessment.requires_revalidation)
         self.assertEqual(assessment.validation_status, "closed")
-        self.assertIn("doc/compliance/validation_report.md", assessment.impacted_artifacts)
+        self.assertIn("docs/compliance/validation_report.md", assessment.impacted_artifacts)
 
     def test_recent_config_change_logs_use_real_store_records(self):
         UploadSettingsStore(db_path=self.db_path).update_allowed_extensions(

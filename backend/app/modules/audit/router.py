@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, Request, Response
 
-from backend.app.core.authz import AdminOnly, AuthContextDep
+from backend.app.core.authz import AuthContextDep, assert_capability
 from backend.app.core.user_display import resolve_user_display_names
 from backend.services.audit import AuditEvidenceExportService
 from backend.services.compliance import ComplianceReviewPackageService, RetiredRecordsService
@@ -20,7 +20,6 @@ def _require_audit_log_manager(ctx: AuthContextDep):
 @router.get("/audit/events")
 async def list_audit_events(
     ctx: AuthContextDep,
-    _: AdminOnly,
     action: str | None = None,
     actor: str | None = None,
     username: str | None = None,
@@ -50,6 +49,7 @@ async def list_audit_events(
     - auth_login/auth_logout
     - document_preview/document_upload/document_download/document_delete
     """
+    assert_capability(ctx, resource="audit_events", action="view")
     manager = _require_audit_log_manager(ctx)
     result = manager.list_events(
         action=action,
@@ -107,7 +107,6 @@ def _resolve_retired_records_service(ctx: AuthContextDep) -> RetiredRecordsServi
 @router.get("/audit/evidence-export")
 async def export_audit_evidence(
     ctx: AuthContextDep,
-    _: AdminOnly,
     from_ms: int | None = None,
     to_ms: int | None = None,
     action: str | None = None,
@@ -121,6 +120,7 @@ async def export_audit_evidence(
     resource_id: str | None = None,
     source: str | None = None,
 ):
+    assert_capability(ctx, resource="audit_events", action="export")
     service = _resolve_evidence_export_service(ctx)
     result = service.export_package(
         exported_by=str(ctx.payload.sub),
@@ -166,7 +166,8 @@ async def export_audit_evidence(
 
 
 @router.get("/audit/controlled-documents")
-async def list_controlled_documents(request: Request, ctx: AuthContextDep, _: AdminOnly):
+async def list_controlled_documents(request: Request, ctx: AuthContextDep):
+    assert_capability(ctx, resource="audit_events", action="view")
     service = _resolve_review_package_service(request)
     try:
         items = [item.as_dict() for item in service.list_controlled_documents()]
@@ -184,9 +185,9 @@ async def list_controlled_documents(request: Request, ctx: AuthContextDep, _: Ad
 async def export_review_package(
     request: Request,
     ctx: AuthContextDep,
-    _: AdminOnly,
     company_id: int | None = None,
 ):
+    assert_capability(ctx, resource="audit_events", action="export")
     service = _resolve_review_package_service(request)
     try:
         result = service.export_review_package(
@@ -225,11 +226,11 @@ async def export_review_package(
 @router.get("/audit/retired-records")
 async def list_retired_records(
     ctx: AuthContextDep,
-    _: AdminOnly,
     kb_id: str | None = None,
     limit: int = 100,
     include_expired: bool = False,
 ):
+    assert_capability(ctx, resource="audit_events", action="view")
     service = _resolve_retired_records_service(ctx)
     items = service.list_retired_documents(
         kb_id=kb_id,
@@ -264,10 +265,10 @@ async def list_retired_records(
 @router.get("/audit/retired-records/{doc_id}/package")
 async def export_retired_record_package(
     ctx: AuthContextDep,
-    _: AdminOnly,
     doc_id: str,
     allow_expired: bool = False,
 ):
+    assert_capability(ctx, resource="audit_events", action="export")
     service = _resolve_retired_records_service(ctx)
     try:
         result = service.export_retired_record_package(doc_id=doc_id, allow_expired=allow_expired)
