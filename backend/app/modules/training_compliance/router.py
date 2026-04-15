@@ -53,8 +53,14 @@ class OperatorCertificationBody(BaseModel):
 class TrainingAssignmentGenerateBody(BaseModel):
     controlled_revision_id: str
     assignee_user_ids: list[str] | None = None
+    department_ids: list[int] | None = None
     min_read_minutes: int = 15
     note: str | None = None
+
+
+class RevisionTrainingGateBody(BaseModel):
+    training_required: bool
+    department_ids: list[int] | None = None
 
 
 class TrainingReadProgressBody(BaseModel):
@@ -98,6 +104,21 @@ def _wrap_payload(field: str, item: object) -> dict[str, object]:
 def _active_user_ids(ctx: AuthContextDep) -> list[str]:
     users = ctx.deps.user_store.list_users(status="active", limit=1000)
     return [str(item.user_id) for item in users if getattr(item, "user_id", None)]
+
+
+def _active_user_ids_for_departments(ctx: AuthContextDep, department_ids: list[int]) -> list[str]:
+    resolved: list[str] = []
+    seen: set[str] = set()
+    store = _user_store_from_ctx(ctx)
+    for department_id in department_ids or []:
+        users = store.list_users(status="active", department_id=int(department_id), limit=1000)
+        for item in users:
+            user_id = str(getattr(item, "user_id", "") or "").strip()
+            if not user_id or user_id in seen:
+                continue
+            seen.add(user_id)
+            resolved.append(user_id)
+    return resolved
 
 
 def _notify_training_event(
@@ -327,13 +348,62 @@ def list_effective_revisions(ctx: AuthContextDep, limit: int = 100):
     return {"items": items, "count": len(items)}
 
 
+@router.get("/training-compliance/trainable-revisions")
+def list_trainable_revisions(ctx: AuthContextDep, limit: int = 100):
+    assert_capability(ctx, resource="training_ack", action="assign")
+    service = _service_from_ctx(ctx)
+    items = service.list_trainable_revisions(limit=limit)
+    return {"items": items, "count": len(items)}
+
+
+@router.put("/training-compliance/revisions/{controlled_revision_id}/gate")
+def upsert_revision_training_gate(controlled_revision_id: str, body: RevisionTrainingGateBody, ctx: AuthContextDep):
+    assert_capability(ctx, resource="training_ack", action="assign")
+    service = _service_from_ctx(ctx)
+    try:
+        item = service.upsert_revision_training_gate(
+            controlled_revision_id=controlled_revision_id,
+            training_required=body.training_required,
+            department_ids=body.department_ids or [],
+        )
+    except TrainingComplianceError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.code) from exc
+    return _wrap_payload("gate", item)
+
+
+@router.get("/training-compliance/revisions/{controlled_revision_id}/gate")
+def get_revision_training_gate(controlled_revision_id: str, ctx: AuthContextDep):
+    assert_capability(ctx, resource="training_ack", action="assign")
+    service = _service_from_ctx(ctx)
+    try:
+        item = service.get_revision_training_gate(controlled_revision_id=controlled_revision_id)
+    except TrainingComplianceError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.code) from exc
+    return _wrap_payload("gate", item)
+
+
 @router.post("/training-compliance/assignments/generate")
 def generate_training_assignments(body: TrainingAssignmentGenerateBody, ctx: AuthContextDep):
     assert_capability(ctx, resource="training_ack", action="assign")
     service = _service_from_ctx(ctx)
-    assignee_user_ids = body.assignee_user_ids or _active_user_ids(ctx)
+    explicit_user_ids = [str(item or "").strip() for item in (body.assignee_user_ids or []) if str(item or "").strip()]
+    department_ids = [int(item) for item in (body.department_ids or [])]
+    assignee_user_ids = explicit_user_ids[:]
+    if department_ids:
+        assignee_user_ids.extend(_active_user_ids_for_departments(ctx, department_ids))
+    assignee_user_ids = list(dict.fromkeys([item for item in assignee_user_ids if item]))
+    if not assignee_user_ids:
+        raise HTTPException(status_code=400, detail="training_assignment_assignees_required")
     for assignee in assignee_user_ids:
         _ensure_user_exists(ctx, assignee, field_name="assignee_user_id")
+    try:
+        service.upsert_revision_training_gate(
+            controlled_revision_id=body.controlled_revision_id,
+            training_required=True,
+            department_ids=department_ids,
+        )
+    except TrainingComplianceError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.code) from exc
     try:
         items = service.create_training_assignments(
             controlled_revision_id=body.controlled_revision_id,

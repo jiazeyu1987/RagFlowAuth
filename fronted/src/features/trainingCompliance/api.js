@@ -120,6 +120,42 @@ export const trainingComplianceApi = {
     );
   },
 
+  async listTrainableRevisions({ limit = 100 } = {}) {
+    return normalizeArrayField(
+      await httpClient.requestJson(
+        authBackendUrl(`/api/training-compliance/trainable-revisions${buildQuery({ limit })}`),
+        { method: 'GET' }
+      ),
+      'items',
+      'training_compliance_trainable_revisions_list'
+    );
+  },
+
+  async getRevisionGate(controlledRevisionId) {
+    return normalizeObjectField(
+      await httpClient.requestJson(
+        authBackendUrl(`/api/training-compliance/revisions/${encodeURIComponent(controlledRevisionId)}/gate`),
+        { method: 'GET' }
+      ),
+      'gate',
+      'training_compliance_revision_gate_get'
+    );
+  },
+
+  async upsertRevisionGate(controlledRevisionId, payload) {
+    return normalizeObjectField(
+      await httpClient.requestJson(
+        authBackendUrl(`/api/training-compliance/revisions/${encodeURIComponent(controlledRevisionId)}/gate`),
+        {
+          method: 'PUT',
+          body: JSON.stringify(payload || {}),
+        }
+      ),
+      'gate',
+      'training_compliance_revision_gate_upsert'
+    );
+  },
+
   async generateAssignments(payload) {
     return normalizeArrayField(
       await httpClient.requestJson(authBackendUrl('/api/training-compliance/assignments/generate'), {

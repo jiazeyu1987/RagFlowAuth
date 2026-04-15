@@ -1,0 +1,207 @@
+{
+  "schema_version": 2,
+  "task_id": "execute-ws01-document-control-approval-workflow--20260414T222455",
+  "mode": "full",
+  "status": "completed",
+  "current_phase": null,
+  "phase_statuses": [
+    {
+      "phase_id": "P1",
+      "title": "Freeze contract types and visibility",
+      "status": "completed",
+      "objective": "Expose revision approval state (request id, round, current step) through document-control read APIs so downstream packages can consume a stable contract.",
+      "owned_paths": [],
+      "dependencies": [
+        "none"
+      ],
+      "deliverables": [],
+      "evidence_expectation": "`backend/services/document_control/models.py` and loaders updated; API unit test asserts keys exist.",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P1-AC1",
+          "text": "`ControlledRevision.as_dict()` includes approval state fields: `approval_request_id`, `approval_last_request_id`, `approval_round`, `approval_submitted_at_ms`, `approval_completed_at_ms`, `current_approval_step_no`, `current_approval_step_name`.",
+          "status": "completed",
+          "evidence": [
+            "backend/services/document_control/models.py",
+            "backend/services/document_control/service.py",
+            "backend/tests/test_document_control_api_unit.py",
+            "docs/tasks/execute-ws01-document-control-approval-workflow--20260414T222455/test-report.md",
+            "python -m pytest backend/tests/test_document_control_service_unit.py backend/tests/test_document_control_api_unit.py -q"
+          ]
+        }
+      ],
+      "evidence": [
+        "backend/services/document_control/models.py",
+        "backend/services/document_control/service.py",
+        "backend/tests/test_document_control_api_unit.py"
+      ],
+      "notes": "- Exposed approval-state fields on ControlledRevision and populated them in revision loaders.",
+      "last_reviewed_at": "2026-04-14T23:48:14"
+    },
+    {
+      "phase_id": "P2",
+      "title": "Implement workflow-backed actions in `DocumentControlService`",
+      "status": "completed",
+      "objective": "Implement submit/approve/reject/resubmit/add-sign semantics using `OperationApprovalStore` + `OperationApprovalDecisionService`, with explicit status gates and audit events.",
+      "owned_paths": [],
+      "dependencies": [
+        "P1"
+      ],
+      "deliverables": [],
+      "evidence_expectation": "service + unit tests cover submit/approve/reject/resubmit/add-sign and audit event emission.",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P2-AC1",
+          "text": "Submit is fail-fast: missing matrix/user_store or invalid revision status rejects explicitly (no legacy fallback).",
+          "status": "completed",
+          "evidence": [
+            "backend/services/document_control/service.py",
+            "backend/services/operation_approval/store.py",
+            "backend/services/operation_approval/repositories/step_repository.py",
+            "backend/services/operation_approval/types.py",
+            "backend/tests/test_document_control_service_unit.py",
+            "docs/tasks/execute-ws01-document-control-approval-workflow--20260414T222455/test-report.md",
+            "python -m pytest backend/tests/test_document_control_service_unit.py backend/tests/test_document_control_api_unit.py -q"
+          ]
+        },
+        {
+          "ac_id": "P2-AC2",
+          "text": "Approval step order is enforced and fixed (`cosign -> approve -> standardize_review`); final approval moves revision to `approved_pending_effective` and clears `approval_request_id`.",
+          "status": "completed",
+          "evidence": [
+            "backend/services/document_control/service.py",
+            "backend/services/operation_approval/store.py",
+            "backend/services/operation_approval/repositories/step_repository.py",
+            "backend/services/operation_approval/types.py",
+            "backend/tests/test_document_control_service_unit.py",
+            "docs/tasks/execute-ws01-document-control-approval-workflow--20260414T222455/test-report.md",
+            "python -m pytest backend/tests/test_document_control_service_unit.py backend/tests/test_document_control_api_unit.py -q"
+          ]
+        },
+        {
+          "ac_id": "P2-AC3",
+          "text": "Reject terminates the current approval instance and sets revision to `approval_rejected`; resubmit creates a new approval request id and increments `approval_round`.",
+          "status": "completed",
+          "evidence": [
+            "backend/services/document_control/service.py",
+            "backend/services/operation_approval/store.py",
+            "backend/services/operation_approval/repositories/step_repository.py",
+            "backend/services/operation_approval/types.py",
+            "backend/tests/test_document_control_service_unit.py",
+            "docs/tasks/execute-ws01-document-control-approval-workflow--20260414T222455/test-report.md",
+            "python -m pytest backend/tests/test_document_control_service_unit.py backend/tests/test_document_control_api_unit.py -q"
+          ]
+        },
+        {
+          "ac_id": "P2-AC4",
+          "text": "Add-sign adds a new pending approver to the current active step only, disallows duplicates, and does not bypass step completion rules.",
+          "status": "completed",
+          "evidence": [
+            "backend/services/document_control/service.py",
+            "backend/services/operation_approval/store.py",
+            "backend/services/operation_approval/repositories/step_repository.py",
+            "backend/services/operation_approval/types.py",
+            "backend/tests/test_document_control_service_unit.py",
+            "docs/tasks/execute-ws01-document-control-approval-workflow--20260414T222455/test-report.md",
+            "python -m pytest backend/tests/test_document_control_service_unit.py backend/tests/test_document_control_api_unit.py -q"
+          ]
+        }
+      ],
+      "evidence": [
+        "backend/services/document_control/service.py",
+        "backend/services/operation_approval/store.py",
+        "backend/services/operation_approval/repositories/step_repository.py",
+        "backend/services/operation_approval/types.py",
+        "backend/tests/test_document_control_service_unit.py"
+      ],
+      "notes": "- Implemented workflow-backed submit/approve/reject/resubmit/add-sign actions with audit events and fail-fast prerequisite checks.",
+      "last_reviewed_at": "2026-04-14T23:48:24"
+    },
+    {
+      "phase_id": "P3",
+      "title": "Replace API surface (remove direct transitions)",
+      "status": "completed",
+      "objective": "Remove the legacy `/transitions` endpoint and replace it with explicit workflow endpoints.",
+      "owned_paths": [],
+      "dependencies": [
+        "P2"
+      ],
+      "deliverables": [],
+      "evidence_expectation": "API unit test calls new endpoints; no route exists for `/transitions`.",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P3-AC1",
+          "text": "The legacy `/transitions` endpoint is removed (no hidden compatibility path), and the new approval endpoints are available with capability gating.",
+          "status": "completed",
+          "evidence": [
+            "backend/app/modules/document_control/router.py",
+            "backend/tests/test_document_control_api_unit.py",
+            "docs/tasks/execute-ws01-document-control-approval-workflow--20260414T222455/test-report.md",
+            "python -m pytest backend/tests/test_document_control_service_unit.py backend/tests/test_document_control_api_unit.py -q"
+          ]
+        }
+      ],
+      "evidence": [
+        "backend/app/modules/document_control/router.py",
+        "backend/tests/test_document_control_api_unit.py"
+      ],
+      "notes": "- Removed legacy direct transition routing and replaced it with explicit approval endpoints.",
+      "last_reviewed_at": "2026-04-14T23:48:43"
+    },
+    {
+      "phase_id": "P4",
+      "title": "Prove step order and rejection semantics with tests",
+      "status": "completed",
+      "objective": "Update tests to cover the new contract and ensure the required semantics are enforced.",
+      "owned_paths": [],
+      "dependencies": [
+        "P3"
+      ],
+      "deliverables": [],
+      "evidence_expectation": "`test-report.md` includes command output summary and pass verdict.",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P4-AC1",
+          "text": "The command below passes: backend/tests/test_document_control_service_unit.py ` backend/tests/test_document_control_api_unit.py -q",
+          "status": "completed",
+          "evidence": [
+            "backend/tests/test_document_control_service_unit.py",
+            "backend/tests/test_document_control_api_unit.py",
+            "python -m pytest backend/tests/test_document_control_service_unit.py backend/tests/test_document_control_api_unit.py -q",
+            "docs/tasks/execute-ws01-document-control-approval-workflow--20260414T222455/test-report.md"
+          ]
+        }
+      ],
+      "evidence": [
+        "backend/tests/test_document_control_service_unit.py",
+        "backend/tests/test_document_control_api_unit.py",
+        "python -m pytest backend/tests/test_document_control_service_unit.py backend/tests/test_document_control_api_unit.py -q"
+      ],
+      "notes": "- Expanded WS01 coverage and confirmed the targeted backend service/API suite passes.",
+      "last_reviewed_at": "2026-04-14T23:48:51"
+    }
+  ],
+  "planner_review_status": "approved",
+  "test_status": "passed",
+  "blocking_prereqs": [],
+  "iteration_counts": {
+    "planner_revisions": 0,
+    "executor_loops": 1,
+    "test_loops": 0
+  },
+  "created_at": "2026-04-14T22:24:55",
+  "updated_at": "2026-04-14T23:55:34",
+  "branch": "int_latest",
+  "baseline_revision": "b588894c15af487c7dfaaaf5038ae84f2e799158",
+  "workspace_root": "D:\\ProjectPackage\\RagflowAuth",
+  "tasks_root": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks",
+  "task_dir": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\execute-ws01-document-control-approval-workflow--20260414T222455",
+  "goal": "Execute WS01: document control approval workflow contract (submit/approve/reject/resubmit/add-sign)",
+  "artifacts": {
+    "prd": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\execute-ws01-document-control-approval-workflow--20260414T222455\\prd.md",
+    "test_plan": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\execute-ws01-document-control-approval-workflow--20260414T222455\\test-plan.md",
+    "task_state": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\execute-ws01-document-control-approval-workflow--20260414T222455\\task-state.json",
+    "execution_log": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\execute-ws01-document-control-approval-workflow--20260414T222455\\execution-log.md",
+    "test_report": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\execute-ws01-document-control-approval-workflow--20260414T222455\\test-report.md"
+  }
+}

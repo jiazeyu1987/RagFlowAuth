@@ -254,7 +254,7 @@ class RagflowDocumentsMixin:
         )
         deadline = time.time() + max(timeout, 0.0)
         while True:
-            documents = self.list_documents(dataset_id)
+            documents = self._list_documents_via_http(dataset_id, page_size=200)
             if any(str(item.get("id") or "").strip() == document_id for item in documents if isinstance(item, dict)):
                 return True
             if time.time() >= deadline:
@@ -516,6 +516,50 @@ class RagflowDocumentsMixin:
         timeout_s = 30.0 if raw_timeout_s is None else float(raw_timeout_s)
         poll_interval_s = 1.0 if raw_poll_interval_s is None else float(raw_poll_interval_s)
 
+        # Uploads already go through the HTTP dataset endpoint and return document ids from that
+        # surface. Prefer parsing through the same HTTP API when we can resolve a dataset id, so
+        # newly uploaded documents do not depend on slower SDK visibility propagation.
+        if dataset_id:
+            for doc_id in doc_ids:
+                visible = self._wait_for_document_visible_via_http(
+                    dataset_id,
+                    doc_id,
+                    timeout_s=timeout_s,
+                    poll_interval_s=poll_interval_s,
+                )
+                if not visible:
+                    self.logger.error(
+                        "parse_documents: document_not_visible dataset_id=%s document_id=%s",
+                        dataset_id,
+                        doc_id,
+                    )
+                    return False
+
+            deadline = time.time() + max(timeout_s, 0.0)
+            while True:
+                payload = self._http.post_json(
+                    f"/api/v1/datasets/{dataset_id}/chunks",
+                    body={"document_ids": doc_ids},
+                )
+                if not payload:
+                    self.logger.error("parse_documents: request failed (dataset_id=%s)", dataset_id)
+                    return False
+
+                code = payload.get("code")
+                if code == 0:
+                    return True
+                if code == 102 and time.time() < deadline:
+                    time.sleep(max(poll_interval_s, 0.0))
+                    continue
+
+                self.logger.error(
+                    "parse_documents: RAGFlow returned error code=%s message=%s dataset_id=%s",
+                    code,
+                    payload.get("message"),
+                    dataset_id,
+                )
+                return False
+
         if self.client:
             dataset_name = self._normalize_dataset_name_for_ops(dataset_ref)
             dataset = self._find_dataset_by_name(dataset_name)
@@ -528,46 +572,8 @@ class RagflowDocumentsMixin:
                 timeout_s=timeout_s,
                 poll_interval_s=poll_interval_s,
             )
-
-        for doc_id in doc_ids:
-            visible = self._wait_for_document_visible_via_http(
-                dataset_id,
-                doc_id,
-                timeout_s=timeout_s,
-                poll_interval_s=poll_interval_s,
-            )
-            if not visible:
-                self.logger.error(
-                    "parse_documents: document_not_visible dataset_id=%s document_id=%s",
-                    dataset_id,
-                    doc_id,
-                )
-                return False
-
-        deadline = time.time() + max(timeout_s, 0.0)
-        while True:
-            payload = self._http.post_json(
-                f"/api/v1/datasets/{dataset_id}/chunks",
-                body={"document_ids": doc_ids},
-            )
-            if not payload:
-                self.logger.error("parse_documents: request failed (dataset_id=%s)", dataset_id)
-                return False
-
-            code = payload.get("code")
-            if code == 0:
-                return True
-            if code == 102 and time.time() < deadline:
-                time.sleep(max(poll_interval_s, 0.0))
-                continue
-
-            self.logger.error(
-                "parse_documents: RAGFlow returned error code=%s message=%s dataset_id=%s",
-                code,
-                payload.get("message"),
-                dataset_id,
-            )
-            return False
+        self.logger.warning("parse_documents: no available parse path dataset_ref=%r", dataset_ref)
+        return False
 
     def parse_document(self, *, dataset_ref: str, document_id: str) -> bool:
         reload_cfg = getattr(self, "_reload_config_if_changed", None)

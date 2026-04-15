@@ -1,0 +1,173 @@
+{
+  "schema_version": 2,
+  "task_id": "docs-tasks-document-control-flow-parallel-202604-20260414T224329",
+  "mode": "full",
+  "status": "completed",
+  "current_phase": null,
+  "phase_statuses": [
+    {
+      "phase_id": "P1",
+      "title": "Add release ledger schema + supersede fields",
+      "status": "completed",
+      "objective": "Persist explicit release/distribution records and model supersede metadata on replaced revisions.",
+      "owned_paths": [],
+      "dependencies": [
+        "none"
+      ],
+      "deliverables": [],
+      "evidence_expectation": "schema + model changes exist and are referenced by tests/service load paths.",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P1-AC1",
+          "text": "`ensure_document_control_tables()` creates the release ledger table and indexes, and adds revision supersede columns additively.",
+          "status": "completed",
+          "evidence": [
+            "Schema: backend/database/schema/document_control.py adds controlled_revision_release_ledger + supersede columns",
+            "python -m pytest backend/tests/test_document_control_service_unit.py backend/tests/test_document_control_api_unit.py -q -> 20 passed in 14.09s"
+          ]
+        },
+        {
+          "ac_id": "P1-AC2",
+          "text": "`ControlledRevision.as_dict()` includes supersede metadata fields populated from DB rows.",
+          "status": "completed",
+          "evidence": [
+            "Model: backend/services/document_control/models.py + loaders include supersede fields",
+            "python -m pytest backend/tests/test_document_control_service_unit.py backend/tests/test_document_control_api_unit.py -q -> 20 passed in 14.09s"
+          ]
+        }
+      ],
+      "evidence": [],
+      "notes": "",
+      "last_reviewed_at": "2026-04-14T22:53:47"
+    },
+    {
+      "phase_id": "P2",
+      "title": "Implement explicit publish action + supersede semantics",
+      "status": "completed",
+      "objective": "Implement a publish action that makes an approved revision effective, writes ledger rows, and supersedes the previous effective revision without using lifecycle `obsolete`.",
+      "owned_paths": [],
+      "dependencies": [
+        "P1"
+      ],
+      "deliverables": [],
+      "evidence_expectation": "service unit test asserts gating + ledger rows + supersede semantics.",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P2-AC1",
+          "text": "Publish rejects when the revision is not `approved_pending_effective` (approval completion is not treated as release).",
+          "status": "completed",
+          "evidence": [
+            "Service: publish_revision() gates on approved_pending_effective in backend/services/document_control/service.py",
+            "python -m pytest backend/tests/test_document_control_service_unit.py backend/tests/test_document_control_api_unit.py -q -> 20 passed in 14.09s"
+          ]
+        },
+        {
+          "ac_id": "P2-AC2",
+          "text": "Publish enforces the training gate: missing `training_compliance_service` or missing requirements/records/certification blocks publish (no bypass).",
+          "status": "completed",
+          "evidence": [
+            "Service: publish_revision() enforces training gate via training_compliance_service in backend/services/document_control/service.py",
+            "python -m pytest backend/tests/test_document_control_service_unit.py backend/tests/test_document_control_api_unit.py -q -> 20 passed in 14.09s"
+          ]
+        },
+        {
+          "ac_id": "P2-AC3",
+          "text": "Publish writes release ledger rows including mode/actor/time/target + replaced revision id, and makes the revision `effective` with `effective_at_ms`.",
+          "status": "completed",
+          "evidence": [
+            "Service: _make_revision_effective() writes controlled_revision_release_ledger rows in backend/services/document_control/service.py",
+            "python -m pytest backend/tests/test_document_control_service_unit.py backend/tests/test_document_control_api_unit.py -q -> 20 passed in 14.09s"
+          ]
+        },
+        {
+          "ac_id": "P2-AC4",
+          "text": "When a new revision is published over an existing effective one, the previous effective becomes `superseded` (not `obsolete`) with `superseded_at_ms` and `superseded_by_revision_id`.",
+          "status": "completed",
+          "evidence": [
+            "Service: previous effective revision updated to superseded with superseded_* fields in backend/services/document_control/service.py",
+            "python -m pytest backend/tests/test_document_control_service_unit.py backend/tests/test_document_control_api_unit.py -q -> 20 passed in 14.09s"
+          ]
+        }
+      ],
+      "evidence": [],
+      "notes": "",
+      "last_reviewed_at": "2026-04-14T22:58:00"
+    },
+    {
+      "phase_id": "P3",
+      "title": "Expose publish API + required approval endpoints",
+      "status": "completed",
+      "objective": "Provide explicit API endpoints to drive the flow without legacy `/transitions`.",
+      "owned_paths": [],
+      "dependencies": [
+        "P2"
+      ],
+      "deliverables": [],
+      "evidence_expectation": "API unit test uses explicit endpoints end-to-end.",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P3-AC1",
+          "text": "Router exposes explicit publish endpoint and required approval endpoints; legacy `/transitions` is not available as a working path.",
+          "status": "completed",
+          "evidence": [
+            "Router: backend/app/modules/document_control/router.py exposes /publish + approval endpoints",
+            "python -m pytest backend/tests/test_document_control_service_unit.py backend/tests/test_document_control_api_unit.py -q -> 20 passed in 14.09s"
+          ]
+        }
+      ],
+      "evidence": [],
+      "notes": "",
+      "last_reviewed_at": "2026-04-14T23:00:58"
+    },
+    {
+      "phase_id": "P4",
+      "title": "Update unit + API tests",
+      "status": "completed",
+      "objective": "Prove the controlled release contract and ledger behavior via the required pytest targets.",
+      "owned_paths": [],
+      "dependencies": [
+        "P3"
+      ],
+      "deliverables": [],
+      "evidence_expectation": "`test-report.md` contains a pass verdict and command output summary.",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P4-AC1",
+          "text": "The command below passes: backend/tests/test_document_control_service_unit.py ` backend/tests/test_document_control_api_unit.py -q",
+          "status": "completed",
+          "evidence": [
+            "python -m pytest backend/tests/test_document_control_service_unit.py backend/tests/test_document_control_api_unit.py -q -> 20 passed in 14.09s"
+          ]
+        }
+      ],
+      "evidence": [
+        "python -m pytest backend/tests/test_document_control_service_unit.py backend/tests/test_document_control_api_unit.py -q -> 20 passed in 14.09s"
+      ],
+      "notes": "- Updated service/API tests for explicit publish, release ledger, supersede semantics, and existing publish-time distribution coupling.",
+      "last_reviewed_at": "2026-04-14T23:47:45"
+    }
+  ],
+  "planner_review_status": "approved",
+  "test_status": "passed",
+  "blocking_prereqs": [],
+  "iteration_counts": {
+    "planner_revisions": 0,
+    "executor_loops": 1,
+    "test_loops": 1
+  },
+  "created_at": "2026-04-14T22:43:29",
+  "updated_at": "2026-04-14T23:49:18",
+  "branch": "int_latest",
+  "baseline_revision": "b588894c15af487c7dfaaaf5038ae84f2e799158",
+  "workspace_root": "D:\\ProjectPackage\\RagflowAuth",
+  "tasks_root": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks",
+  "task_dir": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\docs-tasks-document-control-flow-parallel-202604-20260414T224329",
+  "goal": "完成 docs/tasks/document-control-flow-parallel-20260414T151500/prompt-ws03-controlled-release-and-distribution.md 下的工作",
+  "artifacts": {
+    "prd": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\docs-tasks-document-control-flow-parallel-202604-20260414T224329\\prd.md",
+    "test_plan": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\docs-tasks-document-control-flow-parallel-202604-20260414T224329\\test-plan.md",
+    "task_state": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\docs-tasks-document-control-flow-parallel-202604-20260414T224329\\task-state.json",
+    "execution_log": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\docs-tasks-document-control-flow-parallel-202604-20260414T224329\\execution-log.md",
+    "test_report": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\docs-tasks-document-control-flow-parallel-202604-20260414T224329\\test-report.md"
+  }
+}

@@ -183,6 +183,25 @@ class OperationApprovalStore:
             conn=conn,
         )
 
+    def add_step_approver(
+        self,
+        *,
+        request_id: str,
+        request_step_id: str,
+        step_no: int,
+        approver_user_id: str,
+        approver_username: str | None,
+        conn: Any | None = None,
+    ) -> None:
+        self._step_repo.add_step_approver(
+            request_id=request_id,
+            request_step_id=request_step_id,
+            step_no=step_no,
+            approver_user_id=approver_user_id,
+            approver_username=approver_username,
+            conn=conn,
+        )
+
     def mark_remaining_step_approvers(
         self,
         *,

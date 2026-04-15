@@ -39,3 +39,14 @@ GBZ-03 当前只采用以下主链路：
 - 当前仓库内计划覆盖“退役记录生成、保留期控制、授权访问、管理员导出、审计留痕”。
 - 当前仓库内不覆盖法规年限判定、线下纸质批准、介质保管、到期销毁或移交签字。
 - 上述未覆盖事项保持为仓库外残余项，不在本计划中伪造完成状态。
+
+## 5. WS05 Alignment Notes
+
+- Document-control obsolete handling now uses an explicit initiation and approval path instead of treating `effective -> obsolete` as a single implicit transition.
+- The retention boundary is system-owned only up to archive creation, retention-period access control, expiry blocking, and evidence recording.
+- The required document-control endpoints are:
+  - `POST /api/quality-system/doc-control/revisions/{controlled_revision_id}/obsolete/initiate`
+  - `POST /api/quality-system/doc-control/revisions/{controlled_revision_id}/obsolete/approve`
+  - `POST /api/quality-system/doc-control/revisions/{controlled_revision_id}/obsolete/destruction/confirm`
+- `retention_until_ms` remains mandatory and must be provided explicitly by the caller.
+- Archive destruction is still not executed automatically by the repository. The system records offline disposal confirmation only after retention expiry; the actual disposal remains a warehouse-external residual item.

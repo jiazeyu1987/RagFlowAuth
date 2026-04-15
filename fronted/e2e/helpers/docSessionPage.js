@@ -20,9 +20,10 @@ function storageStateFromSession(session) {
   };
 }
 
-async function openSessionPage(browser, session) {
+async function openSessionPage(browser, session, contextOptions = {}) {
   const context = await browser.newContext({
     storageState: storageStateFromSession(session),
+    ...(contextOptions || {}),
   });
   const page = await context.newPage();
   return { context, page };

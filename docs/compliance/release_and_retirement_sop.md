@@ -61,3 +61,18 @@
 ## 8. 边界说明
 
 - 本 SOP 只覆盖仓库内主链路，不替代线下纸质批准、介质封存、长期可读性抽检和到期处置签字。
+
+## 9. WS05 Document-Control Obsolete Flow
+
+- Controlled revisions do not use the old direct `effective -> obsolete` transition as the complete contract.
+- The system now requires two explicit document-control actions:
+  - `POST /api/quality-system/doc-control/revisions/{controlled_revision_id}/obsolete/initiate`
+  - `POST /api/quality-system/doc-control/revisions/{controlled_revision_id}/obsolete/approve`
+- The initiation request must include `retirement_reason` and a future `retention_until_ms`.
+- Approval removes the active Ragflow index entry, creates the retired archive package, and forces standard knowledge routes to return `document_retired_use_archive_route`.
+- During retention, controlled access must use:
+  - `GET /api/knowledge/retired-documents`
+  - `GET /api/knowledge/retired-documents/{doc_id}/preview`
+  - `GET /api/knowledge/retired-documents/{doc_id}/download`
+- After retention expiry, the system returns `410 document_retention_expired`.
+- The repository does not auto-delete archived records. Offline destruction or handoff remains outside the repo-owned scope and may only be recorded through `POST /api/quality-system/doc-control/revisions/{controlled_revision_id}/obsolete/destruction/confirm`.

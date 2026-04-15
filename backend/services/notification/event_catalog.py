@@ -42,6 +42,18 @@ _EVENT_GROUPS: tuple[dict[str, Any], ...] = (
             {"event_type": "equipment_due_soon", "event_label": "\u8bbe\u5907\u4e34\u671f\u63d0\u9192"},
             {"event_type": "metrology_due_soon", "event_label": "\u8ba1\u91cf\u4e34\u671f\u63d0\u9192"},
             {"event_type": "maintenance_due_soon", "event_label": "\u7ef4\u62a4\u4fdd\u517b\u4e34\u671f\u63d0\u9192"},
+            {
+                "event_type": "document_control_department_ack_required",
+                "event_label": "\u6587\u63a7\u53d1\u5e03\u90e8\u95e8\u786e\u8ba4",
+            },
+            {
+                "event_type": "document_control_department_ack_overdue",
+                "event_label": "\u6587\u63a7\u53d1\u5e03\u786e\u8ba4\u903e\u671f\u63d0\u9192",
+            },
+            {
+                "event_type": "document_control_approval_step_overdue",
+                "event_label": "\u6587\u63a7\u5ba1\u6279\u8d85\u65f6\u63d0\u9192",
+            },
             {"event_type": "training_assignment_created", "event_label": "\u57f9\u8bad\u4efb\u52a1\u901a\u77e5"},
             {"event_type": "training_assignment_questioned", "event_label": "\u57f9\u8bad\u7591\u95ee\u5f85\u5904\u7406"},
             {"event_type": "training_question_resolved", "event_label": "\u57f9\u8bad\u7591\u95ee\u5df2\u56de\u590d"},

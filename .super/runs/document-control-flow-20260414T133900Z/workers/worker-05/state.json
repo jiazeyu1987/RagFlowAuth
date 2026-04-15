@@ -1,0 +1,11 @@
+{
+  "worker_id": "worker-05",
+  "agent_id": "",
+  "status": "queued",
+  "owned_paths": [],
+  "current_step": "Waiting for supervisor task split.",
+  "stuck_count": 0,
+  "updated_at": "2026-04-14T13:46:47Z",
+  "last_supervisor_action": "initialized",
+  "last_validation_result": ""
+}

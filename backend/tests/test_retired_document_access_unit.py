@@ -1,8 +1,10 @@
 import hashlib
 import io
 import os
+import shutil
 import sqlite3
 import unittest
+import uuid
 from pathlib import Path
 from types import SimpleNamespace
 from zipfile import ZipFile
@@ -12,6 +14,7 @@ from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
 
 from backend.app.core import auth as auth_module
+from backend.app.core.paths import resolve_repo_path
 from backend.app.modules.audit.router import router as audit_router
 from backend.app.modules.knowledge.router import router as knowledge_router
 from backend.database.schema.ensure import ensure_schema
@@ -84,6 +87,11 @@ class _DownloadLogStore:
         return None
 
 
+class _UserToolPermissionStore:
+    def list_tool_ids(self, _user_id: str):
+        return []
+
+
 class _OrgDirectoryStore:
     def get_company(self, company_id: int):  # noqa: ARG002
         return SimpleNamespace(name="Acme")
@@ -119,6 +127,7 @@ class _Deps:
     def __init__(self, *, db_path: str, users: dict[str, _User]):
         self.user_store = _UserStore(users)
         self.permission_group_store = _PermissionGroupStore()
+        self.user_tool_permission_store = _UserToolPermissionStore()
         self.kb_store = KbStore(db_path=db_path)
         self.download_log_store = _DownloadLogStore()
         self.audit_log_store = AuditLogStore(db_path=db_path)
@@ -154,7 +163,9 @@ class TestRetiredDocumentAccessUnit(unittest.TestCase):
         }
         self.deps = _Deps(db_path=self.db_path, users=self.users)
 
-        doc_path = Path(self._tmp) / "retire_me.txt"
+        self._data_dir = resolve_repo_path(f"data/test_retired_records/{uuid.uuid4().hex}")
+        self._data_dir.mkdir(parents=True, exist_ok=True)
+        doc_path = Path(self._data_dir) / "retire_me.txt"
         doc_path.write_text("retire me", encoding="utf-8")
         doc = self.deps.kb_store.create_document(
             filename="retire_me.txt",
@@ -177,6 +188,10 @@ class TestRetiredDocumentAccessUnit(unittest.TestCase):
 
     def tearDown(self):
         cleanup_dir(self._tmp)
+        try:
+            shutil.rmtree(self._data_dir, ignore_errors=True)
+        except Exception:
+            pass
 
     def test_retire_list_download_and_admin_export(self):
         reviewer_app = _build_app(current_user_id="reviewer-1", deps=self.deps)

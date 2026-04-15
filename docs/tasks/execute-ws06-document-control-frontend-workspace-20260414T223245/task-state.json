@@ -1,0 +1,199 @@
+{
+  "schema_version": 2,
+  "task_id": "execute-ws06-document-control-frontend-workspace-20260414T223245",
+  "mode": "full",
+  "status": "completed",
+  "current_phase": null,
+  "phase_statuses": [
+    {
+      "phase_id": "P1",
+      "title": "Remove legacy transitions and wire approval actions",
+      "status": "completed",
+      "objective": "移除 UI 中的 “Move to …” 行为，并将页面动作映射到后端审批动作接口。",
+      "owned_paths": [],
+      "dependencies": [
+        "none"
+      ],
+      "deliverables": [],
+      "evidence_expectation": "`fronted/src/features/documentControl/api.test.js` 更新 + 相关 mock 调用断言通过。",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P1-AC1",
+          "text": "页面不再渲染任何 `Move to ...` 状态跳转按钮，也不再调用 `/revisions/{id}/transitions`。",
+          "status": "completed",
+          "evidence": [
+            "fronted/src/features/documentControl/api.test.js",
+            "fronted/src/pages/DocumentControl.test.js",
+            "docs/tasks/execute-ws06-document-control-frontend-workspace-20260414T223245/test-report.md#T1",
+            "docs/tasks/execute-ws06-document-control-frontend-workspace-20260414T223245/test-report.md#T5"
+          ]
+        },
+        {
+          "ac_id": "P1-AC2",
+          "text": "`documentControlApi` 提供 `submitRevisionForApproval` / `approveRevisionStep` / `rejectRevisionStep` / `addSignRevisionStep` 并有 API 单测覆盖 URL 与 envelope 解析。",
+          "status": "completed",
+          "evidence": [
+            "fronted/src/features/documentControl/api.test.js",
+            "fronted/src/pages/DocumentControl.test.js",
+            "docs/tasks/execute-ws06-document-control-frontend-workspace-20260414T223245/test-report.md#T1",
+            "docs/tasks/execute-ws06-document-control-frontend-workspace-20260414T223245/test-report.md#T5"
+          ]
+        }
+      ],
+      "evidence": [
+        "fronted/src/features/documentControl/api.test.js",
+        "fronted/src/pages/DocumentControl.test.js"
+      ],
+      "notes": "- Removed legacy transitions and wired explicit approval action contracts.",
+      "last_reviewed_at": "2026-04-14T23:43:13"
+    },
+    {
+      "phase_id": "P2",
+      "title": "Add approval workspace section (contract-driven)",
+      "status": "completed",
+      "objective": "渲染审批阶段、当前步骤、待处理人，并用 capability 控制动作可见性。",
+      "owned_paths": [],
+      "dependencies": [
+        "P1"
+      ],
+      "deliverables": [],
+      "evidence_expectation": "`DocumentControl.test.js` 覆盖审批区块渲染与动作触发。",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P2-AC1",
+          "text": "当修订存在 `approval_request_id` 时，工作区展示当前步骤与待处理审批人（来自 `operation-approvals/requests/{id}`）。",
+          "status": "completed",
+          "evidence": [
+            "fronted/src/pages/DocumentControl.test.js",
+            "fronted/src/features/documentControl/useDocumentControlPage.test.js",
+            "docs/tasks/execute-ws06-document-control-frontend-workspace-20260414T223245/test-report.md#T1",
+            "docs/tasks/execute-ws06-document-control-frontend-workspace-20260414T223245/test-report.md#T5"
+          ]
+        },
+        {
+          "ac_id": "P2-AC2",
+          "text": "Submit/Approve/Reject/Add-sign 按钮的显隐与禁用基于 capability/状态，不出现“假按钮”。",
+          "status": "completed",
+          "evidence": [
+            "fronted/src/pages/DocumentControl.test.js",
+            "fronted/src/features/documentControl/useDocumentControlPage.test.js",
+            "docs/tasks/execute-ws06-document-control-frontend-workspace-20260414T223245/test-report.md#T1",
+            "docs/tasks/execute-ws06-document-control-frontend-workspace-20260414T223245/test-report.md#T5"
+          ]
+        }
+      ],
+      "evidence": [
+        "fronted/src/pages/DocumentControl.test.js",
+        "fronted/src/features/documentControl/useDocumentControlPage.test.js"
+      ],
+      "notes": "- Added approval workspace rendering and capability-gated actions.",
+      "last_reviewed_at": "2026-04-14T23:43:13"
+    },
+    {
+      "phase_id": "P3",
+      "title": "Render training / release / department-ack / retention sections",
+      "status": "completed",
+      "objective": "在同一工作区展示培训、发布/分发（基于 change-control）、部门确认（基于 change-control confirmations）、作废/留存（基于 retired-documents）信息。",
+      "owned_paths": [],
+      "dependencies": [
+        "P2"
+      ],
+      "deliverables": [],
+      "evidence_expectation": "`useDocumentControlPage.test.js` 覆盖 state 派生 + 错误分支。",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P3-AC1",
+          "text": "Training 区块展示与当前修订相关的培训状态；生成培训动作缺少 assignee 时前端 fail-fast 并提示。",
+          "status": "completed",
+          "evidence": [
+            "fronted/src/features/documentControl/useDocumentControlPage.test.js",
+            "fronted/src/pages/DocumentControl.js",
+            "docs/tasks/execute-ws06-document-control-frontend-workspace-20260414T223245/test-report.md#T1",
+            "docs/tasks/execute-ws06-document-control-frontend-workspace-20260414T223245/test-report.md#T5"
+          ]
+        },
+        {
+          "ac_id": "P3-AC2",
+          "text": "Release/Dept Ack 区块展示关联的 change-control requests，并展示 confirmations 状态摘要。",
+          "status": "completed",
+          "evidence": [
+            "fronted/src/features/documentControl/useDocumentControlPage.test.js",
+            "fronted/src/pages/DocumentControl.js",
+            "docs/tasks/execute-ws06-document-control-frontend-workspace-20260414T223245/test-report.md#T1",
+            "docs/tasks/execute-ws06-document-control-frontend-workspace-20260414T223245/test-report.md#T5"
+          ]
+        },
+        {
+          "ac_id": "P3-AC3",
+          "text": "Retention 区块在可用时展示 retired record 的留存信息（至少 `retention_until_ms`）。",
+          "status": "completed",
+          "evidence": [
+            "fronted/src/features/documentControl/useDocumentControlPage.test.js",
+            "fronted/src/pages/DocumentControl.js",
+            "docs/tasks/execute-ws06-document-control-frontend-workspace-20260414T223245/test-report.md#T1",
+            "docs/tasks/execute-ws06-document-control-frontend-workspace-20260414T223245/test-report.md#T5"
+          ]
+        }
+      ],
+      "evidence": [
+        "fronted/src/features/documentControl/useDocumentControlPage.test.js",
+        "fronted/src/pages/DocumentControl.js"
+      ],
+      "notes": "- Rendered training, change-control, and retention sections from stable contracts.",
+      "last_reviewed_at": "2026-04-14T23:43:14"
+    },
+    {
+      "phase_id": "P4",
+      "title": "Update tests and validate",
+      "status": "completed",
+      "objective": "用聚焦测试覆盖核心交互，确保 page 不再有 legacy 行为，并通过指定测试命令。",
+      "owned_paths": [],
+      "dependencies": [
+        "P3"
+      ],
+      "deliverables": [],
+      "evidence_expectation": "`test-report.md` 记录命令与通过结果。",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P4-AC1",
+          "text": "下述命令通过：",
+          "status": "completed",
+          "evidence": [
+            "docs/tasks/execute-ws06-document-control-frontend-workspace-20260414T223245/test-report.md#T5",
+            "fronted/src/features/documentControl/api.test.js",
+            "docs/tasks/execute-ws06-document-control-frontend-workspace-20260414T223245/test-report.md#T1"
+          ]
+        }
+      ],
+      "evidence": [
+        "docs/tasks/execute-ws06-document-control-frontend-workspace-20260414T223245/test-report.md#T5",
+        "fronted/src/features/documentControl/api.test.js"
+      ],
+      "notes": "- Targeted frontend validation suite and API contract tests passed.",
+      "last_reviewed_at": "2026-04-14T23:43:14"
+    }
+  ],
+  "planner_review_status": "approved",
+  "test_status": "passed",
+  "blocking_prereqs": [],
+  "iteration_counts": {
+    "planner_revisions": 0,
+    "executor_loops": 1,
+    "test_loops": 1
+  },
+  "created_at": "2026-04-14T22:32:45",
+  "updated_at": "2026-04-14T23:43:39",
+  "branch": "int_latest",
+  "baseline_revision": "b588894c15af487c7dfaaaf5038ae84f2e799158",
+  "workspace_root": "D:\\ProjectPackage\\RagflowAuth",
+  "tasks_root": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks",
+  "task_dir": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\execute-ws06-document-control-frontend-workspace-20260414T223245",
+  "goal": "Execute WS06: document control frontend workspace (consume workflow contracts)",
+  "artifacts": {
+    "prd": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\execute-ws06-document-control-frontend-workspace-20260414T223245\\prd.md",
+    "test_plan": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\execute-ws06-document-control-frontend-workspace-20260414T223245\\test-plan.md",
+    "task_state": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\execute-ws06-document-control-frontend-workspace-20260414T223245\\task-state.json",
+    "execution_log": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\execute-ws06-document-control-frontend-workspace-20260414T223245\\execution-log.md",
+    "test_report": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\execute-ws06-document-control-frontend-workspace-20260414T223245\\test-report.md"
+  }
+}

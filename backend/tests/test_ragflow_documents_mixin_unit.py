@@ -173,9 +173,10 @@ class _ParseSvc(RagflowDocumentsMixin):
 
 
 class _SdkParseSvc(RagflowDocumentsMixin):
-    def __init__(self, dataset):
+    def __init__(self, dataset, http=None):
         self.client = object()
         self.dataset = dataset
+        self._http = http or _ParseHttpStub()
         self.logger = SimpleNamespace(
             info=lambda *args, **kwargs: None,
             warning=lambda *args, **kwargs: None,
@@ -293,7 +294,14 @@ class TestRagflowDocumentsMixinUnit(unittest.TestCase):
         ok = svc.parse_documents(dataset_ref="dataset-http-1", document_ids=["doc-1"])
 
         self.assertTrue(ok)
-        self.assertEqual(svc.list_calls, 2)
+        self.assertEqual(svc.list_calls, 0)
+        self.assertEqual(
+            http.lookup_calls,
+            [
+                {"path": "/api/v1/datasets/dataset-http-1/documents", "params": {"page": 1, "page_size": 200}},
+                {"path": "/api/v1/datasets/dataset-http-1/documents", "params": {"page": 1, "page_size": 200}},
+            ],
+        )
         self.assertEqual(
             http.post_calls,
             [{"path": "/api/v1/datasets/dataset-http-1/chunks", "body": {"document_ids": ["doc-1"]}}],
@@ -327,7 +335,7 @@ class TestRagflowDocumentsMixinUnit(unittest.TestCase):
         self.assertFalse(ok)
         self.assertEqual(http.post_calls, [])
 
-    def test_parse_documents_prefers_sdk_visibility_and_parse_flow(self):
+    def test_parse_documents_prefers_http_chunks_flow_when_dataset_id_is_available(self):
         dataset = _SdkParseDataset(
             {
                 "doc-1": [
@@ -337,12 +345,37 @@ class TestRagflowDocumentsMixinUnit(unittest.TestCase):
                 ]
             }
         )
-        svc = _SdkParseSvc(dataset)
+        http = _ParseHttpStub(
+            visibility_sequences={"doc-1": [False, True]},
+            post_payloads=[{"code": 0}],
+        )
+        svc = _SdkParseSvc(dataset, http=http)
 
         ok = svc.parse_documents(dataset_ref="dataset-sdk-1", document_ids=["doc-1"])
 
         self.assertTrue(ok)
-        self.assertEqual(dataset.parse_calls, [["doc-1"]])
+        self.assertEqual(dataset.parse_calls, [])
+        self.assertEqual(
+            http.post_calls,
+            [{"path": "/api/v1/datasets/dataset-sdk-1/chunks", "body": {"document_ids": ["doc-1"]}}],
+        )
+
+    def test_parse_documents_prefers_http_even_when_sdk_client_exists(self):
+        dataset = _SdkParseDataset({"doc-1": [None, None, None]})
+        http = _ParseHttpStub(
+            visibility_sequences={"doc-1": [False, True]},
+            post_payloads=[{"code": 0}],
+        )
+        svc = _SdkParseSvc(dataset, http=http)
+
+        ok = svc.parse_documents(dataset_ref="dataset-sdk-1", document_ids=["doc-1"])
+
+        self.assertTrue(ok)
+        self.assertEqual(dataset.parse_calls, [])
+        self.assertEqual(
+            http.post_calls,
+            [{"path": "/api/v1/datasets/dataset-sdk-1/chunks", "body": {"document_ids": ["doc-1"]}}],
+        )
 
     def test_upload_document_reads_file_and_uses_blob_upload_path(self):
         svc = _UploadSvc()

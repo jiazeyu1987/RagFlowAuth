@@ -1,0 +1,58 @@
+{
+  "run_id": "document-control-flow-20260414T133900Z",
+  "cwd": "D:/ProjectPackage/RagflowAuth",
+  "goal": "Implement the 6 document-control work packages defined in docs/tasks/document-control-flow-parallel-20260414T151500 using supervised swarm execution",
+  "status": "running",
+  "phase": "wave-1-active",
+  "active_wave": 1,
+  "requested_workers": 6,
+  "validation_contract": {
+    "source_type": "task-doc",
+    "source_path": "docs/tasks/document-control-flow-parallel-20260414T151500/ws01-approval-workflow-contract.md",
+    "commands": [
+      "python -m pytest backend/tests/test_document_control_service_unit.py backend/tests/test_document_control_api_unit.py -q"
+    ],
+    "reason": "Wave 1 targets WS01 only; use the workstream's narrow backend validation commands instead of unrelated generic discovery results."
+  },
+  "started_at": "2026-04-14T13:46:47Z",
+  "updated_at": "2026-04-14T14:08:27Z",
+  "last_error": "",
+  "workers": [
+    {
+      "worker_id": "worker-01",
+      "path": ".super/runs/document-control-flow-20260414T133900Z/workers/worker-01",
+      "agent_id": "019d8c45-c2c8-7c10-91a6-ef0c6b4e3cc5",
+      "status": "running"
+    },
+    {
+      "worker_id": "worker-02",
+      "path": ".super/runs/document-control-flow-20260414T133900Z/workers/worker-02",
+      "agent_id": "",
+      "status": "queued"
+    },
+    {
+      "worker_id": "worker-03",
+      "path": ".super/runs/document-control-flow-20260414T133900Z/workers/worker-03",
+      "agent_id": "",
+      "status": "queued"
+    },
+    {
+      "worker_id": "worker-04",
+      "path": ".super/runs/document-control-flow-20260414T133900Z/workers/worker-04",
+      "agent_id": "",
+      "status": "queued"
+    },
+    {
+      "worker_id": "worker-05",
+      "path": ".super/runs/document-control-flow-20260414T133900Z/workers/worker-05",
+      "agent_id": "",
+      "status": "queued"
+    },
+    {
+      "worker_id": "worker-06",
+      "path": ".super/runs/document-control-flow-20260414T133900Z/workers/worker-06",
+      "agent_id": "",
+      "status": "queued"
+    }
+  ]
+}

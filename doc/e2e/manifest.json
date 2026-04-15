@@ -1,7 +1,7 @@
 {
   "version": 1,
   "description": "Verified doc/e2e to Playwright mappings for the full real-chain doc suite.",
-  "verified_at": "2026-04-05",
+  "verified_at": "2026-04-15",
   "principles": {
     "mock": "forbidden",
     "fallback": "forbidden",
@@ -18,7 +18,7 @@
   "coverage": {
     "automated_doc_count": 30,
     "pending_doc_count": 0,
-    "unique_spec_count": 26,
+    "unique_spec_count": 29,
     "scopes": {
       "unit_automated": 19,
       "role_automated": 11
@@ -165,7 +165,10 @@
       {
         "doc": "doc/e2e/role/04_文档上传审核发布.md",
         "specs": [
-          "fronted/e2e/tests/docs.document-upload-publish.spec.js"
+          "fronted/e2e/tests/docs.document-upload-publish.spec.js",
+          "fronted/e2e/tests/docs.document-control-pdf-flow.spec.js",
+          "fronted/e2e/tests/docs.document-control-branch-coverage.spec.js",
+          "fronted/e2e/tests/docs.document-control-edge-branches.spec.js"
         ]
       },
       {

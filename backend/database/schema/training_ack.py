@@ -6,6 +6,26 @@ from .helpers import add_column_if_missing, table_exists
 
 
 def ensure_training_ack_tables(conn: sqlite3.Connection) -> None:
+    if not table_exists(conn, "controlled_revision_training_gates"):
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS controlled_revision_training_gates (
+                controlled_revision_id TEXT PRIMARY KEY,
+                controlled_document_id TEXT NOT NULL,
+                training_required INTEGER NOT NULL DEFAULT 0,
+                department_ids_json TEXT,
+                created_at_ms INTEGER NOT NULL,
+                updated_at_ms INTEGER NOT NULL
+            )
+            """
+        )
+    add_column_if_missing(conn, "controlled_revision_training_gates", "controlled_revision_id TEXT")
+    add_column_if_missing(conn, "controlled_revision_training_gates", "controlled_document_id TEXT")
+    add_column_if_missing(conn, "controlled_revision_training_gates", "training_required INTEGER NOT NULL DEFAULT 0")
+    add_column_if_missing(conn, "controlled_revision_training_gates", "department_ids_json TEXT")
+    add_column_if_missing(conn, "controlled_revision_training_gates", "created_at_ms INTEGER")
+    add_column_if_missing(conn, "controlled_revision_training_gates", "updated_at_ms INTEGER")
+
     if not table_exists(conn, "training_assignments"):
         conn.execute(
             """
@@ -85,6 +105,10 @@ def ensure_training_ack_tables(conn: sqlite3.Connection) -> None:
     add_column_if_missing(conn, "quality_question_threads", "created_at_ms INTEGER")
     add_column_if_missing(conn, "quality_question_threads", "updated_at_ms INTEGER")
 
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_revision_training_gates_document "
+        "ON controlled_revision_training_gates(controlled_document_id, updated_at_ms DESC)"
+    )
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_training_assignments_user_status "
         "ON training_assignments(assignee_user_id, status, assigned_at_ms DESC)"

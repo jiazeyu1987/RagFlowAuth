@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import time
 from typing import Any
+from uuid import uuid4
 
 from ._base import OperationApprovalRepositoryBase
 
@@ -109,6 +110,45 @@ class OperationApprovalStepRepository(OperationApprovalRepositoryBase):
                     request_id,
                     int(step_no),
                     approver_user_id,
+                ),
+            )
+            if owns_conn:
+                conn.commit()
+        except Exception:
+            if owns_conn:
+                conn.rollback()
+            raise
+        finally:
+            if owns_conn:
+                conn.close()
+
+    def add_step_approver(
+        self,
+        *,
+        request_id: str,
+        request_step_id: str,
+        step_no: int,
+        approver_user_id: str,
+        approver_username: str | None,
+        conn: Any | None = None,
+    ) -> None:
+        now_ms = int(time.time() * 1000)
+        conn, owns_conn = self._borrow_connection(conn)
+        try:
+            conn.execute(
+                """
+                INSERT INTO operation_approval_request_step_approvers (
+                    request_step_approver_id, request_id, request_step_id, step_no,
+                    approver_user_id, approver_username, status, action, notes, signature_id, acted_at_ms
+                ) VALUES (?, ?, ?, ?, ?, ?, 'pending', NULL, NULL, NULL, NULL)
+                """,
+                (
+                    str(uuid4()),
+                    request_id,
+                    request_step_id,
+                    int(step_no),
+                    approver_user_id,
+                    approver_username,
                 ),
             )
             if owns_conn:

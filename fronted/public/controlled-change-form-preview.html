@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>受控文件变更单识别预览</title>
+    <style>
+      :root {
+        --paper: #ffffff;
+        --desk: #e9e3d8;
+        --ink: #111111;
+        --line: #1d1d1d;
+        --muted: #666666;
+        --hint: #fff3b0;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        padding: 20px 18px 32px;
+        background: #f3f3f3;
+        color: var(--ink);
+        font-family: "Microsoft YaHei", "PingFang SC", "Noto Sans SC", sans-serif;
+      }
+
+      .page {
+        max-width: 920px;
+        margin: 0 auto;
+      }
+
+      .sheet {
+        padding: 14px;
+        background: var(--paper);
+        border: 1px solid #d7d7d7;
+        box-shadow: 0 3px 10px rgba(18, 18, 18, 0.06);
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        table-layout: fixed;
+      }
+
+      th,
+      td {
+        padding: 6px 8px;
+        border: 1px solid var(--line);
+        font-size: 14px;
+        line-height: 1.35;
+        vertical-align: middle;
+      }
+
+      .head-table td {
+        text-align: center;
+      }
+
+      .logo-cell {
+        width: 190px;
+        padding: 0;
+      }
+
+      .brand {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        min-height: 80px;
+      }
+
+      .brand-mark {
+        font-weight: 900;
+        font-size: 34px;
+        letter-spacing: 1px;
+      }
+
+      .brand-text {
+        text-align: left;
+      }
+
+      .brand-cn {
+        font-size: 26px;
+        font-weight: 700;
+        letter-spacing: 1px;
+      }
+
+      .brand-en {
+        font-size: 17px;
+        font-weight: 700;
+      }
+
+      .form-title {
+        font-size: 28px;
+        font-weight: 700;
+        letter-spacing: 3px;
+      }
+
+      .doc-title {
+        font-size: 28px;
+        font-weight: 700;
+        letter-spacing: 2px;
+      }
+
+      .mini-label {
+        width: 110px;
+        background: #fafafa;
+        font-weight: 600;
+      }
+
+      .meta-value {
+        font-weight: 600;
+      }
+
+      .no-line {
+        margin-top: -1px;
+      }
+
+      .no-line td {
+        text-align: center;
+        font-weight: 700;
+      }
+
+      .section-table {
+        margin-top: -1px;
+      }
+
+      .section-title {
+        background: #f2f2f2;
+        text-align: center;
+        font-size: 16px;
+        font-weight: 700;
+      }
+
+      .label-cell {
+        width: 170px;
+        text-align: center;
+        background: #fafafa;
+        font-weight: 600;
+      }
+
+      .row-label {
+        text-align: center;
+        background: #fafafa;
+        font-weight: 600;
+      }
+
+      .value-cell {
+        padding-left: 10px;
+      }
+
+      .checkbox-line {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px 26px;
+        align-items: center;
+      }
+
+      .checkbox {
+        white-space: nowrap;
+      }
+
+      .vertical {
+        width: 44px;
+        text-align: center;
+        font-weight: 700;
+        background: #fafafa;
+        writing-mode: vertical-rl;
+        text-orientation: mixed;
+        letter-spacing: 3px;
+      }
+
+      .center {
+        text-align: center;
+      }
+
+      .scope-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 6px 12px;
+      }
+
+      .remark {
+        font-size: 13px;
+        color: var(--muted);
+      }
+
+      .uncertain {
+        display: inline-block;
+        padding: 0 4px;
+        background: var(--hint);
+      }
+
+      .signature-table th,
+      .signature-table td {
+        font-size: 13px;
+      }
+
+      .signature-table .header-cell {
+        background: #f7f7f7;
+        text-align: center;
+        font-weight: 700;
+      }
+
+      .signature-placeholder {
+        color: #555555;
+        letter-spacing: 1px;
+      }
+
+      .signature-slot {
+        display: block;
+        width: 78%;
+        height: 16px;
+        margin: 0 auto;
+        border-bottom: 1px solid #4d4d4d;
+      }
+
+      @media (max-width: 860px) {
+        body {
+          padding: 12px;
+        }
+
+        .sheet {
+          padding: 8px;
+          overflow-x: auto;
+        }
+
+        .sheet table {
+          min-width: 780px;
+        }
+
+        .form-title,
+        .doc-title {
+          font-size: 22px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <div class="sheet">
+        <table class="head-table">
+          <colgroup>
+            <col style="width: 190px" />
+            <col style="width: 120px" />
+            <col style="width: 170px" />
+            <col style="width: 90px" />
+            <col style="width: 100px" />
+            <col />
+          </colgroup>
+          <tr>
+            <td class="logo-cell">
+              <div class="brand">
+                <div class="brand-mark">INT</div>
+                <div class="brand-text">
+                  <div class="brand-cn">英泰医疗</div>
+                  <div class="brand-en">INT MEDICAL</div>
+                </div>
+              </div>
+            </td>
+            <td colspan="5" class="form-title">记录表单</td>
+          </tr>
+          <tr>
+            <td rowspan="2" class="doc-title">受控文件变更单</td>
+            <td class="mini-label">文件编号</td>
+            <td colspan="4" class="meta-value">INT/RF/4.2.4-01</td>
+          </tr>
+          <tr>
+            <td class="mini-label">版本修订</td>
+            <td class="meta-value">F/2</td>
+            <td class="mini-label">页码</td>
+            <td colspan="2" class="meta-value">1 of 2</td>
+          </tr>
+        </table>
+
+        <table class="no-line">
+          <tr>
+            <td>No. <span class="uncertain">20251103001</span></td>
+          </tr>
+        </table>
+
+        <table class="section-table">
+          <colgroup>
+            <col style="width: 46px" />
+            <col style="width: 124px" />
+            <col />
+            <col />
+            <col />
+            <col />
+          </colgroup>
+          <tr>
+            <td colspan="6" class="section-title">变更前</td>
+          </tr>
+          <tr>
+            <td colspan="2" class="label-cell">文件编号/版本号/名称</td>
+            <td colspan="4" class="value-cell">
+              PP-HAC-1-17/B0/
+              <span class="uncertain">亲水涂层造影导管工艺文件-浸涂工艺卡</span>
+            </td>
+          </tr>
+          <tr>
+            <td colspan="2" class="label-cell">变更方式</td>
+            <td colspan="4">
+              <div class="checkbox-line">
+                <span class="checkbox">☐ 新建文件</span>
+                <span class="checkbox">☑ 局部变更</span>
+                <span class="checkbox">☐ 换版变更</span>
+                <span class="checkbox">☐ 作废文件</span>
+              </div>
+            </td>
+          </tr>
+          <tr>
+            <td colspan="6" class="section-title">变更后</td>
+          </tr>
+          <tr>
+            <td colspan="2" class="label-cell">文件编号/版本号/名称</td>
+            <td colspan="4" class="value-cell">
+              PP-HAC-1-17/B1/
+              <span class="uncertain">亲水涂层造影导管工艺文件-浸涂工艺卡</span>
+            </td>
+          </tr>
+          <tr>
+            <td colspan="6" class="remark">
+              备注：若多份文件变更方式相同，可以多份文件使用一份受控文件变更单，多份文件变更需注明顺序号。
+            </td>
+          </tr>
+          <tr>
+            <td colspan="2" class="label-cell">变更原因</td>
+            <td colspan="4" class="value-cell">
+              新增编号为 A03401 的
+              <span class="uncertain">浸涂设备</span>
+            </td>
+          </tr>
+          <tr>
+            <td colspan="2" class="label-cell">变更内容（更改前后内容对比，若适用）</td>
+            <td colspan="4" class="value-cell">
+              <span class="uncertain">
+                新增设备编号 A03401，其余工艺参数、工装方式与原版本保持一致。
+              </span>
+            </td>
+          </tr>
+          <tr>
+            <td colspan="2" class="label-cell">是否涉及变更</td>
+            <td colspan="4" class="value-cell">
+              是 ☑，变更号：
+              <span class="uncertain">20251103001</span>
+              &nbsp;&nbsp;&nbsp;&nbsp;否 ☐
+            </td>
+          </tr>
+          <tr>
+            <td colspan="2" class="label-cell">是否影响其他文件/表单</td>
+            <td colspan="4" class="value-cell">是 ☐，文件表单：__________&nbsp;&nbsp;&nbsp;&nbsp;否 ☑</td>
+          </tr>
+          <tr>
+            <td colspan="2" class="label-cell">是否影响产品</td>
+            <td colspan="4" class="value-cell">是 ☐，产品：__________&nbsp;&nbsp;&nbsp;&nbsp;否 ☑</td>
+          </tr>
+          <tr>
+            <td rowspan="2" class="vertical">培训</td>
+            <td class="row-label">是否需要培训</td>
+            <td colspan="4" class="value-cell">
+              是 ☐&nbsp;&nbsp;&nbsp;&nbsp;否 ☑，且由
+              <span class="uncertain">新增设备与原有设备厂家及机型一致</span>
+            </td>
+          </tr>
+          <tr>
+            <td class="row-label">培训对象</td>
+            <td colspan="4" class="center">/</td>
+          </tr>
+          <tr>
+            <td class="vertical">发放范围</td>
+            <td colspan="5">
+              <div class="scope-grid">
+                <span>☐ 01 总经理</span>
+                <span>☐ 02 管理者代表</span>
+                <span>☐ 03 质量部</span>
+                <span>☐ 04 新品研发</span>
+                <span>☐ 05 生产技术</span>
+                <span>☐ 06 市场服务</span>
+                <span>☐ 07 行政部</span>
+                <span>☐ 08 采购</span>
+                <span>☐ 09 仓库</span>
+                <span>☐ 10 注塑</span>
+                <span>☑ 11 组装</span>
+                <span>☐ 12 来料检验</span>
+                <span>☐ 13 检测中心</span>
+                <span>☐ 14 灭菌站</span>
+                <span>☐ 15 设备管理</span>
+                <span>☐ 16 外贸</span>
+                <span>☐ 17 注册部</span>
+                <span>☐ 18 生产计划</span>
+                <span>☐ 19 外贸车间</span>
+                <span>☐ 20 包装设计</span>
+                <span></span>
+              </div>
+              <div class="remark" style="margin-top: 6px">
+                备注：多份文件发放范围不可清楚涉及放顺序号。
+              </div>
+            </td>
+          </tr>
+        </table>
+
+        <table class="section-table signature-table">
+          <colgroup>
+            <col style="width: 102px" />
+            <col />
+            <col />
+            <col />
+            <col />
+            <col />
+            <col />
+          </colgroup>
+          <tbody id="signature-body"></tbody>
+        </table>
+
+      </div>
+    </div>
+    <script>
+      const formPreviewData = {
+        prepared: {
+          label: "编制人/日期",
+          left: "王丽 / 工艺工程",
+          leftDate: "2026.04.03",
+          right: "",
+          rightDate: "2026.04.03",
+        },
+        reviewRows: [
+          ["赵敏", "质量体系", "2026.04.03", "张伟", "生产部", "2026.04.03"],
+          ["刘倩", "技术中心", "2026.04.03", "陈峰", "设备部", "2026.04.03"],
+          ["周楠", "法规事务", "2026.04.03", "李洋", "生物检验", "2026.04.03"],
+        ],
+        approved: {
+          label: "批准人/日期",
+          left: "李总 / 管理者代表",
+          leftDate: "2026.04.03",
+          right: "",
+          rightDate: "2026.04.03",
+        },
+        standardized: {
+          label: "标准化审核/日期",
+          left: "王工 / 标准化",
+          leftDate: "2026.04.03",
+          right: "",
+          rightDate: "2026.04.03",
+        },
+        effectiveDate: "2025.11.30",
+      };
+
+      function renderSignatureValue(value) {
+        if (value) {
+          return `<span class="signature-placeholder">${value}</span>`;
+        }
+
+        return '<span class="signature-slot"></span>';
+      }
+
+      function renderMergedRow(entry) {
+        return `
+          <tr>
+            <td class="row-label">${entry.label}</td>
+            <td colspan="2">${entry.left}</td>
+            <td>${entry.leftDate}</td>
+            <td colspan="2" class="center">${renderSignatureValue(entry.right)}</td>
+            <td class="center">${entry.rightDate}</td>
+          </tr>
+        `;
+      }
+
+      function renderReviewRows(rows) {
+        const header = `
+          <tr>
+            <td class="row-label" rowspan="${rows.length + 1}">审核</td>
+            <td class="header-cell">姓名</td>
+            <td class="header-cell">部门/职能</td>
+            <td class="header-cell">签名/日期</td>
+            <td class="header-cell">姓名</td>
+            <td class="header-cell">部门/职能</td>
+            <td class="header-cell">签名/日期</td>
+          </tr>
+        `;
+
+        const body = rows
+          .map(
+            (row) => `
+              <tr>
+                <td>${row[0]}</td>
+                <td>${row[1]}</td>
+                <td>${row[2]}</td>
+                <td>${row[3]}</td>
+                <td>${row[4]}</td>
+                <td>${row[5]}</td>
+              </tr>
+            `
+          )
+          .join("");
+
+        return header + body;
+      }
+
+      document.getElementById("signature-body").innerHTML = `
+        ${renderMergedRow(formPreviewData.prepared)}
+        ${renderReviewRows(formPreviewData.reviewRows)}
+        ${renderMergedRow(formPreviewData.approved)}
+        ${renderMergedRow(formPreviewData.standardized)}
+        <tr>
+          <td class="row-label">生效日期</td>
+          <td colspan="6">${formPreviewData.effectiveDate}</td>
+        </tr>
+      `;
+    </script>
+  </body>
+</html>

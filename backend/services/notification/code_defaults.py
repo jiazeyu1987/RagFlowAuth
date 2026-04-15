@@ -27,6 +27,9 @@ CODE_OWNED_EVENT_RULES = {
     "training_assignment_created": ["in_app"],
     "training_assignment_questioned": ["in_app"],
     "training_question_resolved": ["in_app"],
+    "document_control_approval_step_overdue": ["in_app"],
+    "document_control_department_ack_required": ["in_app"],
+    "document_control_department_ack_overdue": ["in_app"],
 }
 
 

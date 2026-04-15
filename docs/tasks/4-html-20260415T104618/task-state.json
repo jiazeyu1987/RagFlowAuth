@@ -1,0 +1,283 @@
+{
+  "schema_version": 2,
+  "task_id": "4-html-20260415T104618",
+  "mode": "lite",
+  "status": "completed",
+  "current_phase": null,
+  "phase_statuses": [
+    {
+      "phase_id": "P1",
+      "title": "生成 HTML 表格",
+      "status": "completed",
+      "objective": "从截图转写数据并输出为 HTML 表格（含 DMR 与 DHF）",
+      "owned_paths": [],
+      "dependencies": [],
+      "deliverables": [],
+      "evidence_expectation": "",
+      "evidence": [
+        "Output: docs/generated/document-approval-matrix.html",
+        "Screenshot: tmp/document-approval-matrix.png"
+      ],
+      "notes": "",
+      "last_reviewed_at": "2026-04-15T11:43:15",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P1-AC1",
+          "text": "`docs/generated/document-approval-matrix.html` 存在且为 UTF-8，可在浏览器中打开渲染。",
+          "status": "completed",
+          "evidence": [
+            "Output: docs/generated/document-approval-matrix.html",
+            "evidence/document-approval-matrix.png",
+            "docs/generated/document-approval-matrix.html",
+            "docs/generated/document-approval-matrix.json"
+          ]
+        },
+        {
+          "ac_id": "P1-AC2",
+          "text": "表头列名与截图一致（文件大类/文件小类/编制/审核会签列/标准化审核列/批准/备注）。",
+          "status": "completed",
+          "evidence": [
+            "Screenshot: tmp/document-approval-matrix.png",
+            "evidence/document-approval-matrix.png",
+            "docs/generated/document-approval-matrix.html",
+            "docs/generated/document-approval-matrix.json"
+          ]
+        },
+        {
+          "ac_id": "P1-AC3",
+          "text": "DMR 表包含截图中的全部行内容与对应单元格标记（● / ○），且备注文本一致。",
+          "status": "completed",
+          "evidence": [
+            "Spot-check script + transcription from input screenshots",
+            "evidence/document-approval-matrix.png",
+            "docs/generated/document-approval-matrix.html",
+            "docs/generated/document-approval-matrix.json"
+          ]
+        },
+        {
+          "ac_id": "P1-AC4",
+          "text": "DHF 表包含截图中的全部行内容与对应单元格标记（● / ○），且备注文本一致。",
+          "status": "completed",
+          "evidence": [
+            "Spot-check script + transcription from input screenshots",
+            "evidence/document-approval-matrix.png",
+            "docs/generated/document-approval-matrix.html",
+            "docs/generated/document-approval-matrix.json"
+          ]
+        },
+        {
+          "ac_id": "P1-AC5",
+          "text": "生成可复核证据（例如 Playwright 截图）用于对照检查渲染结果。",
+          "status": "completed",
+          "evidence": [
+            "Screenshot: tmp/document-approval-matrix.png",
+            "evidence/document-approval-matrix.png",
+            "docs/generated/document-approval-matrix.html",
+            "docs/generated/document-approval-matrix.json"
+          ]
+        }
+      ]
+    },
+    {
+      "phase_id": "P2",
+      "title": "合并 DMR 与 DHF 为单表",
+      "status": "completed",
+      "objective": "将 DMR 与 DHF 的内容在同一个 `<table>` 内呈现（仍保留“文件大类”列区分 DMR / DHF）。",
+      "owned_paths": [],
+      "dependencies": [],
+      "deliverables": [],
+      "evidence_expectation": "",
+      "evidence": [
+        "Output updated: docs/generated/document-approval-matrix.html",
+        "Screenshot updated: evidence/document-approval-matrix.png"
+      ],
+      "notes": "",
+      "last_reviewed_at": "2026-04-15T12:16:07",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P2-AC1",
+          "text": "页面仅渲染一张表（DMR 与 DHF 同表展示），且“文件大类”列能区分 DMR / DHF。",
+          "status": "completed",
+          "evidence": [
+            "HTML updated to renderCombinedTable (single <table> in UI)",
+            "evidence/document-approval-matrix.png",
+            "docs/generated/document-approval-matrix.html",
+            "docs/generated/document-approval-matrix.json"
+          ]
+        },
+        {
+          "ac_id": "P2-AC2",
+          "text": "合并后不丢行：DMR 24 行 + DHF 24 行，总计 48 行。",
+          "status": "completed",
+          "evidence": [
+            "Row count self-check: DMR 24 + DHF 24 = 48",
+            "evidence/document-approval-matrix.png",
+            "docs/generated/document-approval-matrix.html",
+            "docs/generated/document-approval-matrix.json"
+          ]
+        },
+        {
+          "ac_id": "P2-AC3",
+          "text": "更新渲染截图证据，用于人工复核合并后的显示效果。",
+          "status": "completed",
+          "evidence": [
+            "Screenshot: evidence/document-approval-matrix.png",
+            "evidence/document-approval-matrix.png",
+            "docs/generated/document-approval-matrix.html",
+            "docs/generated/document-approval-matrix.json"
+          ]
+        }
+      ]
+    },
+    {
+      "phase_id": "P3",
+      "title": "编制人直接主管全部会签",
+      "status": "completed",
+      "objective": "“编制人直接主管”列对所有行均为“●”。",
+      "owned_paths": [],
+      "dependencies": [],
+      "deliverables": [],
+      "evidence_expectation": "",
+      "evidence": [
+        "Output updated: docs/generated/document-approval-matrix.html",
+        "Screenshot: evidence/document-approval-matrix.png"
+      ],
+      "notes": "",
+      "last_reviewed_at": "2026-04-15T12:59:23",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P3-AC1",
+          "text": "“编制人直接主管”列对所有行均显示“●”。",
+          "status": "completed",
+          "evidence": [
+            "Renderer applies default marks: directManager=● for all rows",
+            "evidence/document-approval-matrix.png",
+            "docs/generated/document-approval-matrix.html",
+            "docs/generated/document-approval-matrix.json"
+          ]
+        },
+        {
+          "ac_id": "P3-AC2",
+          "text": "更新渲染截图证据，用于人工复核“编制人直接主管”列显示效果。",
+          "status": "completed",
+          "evidence": [
+            "Screenshot updated: evidence/document-approval-matrix.png",
+            "evidence/document-approval-matrix.png",
+            "docs/generated/document-approval-matrix.html",
+            "docs/generated/document-approval-matrix.json"
+          ]
+        }
+      ]
+    },
+    {
+      "phase_id": "P4",
+      "title": "文档管理员全部会签",
+      "status": "completed",
+      "objective": "“文档管理员”列对所有行均为“●”。",
+      "owned_paths": [],
+      "dependencies": [],
+      "deliverables": [],
+      "evidence_expectation": "",
+      "evidence": [
+        "Output updated: docs/generated/document-approval-matrix.html",
+        "Screenshot: evidence/document-approval-matrix.png"
+      ],
+      "notes": "",
+      "last_reviewed_at": "2026-04-15T13:14:48",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P4-AC1",
+          "text": "“文档管理员”列对所有行均显示“●”。",
+          "status": "completed",
+          "evidence": [
+            "Renderer applies default marks: docAdmin=● for all rows",
+            "evidence/document-approval-matrix.png",
+            "docs/generated/document-approval-matrix.html",
+            "docs/generated/document-approval-matrix.json"
+          ]
+        },
+        {
+          "ac_id": "P4-AC2",
+          "text": "更新渲染截图证据，用于人工复核“文档管理员”列显示效果。",
+          "status": "completed",
+          "evidence": [
+            "Screenshot updated: evidence/document-approval-matrix.png",
+            "evidence/document-approval-matrix.png",
+            "docs/generated/document-approval-matrix.html",
+            "docs/generated/document-approval-matrix.json"
+          ]
+        }
+      ]
+    },
+    {
+      "phase_id": "P5",
+      "title": "输出 JSON（文件小类/编制/审核会签/批准）",
+      "status": "completed",
+      "objective": "将表格数据按“文件小类 / 编制 / 审核会签 / 批准”字段导出为 JSON，便于系统对接或二次加工。",
+      "owned_paths": [],
+      "dependencies": [],
+      "deliverables": [],
+      "evidence_expectation": "",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P5-AC1",
+          "text": "`docs/generated/document-approval-matrix.json` 存在且为有效 JSON（UTF-8）。",
+          "status": "completed",
+          "evidence": [
+            "File: docs/generated/document-approval-matrix.json",
+            "docs/generated/document-approval-matrix.json",
+            "evidence/document-approval-matrix.png"
+          ]
+        },
+        {
+          "ac_id": "P5-AC2",
+          "text": "JSON 内共 48 条记录（DMR 24 + DHF 24），且每条记录包含键：文件小类、编制、审核会签、批准。",
+          "status": "completed",
+          "evidence": [
+            "Count check: 48 items; keys present",
+            "docs/generated/document-approval-matrix.json",
+            "evidence/document-approval-matrix.png"
+          ]
+        },
+        {
+          "ac_id": "P5-AC3",
+          "text": "审核会签字段包含 17 个角色键（含“编制人直接主管”与“文档管理员”），且二者在所有记录中均为“●”。",
+          "status": "completed",
+          "evidence": [
+            "Role check: 17 roles; directManager/docAdmin=● for all",
+            "docs/generated/document-approval-matrix.json",
+            "evidence/document-approval-matrix.png"
+          ]
+        }
+      ],
+      "evidence": [
+        "Output: docs/generated/document-approval-matrix.json"
+      ],
+      "notes": "",
+      "last_reviewed_at": "2026-04-15T14:12:19"
+    }
+  ],
+  "planner_review_status": "approved",
+  "test_status": "passed",
+  "blocking_prereqs": [],
+  "iteration_counts": {
+    "planner_revisions": 3,
+    "executor_loops": 5,
+    "test_loops": 4
+  },
+  "created_at": "2026-04-15T10:46:18",
+  "updated_at": "2026-04-15T14:13:08",
+  "branch": "int_latest",
+  "baseline_revision": "b588894c15af487c7dfaaaf5038ae84f2e799158",
+  "workspace_root": "D:\\ProjectPackage\\RagflowAuth",
+  "tasks_root": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks",
+  "task_dir": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\4-html-20260415T104618",
+  "goal": "识别4张图片内容，并将其整理为 HTML 表格（包含表头、行内容以及●/○标记）。",
+  "artifacts": {
+    "prd": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\4-html-20260415T104618\\prd.md",
+    "test_plan": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\4-html-20260415T104618\\test-plan.md",
+    "task_state": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\4-html-20260415T104618\\task-state.json",
+    "execution_log": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\4-html-20260415T104618\\execution-log.md",
+    "test_report": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\4-html-20260415T104618\\test-report.md"
+  }
+}

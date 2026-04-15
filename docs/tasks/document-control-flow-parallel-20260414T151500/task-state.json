@@ -1,0 +1,318 @@
+{
+  "schema_version": 2,
+  "task_id": "document-control-flow-parallel-20260414T151500",
+  "mode": "lite",
+  "status": "completed",
+  "current_phase": null,
+  "phase_statuses": [
+    {
+      "phase_id": "P1",
+      "title": "审批工作流主合同",
+      "status": "completed",
+      "objective": "固化 PDF 目标流程里的会签、批准、标准化审核、驳回/重提和加签规则，形成后续包都消费的唯一合同。",
+      "owned_paths": [],
+      "dependencies": [
+        "无。"
+      ],
+      "deliverables": [],
+      "evidence_expectation": "`ws01-approval-workflow-contract.md` 含目标、Owned Paths、依赖、非目标、验收和建议测试。",
+      "evidence": [
+        "backend/services/document_control/service.py",
+        "backend/app/modules/document_control/router.py",
+        "backend/services/compliance/retired_records.py",
+        "backend/tests/test_document_control_api_unit.py",
+        "backend/tests/test_retired_document_access_unit.py",
+        "docs/compliance/release_and_retirement_sop.md",
+        "docs/compliance/retirement_plan.md",
+        "execution-log.md#Integration-Repair-Pass"
+      ],
+      "notes": "Workflow-driven approval is integrated and validated.",
+      "last_reviewed_at": "2026-04-15T00:37:11",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P1-AC1",
+          "text": "`WS01` 明确冻结“会签 -> 批准 -> 标准化审核”的顺序，并禁止各后续包自行改写。",
+          "status": "completed",
+          "evidence": [
+            "backend/services/document_control/service.py",
+            "backend/app/modules/document_control/router.py",
+            "backend/tests/test_document_control_api_unit.py",
+            "backend/tests/test_retired_document_access_unit.py",
+            "execution-log.md#Integration-Repair-Pass",
+            "test-report.md#T1",
+            "test-report.md#T2",
+            "test-report.md#T3",
+            "test-report.md#T4",
+            "test-report.md#T5",
+            "test-report.md#T6"
+          ]
+        },
+        {
+          "ac_id": "P1-AC2",
+          "text": "`WS01` 明确“不同意/驳回”与“重新发起”的语义，不允许后续包各自定义退回规则。",
+          "status": "completed",
+          "evidence": [
+            "docs/compliance/release_and_retirement_sop.md",
+            "docs/compliance/retirement_plan.md",
+            "backend/services/document_control/service.py",
+            "execution-log.md#Integration-Repair-Pass",
+            "test-report.md#T1",
+            "test-report.md#T2",
+            "test-report.md#T3",
+            "test-report.md#T4",
+            "test-report.md#T5",
+            "test-report.md#T6"
+          ]
+        }
+      ]
+    },
+    {
+      "phase_id": "P2",
+      "title": "培训门禁与确认闭环",
+      "status": "completed",
+      "objective": "把“培训（若需要）”从当前的生效后动作，重构为与目标流程兼容的显式门禁或显式阻断前提。",
+      "owned_paths": [],
+      "dependencies": [],
+      "deliverables": [],
+      "evidence_expectation": "`ws02-training-gate-and-ack-loop.md` 对应条目完整。",
+      "evidence": [
+        "execution-log.md#Integration-Repair-Pass"
+      ],
+      "notes": "- Revision-level training gate is implemented and validated.",
+      "last_reviewed_at": "2026-04-15T00:37:11",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P2-AC1",
+          "text": "`WS02` 明确培训是目标流程的一部分，并写清阻断条件与未满足时的 fail-fast 行为。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Integration-Repair-Pass",
+            "test-report.md#T1",
+            "test-report.md#T2",
+            "test-report.md#T3",
+            "test-report.md#T4",
+            "test-report.md#T5",
+            "test-report.md#T6"
+          ]
+        },
+        {
+          "ac_id": "P2-AC2",
+          "text": "`WS02` 明确培训指派来源、阅读确认、疑问线程和培训记录边界。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Integration-Repair-Pass",
+            "test-report.md#T1",
+            "test-report.md#T2",
+            "test-report.md#T3",
+            "test-report.md#T4",
+            "test-report.md#T5",
+            "test-report.md#T6"
+          ]
+        }
+      ]
+    },
+    {
+      "phase_id": "P3",
+      "title": "受控发布与旧版回收",
+      "status": "completed",
+      "objective": "定义发布、旧版替代、受控标识、作废标识、自动/人工模式和台账留痕。",
+      "owned_paths": [],
+      "dependencies": [],
+      "deliverables": [],
+      "evidence_expectation": "`ws03-controlled-release-and-distribution.md` 对应条目完整。",
+      "evidence": [
+        "execution-log.md#Integration-Repair-Pass"
+      ],
+      "notes": "- Explicit publish and release ledger integration are validated.",
+      "last_reviewed_at": "2026-04-15T00:37:12",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P3-AC1",
+          "text": "`WS03` 明确“发布”“旧版替代/回收”“自动/人工模式”“发布台账”的实现边界。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Integration-Repair-Pass",
+            "test-report.md#T1",
+            "test-report.md#T2",
+            "test-report.md#T3",
+            "test-report.md#T4",
+            "test-report.md#T5",
+            "test-report.md#T6"
+          ]
+        },
+        {
+          "ac_id": "P3-AC2",
+          "text": "`WS03` 明确不得继续沿用当前“effective 时直接置 obsolete 但不留发布记录”的行为。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Integration-Repair-Pass",
+            "test-report.md#T1",
+            "test-report.md#T2",
+            "test-report.md#T3",
+            "test-report.md#T4",
+            "test-report.md#T5",
+            "test-report.md#T6"
+          ]
+        }
+      ]
+    },
+    {
+      "phase_id": "P4",
+      "title": "部门通知与执行确认",
+      "status": "completed",
+      "objective": "定义发布后“相关部门收到通知并点击确认”的数据模型、提醒链路和确认闭环。",
+      "owned_paths": [],
+      "dependencies": [],
+      "deliverables": [],
+      "evidence_expectation": "`ws04-department-ack-and-execution-confirmation.md` 对应条目完整。",
+      "evidence": [
+        "execution-log.md#Integration-Repair-Pass"
+      ],
+      "notes": "- Department acknowledgment flow uses document-control APIs and passes validation.",
+      "last_reviewed_at": "2026-04-15T00:37:12",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P4-AC1",
+          "text": "`WS04` 明确部门确认对象、提醒机制、确认状态和访问入口。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Integration-Repair-Pass",
+            "test-report.md#T1",
+            "test-report.md#T2",
+            "test-report.md#T3",
+            "test-report.md#T4",
+            "test-report.md#T5",
+            "test-report.md#T6"
+          ]
+        },
+        {
+          "ac_id": "P4-AC2",
+          "text": "`WS04` 明确这部分不再借用变更控制模块的确认流程语义。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Integration-Repair-Pass",
+            "test-report.md#T1",
+            "test-report.md#T2",
+            "test-report.md#T3",
+            "test-report.md#T4",
+            "test-report.md#T5",
+            "test-report.md#T6"
+          ]
+        }
+      ]
+    },
+    {
+      "phase_id": "P5",
+      "title": "作废、留存与销毁",
+      "status": "completed",
+      "objective": "定义作废审批、访问拦截、留存期、销毁记录与合规边界，解决当前“仓库外残余项”和目标流程的冲突。",
+      "owned_paths": [],
+      "dependencies": [],
+      "deliverables": [],
+      "evidence_expectation": "`ws05-obsolete-retention-and-destruction.md` 对应条目完整。",
+      "evidence": [
+        "execution-log.md#Integration-Repair-Pass"
+      ],
+      "notes": "- Obsolete, retention, and destruction flow is validated with explicit offline disposal boundary.",
+      "last_reviewed_at": "2026-04-15T00:37:13",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P5-AC1",
+          "text": "`WS05` 明确作废、留存和销毁的状态及访问策略。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Integration-Repair-Pass",
+            "test-report.md#T1",
+            "test-report.md#T2",
+            "test-report.md#T3",
+            "test-report.md#T4",
+            "test-report.md#T5",
+            "test-report.md#T6"
+          ]
+        },
+        {
+          "ac_id": "P5-AC2",
+          "text": "`WS05` 明确当前仓库外残余项与目标流程冲突的处理前提，不允许静默降级。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Integration-Repair-Pass",
+            "test-report.md#T1",
+            "test-report.md#T2",
+            "test-report.md#T3",
+            "test-report.md#T4",
+            "test-report.md#T5",
+            "test-report.md#T6"
+          ]
+        }
+      ]
+    },
+    {
+      "phase_id": "P6",
+      "title": "文控前端工作区",
+      "status": "completed",
+      "objective": "把当前“直接改状态”的文控页面改成消费前五个工作包合同的工作区。",
+      "owned_paths": [],
+      "dependencies": [],
+      "deliverables": [],
+      "evidence_expectation": "`ws06-document-control-frontend-workspace.md` 对应条目完整。",
+      "evidence": [
+        "execution-log.md#Integration-Repair-Pass"
+      ],
+      "notes": "- Frontend workspace now uses real document-control release, acknowledgment, and obsolete APIs.",
+      "last_reviewed_at": "2026-04-15T00:37:13",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P6-AC1",
+          "text": "`WS06` 明确前端不再保留“Move to approved/effective/obsolete”这类直接状态按钮。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Integration-Repair-Pass",
+            "test-report.md#T1",
+            "test-report.md#T2",
+            "test-report.md#T3",
+            "test-report.md#T4",
+            "test-report.md#T5",
+            "test-report.md#T6"
+          ]
+        },
+        {
+          "ac_id": "P6-AC2",
+          "text": "`WS06` 明确前端如何消费前五个包的 API、阻断状态和审计可见信息。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#Integration-Repair-Pass",
+            "test-report.md#T1",
+            "test-report.md#T2",
+            "test-report.md#T3",
+            "test-report.md#T4",
+            "test-report.md#T5",
+            "test-report.md#T6"
+          ]
+        }
+      ]
+    }
+  ],
+  "planner_review_status": "approved",
+  "test_status": "passed",
+  "blocking_prereqs": [],
+  "iteration_counts": {
+    "planner_revisions": 0,
+    "executor_loops": 1,
+    "test_loops": 0
+  },
+  "created_at": "2026-04-14T20:50:21",
+  "updated_at": "2026-04-15T00:41:28",
+  "branch": "int_latest",
+  "baseline_revision": "b588894c15af487c7dfaaaf5038ae84f2e799158",
+  "workspace_root": "D:\\ProjectPackage\\RagflowAuth",
+  "tasks_root": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks",
+  "task_dir": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\document-control-flow-parallel-20260414T151500",
+  "goal": "把文件控制流程初稿与当前系统差异，细化成可由不同 LLM 并行执行的独立工作文件",
+  "artifacts": {
+    "prd": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\document-control-flow-parallel-20260414T151500\\prd.md",
+    "test_plan": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\document-control-flow-parallel-20260414T151500\\test-plan.md",
+    "task_state": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\document-control-flow-parallel-20260414T151500\\task-state.json",
+    "execution_log": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\document-control-flow-parallel-20260414T151500\\execution-log.md",
+    "test_report": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\document-control-flow-parallel-20260414T151500\\test-report.md"
+  }
+}

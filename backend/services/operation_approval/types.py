@@ -9,9 +9,11 @@ SUPPORTED_OPERATION_TYPES = (
     "knowledge_file_delete",
     "knowledge_base_create",
     "knowledge_base_delete",
+    "document_control_revision_approval",
 )
 
 INTERNAL_OPERATION_TYPE_LEGACY_DOCUMENT_REVIEW = "legacy_document_review"
+OPERATION_TYPE_DOCUMENT_CONTROL_REVISION_APPROVAL = "document_control_revision_approval"
 
 OPERATION_TYPE_LABELS = {
     "knowledge_file_upload": "文件上传",

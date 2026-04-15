@@ -1,0 +1,557 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>文件审核会签矩阵（从图片转写）</title>
+    <style>
+      :root {
+        --border: #1f1f1f;
+        --header-bg: #f5f5f5;
+        --text: #111;
+        --muted: #666;
+      }
+
+      body {
+        font-family: "Segoe UI", "Microsoft YaHei", system-ui, -apple-system, sans-serif;
+        color: var(--text);
+        margin: 24px;
+      }
+
+      h1 {
+        font-size: 18px;
+        margin: 0 0 8px;
+      }
+
+      .hint {
+        font-size: 12px;
+        color: var(--muted);
+        margin: 0 0 16px;
+        line-height: 1.6;
+      }
+
+      .table-wrap {
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        padding: 12px;
+        overflow: auto;
+        max-width: 100%;
+        background: #fff;
+      }
+
+      table {
+        border-collapse: collapse;
+        width: max-content;
+        table-layout: fixed;
+      }
+
+      th,
+      td {
+        border: 1px solid var(--border);
+        padding: 6px 6px;
+        font-size: 12px;
+        vertical-align: middle;
+      }
+
+      thead th {
+        background: var(--header-bg);
+        text-align: center;
+        font-weight: 700;
+        white-space: nowrap;
+      }
+
+      td.center {
+        text-align: center;
+      }
+
+      td.dot {
+        text-align: center;
+        font-size: 16px;
+        line-height: 1;
+      }
+
+      td.doc-name {
+        max-width: 220px;
+        white-space: normal;
+        word-break: break-word;
+      }
+
+      td.compiler {
+        max-width: 140px;
+        white-space: normal;
+        word-break: break-word;
+      }
+
+      td.approver,
+      td.remark {
+        max-width: 180px;
+        white-space: normal;
+        word-break: break-word;
+      }
+
+      .section {
+        margin: 18px 0 10px;
+        font-weight: 700;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>文件审核会签矩阵（从图片转写）</h1>
+    <p class="hint">
+      说明：本表格依据用户提供的 4 张截图转写生成；单元格内的“● / ○”为原图中的标记（不对其含义做额外解释）。DMR 与 DHF 已合并为同一张表。
+      根据补充要求，“编制人直接主管”与“文档管理员”列默认对所有行均为“●”。如需后续维护，建议只改下方 <code>DATA</code> 中的数据项。
+    </p>
+
+    <div id="tables" class="table-wrap"></div>
+
+    <script>
+      const COLS_SIGNOFF = [
+        { key: "directManager", label: "编制人直接主管" },
+        { key: "qa", label: "QA" },
+        { key: "qc", label: "QC" },
+        { key: "qms", label: "QMS" },
+        { key: "reg", label: "注册" },
+        { key: "newDev", label: "新品开发" },
+        { key: "equipDev", label: "设备开发" },
+        { key: "production", label: "生产" },
+        { key: "prodPlan", label: "生产计划" },
+        { key: "prodPurch", label: "生产采购" },
+        { key: "whLog", label: "仓储物流" },
+        { key: "pkgDesign", label: "包装设计" },
+        { key: "market", label: "市场" },
+        { key: "testCenter", label: "检测中心" },
+        { key: "hr", label: "人力资源" },
+        { key: "finance", label: "财务" },
+      ];
+
+      const COL_DOC_ADMIN = { key: "docAdmin", label: "文档管理员" };
+
+      /**
+       * marks: { [key]: "●" | "○" }
+       */
+      const DATA = {
+        DMR: [
+          {
+            file: "产品技术要求",
+            compiler: "项目负责人",
+            marks: { qa: "●", qms: "●", reg: "●" },
+            approver: "编制部门负责人或授权代表",
+            remark: "",
+          },
+          {
+            file: "生产用设备清单",
+            compiler: "项目负责人/或指定人员",
+            marks: { qa: "●", qms: "●", production: "●" },
+            approver: "编制部门负责人或授权代表",
+            remark: "",
+          },
+          {
+            file: "检验用设备清单",
+            compiler: "项目负责人/或指定人员",
+            marks: { qa: "●", qc: "●", qms: "●", production: "●", testCenter: "●" },
+            approver: "编制部门负责人或授权代表",
+            remark: "",
+          },
+          {
+            file: "说明书",
+            compiler: "项目负责人/或指定人员",
+            marks: { qa: "●", qms: "●", reg: "●", market: "●" },
+            approver: "编制部门负责人或授权代表",
+            remark: "",
+          },
+          {
+            file: "包装设计",
+            compiler: "项目负责人/或指定人员",
+            marks: { qa: "●", qms: "●", reg: "●", pkgDesign: "●", market: "●" },
+            approver: "编制部门负责人或授权代表",
+            remark: "注册针对注册产品进行会签",
+          },
+          {
+            file: "标签、合格证",
+            compiler: "项目负责人/或指定人员",
+            marks: { qa: "●", qms: "●", reg: "●", market: "●" },
+            approver: "编制部门负责人或授权代表",
+            remark: "注册针对注册产品进行会签",
+          },
+          {
+            file: "物资采购清单",
+            compiler: "项目负责人/或指定人员",
+            marks: { qa: "●", qms: "●", prodPurch: "●" },
+            approver: "编制部门负责人或授权代表",
+            remark: "",
+          },
+          {
+            file: "采购技术要求",
+            compiler: "项目负责人/或指定人员",
+            marks: { qa: "●", qms: "●", prodPurch: "●" },
+            approver: "编制部门负责人或授权代表",
+            remark: "",
+          },
+          {
+            file: "图纸",
+            compiler: "项目负责人/或指定人员",
+            marks: { qa: "●", qms: "●", production: "○", prodPlan: "●" },
+            approver: "编制部门负责人或授权代表",
+            remark: "",
+          },
+          {
+            file: "工艺流程图",
+            compiler: "项目负责人/或指定人员",
+            marks: { qa: "●", qms: "●", production: "●" },
+            approver: "编制部门负责人或授权代表",
+            remark: "",
+          },
+          {
+            file: "工序卡/作业指导书",
+            compiler: "项目负责人/或指定人员",
+            marks: { qa: "●", qms: "●", production: "●" },
+            approver: "编制部门负责人或授权代表",
+            remark: "",
+          },
+          {
+            file: "来料检验规程",
+            compiler: "QA",
+            marks: { qc: "●", qms: "●", newDev: "●" },
+            approver: "编制部门负责人或授权代表",
+            remark: "",
+          },
+          {
+            file: "过程检验规程",
+            compiler: "QA",
+            marks: { directManager: "●", qc: "●", qms: "●", newDev: "●", docAdmin: "●" },
+            approver: "编制部门负责人或授权代表",
+            remark: "",
+          },
+          {
+            file: "成品检验规程",
+            compiler: "QA",
+            marks: { qms: "●", newDev: "●", testCenter: "●" },
+            approver: "编制部门负责人或授权代表",
+            remark: "",
+          },
+          {
+            file: "检验记录表单",
+            compiler: "QA",
+            marks: { qc: "●", qms: "●", newDev: "●", testCenter: "●" },
+            approver: "编制部门负责人或授权代表",
+            remark: "",
+          },
+          {
+            file: "生产记录表单",
+            compiler: "QA",
+            marks: { qa: "●", qms: "●", newDev: "●", production: "●" },
+            approver: "编制部门负责人或授权代表",
+            remark: "",
+          },
+          {
+            file: "标准测试方法",
+            compiler: "QA",
+            marks: { qa: "●", qms: "●", newDev: "●", testCenter: "●" },
+            approver: "编制部门负责人或授权代表",
+            remark: "",
+          },
+          {
+            file: "设备采购技术要求表",
+            compiler: "需求部门",
+            marks: { qms: "●", newDev: "○", equipDev: "●", production: "○", testCenter: "○" },
+            approver: "编制部门负责人或授权代表",
+            remark: "",
+          },
+          {
+            file: "生产用工装模具采购技术要求及设计图纸",
+            compiler: "技术人员",
+            marks: { qms: "●", newDev: "○", production: "●" },
+            approver: "编制部门负责人或授权代表",
+            remark: "",
+          },
+          {
+            file: "生产用工装模具维护保养规范",
+            compiler: "设备人员",
+            marks: { qms: "●", production: "●" },
+            approver: "编制部门负责人或授权代表",
+            remark: "",
+          },
+          {
+            file: "生产用工装模具维护保养记录表",
+            compiler: "设备人员",
+            marks: { qms: "●", production: "●" },
+            approver: "编制部门负责人或授权代表",
+            remark: "",
+          },
+          {
+            file: "检验用工装模具采购技术要求及设计图纸",
+            compiler: "技术人员",
+            marks: { qa: "●", qc: "○", qms: "●", newDev: "○", testCenter: "○" },
+            approver: "编制部门负责人或授权代表",
+            remark: "根据使用区域",
+          },
+          {
+            file: "检验用工装模具维护保养规范",
+            compiler: "设备人员",
+            marks: { qc: "●", qms: "●", testCenter: "●" },
+            approver: "编制部门负责人或授权代表",
+            remark: "根据使用区域",
+          },
+          {
+            file: "检验用工装模具维护保养记录表单",
+            compiler: "设备人员",
+            marks: { qc: "●", qms: "●", testCenter: "●" },
+            approver: "编制部门负责人或授权代表",
+            remark: "根据使用区域",
+          },
+        ],
+        DHF: [
+          {
+            file: "市场调研报告",
+            compiler: "市场",
+            marks: { qms: "●", newDev: "●" },
+            approver: "编制部门负责人或授权代表",
+            remark: "",
+          },
+          {
+            file: "技术调研报告",
+            compiler: "项目负责人或指定人员",
+            marks: { qms: "●" },
+            approver: "编制部门负责人或授权代表",
+            remark: "",
+          },
+          {
+            file: "注册临床路径分析",
+            compiler: "注册人员",
+            marks: { qms: "●", newDev: "●" },
+            approver: "编制部门负责人或授权代表",
+            remark: "",
+          },
+          {
+            file: "项目立项书",
+            compiler: "市场人员或技术人员",
+            marks: {},
+            approver: "研发部门负责人或总经理",
+            remark: "",
+          },
+          {
+            file: "项目策划书",
+            compiler: "项目负责人或指定人员",
+            marks: { qa: "●", qms: "●", reg: "●", equipDev: "●", production: "●", prodPurch: "●", testCenter: "●" },
+            approver: "编制部门负责人或授权代表",
+            remark: "",
+          },
+          {
+            file: "专利检索与分析报告(如适用)",
+            compiler: "技术人员",
+            marks: { qms: "●" },
+            approver: "编制部门负责人或授权代表",
+            remark: "",
+          },
+          {
+            file: "同类产品测试方案及报告(如适用)",
+            compiler: "技术人员",
+            marks: { qa: "●", qms: "●" },
+            approver: "编制部门负责人或授权代表",
+            remark: "",
+          },
+          {
+            file: "不良事件调研报告(如适用)",
+            compiler: "技术人员",
+            marks: { qa: "●", qms: "●" },
+            approver: "编制部门负责人或授权代表",
+            remark: "",
+          },
+          {
+            file: "法规、标准清单",
+            compiler: "技术人员",
+            marks: { qa: "●", qms: "●" },
+            approver: "编制部门负责人或授权代表",
+            remark: "",
+          },
+          {
+            file: "风险管理计划",
+            compiler: "技术人员",
+            marks: { qa: "●", qms: "●", reg: "●", equipDev: "●", production: "●", prodPurch: "●", testCenter: "●" },
+            approver: "编制部门负责人或授权代表",
+            remark: "",
+          },
+          {
+            file: "风险管理报告",
+            compiler: "技术人员",
+            marks: { qa: "●", qms: "●", reg: "●", equipDev: "●", production: "●", prodPurch: "●", testCenter: "●" },
+            approver: "编制部门负责人或授权代表",
+            remark: "",
+          },
+          {
+            file: "设计验证方案/报告",
+            compiler: "技术人员",
+            marks: { directManager: "●", qa: "●", qms: "●", production: "○", docAdmin: "●" },
+            approver: "编制部门负责人或授权代表",
+            remark: "计划性文件",
+          },
+          {
+            file: "运输包装验证方案/报告",
+            compiler: "技术人员",
+            marks: { qa: "●", qms: "●", reg: "●" },
+            approver: "编制部门负责人或授权代表",
+            remark: "",
+          },
+          {
+            file: "货架寿命验证方案/报告",
+            compiler: "技术人员",
+            marks: { qa: "●", qms: "●", reg: "●" },
+            approver: "编制部门负责人或授权代表",
+            remark: "",
+          },
+          {
+            file: "设计转移方案和报告",
+            compiler: "技术人员",
+            marks: { qa: "●", qc: "●", qms: "●", equipDev: "●", production: "●", prodPlan: "●", prodPurch: "●", whLog: "●" },
+            approver: "编制部门负责人或授权代表",
+            remark: "",
+          },
+          {
+            file: "性能评价方案和报告",
+            compiler: "技术人员",
+            marks: { qa: "●", qms: "●", reg: "●" },
+            approver: "编制部门负责人或授权代表",
+            remark: "",
+          },
+          {
+            file: "临床评价方案/报告(如适用)",
+            compiler: "注册",
+            marks: { qa: "●", qms: "●", newDev: "●" },
+            approver: "编制部门负责人或授权代表",
+            remark: "",
+          },
+          {
+            file: "产品过程确认主计划",
+            compiler: "技术人员",
+            marks: { qa: "●", qms: "●", production: "●" },
+            approver: "编制部门负责人或授权代表",
+            remark: "",
+          },
+          {
+            file: "设备安装确认(IQ)方案/报告",
+            compiler: "设备人员",
+            marks: { qa: "●", qms: "●", newDev: "○", production: "●" },
+            approver: "编制部门负责人或授权代表",
+            remark: "",
+          },
+          {
+            file: "过程运行确认(OQ)方案/报告",
+            compiler: "技术人员",
+            marks: { qa: "●", qms: "●", production: "●" },
+            approver: "编制部门负责人或授权代表",
+            remark: "",
+          },
+          {
+            file: "过程性能确认(PQ)方案和报告",
+            compiler: "技术人员",
+            marks: { qa: "●", qms: "●", production: "●" },
+            approver: "编制部门负责人或授权代表",
+            remark: "",
+          },
+          {
+            file: "灭菌确认方案和报告",
+            compiler: "灭菌验证人员",
+            marks: { qa: "●", qms: "●", newDev: "●" },
+            approver: "编制部门负责人或授权代表",
+            remark: "",
+          },
+          {
+            file: "注册/临床资料汇编",
+            compiler: "注册",
+            marks: { qms: "●", newDev: "●" },
+            approver: "编制部门负责人或授权代表",
+            remark: "",
+          },
+          {
+            file: "生产许可/备案资料汇编",
+            compiler: "注册",
+            marks: { qms: "●", newDev: "●" },
+            approver: "编制部门负责人或授权代表",
+            remark: "",
+          },
+        ],
+      };
+
+      function buildHeader(table) {
+        const thead = document.createElement("thead");
+        const tr1 = document.createElement("tr");
+        const tr2 = document.createElement("tr");
+
+        const addTh = (tr, text, attrs = {}) => {
+          const th = document.createElement("th");
+          th.textContent = text;
+          Object.entries(attrs).forEach(([k, v]) => th.setAttribute(k, String(v)));
+          tr.appendChild(th);
+          return th;
+        };
+
+        addTh(tr1, "文件大类", { rowspan: 2 });
+        addTh(tr1, "文件小类", { rowspan: 2 });
+        addTh(tr1, "编制", { rowspan: 2 });
+        addTh(tr1, "审核会签", { colspan: COLS_SIGNOFF.length });
+        addTh(tr1, "标准化审核", { colspan: 1 });
+        addTh(tr1, "批准", { rowspan: 2 });
+        addTh(tr1, "备注", { rowspan: 2 });
+
+        COLS_SIGNOFF.forEach((c) => addTh(tr2, c.label));
+        addTh(tr2, COL_DOC_ADMIN.label);
+
+        thead.appendChild(tr1);
+        thead.appendChild(tr2);
+        table.appendChild(thead);
+      }
+
+      function renderCombinedTable(categories) {
+        const table = document.createElement("table");
+        buildHeader(table);
+
+        const tbody = document.createElement("tbody");
+
+        categories.forEach((category) => {
+          const rows = DATA[category] ?? [];
+
+          rows.forEach((row, index) => {
+            const tr = document.createElement("tr");
+
+            const marks = { ...(row.marks ?? {}), directManager: "●", docAdmin: "●" };
+
+            const td = (text, className = "") => {
+              const cell = document.createElement("td");
+              if (className) cell.className = className;
+              cell.textContent = text ?? "";
+              return cell;
+            };
+
+            if (index === 0) {
+              const catCell = td(category, "center");
+              catCell.setAttribute("rowspan", String(rows.length));
+              tr.appendChild(catCell);
+            }
+
+            tr.appendChild(td(row.file, "doc-name"));
+            tr.appendChild(td(row.compiler, "compiler"));
+
+            COLS_SIGNOFF.forEach((c) => {
+              const mark = marks[c.key] ?? "";
+              tr.appendChild(td(mark, mark ? "dot" : "center"));
+            });
+
+            const docAdminMark = marks[COL_DOC_ADMIN.key] ?? "";
+            tr.appendChild(td(docAdminMark, docAdminMark ? "dot" : "center"));
+
+            tr.appendChild(td(row.approver ?? "", "approver"));
+            tr.appendChild(td(row.remark ?? "", "remark"));
+
+            tbody.appendChild(tr);
+          });
+        });
+
+        table.appendChild(tbody);
+        return table;
+      }
+
+      const tablesRoot = document.getElementById("tables");
+      tablesRoot.appendChild(renderCombinedTable(["DMR", "DHF"]));
+    </script>
+  </body>
+</html>

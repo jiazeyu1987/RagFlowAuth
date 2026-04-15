@@ -1,0 +1,184 @@
+{
+  "schema_version": 2,
+  "task_id": "ws04-implement-post-release-department-acknowled-20260414T224438",
+  "mode": "lite",
+  "status": "completed",
+  "current_phase": null,
+  "phase_statuses": [
+    {
+      "phase_id": "P1",
+      "title": "Data Model And Schema",
+      "status": "completed",
+      "objective": "Introduce a department acknowledgment data model and persisted target-department mapping.",
+      "owned_paths": [],
+      "dependencies": [],
+      "deliverables": [],
+      "evidence_expectation": "`backend/database/schema/document_control.py` updated; tests demonstrate fail-fast behavior.",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P1-AC1",
+          "text": "Schema includes a persisted department-ack model with `pending/confirmed/overdue` fields and audit fields (department, release revision, confirmer, timestamps, notes).",
+          "status": "completed",
+          "evidence": [
+            "backend/database/schema/document_control.py",
+            "backend/services/document_control/service.py",
+            "backend/tests/test_document_control_api_unit.py",
+            "python -m pytest backend/tests/test_document_control_api_unit.py -q"
+          ]
+        },
+        {
+          "ac_id": "P1-AC2",
+          "text": "Target departments are stored in repo data (DB) and release fails fast if they are missing; no “all departments” default exists.",
+          "status": "completed",
+          "evidence": [
+            "backend/database/schema/document_control.py",
+            "backend/services/document_control/service.py",
+            "backend/tests/test_document_control_api_unit.py",
+            "python -m pytest backend/tests/test_document_control_api_unit.py -q"
+          ]
+        }
+      ],
+      "evidence": [
+        "backend/database/schema/document_control.py",
+        "backend/services/document_control/service.py"
+      ],
+      "notes": "- Added distribution department mapping and persisted department ack schema.",
+      "last_reviewed_at": "2026-04-14T23:47:08"
+    },
+    {
+      "phase_id": "P2",
+      "title": "Service + API (Ack Create/List/Confirm)",
+      "status": "completed",
+      "objective": "Create acknowledgment rows after “release” (revision becomes effective), expose list + confirm APIs, enforce department ownership.",
+      "owned_paths": [],
+      "dependencies": [],
+      "deliverables": [],
+      "evidence_expectation": "`backend/tests/test_document_control_api_unit.py` covers create+confirm.",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P2-AC1",
+          "text": "Transition to `effective` creates department ack rows for the configured target departments (one per department) with `pending` status and due time.",
+          "status": "completed",
+          "evidence": [
+            "backend/services/document_control/service.py",
+            "backend/app/modules/document_control/router.py",
+            "backend/tests/test_document_control_api_unit.py",
+            "python -m pytest backend/tests/test_document_control_api_unit.py -q"
+          ]
+        },
+        {
+          "ac_id": "P2-AC2",
+          "text": "Confirmation endpoint updates the correct ack row, is idempotent for repeat confirms, and rejects users whose `department_id` does not match (unless admin).",
+          "status": "completed",
+          "evidence": [
+            "backend/services/document_control/service.py",
+            "backend/app/modules/document_control/router.py",
+            "backend/tests/test_document_control_api_unit.py",
+            "python -m pytest backend/tests/test_document_control_api_unit.py -q"
+          ]
+        }
+      ],
+      "evidence": [
+        "backend/services/document_control/service.py",
+        "backend/app/modules/document_control/router.py",
+        "backend/tests/test_document_control_api_unit.py"
+      ],
+      "notes": "- Implemented publish-time ack creation, listing, and department-scoped confirmation APIs.",
+      "last_reviewed_at": "2026-04-14T23:47:17"
+    },
+    {
+      "phase_id": "P3",
+      "title": "Notification + Reminder Semantics",
+      "status": "completed",
+      "objective": "Departments receive in-app inbox notifications on creation and on overdue reminders; overdue state is explicit and auditable.",
+      "owned_paths": [],
+      "dependencies": [],
+      "deliverables": [],
+      "evidence_expectation": "tests assert inbox items created and overdue transition occurs.",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P3-AC1",
+          "text": "Notification event types are introduced and used; upon ack creation, each target department receives an in-app inbox item with `title/body/link_path` in payload.",
+          "status": "completed",
+          "evidence": [
+            "backend/services/document_control/service.py",
+            "backend/services/notification/event_catalog.py",
+            "backend/services/notification/code_defaults.py",
+            "backend/tests/test_document_control_api_unit.py",
+            "python -m pytest backend/tests/test_document_control_api_unit.py -q"
+          ]
+        },
+        {
+          "ac_id": "P3-AC2",
+          "text": "Reminder action marks overdue acks explicitly and creates reminder inbox items; reminder action is auditable (via existing audit log store/manager if present).",
+          "status": "completed",
+          "evidence": [
+            "backend/services/document_control/service.py",
+            "backend/services/notification/event_catalog.py",
+            "backend/services/notification/code_defaults.py",
+            "backend/tests/test_document_control_api_unit.py",
+            "python -m pytest backend/tests/test_document_control_api_unit.py -q"
+          ]
+        }
+      ],
+      "evidence": [
+        "backend/services/document_control/service.py",
+        "backend/services/notification/event_catalog.py",
+        "backend/services/notification/code_defaults.py",
+        "backend/tests/test_document_control_api_unit.py"
+      ],
+      "notes": "- Added department ack notification event types and overdue reminder dispatch.",
+      "last_reviewed_at": "2026-04-14T23:47:25"
+    },
+    {
+      "phase_id": "P4",
+      "title": "Tests",
+      "status": "completed",
+      "objective": "Provide unit tests for ack creation, confirmation, and reminder behavior.",
+      "owned_paths": [],
+      "dependencies": [],
+      "deliverables": [],
+      "evidence_expectation": "`test-report.md` includes command output and pass verdict.",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P4-AC1",
+          "text": "`python -m pytest backend/tests/test_document_control_api_unit.py -q` passes.",
+          "status": "completed",
+          "evidence": [
+            "backend/tests/test_document_control_api_unit.py",
+            "python -m pytest backend/tests/test_document_control_api_unit.py -q"
+          ]
+        }
+      ],
+      "evidence": [
+        "backend/tests/test_document_control_api_unit.py",
+        "python -m pytest backend/tests/test_document_control_api_unit.py -q"
+      ],
+      "notes": "- Targeted WS04 unit suite passed with 9 tests.",
+      "last_reviewed_at": "2026-04-14T23:46:26"
+    }
+  ],
+  "planner_review_status": "approved",
+  "test_status": "passed",
+  "blocking_prereqs": [],
+  "iteration_counts": {
+    "planner_revisions": 0,
+    "executor_loops": 1,
+    "test_loops": 0
+  },
+  "created_at": "2026-04-14T22:44:38",
+  "updated_at": "2026-04-14T23:49:42",
+  "branch": "int_latest",
+  "baseline_revision": "b588894c15af487c7dfaaaf5038ae84f2e799158",
+  "workspace_root": "D:\\ProjectPackage\\RagflowAuth",
+  "tasks_root": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks",
+  "task_dir": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\ws04-implement-post-release-department-acknowled-20260414T224438",
+  "goal": "WS04: Implement post-release department acknowledgment & execution confirmation for document control (see docs/tasks/document-control-flow-parallel-20260414T151500/prompt-ws04-department-ack-and-execution-confirmation.md and ws04-department-ack-and-execution-confirmation.md).",
+  "artifacts": {
+    "prd": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\ws04-implement-post-release-department-acknowled-20260414T224438\\prd.md",
+    "test_plan": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\ws04-implement-post-release-department-acknowled-20260414T224438\\test-plan.md",
+    "task_state": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\ws04-implement-post-release-department-acknowled-20260414T224438\\task-state.json",
+    "execution_log": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\ws04-implement-post-release-department-acknowled-20260414T224438\\execution-log.md",
+    "test_report": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\ws04-implement-post-release-department-acknowled-20260414T224438\\test-report.md"
+  }
+}

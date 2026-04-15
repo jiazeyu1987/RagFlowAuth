@@ -1,0 +1,222 @@
+{
+  "schema_version": 2,
+  "task_id": "execute-ws02-training-gate-and-acknowledgment-lo-20260414T224253",
+  "mode": "full",
+  "status": "completed",
+  "current_phase": null,
+  "phase_statuses": [
+    {
+      "phase_id": "P1",
+      "title": "Add revision training-gate contract (schema + service)",
+      "status": "completed",
+      "objective": "Define a stable, explicit gate contract for a controlled revision that returns one of the required states and a `blocking` signal.",
+      "owned_paths": [],
+      "dependencies": [
+        "none"
+      ],
+      "deliverables": [],
+      "evidence_expectation": "schema + service + API unit tests demonstrate the contract.",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P1-AC1",
+          "text": "A revision gate config exists in schema and is ensured by `ensure_schema()` (no manual migrations required).",
+          "status": "completed",
+          "evidence": [
+            "backend/database/schema/training_ack.py",
+            "backend/services/training_compliance.py",
+            "backend/app/modules/training_compliance/router.py",
+            "backend/tests/test_training_compliance_api_unit.py",
+            "backend/tests/test_document_control_api_unit.py",
+            "16 passed in 15.39s"
+          ]
+        },
+        {
+          "ac_id": "P1-AC2",
+          "text": "Gate status API returns explicit states at least: `not_required`, `pending_assignment`, `in_progress`, `completed`, `questions_open` (names may differ but semantics must match).",
+          "status": "completed",
+          "evidence": [
+            "backend/database/schema/training_ack.py",
+            "backend/services/training_compliance.py",
+            "backend/app/modules/training_compliance/router.py",
+            "backend/tests/test_training_compliance_api_unit.py",
+            "backend/tests/test_document_control_api_unit.py",
+            "16 passed in 15.39s"
+          ]
+        },
+        {
+          "ac_id": "P1-AC3",
+          "text": "Gate status response includes `training_required` and `blocking` fields with deterministic meaning.",
+          "status": "completed",
+          "evidence": [
+            "backend/database/schema/training_ack.py",
+            "backend/services/training_compliance.py",
+            "backend/app/modules/training_compliance/router.py",
+            "backend/tests/test_training_compliance_api_unit.py",
+            "backend/tests/test_document_control_api_unit.py",
+            "16 passed in 15.39s"
+          ]
+        }
+      ],
+      "evidence": [
+        "backend/database/schema/training_ack.py",
+        "backend/services/training_compliance.py",
+        "backend/app/modules/training_compliance/router.py"
+      ],
+      "notes": "- Added revision-level training gate schema, explicit gate status contract, and gate API endpoints.",
+      "last_reviewed_at": "2026-04-14T23:58:12"
+    },
+    {
+      "phase_id": "P2",
+      "title": "Make assignment generation explicit and revision-state-aware",
+      "status": "completed",
+      "objective": "Remove implicit default-to-all assignee generation and allow explicit selection (users or department).",
+      "owned_paths": [],
+      "dependencies": [
+        "P1"
+      ],
+      "deliverables": [],
+      "evidence_expectation": "API tests cover success + failure cases.",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P2-AC1",
+          "text": "Assignment generation supports revisions in `approved_pending_effective` and `effective`, and rejects other revision statuses (fail fast).",
+          "status": "completed",
+          "evidence": [
+            "backend/services/training_compliance.py",
+            "backend/app/modules/training_compliance/router.py",
+            "backend/tests/test_training_compliance_api_unit.py",
+            "backend/tests/test_document_control_api_unit.py",
+            "16 passed in 15.39s"
+          ]
+        },
+        {
+          "ac_id": "P2-AC2",
+          "text": "Assignment generation requires explicit assignees; omitting both explicit users and department selection is rejected (no implicit “all active users”).",
+          "status": "completed",
+          "evidence": [
+            "backend/services/training_compliance.py",
+            "backend/app/modules/training_compliance/router.py",
+            "backend/tests/test_training_compliance_api_unit.py",
+            "backend/tests/test_document_control_api_unit.py",
+            "16 passed in 15.39s"
+          ]
+        },
+        {
+          "ac_id": "P2-AC3",
+          "text": "Department-based selection uses a stable data source (`users.department_id`) or fails fast with an explicit error.",
+          "status": "completed",
+          "evidence": [
+            "backend/services/training_compliance.py",
+            "backend/app/modules/training_compliance/router.py",
+            "backend/tests/test_training_compliance_api_unit.py",
+            "backend/tests/test_document_control_api_unit.py",
+            "16 passed in 15.39s"
+          ]
+        }
+      ],
+      "evidence": [
+        "backend/services/training_compliance.py",
+        "backend/app/modules/training_compliance/router.py",
+        "backend/tests/test_training_compliance_api_unit.py"
+      ],
+      "notes": "- Assignment generation now requires explicit assignees, supports department resolution, and only accepts trainable revision states.",
+      "last_reviewed_at": "2026-04-14T23:58:19"
+    },
+    {
+      "phase_id": "P3",
+      "title": "Fix question-thread close -> re-ack loop",
+      "status": "completed",
+      "objective": "Ensure “question -> resolve -> re-acknowledge” works and open questions block gate completion.",
+      "owned_paths": [],
+      "dependencies": [
+        "P2"
+      ],
+      "deliverables": [],
+      "evidence_expectation": "API tests cover questioned -> resolved -> acknowledged flow.",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P3-AC1",
+          "text": "Raising a question creates an open thread and blocks gate completion until resolved.",
+          "status": "completed",
+          "evidence": [
+            "backend/services/training_compliance.py",
+            "backend/tests/test_training_compliance_api_unit.py",
+            "backend/tests/test_document_control_api_unit.py",
+            "16 passed in 15.39s"
+          ]
+        },
+        {
+          "ac_id": "P3-AC2",
+          "text": "Resolving a question thread resets the assignment so the assignee can acknowledge again (no dead-end `resolved` state).",
+          "status": "completed",
+          "evidence": [
+            "backend/services/training_compliance.py",
+            "backend/tests/test_training_compliance_api_unit.py",
+            "backend/tests/test_document_control_api_unit.py",
+            "16 passed in 15.39s"
+          ]
+        }
+      ],
+      "evidence": [
+        "backend/services/training_compliance.py",
+        "backend/tests/test_training_compliance_api_unit.py"
+      ],
+      "notes": "- Question threads now block gate completion until resolution, and resolution resets assignments for re-acknowledgment.",
+      "last_reviewed_at": "2026-04-14T23:58:26"
+    },
+    {
+      "phase_id": "P4",
+      "title": "Prove gate states and blocking with tests",
+      "status": "completed",
+      "objective": "Update/add tests to prove WS02 gate state contract and no-default assignment behavior.",
+      "owned_paths": [],
+      "dependencies": [
+        "P3"
+      ],
+      "deliverables": [],
+      "evidence_expectation": "`test-report.md` records the command and pass verdict.",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P4-AC1",
+          "text": "This command passes: backend/tests/test_training_compliance_api_unit.py ` backend/tests/test_document_control_api_unit.py -q",
+          "status": "completed",
+          "evidence": [
+            "backend/tests/test_training_compliance_api_unit.py",
+            "backend/tests/test_document_control_api_unit.py",
+            "16 passed in 15.39s"
+          ]
+        }
+      ],
+      "evidence": [
+        "backend/tests/test_training_compliance_api_unit.py",
+        "backend/tests/test_document_control_api_unit.py",
+        "16 passed in 15.39s"
+      ],
+      "notes": "- Targeted WS02 validation and declared document-control regression suite passed.",
+      "last_reviewed_at": "2026-04-14T23:58:34"
+    }
+  ],
+  "planner_review_status": "approved",
+  "test_status": "passed",
+  "blocking_prereqs": [],
+  "iteration_counts": {
+    "planner_revisions": 0,
+    "executor_loops": 1,
+    "test_loops": 1
+  },
+  "created_at": "2026-04-14T22:42:53",
+  "updated_at": "2026-04-14T23:58:52",
+  "branch": "int_latest",
+  "baseline_revision": "b588894c15af487c7dfaaaf5038ae84f2e799158",
+  "workspace_root": "D:\\ProjectPackage\\RagflowAuth",
+  "tasks_root": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks",
+  "task_dir": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\execute-ws02-training-gate-and-acknowledgment-lo-20260414T224253",
+  "goal": "Execute WS02: training gate and acknowledgment loop (docs/tasks/document-control-flow-parallel-20260414T151500/prompt-ws02-training-gate-and-ack-loop.md)",
+  "artifacts": {
+    "prd": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\execute-ws02-training-gate-and-acknowledgment-lo-20260414T224253\\prd.md",
+    "test_plan": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\execute-ws02-training-gate-and-acknowledgment-lo-20260414T224253\\test-plan.md",
+    "task_state": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\execute-ws02-training-gate-and-acknowledgment-lo-20260414T224253\\task-state.json",
+    "execution_log": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\execute-ws02-training-gate-and-acknowledgment-lo-20260414T224253\\execution-log.md",
+    "test_report": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\execute-ws02-training-gate-and-acknowledgment-lo-20260414T224253\\test-report.md"
+  }
+}

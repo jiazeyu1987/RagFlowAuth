@@ -333,7 +333,10 @@ class DependencyFactory:
                 user_inbox_service=user_inbox_service,
             ),
             supplier_qualification_service=SupplierQualificationService(db_path=auth_db_path),
-            training_compliance_service=TrainingComplianceService(db_path=training_db_path),
+            training_compliance_service=TrainingComplianceService(
+                db_path=training_db_path,
+                document_control_db_path=auth_db_path,
+            ),
             complaint_service=ComplaintService(db_path=auth_db_path),
             capa_service=CapaService(db_path=auth_db_path),
             internal_audit_service=InternalAuditService(db_path=auth_db_path),

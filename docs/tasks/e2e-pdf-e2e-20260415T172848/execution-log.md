@@ -1,0 +1,105 @@
+# Execution Log
+
+## Phase P1
+
+- Status: completed
+- Summary: Mapped the desktop PDF flow against the three document-control Playwright specs and the existing `doc/e2e` manifest/docs.
+- Changed paths:
+  - `docs/tasks/e2e-pdf-e2e-20260415T172848/prd.md`
+  - `docs/tasks/e2e-pdf-e2e-20260415T172848/test-plan.md`
+  - `docs/tasks/e2e-pdf-e2e-20260415T172848/execution-log.md`
+- Validation run:
+  - Read `doc/e2e/manifest.json`
+  - Rendered `tmp/pdfs/rendered/file-control-draft-page-1.png`
+  - Reviewed:
+    - `fronted/e2e/tests/docs.document-control-pdf-flow.spec.js`
+    - `fronted/e2e/tests/docs.document-control-branch-coverage.spec.js`
+    - `fronted/e2e/tests/docs.document-control-edge-branches.spec.js`
+- Acceptance ids covered:
+  - `P1-AC1`
+  - `P1-AC2`
+  - `P1-AC3`
+- Evidence:
+  - `tmp/pdfs/rendered/file-control-draft-page-1.png`
+  - `doc/e2e/manifest.json`
+  - `fronted/e2e/tests/docs.document-control-pdf-flow.spec.js`
+  - `fronted/e2e/tests/docs.document-control-branch-coverage.spec.js`
+  - `fronted/e2e/tests/docs.document-control-edge-branches.spec.js`
+- Coverage matrix:
+  - New/revise document: covered
+  - Cosign / approve / standardize-review flow: covered
+  - Training gate and acknowledgement: covered
+  - Release new / supersede old version: covered
+  - Department acknowledgement: covered
+  - Obsolete and destruction record: covered
+  - Auto-identification from approval matrix: not directly asserted
+  - Standardization content checks on template/format/page numbers: not directly asserted
+  - Search/chat visibility after controlled release: not covered by the new document-control specs
+- Remaining risks:
+  - `doc/e2e/manifest.json` still does not include the three document-control specs.
+  - Some PDF requirements are only indirectly covered.
+
+## Phase P2
+
+- Status: completed
+- Summary: Reproduced the original failure, fixed the RAGFlow parse-path timing issue, then fixed scheduler robustness and aligned the PDF-flow test with automatic destruction behavior. Final result: all 4 targeted document-control e2e tests passed.
+- Changed paths:
+  - `backend/services/ragflow/mixins/documents.py`
+  - `backend/tests/test_ragflow_documents_mixin_unit.py`
+  - `backend/services/document_control_scheduler.py`
+  - `backend/tests/test_document_control_scheduler_unit.py`
+  - `fronted/playwright.docs.config.js`
+  - `fronted/e2e/tests/docs.document-control-pdf-flow.spec.js`
+  - `docs/tasks/e2e-pdf-e2e-20260415T172848/execution-log.md`
+  - `docs/tasks/e2e-pdf-e2e-20260415T172848/test-report.md`
+- Validation run:
+  - `python -m pytest backend/tests/test_ragflow_documents_mixin_unit.py -q`
+  - `python -m pytest backend/tests/test_document_control_service_unit.py -q`
+  - `python -m pytest backend/tests/test_document_control_scheduler_unit.py backend/tests/test_ragflow_documents_mixin_unit.py -q`
+  - `cd fronted && npx playwright test --config playwright.docs.config.js e2e/tests/docs.document-control-pdf-flow.spec.js --workers=1`
+  - `cd fronted && npx playwright test --config playwright.docs.config.js e2e/tests/docs.document-control-pdf-flow.spec.js e2e/tests/docs.document-control-branch-coverage.spec.js e2e/tests/docs.document-control-edge-branches.spec.js --workers=1`
+- Acceptance ids covered:
+  - `P2-AC1`
+  - `P2-AC2`
+  - `P2-AC3`
+- Evidence:
+  - `backend/services/ragflow/mixins/documents.py`
+  - `backend/tests/test_ragflow_documents_mixin_unit.py`
+  - `backend/services/document_control_scheduler.py`
+  - `backend/tests/test_document_control_scheduler_unit.py`
+- Result details:
+  - Original failure: `document_finalize_failed:ragflow_parse_failed`
+  - Root cause: upload used the HTTP dataset API, while parse preferred SDK visibility/polling when `client` existed; newly uploaded docs were visible to HTTP earlier than to SDK.
+  - Fix 1: parse now prefers the HTTP document visibility/chunks path when a dataset id is available.
+  - Follow-up issue: shortening scheduler cadence exposed that the document-control scheduler could crash on tenant DBs without `controlled_revisions`.
+  - Fix 2: scheduler now skips DBs missing `controlled_revisions` instead of crashing the scan loop.
+  - Test alignment: the PDF says destruction happens automatically at expiry, so the PDF-flow e2e now waits for automatic destruction evidence instead of forcing manual destruction confirmation.
+  - Final Playwright result:
+    - `docs.document-control-branch-coverage.spec.js`: passed
+    - `docs.document-control-edge-branches.spec.js` add-sign: passed
+    - `docs.document-control-edge-branches.spec.js` scheduler reminder: passed
+    - `docs.document-control-pdf-flow.spec.js`: passed
+- Remaining risks:
+  - If parse flow is switched back to SDK-first, the original publication failure can regress.
+  - The document-control scheduler still depends on mixed tenant DB reality and should keep fail-soft behavior.
+
+## Phase P3
+
+- Status: completed
+- Summary: Updated conclusion: the targeted document-control e2e suite now passes and matches the PDF flow much better, but repository-level registration and some fine-grained assertions remain incomplete.
+- Changed paths:
+  - `docs/tasks/e2e-pdf-e2e-20260415T172848/execution-log.md`
+  - `docs/tasks/e2e-pdf-e2e-20260415T172848/test-report.md`
+- Validation run:
+  - Consolidated PDF flow, targeted specs, code fixes, unit tests, and final Playwright pass results
+- Acceptance ids covered:
+  - `P3-AC1`
+  - `P3-AC2`
+  - `P3-AC3`
+- Problem summary:
+  - `doc/e2e/manifest.json` still does not register the three document-control specs.
+  - Search/chat assertions from the older upload-publish flow are not carried into the new document-control suite.
+  - Approval-matrix auto-resolution and standardization content checks are still not directly asserted.
+- Remaining risks:
+  - The targeted suite passes, but the repo’s “document e2e entrypoint” still does not represent the full current document-control coverage.
+  - Full conformance to every PDF fine-grained rule is not yet proven by direct assertions.

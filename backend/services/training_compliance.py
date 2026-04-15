@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import time
 from typing import Any
 from uuid import uuid4
@@ -25,18 +26,69 @@ from .training_compliance_support import (
 )
 
 MAX_TRAINING_READ_HEARTBEAT_MS = 15_000
+TRAINABLE_REVISION_STATUSES = {"approved_pending_effective", "effective"}
+TRAINING_GATE_NOT_REQUIRED = "not_required"
+TRAINING_GATE_PENDING_ASSIGNMENT = "pending_assignment"
+TRAINING_GATE_IN_PROGRESS = "in_progress"
+TRAINING_GATE_COMPLETED = "completed"
+TRAINING_GATE_QUESTIONS_OPEN = "questions_open"
 
 
 class TrainingComplianceService:
-    def __init__(self, db_path: str | None = None):
+    def __init__(self, db_path: str | None = None, *, document_control_db_path: str | None = None):
         self.db_path = resolve_auth_db_path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        self.document_control_db_path = resolve_auth_db_path(document_control_db_path or db_path)
+        self.document_control_db_path.parent.mkdir(parents=True, exist_ok=True)
         self.repository = TrainingComplianceRepository(self._conn)
         # Keep explicit action literals in service scope for compliance validators.
         self._supported_controlled_actions = ("document_review", "restore_drill_execute")
 
     def _conn(self):
         return connect_sqlite(self.db_path)
+
+    def _document_control_conn(self):
+        return connect_sqlite(self.document_control_db_path)
+
+    @staticmethod
+    def _parse_department_ids_json(value: str | None) -> list[int]:
+        raw = str(value or "").strip()
+        if not raw:
+            return []
+        try:
+            parsed = json.loads(raw)
+        except Exception as exc:
+            raise TrainingComplianceError("training_gate_department_ids_invalid", status_code=500) from exc
+        if not isinstance(parsed, list):
+            raise TrainingComplianceError("training_gate_department_ids_invalid", status_code=500)
+        result: list[int] = []
+        seen: set[int] = set()
+        for item in parsed:
+            try:
+                department_id = int(item)
+            except Exception as exc:
+                raise TrainingComplianceError("training_gate_department_ids_invalid", status_code=500) from exc
+            if department_id <= 0:
+                raise TrainingComplianceError("training_gate_department_ids_invalid", status_code=500)
+            if department_id in seen:
+                continue
+            result.append(department_id)
+            seen.add(department_id)
+        return result
+
+    @staticmethod
+    def _encode_department_ids_json(department_ids: list[int]) -> str | None:
+        normalized: list[int] = []
+        seen: set[int] = set()
+        for item in department_ids or []:
+            value = int(item)
+            if value <= 0 or value in seen:
+                continue
+            normalized.append(value)
+            seen.add(value)
+        if not normalized:
+            return None
+        return json.dumps(normalized, ensure_ascii=False)
 
     def get_requirement(self, requirement_code: str) -> dict[str, Any]:
         normalized_code = require_text(requirement_code, "requirement_code")
@@ -453,9 +505,131 @@ class TrainingComplianceService:
         )
         raise TrainingComplianceError(str(first_failure), status_code=403)
 
+    def upsert_revision_training_gate(
+        self,
+        *,
+        controlled_revision_id: str,
+        training_required: bool,
+        department_ids: list[int] | None = None,
+    ) -> dict[str, Any]:
+        revision = self._load_revision_for_training_gate(controlled_revision_id)
+        now_ms = int(time.time() * 1000)
+        normalized_required = bool(training_required)
+        normalized_department_ids = [int(item) for item in (department_ids or [])]
+
+        conn = self._conn()
+        try:
+            conn.execute(
+                """
+                INSERT INTO controlled_revision_training_gates (
+                    controlled_revision_id,
+                    controlled_document_id,
+                    training_required,
+                    department_ids_json,
+                    created_at_ms,
+                    updated_at_ms
+                ) VALUES (?, ?, ?, ?, ?, ?)
+                ON CONFLICT(controlled_revision_id) DO UPDATE SET
+                    controlled_document_id = excluded.controlled_document_id,
+                    training_required = excluded.training_required,
+                    department_ids_json = excluded.department_ids_json,
+                    updated_at_ms = excluded.updated_at_ms
+                """,
+                (
+                    revision["controlled_revision_id"],
+                    revision["controlled_document_id"],
+                    1 if normalized_required else 0,
+                    self._encode_department_ids_json(normalized_department_ids),
+                    now_ms,
+                    now_ms,
+                ),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+        return self.get_revision_training_gate(controlled_revision_id=controlled_revision_id)
+
+    def get_revision_training_gate(self, *, controlled_revision_id: str) -> dict[str, Any]:
+        revision = self._load_revision_for_training_gate(controlled_revision_id)
+        conn = self._conn()
+        try:
+            gate_row = conn.execute(
+                """
+                SELECT
+                    controlled_revision_id,
+                    controlled_document_id,
+                    training_required,
+                    department_ids_json,
+                    created_at_ms,
+                    updated_at_ms
+                FROM controlled_revision_training_gates
+                WHERE controlled_revision_id = ?
+                """,
+                (revision["controlled_revision_id"],),
+            ).fetchone()
+            assignment_rows = conn.execute(
+                """
+                SELECT
+                    status,
+                    question_thread_id
+                FROM training_assignments
+                WHERE controlled_revision_id = ?
+                """,
+                (revision["controlled_revision_id"],),
+            ).fetchall()
+            open_questions = conn.execute(
+                """
+                SELECT COUNT(1)
+                FROM quality_question_threads
+                WHERE controlled_revision_id = ?
+                  AND status = 'open'
+                """,
+                (revision["controlled_revision_id"],),
+            ).fetchone()
+        finally:
+            conn.close()
+
+        configured = gate_row is not None
+        training_required = bool(int(gate_row["training_required"])) if gate_row is not None else False
+        department_ids = self._parse_department_ids_json(gate_row["department_ids_json"]) if gate_row is not None else []
+        assignment_count = len(assignment_rows)
+        acknowledged_count = sum(1 for row in assignment_rows if str(row["status"] or "") == "acknowledged")
+        open_question_count = int(open_questions[0] or 0) if open_questions is not None else 0
+
+        if not training_required:
+            gate_status = TRAINING_GATE_NOT_REQUIRED
+            blocking = False
+        elif assignment_count == 0:
+            gate_status = TRAINING_GATE_PENDING_ASSIGNMENT
+            blocking = True
+        elif open_question_count > 0:
+            gate_status = TRAINING_GATE_QUESTIONS_OPEN
+            blocking = True
+        elif acknowledged_count == assignment_count:
+            gate_status = TRAINING_GATE_COMPLETED
+            blocking = False
+        else:
+            gate_status = TRAINING_GATE_IN_PROGRESS
+            blocking = True
+
+        return {
+            "controlled_revision_id": revision["controlled_revision_id"],
+            "controlled_document_id": revision["controlled_document_id"],
+            "revision_status": revision["status"],
+            "configured": configured,
+            "training_required": training_required,
+            "department_ids": department_ids,
+            "gate_status": gate_status,
+            "blocking": blocking,
+            "assignment_count": assignment_count,
+            "acknowledged_count": acknowledged_count,
+            "open_question_count": open_question_count,
+            "updated_at_ms": (int(gate_row["updated_at_ms"]) if gate_row and gate_row["updated_at_ms"] is not None else None),
+        }
+
     def list_effective_revisions(self, *, limit: int = 100) -> list[dict[str, Any]]:
         clamped_limit = max(1, min(int(limit or 100), 200))
-        conn = self._conn()
+        conn = self._document_control_conn()
         try:
             rows = conn.execute(
                 """
@@ -490,6 +664,45 @@ class TrainingComplianceService:
             for row in rows
         ]
 
+    def list_trainable_revisions(self, *, limit: int = 100) -> list[dict[str, Any]]:
+        clamped_limit = max(1, min(int(limit or 100), 200))
+        conn = self._document_control_conn()
+        try:
+            rows = conn.execute(
+                """
+                SELECT
+                    r.controlled_revision_id,
+                    r.controlled_document_id,
+                    r.kb_doc_id,
+                    r.revision_no,
+                    r.status,
+                    d.doc_code,
+                    d.title,
+                    r.effective_at_ms
+                FROM controlled_revisions r
+                JOIN controlled_documents d ON d.controlled_document_id = r.controlled_document_id
+                WHERE r.status IN ('approved_pending_effective', 'effective')
+                ORDER BY r.updated_at_ms DESC, r.controlled_revision_id DESC
+                LIMIT ?
+                """,
+                (clamped_limit,),
+            ).fetchall()
+        finally:
+            conn.close()
+        return [
+            {
+                "controlled_revision_id": str(row["controlled_revision_id"]),
+                "controlled_document_id": str(row["controlled_document_id"]),
+                "kb_doc_id": str(row["kb_doc_id"]) if row["kb_doc_id"] else None,
+                "revision_no": int(row["revision_no"]),
+                "status": str(row["status"]),
+                "doc_code": str(row["doc_code"]),
+                "title": str(row["title"]),
+                "effective_at_ms": int(row["effective_at_ms"]) if row["effective_at_ms"] else None,
+            }
+            for row in rows
+        ]
+
     def create_training_assignments(
         self,
         *,
@@ -507,11 +720,16 @@ class TrainingComplianceService:
         min_ack_at_ms = now_ms + normalized_min_read_minutes * 60 * 1000
         normalized_note = optional_text(note)
 
-        revision = self._load_effective_revision(normalized_revision_id)
+        revision = self._load_trainable_revision(normalized_revision_id)
         recipients = [str(item or "").strip() for item in assignee_user_ids or []]
         recipients = [item for item in recipients if item]
         if not recipients:
             raise TrainingComplianceError("training_assignment_assignees_required", status_code=400)
+
+        self.upsert_revision_training_gate(
+            controlled_revision_id=normalized_revision_id,
+            training_required=True,
+        )
 
         conn = self._conn()
         created_rows: list[dict[str, Any]] = []
@@ -884,7 +1102,10 @@ class TrainingComplianceService:
             conn.execute(
                 """
                 UPDATE training_assignments
-                SET status = 'resolved',
+                SET acknowledged_at_ms = NULL,
+                    decision = NULL,
+                    question_thread_id = NULL,
+                    status = 'pending',
                     updated_at_ms = ?
                 WHERE assignment_id = ?
                 """,
@@ -948,8 +1169,8 @@ class TrainingComplianceService:
             return None
         return self.get_certification(certification_id)
 
-    def _load_effective_revision(self, controlled_revision_id: str) -> dict[str, Any]:
-        conn = self._conn()
+    def _load_revision_for_training_gate(self, controlled_revision_id: str) -> dict[str, Any]:
+        conn = self._document_control_conn()
         try:
             row = conn.execute(
                 """
@@ -971,16 +1192,27 @@ class TrainingComplianceService:
             conn.close()
         if row is None:
             raise TrainingComplianceError("controlled_revision_not_found", status_code=404)
-        if str(row["status"]) != "effective":
-            raise TrainingComplianceError("controlled_revision_not_effective", status_code=409)
         return {
             "controlled_revision_id": str(row["controlled_revision_id"]),
             "controlled_document_id": str(row["controlled_document_id"]),
             "kb_doc_id": str(row["kb_doc_id"]) if row["kb_doc_id"] else None,
             "revision_no": int(row["revision_no"]),
+            "status": str(row["status"]),
             "doc_code": str(row["doc_code"]),
             "title": str(row["title"]),
         }
+
+    def _load_trainable_revision(self, controlled_revision_id: str) -> dict[str, Any]:
+        row = self._load_revision_for_training_gate(controlled_revision_id)
+        if str(row["status"]) not in TRAINABLE_REVISION_STATUSES:
+            raise TrainingComplianceError("controlled_revision_not_trainable", status_code=409)
+        return row
+
+    def _load_effective_revision(self, controlled_revision_id: str) -> dict[str, Any]:
+        row = self._load_revision_for_training_gate(controlled_revision_id)
+        if str(row["status"]) != "effective":
+            raise TrainingComplianceError("controlled_revision_not_effective", status_code=409)
+        return row
 
     @staticmethod
     def _serialize_assignment_row(row) -> dict[str, Any]:

@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import io
 import json
+import os
 import shutil
 import time
 from dataclasses import dataclass
@@ -12,6 +13,7 @@ from zipfile import ZIP_DEFLATED, ZipFile
 
 from backend.app.core.managed_paths import to_managed_data_storage_path
 from backend.app.core.paths import resolve_repo_path
+from backend.database.sqlite import connect_sqlite
 from backend.services.kb import KbDocument, KbStore
 
 
@@ -59,6 +61,7 @@ class RetiredRecordsService:
         include_expired: bool = False,
         now_ms: int | None = None,
     ) -> list[KbDocument]:
+        self.purge_expired_documents(now_ms=now_ms)
         return self._kb_store.list_retired_documents(
             kb_refs=kb_refs,
             kb_id=kb_id,
@@ -74,13 +77,19 @@ class RetiredRecordsService:
         allow_expired: bool = False,
         now_ms: int | None = None,
     ) -> KbDocument:
+        self.purge_expired_documents(now_ms=now_ms)
         doc = self._kb_store.get_document(doc_id)
         if not doc:
             raise KeyError("document_not_found")
-        if str(getattr(doc, "effective_status", "") or "").strip().lower() != "archived":
-            raise ValueError("document_not_retired")
+        effective_status = str(getattr(doc, "effective_status", "") or "").strip().lower()
         current_ms = int(time.time() * 1000) if now_ms is None else int(now_ms)
         retention_until_ms = getattr(doc, "retention_until_ms", None)
+        if effective_status == "destroyed":
+            if retention_until_ms is None or int(retention_until_ms) < current_ms:
+                raise ValueError("document_retention_expired")
+            raise ValueError("document_not_retired")
+        if effective_status != "archived":
+            raise ValueError("document_not_retired")
         if (
             not allow_expired
             and retention_until_ms is not None
@@ -88,6 +97,79 @@ class RetiredRecordsService:
         ):
             raise ValueError("document_retention_expired")
         return doc
+
+    def purge_expired_documents(self, *, now_ms: int | None = None) -> list[str]:
+        current_ms = int(time.time() * 1000) if now_ms is None else int(now_ms)
+        docs = self._kb_store.list_retired_documents(include_expired=True, now_ms=current_ms, limit=1000)
+        purged: list[str] = []
+        for doc in docs:
+            retention_until_ms = getattr(doc, "retention_until_ms", None)
+            if retention_until_ms is None or int(retention_until_ms) >= current_ms:
+                continue
+            self._purge_expired_document(doc=doc, now_ms=current_ms)
+            purged.append(str(doc.doc_id))
+        return purged
+
+    def _purge_expired_document(self, *, doc: KbDocument, now_ms: int) -> None:
+        candidate_paths = [
+            Path(str(doc.file_path or "").strip()),
+            Path(str(getattr(doc, "archive_manifest_path", "") or "").strip()),
+            Path(str(getattr(doc, "archive_package_path", "") or "").strip()),
+        ]
+        for path in candidate_paths:
+            if not str(path).strip():
+                continue
+            try:
+                if path.exists() and path.is_file():
+                    path.unlink()
+            except FileNotFoundError:
+                pass
+
+        archive_dir = Path(str(getattr(doc, "archive_package_path", "") or "")).parent
+        try:
+            if str(archive_dir).strip() and archive_dir.exists():
+                for current in [archive_dir, archive_dir.parent]:
+                    if current.exists() and current.is_dir() and not any(current.iterdir()):
+                        current.rmdir()
+        except Exception:
+            pass
+
+        self._kb_store.mark_document_destroyed(doc_id=doc.doc_id, destroyed_at_ms=now_ms)
+        self._mark_controlled_revision_destroyed(kb_doc_id=str(doc.doc_id), now_ms=now_ms)
+
+    def _mark_controlled_revision_destroyed(self, *, kb_doc_id: str, now_ms: int) -> None:
+        db_path = getattr(self._kb_store, "db_path", None)
+        if not db_path:
+            return
+        conn = connect_sqlite(db_path)
+        try:
+            conn.execute(
+                """
+                UPDATE controlled_revisions
+                SET destruction_confirmed_by = COALESCE(destruction_confirmed_by, 'system'),
+                    destruction_confirmed_at_ms = COALESCE(destruction_confirmed_at_ms, ?),
+                    destruction_notes = COALESCE(destruction_notes, 'automatic_retention_expiry'),
+                    updated_at_ms = ?
+                WHERE kb_doc_id = ?
+                  AND status = 'obsolete'
+                """,
+                (now_ms, now_ms, kb_doc_id),
+            )
+            conn.execute(
+                """
+                UPDATE controlled_documents
+                SET updated_at_ms = ?
+                WHERE controlled_document_id IN (
+                    SELECT controlled_document_id
+                    FROM controlled_revisions
+                    WHERE kb_doc_id = ?
+                )
+                """,
+                (now_ms, kb_doc_id),
+            )
+            conn.commit()
+        finally:
+            conn.close()
 
     def retire_document(
         self,
@@ -98,13 +180,15 @@ class RetiredRecordsService:
         retention_until_ms: int,
         retired_by_username: str | None = None,
         archived_at_ms: int | None = None,
+        conn: Any | None = None,
     ) -> KbDocument:
         doc = self._kb_store.get_document(doc_id)
         if not doc:
             raise KeyError("document_not_found")
         if str(getattr(doc, "effective_status", "") or "").strip().lower() == "archived":
             raise ValueError("document_already_retired")
-        if str(getattr(doc, "status", "") or "").strip().lower() != "approved":
+        doc_status = str(getattr(doc, "status", "") or "").strip().lower()
+        if doc_status not in {"approved", "effective"}:
             raise ValueError("only_approved_document_can_be_retired")
 
         source_path = Path(str(doc.file_path or "").strip())
@@ -186,6 +270,7 @@ class RetiredRecordsService:
             retirement_reason=str(retirement_reason or "").strip(),
             retention_until_ms=retention_until_ms,
             archived_at_ms=archived_ms,
+            conn=conn,
         )
         if retired is None:
             raise RuntimeError("document_retire_update_failed")

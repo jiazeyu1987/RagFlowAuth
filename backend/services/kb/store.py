@@ -601,6 +601,7 @@ class KbStore:
         retirement_reason: str,
         retention_until_ms: int,
         archived_at_ms: Optional[int] = None,
+        conn=None,
     ) -> Optional[KbDocument]:
         archived_at_ms = int(time.time() * 1000) if archived_at_ms is None else int(archived_at_ms)
         retired_by = str(retired_by or "").strip()
@@ -637,7 +638,10 @@ class KbStore:
             field_name="kb_documents.archive_package_path",
         )
 
-        conn = self._get_connection()
+        owns_conn = False
+        if conn is None:
+            conn = self._get_connection()
+            owns_conn = True
         try:
             conn.execute(
                 """
@@ -666,9 +670,11 @@ class KbStore:
                     str(doc_id),
                 ),
             )
-            conn.commit()
+            if owns_conn:
+                conn.commit()
         finally:
-            conn.close()
+            if owns_conn:
+                conn.close()
         return self.get_document(doc_id)
 
     def list_versions(self, doc_id_or_logical_doc_id: str, *, limit: int = 100) -> List[KbDocument]:
@@ -733,6 +739,36 @@ class KbStore:
             return cursor.rowcount > 0
         finally:
             conn.close()
+
+    def mark_document_destroyed(
+        self,
+        *,
+        doc_id: str,
+        destroyed_at_ms: Optional[int] = None,
+    ) -> Optional[KbDocument]:
+        now_ms = int(time.time() * 1000) if destroyed_at_ms is None else int(destroyed_at_ms)
+        conn = self._get_connection()
+        try:
+            conn.execute(
+                """
+                UPDATE kb_documents
+                SET status = 'destroyed',
+                    effective_status = 'destroyed',
+                    reviewed_at_ms = COALESCE(reviewed_at_ms, ?),
+                    archive_manifest_path = NULL,
+                    archive_package_path = NULL,
+                    archive_package_sha256 = NULL
+                WHERE doc_id = ?
+                """,
+                (
+                    now_ms,
+                    str(doc_id),
+                ),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+        return self.get_document(doc_id)
 
     def count_documents(
         self,

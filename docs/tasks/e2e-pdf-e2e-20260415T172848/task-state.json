@@ -1,0 +1,155 @@
+{
+  "schema_version": 2,
+  "task_id": "e2e-pdf-e2e-20260415T172848",
+  "mode": "full",
+  "status": "testing",
+  "current_phase": null,
+  "phase_statuses": [
+    {
+      "phase_id": "P1",
+      "title": "提炼流程要求并映射现有覆盖",
+      "status": "completed",
+      "objective": "从 PDF 与仓库现有文档中提炼文件控制流程节点，并映射到当前文控 e2e 用例。",
+      "owned_paths": [],
+      "dependencies": [],
+      "deliverables": [],
+      "evidence_expectation": "`execution-log.md` 中记录 PDF 节点清单、对应 spec、差距说明。",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P1-AC1",
+          "text": "已从 PDF 中提炼出文件控制流程的关键节点与分支，包括新建/修订、会签、批准、标准化审核、培训、发新回旧、部门确认、作废、销毁。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#phase-p1"
+          ]
+        },
+        {
+          "ac_id": "P1-AC2",
+          "text": "已将上述节点与现有文控 e2e 用例逐项映射，并明确标出已覆盖、部分覆盖、未覆盖。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#phase-p1"
+          ]
+        },
+        {
+          "ac_id": "P1-AC3",
+          "text": "已明确指出仓库中的文档型 e2e 说明与实际文控用例之间是否存在不一致。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#phase-p1"
+          ]
+        }
+      ],
+      "evidence": [
+        "execution-log.md#phase-p1"
+      ],
+      "notes": "",
+      "last_reviewed_at": "2026-04-15T17:40:22"
+    },
+    {
+      "phase_id": "P2",
+      "title": "运行文控 e2e 并收集执行证据",
+      "status": "completed",
+      "objective": "运行文控相关 Playwright e2e，用真实执行结果验证现有覆盖是否可达成。",
+      "owned_paths": [],
+      "dependencies": [],
+      "deliverables": [],
+      "evidence_expectation": "`execution-log.md` 与 `test-report.md` 中记录命令、退出码、证据文件。",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P2-AC1",
+          "text": "已运行文控相关 Playwright e2e 命令，且命令、退出码、执行时间被记录。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#phase-p2"
+          ]
+        },
+        {
+          "ac_id": "P2-AC2",
+          "text": "若测试失败，已记录失败 spec、错误摘要及证据位置；若通过，已记录通过证据位置。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#phase-p2"
+          ]
+        },
+        {
+          "ac_id": "P2-AC3",
+          "text": "未使用 mock、跳过必需校验或其它降级方式来伪造成功结果。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#phase-p2"
+          ]
+        }
+      ],
+      "evidence": [
+        "execution-log.md#phase-p2"
+      ],
+      "notes": "",
+      "last_reviewed_at": "2026-04-15T17:39:44"
+    },
+    {
+      "phase_id": "P3",
+      "title": "汇总符合性与问题结论",
+      "status": "completed",
+      "objective": "基于覆盖映射与执行结果，判断“是否符合 PDF 要求”，并输出问题总结。",
+      "owned_paths": [],
+      "dependencies": [],
+      "deliverables": [],
+      "evidence_expectation": "`test-report.md` 中形成最终 verdict 与问题清单。",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P3-AC1",
+          "text": "已给出“当前 e2e 是否符合 PDF 要求”的结论，并区分覆盖差距与运行失败两类问题。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#phase-p3"
+          ]
+        },
+        {
+          "ac_id": "P3-AC2",
+          "text": "已总结问题的具体表现、影响流程节点、对应 spec 或缺失覆盖。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#phase-p3"
+          ]
+        },
+        {
+          "ac_id": "P3-AC3",
+          "text": "已标明仍需人工确认或后续补测的剩余风险。",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#phase-p3"
+          ]
+        }
+      ],
+      "evidence": [
+        "execution-log.md#phase-p3"
+      ],
+      "notes": "",
+      "last_reviewed_at": "2026-04-15T17:39:56"
+    }
+  ],
+  "planner_review_status": "approved",
+  "test_status": "failed",
+  "blocking_prereqs": [],
+  "iteration_counts": {
+    "planner_revisions": 0,
+    "executor_loops": 1,
+    "test_loops": 1
+  },
+  "created_at": "2026-04-15T17:28:48",
+  "updated_at": "2026-04-15T17:40:32",
+  "branch": "int_latest",
+  "baseline_revision": "b588894c15af487c7dfaaaf5038ae84f2e799158",
+  "workspace_root": "D:\\ProjectPackage\\RagflowAuth",
+  "tasks_root": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks",
+  "task_dir": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\e2e-pdf-e2e-20260415T172848",
+  "goal": "查看当前的e2e测试是否符合分析桌面上的这个文件控制流程初稿.pdf的要求,运行e2e测试,查看结果是否符合预期,如果有问题,总结问题",
+  "artifacts": {
+    "prd": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\e2e-pdf-e2e-20260415T172848\\prd.md",
+    "test_plan": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\e2e-pdf-e2e-20260415T172848\\test-plan.md",
+    "task_state": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\e2e-pdf-e2e-20260415T172848\\task-state.json",
+    "execution_log": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\e2e-pdf-e2e-20260415T172848\\execution-log.md",
+    "test_report": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\e2e-pdf-e2e-20260415T172848\\test-report.md"
+  }
+}

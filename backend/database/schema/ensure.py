@@ -18,6 +18,7 @@ from .chat_message_sources import ensure_chat_message_sources_table
 from .search_configs import ensure_search_configs_table
 from .upload_settings import ensure_upload_settings_table
 from .config_change_logs import ensure_config_change_logs_table
+from .quality_system_config import ensure_quality_system_config_tables
 from .kb_directory import ensure_kb_directory_tables
 from .data_security import (
     add_cron_schedule_columns_to_data_security,
@@ -118,6 +119,7 @@ def ensure_schema(db_path: str | Path) -> None:
         ensure_search_configs_table(conn)
         ensure_upload_settings_table(conn)
         ensure_config_change_logs_table(conn)
+        ensure_quality_system_config_tables(conn)
         ensure_kb_directory_tables(conn)
         ensure_patent_download_tables(conn)
         ensure_paper_download_tables(conn)

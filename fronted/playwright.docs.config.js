@@ -61,6 +61,7 @@ module.exports = defineConfig({
         PORT: BACKEND_PORT,
         CORS_ORIGINS,
         JWT_SECRET_KEY,
+        DOCUMENT_CONTROL_SCHEDULER_INTERVAL_SECONDS: '5',
       },
     },
     {

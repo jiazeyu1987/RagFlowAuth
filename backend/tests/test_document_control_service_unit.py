@@ -10,11 +10,13 @@ from backend.database.schema.ensure import ensure_schema
 from backend.database.sqlite import connect_sqlite
 from backend.services.audit_log_store import AuditLogStore
 from backend.services.document_control import DocumentControlError, DocumentControlService
+from backend.services.notification import NotificationManager, NotificationStore
+from backend.services.training_compliance import TrainingComplianceService
 from backend.tests._util_tempdir import cleanup_dir, make_temp_dir
 
 
 class _UploadFile:
-    def __init__(self, filename: str, content: bytes, content_type: str = "text/markdown"):
+    def __init__(self, filename: str, content: bytes, content_type: str = "application/pdf"):
         self.filename = filename
         self.content_type = content_type
         self.file = io.BytesIO(content)
@@ -127,6 +129,64 @@ class _KbStore:
             conn.close()
         return self.get_document(doc_id)
 
+    def retire_document(
+        self,
+        *,
+        doc_id: str,
+        archived_file_path: str,
+        archive_manifest_path: str,
+        archive_package_path: str,
+        archive_package_sha256: str,
+        retired_by: str,
+        retirement_reason: str,
+        retention_until_ms: int,
+        archived_at_ms: int | None = None,
+        conn=None,
+    ):
+        archived_at_ms = int(time.time() * 1000) if archived_at_ms is None else int(archived_at_ms)
+        retention_until_ms = int(retention_until_ms)
+        retired_by = str(retired_by or "").strip()
+        retirement_reason = str(retirement_reason or "").strip()
+
+        owns_conn = False
+        if conn is None:
+            conn = connect_sqlite(self.db_path)
+            owns_conn = True
+        try:
+            conn.execute(
+                """
+                UPDATE kb_documents
+                SET file_path = ?,
+                    is_current = 0,
+                    effective_status = 'archived',
+                    archived_at_ms = ?,
+                    retention_until_ms = ?,
+                    retired_by = ?,
+                    retirement_reason = ?,
+                    archive_manifest_path = ?,
+                    archive_package_path = ?,
+                    archive_package_sha256 = ?
+                WHERE doc_id = ?
+                """,
+                (
+                    str(archived_file_path),
+                    archived_at_ms,
+                    retention_until_ms,
+                    retired_by,
+                    retirement_reason,
+                    str(archive_manifest_path),
+                    str(archive_package_path),
+                    str(archive_package_sha256),
+                    str(doc_id),
+                ),
+            )
+            if owns_conn:
+                conn.commit()
+        finally:
+            if owns_conn:
+                conn.close()
+        return self.get_document(str(doc_id))
+
     def delete_document(self, doc_id: str):
         conn = connect_sqlite(self.db_path)
         try:
@@ -135,6 +195,60 @@ class _KbStore:
         finally:
             conn.close()
         return True
+
+    def retire_document(
+        self,
+        *,
+        doc_id: str,
+        archived_file_path: str,
+        archive_manifest_path: str,
+        archive_package_path: str,
+        archive_package_sha256: str,
+        retired_by: str,
+        retirement_reason: str,
+        retention_until_ms: int,
+        archived_at_ms: int | None = None,
+        conn=None,
+    ):
+        archived_at_ms = int(time.time() * 1000) if archived_at_ms is None else int(archived_at_ms)
+        owns_conn = False
+        if conn is None:
+            conn = connect_sqlite(self.db_path)
+            owns_conn = True
+        try:
+            conn.execute(
+                """
+                UPDATE kb_documents
+                SET file_path = ?,
+                    is_current = 0,
+                    effective_status = 'archived',
+                    archived_at_ms = ?,
+                    retention_until_ms = ?,
+                    retired_by = ?,
+                    retirement_reason = ?,
+                    archive_manifest_path = ?,
+                    archive_package_path = ?,
+                    archive_package_sha256 = ?
+                WHERE doc_id = ?
+                """,
+                (
+                    str(archived_file_path),
+                    archived_at_ms,
+                    int(retention_until_ms),
+                    str(retired_by),
+                    str(retirement_reason),
+                    str(archive_manifest_path),
+                    str(archive_package_path),
+                    str(archive_package_sha256),
+                    str(doc_id),
+                ),
+            )
+            if owns_conn:
+                conn.commit()
+        finally:
+            if owns_conn:
+                conn.close()
+        return self.get_document(str(doc_id))
 
 
 class _RagflowService:
@@ -162,6 +276,14 @@ class _RagflowService:
         return True
 
 
+class _UserStore:
+    def __init__(self, users: dict[str, object]):
+        self._users = dict(users)
+
+    def get_by_user_id(self, user_id: str):
+        return self._users.get(str(user_id))
+
+
 class TestDocumentControlServiceUnit(unittest.TestCase):
     def setUp(self):
         self._temp_dir = make_temp_dir(prefix="ragflowauth_doc_control_service")
@@ -171,18 +293,99 @@ class TestDocumentControlServiceUnit(unittest.TestCase):
         ensure_schema(self._db_path)
         self.audit_log_store = AuditLogStore(db_path=self._db_path)
         self.ragflow_service = _RagflowService()
+        self.notification_manager = NotificationManager(store=NotificationStore(db_path=self._db_path))
+        self.notification_manager.upsert_channel(
+            channel_id="inapp-main",
+            channel_type="in_app",
+            name="站内信",
+            enabled=True,
+            config={},
+        )
+        self.user_store = _UserStore(
+            {
+                "reviewer-1": SimpleNamespace(user_id="reviewer-1", username="reviewer", status="active"),
+                "cosigner-1": SimpleNamespace(user_id="cosigner-1", username="cosigner1", status="active"),
+                "cosigner-2": SimpleNamespace(user_id="cosigner-2", username="cosigner2", status="active"),
+                "cosigner-3": SimpleNamespace(user_id="cosigner-3", username="cosigner3", status="active"),
+                "approver-1": SimpleNamespace(user_id="approver-1", username="approver", status="active"),
+                "standardizer-1": SimpleNamespace(user_id="standardizer-1", username="standardizer", status="active"),
+                "docctrl-1": SimpleNamespace(user_id="docctrl-1", username="docctrl", status="active"),
+            }
+        )
+        self.approval_matrix = {
+            "*": [
+                {
+                    "step_type": "cosign",
+                    "approval_rule": "all",
+                    "member_source": "fixed",
+                    "timeout_reminder_minutes": 60,
+                    "approver_user_ids": ["cosigner-1", "cosigner-2"],
+                },
+                {
+                    "step_type": "approve",
+                    "approval_rule": "all",
+                    "member_source": "fixed",
+                    "timeout_reminder_minutes": 60,
+                    "approver_user_ids": ["approver-1"],
+                },
+                {
+                    "step_type": "standardize_review",
+                    "approval_rule": "all",
+                    "member_source": "fixed",
+                    "timeout_reminder_minutes": 60,
+                    "approver_user_ids": ["standardizer-1"],
+                },
+            ]
+        }
+        self.training_service = TrainingComplianceService(db_path=self._db_path)
         self.deps = SimpleNamespace(
             kb_store=_KbStore(self._db_path),
             ragflow_service=self.ragflow_service,
             audit_log_store=self.audit_log_store,
+            training_compliance_service=self.training_service,
+            notification_manager=self.notification_manager,
             org_structure_manager=None,
+            user_store=self.user_store,
         )
         self.service = DocumentControlService.from_deps(self.deps)
-        self.ctx = SimpleNamespace(
+        for document_type in ("urs", "sop", "srs", "wi"):
+            self.service.upsert_document_type_workflow(
+                document_type=document_type,
+                name=f"{document_type} workflow",
+                steps=self.approval_matrix["*"],
+            )
+        self.submitter_ctx = SimpleNamespace(
             payload=SimpleNamespace(sub="reviewer-1"),
             user=SimpleNamespace(
                 user_id="reviewer-1",
                 username="reviewer",
+                company_id=None,
+                department_id=None,
+            ),
+        )
+        self.cosigner1_ctx = SimpleNamespace(
+            payload=SimpleNamespace(sub="cosigner-1"),
+            user=SimpleNamespace(
+                user_id="cosigner-1",
+                username="cosigner1",
+                company_id=None,
+                department_id=None,
+            ),
+        )
+        self.cosigner2_ctx = SimpleNamespace(
+            payload=SimpleNamespace(sub="cosigner-2"),
+            user=SimpleNamespace(
+                user_id="cosigner-2",
+                username="cosigner2",
+                company_id=None,
+                department_id=None,
+            ),
+        )
+        self.cosigner3_ctx = SimpleNamespace(
+            payload=SimpleNamespace(sub="cosigner-3"),
+            user=SimpleNamespace(
+                user_id="cosigner-3",
+                username="cosigner3",
                 company_id=None,
                 department_id=None,
             ),
@@ -196,19 +399,113 @@ class TestDocumentControlServiceUnit(unittest.TestCase):
                 department_id=None,
             ),
         )
+        self.standardizer_ctx = SimpleNamespace(
+            payload=SimpleNamespace(sub="standardizer-1"),
+            user=SimpleNamespace(
+                user_id="standardizer-1",
+                username="standardizer",
+                company_id=None,
+                department_id=None,
+            ),
+        )
+        self.publisher_ctx = SimpleNamespace(
+            payload=SimpleNamespace(sub="docctrl-1"),
+            user=SimpleNamespace(
+                user_id="docctrl-1",
+                username="docctrl",
+                role="doc_control",
+                company_id=None,
+                department_id=None,
+            ),
+        )
 
     def tearDown(self):
         settings.UPLOAD_DIR = self._old_upload_dir
         cleanup_dir(self._temp_dir)
 
-    def test_create_document_lifecycle_and_revision_rollover(self):
+    def _seed_doc_review_training_gate(self, *, user_id: str, role_code: str) -> str:  # noqa: ARG002
+        requirement_code = "TR-001"
+        requirement = self.training_service.get_requirement(requirement_code)
+        curriculum_version = str(requirement["curriculum_version"])
+        self.training_service.record_training(
+            requirement_code=requirement_code,
+            user_id=user_id,
+            curriculum_version=curriculum_version,
+            trainer_user_id="trainer-1",
+            training_outcome="passed",
+            effectiveness_status="effective",
+            effectiveness_score=None,
+            effectiveness_summary="ok",
+            training_notes=None,
+            completed_at_ms=None,
+            effectiveness_reviewed_by_user_id="trainer-1",
+            effectiveness_reviewed_at_ms=None,
+        )
+        self.training_service.grant_certification(
+            requirement_code=requirement_code,
+            user_id=user_id,
+            granted_by_user_id="trainer-1",
+            certification_status="active",
+        )
+        return requirement_code
+
+    def _configure_revision_training_gate(self, *, controlled_revision_id: str, training_required: bool, department_ids: list[int] | None = None):
+        return self.training_service.upsert_revision_training_gate(
+            controlled_revision_id=controlled_revision_id,
+            training_required=training_required,
+            department_ids=department_ids or [],
+        )
+
+    def _approve_revision_to_pending_effective(self, *, controlled_revision_id: str) -> None:
+        self.service.submit_revision_for_approval(
+            controlled_revision_id=controlled_revision_id,
+            ctx=self.submitter_ctx,
+            note="submit",
+        )
+        self.service.approve_revision_approval_step(
+            controlled_revision_id=controlled_revision_id,
+            ctx=self.cosigner1_ctx,
+            note="cosign 1",
+        )
+        self.service.approve_revision_approval_step(
+            controlled_revision_id=controlled_revision_id,
+            ctx=self.cosigner2_ctx,
+            note="cosign 2",
+        )
+        self.service.approve_revision_approval_step(
+            controlled_revision_id=controlled_revision_id,
+            ctx=self.approver_ctx,
+            note="approve",
+        )
+        self.service.approve_revision_approval_step(
+            controlled_revision_id=controlled_revision_id,
+            ctx=self.standardizer_ctx,
+            note="standardize ok",
+        )
+
+    def _seed_active_user(self, *, user_id: str, username: str, department_id: int):
+        now_ms = int(time.time() * 1000)
+        conn = connect_sqlite(self._db_path)
+        try:
+            conn.execute(
+                """
+                INSERT INTO users (user_id, username, password_hash, role, department_id, status, created_at_ms)
+                VALUES (?, ?, ?, ?, ?, 'active', ?)
+                """,
+                (str(user_id), str(username), "x", "viewer", int(department_id), now_ms),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+    def test_submit_approve_workflow_and_audit_events(self):
         created = self.service.create_document(
             doc_code="DOC-001",
             title="Quality URS",
             document_type="urs",
             target_kb_id="Quality KB",
             created_by="reviewer-1",
-            upload_file=_UploadFile("urs.md", b"# urs\n"),
+            upload_file=_UploadFile("urs.pdf", b"%PDF-1.4 urs\n"),
             product_name="Product A",
             registration_ref="REG-001",
             change_summary="initial baseline",
@@ -220,70 +517,185 @@ class TestDocumentControlServiceUnit(unittest.TestCase):
         self.assertIsNone(created.effective_revision)
 
         revision1_id = created.current_revision.controlled_revision_id
-        self.service.transition_revision(
+        submitted = self.service.submit_revision_for_approval(
             controlled_revision_id=revision1_id,
-            target_status="in_review",
-            ctx=self.ctx,
-            note="submit for review",
+            ctx=self.submitter_ctx,
+            note="submit for approval",
         )
-        self.service.transition_revision(
+        self.assertEqual(submitted.current_revision.status, "approval_in_progress")
+        self.assertIsNotNone(submitted.current_revision.approval_request_id)
+        self.assertEqual(submitted.current_revision.current_approval_step_name, "cosign")
+        self.assertEqual(submitted.current_revision.approval_round, 1)
+
+        after_cosign_1 = self.service.approve_revision_approval_step(
             controlled_revision_id=revision1_id,
-            target_status="approved",
-            ctx=self.approver_ctx,
-            note="approved",
+            ctx=self.cosigner1_ctx,
+            note="cosign 1",
         )
-        effective_first = self.service.transition_revision(
+        self.assertEqual(after_cosign_1.current_revision.current_approval_step_name, "cosign")
+        after_cosign_2 = self.service.approve_revision_approval_step(
             controlled_revision_id=revision1_id,
-            target_status="effective",
+            ctx=self.cosigner2_ctx,
+            note="cosign 2",
+        )
+        self.assertEqual(after_cosign_2.current_revision.current_approval_step_name, "approve")
+
+        after_approve = self.service.approve_revision_approval_step(
+            controlled_revision_id=revision1_id,
             ctx=self.approver_ctx,
-            note="release",
+            note="approve",
+        )
+        self.assertEqual(after_approve.current_revision.current_approval_step_name, "standardize_review")
+
+        final_doc = self.service.approve_revision_approval_step(
+            controlled_revision_id=revision1_id,
+            ctx=self.standardizer_ctx,
+            note="standardize ok",
+        )
+        self.assertEqual(final_doc.current_revision.status, "approved_pending_effective")
+        self.assertIsNone(final_doc.current_revision.approval_request_id)
+        self.assertEqual(final_doc.current_revision.current_approval_step_name, "standardize_review")
+
+        _, audit_events = self.audit_log_store.list_events(
+            action="document_control_transition",
+            resource_type="controlled_revision",
+            limit=50,
+        )
+        event_types = [item.event_type for item in audit_events]
+        self.assertIn("controlled_revision_submit", event_types)
+        self.assertIn("controlled_revision_step_activated", event_types)
+        self.assertIn("controlled_revision_step_approved", event_types)
+
+    def test_publish_rejects_when_not_approved_pending_effective(self):
+        self._seed_doc_review_training_gate(user_id="docctrl-1", role_code="doc_control")
+        created = self.service.create_document(
+            doc_code="DOC-020",
+            title="Publish gate",
+            document_type="sop",
+            target_kb_id="Quality KB",
+            created_by="reviewer-1",
+            upload_file=_UploadFile("publish.pdf", b"%PDF-1.4 publish\n"),
+            product_name="Product A",
+            registration_ref="REG-001",
+            change_summary="baseline",
+        )
+        revision_id = created.current_revision.controlled_revision_id
+        with self.assertRaises(DocumentControlError) as invalid_status:
+            self.service.publish_revision(
+                controlled_revision_id=revision_id,
+                release_mode="manual_by_doc_control",
+                ctx=self.publisher_ctx,
+                note="publish without approval",
+            )
+        self.assertEqual(invalid_status.exception.code, "document_control_publish_invalid_status")
+        self.assertEqual(invalid_status.exception.status_code, 409)
+
+    def test_publish_fail_fast_when_training_gate_not_configured(self):
+        created = self.service.create_document(
+            doc_code="DOC-021",
+            title="Training gate",
+            document_type="sop",
+            target_kb_id="Quality KB",
+            created_by="reviewer-1",
+            upload_file=_UploadFile("training.pdf", b"%PDF-1.4 training\n"),
+            product_name="Product A",
+            registration_ref="REG-001",
+            change_summary="baseline",
+        )
+        revision_id = created.current_revision.controlled_revision_id
+        self._approve_revision_to_pending_effective(controlled_revision_id=revision_id)
+        with self.assertRaises(DocumentControlError) as missing_gate:
+            self.service.publish_revision(
+                controlled_revision_id=revision_id,
+                release_mode="manual_by_doc_control",
+                ctx=self.publisher_ctx,
+                note="publish should be blocked",
+            )
+        self.assertEqual(missing_gate.exception.code, "document_control_training_gate_not_configured")
+        self.assertEqual(missing_gate.exception.status_code, 409)
+
+    def test_publish_fail_fast_when_training_gate_requires_assignments(self):
+        created = self.service.create_document(
+            doc_code="DOC-021B",
+            title="Training gate pending assignment",
+            document_type="sop",
+            target_kb_id="Quality KB",
+            created_by="reviewer-1",
+            upload_file=_UploadFile("training-pending.pdf", b"%PDF-1.4 training\n"),
+            product_name="Product A",
+            registration_ref="REG-001",
+            change_summary="baseline",
+        )
+        revision_id = created.current_revision.controlled_revision_id
+        self._approve_revision_to_pending_effective(controlled_revision_id=revision_id)
+        self._configure_revision_training_gate(controlled_revision_id=revision_id, training_required=True)
+        with self.assertRaises(DocumentControlError) as missing_assignments:
+            self.service.publish_revision(
+                controlled_revision_id=revision_id,
+                release_mode="manual_by_doc_control",
+                ctx=self.publisher_ctx,
+                note="publish should be blocked",
+            )
+        self.assertEqual(missing_assignments.exception.code, "document_control_training_pending_assignment")
+        self.assertEqual(missing_assignments.exception.status_code, 409)
+
+    def test_publish_writes_release_ledger_and_supersedes_previous_effective(self):
+        self._seed_doc_review_training_gate(user_id="docctrl-1", role_code="doc_control")
+        created = self.service.create_document(
+            doc_code="DOC-022",
+            title="Release ledger",
+            document_type="sop",
+            target_kb_id="Quality KB",
+            created_by="reviewer-1",
+            upload_file=_UploadFile("ledger.pdf", b"%PDF-1.4 ledger\n"),
+            product_name="Product A",
+            registration_ref="REG-001",
+            change_summary="baseline",
+        )
+        self._seed_active_user(user_id="dept10-user-1", username="dept10-user-1", department_id=10)
+        self.service.set_document_distribution_departments(
+            controlled_document_id=created.controlled_document_id,
+            department_ids=[10],
+            ctx=self.submitter_ctx,
         )
 
-        self.assertEqual(effective_first.current_revision.status, "effective")
-        self.assertEqual(effective_first.effective_revision.status, "effective")
-        self.assertEqual(effective_first.current_revision.reviewed_by, "reviewer-1")
-        self.assertEqual(effective_first.current_revision.approved_by, "approver-1")
+        revision1_id = created.current_revision.controlled_revision_id
+        self._approve_revision_to_pending_effective(controlled_revision_id=revision1_id)
+        self._configure_revision_training_gate(controlled_revision_id=revision1_id, training_required=False)
+        published_1 = self.service.publish_revision(
+            controlled_revision_id=revision1_id,
+            release_mode="manual_by_doc_control",
+            ctx=self.publisher_ctx,
+            note="publish v1",
+        )
+        self.assertEqual(published_1.effective_revision.controlled_revision_id, revision1_id)
+        self.assertEqual(published_1.effective_revision.status, "effective")
 
         revised = self.service.create_revision(
             controlled_document_id=created.controlled_document_id,
             created_by="reviewer-1",
-            upload_file=_UploadFile("urs-v2.md", b"# urs v2\n"),
-            change_summary="update requirements",
+            upload_file=_UploadFile("ledger-v2.pdf", b"%PDF-1.4 ledger v2\n"),
+            change_summary="update",
         )
         revision2_id = revised.current_revision.controlled_revision_id
-        self.assertNotEqual(revision2_id, revision1_id)
-        self.assertEqual(revised.current_revision.status, "draft")
-        self.assertEqual(revised.effective_revision.controlled_revision_id, revision1_id)
+        self._approve_revision_to_pending_effective(controlled_revision_id=revision2_id)
+        self._configure_revision_training_gate(controlled_revision_id=revision2_id, training_required=False)
+        published_2 = self.service.publish_revision(
+            controlled_revision_id=revision2_id,
+            release_mode="manual_by_doc_control",
+            ctx=self.publisher_ctx,
+            note="publish v2",
+        )
+        self.assertEqual(published_2.effective_revision.controlled_revision_id, revision2_id)
+        self.assertEqual(published_2.effective_revision.status, "effective")
 
-        self.service.transition_revision(
-            controlled_revision_id=revision2_id,
-            target_status="in_review",
-            ctx=self.ctx,
-            note="review v2",
-        )
-        self.service.transition_revision(
-            controlled_revision_id=revision2_id,
-            target_status="approved",
-            ctx=self.approver_ctx,
-            note="approve v2",
-        )
-        effective_second = self.service.transition_revision(
-            controlled_revision_id=revision2_id,
-            target_status="effective",
-            ctx=self.approver_ctx,
-            note="release v2",
-        )
+        revision1 = next(item for item in published_2.revisions if item.controlled_revision_id == revision1_id)
+        revision2 = next(item for item in published_2.revisions if item.controlled_revision_id == revision2_id)
+        self.assertEqual(revision1.status, "superseded")
+        self.assertIsNotNone(revision1.superseded_at_ms)
+        self.assertEqual(revision1.superseded_by_revision_id, revision2_id)
+        self.assertEqual(revision2.status, "effective")
 
-        self.assertEqual(effective_second.effective_revision.controlled_revision_id, revision2_id)
-        self.assertEqual(effective_second.current_revision.controlled_revision_id, revision2_id)
-        first_revision = next(
-            item for item in effective_second.revisions if item.controlled_revision_id == revision1_id
-        )
-        second_revision = next(
-            item for item in effective_second.revisions if item.controlled_revision_id == revision2_id
-        )
-        self.assertEqual(first_revision.status, "obsolete")
-        self.assertEqual(second_revision.status, "effective")
         self.assertEqual(len(self.ragflow_service.deleted), 1)
 
         conn = connect_sqlite(self._db_path)
@@ -291,18 +703,33 @@ class TestDocumentControlServiceUnit(unittest.TestCase):
             effective_count = conn.execute(
                 "SELECT COUNT(*) AS count FROM controlled_revisions WHERE status = 'effective'"
             ).fetchone()["count"]
+            ledger_count = conn.execute(
+                "SELECT COUNT(*) AS count FROM controlled_revision_release_ledger"
+            ).fetchone()["count"]
+            ledger_rows = conn.execute(
+                """
+                SELECT event_type, release_mode, subject_revision_id, other_revision_id
+                FROM controlled_revision_release_ledger
+                ORDER BY created_at_ms ASC, ledger_id ASC
+                """
+            ).fetchall()
         finally:
             conn.close()
         self.assertEqual(effective_count, 1)
-
-        _, audit_events = self.audit_log_store.list_events(
-            action="document_control_transition",
-            resource_type="controlled_revision",
-            limit=20,
-        )
-        event_types = [item.event_type for item in audit_events]
-        self.assertIn("controlled_revision_effective", event_types)
-        self.assertIn("controlled_revision_obsolete", event_types)
+        self.assertEqual(ledger_count, 3)
+        self.assertTrue(all(row["release_mode"] == "manual_by_doc_control" for row in ledger_rows))
+        published_rows = [row for row in ledger_rows if row["event_type"] == "published"]
+        superseded_rows = [row for row in ledger_rows if row["event_type"] == "superseded"]
+        self.assertEqual(len(published_rows), 2)
+        self.assertEqual(len(superseded_rows), 1)
+        supersede_row = superseded_rows[0]
+        self.assertEqual(supersede_row["subject_revision_id"], revision1_id)
+        self.assertEqual(supersede_row["other_revision_id"], revision2_id)
+        published_by_subject = {row["subject_revision_id"]: row for row in published_rows}
+        self.assertIn(revision1_id, published_by_subject)
+        self.assertIn(revision2_id, published_by_subject)
+        self.assertIsNone(published_by_subject[revision1_id]["other_revision_id"])
+        self.assertEqual(published_by_subject[revision2_id]["other_revision_id"], revision1_id)
 
     def test_reviewer_and_approver_must_be_different_users(self):
         created = self.service.create_document(
@@ -311,30 +738,295 @@ class TestDocumentControlServiceUnit(unittest.TestCase):
             document_type="sop",
             target_kb_id="Quality KB",
             created_by="reviewer-1",
-            upload_file=_UploadFile("approval.md", b"# approval\n"),
+            upload_file=_UploadFile("approval.pdf", b"%PDF-1.4 approval\n"),
             product_name="Product A",
             registration_ref="REG-001",
             change_summary="baseline",
         )
 
         revision_id = created.current_revision.controlled_revision_id
-        self.service.transition_revision(
+        self.service.submit_revision_for_approval(
             controlled_revision_id=revision_id,
-            target_status="in_review",
-            ctx=self.ctx,
-            note="submit for review",
+            ctx=self.submitter_ctx,
+            note="submit for approval",
         )
 
         with self.assertRaises(DocumentControlError) as same_actor_error:
-            self.service.transition_revision(
-                controlled_revision_id=revision_id,
-                target_status="approved",
-                ctx=self.ctx,
-                note="same actor approval",
-            )
+            self.service.approve_revision_approval_step(controlled_revision_id=revision_id, ctx=self.submitter_ctx, note="same actor approval")
 
         self.assertEqual(same_actor_error.exception.code, "document_control_approval_role_conflict")
         self.assertEqual(same_actor_error.exception.status_code, 409)
+
+    def test_reject_terminates_and_resubmit_creates_new_request(self):
+        created = self.service.create_document(
+            doc_code="DOC-020",
+            title="Reject flow",
+            document_type="sop",
+            target_kb_id="Quality KB",
+            created_by="reviewer-1",
+            upload_file=_UploadFile("reject.pdf", b"%PDF-1.4 reject\n"),
+            product_name="Product A",
+            registration_ref="REG-001",
+            change_summary="baseline",
+        )
+        revision_id = created.current_revision.controlled_revision_id
+        submitted = self.service.submit_revision_for_approval(
+            controlled_revision_id=revision_id,
+            ctx=self.submitter_ctx,
+            note="submit",
+        )
+        first_request_id = submitted.current_revision.approval_request_id
+        self.assertIsNotNone(first_request_id)
+
+        rejected = self.service.reject_revision_approval_step(
+            controlled_revision_id=revision_id,
+            ctx=self.cosigner1_ctx,
+            note="reject",
+        )
+        self.assertEqual(rejected.current_revision.status, "approval_rejected")
+        self.assertIsNone(rejected.current_revision.approval_request_id)
+
+        resubmitted = self.service.submit_revision_for_approval(
+            controlled_revision_id=revision_id,
+            ctx=self.submitter_ctx,
+            note="resubmit",
+        )
+        self.assertEqual(resubmitted.current_revision.status, "approval_in_progress")
+        self.assertEqual(resubmitted.current_revision.approval_round, 2)
+        self.assertNotEqual(resubmitted.current_revision.approval_request_id, first_request_id)
+
+        _, audit_events = self.audit_log_store.list_events(
+            action="document_control_transition",
+            resource_type="controlled_revision",
+            limit=50,
+        )
+        event_types = [item.event_type for item in audit_events]
+        self.assertIn("controlled_revision_step_rejected", event_types)
+        self.assertIn("controlled_revision_resubmitted", event_types)
+
+    def test_add_sign_requires_new_approver_to_participate(self):
+        created = self.service.create_document(
+            doc_code="DOC-030",
+            title="Add sign flow",
+            document_type="sop",
+            target_kb_id="Quality KB",
+            created_by="reviewer-1",
+            upload_file=_UploadFile("add-sign.pdf", b"%PDF-1.4 add sign\n"),
+            product_name="Product A",
+            registration_ref="REG-001",
+            change_summary="baseline",
+        )
+        revision_id = created.current_revision.controlled_revision_id
+        self.service.submit_revision_for_approval(controlled_revision_id=revision_id, ctx=self.submitter_ctx, note="submit")
+
+        self.service.approve_revision_approval_step(controlled_revision_id=revision_id, ctx=self.cosigner1_ctx, note="cosign 1")
+        self.service.add_sign_revision_approval_step(
+            controlled_revision_id=revision_id,
+            approver_user_id="cosigner-3",
+            ctx=self.cosigner1_ctx,
+            note="add cosigner-3",
+        )
+
+        after_cosign_2 = self.service.approve_revision_approval_step(
+            controlled_revision_id=revision_id,
+            ctx=self.cosigner2_ctx,
+            note="cosign 2",
+        )
+        self.assertEqual(after_cosign_2.current_revision.current_approval_step_name, "cosign")
+
+        after_cosign_3 = self.service.approve_revision_approval_step(
+            controlled_revision_id=revision_id,
+            ctx=self.cosigner3_ctx,
+            note="cosign 3",
+        )
+        self.assertEqual(after_cosign_3.current_revision.current_approval_step_name, "approve")
+
+    def test_add_sign_rejects_duplicate_and_forbidden_actor(self):
+        created = self.service.create_document(
+            doc_code="DOC-031",
+            title="Add sign duplicate",
+            document_type="sop",
+            target_kb_id="Quality KB",
+            created_by="reviewer-1",
+            upload_file=_UploadFile("add-sign-dup.pdf", b"%PDF-1.4 add sign\n"),
+            product_name="Product A",
+            registration_ref="REG-001",
+            change_summary="baseline",
+        )
+        revision_id = created.current_revision.controlled_revision_id
+        self.service.submit_revision_for_approval(controlled_revision_id=revision_id, ctx=self.submitter_ctx, note="submit")
+
+        with self.assertRaises(DocumentControlError) as forbidden:
+            self.service.add_sign_revision_approval_step(
+                controlled_revision_id=revision_id,
+                approver_user_id="cosigner-3",
+                ctx=self.submitter_ctx,
+                note="not a step approver",
+            )
+        self.assertEqual(forbidden.exception.code, "document_control_add_sign_forbidden")
+        self.assertEqual(forbidden.exception.status_code, 403)
+
+        with self.assertRaises(DocumentControlError) as duplicated:
+            self.service.add_sign_revision_approval_step(
+                controlled_revision_id=revision_id,
+                approver_user_id="cosigner-2",
+                ctx=self.cosigner1_ctx,
+                note="duplicate",
+            )
+        self.assertEqual(duplicated.exception.code, "document_control_add_sign_duplicated")
+        self.assertEqual(duplicated.exception.status_code, 409)
+
+    def test_submit_fail_fast_when_matrix_or_user_store_missing(self):
+        created = self.service.create_document(
+            doc_code="DOC-040",
+            title="Missing prereqs",
+            document_type="custom-missing-workflow",
+            target_kb_id="Quality KB",
+            created_by="reviewer-1",
+            upload_file=_UploadFile("missing.pdf", b"%PDF-1.4 prereq\n"),
+            product_name="Product A",
+            registration_ref="REG-001",
+            change_summary="baseline",
+        )
+        revision_id = created.current_revision.controlled_revision_id
+
+        deps_no_matrix = SimpleNamespace(
+            kb_store=_KbStore(self._db_path),
+            ragflow_service=self.ragflow_service,
+            audit_log_store=self.audit_log_store,
+            org_structure_manager=None,
+            user_store=self.user_store,
+        )
+        service_no_matrix = DocumentControlService.from_deps(deps_no_matrix)
+        with self.assertRaises(DocumentControlError) as missing_matrix:
+            service_no_matrix.submit_revision_for_approval(controlled_revision_id=revision_id, ctx=self.submitter_ctx, note="submit")
+        self.assertEqual(missing_matrix.exception.code, "document_control_workflow_not_configured")
+        self.assertEqual(missing_matrix.exception.status_code, 409)
+
+        created_configured = self.service.create_document(
+            doc_code="DOC-041",
+            title="Missing user store",
+            document_type="sop",
+            target_kb_id="Quality KB",
+            created_by="reviewer-1",
+            upload_file=_UploadFile("missing-user-store.pdf", b"%PDF-1.4 prereq\n"),
+            product_name="Product A",
+            registration_ref="REG-001",
+            change_summary="baseline",
+        )
+        configured_revision_id = created_configured.current_revision.controlled_revision_id
+
+        deps_no_user_store = SimpleNamespace(
+            kb_store=_KbStore(self._db_path),
+            ragflow_service=self.ragflow_service,
+            audit_log_store=self.audit_log_store,
+            org_structure_manager=None,
+        )
+        service_no_user_store = DocumentControlService.from_deps(deps_no_user_store)
+        with self.assertRaises(DocumentControlError) as missing_user_store:
+            service_no_user_store.submit_revision_for_approval(
+                controlled_revision_id=configured_revision_id,
+                ctx=self.submitter_ctx,
+                note="submit",
+            )
+        self.assertEqual(missing_user_store.exception.code, "document_control_user_store_unavailable")
+        self.assertEqual(missing_user_store.exception.status_code, 500)
+
+    def test_document_type_workflow_is_persisted_and_resolved(self):
+        workflow = self.service.upsert_document_type_workflow(
+            document_type="manual",
+            name="manual workflow",
+            steps=[
+                {
+                    "step_type": "cosign",
+                    "approval_rule": "all",
+                    "member_source": "fixed",
+                    "timeout_reminder_minutes": 30,
+                    "approver_user_ids": ["cosigner-1"],
+                },
+                {
+                    "step_type": "approve",
+                    "approval_rule": "all",
+                    "member_source": "fixed",
+                    "timeout_reminder_minutes": 45,
+                    "approver_user_ids": ["approver-1"],
+                },
+                {
+                    "step_type": "standardize_review",
+                    "approval_rule": "all",
+                    "member_source": "fixed",
+                    "timeout_reminder_minutes": 60,
+                    "approver_user_ids": ["standardizer-1"],
+                },
+            ],
+        )
+        self.assertEqual(workflow["document_type"], "manual")
+        loaded = self.service.get_document_type_workflow(document_type="manual")
+        self.assertEqual([item["step_type"] for item in loaded["steps"]], ["cosign", "approve", "standardize_review"])
+        self.assertEqual(loaded["steps"][0]["timeout_reminder_minutes"], 30)
+
+    def test_remind_overdue_approval_step_marks_revision_and_returns_pending_approvers(self):
+        created = self.service.create_document(
+            doc_code="DOC-050",
+            title="Reminder flow",
+            document_type="sop",
+            target_kb_id="Quality KB",
+            created_by="reviewer-1",
+            upload_file=_UploadFile("reminder.pdf", b"%PDF-1.4 reminder\n"),
+            product_name="Product A",
+            registration_ref="REG-001",
+            change_summary="baseline",
+        )
+        revision_id = created.current_revision.controlled_revision_id
+        self.service.submit_revision_for_approval(
+            controlled_revision_id=revision_id,
+            ctx=self.submitter_ctx,
+            note="submit",
+        )
+        conn = connect_sqlite(self._db_path)
+        try:
+            past_ms = int(time.time() * 1000) - 61 * 60 * 1000
+            conn.execute(
+                """
+                UPDATE operation_approval_request_steps
+                SET activated_at_ms = ?
+                WHERE request_id = (
+                    SELECT approval_request_id
+                    FROM controlled_revisions
+                    WHERE controlled_revision_id = ?
+                )
+                  AND step_no = 1
+                """,
+                (past_ms, revision_id),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+        result = self.service.remind_overdue_revision_approval_step(
+            controlled_revision_id=revision_id,
+            ctx=self.submitter_ctx,
+            note="overdue reminder",
+        )
+        self.assertEqual(result["count"], 2)
+        refreshed = self.service.get_document(controlled_document_id=created.controlled_document_id).current_revision
+        self.assertIsNotNone(refreshed.current_approval_step_last_reminded_at_ms)
+        self.assertIsNotNone(refreshed.current_approval_step_overdue_at_ms)
+
+    def test_create_document_rejects_non_pdf_upload(self):
+        with self.assertRaises(DocumentControlError) as non_pdf:
+            self.service.create_document(
+                doc_code="DOC-060",
+                title="Non PDF",
+                document_type="sop",
+                target_kb_id="Quality KB",
+                created_by="reviewer-1",
+                upload_file=_UploadFile("not-pdf.md", b"# not pdf\n", content_type="text/markdown"),
+                product_name="Product A",
+                registration_ref="REG-001",
+            )
+        self.assertEqual(non_pdf.exception.code, "document_control_pdf_required")
+        self.assertEqual(non_pdf.exception.status_code, 400)
 
     def test_duplicate_doc_code_returns_conflict_error(self):
         self.service.create_document(
@@ -343,7 +1035,7 @@ class TestDocumentControlServiceUnit(unittest.TestCase):
             document_type="urs",
             target_kb_id="Quality KB",
             created_by="reviewer-1",
-            upload_file=_UploadFile("urs.md", b"# urs\n"),
+            upload_file=_UploadFile("urs.pdf", b"%PDF-1.4 urs\n"),
             product_name="Product A",
             registration_ref="REG-001",
         )
@@ -355,7 +1047,7 @@ class TestDocumentControlServiceUnit(unittest.TestCase):
                 document_type="urs",
                 target_kb_id="Quality KB",
                 created_by="reviewer-1",
-                upload_file=_UploadFile("urs-copy.md", b"# urs copy\n"),
+                upload_file=_UploadFile("urs-copy.pdf", b"%PDF-1.4 urs copy\n"),
                 product_name="Product A",
                 registration_ref="REG-001",
             )
@@ -371,7 +1063,7 @@ class TestDocumentControlServiceUnit(unittest.TestCase):
                 document_type="srs",
                 target_kb_id="Quality KB",
                 created_by="reviewer-1",
-                upload_file=_UploadFile("srs.md", b"# srs\n"),
+                upload_file=_UploadFile("srs.pdf", b"%PDF-1.4 srs\n"),
                 product_name="",
                 registration_ref="REG-001",
             )
@@ -386,7 +1078,7 @@ class TestDocumentControlServiceUnit(unittest.TestCase):
                 document_type="wi",
                 target_kb_id="Quality KB",
                 created_by="reviewer-1",
-                upload_file=_UploadFile("wi.md", b"# wi\n"),
+                upload_file=_UploadFile("wi.pdf", b"%PDF-1.4 wi\n"),
                 product_name="Product A",
                 registration_ref="",
             )

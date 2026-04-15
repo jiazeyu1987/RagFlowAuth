@@ -22,6 +22,7 @@ export const ROUTE_TEXT = {
     dataSecurity: '\u6570\u636e\u5b89\u5168',
     logs: '\u65e5\u5fd7\u5ba1\u8ba1',
     notificationSettings: '\u901a\u77e5\u8bbe\u7f6e',
+    qualitySystemConfig: '\u4f53\u7cfb\u914d\u7f6e',
     electronicSignatures: '\u7535\u5b50\u7b7e\u540d',
     trainingCompliance: '\u57f9\u8bad\u5408\u89c4',
     qualitySystem: '\u4f53\u7cfb\u6587\u4ef6',
@@ -45,6 +46,7 @@ const Agents = lazy(() => import('../pages/Agents'));
 const PermissionGroupManagement = lazy(() => import('../pages/PermissionGroupManagement'));
 const DataSecurity = lazy(() => import('../pages/DataSecurity'));
 const NotificationSettings = lazy(() => import('../pages/NotificationSettings'));
+const QualitySystemConfig = lazy(() => import('../pages/QualitySystemConfig'));
 const ApprovalCenter = lazy(() => import('../pages/ApprovalCenter'));
 const ApprovalConfig = lazy(() => import('../pages/ApprovalConfig'));
 const ElectronicSignatureManagement = lazy(() => import('../pages/ElectronicSignatureManagement'));
@@ -282,6 +284,14 @@ export const APP_ROUTES = [
     title: ROUTE_TEXT.nav.notificationSettings,
     showInNav: true,
     icon: '\ud83d\udd14',
+    guard: { allowedRoles: ['admin'] },
+  },
+  {
+    path: '/quality-system-config',
+    component: QualitySystemConfig,
+    title: ROUTE_TEXT.nav.qualitySystemConfig,
+    showInNav: true,
+    icon: '\ud83d\udee0\ufe0f',
     guard: { allowedRoles: ['admin'] },
   },
   {

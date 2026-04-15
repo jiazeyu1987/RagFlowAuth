@@ -70,6 +70,7 @@ def _build_router_registration_specs() -> tuple[RouterRegistrationSpec, ...]:
     from backend.app.modules.patent_download.router import router as patent_download_router
     from backend.app.modules.permission_groups.router import create_router as create_permission_groups_router
     from backend.app.modules.preview.router import router as preview_router
+    from backend.app.modules.quality_system_config.router import router as quality_system_config_router
     from backend.app.modules.ragflow.router import router as ragflow_router
     from backend.app.modules.search_configs.router import router as search_configs_router
     from backend.app.modules.supplier_qualification.router import router as supplier_qualification_router
@@ -101,6 +102,7 @@ def _build_router_registration_specs() -> tuple[RouterRegistrationSpec, ...]:
         RouterRegistrationSpec(prefix="/api", tags=("Document Control",), router=document_control_router),
         RouterRegistrationSpec(prefix="/api/ragflow", tags=("RAGFlow Integration",), router=ragflow_router),
         RouterRegistrationSpec(prefix="/api", tags=("Preview Gateway",), router=preview_router),
+        RouterRegistrationSpec(prefix="/api", tags=("Quality System Config",), router=quality_system_config_router),
         RouterRegistrationSpec(prefix="/api", tags=("Documents",), router=documents_router),
         RouterRegistrationSpec(prefix="/api", tags=("Chat",), router=chat_router),
         RouterRegistrationSpec(prefix="/api", tags=("Agents",), router=agents_router),
@@ -132,6 +134,10 @@ def _register_application_routers(app: FastAPI) -> None:
 async def lifespan(app: FastAPI):
     from backend.app.dependencies import initialize_application_dependencies
     from backend.services.data_security_scheduler_v2 import init_scheduler_v2, stop_scheduler_v2
+    from backend.services.document_control_scheduler import (
+        init_document_control_scheduler,
+        stop_document_control_scheduler,
+    )
 
     initialize_application_dependencies(app)
     logger.info("Dependencies initialized")
@@ -169,6 +175,21 @@ async def lifespan(app: FastAPI):
         logger.error(f"Failed to start improved backup scheduler V2: {exc}", exc_info=True)
         raise
 
+    try:
+        if settings.DOCUMENT_CONTROL_SCHEDULER_ENABLED:
+            deps = app.state.deps
+            scheduler = init_document_control_scheduler(
+                deps=deps,
+                interval_seconds=int(settings.DOCUMENT_CONTROL_SCHEDULER_INTERVAL_SECONDS or 60),
+            )
+            scheduler.start()
+            logger.info("Document control scheduler started")
+        else:
+            logger.info("Document control scheduler disabled by DOCUMENT_CONTROL_SCHEDULER_ENABLED=false")
+    except Exception as exc:
+        logger.error(f"Failed to start document control scheduler: {exc}", exc_info=True)
+        raise
+
     yield
 
     try:
@@ -177,6 +198,13 @@ async def lifespan(app: FastAPI):
             logger.info("Backup scheduler V2 stopped")
     except Exception as exc:
         logger.error(f"Error stopping scheduler V2: {exc}", exc_info=True)
+
+    try:
+        if settings.DOCUMENT_CONTROL_SCHEDULER_ENABLED:
+            stop_document_control_scheduler()
+            logger.info("Document control scheduler stopped")
+    except Exception as exc:
+        logger.error(f"Error stopping document control scheduler: {exc}", exc_info=True)
 
     logger.info("Shutting down...")
 

@@ -36,8 +36,10 @@ class _UserStore:
     def get_by_user_id(self, user_id: str):
         return self._users.get(user_id)
 
-    def list_users(self, status: str | None = None, limit: int = 1000):  # noqa: ARG002
+    def list_users(self, status: str | None = None, limit: int = 1000, department_id: int | None = None):  # noqa: ARG002
         items = list(self._users.values())
+        if department_id is not None:
+            items = [item for item in items if int(getattr(item, "department_id", 0) or 0) == int(department_id)]
         if status is None:
             return items[:limit]
         return [item for item in items if str(getattr(item, "status", "") or "") == status][:limit]
@@ -406,6 +408,230 @@ class TestTrainingComplianceApiUnit(unittest.TestCase):
                 self.assertEqual(resolve_resp.status_code, 200, resolve_resp.text)
                 self.assertEqual(resolve_resp.json()["thread"]["status"], "resolved")
                 self.assertGreaterEqual(len(deps.notification_manager.events), 3)
+        finally:
+            cleanup_dir(td)
+
+    def test_revision_training_gate_supports_trainable_revision_department_selection_and_reack(self):
+        td = make_temp_dir(prefix="ragflowauth_training_gate_revision")
+        try:
+            db_path = os.path.join(str(td), "auth.db")
+            ensure_schema(db_path)
+            users = {
+                "admin-1": _make_user(user_id="admin-1", role="admin", department_id=1),
+                "reviewer-1": _make_user(user_id="reviewer-1", role="reviewer", department_id=2),
+                "reviewer-2": _make_user(user_id="reviewer-2", role="reviewer", department_id=2),
+            }
+            deps = _Deps(db_path=db_path, users=users)
+            app = self._build_app(current_user_id="admin-1", deps=deps)
+
+            conn = sqlite3.connect(db_path)
+            try:
+                conn.execute(
+                    """
+                    INSERT INTO controlled_documents (
+                        controlled_document_id,
+                        doc_code,
+                        title,
+                        document_type,
+                        target_kb_id,
+                        current_revision_id,
+                        effective_revision_id,
+                        created_by,
+                        created_at_ms,
+                        updated_at_ms
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        "cdoc-2",
+                        "DOC-TR-002",
+                        "培训门禁材料",
+                        "SOP",
+                        "default",
+                        "crev-2",
+                        None,
+                        "admin-1",
+                        1_770_000_000_000,
+                        1_770_000_000_000,
+                    ),
+                )
+                conn.execute(
+                    """
+                    INSERT INTO controlled_revisions (
+                        controlled_revision_id,
+                        controlled_document_id,
+                        kb_doc_id,
+                        revision_no,
+                        status,
+                        approved_by,
+                        approved_at_ms,
+                        created_by,
+                        created_at_ms,
+                        updated_at_ms
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        "crev-2",
+                        "cdoc-2",
+                        "kb-doc-2",
+                        2,
+                        "approved_pending_effective",
+                        "admin-1",
+                        1_770_000_000_000,
+                        "admin-1",
+                        1_770_000_000_000,
+                        1_770_000_000_000,
+                    ),
+                )
+                conn.commit()
+            finally:
+                conn.close()
+
+            with TestClient(app) as client:
+                gate_before = client.get("/api/training-compliance/revisions/crev-2/gate")
+                self.assertEqual(gate_before.status_code, 200, gate_before.text)
+                self.assertEqual(gate_before.json()["gate"]["gate_status"], "not_required")
+                self.assertFalse(gate_before.json()["gate"]["blocking"])
+
+                set_gate_resp = client.put(
+                    "/api/training-compliance/revisions/crev-2/gate",
+                    json={"training_required": True, "department_ids": [2]},
+                )
+                self.assertEqual(set_gate_resp.status_code, 200, set_gate_resp.text)
+                self.assertEqual(set_gate_resp.json()["gate"]["gate_status"], "pending_assignment")
+                self.assertTrue(set_gate_resp.json()["gate"]["blocking"])
+
+                generate_resp = client.post(
+                    "/api/training-compliance/assignments/generate",
+                    json={
+                        "controlled_revision_id": "crev-2",
+                        "department_ids": [2],
+                        "min_read_minutes": 1,
+                    },
+                )
+                self.assertEqual(generate_resp.status_code, 200, generate_resp.text)
+                self.assertEqual(generate_resp.json()["count"], 2)
+
+                gate_after_generate = client.get("/api/training-compliance/revisions/crev-2/gate")
+                self.assertEqual(gate_after_generate.status_code, 200, gate_after_generate.text)
+                self.assertEqual(gate_after_generate.json()["gate"]["gate_status"], "in_progress")
+                self.assertTrue(gate_after_generate.json()["gate"]["blocking"])
+
+            reviewer_app = self._build_app(current_user_id="reviewer-1", deps=deps)
+            with TestClient(reviewer_app) as reviewer_client:
+                assignments_resp = reviewer_client.get("/api/training-compliance/assignments")
+                self.assertEqual(assignments_resp.status_code, 200, assignments_resp.text)
+                assignment_id = assignments_resp.json()["items"][0]["assignment_id"]
+
+                with patch("backend.services.training_compliance.time.time", return_value=1_770_000_000):
+                    reviewer_client.post(
+                        f"/api/training-compliance/assignments/{assignment_id}/read-progress",
+                        json={"event": "start"},
+                    )
+                for tick in (1_770_000_015, 1_770_000_030, 1_770_000_045, 1_770_000_060):
+                    with patch("backend.services.training_compliance.time.time", return_value=tick):
+                        reviewer_client.post(
+                            f"/api/training-compliance/assignments/{assignment_id}/read-progress",
+                            json={"event": "heartbeat"},
+                        )
+                with patch("backend.services.training_compliance.time.time", return_value=1_770_000_075):
+                    reviewer_client.post(
+                        f"/api/training-compliance/assignments/{assignment_id}/read-progress",
+                        json={"event": "heartbeat"},
+                    )
+
+                questioned_resp = reviewer_client.post(
+                    f"/api/training-compliance/assignments/{assignment_id}/acknowledge",
+                    json={"decision": "questioned", "question_text": "请确认最新版本"},
+                )
+                self.assertEqual(questioned_resp.status_code, 200, questioned_resp.text)
+                thread_id = questioned_resp.json()["assignment"]["question_thread_id"]
+
+            with TestClient(app) as admin_client:
+                gate_open_question = admin_client.get("/api/training-compliance/revisions/crev-2/gate")
+                self.assertEqual(gate_open_question.status_code, 200, gate_open_question.text)
+                self.assertEqual(gate_open_question.json()["gate"]["gate_status"], "questions_open")
+
+                resolve_resp = admin_client.post(
+                    f"/api/training-compliance/question-threads/{thread_id}/resolve",
+                    json={"resolution_text": "已确认最新版本，请重新确认。"},
+                )
+                self.assertEqual(resolve_resp.status_code, 200, resolve_resp.text)
+
+                gate_after_resolve = admin_client.get("/api/training-compliance/revisions/crev-2/gate")
+                self.assertEqual(gate_after_resolve.status_code, 200, gate_after_resolve.text)
+                self.assertEqual(gate_after_resolve.json()["gate"]["gate_status"], "in_progress")
+
+            with TestClient(reviewer_app) as reviewer_client:
+                acknowledge_resp = reviewer_client.post(
+                    f"/api/training-compliance/assignments/{assignment_id}/acknowledge",
+                    json={"decision": "acknowledged"},
+                )
+                self.assertEqual(acknowledge_resp.status_code, 200, acknowledge_resp.text)
+
+            with TestClient(app) as admin_client:
+                final_gate = admin_client.get("/api/training-compliance/revisions/crev-2/gate")
+                self.assertEqual(final_gate.status_code, 200, final_gate.text)
+                self.assertEqual(final_gate.json()["gate"]["gate_status"], "in_progress")
+                self.assertTrue(final_gate.json()["gate"]["blocking"])
+        finally:
+            cleanup_dir(td)
+
+    def test_generate_training_assignments_requires_explicit_users_or_departments(self):
+        td = make_temp_dir(prefix="ragflowauth_training_gate_require_assignees")
+        try:
+            db_path = os.path.join(str(td), "auth.db")
+            ensure_schema(db_path)
+            users = {"admin-1": _make_user(user_id="admin-1", role="admin", department_id=1)}
+            deps = _Deps(db_path=db_path, users=users)
+            app = self._build_app(current_user_id="admin-1", deps=deps)
+
+            conn = sqlite3.connect(db_path)
+            try:
+                conn.execute(
+                    """
+                    INSERT INTO controlled_documents (
+                        controlled_document_id,
+                        doc_code,
+                        title,
+                        document_type,
+                        target_kb_id,
+                        current_revision_id,
+                        effective_revision_id,
+                        created_by,
+                        created_at_ms,
+                        updated_at_ms
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    ("cdoc-3", "DOC-TR-003", "无默认广播", "SOP", "default", "crev-3", None, "admin-1", 1, 1),
+                )
+                conn.execute(
+                    """
+                    INSERT INTO controlled_revisions (
+                        controlled_revision_id,
+                        controlled_document_id,
+                        kb_doc_id,
+                        revision_no,
+                        status,
+                        approved_by,
+                        approved_at_ms,
+                        created_by,
+                        created_at_ms,
+                        updated_at_ms
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    ("crev-3", "cdoc-3", "kb-doc-3", 1, "approved_pending_effective", "admin-1", 1, "admin-1", 1, 1),
+                )
+                conn.commit()
+            finally:
+                conn.close()
+
+            with TestClient(app) as client:
+                response = client.post(
+                    "/api/training-compliance/assignments/generate",
+                    json={"controlled_revision_id": "crev-3", "min_read_minutes": 1},
+                )
+                self.assertEqual(response.status_code, 400, response.text)
+                self.assertEqual(response.json()["detail"], "training_assignment_assignees_required")
         finally:
             cleanup_dir(td)
 

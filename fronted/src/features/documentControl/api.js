@@ -119,17 +119,281 @@ export const documentControlApi = {
     );
   },
 
-  async transitionRevision(controlledRevisionId, payload) {
+  async submitRevisionForApproval(controlledRevisionId, payload) {
     return normalizeObjectField(
       await httpClient.requestJson(
-        authBackendUrl(`/api/quality-system/doc-control/revisions/${controlledRevisionId}/transitions`),
+        authBackendUrl(
+          `/api/quality-system/doc-control/revisions/${encodeURIComponent(
+            controlledRevisionId
+          )}/approval/submit`
+        ),
         {
           method: 'POST',
           body: JSON.stringify(payload || {}),
         }
       ),
       'document',
-      'document_control_revision_transition'
+      'document_control_revision_approval_submit'
+    );
+  },
+
+  async approveRevisionStep(controlledRevisionId, payload) {
+    return normalizeObjectField(
+      await httpClient.requestJson(
+        authBackendUrl(
+          `/api/quality-system/doc-control/revisions/${encodeURIComponent(
+            controlledRevisionId
+          )}/approval/approve`
+        ),
+        {
+          method: 'POST',
+          body: JSON.stringify(payload || {}),
+        }
+      ),
+      'document',
+      'document_control_revision_approval_approve'
+    );
+  },
+
+  async rejectRevisionStep(controlledRevisionId, payload) {
+    return normalizeObjectField(
+      await httpClient.requestJson(
+        authBackendUrl(
+          `/api/quality-system/doc-control/revisions/${encodeURIComponent(
+            controlledRevisionId
+          )}/approval/reject`
+        ),
+        {
+          method: 'POST',
+          body: JSON.stringify(payload || {}),
+        }
+      ),
+      'document',
+      'document_control_revision_approval_reject'
+    );
+  },
+
+  async addSignRevisionStep(controlledRevisionId, payload) {
+    return normalizeObjectField(
+      await httpClient.requestJson(
+        authBackendUrl(
+          `/api/quality-system/doc-control/revisions/${encodeURIComponent(
+            controlledRevisionId
+          )}/approval/add-sign`
+        ),
+        {
+          method: 'POST',
+          body: JSON.stringify(payload || {}),
+        }
+      ),
+      'document',
+      'document_control_revision_approval_add_sign'
+    );
+  },
+
+  async remindOverdueApprovalStep(controlledRevisionId, payload) {
+    return normalizeObjectField(
+      await httpClient.requestJson(
+        authBackendUrl(
+          `/api/quality-system/doc-control/revisions/${encodeURIComponent(
+            controlledRevisionId
+          )}/approval/remind-overdue`
+        ),
+        {
+          method: 'POST',
+          body: JSON.stringify(payload || {}),
+        }
+      ),
+      'result',
+      'document_control_approval_remind_overdue'
+    );
+  },
+
+  async getDistributionDepartments(controlledDocumentId) {
+    return normalizeArrayField(
+      await httpClient.requestJson(
+        authBackendUrl(
+          `/api/quality-system/doc-control/documents/${encodeURIComponent(
+            controlledDocumentId
+          )}/distribution-departments`
+        ),
+        { method: 'GET' }
+      ),
+      'department_ids',
+      'document_control_distribution_departments_get'
+    );
+  },
+
+  async setDistributionDepartments(controlledDocumentId, payload) {
+    return normalizeArrayField(
+      await httpClient.requestJson(
+        authBackendUrl(
+          `/api/quality-system/doc-control/documents/${encodeURIComponent(
+            controlledDocumentId
+          )}/distribution-departments`
+        ),
+        {
+          method: 'PUT',
+          body: JSON.stringify(payload || {}),
+        }
+      ),
+      'department_ids',
+      'document_control_distribution_departments_set'
+    );
+  },
+
+  async publishRevision(controlledRevisionId, payload) {
+    return normalizeObjectField(
+      await httpClient.requestJson(
+        authBackendUrl(
+          `/api/quality-system/doc-control/revisions/${encodeURIComponent(controlledRevisionId)}/publish`
+        ),
+        {
+          method: 'POST',
+          body: JSON.stringify(payload || {}),
+        }
+      ),
+      'document',
+      'document_control_revision_publish'
+    );
+  },
+
+  async completeManualReleaseArchive(controlledRevisionId, payload) {
+    return normalizeObjectField(
+      await httpClient.requestJson(
+        authBackendUrl(
+          `/api/quality-system/doc-control/revisions/${encodeURIComponent(
+            controlledRevisionId
+          )}/publish/manual-archive-complete`
+        ),
+        {
+          method: 'POST',
+          body: JSON.stringify(payload || {}),
+        }
+      ),
+      'document',
+      'document_control_manual_release_complete'
+    );
+  },
+
+  async listRevisionDepartmentAcks(controlledRevisionId) {
+    return normalizeArrayField(
+      await httpClient.requestJson(
+        authBackendUrl(
+          `/api/quality-system/doc-control/revisions/${encodeURIComponent(
+            controlledRevisionId
+          )}/department-acks`
+        ),
+        { method: 'GET' }
+      ),
+      'items',
+      'document_control_department_acks_list'
+    );
+  },
+
+  async confirmRevisionDepartmentAck(controlledRevisionId, departmentId, payload) {
+    return normalizeObjectField(
+      await httpClient.requestJson(
+        authBackendUrl(
+          `/api/quality-system/doc-control/revisions/${encodeURIComponent(
+            controlledRevisionId
+          )}/department-acks/${encodeURIComponent(departmentId)}/confirm`
+        ),
+        {
+          method: 'POST',
+          body: JSON.stringify(payload || {}),
+        }
+      ),
+      'ack',
+      'document_control_department_ack_confirm'
+    );
+  },
+
+  async remindOverdueRevisionDepartmentAcks(controlledRevisionId, payload) {
+    return normalizeObjectField(
+      await httpClient.requestJson(
+        authBackendUrl(
+          `/api/quality-system/doc-control/revisions/${encodeURIComponent(
+            controlledRevisionId
+          )}/department-acks/remind-overdue`
+        ),
+        {
+          method: 'POST',
+          body: JSON.stringify(payload || {}),
+        }
+      ),
+      'result',
+      'document_control_department_ack_remind'
+    );
+  },
+
+  async initiateObsoleteRevision(controlledRevisionId, payload) {
+    return normalizeObjectField(
+      await httpClient.requestJson(
+        authBackendUrl(
+          `/api/quality-system/doc-control/revisions/${encodeURIComponent(
+            controlledRevisionId
+          )}/obsolete/initiate`
+        ),
+        {
+          method: 'POST',
+          body: JSON.stringify(payload || {}),
+        }
+      ),
+      'document',
+      'document_control_obsolete_initiate'
+    );
+  },
+
+  async approveObsoleteRevision(controlledRevisionId, payload) {
+    return normalizeObjectField(
+      await httpClient.requestJson(
+        authBackendUrl(
+          `/api/quality-system/doc-control/revisions/${encodeURIComponent(
+            controlledRevisionId
+          )}/obsolete/approve`
+        ),
+        {
+          method: 'POST',
+          body: JSON.stringify(payload || {}),
+        }
+      ),
+      'document',
+      'document_control_obsolete_approve'
+    );
+  },
+
+  async confirmRevisionDestruction(controlledRevisionId, payload) {
+    return normalizeObjectField(
+      await httpClient.requestJson(
+        authBackendUrl(
+          `/api/quality-system/doc-control/revisions/${encodeURIComponent(
+            controlledRevisionId
+          )}/obsolete/destruction/confirm`
+        ),
+        {
+          method: 'POST',
+          body: JSON.stringify(payload || {}),
+        }
+      ),
+      'document',
+      'document_control_destruction_confirm'
+    );
+  },
+
+  async listRetiredDocuments({ kbId, limit = 100 } = {}) {
+    return normalizeArrayField(
+      await httpClient.requestJson(
+        authBackendUrl(
+          `/api/retired-documents${buildQuery({
+            kb_id: kbId,
+            limit,
+          })}`
+        ),
+        { method: 'GET' }
+      ),
+      'items',
+      'document_control_retired_documents_list'
     );
   },
 };

@@ -79,6 +79,8 @@ class Settings(BaseSettings):
     # Data security resilience switches
     BACKUP_SCHEDULER_ENABLED: bool = True
     DATA_SECURITY_SCAN_MOUNT_STATS: bool = False
+    DOCUMENT_CONTROL_SCHEDULER_ENABLED: bool = True
+    DOCUMENT_CONTROL_SCHEDULER_INTERVAL_SECONDS: int = 60
 
     @field_validator("DEBUG", mode="before")
     @classmethod

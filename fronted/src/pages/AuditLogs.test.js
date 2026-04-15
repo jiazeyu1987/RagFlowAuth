@@ -211,4 +211,77 @@ describe('AuditLogs', () => {
     await user.click(screen.getByTestId('audit-next'));
     expect(useAuditLogsPage.mock.results[0].value.goNext).toHaveBeenCalledTimes(1);
   });
+
+  it('renders quality system config audit labels', () => {
+    useAuditLogsPage.mockReturnValue({
+      loading: false,
+      exporting: false,
+      error: '',
+      companies: [],
+      departments: [],
+      filters: {
+        action: '',
+        source: '',
+        event_type: '',
+        request_id: '',
+        resource_id: '',
+        company_id: '',
+        department_id: '',
+        username: '',
+        from: '',
+        to: '',
+        limit: 20,
+        offset: 0,
+      },
+      result: {
+        total: 1,
+        items: [
+          {
+            id: 'event-quality-1',
+            created_at_ms: 1712220000000,
+            action: 'quality_system_position_assignments_update',
+            username: 'admin1',
+            company_name: '',
+            department_name: '',
+            source: 'quality_system_config',
+            resource_id: 'QA',
+            before: { assigned_users: [] },
+            after: { assigned_users: [{ user_id: 'u-1' }] },
+          },
+        ],
+      },
+      rows: [
+        {
+          id: 'event-quality-1',
+          created_at_ms: 1712220000000,
+          action: 'quality_system_position_assignments_update',
+          username: 'admin1',
+          company_name: '',
+          department_name: '',
+          source: 'quality_system_config',
+          resource_id: 'QA',
+          before: { assigned_users: [] },
+          after: { assigned_users: [{ user_id: 'u-1' }] },
+        },
+      ],
+      visibleDepartments: [],
+      canGoPrev: false,
+      canGoNext: false,
+      updateFilter: jest.fn(),
+      applyFilters: jest.fn(),
+      goPrev: jest.fn(),
+      goNext: jest.fn(),
+      exportEvidencePackage: jest.fn(),
+    });
+
+    render(<AuditLogs />);
+
+    expect(screen.getByTestId('audit-row-event-quality-1')).toBeInTheDocument();
+    expect(
+      within(screen.getByTestId('audit-row-event-quality-1')).getByText('更新体系岗位分配')
+    ).toBeInTheDocument();
+    expect(
+      within(screen.getByTestId('audit-row-event-quality-1')).getByText('体系配置')
+    ).toBeInTheDocument();
+  });
 });

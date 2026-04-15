@@ -1,4 +1,6 @@
 import React from 'react';
+import PermissionGuard from '../components/PermissionGuard';
+import { useAuth } from '../hooks/useAuth';
 import useDocumentControlPage from '../features/documentControl/useDocumentControlPage';
 import { mapUserFacingErrorMessage } from '../shared/errors/userFacingErrorMessages';
 
@@ -49,13 +51,6 @@ const dangerButtonStyle = {
   background: '#fff1f2',
 };
 
-const STATUS_TRANSITIONS = {
-  draft: ['in_review'],
-  in_review: ['approved'],
-  approved: ['effective'],
-  effective: ['obsolete'],
-};
-
 const prettyStatus = (value) => String(value || '-').replaceAll('_', ' ');
 
 const renderRevisionMeta = (revision) => {
@@ -64,12 +59,55 @@ const renderRevisionMeta = (revision) => {
 };
 
 export default function DocumentControl() {
+  const { user, loading: authLoading, isAuthorized } = useAuth();
+
+  const enableTraining =
+    !authLoading &&
+    !!user &&
+    isAuthorized({
+      anyPermissions: [
+        { resource: 'training_ack', action: 'acknowledge' },
+        { resource: 'training_ack', action: 'assign' },
+      ],
+    });
+  const enableDepartmentAcks =
+    !authLoading &&
+    !!user &&
+    isAuthorized({
+      anyPermissions: [
+        { resource: 'document_control', action: 'review' },
+        { resource: 'document_control', action: 'publish' },
+      ],
+    });
+  const enableRetention = !authLoading && !!user && isAuthorized({ permissionKey: 'canReview' });
+
   const {
     loading,
     detailLoading,
     savingDocument,
     savingRevision,
-    transitioningRevisionId,
+    workflowAction,
+    workflowActionRevisionId,
+    approvalDetailLoading,
+    approvalDetail,
+    approvalDetailError,
+    trainingLoading,
+    trainingGateLoading,
+    trainingGate,
+    trainingGateError,
+    trainingAssignments,
+    trainingError,
+    trainingGenerateLoading,
+    generatedTrainingAssignments,
+    distributionDepartmentsLoading,
+    distributionDepartmentIds,
+    distributionDepartmentsError,
+    departmentAcksLoading,
+    departmentAcks,
+    departmentAcksError,
+    retentionLoading,
+    retentionRecord,
+    retentionError,
     filters,
     documents,
     selectedDocumentId,
@@ -88,8 +126,86 @@ export default function DocumentControl() {
     handleSelectDocument,
     handleCreateDocument,
     handleCreateRevision,
-    handleTransitionRevision,
-  } = useDocumentControlPage({ mapErrorMessage: mapUserFacingErrorMessage });
+    handleSubmitRevisionForApproval,
+    handleApproveRevisionStep,
+    handleRejectRevisionStep,
+    handleRemindOverdueApprovalStep,
+    handleAddSignRevisionStep,
+    handleSetTrainingGate,
+    handleGenerateTrainingAssignments,
+    handleSetDistributionDepartments,
+    handlePublishRevision,
+    handleCompleteManualReleaseArchive,
+    handleConfirmDepartmentAck,
+    handleRemindOverdueDepartmentAcks,
+    handleInitiateObsolete,
+    handleApproveObsolete,
+    handleConfirmDestruction,
+  } = useDocumentControlPage({
+    mapErrorMessage: mapUserFacingErrorMessage,
+    features: {
+      enableTraining,
+      enableDepartmentAcks,
+      enableRetention,
+    },
+  });
+
+  const [approvalNote, setApprovalNote] = React.useState('');
+  const [addSignApproverUserId, setAddSignApproverUserId] = React.useState('');
+  const [trainingRequired, setTrainingRequired] = React.useState(false);
+  const [trainingAssigneeUserIds, setTrainingAssigneeUserIds] = React.useState('');
+  const [trainingDepartmentIdsInput, setTrainingDepartmentIdsInput] = React.useState('');
+  const [trainingMinReadMinutes, setTrainingMinReadMinutes] = React.useState('15');
+  const [distributionDepartmentIdsInput, setDistributionDepartmentIdsInput] = React.useState('');
+  const [releaseMode, setReleaseMode] = React.useState('manual_by_doc_control');
+  const [obsoleteReason, setObsoleteReason] = React.useState('');
+  const [obsoleteRetentionUntilMs, setObsoleteRetentionUntilMs] = React.useState('');
+  const [destructionNotes, setDestructionNotes] = React.useState('');
+
+  const workflowRevisionId = String(currentRevision?.controlled_revision_id || '');
+  const workflowDocumentId = String(selectedDocument?.controlled_document_id || '');
+  const normalizedApprovalNote = approvalNote.trim() ? approvalNote.trim() : null;
+  const requiredApprovalAction =
+    String(currentRevision?.current_approval_step_name || '').trim().toLowerCase() === 'approve'
+      ? 'approve'
+      : 'review';
+
+  const pendingApproversText = React.useMemo(() => {
+    const steps = Array.isArray(approvalDetail?.steps) ? approvalDetail.steps : [];
+    const activeStep = steps.find((step) => String(step?.status || '') === 'active') || null;
+    const approvers = Array.isArray(activeStep?.approvers) ? activeStep.approvers : [];
+    const pending = approvers.filter((item) => String(item?.status || '') === 'pending');
+    if (pending.length === 0) return '-';
+    return pending
+      .map((item) => item.approver_full_name || item.approver_username || item.approver_user_id || '-')
+      .join(', ');
+  }, [approvalDetail]);
+
+  React.useEffect(() => {
+    setTrainingRequired(Boolean(trainingGate?.training_required));
+    setTrainingDepartmentIdsInput(
+      Array.isArray(trainingGate?.department_ids) ? trainingGate.department_ids.join(', ') : ''
+    );
+  }, [trainingGate]);
+
+  const changeControlLoading = departmentAcksLoading;
+  const changeControlError = departmentAcksError;
+  const changeControlRequests = React.useMemo(() => {
+    if (!workflowRevisionId) return [];
+    const requiredDepartments = (distributionDepartmentIds || []).map((item) => String(item));
+    const confirmations = (departmentAcks || [])
+      .filter((item) => String(item?.status || '') === 'confirmed')
+      .map((item) => ({ department_code: String(item.department_id) }));
+    return [
+      {
+        request_id: `doc-control-${workflowRevisionId}`,
+        status: String(currentRevision?.status || '-'),
+        title: selectedDocument?.title || selectedDocument?.doc_code || '-',
+        required_departments: requiredDepartments,
+        confirmations,
+      },
+    ];
+  }, [currentRevision?.status, departmentAcks, distributionDepartmentIds, selectedDocument?.doc_code, selectedDocument?.title, workflowRevisionId]);
 
   return (
     <div
@@ -141,8 +257,9 @@ export default function DocumentControl() {
             >
               <option value="">All</option>
               <option value="draft">draft</option>
-              <option value="in_review">in_review</option>
-              <option value="approved">approved</option>
+              <option value="approval_in_progress">approval_in_progress</option>
+              <option value="approval_rejected">approval_rejected</option>
+              <option value="approved_pending_effective">approved_pending_effective</option>
               <option value="effective">effective</option>
               <option value="obsolete">obsolete</option>
             </select>
@@ -321,6 +438,7 @@ export default function DocumentControl() {
                 <input
                   data-testid="document-control-create-file"
                   type="file"
+                  accept=".pdf,application/pdf"
                   style={inputStyle}
                   onChange={(event) =>
                     setDocumentForm((previous) => ({
@@ -368,6 +486,634 @@ export default function DocumentControl() {
             )}
           </section>
 
+          <section style={panelStyle} data-testid="document-control-workspace">
+            <h2 style={{ marginTop: 0 }}>Workflow Workspace</h2>
+            {!selectedDocument ? (
+              <div style={{ color: '#6b7280' }}>Select a document to view its workflow workspace.</div>
+            ) : !currentRevision ? (
+              <div style={{ color: '#6b7280' }}>No current revision available.</div>
+            ) : (
+              <div style={{ display: 'grid', gap: 12 }}>
+                <div>
+                  <strong>{renderRevisionMeta(currentRevision)}</strong>
+                </div>
+                <div data-testid="document-control-workspace-status">
+                  Status: {prettyStatus(currentRevision.status)}
+                </div>
+
+                <div data-testid="document-control-workspace-approval-summary" style={{ display: 'grid', gap: 6 }}>
+                  <div>Approval request: {currentRevision.approval_request_id || '-'}</div>
+                  <div>
+                    Approval round:{' '}
+                    {Number.isFinite(currentRevision.approval_round) ? currentRevision.approval_round : '-'}
+                  </div>
+                  <div>
+                    Current step: {currentRevision.current_approval_step_name || '-'}
+                    {currentRevision.current_approval_step_no ? ` (#${currentRevision.current_approval_step_no})` : ''}
+                  </div>
+                  {currentRevision.approval_request_id ? (
+                    approvalDetailLoading ? (
+                      <div data-testid="document-control-approval-detail-loading" style={{ color: '#6b7280' }}>
+                        Loading approval detail...
+                      </div>
+                    ) : approvalDetailError ? (
+                      <div data-testid="document-control-approval-detail-error" style={{ color: '#9f1239' }}>
+                        {approvalDetailError}
+                      </div>
+                    ) : approvalDetail ? (
+                      <div data-testid="document-control-approval-pending-approvers">
+                        Pending approvers: {pendingApproversText}
+                      </div>
+                    ) : (
+                      <div data-testid="document-control-approval-detail-empty" style={{ color: '#6b7280' }}>
+                        Approval detail unavailable.
+                      </div>
+                    )
+                  ) : null}
+                </div>
+
+                <label style={labelStyle}>
+                  Note
+                  <textarea
+                    data-testid="document-control-approval-note"
+                    style={{ ...inputStyle, minHeight: 72 }}
+                    value={approvalNote}
+                    onChange={(event) => setApprovalNote(event.target.value)}
+                  />
+                </label>
+
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  {['draft', 'approval_rejected'].includes(String(currentRevision.status || '')) ? (
+                    <PermissionGuard permission={{ resource: 'document_control', action: 'create' }} fallback={null}>
+                      <button
+                        type="button"
+                        data-testid="document-control-approval-submit"
+                        disabled={workflowAction === 'submit' && workflowActionRevisionId === workflowRevisionId}
+                        onClick={() =>
+                          handleSubmitRevisionForApproval(workflowRevisionId, { note: normalizedApprovalNote })
+                        }
+                        style={primaryButtonStyle}
+                      >
+                        {workflowAction === 'submit' && workflowActionRevisionId === workflowRevisionId
+                          ? 'Submitting...'
+                          : 'Submit for approval'}
+                      </button>
+                    </PermissionGuard>
+                  ) : null}
+
+                  {String(currentRevision.status || '') === 'approval_in_progress' ? (
+                    <>
+                      <PermissionGuard
+                        permission={{ resource: 'document_control', action: requiredApprovalAction }}
+                        fallback={null}
+                      >
+                        <button
+                          type="button"
+                          data-testid="document-control-approval-approve"
+                          disabled={workflowAction === 'approve' && workflowActionRevisionId === workflowRevisionId}
+                          onClick={() =>
+                            handleApproveRevisionStep(workflowRevisionId, { note: normalizedApprovalNote })
+                          }
+                          style={primaryButtonStyle}
+                        >
+                          {workflowAction === 'approve' && workflowActionRevisionId === workflowRevisionId
+                            ? 'Approving...'
+                            : 'Approve step'}
+                        </button>
+                      </PermissionGuard>
+                      <PermissionGuard
+                        permission={{ resource: 'document_control', action: requiredApprovalAction }}
+                        fallback={null}
+                      >
+                        <button
+                          type="button"
+                          data-testid="document-control-approval-reject"
+                          disabled={workflowAction === 'reject' && workflowActionRevisionId === workflowRevisionId}
+                          onClick={() =>
+                            handleRejectRevisionStep(workflowRevisionId, { note: normalizedApprovalNote })
+                          }
+                          style={dangerButtonStyle}
+                        >
+                          {workflowAction === 'reject' && workflowActionRevisionId === workflowRevisionId
+                            ? 'Rejecting...'
+                            : 'Reject step'}
+                        </button>
+                      </PermissionGuard>
+                      <PermissionGuard
+                        permission={{ resource: 'document_control', action: 'review' }}
+                        fallback={null}
+                      >
+                        <button
+                          type="button"
+                          data-testid="document-control-approval-remind-overdue"
+                          disabled={workflowAction === 'approval_remind' && workflowActionRevisionId === workflowRevisionId}
+                          onClick={() =>
+                            handleRemindOverdueApprovalStep(workflowRevisionId, { note: normalizedApprovalNote })
+                          }
+                          style={secondaryButtonStyle}
+                        >
+                          {workflowAction === 'approval_remind' && workflowActionRevisionId === workflowRevisionId
+                            ? 'Sending...'
+                            : 'Remind overdue approval'}
+                        </button>
+                      </PermissionGuard>
+                    </>
+                  ) : null}
+                </div>
+
+                {String(currentRevision.status || '') === 'approval_in_progress' ? (
+                  <div style={{ display: 'grid', gap: 8 }}>
+                    <label style={labelStyle}>
+                      Add-sign approver user id
+                      <input
+                        data-testid="document-control-add-sign-user-id"
+                        style={inputStyle}
+                        value={addSignApproverUserId}
+                        onChange={(event) => setAddSignApproverUserId(event.target.value)}
+                      />
+                    </label>
+                    <PermissionGuard
+                      permission={{ resource: 'document_control', action: requiredApprovalAction }}
+                      fallback={null}
+                    >
+                      <button
+                        type="button"
+                        data-testid="document-control-add-sign-submit"
+                        disabled={workflowAction === 'add_sign' && workflowActionRevisionId === workflowRevisionId}
+                        onClick={() =>
+                          handleAddSignRevisionStep(workflowRevisionId, {
+                            approverUserId: addSignApproverUserId,
+                            note: normalizedApprovalNote,
+                          })
+                        }
+                        style={secondaryButtonStyle}
+                      >
+                        {workflowAction === 'add_sign' && workflowActionRevisionId === workflowRevisionId
+                          ? 'Adding...'
+                          : 'Add sign'}
+                      </button>
+                    </PermissionGuard>
+                  </div>
+                ) : null}
+
+                <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: 12, display: 'grid', gap: 10 }}>
+                  <div style={{ fontWeight: 700, color: '#0f172a' }}>Training</div>
+                  <PermissionGuard
+                    anyPermissions={[
+                      { resource: 'training_ack', action: 'acknowledge' },
+                      { resource: 'training_ack', action: 'assign' },
+                    ]}
+                    fallback={<div style={{ color: '#6b7280' }}>Training data is not visible for the current account.</div>}
+                  >
+                    {trainingGateLoading ? (
+                      <div style={{ color: '#6b7280' }}>Loading training gate...</div>
+                    ) : trainingGateError ? (
+                      <div style={{ color: '#9f1239' }}>{trainingGateError}</div>
+                    ) : trainingGate ? (
+                      <div data-testid="document-control-training-gate" style={{ color: '#475569', fontSize: 13 }}>
+                        Gate: {trainingGate.gate_status} · blocking={String(Boolean(trainingGate.blocking))}
+                      </div>
+                    ) : (
+                      <div style={{ color: '#6b7280' }}>Training gate is not configured yet.</div>
+                    )}
+
+                    <PermissionGuard permission={{ resource: 'training_ack', action: 'assign' }} fallback={null}>
+                      <div style={{ display: 'grid', gap: 8, marginTop: 10 }}>
+                        <label style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#334155' }}>
+                          <input
+                            data-testid="document-control-training-required"
+                            type="checkbox"
+                            checked={trainingRequired}
+                            onChange={(event) => setTrainingRequired(event.target.checked)}
+                          />
+                          Training required before publish
+                        </label>
+                        <label style={labelStyle}>
+                          Training department ids (comma-separated)
+                          <input
+                            data-testid="document-control-training-departments"
+                            style={inputStyle}
+                            value={trainingDepartmentIdsInput}
+                            onChange={(event) => setTrainingDepartmentIdsInput(event.target.value)}
+                          />
+                        </label>
+                        <button
+                          type="button"
+                          data-testid="document-control-training-gate-save"
+                          disabled={workflowAction === 'training_gate' && workflowActionRevisionId === workflowRevisionId}
+                          onClick={() => {
+                            const departmentIds = trainingDepartmentIdsInput
+                              .split(/[,\\s]+/g)
+                              .map((item) => Number(item))
+                              .filter((item) => Number.isInteger(item) && item > 0);
+                            handleSetTrainingGate(workflowRevisionId, {
+                              trainingRequired,
+                              departmentIds,
+                            });
+                          }}
+                          style={secondaryButtonStyle}
+                        >
+                          {workflowAction === 'training_gate' && workflowActionRevisionId === workflowRevisionId
+                            ? 'Saving...'
+                            : 'Save training gate'}
+                        </button>
+                      </div>
+                    </PermissionGuard>
+
+                    {trainingLoading ? (
+                      <div style={{ color: '#6b7280' }}>Loading training assignments...</div>
+                    ) : trainingError ? (
+                      <div style={{ color: '#9f1239' }}>{trainingError}</div>
+                    ) : trainingAssignments.length === 0 ? (
+                      <div style={{ color: '#6b7280' }}>No training assignments found for this revision (current user).</div>
+                    ) : (
+                      <div style={{ display: 'grid', gap: 6 }}>
+                        {trainingAssignments.map((assignment) => (
+                          <div
+                            key={assignment.assignment_id}
+                            style={{ border: '1px solid #e2e8f0', borderRadius: 8, padding: 10 }}
+                          >
+                            <div>
+                              <strong>{assignment.status}</strong>{' '}
+                              {assignment.decision ? `· decision=${assignment.decision}` : ''}
+                            </div>
+                            <div style={{ color: '#475569', fontSize: 13 }}>
+                              Read: {Math.floor((assignment.read_progress_ms || 0) / 60000)} /{' '}
+                              {Math.floor((assignment.required_read_ms || 0) / 60000)} min
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    <PermissionGuard permission={{ resource: 'training_ack', action: 'assign' }} fallback={null}>
+                      <div style={{ display: 'grid', gap: 8, marginTop: 10 }}>
+                        <label style={labelStyle}>
+                          Assignee user ids (comma-separated)
+                          <input
+                            data-testid="document-control-training-assignees"
+                            style={inputStyle}
+                            value={trainingAssigneeUserIds}
+                            onChange={(event) => setTrainingAssigneeUserIds(event.target.value)}
+                          />
+                        </label>
+                        <label style={labelStyle}>
+                          Department ids for assignment generation (comma-separated)
+                          <input
+                            data-testid="document-control-training-generate-departments"
+                            style={inputStyle}
+                            value={trainingDepartmentIdsInput}
+                            onChange={(event) => setTrainingDepartmentIdsInput(event.target.value)}
+                          />
+                        </label>
+                        <label style={labelStyle}>
+                          Min read minutes
+                          <input
+                            data-testid="document-control-training-min-read-minutes"
+                            type="number"
+                            min="1"
+                            style={inputStyle}
+                            value={trainingMinReadMinutes}
+                            onChange={(event) => setTrainingMinReadMinutes(event.target.value)}
+                          />
+                        </label>
+                        <button
+                          type="button"
+                          data-testid="document-control-training-generate"
+                          disabled={trainingGenerateLoading || !workflowRevisionId}
+                          onClick={() => {
+                            const assignees = trainingAssigneeUserIds
+                              .split(/[,\\s]+/g)
+                              .map((item) => item.trim())
+                              .filter((item) => item.length > 0);
+                            const departmentIds = trainingDepartmentIdsInput
+                              .split(/[,\\s]+/g)
+                              .map((item) => Number(item))
+                              .filter((item) => Number.isInteger(item) && item > 0);
+                            const minutes = Number(trainingMinReadMinutes);
+                            handleGenerateTrainingAssignments(workflowRevisionId, {
+                              assigneeUserIds: assignees,
+                              departmentIds,
+                              minReadMinutes: minutes,
+                              note: normalizedApprovalNote,
+                            });
+                          }}
+                          style={secondaryButtonStyle}
+                        >
+                          {trainingGenerateLoading ? 'Generating...' : 'Generate training assignments'}
+                        </button>
+                        {Array.isArray(generatedTrainingAssignments) && generatedTrainingAssignments.length > 0 ? (
+                          <div data-testid="document-control-training-generated" style={{ color: '#475569' }}>
+                            Generated: {generatedTrainingAssignments.length}
+                          </div>
+                        ) : null}
+                      </div>
+                    </PermissionGuard>
+                  </PermissionGuard>
+                </div>
+
+                <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: 12, display: 'grid', gap: 10 }}>
+                  <div style={{ fontWeight: 700, color: '#0f172a' }}>Distribution / Publish Controls</div>
+                  <label style={labelStyle}>
+                    Distribution department ids (comma-separated)
+                    <input
+                      data-testid="document-control-distribution-departments"
+                      style={inputStyle}
+                      value={distributionDepartmentIdsInput}
+                      onChange={(event) => setDistributionDepartmentIdsInput(event.target.value)}
+                      placeholder={(distributionDepartmentIds || []).join(', ')}
+                    />
+                  </label>
+                  <div style={{ color: '#475569', fontSize: 13 }}>
+                    Current departments:{' '}
+                    {distributionDepartmentsLoading
+                      ? 'loading...'
+                      : distributionDepartmentIds.length > 0
+                        ? distributionDepartmentIds.join(', ')
+                        : '-'}
+                  </div>
+                  {distributionDepartmentsError ? (
+                    <div style={{ color: '#9f1239' }}>{distributionDepartmentsError}</div>
+                  ) : null}
+                  <PermissionGuard permission={{ resource: 'document_control', action: 'review' }} fallback={null}>
+                    <button
+                      type="button"
+                      data-testid="document-control-distribution-save"
+                      disabled={workflowAction === 'set_distribution' && workflowActionRevisionId === workflowDocumentId}
+                      onClick={() => {
+                        const departmentIds = distributionDepartmentIdsInput
+                          .split(/[,\\s]+/g)
+                          .map((item) => Number(item))
+                          .filter((item) => Number.isInteger(item) && item > 0);
+                        handleSetDistributionDepartments(workflowDocumentId, { departmentIds });
+                      }}
+                      style={secondaryButtonStyle}
+                    >
+                      {workflowAction === 'set_distribution' && workflowActionRevisionId === workflowDocumentId
+                        ? 'Saving...'
+                        : 'Save distribution departments'}
+                    </button>
+                  </PermissionGuard>
+
+                  {String(currentRevision?.status || '') === 'approved_pending_effective' ? (
+                    <div style={{ display: 'grid', gap: 8 }}>
+                      <label style={labelStyle}>
+                        Release mode
+                        <select
+                          data-testid="document-control-release-mode"
+                          style={inputStyle}
+                          value={releaseMode}
+                          onChange={(event) => setReleaseMode(event.target.value)}
+                        >
+                          <option value="manual_by_doc_control">manual_by_doc_control</option>
+                          <option value="automatic">automatic</option>
+                        </select>
+                      </label>
+                      <PermissionGuard permission={{ resource: 'document_control', action: 'publish' }} fallback={null}>
+                        <button
+                          type="button"
+                          data-testid="document-control-publish"
+                          disabled={workflowAction === 'publish' && workflowActionRevisionId === workflowRevisionId}
+                          onClick={() =>
+                            handlePublishRevision(workflowRevisionId, {
+                              releaseMode,
+                              note: normalizedApprovalNote,
+                            })
+                          }
+                          style={primaryButtonStyle}
+                        >
+                          {workflowAction === 'publish' && workflowActionRevisionId === workflowRevisionId
+                            ? 'Publishing...'
+                            : 'Publish revision'}
+                        </button>
+                      </PermissionGuard>
+                    </div>
+                  ) : null}
+
+                  {String(currentRevision?.status || '') === 'effective' &&
+                  String(currentRevision?.release_mode || '') === 'manual_by_doc_control' &&
+                  !currentRevision?.release_manual_archive_completed_at_ms ? (
+                    <PermissionGuard permission={{ resource: 'document_control', action: 'publish' }} fallback={null}>
+                      <button
+                        type="button"
+                        data-testid="document-control-manual-release-complete"
+                        disabled={workflowAction === 'manual_release_complete' && workflowActionRevisionId === workflowRevisionId}
+                        onClick={() =>
+                          handleCompleteManualReleaseArchive(workflowRevisionId, {
+                            note: normalizedApprovalNote,
+                          })
+                        }
+                        style={secondaryButtonStyle}
+                      >
+                        {workflowAction === 'manual_release_complete' && workflowActionRevisionId === workflowRevisionId
+                          ? 'Completing...'
+                          : 'Complete manual archive release'}
+                      </button>
+                    </PermissionGuard>
+                  ) : null}
+                </div>
+
+                <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: 12, display: 'grid', gap: 10 }}>
+                  <div style={{ fontWeight: 700, color: '#0f172a' }}>Release / Department Acknowledgment</div>
+                  <PermissionGuard
+                    permission={{ resource: 'change_control', action: 'evaluate' }}
+                    fallback={<div style={{ color: '#6b7280' }}>Change-control data is not visible for the current account.</div>}
+                  >
+                    {changeControlLoading ? (
+                      <div style={{ color: '#6b7280' }}>Loading change-control requests...</div>
+                    ) : changeControlError ? (
+                      <div style={{ color: '#9f1239' }}>{changeControlError}</div>
+                    ) : changeControlRequests.length === 0 ? (
+                      <div style={{ color: '#6b7280' }}>No related change-control requests.</div>
+                    ) : (
+                      <div style={{ display: 'grid', gap: 8 }}>
+                        {changeControlRequests.map((req) => {
+                          const required = Array.isArray(req.required_departments) ? req.required_departments : [];
+                          const confirmations = Array.isArray(req.confirmations) ? req.confirmations : [];
+                          const confirmed = new Set(
+                            confirmations.map((c) => String(c.department_code || '').trim()).filter(Boolean)
+                          );
+                          const pending = required.filter((dept) => !confirmed.has(String(dept || '').trim()));
+                          return (
+                            <div
+                              key={req.request_id}
+                              style={{ border: '1px solid #e2e8f0', borderRadius: 8, padding: 10 }}
+                            >
+                              <div>
+                                <strong>{req.request_id}</strong> · {req.status}
+                              </div>
+                              <div style={{ color: '#475569', fontSize: 13 }}>{req.title || '-'}</div>
+                              <div style={{ color: '#475569', fontSize: 13 }}>
+                                Departments: {confirmed.size}/{required.length}
+                                {pending.length > 0 ? ` (pending: ${pending.join(', ')})` : ''}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </PermissionGuard>
+                  {departmentAcks.length > 0 ? (
+                    <div style={{ display: 'grid', gap: 8 }}>
+                      {departmentAcks.map((ack) =>
+                        ack.status !== 'confirmed' ? (
+                          <PermissionGuard
+                            key={ack.ack_id}
+                            permission={{ resource: 'document_control', action: 'review' }}
+                            fallback={null}
+                          >
+                            <button
+                              type="button"
+                              data-testid={`document-control-department-ack-confirm-${ack.department_id}`}
+                              disabled={
+                                workflowAction === 'department_ack_confirm' &&
+                                workflowActionRevisionId === `${workflowRevisionId}:${ack.department_id}`
+                              }
+                              onClick={() =>
+                                handleConfirmDepartmentAck(workflowRevisionId, ack.department_id, {
+                                  notes: normalizedApprovalNote,
+                                })
+                              }
+                              style={secondaryButtonStyle}
+                            >
+                              Confirm acknowledgment for Dept {ack.department_id}
+                            </button>
+                          </PermissionGuard>
+                        ) : null
+                      )}
+                      <PermissionGuard permission={{ resource: 'document_control', action: 'publish' }} fallback={null}>
+                        <button
+                          type="button"
+                          data-testid="document-control-department-ack-remind"
+                          disabled={workflowAction === 'department_ack_remind' && workflowActionRevisionId === workflowRevisionId}
+                          onClick={() =>
+                            handleRemindOverdueDepartmentAcks(workflowRevisionId, { note: normalizedApprovalNote })
+                          }
+                          style={secondaryButtonStyle}
+                        >
+                          {workflowAction === 'department_ack_remind' && workflowActionRevisionId === workflowRevisionId
+                            ? 'Sending...'
+                            : 'Remind overdue acknowledgments'}
+                        </button>
+                      </PermissionGuard>
+                    </div>
+                  ) : null}
+                </div>
+
+                <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: 12, display: 'grid', gap: 10 }}>
+                  <div style={{ fontWeight: 700, color: '#0f172a' }}>Obsolete / Retention</div>
+                  <PermissionGuard
+                    permissionKey="canReview"
+                    fallback={<div style={{ color: '#6b7280' }}>Retention data is not visible for the current account.</div>}
+                  >
+                    {String(currentRevision.status || '') === 'effective' ? (
+                      <div style={{ display: 'grid', gap: 8 }}>
+                        <label style={labelStyle}>
+                          Obsolete reason
+                          <input
+                            data-testid="document-control-obsolete-reason"
+                            style={inputStyle}
+                            value={obsoleteReason}
+                            onChange={(event) => setObsoleteReason(event.target.value)}
+                          />
+                        </label>
+                        <label style={labelStyle}>
+                          Retention until ms
+                          <input
+                            data-testid="document-control-obsolete-retention-until-ms"
+                            style={inputStyle}
+                            value={obsoleteRetentionUntilMs}
+                            onChange={(event) => setObsoleteRetentionUntilMs(event.target.value)}
+                          />
+                        </label>
+                        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                          <PermissionGuard permission={{ resource: 'document_control', action: 'obsolete' }} fallback={null}>
+                            <button
+                              type="button"
+                              data-testid="document-control-obsolete-initiate"
+                              disabled={workflowAction === 'obsolete_initiate' && workflowActionRevisionId === workflowRevisionId}
+                              onClick={() =>
+                                handleInitiateObsolete(workflowRevisionId, {
+                                  retirementReason: obsoleteReason,
+                                  retentionUntilMs: Number(obsoleteRetentionUntilMs),
+                                  note: normalizedApprovalNote,
+                                })
+                              }
+                              style={dangerButtonStyle}
+                            >
+                              Initiate obsolete
+                            </button>
+                          </PermissionGuard>
+                          {currentRevision?.obsolete_requested_at_ms && !currentRevision?.obsolete_approved_at_ms ? (
+                            <PermissionGuard permission={{ resource: 'document_control', action: 'obsolete' }} fallback={null}>
+                              <button
+                                type="button"
+                                data-testid="document-control-obsolete-approve"
+                                disabled={workflowAction === 'obsolete_approve' && workflowActionRevisionId === workflowRevisionId}
+                                onClick={() =>
+                                  handleApproveObsolete(workflowRevisionId, {
+                                    note: normalizedApprovalNote,
+                                  })
+                                }
+                                style={secondaryButtonStyle}
+                              >
+                                Approve obsolete
+                              </button>
+                            </PermissionGuard>
+                          ) : null}
+                        </div>
+                      </div>
+                    ) : null}
+                    {String(currentRevision.status || '') !== 'obsolete' ? (
+                      <div style={{ color: '#6b7280' }}>Retention applies once a revision is obsolete.</div>
+                    ) : retentionLoading ? (
+                      <div style={{ color: '#6b7280' }}>Loading retention record...</div>
+                    ) : retentionError ? (
+                      <div style={{ color: '#9f1239' }}>{retentionError}</div>
+                    ) : retentionRecord ? (
+                      <div data-testid="document-control-retention-record" style={{ display: 'grid', gap: 6 }}>
+                        <div>Doc ID: {retentionRecord.doc_id}</div>
+                        <div>Filename: {retentionRecord.filename}</div>
+                        <div>Retention until: {retentionRecord.retention_until_ms || '-'}</div>
+                        <div>Reason: {retentionRecord.retirement_reason || '-'}</div>
+                      </div>
+                    ) : (
+                      <div style={{ color: '#6b7280' }}>No retired record found for this revision.</div>
+                    )}
+                    {String(currentRevision.status || '') === 'obsolete' ? (
+                      <div style={{ display: 'grid', gap: 8 }}>
+                        <label style={labelStyle}>
+                          Destruction confirmation notes
+                          <textarea
+                            data-testid="document-control-destruction-notes"
+                            style={{ ...inputStyle, minHeight: 72 }}
+                            value={destructionNotes}
+                            onChange={(event) => setDestructionNotes(event.target.value)}
+                          />
+                        </label>
+                        <PermissionGuard permission={{ resource: 'document_control', action: 'obsolete' }} fallback={null}>
+                          <button
+                            type="button"
+                            data-testid="document-control-destruction-confirm"
+                            disabled={workflowAction === 'destruction_confirm' && workflowActionRevisionId === workflowRevisionId}
+                            onClick={() =>
+                              handleConfirmDestruction(workflowRevisionId, {
+                                destructionNotes,
+                              })
+                            }
+                            style={dangerButtonStyle}
+                          >
+                            Confirm destruction
+                          </button>
+                        </PermissionGuard>
+                      </div>
+                    ) : null}
+                  </PermissionGuard>
+                </div>
+              </div>
+            )}
+          </section>
+
           <section style={panelStyle}>
             <h2 style={{ marginTop: 0 }}>Create Revision</h2>
             <div style={{ display: 'grid', gap: 10 }}>
@@ -390,6 +1136,7 @@ export default function DocumentControl() {
                 <input
                   data-testid="document-control-revision-file"
                   type="file"
+                  accept=".pdf,application/pdf"
                   style={inputStyle}
                   onChange={(event) =>
                     setRevisionForm((previous) => ({
@@ -431,22 +1178,12 @@ export default function DocumentControl() {
                   </div>
                   <div>Change summary: {revision.change_summary || '-'}</div>
                   <div>Path: {revision.file_path}</div>
-                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                    {(STATUS_TRANSITIONS[revision.status] || []).map((status) => (
-                      <button
-                        key={status}
-                        type="button"
-                        data-testid={`document-control-transition-${revision.controlled_revision_id}-${status}`}
-                        disabled={transitioningRevisionId === revision.controlled_revision_id}
-                        onClick={() =>
-                          handleTransitionRevision(revision.controlled_revision_id, status)
-                        }
-                        style={status === 'obsolete' ? dangerButtonStyle : secondaryButtonStyle}
-                      >
-                        Move to {status}
-                      </button>
-                    ))}
-                  </div>
+                  {revision.approval_request_id ? (
+                    <div style={{ color: '#475569' }}>
+                      Approval request: {revision.approval_request_id} · Step:{' '}
+                      {revision.current_approval_step_name || '-'}
+                    </div>
+                  ) : null}
                 </div>
               ))}
               {selectedDocument && revisions.length === 0 ? (
