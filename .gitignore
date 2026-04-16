@@ -82,8 +82,10 @@ data/restore_drills/
 data/retired_documents/
 data/tenants/
 data/backup_tmp/
+data/backups/
 data/backups_test/
 data/db_recovery_*/
+output/
 
 # Retired backend-local runtime directory
 /backend/data/
