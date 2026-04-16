@@ -39,7 +39,7 @@ const Layout = ({ children }) => {
       {isMobile && sidebarOpen ? (
         <button
           type="button"
-          aria-label="Close sidebar overlay"
+          aria-label="关闭侧边栏遮罩"
           onClick={closeSidebar}
           style={{
             position: 'fixed',

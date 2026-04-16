@@ -15,6 +15,7 @@ def ensure_document_control_tables(conn: sqlite3.Connection) -> None:
                 title TEXT NOT NULL,
                 document_type TEXT NOT NULL,
                 file_subtype TEXT,
+                usage_scope TEXT,
                 product_name TEXT,
                 registration_ref TEXT,
                 target_kb_id TEXT NOT NULL,
@@ -33,6 +34,7 @@ def ensure_document_control_tables(conn: sqlite3.Connection) -> None:
     add_column_if_missing(conn, "controlled_documents", "title TEXT")
     add_column_if_missing(conn, "controlled_documents", "document_type TEXT")
     add_column_if_missing(conn, "controlled_documents", "file_subtype TEXT")
+    add_column_if_missing(conn, "controlled_documents", "usage_scope TEXT")
     add_column_if_missing(conn, "controlled_documents", "product_name TEXT")
     add_column_if_missing(conn, "controlled_documents", "registration_ref TEXT")
     add_column_if_missing(conn, "controlled_documents", "target_kb_id TEXT")

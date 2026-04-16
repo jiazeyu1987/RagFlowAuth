@@ -33,7 +33,7 @@ const createJob = (overrides = {}) => ({
   id: 101,
   kind: 'incremental',
   status: 'completed',
-  message: 'backup finished',
+  message: '备份完成',
   progress: 100,
   package_hash: 'hash-local-101',
   output_dir: '/app/data/backups/migration_pack_20260404_120000',

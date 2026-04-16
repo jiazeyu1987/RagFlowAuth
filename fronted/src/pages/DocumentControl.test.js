@@ -374,4 +374,24 @@ describe('DocumentControl page', () => {
       'Please select a file subtype.'
     );
   });
+
+  it('disables approval submit when matrix preview reports a blocking error', async () => {
+    const user = userEvent.setup();
+    documentControlApi.previewRevisionApprovalMatrix.mockRejectedValueOnce(
+      new Error('document_control_matrix_usage_scope_required')
+    );
+
+    render(<DocumentControl />);
+
+    await screen.findByTestId('document-control-page');
+    expect(await screen.findByTestId('document-control-matrix-preview-error')).toHaveTextContent(
+      'This file subtype requires usage scope data before the approval matrix can be resolved.'
+    );
+
+    const submitButton = await screen.findByTestId('document-control-approval-submit');
+    expect(submitButton).toBeDisabled();
+
+    await user.click(submitButton);
+    expect(documentControlApi.submitRevisionForApproval).not.toHaveBeenCalled();
+  });
 });

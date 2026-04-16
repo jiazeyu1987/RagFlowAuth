@@ -174,6 +174,7 @@ export default function DocumentControl() {
     String(currentRevision?.current_approval_step_name || '').trim().toLowerCase() === 'approve'
       ? 'approve'
       : 'review';
+  const submitBlockedByMatrix = Boolean(matrixPreviewError);
 
   const pendingApproversText = React.useMemo(() => {
     const steps = Array.isArray(approvalDetail?.steps) ? approvalDetail.steps : [];
@@ -404,6 +405,20 @@ export default function DocumentControl() {
                   ))}
                 </select>
               </label>
+              <label style={labelStyle}>
+                Usage Scope
+                <input
+                  data-testid="document-control-create-usage-scope"
+                  style={inputStyle}
+                  value={documentForm.usage_scope}
+                  onChange={(event) =>
+                    setDocumentForm((previous) => ({
+                      ...previous,
+                      usage_scope: event.target.value,
+                    }))
+                  }
+                />
+              </label>
               {fileSubtypeOptionsError ? (
                 <div data-testid="document-control-file-subtype-error" style={{ color: '#9f1239' }}>
                   {fileSubtypeOptionsError}
@@ -504,6 +519,7 @@ export default function DocumentControl() {
                 </div>
                 <div>Type: {selectedDocument.document_type}</div>
                 <div>File subtype: {selectedDocument.file_subtype || '-'}</div>
+                <div>Usage scope: {selectedDocument.usage_scope || '-'}</div>
                 <div>Product: {selectedDocument.product_name || '-'}</div>
                 <div>Registration: {selectedDocument.registration_ref || '-'}</div>
                 <div>Target KB: {selectedDocument.target_kb_name || selectedDocument.target_kb_id}</div>
@@ -614,6 +630,9 @@ export default function DocumentControl() {
                           Final approval:{' '}
                           {(matrixPreview.approval_steps || []).map((item) => item.position_name).join(', ') || '-'}
                         </div>
+                        <div data-testid="document-control-matrix-preview-usage-scope">
+                          Usage scope: {matrixPreview.usage_scope || '-'}
+                        </div>
                         <div data-testid="document-control-matrix-preview-approvers">
                           Resolved approvers:{' '}
                           {[
@@ -652,10 +671,14 @@ export default function DocumentControl() {
                       <button
                         type="button"
                         data-testid="document-control-approval-submit"
-                        disabled={workflowAction === 'submit' && workflowActionRevisionId === workflowRevisionId}
+                        disabled={
+                          submitBlockedByMatrix
+                          || (workflowAction === 'submit' && workflowActionRevisionId === workflowRevisionId)
+                        }
                         onClick={() =>
                           handleSubmitRevisionForApproval(workflowRevisionId, { note: normalizedApprovalNote })
                         }
+                        title={submitBlockedByMatrix ? matrixPreviewError : undefined}
                         style={primaryButtonStyle}
                       >
                         {workflowAction === 'submit' && workflowActionRevisionId === workflowRevisionId

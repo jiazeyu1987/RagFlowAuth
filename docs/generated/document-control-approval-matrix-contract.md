@@ -32,7 +32,7 @@
 - `target_kb_id: string`
 - `product_name?: string`
 - `registration_ref?: string` 可为空；仅在矩阵命中“注册”会签条件时参与解析
-- `usage_scope?: string` 当前业务字段尚未进入文控表单；对于 HTML 备注为“根据使用区域”的文件小类，后端会先失败并提示缺少该前提
+- `usage_scope?: string` 已进入文控创建表单；对于矩阵 JSON 备注为“根据使用区域”的文件小类，提交审批前必须提供该字段，否则后端会直接失败提示缺少前提
 - `change_summary?: string`
 - `file: binary`
 
@@ -297,5 +297,5 @@
 
 - 当前自动审批链只会执行矩阵中的 `●`
 - `○` 仅保留在快照里，不会自动进入审批链
-- “根据使用区域”当前只保留在快照里，不驱动自动分支
+- “根据使用区域”当前由矩阵 JSON 的 `备注` 字段驱动；缺少 `usage_scope` 时会直接报错，不再依赖 HTML 元数据
 - “注册针对注册产品进行会签”当前以 `registration_ref` 是否为空作为触发条件

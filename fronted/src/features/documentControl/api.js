@@ -46,6 +46,7 @@ const buildDocumentFormData = (payload = {}) => {
   appendIfPresent(formData, 'title', payload.title);
   appendIfPresent(formData, 'document_type', payload.document_type);
   appendIfPresent(formData, 'file_subtype', payload.file_subtype);
+  appendIfPresent(formData, 'usage_scope', payload.usage_scope);
   appendIfPresent(formData, 'target_kb_id', payload.target_kb_id);
   appendIfPresent(formData, 'product_name', payload.product_name);
   appendIfPresent(formData, 'registration_ref', payload.registration_ref);

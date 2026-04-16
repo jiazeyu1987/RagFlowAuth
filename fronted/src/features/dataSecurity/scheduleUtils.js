@@ -1,4 +1,4 @@
-// 将cron表达式转换为UI状态对象
+// 将 cron 表达式转换为界面状态对象
 export function cronToSchedule(cronStr) {
   if (!cronStr) return { type: 'daily', hour: '18', minute: '30' };
 
@@ -20,7 +20,7 @@ export function cronToSchedule(cronStr) {
   return null;
 }
 
-// 将UI状态对象转换为cron表达式
+// 将界面状态对象转换为 cron 表达式
 export function scheduleToCron(schedule) {
   if (schedule.type === 'daily') {
     return `${schedule.minute} ${schedule.hour} * * *`;

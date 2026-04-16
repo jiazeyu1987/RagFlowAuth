@@ -3,13 +3,13 @@ export const authBackendUrl = (path) => {
   const normalizedConfigured =
     configured && configured.endsWith('/') ? configured.slice(0, -1) : configured;
 
-  // Dev default: use the CRA proxy so browser requests stay same-origin.
+  // 开发环境默认使用 CRA 代理，保持浏览器请求同源。
   if (process.env.NODE_ENV !== 'production') {
     if (!normalizedConfigured) return path;
     return `${normalizedConfigured}${path}`;
   }
 
-  // Production default: same-origin (recommended when served behind Nginx reverse proxy).
+  // 生产环境默认保持同源，适用于经 Nginx 反向代理提供服务的场景。
   if (!normalizedConfigured) return path;
   return `${normalizedConfigured}${path}`;
 };

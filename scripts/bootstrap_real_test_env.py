@@ -27,6 +27,7 @@ from backend.database.tenant_paths import resolve_tenant_auth_db_path
 from backend.models.user import UserCreate, UserUpdate
 from backend.runtime.runner import ensure_database
 from backend.services.ragflow_config import is_placeholder_api_key
+from backend.services.quality_system_config import QualitySystemConfigService
 from backend.services.training_compliance import TrainingComplianceError
 
 
@@ -49,6 +50,19 @@ VIEWER_GROUP_NAME = "e2e_scope_viewer"
 REVIEWER_GROUP_NAME = "e2e_scope_reviewer"
 UPLOADER_GROUP_NAME = "e2e_scope_uploader"
 OPERATOR_GROUP_NAME = "e2e_scope_operator"
+
+QUALITY_SYSTEM_POSITION_ASSIGNMENT_SEED = (
+    ("\u9879\u76ee\u8d1f\u8d23\u4eba", "operator"),
+    ("\u6307\u5b9a\u4eba\u5458", "sub_admin"),
+    ("QA", "reviewer"),
+    ("QMS", "operator"),
+    ("\u6ce8\u518c", "reviewer"),
+    ("\u6587\u6863\u7ba1\u7406\u5458", "sub_admin"),
+    ("\u7f16\u5236\u90e8\u95e8\u8d1f\u8d23\u4eba\u6216\u6388\u6743\u4ee3\u8868", "operator"),
+    ("\u8bbe\u5907\u4eba\u5458", "sub_admin"),
+    ("QC", "sub_admin"),
+    ("\u68c0\u6d4b\u4e2d\u5fc3", "sub_admin"),
+)
 
 
 @dataclass(frozen=True)
@@ -212,6 +226,38 @@ def _build_users(config: BootstrapConfig) -> dict[str, EnvUserSpec]:
             password=config.uploader_password,
         ),
     }
+
+
+def _seed_quality_system_assignments(
+    *,
+    db_path: Path,
+    user_store: Any,
+    org_structure_manager: Any,
+    actor_user: Any,
+    user_lookup: dict[str, Any],
+) -> dict[str, list[str]]:
+    service = QualitySystemConfigService(
+        db_path=str(db_path),
+        user_store=user_store,
+        org_structure_manager=org_structure_manager,
+        audit_log_manager=None,
+    )
+    config = service.get_config()
+    positions = {str(item["name"]): item for item in (config.get("positions") or [])}
+    applied: dict[str, list[str]] = {}
+    for position_name, user_key in QUALITY_SYSTEM_POSITION_ASSIGNMENT_SEED:
+        position = positions.get(position_name)
+        user = user_lookup.get(user_key)
+        if not position or user is None:
+            continue
+        service.update_position_assignments(
+            position_id=int(position["id"]),
+            user_ids=[str(user.user_id)],
+            change_reason="bootstrap_real_test_env_seed",
+            actor_user=actor_user,
+        )
+        applied[position_name] = [str(user.user_id)]
+    return applied
 
 
 def _clear_user_scope_fields(user_store: Any, *, user_id: str) -> None:
@@ -1481,6 +1527,21 @@ def bootstrap_real_test_env(config: BootstrapConfig) -> dict[str, Any]:
         reviewer_user_id=reviewer_user.user_id,
     )
 
+    quality_system_seed_assignments = _seed_quality_system_assignments(
+        db_path=Path(global_db_path),
+        user_store=global_deps.user_store,
+        org_structure_manager=global_deps.org_structure_manager,
+        actor_user=admin_user,
+        user_lookup={
+            "admin": admin_user,
+            "sub_admin": sub_admin_user,
+            "operator": operator_user,
+            "reviewer": reviewer_user,
+            "viewer": viewer_user,
+            "uploader": uploader_user,
+        },
+    )
+
     return {
         "org": {
             "summary": org_summary,
@@ -1544,6 +1605,9 @@ def bootstrap_real_test_env(config: BootstrapConfig) -> dict[str, Any]:
             },
         },
         "operation_workflows": workflows,
+        "quality_system": {
+            "seed_assignments": quality_system_seed_assignments,
+        },
         "paths": {
             "global_db_path": str(Path(global_db_path).resolve()),
             "tenant_db_path": str(Path(tenant_db_path).resolve()),

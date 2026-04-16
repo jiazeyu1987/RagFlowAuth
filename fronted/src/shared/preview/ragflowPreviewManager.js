@@ -4,18 +4,18 @@ import { excelBlobToSheetsHtml, isExcelFilename } from './excelPreview';
 const isDocxFilename = (name) => String(name || '').toLowerCase().endsWith('.docx');
 
 /**
- * Unifies the "view/preview" flow for both Ragflow and local Knowledge documents.
+ * 统一 Ragflow 文档与本地知识库文档的查看/预览流程。
  *
- * Contract:
+ * 约定：
  * - getPreviewJson: ({ docId, dataset }) -> { type, filename, content, ... }
- * - getDownloadBlob: ({ docId, dataset, filename }) -> Blob (original file bytes)
+ * - getDownloadBlob: ({ docId, dataset, filename }) -> Blob（原始文件字节）
  *
- * Returns an object that callers can render by `type`:
+ * 返回值按 `type` 供调用方渲染：
  * - excel: { type:'excel', filename, sheets, docId, dataset }
  * - docx:  { type:'docx', filename, html, docId, dataset }
- * - passthrough preview json for other types (text/image/pdf/html/unsupported...)
+ * - 其他类型直接透传预览结果（如 text/image/pdf/html/unsupported）
  *
- * Note: `dataset` is optional for Knowledge docs; it will be ignored by callers if not needed.
+ * 说明：知识库文档的 `dataset` 为可选字段，调用方在不需要时会忽略它。
  */
 export const loadDocumentPreview = async ({ docId, dataset, title, getPreviewJson, getDownloadBlob }) => {
   const t0 = (typeof performance !== 'undefined' ? performance.now() : Date.now());
@@ -25,21 +25,21 @@ export const loadDocumentPreview = async ({ docId, dataset, title, getPreviewJso
     // eslint-disable-next-line no-console
     console.info('[PreviewTrace][Manager]', step, { docId, dataset, title, elapsedMs, ...extra });
   };
-  if (!docId) throw new Error('Missing document id; cannot preview.');
-  if (typeof getPreviewJson !== 'function') throw new Error('getPreviewJson is required');
+  if (!docId) throw new Error('缺少文档 ID，无法预览。');
+  if (typeof getPreviewJson !== 'function') throw new Error('必须提供 getPreviewJson 方法。');
 
   mark('getPreviewJson:start');
   const data = await getPreviewJson({ docId, dataset });
   mark('getPreviewJson:done', { type: data?.type, filename: data?.filename, sourceFilename: data?.source_filename });
-  // Some backends may return `filename` as the rendered filename (e.g. *.html),
-  // and keep the original as `source_filename`. Prefer the original for type detection.
+  // 某些后端会把 `filename` 返回为渲染后的文件名（如 *.html），
+  // 并把原始文件名保存在 `source_filename` 中。类型识别优先使用原始文件名。
   const resolvedName = String(data?.source_filename || data?.filename || title || '');
 
-  // If the current user doesn't have download permission, we must not call the download endpoint.
-  // In that case rely on the backend preview response (which may convert to HTML).
+  // 当前用户若没有下载权限，就不能调用下载接口。
+  // 此时依赖后端返回的预览结果（后端可能已转成 HTML）。
   const canUseDownload = typeof getDownloadBlob === 'function';
 
-  // Prefer backend-provided Excel preview payload to avoid an extra download round-trip.
+  // 优先复用后端提供的 Excel 预览数据，避免额外下载一次。
   if (isExcelFilename(resolvedName) && data?.type === 'excel' && data?.sheets) {
     mark('excelPassthrough:done', { sheetCount: Object.keys(data.sheets || {}).length });
     return { ...(data || {}), filename: String(data?.filename || title || resolvedName), docId, dataset };
@@ -68,5 +68,5 @@ export const loadDocumentPreview = async ({ docId, dataset, title, getPreviewJso
   return { ...(data || {}), filename: String(data?.filename || title || resolvedName) };
 };
 
-// Backward compatible alias (older code imports this name).
+// 向后兼容的别名（旧代码仍在使用这个导出名）。
 export const loadRagflowPreview = loadDocumentPreview;

@@ -92,7 +92,7 @@ export default function ChangeControl({ onReturnToQualitySystem }) {
   return (
     <div data-testid="change-control-page" style={{ display: 'grid', gap: 16, padding: 20, background: '#f8fafc' }}>
       <div style={{ ...panelStyle, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <h2 style={{ margin: 0 }}>Change Control Ledger (WS04)</h2>
+        <h2 style={{ margin: 0 }}>变更控制台账（WS04）</h2>
         <div style={{ display: 'flex', gap: 8 }}>
           {typeof onReturnToQualitySystem === 'function' ? (
             <button
@@ -101,17 +101,17 @@ export default function ChangeControl({ onReturnToQualitySystem }) {
               style={buttonStyle}
               onClick={onReturnToQualitySystem}
             >
-              Return to quality system
+              返回质量体系
             </button>
           ) : null}
           <button
             type="button"
             data-testid="change-control-dispatch-reminder"
             style={buttonStyle}
-            onClick={() => runAction(() => changeControlApi.dispatchReminders(7), 'Reminder dispatched')}
+            onClick={() => runAction(() => changeControlApi.dispatchReminders(7), '已发送提醒')}
             disabled={working}
           >
-            Dispatch due reminders
+            发送到期提醒
           </button>
         </div>
       </div>
@@ -128,33 +128,33 @@ export default function ChangeControl({ onReturnToQualitySystem }) {
       ) : null}
 
       <section style={panelStyle}>
-        <h3 style={{ marginTop: 0 }}>Create change request</h3>
+        <h3 style={{ marginTop: 0 }}>新建变更申请</h3>
         <div style={{ display: 'grid', gap: 10, gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' }}>
           <input
             data-testid="change-control-create-title"
             style={inputStyle}
-            placeholder="Title"
+            placeholder="标题"
             value={createForm.title}
             onChange={(event) => setCreateForm((prev) => ({ ...prev, title: event.target.value }))}
           />
           <input
             data-testid="change-control-create-reason"
             style={inputStyle}
-            placeholder="Reason"
+            placeholder="变更原因"
             value={createForm.reason}
             onChange={(event) => setCreateForm((prev) => ({ ...prev, reason: event.target.value }))}
           />
           <input
             data-testid="change-control-create-owner-user-id"
             style={inputStyle}
-            placeholder="Owner user_id"
+            placeholder="责任人编号"
             value={createForm.owner_user_id}
             onChange={(event) => setCreateForm((prev) => ({ ...prev, owner_user_id: event.target.value }))}
           />
           <input
             data-testid="change-control-create-evaluator-user-id"
             style={inputStyle}
-            placeholder="Evaluator user_id"
+            placeholder="评估人编号"
             value={createForm.evaluator_user_id}
             onChange={(event) => setCreateForm((prev) => ({ ...prev, evaluator_user_id: event.target.value }))}
           />
@@ -176,17 +176,17 @@ export default function ChangeControl({ onReturnToQualitySystem }) {
               });
               setCreateForm(initialCreateForm);
               setSelectedRequestId(created.request_id);
-            }, 'Change request created')
+            }, '变更申请已创建')
           }
         >
-          Create
+          创建
         </button>
       </section>
 
       <section style={panelStyle}>
-        <h3 style={{ marginTop: 0 }}>Requests</h3>
-        {loading ? <div data-testid="change-control-loading">Loading...</div> : null}
-        {!loading && requests.length === 0 ? <div data-testid="change-control-empty">No requests</div> : null}
+        <h3 style={{ marginTop: 0 }}>申请列表</h3>
+        {loading ? <div data-testid="change-control-loading">加载中...</div> : null}
+        {!loading && requests.length === 0 ? <div data-testid="change-control-empty">暂无申请</div> : null}
         <div style={{ display: 'grid', gap: 10 }}>
           {requests.map((item) => (
             <div
@@ -209,7 +209,7 @@ export default function ChangeControl({ onReturnToQualitySystem }) {
                 style={{ ...buttonStyle, marginTop: 8 }}
                 onClick={() => setSelectedRequestId(item.request_id)}
               >
-                Select
+                选择
               </button>
             </div>
           ))}
@@ -227,12 +227,12 @@ export default function ChangeControl({ onReturnToQualitySystem }) {
               disabled={working}
               onClick={() =>
                 runAction(
-                  () => changeControlApi.evaluateRequest(selectedRequest.request_id, { evaluation_summary: 'risk reviewed' }),
-                  'Request evaluated'
+                  () => changeControlApi.evaluateRequest(selectedRequest.request_id, { evaluation_summary: '已完成风险评估' }),
+                  '已完成评估'
                 )
               }
             >
-              Evaluate
+              评估
             </button>
             <button
               type="button"
@@ -243,15 +243,15 @@ export default function ChangeControl({ onReturnToQualitySystem }) {
                 runAction(
                   () =>
                     changeControlApi.createPlanItem(selectedRequest.request_id, {
-                      title: 'Execute controlled update',
+                      title: '执行受控变更',
                       assignee_user_id: selectedRequest.owner_user_id,
                       due_date: '2026-04-21',
                     }),
-                  'Plan item added'
+                  '已新增计划项'
                 )
               }
             >
-              Add plan item
+              新增计划项
             </button>
             <button
               type="button"

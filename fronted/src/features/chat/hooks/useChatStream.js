@@ -126,9 +126,9 @@ export const useChatStream = ({
 
     try {
       if (isFirstUserMessage) {
-        // Do not block first-turn completion on session rename.
+        // 首轮发送时不等待会话重命名完成。
         Promise.resolve(autoRenameSessionByFirstQuestion(question)).catch(() => {
-          // Ignore rename failures/delay and keep chat streaming path responsive.
+          // 忽略重命名失败或延迟，优先保证对话流式返回。
         });
       }
 

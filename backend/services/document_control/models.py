@@ -72,6 +72,7 @@ class ControlledDocument:
     title: str
     document_type: str
     file_subtype: str | None
+    usage_scope: str | None
     product_name: str | None
     registration_ref: str | None
     target_kb_id: str

@@ -47,6 +47,7 @@ from backend.services.ragflow_service import RagflowService
 from backend.services.search_config_store import SearchConfigStore
 from backend.services.supplier_qualification import SupplierQualificationService
 from backend.services.training_compliance import TrainingComplianceService
+from backend.services.quality_system_config import QualitySystemConfigService
 from backend.services.upload_settings_store import UploadSettingsStore
 from backend.services.users.store import UserStore
 from backend.services.users.tool_permission_store import UserToolPermissionStore
@@ -105,6 +106,7 @@ class AppDependencies:
     user_inbox_service: UserInboxService | None = None
     operation_approval_service: OperationApprovalService | None = None
     watermark_policy_store: WatermarkPolicyStore | None = None
+    quality_system_config_service: QualitySystemConfigService | None = None
 
 
 @dataclass(frozen=True)
@@ -376,8 +378,7 @@ class DependencyFactory:
             user_inbox_service=user_inbox_service,
         )
 
-    @staticmethod
-    def _package_app_dependencies(runtime: _SharedRuntime) -> AppDependencies:
+    def _package_app_dependencies(self, runtime: _SharedRuntime) -> AppDependencies:
         return AppDependencies(
             user_store=runtime.user_store,
             kb_store=runtime.kb_store,
@@ -429,6 +430,12 @@ class DependencyFactory:
             user_inbox_service=runtime.user_inbox_service,
             operation_approval_service=None,
             watermark_policy_store=runtime.watermark_policy_store,
+            quality_system_config_service=QualitySystemConfigService(
+                db_path=str(self._paths.operation_approval_db_path),
+                user_store=runtime.user_store,
+                org_structure_manager=runtime.org_structure_manager,
+                audit_log_manager=runtime.audit_log_manager,
+            ),
         )
 
     def _build_operation_approval_dependencies(

@@ -120,7 +120,7 @@ export const useChatSessions = ({ restoreSourcesIntoMessages }) => {
   const createSession = useCallback(async () => {
     if (!selectedChatId) return;
     try {
-      // Invalidate in-flight list responses that started before this create.
+      // 创建会话前使较早发起的列表请求失效，避免旧结果覆盖新状态。
       fetchSessionsRequestRef.current += 1;
       const sessionName = '\u65b0\u5bf9\u8bdd';
       const session = await chatApi.createChatSession(selectedChatId, sessionName);
@@ -192,7 +192,7 @@ export const useChatSessions = ({ restoreSourcesIntoMessages }) => {
         await chatApi.renameChatSession(selectedChatId, selectedSessionId, newName);
         setSessions((prev) => prev.map((s) => (s.id === selectedSessionId ? { ...s, name: newName } : s)));
       } catch {
-        // Keep chat flow uninterrupted when rename fails.
+        // 重命名失败时不打断当前对话流程。
       }
     },
     [buildSessionNameFromQuestion, isAutoSessionName, selectedChatId, selectedSessionId, sessions]

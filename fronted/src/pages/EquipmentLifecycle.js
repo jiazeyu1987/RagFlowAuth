@@ -195,7 +195,7 @@ export default function EquipmentLifecycle() {
           <input
             data-testid="equipment-create-owner-user-id"
             style={inputStyle}
-            placeholder="责任人 user_id"
+            placeholder="责任人编号"
             value={createForm.owner_user_id}
             onChange={(event) => setCreateForm((p) => ({ ...p, owner_user_id: event.target.value }))}
           />
@@ -216,14 +216,14 @@ export default function EquipmentLifecycle() {
           <input
             data-testid="equipment-create-purchase-date"
             style={inputStyle}
-            placeholder="采购日期 YYYY-MM-DD"
+            placeholder="采购日期（年-月-日）"
             value={createForm.purchase_date}
             onChange={(event) => setCreateForm((p) => ({ ...p, purchase_date: event.target.value }))}
           />
           <input
             data-testid="equipment-create-retirement-due-date"
             style={inputStyle}
-            placeholder="报废节点 YYYY-MM-DD"
+            placeholder="报废日期（年-月-日）"
             value={createForm.retirement_due_date}
             onChange={(event) =>
               setCreateForm((p) => ({ ...p, retirement_due_date: event.target.value }))
@@ -232,7 +232,7 @@ export default function EquipmentLifecycle() {
           <input
             data-testid="equipment-create-metrology-due-date"
             style={inputStyle}
-            placeholder="下次计量 YYYY-MM-DD"
+            placeholder="下次计量日期（年-月-日）"
             value={createForm.next_metrology_due_date}
             onChange={(event) =>
               setCreateForm((p) => ({ ...p, next_metrology_due_date: event.target.value }))
@@ -241,7 +241,7 @@ export default function EquipmentLifecycle() {
           <input
             data-testid="equipment-create-maintenance-due-date"
             style={inputStyle}
-            placeholder="下次维护 YYYY-MM-DD"
+            placeholder="下次维护日期（年-月-日）"
             value={createForm.next_maintenance_due_date}
             onChange={(event) =>
               setCreateForm((p) => ({ ...p, next_maintenance_due_date: event.target.value }))

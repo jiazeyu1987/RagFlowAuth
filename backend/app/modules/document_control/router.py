@@ -57,19 +57,6 @@ class DocumentControlWorkflowRequest(BaseModel):
     steps: list[DocumentControlWorkflowStepRequest]
 
 
-class DocumentControlWorkflowStepRequest(BaseModel):
-    step_type: str
-    approval_rule: str
-    approver_user_ids: list[str]
-    timeout_reminder_minutes: int
-    member_source: str | None = None
-
-
-class DocumentControlWorkflowRequest(BaseModel):
-    name: str | None = None
-    steps: list[DocumentControlWorkflowStepRequest]
-
-
 def _service(ctx: AuthContextDep) -> DocumentControlService:
     return DocumentControlService.from_deps(ctx.deps)
 
@@ -128,11 +115,6 @@ def _required_action_for_step(step_name: str | None) -> str:
     return "review"
 
 
-def _assert_admin(ctx: AuthContextDep) -> None:
-    if not bool(getattr(ctx.snapshot, "is_admin", False)):
-        raise HTTPException(status_code=403, detail="admin_required")
-
-
 @router.get("/quality-system/doc-control/documents")
 def list_controlled_documents(
     ctx: AuthContextDep,
@@ -175,37 +157,6 @@ def get_controlled_document(controlled_document_id: str, ctx: AuthContextDep):
         if document.target_kb_id not in allowed and (document.target_kb_name or "") not in allowed:
             raise HTTPException(status_code=403, detail="document_control_access_denied")
     return {"document": document.as_dict()}
-
-
-@router.get("/quality-system/doc-control/workflows")
-def list_document_control_workflows(ctx: AuthContextDep):
-    _assert_admin(ctx)
-    items = _service(ctx).list_document_type_workflows()
-    return {"items": items, "count": len(items)}
-
-
-@router.get("/quality-system/doc-control/workflows/{document_type}")
-def get_document_control_workflow(document_type: str, ctx: AuthContextDep):
-    _assert_admin(ctx)
-    try:
-        workflow = _service(ctx).get_document_type_workflow(document_type=document_type)
-    except DocumentControlError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
-    return {"workflow": workflow}
-
-
-@router.put("/quality-system/doc-control/workflows/{document_type}")
-def upsert_document_control_workflow(document_type: str, body: DocumentControlWorkflowRequest, ctx: AuthContextDep):
-    _assert_admin(ctx)
-    try:
-        workflow = _service(ctx).upsert_document_type_workflow(
-            document_type=document_type,
-            name=body.name,
-            steps=[item.model_dump() for item in body.steps],
-        )
-    except DocumentControlError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
-    return {"workflow": workflow}
 
 
 @router.get("/quality-system/doc-control/workflows")
@@ -297,6 +248,7 @@ def create_controlled_document(
     title: str = Form(...),
     document_type: str = Form(...),
     file_subtype: str | None = Form(None),
+    usage_scope: str | None = Form(None),
     target_kb_id: str = Form(...),
     product_name: str = Form(...),
     registration_ref: str | None = Form(None),
@@ -311,6 +263,7 @@ def create_controlled_document(
             title=title,
             document_type=document_type,
             file_subtype=file_subtype,
+            usage_scope=usage_scope,
             target_kb_id=target_kb_id,
             created_by=str(ctx.payload.sub),
             upload_file=file,

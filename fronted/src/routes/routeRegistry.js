@@ -195,7 +195,7 @@ export const APP_ROUTES = [
   {
     path: '/tools/nmpa',
     component: NMPATool,
-    title: 'NMPA',
+    title: '国家药监局',
     guard: { permission: { resource: 'tools', action: 'view', target: 'nmpa' } },
   },
   {

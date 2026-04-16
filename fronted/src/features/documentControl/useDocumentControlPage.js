@@ -19,6 +19,7 @@ const DEFAULT_DOCUMENT_FORM = {
   title: '',
   document_type: '',
   file_subtype: '',
+  usage_scope: '',
   target_kb_id: '',
   product_name: '',
   registration_ref: '',
@@ -222,7 +223,7 @@ export default function useDocumentControlPage({ text = DEFAULT_TEXT, mapErrorMe
 
   useEffect(() => {
     loadDocuments({ nextFilters: DEFAULT_FILTERS });
-    // Initial load only; later refreshes are explicit via search or mutations.
+    // 仅在初始化时自动加载，后续刷新通过搜索或操作显式触发。
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -699,6 +700,10 @@ export default function useDocumentControlPage({ text = DEFAULT_TEXT, mapErrorMe
   const handleSubmitRevisionForApproval = useCallback(
     async (controlledRevisionId, { note } = {}) => {
       resetMessages();
+      if (matrixPreviewError) {
+        setError(matrixPreviewError);
+        return null;
+      }
       startWorkflowAction('submit', controlledRevisionId);
       try {
         const document = await documentControlApi.submitRevisionForApproval(controlledRevisionId, {
@@ -720,6 +725,7 @@ export default function useDocumentControlPage({ text = DEFAULT_TEXT, mapErrorMe
     [
       commitWorkflowDocument,
       mapErrorMessage,
+      matrixPreviewError,
       resetMessages,
       resolvedText.submitApprovalError,
       resolvedText.submitApprovalSuccess,

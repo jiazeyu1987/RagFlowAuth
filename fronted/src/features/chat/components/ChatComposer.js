@@ -71,7 +71,7 @@ export default function ChatComposer({
         onChange={(e) => setInputMessage(e.target.value)}
         onKeyDown={onKeyPress}
         data-testid="chat-input"
-        placeholder="输入消息...（回车发送，Shift+回车换行）"
+        placeholder="输入消息（回车发送，使用组合键换行）"
         style={{
           flex: 1,
           width: '100%',

@@ -131,7 +131,7 @@ adminTest('document control shows matrix missing preview error @regression @docs
 });
 
 
-adminTest('document control shows usage scope required preview error for html remark branch @regression @docs', async ({ page }) => {
+adminTest('document control blocks approval submit when matrix remark requires usage scope @regression @docs', async ({ page }) => {
   await mockBase(page);
   await page.route('**/api/quality-system/doc-control/documents?**', async (route) => {
     if (route.request().method() !== 'GET') return route.fallback();
@@ -191,4 +191,5 @@ adminTest('document control shows usage scope required preview error for html re
   await expect(page.getByTestId('document-control-matrix-preview-error')).toContainText(
     'This file subtype requires usage scope data before the approval matrix can be resolved.'
   );
+  await expect(page.getByTestId('document-control-approval-submit')).toBeDisabled();
 });

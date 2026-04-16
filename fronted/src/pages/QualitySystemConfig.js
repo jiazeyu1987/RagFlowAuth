@@ -85,27 +85,27 @@ export default function QualitySystemConfig() {
   } = useQualitySystemConfigPage();
 
   const handleSaveAssignments = async (positionId) => {
-    const changeReason = window.prompt('Please enter the reason for this assignment change.');
+    const changeReason = window.prompt('请输入本次岗位分配变更原因。');
     if (changeReason === null) return;
     await saveAssignments(positionId, changeReason);
   };
 
   const handleCreateCategory = async () => {
-    const changeReason = window.prompt('Please enter the reason for this file category change.');
+    const changeReason = window.prompt('请输入本次文件小类变更原因。');
     if (changeReason === null) return;
     await createCategory(changeReason);
   };
 
   const handleDeactivateCategory = async (category) => {
-    const confirmed = window.confirm(`Remove "${String(category?.name || '')}" from the active list?`);
+    const confirmed = window.confirm(`确认将“${String(category?.name || '')}”移出启用列表吗？`);
     if (!confirmed) return;
-    const changeReason = window.prompt('Please enter the reason for removing this file category.');
+    const changeReason = window.prompt('请输入停用该文件小类的原因。');
     if (changeReason === null) return;
     await deactivateCategory(category.id, changeReason);
   };
 
   if (loading) {
-    return <div style={{ padding: '12px' }}>Loading quality system configuration...</div>;
+    return <div style={{ padding: '12px' }}>正在加载体系配置...</div>;
   }
 
   return (
@@ -219,7 +219,7 @@ export default function QualitySystemConfig() {
                       }}
                       data-testid={`quality-system-config-position-save-${position.id}`}
                     >
-                      {savingAssignments[position.id] ? 'Saving...' : TEXT.saveAssignments}
+                      {savingAssignments[position.id] ? '保存中...' : TEXT.saveAssignments}
                     </button>
                   </div>
 
@@ -249,7 +249,7 @@ export default function QualitySystemConfig() {
             <input
               value={categoryName}
               onChange={(event) => setCategoryName(event.target.value)}
-              placeholder="Add a new file category"
+              placeholder="新增文件小类"
               data-testid="quality-system-config-category-input"
               style={{
                 width: '100%',
@@ -274,7 +274,7 @@ export default function QualitySystemConfig() {
                 fontWeight: 700,
               }}
             >
-              {categorySubmitting ? 'Saving...' : TEXT.addCategory}
+              {categorySubmitting ? '保存中...' : TEXT.addCategory}
             </button>
           </div>
 

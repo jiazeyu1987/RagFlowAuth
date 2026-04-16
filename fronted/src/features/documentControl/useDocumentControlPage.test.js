@@ -317,6 +317,7 @@ describe('useDocumentControlPage', () => {
         title: 'Controlled SRS',
         document_type: 'srs',
         file_subtype: '设计验证方案/报告',
+        usage_scope: 'EU',
         target_kb_id: 'Quality KB',
         product_name: 'Product B',
         file: new File(['hello'], 'srs.md', { type: 'text/markdown' }),
@@ -326,7 +327,11 @@ describe('useDocumentControlPage', () => {
     await act(async () => {
       await result.current.handleCreateDocument();
     });
-    expect(documentControlApi.createDocument).toHaveBeenCalled();
+    expect(documentControlApi.createDocument).toHaveBeenCalledWith(
+      expect.objectContaining({
+        usage_scope: 'EU',
+      })
+    );
     expect(result.current.success).toBe('Controlled document created');
 
     act(() => {
@@ -413,6 +418,26 @@ describe('useDocumentControlPage', () => {
       department_ids: [10],
     });
     expect(result.current.success).toBe('Training gate saved');
+  });
+
+  it('blocks approval submission when matrix preview has unresolved errors', async () => {
+    documentControlApi.previewRevisionApprovalMatrix.mockRejectedValueOnce(
+      new Error('document_control_matrix_usage_scope_required')
+    );
+
+    const { result } = renderHook(() => useDocumentControlPage());
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    await waitFor(() =>
+      expect(result.current.matrixPreviewError).toBe('document_control_matrix_usage_scope_required')
+    );
+
+    await act(async () => {
+      await result.current.handleSubmitRevisionForApproval('rev-1');
+    });
+
+    expect(documentControlApi.submitRevisionForApproval).not.toHaveBeenCalled();
+    expect(result.current.error).toBe('document_control_matrix_usage_scope_required');
   });
 
   it('derives workflow workspace state for training, department acks, and retention', async () => {

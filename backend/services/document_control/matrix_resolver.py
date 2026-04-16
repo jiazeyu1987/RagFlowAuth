@@ -11,6 +11,7 @@ _KEY_FILE_SUBTYPE = "文件小类"
 _KEY_COMPILER = "编制"
 _KEY_SIGNOFF = "审核会签"
 _KEY_APPROVER = "批准"
+_KEY_REMARK = "备注"
 
 _MARK_REQUIRED = "●"
 _MARK_OPTIONAL = "○"
@@ -111,6 +112,9 @@ class DocumentApprovalMatrixEntry:
         compiler_position = str(payload.get(_KEY_COMPILER) or "").strip()
         approver_position = str(payload.get(_KEY_APPROVER) or "").strip()
         signoff_marks = payload.get(_KEY_SIGNOFF)
+        if _KEY_REMARK not in payload:
+            raise DocumentControlMatrixResolverError("document_control_matrix_remark_missing", status_code=500)
+        remark_value = payload.get(_KEY_REMARK)
         if not file_subtype:
             raise DocumentControlMatrixResolverError("document_control_matrix_file_subtype_invalid", status_code=500)
         if not compiler_position:
@@ -119,6 +123,8 @@ class DocumentApprovalMatrixEntry:
             raise DocumentControlMatrixResolverError("document_control_matrix_approver_position_invalid", status_code=500)
         if not isinstance(signoff_marks, dict):
             raise DocumentControlMatrixResolverError("document_control_matrix_signoff_invalid", status_code=500)
+        if remark_value is not None and not isinstance(remark_value, str):
+            raise DocumentControlMatrixResolverError("document_control_matrix_remark_invalid", status_code=500)
         normalized_marks = {
             str(key or "").strip(): str(value or "").strip()
             for key, value in signoff_marks.items()
@@ -129,7 +135,7 @@ class DocumentApprovalMatrixEntry:
             compiler_position=compiler_position,
             signoff_marks=normalized_marks,
             approver_position=approver_position,
-            remark=None,
+            remark=(str(remark_value or "").strip() or None),
         )
 
 
@@ -138,17 +144,11 @@ class DocumentControlMatrixResolver:
         self,
         *,
         matrix_json_path: str | Path | None = None,
-        matrix_html_path: str | Path | None = None,
     ) -> None:
         self._matrix_json_path = (
             Path(matrix_json_path)
             if matrix_json_path is not None
             else Path(__file__).resolve().parents[3] / "docs" / "generated" / "document-approval-matrix.json"
-        )
-        self._matrix_html_path = (
-            Path(matrix_html_path)
-            if matrix_html_path is not None
-            else Path(__file__).resolve().parents[3] / "docs" / "generated" / "document-approval-matrix.html"
         )
 
     def load_entries(self) -> list[DocumentApprovalMatrixEntry]:
@@ -161,13 +161,7 @@ class DocumentControlMatrixResolver:
             raise DocumentControlMatrixResolverError("document_control_matrix_invalid", status_code=500) from exc
         if not isinstance(payload, list):
             raise DocumentControlMatrixResolverError("document_control_matrix_invalid", status_code=500)
-        entries = [DocumentApprovalMatrixEntry.from_dict(item) for item in payload]
-        metadata_by_file = self._load_html_metadata_by_file()
-        for entry in entries:
-            metadata = metadata_by_file.get(entry.file_subtype)
-            if metadata:
-                entry.remark = metadata.get("remark") or None
-        return entries
+        return [DocumentApprovalMatrixEntry.from_dict(item) for item in payload]
 
     @staticmethod
     def build_position_assignment_index(positions: list[dict[str, Any]] | None) -> dict[str, list[MatrixApprover]]:
@@ -480,27 +474,3 @@ class DocumentControlMatrixResolver:
                 merged.append(approver)
                 seen_user_ids.add(approver.user_id)
         return merged
-
-    def _load_html_metadata_by_file(self) -> dict[str, dict[str, str]]:
-        path = self._matrix_html_path
-        if not path.exists():
-            return {}
-        try:
-            text = path.read_text(encoding="utf-8")
-        except Exception:  # noqa: BLE001
-            return {}
-        pattern = re.compile(
-            r'file:\s*"(?P<file>[^"]+)"[\s\S]*?compiler:\s*"(?P<compiler>[^"]*)"[\s\S]*?approver:\s*"(?P<approver>[^"]*)"[\s\S]*?remark:\s*"(?P<remark>[^"]*)"',
-            re.MULTILINE,
-        )
-        metadata: dict[str, dict[str, str]] = {}
-        for match in pattern.finditer(text):
-            file_name = str(match.group("file") or "").strip()
-            if not file_name:
-                continue
-            metadata[file_name] = {
-                "compiler": str(match.group("compiler") or "").strip(),
-                "approver": str(match.group("approver") or "").strip(),
-                "remark": str(match.group("remark") or "").strip(),
-            }
-        return metadata

@@ -436,13 +436,13 @@ export default function BatchRecordsWorkspace() {
                 style={INPUT_STYLE}
                 value={createTemplateForm.template_code}
                 onChange={(e) => setCreateTemplateForm((prev) => ({ ...prev, template_code: e.target.value }))}
-                placeholder="template_code (e.g. BR-TPL-001)"
+                placeholder="模板编码（例如 BR-TPL-001）"
               />
               <input
                 style={INPUT_STYLE}
                 value={createTemplateForm.template_name}
                 onChange={(e) => setCreateTemplateForm((prev) => ({ ...prev, template_name: e.target.value }))}
-                placeholder="template_name"
+                placeholder="模板名称"
               />
               <textarea
                 style={TEXTAREA_STYLE}
@@ -465,18 +465,18 @@ export default function BatchRecordsWorkspace() {
             </div>
 
             <div style={{ display: 'grid', gap: 10 }}>
-              <strong>创建新版本（draft）</strong>
+              <strong>创建新版本（草稿）</strong>
               <input
                 style={INPUT_STYLE}
                 value={createVersionForm.template_code}
                 onChange={(e) => setCreateVersionForm((prev) => ({ ...prev, template_code: e.target.value }))}
-                placeholder="existing template_code"
+                placeholder="已有模板编码"
               />
               <input
                 style={INPUT_STYLE}
                 value={createVersionForm.template_name}
                 onChange={(e) => setCreateVersionForm((prev) => ({ ...prev, template_name: e.target.value }))}
-                placeholder="template_name"
+                placeholder="模板名称"
               />
               <textarea
                 style={TEXTAREA_STYLE}
@@ -516,7 +516,7 @@ export default function BatchRecordsWorkspace() {
               value={createExecutionForm.template_id}
               onChange={(e) => setCreateExecutionForm((prev) => ({ ...prev, template_id: e.target.value }))}
             >
-              <option value="">选择 active 模板</option>
+              <option value="">选择已启用模板</option>
               {activeTemplates.map((tpl) => (
                 <option key={tpl.template_id} value={tpl.template_id}>
                   {tpl.template_code} v{tpl.version_no} · {tpl.template_name}
@@ -527,13 +527,13 @@ export default function BatchRecordsWorkspace() {
               style={INPUT_STYLE}
               value={createExecutionForm.batch_no}
               onChange={(e) => setCreateExecutionForm((prev) => ({ ...prev, batch_no: e.target.value }))}
-              placeholder="batch_no (e.g. B-0001)"
+              placeholder="批号（例如 B-0001）"
             />
             <input
               style={INPUT_STYLE}
               value={createExecutionForm.title}
               onChange={(e) => setCreateExecutionForm((prev) => ({ ...prev, title: e.target.value }))}
-              placeholder="title (optional)"
+              placeholder="标题（可选）"
             />
             <button
               type="button"
@@ -572,7 +572,7 @@ export default function BatchRecordsWorkspace() {
                   <span style={pillStyle('#f1f5f9', '#475569')}>{String(item.status)}</span>
                 </div>
                 <div style={{ marginTop: 6, color: '#64748b', fontSize: '0.92rem' }}>
-                  batch_no: {String(item.batch_no)} · {String(item.template_code)} v{String(item.template_version_no)}
+                  批号：{String(item.batch_no)} · {String(item.template_code)} v{String(item.template_version_no)}
                 </div>
               </button>
             ))}
@@ -692,12 +692,12 @@ export default function BatchRecordsWorkspace() {
               </div>
               {detail?.signed_signature ? (
                 <div style={{ color: '#475569', fontSize: '0.92rem' }}>
-                  signed_by={String(detail.signed_signature.signed_by_username)} at {formatTime(detail.signed_signature.signed_at_ms)} verified={String(detail.signed_signature.signature_verified)}
+                  签名人：{String(detail.signed_signature.signed_by_username)}，时间：{formatTime(detail.signed_signature.signed_at_ms)}，校验结果：{String(detail.signed_signature.signature_verified)}
                 </div>
               ) : null}
               {detail?.reviewed_signature ? (
                 <div style={{ color: '#475569', fontSize: '0.92rem' }}>
-                  reviewed_by={String(detail.reviewed_signature.signed_by_username)} at {formatTime(detail.reviewed_signature.signed_at_ms)} verified={String(detail.reviewed_signature.signature_verified)}
+                  复核人：{String(detail.reviewed_signature.signed_by_username)}，时间：{formatTime(detail.reviewed_signature.signed_at_ms)}，校验结果：{String(detail.reviewed_signature.signature_verified)}
                 </div>
               ) : null}
 
@@ -706,13 +706,13 @@ export default function BatchRecordsWorkspace() {
                   style={INPUT_STYLE}
                   value={signatureForm.meaning}
                   onChange={(e) => setSignatureForm((prev) => ({ ...prev, meaning: e.target.value }))}
-                  placeholder="meaning"
+                  placeholder="签名含义"
                 />
                 <input
                   style={INPUT_STYLE}
                   value={signatureForm.reason}
                   onChange={(e) => setSignatureForm((prev) => ({ ...prev, reason: e.target.value }))}
-                  placeholder="reason"
+                  placeholder="签名原因"
                 />
                 <input
                   style={INPUT_STYLE}

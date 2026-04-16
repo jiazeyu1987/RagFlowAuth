@@ -140,42 +140,42 @@ export default function GovernanceClosureWorkspace() {
       ) : null}
 
       <section style={panelStyle}>
-        <h4 style={sectionHeaderStyle}>Complaint Cases</h4>
-        <p style={{ color: '#475569', marginTop: 8 }}>ComplaintCase owner scope for WS08.</p>
+        <h4 style={sectionHeaderStyle}>投诉记录</h4>
+        <p style={{ color: '#475569', marginTop: 8 }}>用于管理 WS08 范围内的投诉记录。</p>
         <div style={{ display: 'grid', gap: 8, gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' }}>
           <input
             style={inputStyle}
-            placeholder="Complaint code"
+            placeholder="投诉编号"
             value={complaintForm.complaint_code}
             onChange={(event) => setComplaintForm((prev) => ({ ...prev, complaint_code: event.target.value }))}
           />
           <input
             style={inputStyle}
-            placeholder="Subject"
+            placeholder="主题"
             value={complaintForm.subject}
             onChange={(event) => setComplaintForm((prev) => ({ ...prev, subject: event.target.value }))}
           />
           <input
             style={inputStyle}
-            placeholder="Description"
+            placeholder="问题描述"
             value={complaintForm.description}
             onChange={(event) => setComplaintForm((prev) => ({ ...prev, description: event.target.value }))}
           />
           <input
             style={inputStyle}
-            placeholder="Reported by user_id"
+            placeholder="提报人 user_id"
             value={complaintForm.reported_by_user_id}
             onChange={(event) => setComplaintForm((prev) => ({ ...prev, reported_by_user_id: event.target.value }))}
           />
           <input
             style={inputStyle}
-            placeholder="Owner user_id"
+            placeholder="责任人 user_id"
             value={complaintForm.owner_user_id}
             onChange={(event) => setComplaintForm((prev) => ({ ...prev, owner_user_id: event.target.value }))}
           />
           <input
             style={inputStyle}
-            placeholder="Severity (minor|major|critical)"
+            placeholder="严重等级（minor / major / critical）"
             value={complaintForm.severity_level}
             onChange={(event) => setComplaintForm((prev) => ({ ...prev, severity_level: event.target.value }))}
           />
@@ -195,64 +195,64 @@ export default function GovernanceClosureWorkspace() {
               owner_user_id: complaintForm.owner_user_id.trim(),
             });
             setComplaintForm(initialComplaintForm);
-          }, 'Complaint case created')}
+          }, '投诉记录已创建')}
         >
-          Create complaint
+          新建投诉
         </button>
         <div style={{ marginTop: 12, color: '#475569' }}>
-          {loading ? 'Loading...' : `${complaints.length} complaint cases`}
+          {loading ? '加载中...' : `共 ${complaints.length} 条投诉记录`}
         </div>
       </section>
 
       <section style={panelStyle}>
-        <h4 style={sectionHeaderStyle}>CAPA Actions</h4>
-        <p style={{ color: '#475569', marginTop: 8 }}>CapaAction owner scope for WS08.</p>
+        <h4 style={sectionHeaderStyle}>CAPA 措施</h4>
+        <p style={{ color: '#475569', marginTop: 8 }}>用于管理 WS08 范围内的 CAPA 记录。</p>
         <div style={{ display: 'grid', gap: 8, gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' }}>
           <input
             style={inputStyle}
-            placeholder="CAPA code"
+            placeholder="CAPA 编号"
             value={capaForm.capa_code}
             onChange={(event) => setCapaForm((prev) => ({ ...prev, capa_code: event.target.value }))}
           />
           <input
             style={inputStyle}
-            placeholder="Linked complaint_id (optional)"
+            placeholder="关联 complaint_id（可选）"
             value={capaForm.complaint_id}
             onChange={(event) => setCapaForm((prev) => ({ ...prev, complaint_id: event.target.value }))}
           />
           <input
             style={inputStyle}
-            placeholder="Title"
+            placeholder="标题"
             value={capaForm.action_title}
             onChange={(event) => setCapaForm((prev) => ({ ...prev, action_title: event.target.value }))}
           />
           <input
             style={inputStyle}
-            placeholder="Owner user_id"
+            placeholder="责任人 user_id"
             value={capaForm.owner_user_id}
             onChange={(event) => setCapaForm((prev) => ({ ...prev, owner_user_id: event.target.value }))}
           />
           <input
             style={inputStyle}
-            placeholder="Due date (YYYY-MM-DD)"
+            placeholder="截止日期（YYYY-MM-DD）"
             value={capaForm.due_date}
             onChange={(event) => setCapaForm((prev) => ({ ...prev, due_date: event.target.value }))}
           />
           <input
             style={inputStyle}
-            placeholder="Root cause"
+            placeholder="根因分析"
             value={capaForm.root_cause_summary}
             onChange={(event) => setCapaForm((prev) => ({ ...prev, root_cause_summary: event.target.value }))}
           />
           <input
             style={inputStyle}
-            placeholder="Correction plan"
+            placeholder="纠正措施"
             value={capaForm.correction_plan}
             onChange={(event) => setCapaForm((prev) => ({ ...prev, correction_plan: event.target.value }))}
           />
           <input
             style={inputStyle}
-            placeholder="Preventive plan"
+            placeholder="预防措施"
             value={capaForm.preventive_plan}
             onChange={(event) => setCapaForm((prev) => ({ ...prev, preventive_plan: event.target.value }))}
           />
@@ -273,40 +273,40 @@ export default function GovernanceClosureWorkspace() {
               due_date: capaForm.due_date.trim(),
             });
             setCapaForm(initialCapaForm);
-          }, 'CAPA action created')}
+          }, 'CAPA 记录已创建')}
         >
-          Create CAPA
+          新建 CAPA
         </button>
         <div style={{ marginTop: 12, color: '#475569' }}>
-          {loading ? 'Loading...' : `${capas.length} CAPA actions`}
+          {loading ? '加载中...' : `共 ${capas.length} 条 CAPA 记录`}
         </div>
       </section>
 
       <section style={panelStyle}>
-        <h4 style={sectionHeaderStyle}>Internal Audit Records</h4>
-        <p style={{ color: '#475569', marginTop: 8 }}>InternalAuditRecord owner scope for WS08.</p>
+        <h4 style={sectionHeaderStyle}>内审记录</h4>
+        <p style={{ color: '#475569', marginTop: 8 }}>用于管理 WS08 范围内的内审记录。</p>
         <div style={{ display: 'grid', gap: 8, gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' }}>
           <input
             style={inputStyle}
-            placeholder="Audit code"
+            placeholder="审计编号"
             value={internalAuditForm.audit_code}
             onChange={(event) => setInternalAuditForm((prev) => ({ ...prev, audit_code: event.target.value }))}
           />
           <input
             style={inputStyle}
-            placeholder="Lead auditor user_id"
+            placeholder="主审人 user_id"
             value={internalAuditForm.lead_auditor_user_id}
             onChange={(event) => setInternalAuditForm((prev) => ({ ...prev, lead_auditor_user_id: event.target.value }))}
           />
           <input
             style={inputStyle}
-            placeholder="Scope summary"
+            placeholder="范围说明"
             value={internalAuditForm.scope_summary}
             onChange={(event) => setInternalAuditForm((prev) => ({ ...prev, scope_summary: event.target.value }))}
           />
           <input
             style={inputStyle}
-            placeholder="Planned at ms"
+            placeholder="计划时间戳（毫秒）"
             value={internalAuditForm.planned_at_ms}
             onChange={(event) => setInternalAuditForm((prev) => ({ ...prev, planned_at_ms: event.target.value }))}
           />
@@ -323,40 +323,40 @@ export default function GovernanceClosureWorkspace() {
               planned_at_ms: Number(internalAuditForm.planned_at_ms),
             });
             setInternalAuditForm(initialInternalAuditForm);
-          }, 'Internal audit record created')}
+          }, '内审记录已创建')}
         >
-          Create internal audit
+          新建内审
         </button>
         <div style={{ marginTop: 12, color: '#475569' }}>
-          {loading ? 'Loading...' : `${internalAudits.length} internal audit records`}
+          {loading ? '加载中...' : `共 ${internalAudits.length} 条内审记录`}
         </div>
       </section>
 
       <section style={panelStyle}>
-        <h4 style={sectionHeaderStyle}>Management Review Records</h4>
-        <p style={{ color: '#475569', marginTop: 8 }}>ManagementReviewRecord owner scope for WS08.</p>
+        <h4 style={sectionHeaderStyle}>管理评审记录</h4>
+        <p style={{ color: '#475569', marginTop: 8 }}>用于管理 WS08 范围内的管理评审记录。</p>
         <div style={{ display: 'grid', gap: 8, gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' }}>
           <input
             style={inputStyle}
-            placeholder="Review code"
+            placeholder="评审编号"
             value={managementReviewForm.review_code}
             onChange={(event) => setManagementReviewForm((prev) => ({ ...prev, review_code: event.target.value }))}
           />
           <input
             style={inputStyle}
-            placeholder="Meeting at ms"
+            placeholder="会议时间戳（毫秒）"
             value={managementReviewForm.meeting_at_ms}
             onChange={(event) => setManagementReviewForm((prev) => ({ ...prev, meeting_at_ms: event.target.value }))}
           />
           <input
             style={inputStyle}
-            placeholder="Chair user_id"
+            placeholder="主持人 user_id"
             value={managementReviewForm.chair_user_id}
             onChange={(event) => setManagementReviewForm((prev) => ({ ...prev, chair_user_id: event.target.value }))}
           />
           <input
             style={inputStyle}
-            placeholder="Input summary"
+            placeholder="输入摘要"
             value={managementReviewForm.input_summary}
             onChange={(event) => setManagementReviewForm((prev) => ({ ...prev, input_summary: event.target.value }))}
           />
@@ -373,12 +373,12 @@ export default function GovernanceClosureWorkspace() {
               input_summary: managementReviewForm.input_summary.trim(),
             });
             setManagementReviewForm(initialManagementReviewForm);
-          }, 'Management review record created')}
+          }, '管理评审记录已创建')}
         >
-          Create management review
+          新建管理评审
         </button>
         <div style={{ marginTop: 12, color: '#475569' }}>
-          {loading ? 'Loading...' : `${managementReviews.length} management review records`}
+          {loading ? '加载中...' : `共 ${managementReviews.length} 条管理评审记录`}
         </div>
       </section>
     </div>

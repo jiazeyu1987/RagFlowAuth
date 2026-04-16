@@ -61,6 +61,7 @@ describe('documentControlApi', () => {
       title: 'SRS',
       document_type: 'srs',
       file_subtype: '设计验证方案/报告',
+      usage_scope: 'EU',
       target_kb_id: 'Quality KB',
       file: new File(['hello'], 'srs.md', { type: 'text/markdown' }),
     };
@@ -177,6 +178,7 @@ describe('documentControlApi', () => {
     expect([...httpClient.requestJson.mock.calls[2][1].body.entries()]).toEqual(
       expect.arrayContaining([
         ['file_subtype', '设计验证方案/报告'],
+        ['usage_scope', 'EU'],
       ])
     );
     expect(httpClient.requestJson).toHaveBeenNthCalledWith(

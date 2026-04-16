@@ -626,6 +626,7 @@ class DocumentControlService:
             title=str(row["title"]),
             document_type=str(row["document_type"]),
             file_subtype=(str(row["file_subtype"]) if row["file_subtype"] else None),
+            usage_scope=(str(row["usage_scope"]) if row["usage_scope"] else None),
             product_name=(str(row["product_name"]) if row["product_name"] else None),
             registration_ref=(str(row["registration_ref"]) if row["registration_ref"] else None),
             target_kb_id=str(row["target_kb_id"]),
@@ -718,6 +719,7 @@ class DocumentControlService:
                 title,
                 document_type,
                 file_subtype,
+                usage_scope,
                 product_name,
                 registration_ref,
                 target_kb_id,
@@ -936,6 +938,7 @@ class DocumentControlService:
         title: str,
         document_type: str,
         file_subtype: str | None,
+        usage_scope: str | None,
         product_name: str | None,
         registration_ref: str | None,
         target_kb_id: str,
@@ -952,6 +955,7 @@ class DocumentControlService:
                 title,
                 document_type,
                 file_subtype,
+                usage_scope,
                 product_name,
                 registration_ref,
                 target_kb_id,
@@ -961,7 +965,7 @@ class DocumentControlService:
                 created_by,
                 created_at_ms,
                 updated_at_ms
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 controlled_document_id,
@@ -969,6 +973,7 @@ class DocumentControlService:
                 title,
                 document_type,
                 file_subtype,
+                usage_scope,
                 product_name,
                 registration_ref,
                 target_kb_id,
@@ -1079,6 +1084,7 @@ class DocumentControlService:
         title: str,
         document_type: str,
         file_subtype: str | None = None,
+        usage_scope: str | None = None,
         target_kb_id: str,
         created_by: str,
         upload_file,
@@ -1090,6 +1096,7 @@ class DocumentControlService:
         clean_title = self._require_text(title, "title_required")
         clean_type = self._require_text(document_type, "document_type_required")
         clean_file_subtype = self._require_text(file_subtype or clean_type, "document_control_matrix_file_subtype_required")
+        clean_usage_scope = str(usage_scope or "").strip() or None
         clean_target_kb = self._require_text(target_kb_id, "target_kb_id_required")
         clean_created_by = self._require_text(created_by, "created_by_required")
         clean_product_name = self._require_text(product_name, "product_name_required")
@@ -1132,6 +1139,7 @@ class DocumentControlService:
                     title=clean_title,
                     document_type=clean_type,
                     file_subtype=clean_file_subtype,
+                    usage_scope=clean_usage_scope,
                     product_name=clean_product_name,
                     registration_ref=clean_registration_ref,
                     target_kb_id=kb_id,
@@ -1513,6 +1521,7 @@ class DocumentControlService:
                 applicant_manager_user_id=applicant_manager_user_id,
                 document_type=document.document_type,
                 registration_ref=document.registration_ref,
+                usage_scope=document.usage_scope,
                 position_assignments=positions,
             )
         except DocumentControlMatrixResolverError as exc:
@@ -1922,6 +1931,7 @@ class DocumentControlService:
             "file_subtype": resolution.file_subtype,
             "document_type": document.document_type,
             "registration_ref": document.registration_ref,
+            "usage_scope": document.usage_scope,
             "compiler_check": resolution.compiler_check.as_dict(),
             "signoff_steps": [item.as_dict() for item in resolution.signoff_steps],
             "approval_steps": [item.as_dict() for item in resolution.approval_steps],

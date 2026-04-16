@@ -13,6 +13,7 @@ KEY_FILE = "\u6587\u4ef6\u5c0f\u7c7b"
 KEY_COMPILER = "\u7f16\u5236"
 KEY_SIGNOFF = "\u5ba1\u6838\u4f1a\u7b7e"
 KEY_APPROVER = "\u6279\u51c6"
+KEY_REMARK = "\u5907\u6ce8"
 
 POS_DIRECT_MANAGER = "\u7f16\u5236\u4eba\u76f4\u63a5\u4e3b\u7ba1"
 POS_DOC_ADMIN = "\u6587\u6863\u7ba1\u7406\u5458"
@@ -45,27 +46,10 @@ def _write_matrix_json(path: str, items: list[dict]) -> None:
         json.dump(items, handle, ensure_ascii=False, indent=2)
 
 
-def _write_matrix_html(path: str, rows: list[dict]) -> None:
-    objects = []
-    for row in rows:
-        objects.append(
-            "{\n"
-            f'  file: "{row["file"]}",\n'
-            f'  compiler: "{row["compiler"]}",\n'
-            f'  approver: "{row["approver"]}",\n'
-            f'  remark: "{row.get("remark", "")}"\n'
-            "}"
-        )
-    payload = "<script>\nconst DATA = { DMR: [\n" + ",\n".join(objects) + "\n] };\n</script>\n"
-    with open(path, "w", encoding="utf-8") as handle:
-        handle.write(payload)
-
-
 class TestDocumentControlMatrixResolverUnit(unittest.TestCase):
     def setUp(self):
         self._tmp = make_temp_dir(prefix="ragflowauth_matrix_resolver")
         self.matrix_path = os.path.join(str(self._tmp), "matrix.json")
-        self.matrix_html_path = os.path.join(str(self._tmp), "matrix.html")
         _write_matrix_json(
             self.matrix_path,
             [
@@ -81,6 +65,7 @@ class TestDocumentControlMatrixResolverUnit(unittest.TestCase):
                         POS_DOC_ADMIN: "\u25cf",
                     },
                     KEY_APPROVER: ROLE_APPROVER_DEPT,
+                    KEY_REMARK: "",
                 },
                 {
                     KEY_FILE: FILE_PROCESS_FLOW,
@@ -94,6 +79,7 @@ class TestDocumentControlMatrixResolverUnit(unittest.TestCase):
                         POS_DOC_ADMIN: "\u25cf",
                     },
                     KEY_APPROVER: ROLE_GENERAL_MANAGER,
+                    KEY_REMARK: "",
                 },
                 {
                     KEY_FILE: FILE_PROJECT_PLAN,
@@ -103,6 +89,7 @@ class TestDocumentControlMatrixResolverUnit(unittest.TestCase):
                         POS_DOC_ADMIN: "\u25cf",
                     },
                     KEY_APPROVER: ROLE_RD_HEAD_OR_GM,
+                    KEY_REMARK: "",
                 },
                 {
                     KEY_FILE: FILE_INSPECTION_MAINT,
@@ -113,22 +100,11 @@ class TestDocumentControlMatrixResolverUnit(unittest.TestCase):
                         POS_TEST_CENTER: "\u25cf",
                     },
                     KEY_APPROVER: ROLE_APPROVER_DEPT,
+                    KEY_REMARK: REMARK_USAGE_SCOPE,
                 },
             ],
         )
-        _write_matrix_html(
-            self.matrix_html_path,
-            [
-                {"file": FILE_PRODUCT_TECH_REQ, "compiler": ROLE_PROJECT_OWNER, "approver": ROLE_APPROVER_DEPT, "remark": ""},
-                {"file": FILE_PROCESS_FLOW, "compiler": ROLE_TECH, "approver": ROLE_GENERAL_MANAGER, "remark": ""},
-                {"file": FILE_PROJECT_PLAN, "compiler": ROLE_PROJECT_OWNER_OR_DESIGNEE, "approver": ROLE_RD_HEAD_OR_GM, "remark": ""},
-                {"file": FILE_INSPECTION_MAINT, "compiler": ROLE_EQUIPMENT, "approver": ROLE_APPROVER_DEPT, "remark": REMARK_USAGE_SCOPE},
-            ],
-        )
-        self.resolver = DocumentControlMatrixResolver(
-            matrix_json_path=self.matrix_path,
-            matrix_html_path=self.matrix_html_path,
-        )
+        self.resolver = DocumentControlMatrixResolver(matrix_json_path=self.matrix_path)
         self.position_assignments = {
             ROLE_PROJECT_OWNER: [
                 {"user_id": "applicant-1", "username": "applicant1", "full_name": "Applicant One"},
@@ -283,6 +259,30 @@ class TestDocumentControlMatrixResolverUnit(unittest.TestCase):
         self.assertEqual(result.compiler_check.position_name, ROLE_PROJECT_OWNER_OR_DESIGNEE)
         self.assertEqual([item.user_id for item in result.approval_steps[0].approvers], ["rd-head-1", "gm-1"])
         self.assertEqual(result.snapshot["remark"], None)
+
+    def test_missing_remark_field_fails_fast(self):
+        invalid_matrix_path = os.path.join(str(self._tmp), "matrix-missing-remark.json")
+        _write_matrix_json(
+            invalid_matrix_path,
+            [
+                {
+                    KEY_FILE: FILE_PRODUCT_TECH_REQ,
+                    KEY_COMPILER: ROLE_PROJECT_OWNER,
+                    KEY_SIGNOFF: {
+                        POS_DIRECT_MANAGER: "\u25cf",
+                        ROLE_QA: "\u25cf",
+                    },
+                    KEY_APPROVER: ROLE_APPROVER_DEPT,
+                }
+            ],
+        )
+        resolver = DocumentControlMatrixResolver(matrix_json_path=invalid_matrix_path)
+
+        with self.assertRaises(DocumentControlMatrixResolverError) as ctx:
+            resolver.load_entries()
+
+        self.assertEqual(ctx.exception.code, "document_control_matrix_remark_missing")
+        self.assertEqual(ctx.exception.status_code, 500)
 
     def test_usage_scope_remark_requires_usage_scope_metadata(self):
         with self.assertRaises(DocumentControlMatrixResolverError) as ctx:
