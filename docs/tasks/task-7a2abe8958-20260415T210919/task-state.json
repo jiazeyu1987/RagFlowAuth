@@ -1,0 +1,237 @@
+{
+  "schema_version": 2,
+  "task_id": "task-7a2abe8958-20260415T210919",
+  "mode": "lite",
+  "status": "completed",
+  "current_phase": null,
+  "phase_statuses": [
+    {
+      "phase_id": "P1",
+      "title": "接入矩阵解析器到文控提交链",
+      "status": "completed",
+      "objective": "",
+      "owned_paths": [],
+      "dependencies": [],
+      "deliverables": [],
+      "evidence_expectation": "",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P1-AC1",
+          "text": "提交审批时会读取当前文档的 `file_subtype` 并调用矩阵解析器",
+          "status": "completed",
+          "evidence": [
+            "submit_revision_for_approval now resolves matrix workflow",
+            "backend/tests/test_document_control_service_unit.py",
+            "backend/tests/test_document_control_api_unit.py",
+            "backend/services/document_control/service.py"
+          ]
+        },
+        {
+          "ac_id": "P1-AC2",
+          "text": "提交人必须满足矩阵里的“编制”岗位校验",
+          "status": "completed",
+          "evidence": [
+            "Compiler membership enforced through matrix resolver",
+            "backend/tests/test_document_control_service_unit.py",
+            "backend/tests/test_document_control_api_unit.py",
+            "backend/services/document_control/service.py"
+          ]
+        },
+        {
+          "ac_id": "P1-AC3",
+          "text": "request steps / approvers 来自矩阵解析结果，而不是固定 workflow approver_user_ids",
+          "status": "completed",
+          "evidence": [
+            "Request steps and approvers generated from matrix result",
+            "backend/tests/test_document_control_service_unit.py",
+            "backend/tests/test_document_control_api_unit.py",
+            "backend/services/document_control/service.py"
+          ]
+        },
+        {
+          "ac_id": "P1-AC4",
+          "text": "批准步骤始终出现在会签步骤之后",
+          "status": "completed",
+          "evidence": [
+            "Approval step emitted after signoff steps",
+            "backend/tests/test_document_control_service_unit.py",
+            "backend/tests/test_document_control_api_unit.py",
+            "backend/services/document_control/service.py"
+          ]
+        }
+      ],
+      "evidence": [
+        "Implementation: backend/services/document_control/service.py"
+      ],
+      "notes": "",
+      "last_reviewed_at": "2026-04-16T00:05:25"
+    },
+    {
+      "phase_id": "P2",
+      "title": "增加实例快照字段与回显",
+      "status": "completed",
+      "objective": "",
+      "owned_paths": [],
+      "dependencies": [],
+      "deliverables": [],
+      "evidence_expectation": "",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P2-AC1",
+          "text": "新提交实例会写入 `file_subtype`",
+          "status": "completed",
+          "evidence": [
+            "file_subtype persisted on document/revision",
+            "backend/tests/test_document_control_service_unit.py",
+            "backend/tests/test_document_control_api_unit.py",
+            "backend/services/document_control/service.py"
+          ]
+        },
+        {
+          "ac_id": "P2-AC2",
+          "text": "新提交实例会写入 `matrix_snapshot_json`",
+          "status": "completed",
+          "evidence": [
+            "matrix_snapshot_json persisted on revision",
+            "backend/tests/test_document_control_service_unit.py",
+            "backend/tests/test_document_control_api_unit.py",
+            "backend/services/document_control/service.py"
+          ]
+        },
+        {
+          "ac_id": "P2-AC3",
+          "text": "新提交实例会写入 `position_snapshot_json`",
+          "status": "completed",
+          "evidence": [
+            "position_snapshot_json persisted on revision",
+            "backend/tests/test_document_control_service_unit.py",
+            "backend/tests/test_document_control_api_unit.py",
+            "backend/services/document_control/service.py"
+          ]
+        },
+        {
+          "ac_id": "P2-AC4",
+          "text": "审批详情中能通过 `workflow_snapshot` 看到矩阵相关信息",
+          "status": "completed",
+          "evidence": [
+            "workflow_snapshot includes matrix mode and snapshots",
+            "backend/tests/test_document_control_service_unit.py",
+            "backend/tests/test_document_control_api_unit.py",
+            "backend/services/document_control/service.py"
+          ]
+        },
+        {
+          "ac_id": "P2-AC5",
+          "text": "历史实例读取不被破坏",
+          "status": "completed",
+          "evidence": [
+            "document control service/api tests remain green",
+            "backend/tests/test_document_control_service_unit.py",
+            "backend/tests/test_document_control_api_unit.py",
+            "backend/services/document_control/service.py"
+          ]
+        }
+      ],
+      "evidence": [
+        "Schema/models snapshots: backend/database/schema/document_control.py backend/services/document_control/models.py"
+      ],
+      "notes": "",
+      "last_reviewed_at": "2026-04-16T00:06:51"
+    },
+    {
+      "phase_id": "P3",
+      "title": "补服务/API测试并验证兼容",
+      "status": "completed",
+      "objective": "",
+      "owned_paths": [],
+      "dependencies": [],
+      "deliverables": [],
+      "evidence_expectation": "",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P3-AC1",
+          "text": "服务/API测试覆盖提交成功后实例步骤正确",
+          "status": "completed",
+          "evidence": [
+            "Service/API tests validate generated steps",
+            "backend/tests/test_document_control_service_unit.py",
+            "backend/tests/test_document_control_api_unit.py",
+            "backend/services/document_control/service.py"
+          ]
+        },
+        {
+          "ac_id": "P3-AC2",
+          "text": "服务/API测试覆盖快照写入正确",
+          "status": "completed",
+          "evidence": [
+            "Service tests validate snapshot writes",
+            "backend/tests/test_document_control_service_unit.py",
+            "backend/tests/test_document_control_api_unit.py",
+            "backend/services/document_control/service.py"
+          ]
+        },
+        {
+          "ac_id": "P3-AC3",
+          "text": "服务/API测试覆盖编制岗位不匹配时报错",
+          "status": "completed",
+          "evidence": [
+            "Compiler mismatch test added",
+            "backend/tests/test_document_control_service_unit.py",
+            "backend/tests/test_document_control_api_unit.py",
+            "backend/services/document_control/service.py"
+          ]
+        },
+        {
+          "ac_id": "P3-AC4",
+          "text": "服务/API测试覆盖岗位无人时报错",
+          "status": "completed",
+          "evidence": [
+            "Unassigned position test added",
+            "backend/tests/test_document_control_service_unit.py",
+            "backend/tests/test_document_control_api_unit.py",
+            "backend/services/document_control/service.py"
+          ]
+        },
+        {
+          "ac_id": "P3-AC5",
+          "text": "服务/API测试覆盖批准步骤始终在最后",
+          "status": "completed",
+          "evidence": [
+            "Approval-last assertions kept in service tests",
+            "backend/tests/test_document_control_service_unit.py",
+            "backend/tests/test_document_control_api_unit.py",
+            "backend/services/document_control/service.py"
+          ]
+        }
+      ],
+      "evidence": [
+        "Tests: backend/tests/test_document_control_service_unit.py backend/tests/test_document_control_api_unit.py"
+      ],
+      "notes": "",
+      "last_reviewed_at": "2026-04-16T00:09:22"
+    }
+  ],
+  "planner_review_status": "approved",
+  "test_status": "passed",
+  "blocking_prereqs": [],
+  "iteration_counts": {
+    "planner_revisions": 1,
+    "executor_loops": 1,
+    "test_loops": 1
+  },
+  "created_at": "2026-04-15T21:09:19",
+  "updated_at": "2026-04-16T00:10:47",
+  "branch": "int_latest",
+  "baseline_revision": "0462434b54bd34722919b5c2eb01645271af1d57",
+  "workspace_root": "D:\\ProjectPackage\\RagflowAuth",
+  "tasks_root": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks",
+  "task_dir": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\task-7a2abe8958-20260415T210919",
+  "goal": "把文控提交审批改造成由审批矩阵自动生成审批实例，接入矩阵解析器并写入快照字段。",
+  "artifacts": {
+    "prd": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\task-7a2abe8958-20260415T210919\\prd.md",
+    "test_plan": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\task-7a2abe8958-20260415T210919\\test-plan.md",
+    "task_state": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\task-7a2abe8958-20260415T210919\\task-state.json",
+    "execution_log": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\task-7a2abe8958-20260415T210919\\execution-log.md",
+    "test_report": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\task-7a2abe8958-20260415T210919\\test-report.md"
+  }
+}

@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import DocumentControl from './DocumentControl';
 import documentControlApi from '../features/documentControl/api';
 import operationApprovalApi from '../features/operationApproval/api';
+import qualitySystemConfigApi from '../features/qualitySystemConfig/api';
 import { useAuth } from '../hooks/useAuth';
 
 jest.mock('../features/documentControl/api', () => ({
@@ -13,6 +14,7 @@ jest.mock('../features/documentControl/api', () => ({
     getDocument: jest.fn(),
     createDocument: jest.fn(),
     createRevision: jest.fn(),
+    previewRevisionApprovalMatrix: jest.fn(),
     submitRevisionForApproval: jest.fn(),
     approveRevisionStep: jest.fn(),
     rejectRevisionStep: jest.fn(),
@@ -27,6 +29,13 @@ jest.mock('../features/documentControl/api', () => ({
     approveObsoleteRevision: jest.fn(),
     confirmRevisionDestruction: jest.fn(),
     listRetiredDocuments: jest.fn(),
+  },
+}));
+
+jest.mock('../features/qualitySystemConfig/api', () => ({
+  __esModule: true,
+  default: {
+    getConfig: jest.fn(),
   },
 }));
 
@@ -70,6 +79,7 @@ const detailResponse = {
   doc_code: 'DOC-001',
   title: 'Controlled URS',
   document_type: 'urs',
+  file_subtype: '设计验证方案/报告',
   product_name: 'Product A',
   registration_ref: 'REG-001',
   target_kb_id: 'kb-quality',
@@ -79,6 +89,9 @@ const detailResponse = {
     revision_no: 1,
     status: 'draft',
     filename: 'urs.md',
+    file_subtype: '设计验证方案/报告',
+    matrix_snapshot: { file_subtype: '设计验证方案/报告' },
+    position_snapshot: { QA: [{ user_id: 'u-2' }] },
   },
   effective_revision: null,
   revisions: [
@@ -118,6 +131,16 @@ describe('DocumentControl page', () => {
       status: 'in_approval',
       current_step_name: 'cosign',
       current_step_no: 1,
+      workflow_snapshot: {
+        steps: [
+          {
+            step_no: 1,
+            step_semantic: 'signoff',
+            position_name: 'QA',
+            members: [{ user_id: 'u-2', full_name: 'Bob Reviewer' }],
+          },
+        ],
+      },
       steps: [
         {
           request_step_id: 'step-1',
@@ -135,6 +158,12 @@ describe('DocumentControl page', () => {
         },
       ],
       events: [],
+    });
+    qualitySystemConfigApi.getConfig.mockResolvedValue({
+      file_categories: [
+        { id: 1, name: '设计验证方案/报告' },
+        { id: 2, name: '工艺流程图' },
+      ],
     });
     const trainingComplianceApi = require('../features/trainingCompliance/api').default;
     trainingComplianceApi.getRevisionGate.mockResolvedValue({
@@ -167,6 +196,12 @@ describe('DocumentControl page', () => {
     documentControlApi.initiateObsoleteRevision.mockResolvedValue(detailResponse);
     documentControlApi.approveObsoleteRevision.mockResolvedValue(detailResponse);
     documentControlApi.confirmRevisionDestruction.mockResolvedValue(detailResponse);
+    documentControlApi.previewRevisionApprovalMatrix.mockResolvedValue({
+      file_subtype: '设计验证方案/报告',
+      compiler_check: { position_name: '项目负责人' },
+      signoff_steps: [{ position_name: 'QA', approvers: [{ user_id: 'u-2', full_name: 'Bob Reviewer' }] }],
+      approval_steps: [{ position_name: '编制部门负责人或授权代表', approvers: [{ user_id: 'u-3', full_name: 'Alice Approver' }] }],
+    });
     documentControlApi.createDocument.mockResolvedValue({
       ...detailResponse,
       controlled_document_id: 'doc-2',
@@ -180,6 +215,7 @@ describe('DocumentControl page', () => {
         revision_no: 2,
         status: 'draft',
         filename: 'urs-v2.md',
+        file_subtype: '设计验证方案/报告',
       },
       revisions: [
         {
@@ -200,6 +236,7 @@ describe('DocumentControl page', () => {
         revision_no: 2,
         status: 'approval_in_progress',
         filename: 'urs-v2.md',
+        file_subtype: '设计验证方案/报告',
         approval_request_id: 'req-2',
         approval_round: 1,
         current_approval_step_name: 'cosign',
@@ -226,6 +263,9 @@ describe('DocumentControl page', () => {
     expect(await screen.findByTestId('document-control-detail-doc-code')).toHaveTextContent(
       'DOC-001'
     );
+    expect(await screen.findByTestId('document-control-matrix-preview-compiler')).toHaveTextContent(
+      '项目负责人'
+    );
   });
 
   it('supports search, document creation, revision creation, and approval submit actions', async () => {
@@ -246,9 +286,9 @@ describe('DocumentControl page', () => {
     await user.type(screen.getByTestId('document-control-create-doc-code'), 'DOC-002');
     await user.type(screen.getByTestId('document-control-create-title'), 'Controlled SRS');
     await user.type(screen.getByTestId('document-control-create-document-type'), 'srs');
+    await user.selectOptions(screen.getByTestId('document-control-create-file-subtype'), '设计验证方案/报告');
     await user.type(screen.getByTestId('document-control-create-target-kb'), 'Quality KB');
     await user.type(screen.getByTestId('document-control-create-product-name'), 'Product B');
-    await user.type(screen.getByTestId('document-control-create-registration-ref'), 'REG-002');
     await user.upload(
       screen.getByTestId('document-control-create-file'),
       new File(['hello'], 'srs.pdf', { type: 'application/pdf' })
@@ -278,9 +318,18 @@ describe('DocumentControl page', () => {
     expect(await screen.findByTestId('document-control-approval-pending-approvers')).toHaveTextContent(
       'Bob Reviewer'
     );
+    expect(await screen.findByTestId('document-control-approval-step-semantic')).toHaveTextContent(
+      'signoff'
+    );
+    expect(await screen.findByTestId('document-control-approval-step-position')).toHaveTextContent(
+      'QA'
+    );
+    expect(await screen.findByTestId('document-control-approval-step-approvers')).toHaveTextContent(
+      'Bob Reviewer'
+    );
   });
 
-  it('requires product name and registration reference before creating a document', async () => {
+  it('requires product name before creating a document', async () => {
     const user = userEvent.setup();
     render(<DocumentControl />);
 
@@ -299,6 +348,30 @@ describe('DocumentControl page', () => {
     expect(documentControlApi.createDocument).not.toHaveBeenCalled();
     expect(await screen.findByTestId('document-control-error')).toHaveTextContent(
       'Please provide the product name.'
+    );
+  });
+
+  it('requires file subtype before creating a document', async () => {
+    const user = userEvent.setup();
+    render(<DocumentControl />);
+
+    await screen.findByTestId('document-control-page');
+
+    await user.type(screen.getByTestId('document-control-create-doc-code'), 'DOC-004');
+    await user.type(screen.getByTestId('document-control-create-title'), 'Controlled Matrix Doc');
+    await user.type(screen.getByTestId('document-control-create-document-type'), 'urs');
+    await user.type(screen.getByTestId('document-control-create-target-kb'), 'Quality KB');
+    await user.type(screen.getByTestId('document-control-create-product-name'), 'Product A');
+    await user.type(screen.getByTestId('document-control-create-registration-ref'), 'REG-003');
+    await user.upload(
+      screen.getByTestId('document-control-create-file'),
+      new File(['hello'], 'matrix.pdf', { type: 'application/pdf' })
+    );
+    await user.click(screen.getByTestId('document-control-create-submit'));
+
+    expect(documentControlApi.createDocument).not.toHaveBeenCalled();
+    expect(await screen.findByTestId('document-control-error')).toHaveTextContent(
+      'Please select a file subtype.'
     );
   });
 });

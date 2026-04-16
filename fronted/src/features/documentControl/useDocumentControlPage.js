@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import documentControlApi from './api';
 import operationApprovalApi from '../operationApproval/api';
 import trainingComplianceApi from '../trainingCompliance/api';
+import qualitySystemConfigApi from '../qualitySystemConfig/api';
 
 const DEFAULT_FILTERS = {
   query: '',
@@ -17,6 +18,7 @@ const DEFAULT_DOCUMENT_FORM = {
   doc_code: '',
   title: '',
   document_type: '',
+  file_subtype: '',
   target_kb_id: '',
   product_name: '',
   registration_ref: '',
@@ -57,6 +59,8 @@ const DEFAULT_TEXT = {
   destructionConfirmError: 'Failed to confirm destruction',
   destructionConfirmSuccess: 'Destruction confirmation recorded',
   retentionLoadError: 'Failed to load retention information',
+  fileSubtypeLoadError: 'Failed to load file subtypes',
+  matrixPreviewLoadError: 'Failed to load matrix preview',
   createDocumentError: 'Failed to create controlled document',
   createDocumentSuccess: 'Controlled document created',
   createRevisionError: 'Failed to create revision',
@@ -100,6 +104,11 @@ export default function useDocumentControlPage({ text = DEFAULT_TEXT, mapErrorMe
   const [approvalDetailLoading, setApprovalDetailLoading] = useState(false);
   const [approvalDetail, setApprovalDetail] = useState(null);
   const [approvalDetailError, setApprovalDetailError] = useState('');
+  const [fileSubtypeOptions, setFileSubtypeOptions] = useState([]);
+  const [fileSubtypeOptionsError, setFileSubtypeOptionsError] = useState('');
+  const [matrixPreviewLoading, setMatrixPreviewLoading] = useState(false);
+  const [matrixPreview, setMatrixPreview] = useState(null);
+  const [matrixPreviewError, setMatrixPreviewError] = useState('');
 
   const [trainingLoading, setTrainingLoading] = useState(false);
   const [trainingGateLoading, setTrainingGateLoading] = useState(false);
@@ -217,6 +226,28 @@ export default function useDocumentControlPage({ text = DEFAULT_TEXT, mapErrorMe
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+    setFileSubtypeOptionsError('');
+    qualitySystemConfigApi
+      .getConfig()
+      .then((payload) => {
+        if (cancelled) return;
+        const items = Array.isArray(payload?.file_categories) ? payload.file_categories : [];
+        setFileSubtypeOptions(items);
+      })
+      .catch((requestError) => {
+        if (cancelled) return;
+        setFileSubtypeOptions([]);
+        setFileSubtypeOptionsError(
+          normalizeError(requestError?.message, resolvedText.fileSubtypeLoadError, mapErrorMessage)
+        );
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [mapErrorMessage, resolvedText.fileSubtypeLoadError]);
+
   const currentRevision = selectedDocument?.current_revision || null;
   const effectiveRevision = selectedDocument?.effective_revision || null;
   const revisions = useMemo(
@@ -238,6 +269,45 @@ export default function useDocumentControlPage({ text = DEFAULT_TEXT, mapErrorMe
     const raw = currentRevision?.approval_request_id;
     return raw ? String(raw).trim() : '';
   }, [currentRevision?.approval_request_id]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setMatrixPreview(null);
+    setMatrixPreviewError('');
+
+    if (!currentRevisionId || approvalRequestId || !['draft', 'approval_rejected'].includes(String(currentRevision?.status || ''))) {
+      setMatrixPreviewLoading(false);
+      return () => {};
+    }
+
+    setMatrixPreviewLoading(true);
+    documentControlApi
+      .previewRevisionApprovalMatrix(currentRevisionId)
+      .then((result) => {
+        if (cancelled) return;
+        setMatrixPreview(result);
+      })
+      .catch((requestError) => {
+        if (cancelled) return;
+        setMatrixPreviewError(
+          normalizeError(requestError?.message, resolvedText.matrixPreviewLoadError, mapErrorMessage)
+        );
+      })
+      .finally(() => {
+        if (cancelled) return;
+        setMatrixPreviewLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    approvalRequestId,
+    currentRevision?.status,
+    currentRevisionId,
+    mapErrorMessage,
+    resolvedText.matrixPreviewLoadError,
+  ]);
 
   useEffect(() => {
     let cancelled = false;
@@ -515,9 +585,9 @@ export default function useDocumentControlPage({ text = DEFAULT_TEXT, mapErrorMe
       );
       return null;
     }
-    if (!String(documentForm.registration_ref || '').trim()) {
+    if (!String(documentForm.file_subtype || '').trim()) {
       setError(
-        normalizeError('registration_ref_required', resolvedText.createDocumentError, mapErrorMessage)
+        normalizeError('document_control_matrix_file_subtype_required', resolvedText.createDocumentError, mapErrorMessage)
       );
       return null;
     }
@@ -1151,6 +1221,11 @@ export default function useDocumentControlPage({ text = DEFAULT_TEXT, mapErrorMe
     approvalDetailLoading,
     approvalDetail,
     approvalDetailError,
+    fileSubtypeOptions,
+    fileSubtypeOptionsError,
+    matrixPreviewLoading,
+    matrixPreview,
+    matrixPreviewError,
     trainingLoading,
     trainingGateLoading,
     trainingGate,

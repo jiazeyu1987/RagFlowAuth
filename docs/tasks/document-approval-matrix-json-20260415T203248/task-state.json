@@ -1,0 +1,175 @@
+{
+  "schema_version": 2,
+  "task_id": "document-approval-matrix-json-20260415T203248",
+  "mode": "lite",
+  "status": "completed",
+  "current_phase": null,
+  "phase_statuses": [
+    {
+      "phase_id": "P1",
+      "title": "实现矩阵解析器",
+      "status": "completed",
+      "objective": "",
+      "owned_paths": [],
+      "dependencies": [],
+      "deliverables": [],
+      "evidence_expectation": "",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P1-AC1",
+          "text": "解析器能根据 `文件小类` 找到矩阵项，并输出 `compiler_check / signoff_steps / approval_steps / snapshot`",
+          "status": "completed",
+          "evidence": [
+            "backend/services/document_control/matrix_resolver.py",
+            "backend/tests/test_document_control_matrix_resolver_unit.py"
+          ]
+        },
+        {
+          "ac_id": "P1-AC2",
+          "text": "`编制` 只做岗位校验，不生成审批步骤",
+          "status": "completed",
+          "evidence": [
+            "Compiler check emitted without approval steps",
+            "backend/tests/test_document_control_matrix_resolver_unit.py",
+            "backend/services/document_control/matrix_resolver.py"
+          ]
+        },
+        {
+          "ac_id": "P1-AC3",
+          "text": "`审核会签` 只把 `●` 进入自动审批链，`○` 只保留在快照里",
+          "status": "completed",
+          "evidence": [
+            "Optional marks recorded as optional_mark in snapshot",
+            "backend/tests/test_document_control_matrix_resolver_unit.py",
+            "backend/services/document_control/matrix_resolver.py"
+          ]
+        },
+        {
+          "ac_id": "P1-AC4",
+          "text": "`批准` 作为最后一步输出",
+          "status": "completed",
+          "evidence": [
+            "Approval position emitted in approval_steps",
+            "backend/tests/test_document_control_matrix_resolver_unit.py",
+            "backend/services/document_control/matrix_resolver.py"
+          ]
+        },
+        {
+          "ac_id": "P1-AC5",
+          "text": "`编制人直接主管` 与 `文档管理员` 可被正确解析",
+          "status": "completed",
+          "evidence": [
+            "Direct manager and document admin rules implemented",
+            "backend/tests/test_document_control_matrix_resolver_unit.py",
+            "backend/services/document_control/matrix_resolver.py"
+          ]
+        },
+        {
+          "ac_id": "P1-AC6",
+          "text": "对矩阵缺失、文件小类缺失、岗位缺失、岗位无人、直属主管缺失给出明确错误码",
+          "status": "completed",
+          "evidence": [
+            "Explicit resolver error codes implemented",
+            "backend/tests/test_document_control_matrix_resolver_unit.py",
+            "backend/services/document_control/matrix_resolver.py"
+          ]
+        }
+      ],
+      "evidence": [
+        "Implementation: backend/services/document_control/matrix_resolver.py"
+      ],
+      "notes": "",
+      "last_reviewed_at": "2026-04-15T20:48:44"
+    },
+    {
+      "phase_id": "P2",
+      "title": "为解析器补单元测试",
+      "status": "completed",
+      "objective": "",
+      "owned_paths": [],
+      "dependencies": [],
+      "deliverables": [],
+      "evidence_expectation": "",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P2-AC1",
+          "text": "单测覆盖不同文件小类生成不同链路",
+          "status": "completed",
+          "evidence": [
+            "pytest backend/tests/test_document_control_matrix_resolver_unit.py -q",
+            "backend/tests/test_document_control_matrix_resolver_unit.py",
+            "backend/services/document_control/matrix_resolver.py"
+          ]
+        },
+        {
+          "ac_id": "P2-AC2",
+          "text": "单测覆盖注册产品条件命中 / 未命中",
+          "status": "completed",
+          "evidence": [
+            "Registration gate covered by unit tests",
+            "backend/tests/test_document_control_matrix_resolver_unit.py",
+            "backend/services/document_control/matrix_resolver.py"
+          ]
+        },
+        {
+          "ac_id": "P2-AC3",
+          "text": "单测覆盖直属主管缺失",
+          "status": "completed",
+          "evidence": [
+            "Direct manager missing covered by unit tests",
+            "backend/tests/test_document_control_matrix_resolver_unit.py",
+            "backend/services/document_control/matrix_resolver.py"
+          ]
+        },
+        {
+          "ac_id": "P2-AC4",
+          "text": "单测覆盖岗位无人",
+          "status": "completed",
+          "evidence": [
+            "Position unassigned covered by unit tests",
+            "backend/tests/test_document_control_matrix_resolver_unit.py",
+            "backend/services/document_control/matrix_resolver.py"
+          ]
+        },
+        {
+          "ac_id": "P2-AC5",
+          "text": "单测覆盖 `○` 不进入自动审批链",
+          "status": "completed",
+          "evidence": [
+            "Optional mark behavior covered by unit tests",
+            "backend/tests/test_document_control_matrix_resolver_unit.py",
+            "backend/services/document_control/matrix_resolver.py"
+          ]
+        }
+      ],
+      "evidence": [
+        "Tests: backend/tests/test_document_control_matrix_resolver_unit.py"
+      ],
+      "notes": "",
+      "last_reviewed_at": "2026-04-15T21:03:44"
+    }
+  ],
+  "planner_review_status": "approved",
+  "test_status": "passed",
+  "blocking_prereqs": [],
+  "iteration_counts": {
+    "planner_revisions": 1,
+    "executor_loops": 1,
+    "test_loops": 1
+  },
+  "created_at": "2026-04-15T20:32:49",
+  "updated_at": "2026-04-15T21:06:16",
+  "branch": "int_latest",
+  "baseline_revision": "0462434b54bd34722919b5c2eb01645271af1d57",
+  "workspace_root": "D:\\ProjectPackage\\RagflowAuth",
+  "tasks_root": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks",
+  "task_dir": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\document-approval-matrix-json-20260415T203248",
+  "goal": "实现审批矩阵到文控审批步骤的后端解析内核，基于 document-approval-matrix.json 与体系配置岗位分配生成文控审批链。",
+  "artifacts": {
+    "prd": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\document-approval-matrix-json-20260415T203248\\prd.md",
+    "test_plan": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\document-approval-matrix-json-20260415T203248\\test-plan.md",
+    "task_state": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\document-approval-matrix-json-20260415T203248\\task-state.json",
+    "execution_log": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\document-approval-matrix-json-20260415T203248\\execution-log.md",
+    "test_report": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\document-approval-matrix-json-20260415T203248\\test-report.md"
+  }
+}

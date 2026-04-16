@@ -91,6 +91,11 @@ export default function DocumentControl() {
     approvalDetailLoading,
     approvalDetail,
     approvalDetailError,
+    fileSubtypeOptions,
+    fileSubtypeOptionsError,
+    matrixPreviewLoading,
+    matrixPreview,
+    matrixPreviewError,
     trainingLoading,
     trainingGateLoading,
     trainingGate,
@@ -379,6 +384,32 @@ export default function DocumentControl() {
                 />
               </label>
               <label style={labelStyle}>
+                File Subtype
+                <select
+                  data-testid="document-control-create-file-subtype"
+                  style={inputStyle}
+                  value={documentForm.file_subtype}
+                  onChange={(event) =>
+                    setDocumentForm((previous) => ({
+                      ...previous,
+                      file_subtype: event.target.value,
+                    }))
+                  }
+                >
+                  <option value="">Select file subtype</option>
+                  {(fileSubtypeOptions || []).map((item) => (
+                    <option key={item.id || item.name} value={item.name}>
+                      {item.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {fileSubtypeOptionsError ? (
+                <div data-testid="document-control-file-subtype-error" style={{ color: '#9f1239' }}>
+                  {fileSubtypeOptionsError}
+                </div>
+              ) : null}
+              <label style={labelStyle}>
                 Target KB
                 <input
                   data-testid="document-control-create-target-kb"
@@ -405,12 +436,11 @@ export default function DocumentControl() {
                 />
               </label>
               <label style={labelStyle}>
-                Registration Ref *
+                Registration Ref
                 <input
                   data-testid="document-control-create-registration-ref"
                   style={inputStyle}
                   value={documentForm.registration_ref}
-                  required
                   onChange={(event) =>
                     setDocumentForm((previous) => ({
                       ...previous,
@@ -473,6 +503,7 @@ export default function DocumentControl() {
                   <strong>{selectedDocument.doc_code}</strong> · {selectedDocument.title}
                 </div>
                 <div>Type: {selectedDocument.document_type}</div>
+                <div>File subtype: {selectedDocument.file_subtype || '-'}</div>
                 <div>Product: {selectedDocument.product_name || '-'}</div>
                 <div>Registration: {selectedDocument.registration_ref || '-'}</div>
                 <div>Target KB: {selectedDocument.target_kb_name || selectedDocument.target_kb_id}</div>
@@ -521,8 +552,34 @@ export default function DocumentControl() {
                         {approvalDetailError}
                       </div>
                     ) : approvalDetail ? (
-                      <div data-testid="document-control-approval-pending-approvers">
-                        Pending approvers: {pendingApproversText}
+                      <div style={{ display: 'grid', gap: 6 }}>
+                        <div data-testid="document-control-approval-pending-approvers">
+                          Pending approvers: {pendingApproversText}
+                        </div>
+                        <div data-testid="document-control-approval-step-semantic">
+                          Step semantic:{' '}
+                          {String(
+                            approvalDetail?.workflow_snapshot?.steps?.find(
+                              (step) => Number(step?.step_no) === Number(currentRevision.current_approval_step_no)
+                            )?.step_semantic || '-'
+                          )}
+                        </div>
+                        <div data-testid="document-control-approval-step-position">
+                          Position:{' '}
+                          {String(
+                            approvalDetail?.workflow_snapshot?.steps?.find(
+                              (step) => Number(step?.step_no) === Number(currentRevision.current_approval_step_no)
+                            )?.position_name || '-'
+                          )}
+                        </div>
+                        <div data-testid="document-control-approval-step-approvers">
+                          Step approvers:{' '}
+                          {(approvalDetail?.workflow_snapshot?.steps?.find(
+                            (step) => Number(step?.step_no) === Number(currentRevision.current_approval_step_no)
+                          )?.members || [])
+                            .map((item) => item.full_name || item.username || item.user_id || item.member_ref || '-')
+                            .join(', ') || '-'}
+                        </div>
                       </div>
                     ) : (
                       <div data-testid="document-control-approval-detail-empty" style={{ color: '#6b7280' }}>
@@ -531,6 +588,53 @@ export default function DocumentControl() {
                     )
                   ) : null}
                 </div>
+
+                {!currentRevision.approval_request_id ? (
+                  <div
+                    data-testid="document-control-matrix-preview"
+                    style={{ border: '1px solid #e2e8f0', borderRadius: 8, padding: 12, display: 'grid', gap: 8 }}
+                  >
+                    <div style={{ fontWeight: 700 }}>Matrix Preview</div>
+                    {matrixPreviewLoading ? (
+                      <div style={{ color: '#6b7280' }}>Loading matrix preview...</div>
+                    ) : matrixPreviewError ? (
+                      <div data-testid="document-control-matrix-preview-error" style={{ color: '#9f1239' }}>
+                        {matrixPreviewError}
+                      </div>
+                    ) : matrixPreview ? (
+                      <>
+                        <div data-testid="document-control-matrix-preview-compiler">
+                          Compiler: {matrixPreview.compiler_check?.position_name || '-'}
+                        </div>
+                        <div data-testid="document-control-matrix-preview-signoff">
+                          Signoff positions:{' '}
+                          {(matrixPreview.signoff_steps || []).map((item) => item.position_name).join(', ') || '-'}
+                        </div>
+                        <div data-testid="document-control-matrix-preview-approval">
+                          Final approval:{' '}
+                          {(matrixPreview.approval_steps || []).map((item) => item.position_name).join(', ') || '-'}
+                        </div>
+                        <div data-testid="document-control-matrix-preview-approvers">
+                          Resolved approvers:{' '}
+                          {[
+                            ...(matrixPreview.signoff_steps || []).flatMap((item) =>
+                              (item.approvers || []).map(
+                                (approver) => approver.full_name || approver.username || approver.user_id || '-'
+                              )
+                            ),
+                            ...(matrixPreview.approval_steps || []).flatMap((item) =>
+                              (item.approvers || []).map(
+                                (approver) => approver.full_name || approver.username || approver.user_id || '-'
+                              )
+                            ),
+                          ].join(', ') || '-'}
+                        </div>
+                      </>
+                    ) : (
+                      <div style={{ color: '#6b7280' }}>Matrix preview unavailable.</div>
+                    )}
+                  </div>
+                ) : null}
 
                 <label style={labelStyle}>
                   Note

@@ -3,6 +3,7 @@ import useDocumentControlPage from './useDocumentControlPage';
 import documentControlApi from './api';
 import operationApprovalApi from '../operationApproval/api';
 import trainingComplianceApi from '../trainingCompliance/api';
+import qualitySystemConfigApi from '../qualitySystemConfig/api';
 
 jest.mock('./api', () => ({
   __esModule: true,
@@ -11,6 +12,7 @@ jest.mock('./api', () => ({
     getDocument: jest.fn(),
     createDocument: jest.fn(),
     createRevision: jest.fn(),
+    previewRevisionApprovalMatrix: jest.fn(),
     submitRevisionForApproval: jest.fn(),
     approveRevisionStep: jest.fn(),
     rejectRevisionStep: jest.fn(),
@@ -25,6 +27,13 @@ jest.mock('./api', () => ({
     approveObsoleteRevision: jest.fn(),
     confirmRevisionDestruction: jest.fn(),
     listRetiredDocuments: jest.fn(),
+  },
+}));
+
+jest.mock('../qualitySystemConfig/api', () => ({
+  __esModule: true,
+  default: {
+    getConfig: jest.fn(),
   },
 }));
 
@@ -64,6 +73,7 @@ const detailResponse = {
   doc_code: 'DOC-001',
   title: 'Controlled URS',
   document_type: 'urs',
+  file_subtype: '设计验证方案/报告',
   target_kb_id: 'kb-quality',
   target_kb_name: 'Quality KB',
   current_revision: {
@@ -71,6 +81,9 @@ const detailResponse = {
     revision_no: 1,
     status: 'draft',
     filename: 'urs.md',
+    file_subtype: '设计验证方案/报告',
+    matrix_snapshot: { file_subtype: '设计验证方案/报告' },
+    position_snapshot: { QA: [{ user_id: 'u-2' }] },
   },
   effective_revision: null,
   revisions: [
@@ -92,8 +105,24 @@ describe('useDocumentControlPage', () => {
       status: 'in_approval',
       current_step_name: 'cosign',
       current_step_no: 1,
+      workflow_snapshot: {
+        steps: [
+          {
+            step_no: 1,
+            step_semantic: 'signoff',
+            position_name: 'QA',
+            members: [{ user_id: 'u-2', full_name: 'Bob Reviewer' }],
+          },
+        ],
+      },
       steps: [],
       events: [],
+    });
+    qualitySystemConfigApi.getConfig.mockResolvedValue({
+      file_categories: [
+        { id: 1, name: '设计验证方案/报告' },
+        { id: 2, name: '工艺流程图' },
+      ],
     });
     trainingComplianceApi.getRevisionGate.mockResolvedValue({
       controlled_revision_id: 'rev-1',
@@ -137,6 +166,7 @@ describe('useDocumentControlPage', () => {
         revision_no: 2,
         status: 'draft',
         filename: 'urs-v2.md',
+        file_subtype: '设计验证方案/报告',
       },
       revisions: [
         {
@@ -155,6 +185,12 @@ describe('useDocumentControlPage', () => {
         },
       ],
     });
+    documentControlApi.previewRevisionApprovalMatrix.mockResolvedValue({
+      file_subtype: '设计验证方案/报告',
+      compiler_check: { position_name: '项目负责人' },
+      signoff_steps: [{ position_name: 'QA', approvers: [{ user_id: 'u-2', full_name: 'Bob Reviewer' }] }],
+      approval_steps: [{ position_name: '编制部门负责人或授权代表', approvers: [{ user_id: 'u-3', full_name: 'Alice Approver' }] }],
+    });
     documentControlApi.submitRevisionForApproval.mockResolvedValue({
       ...detailResponse,
       current_revision: {
@@ -162,6 +198,7 @@ describe('useDocumentControlPage', () => {
         revision_no: 1,
         status: 'approval_in_progress',
         filename: 'urs.md',
+        file_subtype: '设计验证方案/报告',
         approval_request_id: 'req-1',
         approval_round: 1,
         current_approval_step_name: 'cosign',
@@ -229,6 +266,8 @@ describe('useDocumentControlPage', () => {
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(result.current.documents).toHaveLength(1);
     expect(result.current.selectedDocument?.controlled_document_id).toBe('doc-1');
+    expect(result.current.fileSubtypeOptions).toHaveLength(2);
+    expect(result.current.matrixPreview?.compiler_check?.position_name).toBe('项目负责人');
     expect(documentControlApi.listDocuments).toHaveBeenCalledWith({
       limit: 100,
       query: '',
@@ -277,9 +316,9 @@ describe('useDocumentControlPage', () => {
         doc_code: 'DOC-002',
         title: 'Controlled SRS',
         document_type: 'srs',
+        file_subtype: '设计验证方案/报告',
         target_kb_id: 'Quality KB',
         product_name: 'Product B',
-        registration_ref: 'REG-002',
         file: new File(['hello'], 'srs.md', { type: 'text/markdown' }),
       }));
     });

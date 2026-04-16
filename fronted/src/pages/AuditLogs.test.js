@@ -284,4 +284,98 @@ describe('AuditLogs', () => {
       within(screen.getByTestId('audit-row-event-quality-1')).getByText('体系配置')
     ).toBeInTheDocument();
   });
+
+  it('renders document control matrix audit context', () => {
+    useAuditLogsPage.mockReturnValue({
+      loading: false,
+      exporting: false,
+      error: '',
+      companies: [],
+      departments: [],
+      filters: {
+        action: '',
+        source: '',
+        event_type: '',
+        request_id: '',
+        resource_id: '',
+        company_id: '',
+        department_id: '',
+        username: '',
+        from: '',
+        to: '',
+        limit: 20,
+        offset: 0,
+      },
+      result: {
+        total: 1,
+        items: [
+          {
+            id: 'event-doc-control-1',
+            created_at_ms: 1712223600000,
+            action: 'document_control_transition',
+            username: 'reviewer1',
+            company_name: '',
+            department_name: '',
+            source: 'document_control',
+            resource_id: 'rev-1',
+            event_type: 'controlled_revision_submit',
+            after: {
+              file_subtype: '设计验证方案/报告',
+              current_approval_step_name: 'cosign',
+            },
+            meta: {
+              matrix_mode: 'approval_matrix',
+            },
+          },
+        ],
+      },
+      rows: [
+        {
+          id: 'event-doc-control-1',
+          created_at_ms: 1712223600000,
+          action: 'document_control_transition',
+          username: 'reviewer1',
+          company_name: '',
+          department_name: '',
+          source: 'document_control',
+          resource_id: 'rev-1',
+          event_type: 'controlled_revision_submit',
+          after: {
+            file_subtype: '设计验证方案/报告',
+            current_approval_step_name: 'cosign',
+          },
+          meta: {
+            matrix_mode: 'approval_matrix',
+          },
+        },
+      ],
+      visibleDepartments: [],
+      canGoPrev: false,
+      canGoNext: false,
+      updateFilter: jest.fn(),
+      applyFilters: jest.fn(),
+      goPrev: jest.fn(),
+      goNext: jest.fn(),
+      exportEvidencePackage: jest.fn(),
+    });
+
+    render(<AuditLogs />);
+
+    expect(screen.getByTestId('audit-row-event-doc-control-1')).toBeInTheDocument();
+    expect(
+      within(screen.getByTestId('audit-row-event-doc-control-1')).getByText('文控审批流转')
+    ).toBeInTheDocument();
+    expect(
+      within(screen.getByTestId('audit-row-event-doc-control-1')).getByText('文控审批')
+    ).toBeInTheDocument();
+    expect(
+      within(screen.getByTestId('audit-row-event-doc-control-1')).getByText('文件小类：设计验证方案/报告')
+    ).toBeInTheDocument();
+    expect(
+      within(screen.getByTestId('audit-row-event-doc-control-1')).getByText('当前步骤：cosign')
+    ).toBeInTheDocument();
+    expect(
+      within(screen.getByTestId('audit-row-event-doc-control-1')).getByText('模式：approval_matrix')
+    ).toBeInTheDocument();
+  });
 });

@@ -1,4 +1,5 @@
 import io
+import json
 import os
 import time
 import unittest
@@ -301,15 +302,48 @@ class TestDocumentControlServiceUnit(unittest.TestCase):
             enabled=True,
             config={},
         )
+        self._matrix_path = os.path.join(str(self._temp_dir), "document_control_matrix.json")
+        with open(self._matrix_path, "w", encoding="utf-8") as handle:
+            json.dump(
+                [
+                    {
+                        "文件小类": "urs",
+                        "编制": "项目负责人",
+                        "审核会签": {"QA": "●", "QMS": "", "文档管理员": "●"},
+                        "批准": "编制部门负责人或授权代表",
+                    },
+                    {
+                        "文件小类": "sop",
+                        "编制": "项目负责人",
+                        "审核会签": {"QA": "●", "QMS": "", "文档管理员": "●"},
+                        "批准": "编制部门负责人或授权代表",
+                    },
+                    {
+                        "文件小类": "srs",
+                        "编制": "项目负责人",
+                        "审核会签": {"QA": "●", "QMS": "", "文档管理员": "●"},
+                        "批准": "编制部门负责人或授权代表",
+                    },
+                    {
+                        "文件小类": "wi",
+                        "编制": "项目负责人",
+                        "审核会签": {"QA": "●", "QMS": "", "文档管理员": "●"},
+                        "批准": "编制部门负责人或授权代表",
+                    },
+                ],
+                handle,
+                ensure_ascii=False,
+                indent=2,
+            )
         self.user_store = _UserStore(
             {
-                "reviewer-1": SimpleNamespace(user_id="reviewer-1", username="reviewer", status="active"),
-                "cosigner-1": SimpleNamespace(user_id="cosigner-1", username="cosigner1", status="active"),
-                "cosigner-2": SimpleNamespace(user_id="cosigner-2", username="cosigner2", status="active"),
-                "cosigner-3": SimpleNamespace(user_id="cosigner-3", username="cosigner3", status="active"),
-                "approver-1": SimpleNamespace(user_id="approver-1", username="approver", status="active"),
-                "standardizer-1": SimpleNamespace(user_id="standardizer-1", username="standardizer", status="active"),
-                "docctrl-1": SimpleNamespace(user_id="docctrl-1", username="docctrl", status="active"),
+                "reviewer-1": SimpleNamespace(user_id="reviewer-1", username="reviewer", status="active", full_name="Reviewer One"),
+                "cosigner-1": SimpleNamespace(user_id="cosigner-1", username="cosigner1", status="active", full_name="Cosigner One"),
+                "cosigner-2": SimpleNamespace(user_id="cosigner-2", username="cosigner2", status="active", full_name="Cosigner Two"),
+                "cosigner-3": SimpleNamespace(user_id="cosigner-3", username="cosigner3", status="active", full_name="Cosigner Three"),
+                "approver-1": SimpleNamespace(user_id="approver-1", username="approver", status="active", full_name="Approver One"),
+                "standardizer-1": SimpleNamespace(user_id="standardizer-1", username="standardizer", status="active", full_name="Standardizer One"),
+                "docctrl-1": SimpleNamespace(user_id="docctrl-1", username="docctrl", status="active", full_name="Doc Control One"),
             }
         )
         self.approval_matrix = {
@@ -346,6 +380,23 @@ class TestDocumentControlServiceUnit(unittest.TestCase):
             notification_manager=self.notification_manager,
             org_structure_manager=None,
             user_store=self.user_store,
+            document_control_matrix_json_path=self._matrix_path,
+            quality_system_config_service=SimpleNamespace(
+                get_config=lambda: {
+                    "positions": [
+                        {"name": "项目负责人", "assigned_users": [{"user_id": "reviewer-1", "username": "reviewer", "full_name": "Reviewer One"}]},
+                        {
+                            "name": "QA",
+                            "assigned_users": [
+                                {"user_id": "cosigner-1", "username": "cosigner1", "full_name": "Cosigner One"},
+                                {"user_id": "cosigner-2", "username": "cosigner2", "full_name": "Cosigner Two"},
+                            ],
+                        },
+                        {"name": "文档管理员", "assigned_users": [{"user_id": "standardizer-1", "username": "standardizer", "full_name": "Standardizer One"}]},
+                        {"name": "编制部门负责人或授权代表", "assigned_users": [{"user_id": "approver-1", "username": "approver", "full_name": "Approver One"}]},
+                    ]
+                }
+            ),
         )
         self.service = DocumentControlService.from_deps(self.deps)
         for document_type in ("urs", "sop", "srs", "wi"):
@@ -474,13 +525,13 @@ class TestDocumentControlServiceUnit(unittest.TestCase):
         )
         self.service.approve_revision_approval_step(
             controlled_revision_id=controlled_revision_id,
-            ctx=self.approver_ctx,
-            note="approve",
+            ctx=self.standardizer_ctx,
+            note="standardize ok",
         )
         self.service.approve_revision_approval_step(
             controlled_revision_id=controlled_revision_id,
-            ctx=self.standardizer_ctx,
-            note="standardize ok",
+            ctx=self.approver_ctx,
+            note="approve",
         )
 
     def _seed_active_user(self, *, user_id: str, username: str, department_id: int):
@@ -526,6 +577,19 @@ class TestDocumentControlServiceUnit(unittest.TestCase):
         self.assertIsNotNone(submitted.current_revision.approval_request_id)
         self.assertEqual(submitted.current_revision.current_approval_step_name, "cosign")
         self.assertEqual(submitted.current_revision.approval_round, 1)
+        self.assertEqual(submitted.current_revision.file_subtype, "urs")
+        self.assertIsInstance(submitted.current_revision.matrix_snapshot, dict)
+        self.assertIsInstance(submitted.current_revision.position_snapshot, dict)
+        self.assertEqual(submitted.current_revision.matrix_snapshot.get("file_subtype"), "urs")
+        self.assertEqual(
+            [item["position_name"] for item in submitted.current_revision.matrix_snapshot.get("approval_positions", []) if item.get("included")],
+            ["编制部门负责人或授权代表"],
+        )
+        request_snapshot = self.service._approval_store.get_request(submitted.current_revision.approval_request_id)
+        self.assertEqual(request_snapshot["workflow_snapshot"]["mode"], "approval_matrix")
+        self.assertEqual(request_snapshot["workflow_snapshot"]["file_subtype"], "urs")
+        self.assertIn("matrix_snapshot", request_snapshot["workflow_snapshot"])
+        self.assertIn("position_snapshot", request_snapshot["workflow_snapshot"])
 
         after_cosign_1 = self.service.approve_revision_approval_step(
             controlled_revision_id=revision1_id,
@@ -538,23 +602,23 @@ class TestDocumentControlServiceUnit(unittest.TestCase):
             ctx=self.cosigner2_ctx,
             note="cosign 2",
         )
-        self.assertEqual(after_cosign_2.current_revision.current_approval_step_name, "approve")
+        self.assertEqual(after_cosign_2.current_revision.current_approval_step_name, "standardize_review")
 
-        after_approve = self.service.approve_revision_approval_step(
-            controlled_revision_id=revision1_id,
-            ctx=self.approver_ctx,
-            note="approve",
-        )
-        self.assertEqual(after_approve.current_revision.current_approval_step_name, "standardize_review")
-
-        final_doc = self.service.approve_revision_approval_step(
+        after_standardize = self.service.approve_revision_approval_step(
             controlled_revision_id=revision1_id,
             ctx=self.standardizer_ctx,
             note="standardize ok",
         )
+        self.assertEqual(after_standardize.current_revision.current_approval_step_name, "approve")
+
+        final_doc = self.service.approve_revision_approval_step(
+            controlled_revision_id=revision1_id,
+            ctx=self.approver_ctx,
+            note="approve",
+        )
         self.assertEqual(final_doc.current_revision.status, "approved_pending_effective")
         self.assertIsNone(final_doc.current_revision.approval_request_id)
-        self.assertEqual(final_doc.current_revision.current_approval_step_name, "standardize_review")
+        self.assertEqual(final_doc.current_revision.current_approval_step_name, "approve")
 
         _, audit_events = self.audit_log_store.list_events(
             action="document_control_transition",
@@ -565,6 +629,78 @@ class TestDocumentControlServiceUnit(unittest.TestCase):
         self.assertIn("controlled_revision_submit", event_types)
         self.assertIn("controlled_revision_step_activated", event_types)
         self.assertIn("controlled_revision_step_approved", event_types)
+
+    def test_submit_fails_when_compiler_position_does_not_include_applicant(self):
+        created = self.service.create_document(
+            doc_code="DOC-001A",
+            title="Compiler mismatch",
+            document_type="urs",
+            target_kb_id="Quality KB",
+            created_by="reviewer-1",
+            upload_file=_UploadFile("compiler-mismatch.pdf", b"%PDF-1.4 compiler mismatch\n"),
+            product_name="Product A",
+            registration_ref="REG-001",
+            change_summary="baseline",
+        )
+        revision_id = created.current_revision.controlled_revision_id
+        original_service = self.deps.quality_system_config_service
+        self.deps.quality_system_config_service = SimpleNamespace(
+            get_config=lambda: {
+                "positions": [
+                    {"name": "项目负责人", "assigned_users": [{"user_id": "someone-else", "username": "other"}]},
+                    {"name": "QA", "assigned_users": [{"user_id": "cosigner-1", "username": "cosigner1"}]},
+                    {"name": "文档管理员", "assigned_users": [{"user_id": "standardizer-1", "username": "standardizer"}]},
+                    {"name": "编制部门负责人或授权代表", "assigned_users": [{"user_id": "approver-1", "username": "approver"}]},
+                ]
+            }
+        )
+        try:
+            with self.assertRaises(DocumentControlError) as compiler_mismatch:
+                self.service.submit_revision_for_approval(
+                    controlled_revision_id=revision_id,
+                    ctx=self.submitter_ctx,
+                    note="submit",
+                )
+        finally:
+            self.deps.quality_system_config_service = original_service
+        self.assertEqual(compiler_mismatch.exception.code, "document_control_matrix_compiler_mismatch")
+        self.assertEqual(compiler_mismatch.exception.status_code, 409)
+
+    def test_submit_fails_when_required_position_has_no_assignees(self):
+        created = self.service.create_document(
+            doc_code="DOC-001B",
+            title="Unassigned matrix position",
+            document_type="urs",
+            target_kb_id="Quality KB",
+            created_by="reviewer-1",
+            upload_file=_UploadFile("matrix-unassigned.pdf", b"%PDF-1.4 matrix unassigned\n"),
+            product_name="Product A",
+            registration_ref="REG-001",
+            change_summary="baseline",
+        )
+        revision_id = created.current_revision.controlled_revision_id
+        original_service = self.deps.quality_system_config_service
+        self.deps.quality_system_config_service = SimpleNamespace(
+            get_config=lambda: {
+                "positions": [
+                    {"name": "项目负责人", "assigned_users": [{"user_id": "reviewer-1", "username": "reviewer"}]},
+                    {"name": "QA", "assigned_users": []},
+                    {"name": "文档管理员", "assigned_users": [{"user_id": "standardizer-1", "username": "standardizer"}]},
+                    {"name": "编制部门负责人或授权代表", "assigned_users": [{"user_id": "approver-1", "username": "approver"}]},
+                ]
+            }
+        )
+        try:
+            with self.assertRaises(DocumentControlError) as unassigned_position:
+                self.service.submit_revision_for_approval(
+                    controlled_revision_id=revision_id,
+                    ctx=self.submitter_ctx,
+                    note="submit",
+                )
+        finally:
+            self.deps.quality_system_config_service = original_service
+        self.assertEqual(unassigned_position.exception.code, "document_control_matrix_position_unassigned:QA")
+        self.assertEqual(unassigned_position.exception.status_code, 409)
 
     def test_publish_rejects_when_not_approved_pending_effective(self):
         self._seed_doc_review_training_gate(user_id="docctrl-1", role_code="doc_control")
@@ -839,7 +975,7 @@ class TestDocumentControlServiceUnit(unittest.TestCase):
             ctx=self.cosigner3_ctx,
             note="cosign 3",
         )
-        self.assertEqual(after_cosign_3.current_revision.current_approval_step_name, "approve")
+        self.assertEqual(after_cosign_3.current_revision.current_approval_step_name, "standardize_review")
 
     def test_add_sign_rejects_duplicate_and_forbidden_actor(self):
         created = self.service.create_document(
@@ -896,12 +1032,14 @@ class TestDocumentControlServiceUnit(unittest.TestCase):
             audit_log_store=self.audit_log_store,
             org_structure_manager=None,
             user_store=self.user_store,
+            document_control_matrix_json_path=os.path.join(str(self._temp_dir), "missing-matrix.json"),
+            quality_system_config_service=self.deps.quality_system_config_service,
         )
         service_no_matrix = DocumentControlService.from_deps(deps_no_matrix)
         with self.assertRaises(DocumentControlError) as missing_matrix:
             service_no_matrix.submit_revision_for_approval(controlled_revision_id=revision_id, ctx=self.submitter_ctx, note="submit")
-        self.assertEqual(missing_matrix.exception.code, "document_control_workflow_not_configured")
-        self.assertEqual(missing_matrix.exception.status_code, 409)
+        self.assertEqual(missing_matrix.exception.code, "document_control_matrix_missing")
+        self.assertEqual(missing_matrix.exception.status_code, 500)
 
         created_configured = self.service.create_document(
             doc_code="DOC-041",
@@ -921,6 +1059,7 @@ class TestDocumentControlServiceUnit(unittest.TestCase):
             ragflow_service=self.ragflow_service,
             audit_log_store=self.audit_log_store,
             org_structure_manager=None,
+            document_control_matrix_json_path=self._matrix_path,
         )
         service_no_user_store = DocumentControlService.from_deps(deps_no_user_store)
         with self.assertRaises(DocumentControlError) as missing_user_store:
@@ -1055,7 +1194,7 @@ class TestDocumentControlServiceUnit(unittest.TestCase):
         self.assertEqual(ctx.exception.code, "doc_code_conflict")
         self.assertEqual(ctx.exception.status_code, 409)
 
-    def test_create_document_requires_product_and_registration_metadata(self):
+    def test_create_document_requires_product_metadata_and_allows_empty_registration_ref(self):
         with self.assertRaises(DocumentControlError) as missing_product:
             self.service.create_document(
                 doc_code="DOC-002",
@@ -1071,20 +1210,20 @@ class TestDocumentControlServiceUnit(unittest.TestCase):
         self.assertEqual(missing_product.exception.code, "product_name_required")
         self.assertEqual(missing_product.exception.status_code, 400)
 
-        with self.assertRaises(DocumentControlError) as missing_registration:
-            self.service.create_document(
-                doc_code="DOC-003",
-                title="Quality WI",
-                document_type="wi",
-                target_kb_id="Quality KB",
-                created_by="reviewer-1",
-                upload_file=_UploadFile("wi.pdf", b"%PDF-1.4 wi\n"),
-                product_name="Product A",
-                registration_ref="",
-            )
+        document = self.service.create_document(
+            doc_code="DOC-003",
+            title="Quality WI",
+            document_type="wi",
+            file_subtype="工艺流程图",
+            target_kb_id="Quality KB",
+            created_by="reviewer-1",
+            upload_file=_UploadFile("wi.pdf", b"%PDF-1.4 wi\n"),
+            product_name="Product A",
+            registration_ref="",
+        )
 
-        self.assertEqual(missing_registration.exception.code, "registration_ref_required")
-        self.assertEqual(missing_registration.exception.status_code, 400)
+        self.assertEqual(document.registration_ref, None)
+        self.assertEqual(document.file_subtype, "工艺流程图")
 
 
 if __name__ == "__main__":

@@ -17,6 +17,7 @@ const ACTION_LABELS = {
   datasets_create: '新建知识库',
   datasets_update: '修改知识库',
   datasets_delete: '删除知识库',
+  document_control_transition: '文控审批流转',
   document_approve: '文档审核通过',
   document_reject: '文档审核驳回',
   document_retire: '文档归档',
@@ -67,6 +68,7 @@ const SOURCE_LABELS = {
   electronic_signature: '电子签名',
   knowledge: '本地知识库',
   knowledge_retired: '归档文档',
+  document_control: '文控审批',
   operation_approval: '操作审批',
   quality_system_config: '体系配置',
   ragflow: 'RAGFlow',
@@ -160,6 +162,7 @@ const ACTION_FILTER_VALUES = [
   'datasets_create',
   'datasets_update',
   'datasets_delete',
+  'document_control_transition',
   'upload_settings_update',
   'paper_kb_add',
   'paper_kb_add_all',
@@ -212,6 +215,7 @@ const SOURCE_FILTER_VALUES = [
   'audit',
   'auth',
   'knowledge',
+  'document_control',
   'review',
   'global_search',
   'smart_chat',
@@ -274,6 +278,18 @@ const summarizeAuditContext = (item) => {
     }
     const sourceCount = meta.source_count ?? getEvidenceRefs(item).length;
     lines.push(`引用：${sourceCount} 条`);
+  }
+
+  if (item?.source === 'document_control') {
+    const fileSubtype = after.file_subtype || before.file_subtype || meta.file_subtype;
+    if (fileSubtype) lines.push(`文件小类：${truncateText(fileSubtype)}`);
+    const stepName =
+      after.current_approval_step_name ||
+      before.current_approval_step_name ||
+      meta.current_step_name;
+    if (stepName) lines.push(`当前步骤：${stepName}`);
+    const matrixMode = meta.matrix_mode || after.workflow_mode || before.workflow_mode;
+    if (matrixMode) lines.push(`模式：${matrixMode}`);
   }
 
   if (!lines.length) {

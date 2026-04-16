@@ -296,9 +296,10 @@ def create_controlled_document(
     doc_code: str = Form(...),
     title: str = Form(...),
     document_type: str = Form(...),
+    file_subtype: str | None = Form(None),
     target_kb_id: str = Form(...),
     product_name: str = Form(...),
-    registration_ref: str = Form(...),
+    registration_ref: str | None = Form(None),
     change_summary: str | None = Form(None),
     file: UploadFile = File(...),
 ):
@@ -309,6 +310,7 @@ def create_controlled_document(
             doc_code=doc_code,
             title=title,
             document_type=document_type,
+            file_subtype=file_subtype,
             target_kb_id=target_kb_id,
             created_by=str(ctx.payload.sub),
             upload_file=file,
@@ -319,6 +321,27 @@ def create_controlled_document(
     except DocumentControlError as exc:
         raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
     return {"document": document.as_dict()}
+
+
+@router.get("/quality-system/doc-control/revisions/{controlled_revision_id}/matrix-preview")
+def preview_controlled_revision_matrix(
+    controlled_revision_id: str,
+    ctx: AuthContextDep,
+):
+    assert_capability(ctx, resource="document_control", action="create")
+    try:
+        revision = _service(ctx).get_revision(controlled_revision_id=controlled_revision_id)
+    except DocumentControlError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
+    _assert_can_submit(ctx, revision.kb_id, revision.kb_dataset_id, revision.kb_name)
+    try:
+        result = _service(ctx).preview_revision_submission_matrix(
+            controlled_revision_id=controlled_revision_id,
+            ctx=ctx,
+        )
+    except DocumentControlError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
+    return {"result": result}
 
 
 @router.post("/quality-system/doc-control/documents/{controlled_document_id}/revisions")

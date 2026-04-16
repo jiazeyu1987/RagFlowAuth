@@ -15,6 +15,11 @@ from backend.app.core.paths import resolve_repo_path
 from backend.database.sqlite import connect_sqlite
 from backend.services.audit_helpers import actor_fields_from_ctx
 from backend.services.compliance.retired_records import RetiredRecordsService
+from backend.services.document_control.matrix_resolver import (
+    DocumentControlMatrixResolver,
+    DocumentControlMatrixResolverError,
+    MatrixApprover,
+)
 from backend.services.document_control.models import ControlledDocument, ControlledRevision
 from backend.services.knowledge_ingestion import KnowledgeIngestionManager
 from backend.services.notification import NotificationManagerError
@@ -87,6 +92,9 @@ class DocumentControlService:
             store=self._approval_store,
             error_factory=lambda code, status_code=400: DocumentControlError(code, status_code=status_code),
         )
+        self._matrix_resolver = DocumentControlMatrixResolver(
+            matrix_json_path=getattr(deps, "document_control_matrix_json_path", None)
+        )
 
     @classmethod
     def from_deps(cls, deps: Any) -> "DocumentControlService":
@@ -122,6 +130,21 @@ class DocumentControlService:
     @staticmethod
     def _to_json_text(value: object) -> str:
         return json.dumps(value, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
+
+    @staticmethod
+    def _from_json_text(value: str | None) -> dict | None:
+        raw = str(value or "").strip()
+        if not raw:
+            return None
+        try:
+            parsed = json.loads(raw)
+        except Exception as exc:  # noqa: BLE001
+            raise DocumentControlError("document_control_snapshot_invalid", status_code=500) from exc
+        if parsed is None:
+            return None
+        if not isinstance(parsed, dict):
+            raise DocumentControlError("document_control_snapshot_invalid", status_code=500)
+        return parsed
 
     @staticmethod
     def _normalize_department_ids(department_ids: list[object] | None) -> list[int]:
@@ -514,6 +537,7 @@ class DocumentControlService:
             controlled_document_id=str(row["controlled_document_id"]),
             kb_doc_id=str(row["kb_doc_id"]),
             revision_no=int(row["revision_no"]),
+            file_subtype=(str(row["file_subtype"]) if row["file_subtype"] else None),
             status=str(row["status"]),
             change_summary=(str(row["change_summary"]) if row["change_summary"] else None),
             previous_revision_id=(str(row["previous_revision_id"]) if row["previous_revision_id"] else None),
@@ -550,6 +574,8 @@ class DocumentControlService:
             ),
             approved_by=(str(row["approved_by"]) if row["approved_by"] else None),
             approved_at_ms=(int(row["approved_at_ms"]) if row["approved_at_ms"] is not None else None),
+            matrix_snapshot=self._from_json_text(row["matrix_snapshot_json"]),
+            position_snapshot=self._from_json_text(row["position_snapshot_json"]),
             effective_at_ms=(int(row["effective_at_ms"]) if row["effective_at_ms"] is not None else None),
             obsolete_at_ms=(int(row["obsolete_at_ms"]) if row["obsolete_at_ms"] is not None else None),
             obsolete_requested_by=(str(row["obsolete_requested_by"]) if row["obsolete_requested_by"] else None),
@@ -599,6 +625,7 @@ class DocumentControlService:
             doc_code=str(row["doc_code"]),
             title=str(row["title"]),
             document_type=str(row["document_type"]),
+            file_subtype=(str(row["file_subtype"]) if row["file_subtype"] else None),
             product_name=(str(row["product_name"]) if row["product_name"] else None),
             registration_ref=(str(row["registration_ref"]) if row["registration_ref"] else None),
             target_kb_id=str(row["target_kb_id"]),
@@ -622,6 +649,7 @@ class DocumentControlService:
                 r.controlled_document_id,
                 r.kb_doc_id,
                 r.revision_no,
+                r.file_subtype,
                 r.status,
                 r.change_summary,
                 r.previous_revision_id,
@@ -640,6 +668,8 @@ class DocumentControlService:
                 r.release_manual_archive_completed_at_ms,
                 r.approved_by,
                 r.approved_at_ms,
+                r.matrix_snapshot_json,
+                r.position_snapshot_json,
                 r.effective_at_ms,
                 r.obsolete_at_ms,
                 r.obsolete_requested_by,
@@ -687,6 +717,7 @@ class DocumentControlService:
                 doc_code,
                 title,
                 document_type,
+                file_subtype,
                 product_name,
                 registration_ref,
                 target_kb_id,
@@ -724,6 +755,7 @@ class DocumentControlService:
                 r.controlled_document_id,
                 r.kb_doc_id,
                 r.revision_no,
+                r.file_subtype,
                 r.status,
                 r.change_summary,
                 r.previous_revision_id,
@@ -742,6 +774,8 @@ class DocumentControlService:
                 r.release_manual_archive_completed_at_ms,
                 r.approved_by,
                 r.approved_at_ms,
+                r.matrix_snapshot_json,
+                r.position_snapshot_json,
                 r.effective_at_ms,
                 r.obsolete_at_ms,
                 r.obsolete_requested_by,
@@ -901,6 +935,7 @@ class DocumentControlService:
         doc_code: str,
         title: str,
         document_type: str,
+        file_subtype: str | None,
         product_name: str | None,
         registration_ref: str | None,
         target_kb_id: str,
@@ -916,6 +951,7 @@ class DocumentControlService:
                 doc_code,
                 title,
                 document_type,
+                file_subtype,
                 product_name,
                 registration_ref,
                 target_kb_id,
@@ -925,13 +961,14 @@ class DocumentControlService:
                 created_by,
                 created_at_ms,
                 updated_at_ms
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 controlled_document_id,
                 doc_code,
                 title,
                 document_type,
+                file_subtype,
                 product_name,
                 registration_ref,
                 target_kb_id,
@@ -952,6 +989,7 @@ class DocumentControlService:
         controlled_document_id: str,
         kb_doc_id: str,
         revision_no: int,
+        file_subtype: str | None,
         change_summary: str | None,
         previous_revision_id: str | None,
         created_by: str,
@@ -964,6 +1002,7 @@ class DocumentControlService:
                 controlled_document_id,
                 kb_doc_id,
                 revision_no,
+                file_subtype,
                 status,
                 change_summary,
                 previous_revision_id,
@@ -987,16 +1026,34 @@ class DocumentControlService:
                 created_by,
                 created_at_ms,
                 updated_at_ms
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, NULL, NULL, 0, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 revision_id,
                 controlled_document_id,
                 kb_doc_id,
                 revision_no,
+                file_subtype,
                 REVISION_STATUS_DRAFT,
                 change_summary,
                 previous_revision_id,
+                None,
+                None,
+                0,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
                 created_by,
                 now_ms,
                 now_ms,
@@ -1021,6 +1078,7 @@ class DocumentControlService:
         doc_code: str,
         title: str,
         document_type: str,
+        file_subtype: str | None = None,
         target_kb_id: str,
         created_by: str,
         upload_file,
@@ -1031,10 +1089,11 @@ class DocumentControlService:
         clean_doc_code = self._require_text(doc_code, "doc_code_required")
         clean_title = self._require_text(title, "title_required")
         clean_type = self._require_text(document_type, "document_type_required")
+        clean_file_subtype = self._require_text(file_subtype or clean_type, "document_control_matrix_file_subtype_required")
         clean_target_kb = self._require_text(target_kb_id, "target_kb_id_required")
         clean_created_by = self._require_text(created_by, "created_by_required")
         clean_product_name = self._require_text(product_name, "product_name_required")
-        clean_registration_ref = self._require_text(registration_ref, "registration_ref_required")
+        clean_registration_ref = str(registration_ref or "").strip() or None
         controlled_document_id = str(uuid.uuid4())
         revision_id = str(uuid.uuid4())
         now_ms = self._now_ms()
@@ -1072,6 +1131,7 @@ class DocumentControlService:
                     doc_code=clean_doc_code,
                     title=clean_title,
                     document_type=clean_type,
+                    file_subtype=clean_file_subtype,
                     product_name=clean_product_name,
                     registration_ref=clean_registration_ref,
                     target_kb_id=kb_id,
@@ -1086,6 +1146,7 @@ class DocumentControlService:
                     controlled_document_id=controlled_document_id,
                     kb_doc_id=kb_doc.doc_id,
                     revision_no=1,
+                    file_subtype=clean_file_subtype,
                     change_summary=(str(change_summary).strip() if change_summary else None),
                     previous_revision_id=None,
                     created_by=clean_created_by,
@@ -1166,6 +1227,7 @@ class DocumentControlService:
                     controlled_document_id=clean_document_id,
                     kb_doc_id=kb_doc.doc_id,
                     revision_no=next_revision_no,
+                    file_subtype=document.file_subtype or document.document_type,
                     change_summary=(str(change_summary).strip() if change_summary else None),
                     previous_revision_id=previous_revision_id,
                     created_by=clean_created_by,
@@ -1292,6 +1354,175 @@ class DocumentControlService:
         if user_store is None or not callable(getattr(user_store, "get_by_user_id", None)):
             raise DocumentControlError("document_control_user_store_unavailable", status_code=500)
         return user_store
+
+    def _quality_system_config_service(self):
+        service = getattr(self._deps, "quality_system_config_service", None)
+        if service is not None and callable(getattr(service, "get_config", None)):
+            return service
+        from backend.services.quality_system_config import QualitySystemConfigService
+
+        return QualitySystemConfigService(
+            db_path=self._db_path,
+            user_store=self._require_user_store(),
+            org_structure_manager=getattr(self._deps, "org_structure_manager", None),
+            audit_log_manager=getattr(self._deps, "audit_log_manager", None),
+        )
+
+    def _load_matrix_position_assignments(self) -> list[dict[str, object]]:
+        config = self._quality_system_config_service().get_config()
+        positions = config.get("positions")
+        if not isinstance(positions, list):
+            raise DocumentControlError("document_control_matrix_positions_invalid", status_code=500)
+        return positions
+
+    @staticmethod
+    def _matrix_step_type_for_position(position_name: str) -> str:
+        if str(position_name or "").strip() == "文档管理员":
+            return WORKFLOW_STEP_TYPE_STANDARDIZE_REVIEW
+        return WORKFLOW_STEP_TYPE_COSIGN
+
+    def _matrix_request_steps(self, *, resolution) -> tuple[list[dict[str, object]], list[dict[str, object]]]:
+        request_steps: list[dict[str, object]] = []
+        workflow_snapshot_steps: list[dict[str, object]] = []
+        step_no = 1
+
+        for item in resolution.signoff_steps:
+            step_type = self._matrix_step_type_for_position(item.position_name)
+            approvers = [
+                {
+                    "user_id": approver.user_id,
+                    "username": approver.username or approver.user_id,
+                }
+                for approver in item.approvers
+            ]
+            request_steps.append(
+                {
+                    "step_no": step_no,
+                    "step_name": step_type,
+                    "approval_rule": "all",
+                    "timeout_reminder_minutes": 60,
+                    "approvers": approvers,
+                }
+            )
+            workflow_snapshot_steps.append(
+                {
+                    "step_no": step_no,
+                    "step_name": step_type,
+                    "step_type": step_type,
+                    "step_semantic": "signoff",
+                    "approval_rule": "all",
+                    "member_source": item.member_source,
+                    "position_name": item.position_name,
+                    "matrix_mark": item.mark,
+                    "activation_rule": item.activation_rule,
+                    "members": [
+                        {
+                            "member_type": "user" if approver.source != "direct_manager" else "special_role",
+                            "member_ref": approver.user_id if approver.source != "direct_manager" else "direct_manager",
+                            "user_id": approver.user_id,
+                            "username": approver.username,
+                            "full_name": approver.full_name,
+                            "employee_user_id": approver.employee_user_id,
+                            "source": approver.source,
+                        }
+                        for approver in item.approvers
+                    ],
+                }
+            )
+            step_no += 1
+
+        for item in resolution.approval_steps:
+            approvers = [
+                {
+                    "user_id": approver.user_id,
+                    "username": approver.username or approver.user_id,
+                }
+                for approver in item.approvers
+            ]
+            request_steps.append(
+                {
+                    "step_no": step_no,
+                    "step_name": WORKFLOW_STEP_TYPE_APPROVE,
+                    "approval_rule": "all",
+                    "timeout_reminder_minutes": 60,
+                    "approvers": approvers,
+                }
+            )
+            workflow_snapshot_steps.append(
+                {
+                    "step_no": step_no,
+                    "step_name": WORKFLOW_STEP_TYPE_APPROVE,
+                    "step_type": WORKFLOW_STEP_TYPE_APPROVE,
+                    "step_semantic": "approval",
+                    "approval_rule": "all",
+                    "member_source": item.member_source,
+                    "position_name": item.position_name,
+                    "matrix_mark": item.mark,
+                    "activation_rule": item.activation_rule,
+                    "members": [
+                        {
+                            "member_type": "user",
+                            "member_ref": approver.user_id,
+                            "user_id": approver.user_id,
+                            "username": approver.username,
+                            "full_name": approver.full_name,
+                            "employee_user_id": approver.employee_user_id,
+                            "source": approver.source,
+                        }
+                        for approver in item.approvers
+                    ],
+                }
+            )
+            step_no += 1
+
+        if not request_steps:
+            raise DocumentControlError("document_control_matrix_generated_steps_missing", status_code=409)
+        return request_steps, workflow_snapshot_steps
+
+    def _update_revision_matrix_state(
+        self,
+        conn,
+        *,
+        controlled_revision_id: str,
+        file_subtype: str | None,
+        matrix_snapshot: dict[str, object] | None,
+        position_snapshot: dict[str, object] | None,
+    ) -> None:
+        conn.execute(
+            """
+            UPDATE controlled_revisions
+            SET file_subtype = ?,
+                matrix_snapshot_json = ?,
+                position_snapshot_json = ?
+            WHERE controlled_revision_id = ?
+            """,
+            (
+                file_subtype,
+                (self._to_json_text(matrix_snapshot) if matrix_snapshot is not None else None),
+                (self._to_json_text(position_snapshot) if position_snapshot is not None else None),
+                controlled_revision_id,
+            ),
+        )
+
+    def _resolve_matrix_for_document(self, *, document: ControlledDocument, actor_user_id: str, applicant_manager_user_id: str | None) -> tuple[Any, dict[str, object]]:
+        positions = self._load_matrix_position_assignments()
+        try:
+            resolution = self._matrix_resolver.resolve(
+                file_subtype=document.file_subtype or document.document_type,
+                applicant_user_id=actor_user_id,
+                applicant_manager_user_id=applicant_manager_user_id,
+                document_type=document.document_type,
+                registration_ref=document.registration_ref,
+                position_assignments=positions,
+            )
+        except DocumentControlMatrixResolverError as exc:
+            raise DocumentControlError(exc.code, status_code=exc.status_code) from exc
+        position_snapshot = {
+            str(item.get("name") or ""): item.get("assigned_users") or []
+            for item in positions
+            if isinstance(item, dict) and str(item.get("name") or "").strip()
+        }
+        return resolution, position_snapshot
 
     def _resolve_active_user(self, *, user_id: str):
         store = self._require_user_store()
@@ -1532,9 +1763,13 @@ class DocumentControlService:
                 raise DocumentControlError("document_control_approval_request_active", status_code=409)
 
             document = self._load_document(conn, controlled_document_id=revision.controlled_document_id)
-            normalized_workflow_steps = self._normalize_workflow_steps(document_type=document.document_type)
-            request_steps = self._request_steps_from_workflow(steps=normalized_workflow_steps)
-            workflow_snapshot_steps = self._workflow_snapshot(steps=normalized_workflow_steps)
+            applicant_user = self._resolve_active_user(user_id=actor_user_id)
+            resolution, position_snapshot = self._resolve_matrix_for_document(
+                document=document,
+                actor_user_id=actor_user_id,
+                applicant_manager_user_id=str(getattr(applicant_user, "manager_user_id", "") or "").strip() or None,
+            )
+            request_steps, workflow_snapshot_steps = self._matrix_request_steps(resolution=resolution)
             request_id = str(uuid.uuid4())
             created_request = self._approval_store.create_request(
                 request_id=request_id,
@@ -1551,19 +1786,34 @@ class DocumentControlService:
                     "controlled_revision_id": revision.controlled_revision_id,
                     "doc_code": document.doc_code,
                     "document_type": document.document_type,
+                    "file_subtype": resolution.file_subtype,
                     "revision_no": revision.revision_no,
                 },
                 payload={
                     "controlled_document_id": revision.controlled_document_id,
                     "controlled_revision_id": revision.controlled_revision_id,
+                    "file_subtype": resolution.file_subtype,
                 },
                 workflow_snapshot={
                     "name": f"document_control_{document.document_type}_approval",
+                    "mode": "approval_matrix",
+                    "file_subtype": resolution.file_subtype,
+                    "compiler_check": resolution.compiler_check.as_dict(),
+                    "matrix_snapshot": resolution.snapshot,
+                    "position_snapshot": position_snapshot,
                     "steps": workflow_snapshot_steps,
                 },
                 steps=request_steps,
                 artifacts=[],
                 conn=conn,
+            )
+
+            self._update_revision_matrix_state(
+                conn,
+                controlled_revision_id=clean_revision_id,
+                file_subtype=resolution.file_subtype,
+                matrix_snapshot=resolution.snapshot,
+                position_snapshot=position_snapshot,
             )
 
             self._update_revision_approval_state(
@@ -1577,7 +1827,7 @@ class DocumentControlService:
                 approval_completed_at_ms=None,
                 current_approval_step_no=created_request.get("current_step_no"),
                 current_approval_step_name=created_request.get("current_step_name"),
-                current_approval_step_timeout_reminder_minutes=int(normalized_workflow_steps[0]["timeout_reminder_minutes"]),
+                current_approval_step_timeout_reminder_minutes=int(request_steps[0]["timeout_reminder_minutes"]),
                 current_approval_step_overdue_at_ms=None,
                 current_approval_step_last_reminded_at_ms=None,
                 release_mode=None,
@@ -1645,6 +1895,47 @@ class DocumentControlService:
                 ),
             )
         return updated_document
+
+    def preview_revision_submission_matrix(
+        self,
+        *,
+        controlled_revision_id: str,
+        ctx,
+    ) -> dict[str, object]:
+        clean_revision_id = self._require_text(controlled_revision_id, "controlled_revision_id_required")
+        actor_user_id = self._require_text(str(getattr(ctx.payload, "sub", "") or ""), "actor_user_id_required")
+        conn = self._connect()
+        try:
+            revision = self._load_revision(conn, controlled_revision_id=clean_revision_id)
+            document = self._load_document(conn, controlled_document_id=revision.controlled_document_id)
+        finally:
+            conn.close()
+
+        applicant_user = self._resolve_active_user(user_id=actor_user_id)
+        resolution, position_snapshot = self._resolve_matrix_for_document(
+            document=document,
+            actor_user_id=actor_user_id,
+            applicant_manager_user_id=str(getattr(applicant_user, "manager_user_id", "") or "").strip() or None,
+        )
+        request_steps, workflow_snapshot_steps = self._matrix_request_steps(resolution=resolution)
+        return {
+            "file_subtype": resolution.file_subtype,
+            "document_type": document.document_type,
+            "registration_ref": document.registration_ref,
+            "compiler_check": resolution.compiler_check.as_dict(),
+            "signoff_steps": [item.as_dict() for item in resolution.signoff_steps],
+            "approval_steps": [item.as_dict() for item in resolution.approval_steps],
+            "position_snapshot": position_snapshot,
+            "workflow_snapshot": {
+                "mode": "approval_matrix",
+                "file_subtype": resolution.file_subtype,
+                "compiler_check": resolution.compiler_check.as_dict(),
+                "matrix_snapshot": resolution.snapshot,
+                "position_snapshot": position_snapshot,
+                "steps": workflow_snapshot_steps,
+            },
+            "request_steps": request_steps,
+        }
 
     def _require_active_approval_request(
         self,

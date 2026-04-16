@@ -14,6 +14,7 @@ def ensure_document_control_tables(conn: sqlite3.Connection) -> None:
                 doc_code TEXT NOT NULL UNIQUE,
                 title TEXT NOT NULL,
                 document_type TEXT NOT NULL,
+                file_subtype TEXT,
                 product_name TEXT,
                 registration_ref TEXT,
                 target_kb_id TEXT NOT NULL,
@@ -31,6 +32,7 @@ def ensure_document_control_tables(conn: sqlite3.Connection) -> None:
     add_column_if_missing(conn, "controlled_documents", "doc_code TEXT")
     add_column_if_missing(conn, "controlled_documents", "title TEXT")
     add_column_if_missing(conn, "controlled_documents", "document_type TEXT")
+    add_column_if_missing(conn, "controlled_documents", "file_subtype TEXT")
     add_column_if_missing(conn, "controlled_documents", "product_name TEXT")
     add_column_if_missing(conn, "controlled_documents", "registration_ref TEXT")
     add_column_if_missing(conn, "controlled_documents", "target_kb_id TEXT")
@@ -50,6 +52,7 @@ def ensure_document_control_tables(conn: sqlite3.Connection) -> None:
                 controlled_document_id TEXT NOT NULL,
                 kb_doc_id TEXT NOT NULL UNIQUE,
                 revision_no INTEGER NOT NULL,
+                file_subtype TEXT,
                 status TEXT NOT NULL,
                 change_summary TEXT,
                 previous_revision_id TEXT,
@@ -68,6 +71,8 @@ def ensure_document_control_tables(conn: sqlite3.Connection) -> None:
                 release_manual_archive_completed_at_ms INTEGER,
                 approved_by TEXT,
                 approved_at_ms INTEGER,
+                matrix_snapshot_json TEXT,
+                position_snapshot_json TEXT,
                 effective_at_ms INTEGER,
                 obsolete_at_ms INTEGER,
                 superseded_at_ms INTEGER,
@@ -82,6 +87,7 @@ def ensure_document_control_tables(conn: sqlite3.Connection) -> None:
     add_column_if_missing(conn, "controlled_revisions", "controlled_document_id TEXT")
     add_column_if_missing(conn, "controlled_revisions", "kb_doc_id TEXT")
     add_column_if_missing(conn, "controlled_revisions", "revision_no INTEGER")
+    add_column_if_missing(conn, "controlled_revisions", "file_subtype TEXT")
     add_column_if_missing(conn, "controlled_revisions", "status TEXT")
     add_column_if_missing(conn, "controlled_revisions", "change_summary TEXT")
     add_column_if_missing(conn, "controlled_revisions", "previous_revision_id TEXT")
@@ -100,6 +106,8 @@ def ensure_document_control_tables(conn: sqlite3.Connection) -> None:
     add_column_if_missing(conn, "controlled_revisions", "release_manual_archive_completed_at_ms INTEGER")
     add_column_if_missing(conn, "controlled_revisions", "approved_by TEXT")
     add_column_if_missing(conn, "controlled_revisions", "approved_at_ms INTEGER")
+    add_column_if_missing(conn, "controlled_revisions", "matrix_snapshot_json TEXT")
+    add_column_if_missing(conn, "controlled_revisions", "position_snapshot_json TEXT")
     add_column_if_missing(conn, "controlled_revisions", "effective_at_ms INTEGER")
     add_column_if_missing(conn, "controlled_revisions", "obsolete_at_ms INTEGER")
     add_column_if_missing(conn, "controlled_revisions", "superseded_at_ms INTEGER")

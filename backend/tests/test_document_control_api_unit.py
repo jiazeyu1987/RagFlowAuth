@@ -1,3 +1,4 @@
+import json
 import os
 import shutil
 import time
@@ -67,14 +68,47 @@ class TestDocumentControlApiUnit(unittest.TestCase):
             enabled=True,
             config={},
         )
+        self._matrix_path = os.path.join(str(self._temp_dir), "document_control_matrix.json")
+        with open(self._matrix_path, "w", encoding="utf-8") as handle:
+            json.dump(
+                [
+                    {
+                        "文件小类": "urs",
+                        "编制": "项目负责人",
+                        "审核会签": {"QA": "●", "QMS": "", "文档管理员": "●"},
+                        "批准": "编制部门负责人或授权代表",
+                    },
+                    {
+                        "文件小类": "sop",
+                        "编制": "项目负责人",
+                        "审核会签": {"QA": "●", "QMS": "", "文档管理员": "●"},
+                        "批准": "编制部门负责人或授权代表",
+                    },
+                    {
+                        "文件小类": "srs",
+                        "编制": "项目负责人",
+                        "审核会签": {"QA": "●", "QMS": "", "文档管理员": "●"},
+                        "批准": "编制部门负责人或授权代表",
+                    },
+                    {
+                        "文件小类": "wi",
+                        "编制": "项目负责人",
+                        "审核会签": {"QA": "●", "QMS": "", "文档管理员": "●"},
+                        "批准": "编制部门负责人或授权代表",
+                    },
+                ],
+                handle,
+                ensure_ascii=False,
+                indent=2,
+            )
         self.training_service = TrainingComplianceService(db_path=self._db_path)
         self.user_store = _UserStore(
             {
-                "reviewer-1": SimpleNamespace(user_id="reviewer-1", username="reviewer", status="active"),
-                "cosigner-1": SimpleNamespace(user_id="cosigner-1", username="cosigner1", status="active"),
-                "cosigner-2": SimpleNamespace(user_id="cosigner-2", username="cosigner2", status="active"),
-                "approver-1": SimpleNamespace(user_id="approver-1", username="approver", status="active"),
-                "standardizer-1": SimpleNamespace(user_id="standardizer-1", username="standardizer", status="active"),
+                "reviewer-1": SimpleNamespace(user_id="reviewer-1", username="reviewer", status="active", full_name="Reviewer One"),
+                "cosigner-1": SimpleNamespace(user_id="cosigner-1", username="cosigner1", status="active", full_name="Cosigner One"),
+                "cosigner-2": SimpleNamespace(user_id="cosigner-2", username="cosigner2", status="active", full_name="Cosigner Two"),
+                "approver-1": SimpleNamespace(user_id="approver-1", username="approver", status="active", full_name="Approver One"),
+                "standardizer-1": SimpleNamespace(user_id="standardizer-1", username="standardizer", status="active", full_name="Standardizer One"),
             }
         )
         self.approval_matrix = {
@@ -110,6 +144,23 @@ class TestDocumentControlApiUnit(unittest.TestCase):
             notification_manager=self.notification_manager,
             org_structure_manager=None,
             user_store=self.user_store,
+            document_control_matrix_json_path=self._matrix_path,
+            quality_system_config_service=SimpleNamespace(
+                get_config=lambda: {
+                    "positions": [
+                        {"name": "项目负责人", "assigned_users": [{"user_id": "reviewer-1", "username": "reviewer", "full_name": "Reviewer One"}]},
+                        {
+                            "name": "QA",
+                            "assigned_users": [
+                                {"user_id": "cosigner-1", "username": "cosigner1", "full_name": "Cosigner One"},
+                                {"user_id": "cosigner-2", "username": "cosigner2", "full_name": "Cosigner Two"},
+                            ],
+                        },
+                        {"name": "文档管理员", "assigned_users": [{"user_id": "standardizer-1", "username": "standardizer", "full_name": "Standardizer One"}]},
+                        {"name": "编制部门负责人或授权代表", "assigned_users": [{"user_id": "approver-1", "username": "approver", "full_name": "Approver One"}]},
+                    ]
+                }
+            ),
         )
         service = DocumentControlService.from_deps(self.deps)
         for document_type in ("urs", "sop", "srs", "wi"):
@@ -222,8 +273,8 @@ class TestDocumentControlApiUnit(unittest.TestCase):
         for user_id, username in (
             ("cosigner-1", "cosigner1"),
             ("cosigner-2", "cosigner2"),
-            ("approver-1", "approver"),
             ("standardizer-1", "standardizer"),
+            ("approver-1", "approver"),
         ):
             with self._build_client(kb_ref=kb_ref, user_id=user_id, username=username) as client:
                 approve_resp = client.post(
@@ -301,14 +352,6 @@ class TestDocumentControlApiUnit(unittest.TestCase):
                     json={"note": "cosign 2"},
                 )
                 self.assertEqual(approve_resp.status_code, 200, approve_resp.text)
-                self.assertEqual(approve_resp.json()["document"]["current_revision"]["current_approval_step_name"], "approve")
-
-            with self._build_client(kb_ref="Quality KB", user_id="approver-1", username="approver") as approver_client:
-                approve_resp = approver_client.post(
-                    f"/api/quality-system/doc-control/revisions/{revision_id}/approval/approve",
-                    json={"note": "approve"},
-                )
-                self.assertEqual(approve_resp.status_code, 200, approve_resp.text)
                 self.assertEqual(
                     approve_resp.json()["document"]["current_revision"]["current_approval_step_name"],
                     "standardize_review",
@@ -317,9 +360,20 @@ class TestDocumentControlApiUnit(unittest.TestCase):
             with self._build_client(
                 kb_ref="Quality KB", user_id="standardizer-1", username="standardizer"
             ) as standardizer_client:
-                final_resp = standardizer_client.post(
+                approve_resp = standardizer_client.post(
                     f"/api/quality-system/doc-control/revisions/{revision_id}/approval/approve",
                     json={"note": "standardize ok"},
+                )
+                self.assertEqual(approve_resp.status_code, 200, approve_resp.text)
+                self.assertEqual(
+                    approve_resp.json()["document"]["current_revision"]["current_approval_step_name"],
+                    "approve",
+                )
+
+            with self._build_client(kb_ref="Quality KB", user_id="approver-1", username="approver") as approver_client:
+                final_resp = approver_client.post(
+                    f"/api/quality-system/doc-control/revisions/{revision_id}/approval/approve",
+                    json={"note": "approve"},
                 )
                 self.assertEqual(final_resp.status_code, 200, final_resp.text)
                 self.training_service.upsert_revision_training_gate(
@@ -406,7 +460,7 @@ class TestDocumentControlApiUnit(unittest.TestCase):
         self.assertEqual(response.status_code, 403, response.text)
         self.assertEqual(response.json()["detail"], "kb_not_allowed")
 
-    def test_create_route_requires_product_and_registration_metadata(self):
+    def test_create_route_requires_product_metadata_and_allows_empty_registration_ref(self):
         with self._build_client(kb_ref="Quality KB") as client:
             response = client.post(
                 "/api/quality-system/doc-control/documents",
@@ -423,6 +477,25 @@ class TestDocumentControlApiUnit(unittest.TestCase):
 
         self.assertEqual(response.status_code, 400, response.text)
         self.assertEqual(response.json()["detail"], "product_name_required")
+
+        with self._build_client(kb_ref="Quality KB") as client:
+            optional_registration = client.post(
+                "/api/quality-system/doc-control/documents",
+                data={
+                    "doc_code": "DOC-API-003A",
+                    "title": "Registration optional",
+                    "document_type": "wi",
+                    "file_subtype": "工艺流程图",
+                    "target_kb_id": "Quality KB",
+                    "product_name": "Product A",
+                    "registration_ref": "",
+                },
+                files={"file": ("wi.pdf", b"%PDF-1.4 wi\n", "application/pdf")},
+            )
+
+        self.assertEqual(optional_registration.status_code, 200, optional_registration.text)
+        self.assertEqual(optional_registration.json()["document"]["registration_ref"], None)
+        self.assertEqual(optional_registration.json()["document"]["file_subtype"], "工艺流程图")
 
     def test_create_route_rejects_non_pdf_upload(self):
         with self._build_client(kb_ref="Quality KB") as client:

@@ -22,6 +22,7 @@ describe('documentControlApi', () => {
       .mockResolvedValueOnce({ document: { controlled_document_id: 'doc-1', title: 'URS' } })
       .mockResolvedValueOnce({ document: { controlled_document_id: 'doc-2' } })
       .mockResolvedValueOnce({ document: { controlled_document_id: 'doc-1', current_revision_id: 'rev-2' } })
+      .mockResolvedValueOnce({ result: { file_subtype: '设计验证方案/报告', compiler_check: { position_name: '项目负责人' } } })
       .mockResolvedValueOnce({ document: { controlled_document_id: 'doc-1', approval_request_id: 'req-1' } })
       .mockResolvedValueOnce({ document: { controlled_document_id: 'doc-1', approval_step: 'cosign' } })
       .mockResolvedValueOnce({ document: { controlled_document_id: 'doc-1', approval_step: 'approve' } })
@@ -59,6 +60,7 @@ describe('documentControlApi', () => {
       doc_code: 'DOC-002',
       title: 'SRS',
       document_type: 'srs',
+      file_subtype: '设计验证方案/报告',
       target_kb_id: 'Quality KB',
       file: new File(['hello'], 'srs.md', { type: 'text/markdown' }),
     };
@@ -73,6 +75,11 @@ describe('documentControlApi', () => {
     await expect(documentControlApi.createRevision('doc-1', revisionPayload)).resolves.toEqual({
       controlled_document_id: 'doc-1',
       current_revision_id: 'rev-2',
+    });
+
+    await expect(documentControlApi.previewRevisionApprovalMatrix('rev-2')).resolves.toEqual({
+      file_subtype: '设计验证方案/报告',
+      compiler_check: { position_name: '项目负责人' },
     });
 
     await expect(documentControlApi.submitRevisionForApproval('rev-2', { note: 'submit' })).resolves.toEqual({
@@ -167,6 +174,11 @@ describe('documentControlApi', () => {
         body: expect.any(FormData),
       })
     );
+    expect([...httpClient.requestJson.mock.calls[2][1].body.entries()]).toEqual(
+      expect.arrayContaining([
+        ['file_subtype', '设计验证方案/报告'],
+      ])
+    );
     expect(httpClient.requestJson).toHaveBeenNthCalledWith(
       4,
       'http://auth.local/api/quality-system/doc-control/documents/doc-1/revisions',
@@ -177,6 +189,11 @@ describe('documentControlApi', () => {
     );
     expect(httpClient.requestJson).toHaveBeenNthCalledWith(
       5,
+      'http://auth.local/api/quality-system/doc-control/revisions/rev-2/matrix-preview',
+      { method: 'GET' }
+    );
+    expect(httpClient.requestJson).toHaveBeenNthCalledWith(
+      6,
       'http://auth.local/api/quality-system/doc-control/revisions/rev-2/approval/submit',
       {
         method: 'POST',
@@ -184,7 +201,7 @@ describe('documentControlApi', () => {
       }
     );
     expect(httpClient.requestJson).toHaveBeenNthCalledWith(
-      6,
+      7,
       'http://auth.local/api/quality-system/doc-control/revisions/rev-2/approval/approve',
       {
         method: 'POST',
@@ -192,7 +209,7 @@ describe('documentControlApi', () => {
       }
     );
     expect(httpClient.requestJson).toHaveBeenNthCalledWith(
-      7,
+      8,
       'http://auth.local/api/quality-system/doc-control/revisions/rev-2/approval/reject',
       {
         method: 'POST',
@@ -200,7 +217,7 @@ describe('documentControlApi', () => {
       }
     );
     expect(httpClient.requestJson).toHaveBeenNthCalledWith(
-      8,
+      9,
       'http://auth.local/api/quality-system/doc-control/revisions/rev-2/approval/add-sign',
       {
         method: 'POST',
@@ -208,12 +225,12 @@ describe('documentControlApi', () => {
       }
     );
     expect(httpClient.requestJson).toHaveBeenNthCalledWith(
-      9,
+      10,
       'http://auth.local/api/quality-system/doc-control/documents/doc-1/distribution-departments',
       { method: 'GET' }
     );
     expect(httpClient.requestJson).toHaveBeenNthCalledWith(
-      10,
+      11,
       'http://auth.local/api/quality-system/doc-control/documents/doc-1/distribution-departments',
       {
         method: 'PUT',
@@ -221,7 +238,7 @@ describe('documentControlApi', () => {
       }
     );
     expect(httpClient.requestJson).toHaveBeenNthCalledWith(
-      11,
+      12,
       'http://auth.local/api/quality-system/doc-control/revisions/rev-2/publish',
       {
         method: 'POST',
@@ -229,12 +246,12 @@ describe('documentControlApi', () => {
       }
     );
     expect(httpClient.requestJson).toHaveBeenNthCalledWith(
-      12,
+      13,
       'http://auth.local/api/quality-system/doc-control/revisions/rev-2/department-acks',
       { method: 'GET' }
     );
     expect(httpClient.requestJson).toHaveBeenNthCalledWith(
-      13,
+      14,
       'http://auth.local/api/quality-system/doc-control/revisions/rev-2/department-acks/10/confirm',
       {
         method: 'POST',
@@ -242,7 +259,7 @@ describe('documentControlApi', () => {
       }
     );
     expect(httpClient.requestJson).toHaveBeenNthCalledWith(
-      14,
+      15,
       'http://auth.local/api/quality-system/doc-control/revisions/rev-2/department-acks/remind-overdue',
       {
         method: 'POST',
@@ -250,7 +267,7 @@ describe('documentControlApi', () => {
       }
     );
     expect(httpClient.requestJson).toHaveBeenNthCalledWith(
-      15,
+      16,
       'http://auth.local/api/quality-system/doc-control/revisions/rev-2/obsolete/initiate',
       {
         method: 'POST',
@@ -258,7 +275,7 @@ describe('documentControlApi', () => {
       }
     );
     expect(httpClient.requestJson).toHaveBeenNthCalledWith(
-      16,
+      17,
       'http://auth.local/api/quality-system/doc-control/revisions/rev-2/obsolete/approve',
       {
         method: 'POST',
@@ -266,7 +283,7 @@ describe('documentControlApi', () => {
       }
     );
     expect(httpClient.requestJson).toHaveBeenNthCalledWith(
-      17,
+      18,
       'http://auth.local/api/quality-system/doc-control/revisions/rev-2/obsolete/destruction/confirm',
       {
         method: 'POST',
@@ -274,7 +291,7 @@ describe('documentControlApi', () => {
       }
     );
     expect(httpClient.requestJson).toHaveBeenNthCalledWith(
-      18,
+      19,
       'http://auth.local/api/retired-documents?kb_id=kb-1&limit=20',
       { method: 'GET' }
     );
@@ -286,7 +303,7 @@ describe('documentControlApi', () => {
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce(null)
       .mockResolvedValueOnce({ item: {} })
-      .mockResolvedValueOnce({ result: {} })
+      .mockResolvedValueOnce({ result: [] })
       .mockResolvedValueOnce({ document: [] })
       .mockResolvedValueOnce({ document: [] })
       .mockResolvedValueOnce({ document: [] })
@@ -313,6 +330,9 @@ describe('documentControlApi', () => {
     );
     await expect(documentControlApi.createRevision('doc-1', {})).rejects.toThrow(
       'document_control_revision_create_invalid_payload'
+    );
+    await expect(documentControlApi.previewRevisionApprovalMatrix('rev-1')).rejects.toThrow(
+      'document_control_revision_matrix_preview_invalid_payload'
     );
     await expect(documentControlApi.submitRevisionForApproval('rev-1', {})).rejects.toThrow(
       'document_control_revision_approval_submit_invalid_payload'

@@ -51,6 +51,9 @@ class ControlledRevision:
     reviewed_by: str | None
     reviewed_at_ms: int | None
     review_notes: str | None
+    file_subtype: str | None
+    matrix_snapshot: dict | None
+    position_snapshot: dict | None
     ragflow_doc_id: str | None
     kb_id: str
     kb_dataset_id: str | None
@@ -68,6 +71,7 @@ class ControlledDocument:
     doc_code: str
     title: str
     document_type: str
+    file_subtype: str | None
     product_name: str | None
     registration_ref: str | None
     target_kb_id: str

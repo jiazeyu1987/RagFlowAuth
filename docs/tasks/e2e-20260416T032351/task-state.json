@@ -1,0 +1,175 @@
+{
+  "schema_version": 2,
+  "task_id": "e2e-20260416T032351",
+  "mode": "full",
+  "status": "completed",
+  "current_phase": null,
+  "phase_statuses": [
+    {
+      "phase_id": "P1",
+      "title": "审查现有矩阵 E2E 覆盖",
+      "status": "completed",
+      "objective": "盘点当前审批矩阵 E2E 已覆盖与未覆盖的文控场景",
+      "owned_paths": [
+        "`fronted/e2e/tests/`",
+        "`docs/tasks/e2e-20260416T032351/`"
+      ],
+      "dependencies": [
+        "已有矩阵前后端实现与已有 E2E 文件"
+      ],
+      "deliverables": [
+        "覆盖缺口清单写入 `execution-log.md`"
+      ],
+      "evidence_expectation": "`execution-log.md` 中记录现状与缺口",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P1-AC1",
+          "text": "明确列出当前矩阵 E2E 已覆盖的 happy path 和缺失的关键分支",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#phase-p1",
+            "test-report.md#results"
+          ]
+        },
+        {
+          "ac_id": "P1-AC2",
+          "text": "缺口分析覆盖主流程、错误态、审计展示三类场景",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#phase-p1",
+            "test-report.md#results"
+          ]
+        }
+      ],
+      "evidence": [
+        "execution-log.md#phase-p1"
+      ],
+      "notes": "",
+      "last_reviewed_at": "2026-04-16T03:36:49"
+    },
+    {
+      "phase_id": "P2",
+      "title": "补充矩阵主流程与错误场景 E2E",
+      "status": "completed",
+      "objective": "新增/扩展 mocked Playwright 用例，覆盖矩阵预览、注册条件分支、提交流程、关键错误态",
+      "owned_paths": [
+        "`fronted/e2e/tests/document-control.matrix*.spec.js`"
+      ],
+      "dependencies": [
+        "文控页面现有 testid 与 mocked API 契约"
+      ],
+      "deliverables": [
+        "新增或更新的 E2E spec 文件"
+      ],
+      "evidence_expectation": "新增/更新的 E2E spec 与运行日志",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P2-AC1",
+          "text": "至少补齐一个文件小类/矩阵预览主流程用例以外的矩阵分支用例",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#phase-p2",
+            "test-report.md#results"
+          ]
+        },
+        {
+          "ac_id": "P2-AC2",
+          "text": "至少补齐两个关键错误场景的浏览器 E2E 断言",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#phase-p2",
+            "test-report.md#results"
+          ]
+        },
+        {
+          "ac_id": "P2-AC3",
+          "text": "至少补齐一个“注册条件不触发注册会签”的浏览器 E2E 断言",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#phase-p2",
+            "test-report.md#results"
+          ]
+        }
+      ],
+      "evidence": [
+        "execution-log.md#phase-p2"
+      ],
+      "notes": "",
+      "last_reviewed_at": "2026-04-16T03:37:01"
+    },
+    {
+      "phase_id": "P3",
+      "title": "补充矩阵审计 E2E 并完成定向验证",
+      "status": "completed",
+      "objective": "确认审计页可读、可筛选，并运行目标 E2E 回归",
+      "owned_paths": [
+        "`fronted/e2e/tests/audit.logs.document-control-matrix.spec.js`",
+        "`docs/tasks/e2e-20260416T032351/test-report.md`"
+      ],
+      "dependencies": [
+        "审计页现有 filter/testid 与新旧矩阵动作映射"
+      ],
+      "deliverables": [
+        "通过的 Playwright 结果与测试报告摘要"
+      ],
+      "evidence_expectation": "Playwright 通过输出与 `test-report.md`",
+      "acceptance_criteria": [
+        {
+          "ac_id": "P3-AC1",
+          "text": "审计页 E2E 能断言矩阵流转 action/source/上下文摘要/筛选",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#phase-p3",
+            "test-report.md#results"
+          ]
+        },
+        {
+          "ac_id": "P3-AC2",
+          "text": "目标 Playwright 命令在独立测试库下通过",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#phase-p3",
+            "test-report.md#results"
+          ]
+        },
+        {
+          "ac_id": "P3-AC3",
+          "text": "`test-report.md` 记录通过情况、环境前提和剩余风险",
+          "status": "completed",
+          "evidence": [
+            "execution-log.md#phase-p3",
+            "test-report.md#results"
+          ]
+        }
+      ],
+      "evidence": [
+        "execution-log.md#phase-p3"
+      ],
+      "notes": "",
+      "last_reviewed_at": "2026-04-16T03:37:11"
+    }
+  ],
+  "planner_review_status": "approved",
+  "test_status": "passed",
+  "blocking_prereqs": [],
+  "iteration_counts": {
+    "planner_revisions": 0,
+    "executor_loops": 3,
+    "test_loops": 1
+  },
+  "created_at": "2026-04-16T03:23:52",
+  "updated_at": "2026-04-16T03:38:18",
+  "branch": "int_latest",
+  "baseline_revision": "0462434b54bd34722919b5c2eb01645271af1d57",
+  "workspace_root": "D:\\ProjectPackage\\RagflowAuth",
+  "tasks_root": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks",
+  "task_dir": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\e2e-20260416T032351",
+  "goal": "为当前审批矩阵编写 E2E 测试用例，尽量覆盖完整的文控矩阵主流程、关键错误场景和审计展示",
+  "artifacts": {
+    "prd": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\e2e-20260416T032351\\prd.md",
+    "test_plan": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\e2e-20260416T032351\\test-plan.md",
+    "task_state": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\e2e-20260416T032351\\task-state.json",
+    "execution_log": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\e2e-20260416T032351\\execution-log.md",
+    "test_report": "D:\\ProjectPackage\\RagflowAuth\\docs\\tasks\\e2e-20260416T032351\\test-report.md"
+  }
+}
